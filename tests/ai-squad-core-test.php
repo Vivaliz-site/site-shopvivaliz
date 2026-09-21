@@ -93,7 +93,7 @@ $order = svais_openai_transport_order();
 ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
 
 $anthropicOrder = svais_anthropic_transport_order();
-ais_assert($anthropicOrder === ['claude_code', 'direct', 'vertex_oauth', 'openrouter'], 'Anthropic transport order mismatch');
+ais_assert($anthropicOrder === ['claude_code'], 'Anthropic transport must use Claude Code account login only');
 $geminiOrder = svais_gemini_transport_order();
 ais_assert($geminiOrder === ['vertex_oauth', 'direct', 'openrouter'], 'Gemini transport order mismatch');
 
@@ -116,7 +116,27 @@ $anthropicResult = svais_anthropic_dispatch(
     }
 );
 ais_assert(($anthropicResult['text'] ?? '') === 'claude-oauth-ok', 'Claude Code OAuth result missing');
-ais_assert($anthropicCalls === ['claude_code'], 'Claude Code OAuth must be Anthropic primary');
+ais_assert($anthropicCalls === ['claude_code'], 'Claude Code account login must be the only Anthropic transport');
+
+$anthropicFailureCalls = [];
+$anthropicFailure = null;
+try {
+    svais_anthropic_dispatch(
+        $deep['anthropic'],
+        'system',
+        'prompt',
+        true,
+        function (string $transport) use (&$anthropicFailureCalls): array {
+            $anthropicFailureCalls[] = $transport;
+            throw new RuntimeException('usage_limit_exhausted');
+        }
+    );
+} catch (RuntimeException $e) {
+    $anthropicFailure = $e;
+}
+ais_assert($anthropicFailure instanceof RuntimeException, 'Claude Code failure must surface without provider fallback');
+ais_assert($anthropicFailureCalls === ['claude_code'], 'Claude failure must not fall back to direct, Vertex or OpenRouter');
+ais_assert(str_contains($anthropicFailure->getMessage(), 'anthropic_transports_exhausted:claude_code=quota'), 'Claude Code failure classification missing');
 
 $geminiCalls = [];
 $geminiResult = svais_gemini_dispatch(
@@ -241,6 +261,10 @@ ais_assert(($state['openai']['manual_fallback'] ?? false) === true, 'health manu
 ais_assert(!array_key_exists('openrouter_fallback_configured', $state['openai']), 'OpenAI health must not advertise OpenRouter fallback');
 ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
 ais_assert(array_key_exists('claude_code_oauth_configured', $state['anthropic']), 'Anthropic health Claude OAuth state missing');
+ais_assert(($state['anthropic']['account_login_only'] ?? false) === true, 'Anthropic health must declare account login only');
+ais_assert(!array_key_exists('direct_configured', $state['anthropic']), 'Anthropic health must not advertise direct fallback');
+ais_assert(!array_key_exists('vertex_oauth_configured', $state['anthropic']), 'Anthropic health must not advertise Vertex fallback');
+ais_assert(!array_key_exists('openrouter_fallback_configured', $state['anthropic']), 'Anthropic health must not advertise OpenRouter fallback');
 ais_assert(($state['gemini']['transport_order'] ?? []) === $geminiOrder, 'Gemini health transport order missing');
 ais_assert(array_key_exists('vertex_oauth_configured', $state['gemini']), 'Gemini health Vertex OAuth state missing');
 
