@@ -293,7 +293,7 @@ function processLizChat(string $message, string $context): string
     // histórico de um visitante com outro nem persistir mensagens públicas.
     $contents = [['role' => 'user', 'parts' => [['text' => $message]]]];
 
-    $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
+    $model = getenv('AI_SQUAD_GEMINI_MODEL') ?: getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash';
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
     $requestPayload = [
         'system_instruction' => ['parts' => [['text' => $systemPrompt]]],

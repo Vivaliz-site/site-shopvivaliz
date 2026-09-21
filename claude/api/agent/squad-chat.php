@@ -51,7 +51,7 @@ function squad_env_load(string $path): void
 
 function squad_rate_limit(string $token): void
 {
-    $root = dirname(__DIR__, 2);
+    $root = dirname(__DIR__, 3);
     $dir = $root . '/logs/squad/rate';
     if (!is_dir($dir)) {
         @mkdir($dir, 0755, true);
@@ -159,15 +159,15 @@ function squad_pdf_extract_text(string $pdf): string
     return $text;
 }
 
-squad_env_load(dirname(__DIR__, 2) . '/.env');
+squad_env_load(dirname(__DIR__, 3) . '/.env');
 
 function squad_github_tree(): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '') return '';
 
-    $cacheDir  = dirname(__DIR__, 2) . '/logs/squad';
+    $cacheDir  = dirname(__DIR__, 3) . '/logs/squad';
     $cacheFile = $cacheDir . '/repo-tree.cache';
     if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
         return (string) file_get_contents($cacheFile);
@@ -205,7 +205,7 @@ function squad_github_tree(): string
 function squad_github_file(string $path): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '' || $path === '') return '';
 
     $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
@@ -235,7 +235,7 @@ function squad_github_file(string $path): string
 function squad_github_issues(): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '') return '';
 
     $ch = curl_init("https://api.github.com/repos/{$repo}/issues?state=open&per_page=10&sort=updated");
@@ -264,7 +264,7 @@ function squad_github_issues(): string
 function squad_github_create_issue(string $title, string $body, array $labels = []): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '' || $title === '') return '';
 
     $payload = json_encode(array_filter(['title' => $title, 'body' => $body, 'labels' => $labels]));
@@ -295,7 +295,7 @@ function squad_github_create_issue(string $title, string $body, array $labels = 
 function squad_github_commit(string $path, string $content, string $message): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '' || $path === '') return '';
 
     $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
@@ -344,7 +344,7 @@ function squad_github_commit(string $path, string $content, string $message): st
 function squad_github_commits(): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
-    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
     if ($token === '') return '';
 
     $ch = curl_init("https://api.github.com/repos/{$repo}/commits?per_page=10");
@@ -375,7 +375,7 @@ function squad_github_commits(): string
 
 $allowed_origins = [
     'https://shopvivaliz.com.br',
-    'https://shopvivaliz.com.br',
+    'https://admin.shopvivaliz.com.br',
 ];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if ($origin !== '' && in_array($origin, $allowed_origins, true)) {
@@ -395,7 +395,7 @@ $openaiKey = getenv('OPENAI_API_KEY') ?: '';
 $geminiKey = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_API_KEY') ?: '');
 $anthropicModel = getenv('SQUAD_ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
 $openaiModel = getenv('SQUAD_OPENAI_MODEL') ?: 'gpt-4o-mini';
-$geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
+$geminiModel = getenv('AI_SQUAD_GEMINI_MODEL') ?: getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash';
 $maxTokens = (int) (getenv('SQUAD_MAX_TOKENS') ?: 900);
 if ($maxTokens < 100 || $maxTokens > 4000) {
     $maxTokens = 900;
@@ -407,7 +407,7 @@ if (($_GET['health'] ?? '') === '1') {
         'endpoint' => 'squad-chat',
         'version' => 'squad-chat-dialogue-mode-20260626',
         'token_required_for_post' => true,
-        'env_loaded' => is_file(dirname(__DIR__, 2) . '/.env'),
+        'env_loaded' => is_file(dirname(__DIR__, 3) . '/.env'),
         'providers' => [
             'anthropic' => ['configured' => $anthropicKey !== '', 'model' => $anthropicModel],
             'openai' => ['configured' => $openaiKey !== '', 'model' => $openaiModel],
@@ -757,7 +757,7 @@ foreach ($agentsToRun as $agentId) {
     }
 }
 
-$logDir = dirname(__DIR__, 2) . '/logs/squad';
+$logDir = dirname(__DIR__, 3) . '/logs/squad';
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0755, true);
 }
