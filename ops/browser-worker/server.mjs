@@ -1,5 +1,3 @@
-[Reading 286 lines from start (total: 286 lines, 0 remaining)]
-
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -432,4 +430,3 @@ async function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-[executed on device: always-free-arm-1787907847-26 (a4fd96b2-4248-434d-aaaa-2dfe80d29366)]
