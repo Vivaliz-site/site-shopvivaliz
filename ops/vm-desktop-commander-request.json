@@ -1,5 +1,6 @@
 {
   "action": "amazon_support_reply",
   "case_ids": ["22153077391", "22153259501"],
-  "reason": "reply to the two Seller Support cases opened by ShopVivaliz and verify read-back"
+  "requested_at": "2026-09-21T23:10:00Z",
+  "reason": "reply to the two Seller Support cases opened by ShopVivaliz and publish sanitized read-back evidence"
 }
