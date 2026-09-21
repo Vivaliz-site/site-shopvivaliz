@@ -12,7 +12,6 @@ bridge="/home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/claude-bridge.mjs"
 claude_bin="/home/ubuntu/.local/bin/claude"
 env_path="/home/ubuntu/shopvivaliz-deploy/shared/.env"
 credentials_path="/home/ubuntu/.claude/.credentials.json"
-legacy_bridge="/home/ubuntu/.local/share/shopvivaliz-ai-squad/claude-bridge.mjs"
 node_bin="$(command -v node)"
 
 test -n "$node_bin"
