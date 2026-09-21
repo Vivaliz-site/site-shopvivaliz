@@ -167,7 +167,7 @@ async function performAction(session, body) {
   } else if (action === 'type') {
     await page.keyboard.insertText(String(body.text || '').slice(0, 4000));
   } else if (action === 'key') {
-    const allowed = new Set(['Enter','Tab','Escape','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Space','Home','End','Delete']);
+    const allowed = new Set(['Enter','Tab','Escape','Backspace','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Space','Home','End','Delete','Control+A','Control+C','Control+V']);
     const key = String(body.key || '');
     if (!allowed.has(key)) throw new Error('key_not_allowed');
     await page.keyboard.press(key);

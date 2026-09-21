@@ -15,7 +15,7 @@ $allowedLegacyControl = [
     'pr-conflict-auto-healer.yml',
     'audit-openai-secondary-vm.yml',
     'active-products-browser-smoke.yml',
-    'fred-win-admin-mobile-readonly-smoke.yml',
+    'backend-vm-admin-mobile-readonly-smoke.yml',
     'image-run-browser-smoke.yml',
 ];
 $violations = [];

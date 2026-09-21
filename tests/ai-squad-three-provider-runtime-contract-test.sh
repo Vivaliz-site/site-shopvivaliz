@@ -22,6 +22,17 @@ grep -q 'reconcile_ai_squad_codex_bridge_unit' "$deploy"
 grep -q 'install-codex-bridge-user-service.sh' "$deploy"
 grep -q 'reconcile_ai_squad_claude_bridge_unit' "$deploy"
 grep -q 'shopvivaliz-squad-claude-bridge.service' "$deploy"
+python3 - "$deploy" <<'PY'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+start = text.index('if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then')
+end = text.index('log INFO "Producao e runtime ja alinhados', start)
+block = text[start:end]
+for required in ('reconcile_ai_squad_codex_bridge_unit "$CURRENT_LINK"', 'reconcile_ai_squad_claude_bridge_unit "$CURRENT_LINK"'):
+    if required not in block:
+        raise SystemExit(f"FAIL: aligned-release path missing {required}")
+PY
 grep -q 'claude_code' "$docs"
 grep -q 'vertex_oauth' "$docs"
 grep -Fq 'OpenAI: `gpt-5.6-terra`, effort `medium`;' "$docs"
