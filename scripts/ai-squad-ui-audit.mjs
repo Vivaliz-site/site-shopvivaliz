@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json';
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
-const profileDir = process.env.AI_SQUAD_UI_PROFILE || '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/shopvivaliz-admin-test';
+const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
+const ephemeralProfile = configuredProfileDir === '';
+const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
   String(process.env.AI_SQUAD_PLAYWRIGHT_MODULE || '').trim(),
   '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
@@ -28,16 +31,24 @@ function fail(message) {
 
 const raw = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
 if (!raw.email || !raw.password) fail('credential_file_invalid');
-fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
+if (!ephemeralProfile) fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
 
 const chromium = await loadChromium();
 const browserPath = configuredBrowserPath || chromium.executablePath();
 if (!browserPath || !fs.existsSync(browserPath)) fail('chromium_missing');
 const context = await chromium.launchPersistentContext(profileDir, {
   executablePath: browserPath,
-  headless: false,
+  headless: true,
   viewport: { width: 1440, height: 900 },
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  env: { ...process.env, LIBGL_ALWAYS_SOFTWARE: '1' },
+  args: [
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--disable-vulkan',
+    '--use-gl=swiftshader',
+    '--use-angle=swiftshader',
+  ],
 });
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(20000);
@@ -155,4 +166,5 @@ try {
   console.log('AI_SQUAD_UI_AUDIT=PASS');
 } finally {
   await context.close().catch(() => {});
+  if (ephemeralProfile) fs.rmSync(profileDir, { recursive: true, force: true });
 }

@@ -61,15 +61,8 @@ export function classifyClaudeError(value) {
 export function claudeFailureDetail(result) {
   let detail = String(result?.stderr || '').trim();
   if (!detail) {
-    const stdout = String(result?.stdout || '').trim();
-    if (stdout) {
-      try {
-        const parsed = JSON.parse(stdout);
-        detail = String(parsed?.result || parsed?.error?.message || parsed?.message || stdout);
-      } catch {
-        detail = stdout;
-      }
-    }
+    const parsed = parseClaudeOutput(result?.stdout || '');
+    detail = String(parsed.result || parsed.error || result?.stdout || '').trim();
   }
   return sanitizeBridgeError(detail || ('claude_exit_' + String(result?.code ?? 'unknown')));
 }
@@ -77,7 +70,8 @@ export function claudeFailureDetail(result) {
 export function buildClaudeArgs(request) {
   const args = [
     '-p',
-    '--output-format', 'json',
+    '--output-format', 'stream-json',
+    '--verbose',
     '--no-session-persistence',
     '--safe-mode',
     '--restricted',
@@ -231,15 +225,10 @@ async function probeAuth() {
       web_search: false,
     };
     const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
-    let data = {};
-    try {
-      data = JSON.parse(result.stdout || '{}');
-    } catch {
-      data = {};
-    }
+    const data = parseClaudeOutput(result.stdout || '');
     const ok = result.code === 0
-      && data?.is_error !== true
-      && String(data?.result || '').trim() !== '';
+      && data.is_error !== true
+      && data.result !== '';
     authState = { checked_at: Date.now(), authenticated: ok };
     return ok;
   } catch {
@@ -255,6 +244,59 @@ function extractUrls(text) {
   return [...seen].slice(0, 30);
 }
 
+function collectUrlsFromValue(value, seen) {
+  if (typeof value === 'string') {
+    for (const url of extractUrls(value)) seen.add(url);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectUrlsFromValue(item, seen);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const nested of Object.values(value)) collectUrlsFromValue(nested, seen);
+}
+
+export function parseClaudeOutput(stdout) {
+  const raw = String(stdout || '').trim();
+  if (!raw) return { result: '', usage: {}, sources: [], is_error: false, error: '' };
+
+  const records = [];
+  try {
+    records.push(JSON.parse(raw));
+  } catch {
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        records.push(JSON.parse(trimmed));
+      } catch {
+        // Ignore non-JSON diagnostic lines; stderr remains the authoritative
+        // transport diagnostic channel.
+      }
+    }
+  }
+
+  if (records.length === 0) {
+    return { result: '', usage: {}, sources: [], is_error: true, error: 'invalid_json' };
+  }
+
+  const final = [...records].reverse().find((entry) => entry?.type === 'result')
+    || records[records.length - 1];
+  const result = String(final?.result || '').trim();
+  const seen = new Set(extractUrls(result));
+
+  for (const record of records) collectUrlsFromValue(record, seen);
+
+  return {
+    result,
+    usage: final?.usage && typeof final.usage === 'object' ? final.usage : {},
+    sources: [...seen].slice(0, 30),
+    is_error: final?.is_error === true || final?.subtype === 'error',
+    error: String(final?.error?.message || final?.message || ''),
+  };
+}
+
 async function answer(request) {
   const auth = claudeAuthSource();
   if (!auth.configured) throw new Error('missing token');
@@ -265,16 +307,11 @@ async function answer(request) {
     const detail = claudeFailureDetail(result);
     throw new Error(detail || 'claude_transport_error');
   }
-  let data;
-  try {
-    data = JSON.parse(result.stdout);
-  } catch {
-    throw new Error('invalid_json');
+  const data = parseClaudeOutput(result.stdout);
+  if (data.is_error === true) {
+    throw new Error(sanitizeBridgeError(data.error || data.result || 'claude_error'));
   }
-  if (!data || data.is_error === true) {
-    throw new Error(sanitizeBridgeError(data?.result || 'claude_error'));
-  }
-  const text = String(data.result || '').trim();
+  const text = data.result;
   if (!text) throw new Error('empty_response');
 
   authState = { checked_at: Date.now(), authenticated: true };
@@ -283,8 +320,8 @@ async function answer(request) {
     text,
     model: request.model,
     transport: 'claude_code',
-    sources: extractUrls(text),
-    usage: data.usage && typeof data.usage === 'object' ? data.usage : {},
+    sources: data.sources,
+    usage: data.usage,
   };
 }
 
