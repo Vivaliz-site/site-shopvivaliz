@@ -30,6 +30,7 @@ $mustContain = [
     [$server, "origin: session.origin", 'session origin metadata required'],
     [$server, "profile: session.profile", 'profile metadata required'],
     [$server, "setInterval(async () =>", 'TTL watchdog required'],
+    [$server, "'Control+A','Control+C','Control+V'", 'safe clipboard shortcuts required'],
     [$supervisor, '-R "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT"', 'reverse tunnel must bind site loopback'],
     [$supervisor, 'StrictHostKeyChecking=yes', 'strict host verification required'],
     [$admin, "require_once __DIR__ . '/../includes/admin-guard.php';", 'admin authentication required'],

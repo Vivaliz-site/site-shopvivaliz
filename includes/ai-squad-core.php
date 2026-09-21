@@ -37,7 +37,7 @@ function svais_openai_transport_order(): array
 
 function svais_anthropic_transport_order(): array
 {
-    return ['claude_code', 'direct', 'vertex_oauth', 'openrouter'];
+    return ['claude_code'];
 }
 
 function svais_gemini_transport_order(): array
@@ -258,7 +258,6 @@ function svais_provider_state(array $profile): array
 {
     $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
     $openAiDirectConfigured = trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '';
-    $anthropicDirectConfigured = trim((string)(getenv('ANTHROPIC_API_KEY') ?: '')) !== '';
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
     $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
@@ -276,13 +275,11 @@ function svais_provider_state(array $profile): array
             'reasoning' => (string)$profile['openai']['effort'],
         ],
         'anthropic' => [
-            'configured' => $claude['available'] || $anthropicDirectConfigured || $vertexConfigured || $openRouterConfigured,
+            'configured' => $claude['available'],
             'claude_code_oauth_configured' => $claude['configured'],
             'claude_code_authenticated' => $claude['authenticated'],
             'claude_code_available' => $claude['available'],
-            'direct_configured' => $anthropicDirectConfigured,
-            'vertex_oauth_configured' => $vertexConfigured,
-            'openrouter_fallback_configured' => $openRouterConfigured,
+            'account_login_only' => true,
             'transport_order' => svais_anthropic_transport_order(),
             'model' => (string)$profile['anthropic']['model'],
             'reasoning' => (string)$profile['anthropic']['effort'],
@@ -909,9 +906,6 @@ function svais_anthropic_dispatch(
     ): array {
         return match ($transport) {
             'claude_code' => svais_claude_bridge_call($cfg, $system, $prompt, $webSearch),
-            'direct' => svais_anthropic_call($cfg, $system, $prompt, $webSearch),
-            'vertex_oauth' => svais_anthropic_vertex_call($cfg, $system, $prompt, $webSearch),
-            'openrouter' => svais_openrouter_call('anthropic', $cfg, $system, $prompt, $webSearch),
             default => throw new InvalidArgumentException('unknown_anthropic_transport'),
         };
     };

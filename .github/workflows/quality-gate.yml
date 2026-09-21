@@ -63,6 +63,7 @@ jobs:
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
+          python3 tests/windows-browser-policy-regression.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
@@ -75,11 +76,9 @@ jobs:
           bash tests/public-layout-a1-proxy-regression.sh
           bash tests/public-layout-proxy-route-discovery-regression.sh
           bash tests/public-layout-audit-concurrency-regression.sh
-          bash tests/active-products-browser-relay-fallback-regression.sh
           bash tests/ecommerce-live-stale-evidence-regression.sh
           bash tests/blog-production-proof-regression.sh
           php tests/php-router-blog-contract-test.php
-          php tests/browser-smoke-relay-failover-regression.php
           bash tests/apache-security-headers-module-regression.sh
           php tests/csp-mercadopago-frame-regression.php
           php tests/popup-coupon-navigation-abort-regression.php

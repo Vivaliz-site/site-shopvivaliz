@@ -687,12 +687,15 @@ if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
 fi
 
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
-  if ! reconcile_runtime_secrets "$CURRENT_LINK" || ! verify_runtime_health; then
-    write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado invalido"
+  if ! reconcile_runtime_secrets "$CURRENT_LINK" \
+    || ! reconcile_ai_squad_codex_bridge_unit "$CURRENT_LINK" \
+    || ! reconcile_ai_squad_claude_bridge_unit "$CURRENT_LINK" \
+    || ! verify_runtime_health; then
+    write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado/AI Squad invalido"
     exit 1
   fi
-  log INFO "Producao e runtime ja alinhados em $REMOTE_SHA"
-  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release e runtime ja estavam alinhados"
+  log INFO "Producao, runtime e bridges AI Squad ja alinhados em $REMOTE_SHA"
+  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release, runtime e bridges AI Squad ja estavam alinhados"
   exit 0
 fi
 
