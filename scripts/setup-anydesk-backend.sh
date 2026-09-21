@@ -32,20 +32,40 @@ status() {
   echo "ANYDESK_ARCH=$(dpkg --print-architecture)"
   if dpkg-query -W -f='${Status}' anydesk 2>/dev/null | grep -q 'install ok installed'; then
     echo "ANYDESK_INSTALLED=true"
-    echo "ANYDESK_VERSION=$(anydesk --version 2>/dev/null | head -1 || true)"
+    if version_value="$(anydesk --version 2>/dev/null | head -1)"; then
+      echo "ANYDESK_VERSION=$version_value"
+    else
+      echo "ANYDESK_VERSION=unavailable"
+    fi
   else
     echo "ANYDESK_INSTALLED=false"
   fi
-  echo "ANYDESK_SERVICE=$(systemctl is-active anydesk.service 2>/dev/null || true)"
-  echo "ANYDESK_ENABLED=$(systemctl is-enabled anydesk.service 2>/dev/null || true)"
+  if service_state="$(systemctl is-active anydesk.service 2>/dev/null)"; then
+    echo "ANYDESK_SERVICE=$service_state"
+  else
+    echo "ANYDESK_SERVICE=inactive"
+  fi
+  if enabled_state="$(systemctl is-enabled anydesk.service 2>/dev/null)"; then
+    echo "ANYDESK_ENABLED=$enabled_state"
+  else
+    echo "ANYDESK_ENABLED=disabled"
+  fi
   if command -v anydesk >/dev/null 2>&1; then
-    id_value="$(timeout 10 anydesk --get-id 2>/dev/null || true)"
+    if id_value="$(timeout 10 anydesk --get-id 2>/dev/null)"; then
+      :
+    else
+      id_value=""
+    fi
     if [ -n "$id_value" ]; then
       echo "ANYDESK_ID=$id_value"
     else
       echo "ANYDESK_ID=unavailable"
     fi
-    online="$(timeout 10 anydesk --get-status 2>/dev/null || true)"
+    if online="$(timeout 10 anydesk --get-status 2>/dev/null)"; then
+      :
+    else
+      online=""
+    fi
     echo "ANYDESK_NETWORK_STATUS=${online:-unknown}"
   fi
 }
@@ -60,12 +80,14 @@ install_anydesk() {
   apt-get update -qq
   if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq anydesk; then
     echo "ANYDESK_WARN=apt_install_failed_attempting_dpkg_repair" >&2
-    command -v update-menus >/dev/null 2>&1 || { echo "ANYDESK_ERROR=update_menus_missing" >&2; exit 30; }
-    command -v update-desktop-database >/dev/null 2>&1 || { echo "ANYDESK_ERROR=update_desktop_database_missing" >&2; exit 31; }
-    command -v xdg-desktop-menu >/dev/null 2>&1 || { echo "ANYDESK_ERROR=xdg_desktop_menu_missing" >&2; exit 32; }
+    if ! command -v update-menus >/dev/null 2>&1; then echo "ANYDESK_ERROR=update_menus_missing" >&2; exit 30; fi
+    if ! command -v update-desktop-database >/dev/null 2>&1; then echo "ANYDESK_ERROR=update_desktop_database_missing" >&2; exit 31; fi
+    if ! command -v xdg-desktop-menu >/dev/null 2>&1; then echo "ANYDESK_ERROR=xdg_desktop_menu_missing" >&2; exit 32; fi
     dpkg --configure anydesk
   fi
-  dpkg --audit || true
+  if ! dpkg --audit; then
+    echo "ANYDESK_WARN=dpkg_audit_reported_pending_items" >&2
+  fi
   systemctl daemon-reload
   systemctl enable --now anydesk.service
   sleep 2
@@ -74,13 +96,17 @@ install_anydesk() {
 }
 
 launch_gui() {
-  command -v anydesk >/dev/null 2>&1 || {
+  if ! command -v anydesk >/dev/null 2>&1; then
     echo "ANYDESK_ERROR=not_installed" >&2
     exit 24
-  }
+  fi
 
   local tray_pid env_dump display xauthority runtime dbus window_dump session_id session_type session_remote
-  tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1 || true)"
+  if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
+    :
+  else
+    tray_pid=""
+  fi
   if [ -z "$tray_pid" ]; then
     echo "ANYDESK_ERROR=physical_tray_missing" >&2
     exit 25
@@ -93,8 +119,16 @@ launch_gui() {
   dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
 
   session_id="$(loginctl list-sessions --no-legend | awk -v user="$GUI_USER" '$3 == user {print $1; exit}')"
-  session_type="$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || true)"
-  session_remote="$(loginctl show-session "$session_id" -p Remote --value 2>/dev/null || true)"
+  if session_type="$(loginctl show-session "$session_id" -p Type --value 2>/dev/null)"; then
+    :
+  else
+    session_type=""
+  fi
+  if session_remote="$(loginctl show-session "$session_id" -p Remote --value 2>/dev/null)"; then
+    :
+  else
+    session_remote=""
+  fi
 
   if [ -z "$display" ] || [ "$display" != ":0" ] || [ "$session_type" != "x11" ] || [ "$session_remote" != "no" ]; then
     echo "ANYDESK_ERROR=unsupported_gui_session" >&2
@@ -104,20 +138,28 @@ launch_gui() {
     exit 28
   fi
 
-  [ -n "$xauthority" ] || xauthority="/home/$GUI_USER/.Xauthority"
-  [ -n "$runtime" ] || runtime="/run/user/$(id -u "$GUI_USER")"
-  [ -n "$dbus" ] || dbus="unix:path=$runtime/bus"
+  if [ -z "$xauthority" ]; then xauthority="/home/$GUI_USER/.Xauthority"; fi
+  if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$GUI_USER")"; fi
+  if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
 
-  runuser -u "$GUI_USER" -- env \
+  if runuser -u "$GUI_USER" -- env \
     DISPLAY="$display" \
     XAUTHORITY="$xauthority" \
     XDG_RUNTIME_DIR="$runtime" \
     DBUS_SESSION_BUS_ADDRESS="$dbus" \
     GDK_BACKEND=x11 \
-    anydesk --settings >/dev/null 2>&1 || true
+    anydesk --settings >/dev/null 2>&1; then
+    :
+  else
+    echo "ANYDESK_WARN=settings_open_returned_nonzero" >&2
+  fi
 
   sleep 2
-  window_dump="$(runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xwininfo -root -tree 2>/dev/null || true)"
+  if window_dump="$(runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xwininfo -root -tree 2>/dev/null)"; then
+    :
+  else
+    window_dump=""
+  fi
   if printf '%s\n' "$window_dump" | grep -qi 'AnyDesk'; then
     echo "ANYDESK_GUI=window_present"
   elif pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' >/dev/null 2>&1; then
