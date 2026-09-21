@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+// Deep-research cycles can legitimately exceed the default PHP request timeout.
+// Keep the server-side cycle alive long enough to finish all providers and consensus.
+@set_time_limit(900);
+ignore_user_abort(true);
+
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__, 2) . '/config/agent-keys.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
