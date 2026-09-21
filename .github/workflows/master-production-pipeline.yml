@@ -384,7 +384,7 @@ jobs:
           sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
           [[ "$sitemap_body" == *'<urlset'* ]]
 
-          health_json="$(curl -fsS -A 'ShopVivaliz-Safe-Sync/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health/)"
+          health_json="$(curl -fsS -A 'ShopVivaliz-Safe-Sync/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health.php)"
           printf '%s' "$health_json" | php -r '$j=json_decode(stream_get_contents(STDIN), true); if (!is_array($j) || ($j["ok"] ?? null) !== true || (float)($j["health_score_percent"] ?? -1) !== 100.0) { fwrite(STDERR, "health_not_100\n"); exit(1); }'
           echo 'health_score_percent -> 100'
 
