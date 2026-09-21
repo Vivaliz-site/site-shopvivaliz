@@ -1,7 +1,7 @@
 # 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
-> 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md).
+> 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md). O GPT `@dev` e qualquer agente adicional usado como programador/revisor também devem ler [`docs/knowledge/dev-agent-briefing.md`](docs/knowledge/dev-agent-briefing.md), inclusive a política de pesquisa técnica atualizada na web.
 > Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Prefira Remote Desktop Commander por nome do dispositivo; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
 
 <!-- SUPERPOWERS_EVERY_STAGE_V1 -->
