@@ -12,14 +12,33 @@ bridge="/home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/claude-bridge.mjs"
 claude_bin="/home/ubuntu/.local/bin/claude"
 env_path="/home/ubuntu/shopvivaliz-deploy/shared/.env"
 credentials_path="/home/ubuntu/.claude/.credentials.json"
+claude_dir="$HOME/.claude"
+user_memory="$claude_dir/CLAUDE.md"
+bootstrap_doc="/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/claude-vm-bootstrap.md"
+bootstrap_link="$claude_dir/shopvivaliz-bootstrap.md"
 node_bin="$(command -v node)"
 
 test -n "$node_bin"
 test -f "$bridge"
 test -x "$claude_bin"
 test -f "$env_path"
-mkdir -p "$service_dir" "$workspace"
-chmod 700 "$runtime" "$workspace"
+test -f "$bootstrap_doc"
+mkdir -p "$service_dir" "$workspace" "$claude_dir"
+chmod 700 "$runtime" "$workspace" "$claude_dir"
+
+# Claude Code user memory is global across projects. Keep a stable import in
+# ~/.claude/CLAUDE.md and point it at the canonical bootstrap from the active
+# immutable release. Preserve any pre-existing user memory.
+ln -sfn "$bootstrap_doc" "$bootstrap_link"
+touch "$user_memory"
+chmod 600 "$user_memory"
+bootstrap_import='@~/.claude/shopvivaliz-bootstrap.md'
+if ! grep -Fqx "$bootstrap_import" "$user_memory"; then
+  {
+    printf '\n# ShopVivaliz managed VM bootstrap\n'
+    printf '%s\n' "$bootstrap_import"
+  } >>"$user_memory"
+fi
 
 tmp="$(mktemp "$service_dir/.${service}.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
