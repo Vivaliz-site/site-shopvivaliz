@@ -34,26 +34,34 @@ status() {
   echo "ANYDESK_SERVICE=$(systemctl is-active anydesk.service 2>/dev/null || true)"
   echo "ANYDESK_ENABLED=$(systemctl is-enabled anydesk.service 2>/dev/null || true)"
   if command -v anydesk >/dev/null 2>&1; then
-    id_value="$(timeout 10 runuser -u "$RDP_USER" -- anydesk --get-id 2>/dev/null || true)"
+    id_value="$(timeout 10 anydesk --get-id 2>/dev/null || true)"
     if [ -n "$id_value" ]; then
       echo "ANYDESK_ID=$id_value"
     else
       echo "ANYDESK_ID=unavailable"
     fi
-    online="$(timeout 10 runuser -u "$RDP_USER" -- anydesk --get-status 2>/dev/null || true)"
+    online="$(timeout 10 anydesk --get-status 2>/dev/null || true)"
     echo "ANYDESK_NETWORK_STATUS=${online:-unknown}"
   fi
 }
 
 install_anydesk() {
   apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl apt-transport-https
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates curl apt-transport-https menu desktop-file-utils xdg-utils
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://keys.anydesk.com/repos/DEB-GPG-KEY -o /etc/apt/keyrings/keys.anydesk.com.asc
   chmod a+r /etc/apt/keyrings/keys.anydesk.com.asc
   printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/keys.anydesk.com.asc] https://deb.anydesk.com all main' > /etc/apt/sources.list.d/anydesk-stable.list
   apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq anydesk
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq anydesk; then
+    echo "ANYDESK_WARN=apt_install_failed_attempting_dpkg_repair" >&2
+    command -v update-menus >/dev/null 2>&1 || { echo "ANYDESK_ERROR=update_menus_missing" >&2; exit 30; }
+    command -v update-desktop-database >/dev/null 2>&1 || { echo "ANYDESK_ERROR=update_desktop_database_missing" >&2; exit 31; }
+    command -v xdg-desktop-menu >/dev/null 2>&1 || { echo "ANYDESK_ERROR=xdg_desktop_menu_missing" >&2; exit 32; }
+    dpkg --configure anydesk
+  fi
+  dpkg --audit || true
+  systemctl daemon-reload
   systemctl enable --now anydesk.service
   sleep 2
   status
