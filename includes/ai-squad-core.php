@@ -1118,6 +1118,28 @@ function svais_transcript_text(array $entries): string
     return implode("\n\n", $chunks);
 }
 
+function svais_cycle_completion(array $providers, array $providerStatus, bool $consensusAvailable): array
+{
+    $successful = [];
+    $failed = [];
+    foreach ($providers as $provider) {
+        $id = (string)$provider;
+        if (($providerStatus[$id] ?? '') === 'ok') {
+            $successful[] = $id;
+        } else {
+            $failed[] = $id;
+        }
+    }
+
+    $complete = $failed === [] && $consensusAvailable;
+    return [
+        'ok' => $complete,
+        'degraded' => !$complete && $successful !== [],
+        'successful_providers' => $successful,
+        'failed_providers' => $failed,
+    ];
+}
+
 function svais_round_prompt(string $topic, string $phase, array $transcript): string
 {
     if ($phase === 'research') {
