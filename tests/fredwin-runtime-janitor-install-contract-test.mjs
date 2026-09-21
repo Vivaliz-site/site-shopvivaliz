@@ -4,7 +4,7 @@ for (const needle of [
   '[switch]$InstallTask',
   "'ShopVivaliz Runtime Janitor'",
   'New-ScheduledTaskTrigger -AtStartup',
-  'New-TimeSpan -Minutes 5',
+  'New-TimeSpan -Minutes 30',
   'New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest',
   'Register-ScheduledTask',
   '$settings.Hidden = $true',

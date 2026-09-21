@@ -804,7 +804,7 @@ function liz_call_claude(string $message, array $history, array $products, strin
     $messages[] = ['role' => 'user', 'content' => $message];
 
     $payload = [
-        'model' => liz_env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
+        'model' => liz_env('ANTHROPIC_MODEL') ?: 'claude-sonnet-5',
         'max_tokens' => 1000,
         'system' => liz_system_prompt($products, $knowledge, $orderContext, $state),
         'messages' => $messages
@@ -820,7 +820,7 @@ function liz_call_claude(string $message, array $history, array $products, strin
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01'
+            'anthropic-version: 2024-06-01'
         ],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
