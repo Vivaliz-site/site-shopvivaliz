@@ -7,13 +7,13 @@ if (!is_file($workflow)) {
 }
 $text = (string) file_get_contents($workflow);
 $required = [
-    "issues:",
-    "types: [opened]",
+    "issue_comment:",
+    "types: [created]",
     "runs-on: ubuntu-latest",
     "environment: Production",
-    "github.event.issue.title == '[amazon-support-reply]'",
-    "github.event.issue.user.login == 'fredmourao-ai'",
-    "github.event.issue.body == 'case_ids=22153077391,22153259501'",
+    "github.event.issue.number == 1586",
+    "github.event.comment.user.login == 'fredmourao-ai'",
+    "github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501'",
     "OCI_CLI_USER",
     "OCI_CLI_TENANCY",
     "OCI_CLI_FINGERPRINT",
@@ -40,6 +40,7 @@ foreach ($required as $needle) {
 }
 $forbidden = [
     "push:",
+    "issues:",
     "schedule:",
     "repository_dispatch:",
     "runs-on: self-hosted",
