@@ -13,6 +13,7 @@ on:
           - identity
           - disk
           - storage_scan
+          - storage_cleanup_safe
           - runtime_status
           - repo_status
           - browser_status
@@ -90,7 +91,7 @@ jobs:
               action, reason = match.group(1), match.group(2).strip()
 
           allowed = {
-              "identity", "disk", "storage_scan", "runtime_status", "repo_status",
+              "identity", "disk", "storage_scan", "storage_cleanup_safe", "runtime_status", "repo_status",
               "browser_status", "browser_health", "browser_install",
               "browser_start", "browser_restart", "browser_stop",
               "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
@@ -329,6 +330,48 @@ jobs:
               ;;
             storage_scan)
               CMD='echo BACKEND_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo BACKEND_STORAGE_SCAN_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_cleanup_safe)
+              CMD='set -Eeuo pipefail
+              echo BACKEND_STORAGE_CLEANUP_BEGIN
+              df -h /
+              freed_candidates=0
+              if ! pgrep -af "/home/ubuntu/.cache/ms-playwright" >/dev/null 2>&1; then
+                rm -rf /home/ubuntu/.cache/ms-playwright
+                echo CLEANED=/home/ubuntu/.cache/ms-playwright
+              else
+                echo SKIPPED_ACTIVE=/home/ubuntu/.cache/ms-playwright
+              fi
+              rm -rf /home/ubuntu/.npm/_cacache
+              echo CLEANED=/home/ubuntu/.npm/_cacache
+              if ! pgrep -af "/home/ubuntu/.npm/_npx/" >/dev/null 2>&1; then
+                find /home/ubuntu/.npm/_npx -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+                echo CLEANED=/home/ubuntu/.npm/_npx_children
+              else
+                echo SKIPPED_ACTIVE=/home/ubuntu/.npm/_npx
+              fi
+              for d in                 /home/ubuntu/shopvivaliz-olist-integration-20260911-vm1                 /home/ubuntu/shopvivaliz-revenue-recovery-20260911                 /home/ubuntu/shopvivaliz-me-runtime-refresh                 /home/ubuntu/site-shopvivaliz-private-runner-fix                 /home/ubuntu/site-shopvivaliz-origin-access-fix                 /home/ubuntu/site-shopvivaliz-oci-rebalance-20260913                 /home/ubuntu/shopvivaliz-pr1478-policy-red                 /home/ubuntu/shopvivaliz-pr-enforcer-red                 /home/ubuntu/shopvivaliz-evidence-fix
+              do
+                [ -e "$d" ] || continue
+                if pgrep -af "$d" >/dev/null 2>&1; then
+                  echo SKIPPED_ACTIVE=$d
+                  continue
+                fi
+                if git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                  if [ -n "$(git -C "$d" status --porcelain 2>/dev/null)" ]; then
+                    echo SKIPPED_DIRTY=$d
+                    continue
+                  fi
+                else
+                  echo SKIPPED_NOT_GIT=$d
+                  continue
+                fi
+                rm -rf "$d"
+                echo CLEANED=$d
+              done
+              df -h /
+              echo BACKEND_STORAGE_CLEANUP_END'
               "${SSH[@]}" "$CMD"
               ;;
             runtime_status)
