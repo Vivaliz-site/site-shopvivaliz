@@ -343,7 +343,11 @@ jobs:
               path_in_use() {
                 target="$1"
                 for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
-                  resolved="$(readlink -f "$ref" 2>/dev/null || true)"
+                  if resolved="$(readlink -f "$ref" 2>/dev/null)"; then
+                    :
+                  else
+                    continue
+                  fi
                   case "$resolved" in "$target"|"$target"/*) return 0 ;; esac
                 done
                 return 1
