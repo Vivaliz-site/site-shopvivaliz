@@ -50,7 +50,7 @@ PY
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$tmp"
   systemctl daemon-reload
-  systemctl enable rustdesk.service >/dev/null 2>&1 || true
+  if systemctl list-unit-files rustdesk.service >/dev/null 2>&1; then systemctl enable rustdesk.service >/dev/null; fi
 }
 
 configure_client_profile() {
@@ -84,7 +84,7 @@ PY
   chmod 600 "$PASSWORD_FILE"
   if command -v rustdesk >/dev/null 2>&1; then
     if rustdesk --help 2>&1 | grep -q -- '--password'; then
-      cat "$PASSWORD_FILE" | rustdesk --password >/dev/null 2>&1 || true
+      if ! rustdesk --password < "$PASSWORD_FILE" >/dev/null 2>&1; then die unattended_password_set_failed 32; fi
     fi
   fi
   echo "RUSTDESK_PASSWORD_SOURCE=local_root_only"
@@ -94,9 +94,9 @@ install_client() {
   require_root
   assert_host
   [ -n "$CLIENT_KEY" ] || die server_key_required 31
-  systemctl stop rustdesk.service >/dev/null 2>&1 || true
+  if systemctl is-active --quiet rustdesk.service; then systemctl stop rustdesk.service; fi
   install_client_package
-  systemctl stop rustdesk.service >/dev/null 2>&1 || true
+  if systemctl is-active --quiet rustdesk.service; then systemctl stop rustdesk.service; fi
 
   configure_client_profile /root root "$CLIENT_SERVER" "$CLIENT_KEY"
   for u in fredconsole fredrdp ubuntu; do
@@ -107,7 +107,7 @@ install_client() {
   done
 
   ensure_unattended_password
-  systemctl enable --now rustdesk.service >/dev/null 2>&1 || true
+  systemctl enable --now rustdesk.service >/dev/null
   sleep 3
   echo "RUSTDESK_CLIENT_INSTALL=PASS"
   status
@@ -151,7 +151,7 @@ EOF
     sleep 1
   done
   [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] || die server_key_not_generated 41
-  chmod 600 "$SERVER_ROOT/data/id_ed25519" 2>/dev/null || true
+  if [ -f "$SERVER_ROOT/data/id_ed25519" ]; then chmod 600 "$SERVER_ROOT/data/id_ed25519"; fi
   chmod 644 "$SERVER_ROOT/data/id_ed25519.pub"
 
   # Never publish the RustDesk web-client ports. The OCI security list remains
@@ -176,18 +176,22 @@ status() {
   echo "RUSTDESK_HOST=$HOST"
   if command -v rustdesk >/dev/null 2>&1; then
     echo "RUSTDESK_CLIENT_INSTALLED=true"
-    rustdesk --version 2>/dev/null | head -1 | sed 's/^/RUSTDESK_CLIENT_VERSION=/' || true
-    idv="$(timeout 10 rustdesk --get-id 2>/dev/null || true)"
+    if version_value="$(rustdesk --version 2>/dev/null | head -1)"; then
+      echo "RUSTDESK_CLIENT_VERSION=$version_value"
+    else
+      echo "RUSTDESK_CLIENT_VERSION=unavailable"
+    fi
+    if idv="$(timeout 10 rustdesk --get-id 2>/dev/null)"; then :; else idv=""; fi
     [ -n "$idv" ] && echo "RUSTDESK_ID=$idv" || echo "RUSTDESK_ID=unavailable"
   else
     echo "RUSTDESK_CLIENT_INSTALLED=false"
   fi
-  svc="$(systemctl is-active rustdesk.service 2>/dev/null || true)"
+  if svc="$(systemctl is-active rustdesk.service 2>/dev/null)"; then :; else svc="inactive"; fi
   echo "RUSTDESK_CLIENT_SERVICE=${svc:-unknown}"
   if [ "$HOST" = "$BACKEND_HOST" ]; then
     if command -v docker >/dev/null 2>&1 && [ -f "$SERVER_ROOT/compose.yml" ]; then
-      hbbs="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbs 2>/dev/null || true)"
-      hbbr="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbr 2>/dev/null || true)"
+      if hbbs="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)"; then :; else hbbs="missing"; fi
+      if hbbr="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbr 2>/dev/null)"; then :; else hbbr="missing"; fi
       echo "RUSTDESK_HBBS=${hbbs:-missing}"
       echo "RUSTDESK_HBBR=${hbbr:-missing}"
       [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] && echo "RUSTDESK_SERVER_KEY_PRESENT=true" || echo "RUSTDESK_SERVER_KEY_PRESENT=false"
