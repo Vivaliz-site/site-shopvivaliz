@@ -77,7 +77,7 @@ prepare() {
   if ! tailscale set --operator=ubuntu >/dev/null 2>&1; then
     echo "PRIVATE_RDP_WARN=operator_not_set" >&2
   fi
-  timedatectl show -p NTPSynchronized --value | grep -qx true || {
+  timedatectl show -p NTPSynchronized --value | grep -qxE '(yes|true)' || {
     echo "PRIVATE_RDP_ERROR=time_not_synchronized" >&2
     exit 23
   }
