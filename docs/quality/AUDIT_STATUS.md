@@ -1,7 +1,6 @@
 # Estado da Auditoria
 
 **Status:** ⚠️ APTO COM RESSALVAS — AUDIT_ESCAPE registrado em 2026-09-21 (squad API nunca auditada; fixes aplicados, aguardando deploy e validação pós-deploy)
-
 ---
 
 ## Rodada 2026-09-19 — cobertura completa com acesso a produção via Remote Desktop Commander

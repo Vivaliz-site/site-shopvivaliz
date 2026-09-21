@@ -1,6 +1,8 @@
 name: MLRR Production Operations Bridge
 
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       operation:
@@ -12,6 +14,8 @@ on:
           - cutover
           - validate
           - shadow
+          - preflight
+          - rollout
 
 permissions:
   contents: read
@@ -22,27 +26,154 @@ concurrency:
 
 jobs:
   operate:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/mlrr '))
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production
     steps:
+      - name: Resolve MLRR request
+        id: req
+        shell: bash
+        env:
+          DISPATCH_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              operation = os.environ.get("DISPATCH_OPERATION", "").strip()
+              reason = "workflow_dispatch"
+          else:
+              comment = event.get("comment") or {}
+              body = str(comment.get("body") or "").strip()
+              match = re.fullmatch(
+                  r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)\s+reason=(.{3,500})",
+                  body,
+              )
+              if not match:
+                  raise SystemExit("Invalid MLRR command format")
+              operation = match.group(1)
+              reason = match.group(2).strip()
+
+          allowed = {"prepare", "cutover", "validate", "shadow", "preflight", "rollout"}
+          if operation not in allowed:
+              raise SystemExit(f"Unsupported MLRR operation: {operation}")
+          if not reason:
+              raise SystemExit("Reason is required")
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"operation={operation}\n")
+          print(f"MLRR_REQUEST operation={operation}")
+          print(f"MLRR_REASON={reason}")
+          PY
+
       - name: Execute canonical MLRR operation
         shell: bash
         env:
-          CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge
-          MLRR_OPERATION: ${{ inputs.operation }}
+          CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge-${{ github.run_id }}
+          MLRR_OPERATION: ${{ steps.req.outputs.operation }}
+          EXECUTION_AGENT: github-actions-mlrr-bridge
         run: |
           set -Eeuo pipefail
-          repo=/home/ubuntu/mercadolivre-returns-recovery
+          test "$(hostname)" = shopvivaliz-free-a1
+
+          site_repo=/home/ubuntu/shopvivaliz-deploy/repo
+          state_dir="$HOME/.local/state/shopvivaliz"
+          cache_root=/home/ubuntu/.cache/mlrr-production-bridge
+          key_file="$HOME/.config/shopvivaliz/execution-provenance.key"
+          work_root=""
+          repo=""
+          mkdir -p "$state_dir"
+          chmod 700 "$state_dir"
+          install -d -m 700 "$cache_root"
+          test -s "$key_file"
+          test -x "$site_repo/scripts/emit-execution-provenance.py"
+          gh auth status --hostname github.com >/dev/null 2>&1
+
+          export EXECUTION_PROVENANCE_HMAC_KEY="$(cat "$key_file")"
+          export EXECUTION_PROVENANCE_KEY_ID=shopvivaliz-host-provenance-v1
+          export EXECUTION_SESSION_ID="$CHAT_CLI_SESSION_ID"
+          export EXECUTION_REPOSITORY=Vivaliz-site/mercadolivre-returns-recovery
+          export EXECUTION_REF=refs/heads/main
+          export EXECUTION_TARGET=shopvivaliz-free-a1
+          export EXECUTION_ORIGIN_TYPE=github-actions
+
+          provenance() {
+            local result="$1" code="$2"
+            EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code" \
+              python3 "$site_repo/scripts/emit-execution-provenance.py" \
+                mlrr_production_bridge --target shopvivaliz-free-a1 \
+              >> "$state_dir/execution-provenance.jsonl"
+          }
+
+          cleanup_workspace() {
+            if [ -z "${work_root:-}" ]; then
+              return 0
+            fi
+            case "$work_root" in
+              /home/ubuntu/.cache/mlrr-production-bridge/run-*) ;;
+              *)
+                echo "Refusing unsafe MLRR bridge cleanup path." >&2
+                return 1
+                ;;
+            esac
+            if [ -d "$work_root" ]; then
+              rm -r -- "$work_root"
+            fi
+          }
+
+          cleanup() {
+            local rc=$?
+            local cleanup_rc=0
+            if ! cleanup_workspace; then
+              cleanup_rc=1
+            fi
+            if [ "$rc" -eq 0 ] && [ "$cleanup_rc" -eq 0 ]; then
+              provenance COMPLETED 0
+            else
+              if [ "$rc" -eq 0 ]; then
+                rc=1
+              fi
+              if ! provenance FAILED "$rc"; then
+                echo "Execution provenance failed during error cleanup." >&2
+                rc=1
+              fi
+            fi
+            unset EXECUTION_PROVENANCE_HMAC_KEY
+            exit "$rc"
+          }
+          trap cleanup EXIT
+          provenance STARTED ""
+
+          work_root="$(mktemp -d "$cache_root/run-XXXXXX")"
+          chmod 700 "$work_root"
+          repo="$work_root/repo"
+          gh repo clone Vivaliz-site/mercadolivre-returns-recovery "$repo" -- --branch main --single-branch --quiet
+          test -z "$(git -C "$repo" status --porcelain)"
+          git -C "$repo" merge-base --is-ancestor f6f8c587e893286aa532760ee461c05b061eeaa2 HEAD
+          git -C "$repo" merge-base --is-ancestor f28cfcdd8efe68a144b528517f230ce803774ef1 HEAD
+          sha="$(git -C "$repo" rev-parse HEAD)"
+          test "$sha" = "$(git -C "$repo" rev-parse origin/main)"
           cd "$repo"
-          test -z "$(git status --porcelain)"
-          git fetch origin main --quiet
-          git switch main
-          git merge --ff-only origin/main
-          sha="$(git rev-parse HEAD)"
-          test "$sha" = "$(git rev-parse origin/main)"
+
           export GITHUB_WORKSPACE="$repo"
           export GITHUB_SHA="$sha"
+          export EXECUTION_SHA="$sha"
           export GITHUB_REF_NAME=main
           test -x scripts/mlrr-production-ops.sh
-          scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
+
+          if [ "$MLRR_OPERATION" = rollout ]; then
+            scripts/mlrr-production-ops.sh prepare
+            scripts/mlrr-production-ops.sh shadow
+            scripts/mlrr-production-ops.sh validate
+            scripts/mlrr-production-ops.sh preflight
+          else
+            scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
+          fi
+
+          echo "MLRR_OPERATION_COMPLETE=$MLRR_OPERATION"
