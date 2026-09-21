@@ -149,7 +149,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 const API='/api/agent/ai-squad.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
 const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
-const transportNames={codex_chatgpt:'via ChatGPT/Codex',direct:'direto',openrouter:'via OpenRouter',manual:'manual'};
+const transportNames={codex_chatgpt:'via ChatGPT/Codex',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
 let count=0;
 
@@ -206,14 +206,14 @@ function addManual(e){
   agent.className='agent';
   agent.textContent='OpenAI — intervenção manual necessária';
   const model=document.createElement('small');
-  model.textContent=String(e.model||'')+' · '+transportLabel('manual');
+  model.textContent=String(e.model||'')+' · '+transportLabel('manual_chatgpt');
   agent.appendChild(model);
   head.appendChild(agent);
   div.appendChild(head);
 
   const note=document.createElement('div');
   note.className='manual-note';
-  note.textContent='Abra a sessão ChatGPT autenticada da VM/RDP e envie este prompt. A resposta não será lida automaticamente pelo AI Squad.';
+  note.textContent='Os perfis ChatGPT/Codex ficaram sem capacidade. Use o ChatGPT autenticado para executar este prompt sem recorrer à OpenAI Platform API.';
   div.appendChild(note);
 
   if(Array.isArray(e.attempts)&&e.attempts.length){
@@ -241,6 +241,13 @@ function addManual(e){
     }
   });
   div.appendChild(button);
+
+  const openChat=document.createElement('button');
+  openChat.type='button';
+  openChat.className='manual-copy';
+  openChat.textContent='Abrir ChatGPT';
+  openChat.addEventListener('click',()=>window.open('https://chatgpt.com/','_blank','noopener,noreferrer'));
+  div.appendChild(openChat);
 
   document.getElementById('feed').appendChild(div);
   div.scrollIntoView({behavior:'smooth',block:'nearest'});
