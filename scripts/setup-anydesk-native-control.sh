@@ -20,8 +20,14 @@ fi
 
 seat0_user() {
   local s
-  s="$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null || true)"
-  [ -n "$s" ] && loginctl show-session "$s" -p Name --value 2>/dev/null || true
+  if ! s="$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null)"; then
+    s=""
+  fi
+  if [ -n "$s" ]; then
+    if ! loginctl show-session "$s" -p Name --value 2>/dev/null; then
+      :
+    fi
+  fi
 }
 
 wait_native_user() {
@@ -38,7 +44,9 @@ grant_local_control() {
   local auth="/home/$RDP_USER/.Xauthority"
   test -r "$auth"
   runuser -u "$RDP_USER" -- env DISPLAY="$NATIVE_DISPLAY" XAUTHORITY="$auth"     xhost "+SI:localuser:$CONTROL_USER" >/dev/null
-  runuser -u "$RDP_USER" -- env DISPLAY="$XRDP_DISPLAY" XAUTHORITY="$auth"     xhost "+SI:localuser:$CONTROL_USER" >/dev/null 2>&1 || true
+  if ! runuser -u "$RDP_USER" -- env DISPLAY="$XRDP_DISPLAY" XAUTHORITY="$auth"     xhost "+SI:localuser:$CONTROL_USER" >/dev/null 2>&1; then
+    echo "ANYDESK_NATIVE_WARN=xrdp_control_not_granted" >&2
+  fi
 }
 
 launch_native_anydesk() {
@@ -57,7 +65,9 @@ launch_native_anydesk() {
     fi
   done
   echo "ANYDESK_NATIVE_ERROR=gui_not_running" >&2
-  tail -20 "$log" 2>/dev/null | sed -E 's/([A-Za-z0-9+\/_=-]{32,})/[redacted]/g' >&2 || true
+  if [ -r "$log" ]; then
+    tail -20 "$log" | sed -E 's/([A-Za-z0-9+\/_=-]{32,})/[redacted]/g' >&2
+  fi
   return 1
 }
 
@@ -103,8 +113,12 @@ password_from_clipboard() {
 cleanup_native() {
   local auth="/home/$RDP_USER/.Xauthority"
   if [ -r "$auth" ]; then
-    runuser -u "$RDP_USER" -- env DISPLAY="$NATIVE_DISPLAY" XAUTHORITY="$auth"       xhost "-SI:localuser:$CONTROL_USER" >/dev/null 2>&1 || true
-    runuser -u "$RDP_USER" -- env DISPLAY="$XRDP_DISPLAY" XAUTHORITY="$auth"       xhost "-SI:localuser:$CONTROL_USER" >/dev/null 2>&1 || true
+    if ! runuser -u "$RDP_USER" -- env DISPLAY="$NATIVE_DISPLAY" XAUTHORITY="$auth"       xhost "-SI:localuser:$CONTROL_USER" >/dev/null 2>&1; then
+      :
+    fi
+    if ! runuser -u "$RDP_USER" -- env DISPLAY="$XRDP_DISPLAY" XAUTHORITY="$auth"       xhost "-SI:localuser:$CONTROL_USER" >/dev/null 2>&1; then
+      :
+    fi
   fi
   rm -f "$NATIVE_LIGHTDM_CONF"
   systemctl restart lightdm.service
