@@ -12,14 +12,19 @@ SITE_KEY="${SHOPVIVALIZ_BROWSER_SITE_KEY:-/home/ubuntu/.ssh/shopvivaliz-free-a1-
 SITE_REMOTE_PORT="${SHOPVIVALIZ_BROWSER_SITE_REMOTE_PORT:-17777}"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
-chmod 700 "$ROOT" "$PID_DIR" "$LOG_DIR" 2>/dev/null || true
+if ! chmod 700 "$ROOT" "$PID_DIR" "$LOG_DIR" 2>/dev/null; then
+  echo "failed to secure browser worker directories" >&2
+  exit 1
+fi
 exec 9>"$ROOT/.supervisor.lock"
 flock -w 15 9
 
 pid_alive() {
   local file="$1" needle="$2" pid
   test -s "$file" || return 1
-  pid="$(cat "$file" 2>/dev/null || true)"
+  if ! pid="$(cat "$file" 2>/dev/null)"; then
+    return 1
+  fi
   [[ "$pid" =~ ^[0-9]+$ ]] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
   tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fq "$needle"
@@ -29,12 +34,16 @@ stop_pid() {
   local file="$1" needle="$2" pid
   if pid_alive "$file" "$needle"; then
     pid="$(cat "$file")"
-    kill "$pid" 2>/dev/null || true
+    if ! kill "$pid" 2>/dev/null; then
+      echo "failed to stop pid=$pid for $needle" >&2
+    fi
     for _ in $(seq 1 20); do
       kill -0 "$pid" 2>/dev/null || break
       sleep 0.25
     done
-    kill -9 "$pid" 2>/dev/null || true
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -9 "$pid"
+    fi
   fi
   rm -f "$file"
 }
@@ -79,7 +88,10 @@ start_tunnel() {
   if pid_alive "$pf" "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT"; then return 0; fi
   rm -f "$pf"
   test -f "$SITE_KEY"
-  chmod 600 "$SITE_KEY" 2>/dev/null || true
+  if ! chmod 600 "$SITE_KEY" 2>/dev/null; then
+    echo "failed to secure SITE_KEY" >&2
+    return 1
+  fi
   nohup ssh -NT     -i "$SITE_KEY"     -o BatchMode=yes     -o IdentitiesOnly=yes     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=30     -o ServerAliveCountMax=3     -o StrictHostKeyChecking=yes     -R "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT"     "$SITE_USER@$SITE_HOST" >>"$LOG_DIR/tunnel.log" 2>&1 9>&- &
   echo $! >"$pf"
   sleep 2
