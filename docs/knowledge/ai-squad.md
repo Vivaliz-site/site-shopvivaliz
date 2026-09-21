@@ -58,15 +58,13 @@ Perfil de menor custo/latência para tarefas simples.
 
 As variáveis abaixo são referências de configuração. Valores nunca devem ser versionados.
 
-Obrigatórias para os três provedores:
+Transportes operacionais atuais:
 
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GEMINI_API_KEY` ou `GOOGLE_API_KEY`
+- OpenAI: `codex_chatgpt` (login ChatGPT Business) → API direta quando configurada → fallback manual explícito;
+- Anthropic: `claude_code` com OAuth da conta; não há fallback silencioso para API direta, Vertex ou OpenRouter;
+- Gemini: `vertex_oauth` → API direta quando configurada → OpenRouter quando configurado.
 
-Fallback opcional de transporte:
-
-- `OPENROUTER_API_KEY` — usado somente quando a chamada direta do provider falhar; o modelo original continua identificado na resposta.
+Credenciais opcionais de fallback são mantidas apenas no runtime protegido. `OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY` e `OPENROUTER_API_KEY` não são requisitos para considerar os bridges primários autenticados.
 
 Overrides opcionais:
 
@@ -85,9 +83,14 @@ O health esperado contém:
 
 - `ok=true`
 - `endpoint=ai-squad`
-- `providers` com OpenAI, Anthropic e Gemini
-- modelo e esforço de cada provider
-- somente booleano `configured`, nunca a credencial.
+- `providers` com OpenAI, Anthropic e Gemini;
+- modelo e esforço de cada provider;
+- `health=verified` somente quando o transporte primário possui prova viva de autenticação/disponibilidade;
+- `health=configured_unverified` quando existe transporte configurado, mas sem prova viva equivalente;
+- `health=unavailable` quando nenhum transporte está configurado;
+- estados de autenticação/transportes em booleanos, nunca a credencial.
+
+A UI não pode converter `configured=true` em indicador verde. Verde exige `health=verified`; configuração sem verificação deve aparecer como estado distinto.
 
 ## API externa
 
