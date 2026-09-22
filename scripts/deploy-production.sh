@@ -227,13 +227,19 @@ reconcile_ai_squad_bridges() {
   local status=0
 
   mkdir -p "$lock_dir"
-  sudo chgrp www-data "$lock_dir"
-  sudo chmod 2770 "$lock_dir"
+  if ! sudo chgrp www-data "$lock_dir" \
+    || ! sudo chmod 2770 "$lock_dir" \
+    || ! sudo touch "$gate_lock" "$runtime_lock" \
+    || ! sudo chgrp www-data "$gate_lock" "$runtime_lock" \
+    || ! sudo chmod 0660 "$gate_lock" "$runtime_lock"; then
+    log ERROR "Nao foi possivel preparar locks compartilhados do AI Squad"
+    return 1
+  fi
 
+  # Prepare ownership/mode before opening: PHP/www-data may have created these
+  # files first, and ubuntu is not a member of the www-data group.
   exec {gate_fd}>"$gate_lock"
   exec {runtime_fd}>"$runtime_lock"
-  sudo chgrp www-data "$gate_lock" "$runtime_lock"
-  sudo chmod 0660 "$gate_lock" "$runtime_lock"
 
   # Lock ordering matches the web API: gate first, runtime second. Holding the
   # gate exclusively blocks new cycles; runtime waits for every in-flight
