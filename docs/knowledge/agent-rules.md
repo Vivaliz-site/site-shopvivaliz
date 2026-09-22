@@ -61,6 +61,10 @@
 - Se a auditoria funcional nao puder ser executada por falta de credencial, conectividade ou ambiente, o resultado e INCONCLUSIVO/FAIL, nunca PASS.
 - Relatorios devem separar explicitamente `STRUCTURAL`, `INTEGRATION`, `FUNCTIONAL` e `TRANSACTIONAL`.
 - Nenhum agente, workflow, monitor, Claude, Codex ou automacao pode substituir o gate funcional por verificacao superficial.
+- **BROWSER E2E OBRIGATÓRIO:** se o fluxo possui UI, o próprio agente deve executar o caminho de ponta a ponta no navegador real da VM, contra o mesmo release/ambiente certificado. Seguir `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
+- `scripts/production-functional-audit.sh`, `curl`, API direta, SQL, testes automatizados e healthchecks complementam a evidência, mas **não substituem** cliques, formulários, navegação, submissão, reload/revisita e confirmação de persistência pela UI real.
+- É proibido encerrar a validação pedindo ao usuário para executar o browser ou enviar screenshot quando o agente possui acesso técnico ao ambiente. Screenshot do usuário pode complementar, nunca substituir, o E2E do agente.
+- Execução somente headless ou screenshot sem percorrer o fluxo completo não certifica a UI. Para auditoria formal, usar a sessão gráfica real da VM de navegação, salvo impossibilidade técnica comprovada; nesse caso o resultado é `NÃO VALIDADO/INCONCLUSIVO`, nunca `APTO`.
 
 ## Validação do Squad Chat
 
