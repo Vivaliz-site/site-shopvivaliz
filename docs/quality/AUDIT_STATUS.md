@@ -1,10 +1,46 @@
 # Estado da Auditoria
 
-**Status:** ✅ APTO — Auditoria Extrema v5 squad API concluída em 2026-09-21; ESC-2026-001 FECHADO; SQUAD_TOKEN pendente de configuração operacional (não bloqueia APTO — é gap de configuração, não defeito de código)
+**Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
 ---
 
-## Rodada 2026-09-21 — Auditoria Extrema v5 API AI Squad (ESC-2026-001)
+## Rodada 2026-09-21 (2ª passagem) — Auditoria pós-atualização Fred+GPT (PRs #1692–#1703)
+
+**SHA auditado:** `affe06a75` (origin/main em 2026-09-21)
+**Escopo:** squad-chat.php, claude-bridge.mjs, ai-squad-core.php, installer, testes
+
+### Matriz de invariantes
+
+| # | Verificação | Resultado | Evidência |
+|---|---|---|---|
+| 1 | `.htaccess` exceção squad-chat.php | ✅ PASS | linha 204 |
+| 2 | `dirname(__DIR__, 3)` em 5 ocorrências | ✅ PASS | grep |
+| 3 | `API_ENDPOINT` em `admin/squad-chat.html` | ✅ PASS | `/claude/api/agent/squad-chat.php` |
+| 4 | SQUAD_TOKEN validado com `hash_equals` | ✅ PASS | linha 405 |
+| 5 | Token via header `X-Squad-Token` | ✅ PASS | `HTTP_X_SQUAD_TOKEN` |
+| 6 | `call_claude_bridge_agent()` presente | ✅ PASS | linhas 532–557 |
+| 7 | Flag `$useBridge` configurada | ✅ PASS | linha 378 |
+| 8 | GH_REPO default `Vivaliz-site/site-shopvivaliz` | ✅ PASS | grep |
+| 9 | Modelo Gemini `gemini-2.5-flash` (não 3.5) | ✅ PASS | linha 371 |
+| 10 | PHP lint `squad-chat.php` | ✅ PASS | `php -l` |
+| 11 | PHP lint geral (exceto teste pré-existente) | ✅ PASS | 0 erros |
+| 12 | `validate-health-output.php` | ✅ PASS | COMPROVADO |
+| 13 | `validate-asset-manifest.php` (89 entradas) | ✅ PASS | COMPROVADO |
+| 14 | `ai-squad-claude-bridge-test.mjs` | ✅ PASS | pass 1/1 |
+| 15 | `ai-squad-three-provider-runtime-contract-test.sh` | ✅ PASS | CONTRACT=PASS |
+
+### Veredito
+
+**✅ APTO** — SHA `affe06a75`. Bridge OAuth funcional com `AI_SQUAD_USE_BRIDGE=1`. SQUAD_TOKEN configurado (Fred). `gemini-2.5-flash` correto. Todos os testes e validadores passam.
+
+### Ressalvas
+
+- `tests/production-runner-rescue-contract-test.php` linha 23 — erro de sintaxe PHP **pré-existente**, não introduzido nesta sessão.
+- OpenAI sem créditos (`OPENAI_API_KEY` sem saldo) — não bloqueia APTO; Anthropic via bridge e Gemini operacionais.
+
+---
+
+## Rodada 2026-09-21 (1ª passagem) — Auditoria Extrema v5 API AI Squad (ESC-2026-001)
 
 **SHA em produção:** `f386a922f247f87b26fae99349a8d0edd2647a65` (release `20260921-174416-f386a922`)  
 **Fixes mergeados:** PR #1689 SHA `63ae6fafb307119e2f6f5164511a46074a4bb507`  
