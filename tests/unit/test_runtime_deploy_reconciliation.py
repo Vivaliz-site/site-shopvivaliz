@@ -58,6 +58,9 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('17656/health', helper)
         self.assertIn('"web_search_mode":"live"', helper)
         self.assertIn('shopvivaliz-squad-claude-bridge.service', helper)
+        self.assertIn('install-claude-bridge-user-service.sh', helper)
+        self.assertNotIn('/etc/systemd/system', helper)
+        self.assertNotIn('sudo systemctl start "$claude_service"', helper)
         self.assertIn('17657/health', helper)
 
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
