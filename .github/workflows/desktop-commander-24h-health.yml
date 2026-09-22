@@ -253,7 +253,7 @@ jobs:
               else:
                   recovery = 'not_attempted'
               if not auth and (not structurally_healthy or not provider_connected) and MAX_REPAIR_ATTEMPTS == 1:
-                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Restart' if structurally_healthy else 'Ensure'
+                  repair_mode = 'InstallTask' if not structurally_healthy else 'Restart'
                   repair = (
                       'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                       '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
