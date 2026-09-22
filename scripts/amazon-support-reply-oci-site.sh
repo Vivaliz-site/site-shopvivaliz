@@ -96,17 +96,7 @@ if ! sv_as_ubuntu '
   exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
 ' >/tmp/shopvivaliz-support-probe.out 2>&1; then
   probe_result=""
-  if probe_result="$(grep -E '^\\{.*\"event\":\"support_lookup_probe\".*\\}$' /tmp/shopvivaliz-support-probe.out | tail -n 1)"; then
-    :
-  else
-    probe_result='{"status":"FAILED","reason":"PROBE_NO_JSON_OUTPUT"}'
-  fi
-  printf 'SUPPORT_PROBE_RESULT=%s\\n' "$probe_result"
-  probe_sha="$(sha256sum /tmp/shopvivaliz-support-probe.out | awk '{print $1}')"
-  printf 'SUPPORT_PROBE_OUTPUT_SHA256=%s\\n' "$probe_sha"
-  echo ERROR_CODE=SUPPORT_PROBE_FAILED
-  exit 71
-fi
+  if probe_result="$(grep -E '^\\{.*\"event\":\"support_lookup_probe\".*\\}
 if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
   || ! grep -q '"auth_state":"AUTHENTICATED"' /tmp/shopvivaliz-support-probe.out; then
   echo ERROR_CODE=SUPPORT_AUTH_CHECK_FAILED
@@ -228,12 +218,10 @@ NODE
 "$NODE_BIN" /tmp/shopvivaliz-amazon-support-breakglass.mjs
  /tmp/shopvivaliz-support-probe.out | tail -n 1)"; then
     :
-  fi
-  if [[ -n "$probe_result" ]]; then
-    printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
   else
-    echo 'SUPPORT_PROBE_RESULT={"status":"FAILED","reason":"PROBE_NO_JSON_OUTPUT"}'
+    probe_result='{"status":"FAILED","reason":"PROBE_NO_JSON_OUTPUT"}'
   fi
+  printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
   probe_sha="$(sha256sum /tmp/shopvivaliz-support-probe.out | awk '{print $1}')"
   printf 'SUPPORT_PROBE_OUTPUT_SHA256=%s\n' "$probe_sha"
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
