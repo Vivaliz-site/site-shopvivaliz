@@ -34,6 +34,8 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
                 <a href="/admin/ai-provider-audit.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🧪 Auditoria IA</a>
+                <a href="/admin/buscador.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(37,99,235,0.35);">🔎 Buscador</a>
+                <a href="/admin/squad-chat.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(14,165,233,0.28);">💬 Squad Chat</a>
                 <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
@@ -81,6 +83,12 @@ $codename = (string)($version['codename'] ?? '');
                 </a>
                 <a href="/admin/ai-provider-audit.php" style="background: #0ea5e9; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     🧪 Auditoria IA
+                </a>
+                <a href="/admin/buscador.php" style="background: #1f3a70; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🔎 Buscador
+                </a>
+                <a href="/admin/squad-chat.php" style="background: #0369a1; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    💬 Squad Chat
                 </a>
                 <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     ⚙️ Integrações
@@ -214,6 +222,8 @@ $codename = (string)($version['codename'] ?? '');
             <div class="admin-link-list">
                 <a class="btn btn-secondary" href="/admin/monitor/" target="_blank" rel="noreferrer">Monitor</a>
                 <a class="btn btn-secondary" href="/admin/ai-provider-audit.php" target="_blank" rel="noreferrer">Auditoria IA</a>
+                <a class="btn btn-secondary" href="/admin/buscador.php">Buscador</a>
+                <a class="btn btn-primary" href="/admin/squad-chat.php">Squad Chat</a>
                 <a class="btn btn-secondary" href="/admin/admin-back.php" target="_blank" rel="noreferrer">Legado</a>
                 <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver JSON</a>
             </div>

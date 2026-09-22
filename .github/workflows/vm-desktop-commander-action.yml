@@ -2,6 +2,26 @@ name: VM Desktop Commander 24h Action
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: Explicit VM maintenance action for manual dispatch
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - clear_cooldown_restart
+          - dc_diagnose
+          - dc_live_summary
+          - oracle_agent_audit
+          - oracle_agent_enable
+          - site_precheck
+          - disk_audit
+          - system_audit
+          - install_or_repair
+          - restart
+          - kill_for_recovery_test
+          - recover_session
   push:
     branches: [main]
     paths:
@@ -32,8 +52,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            ACTION="${{ inputs.action }}"
+          else
+            ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
+          fi
           case "$ACTION" in
+            amazon_support_reply)
+              COMMAND='echo VM_ACTION_SKIPPED=unrelated_amazon_support_request'
+              ;;
             status)
               COMMAND='set -Eeuo pipefail; device=false; test -f "$HOME/.desktop-commander-device/device.json" && device=true; enabled=unknown; if enabled_value=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null); then enabled=$enabled_value; else enabled=${enabled_value:-unknown}; fi; active=unknown; if active_value=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null); then active=$active_value; else active=${active_value:-unknown}; fi; mainpid=0; if mainpid_value=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null); then mainpid=${mainpid_value:-0}; fi; user=unknown; if user_value=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null); then user=${user_value:-unknown}; fi; auth=false; cooldown="$HOME/.desktop-commander-device/auth-required.cooldown"; device_file="$HOME/.desktop-commander-device/device.json"; if test -f "$cooldown"; then if test -f "$device_file" && test "$device_file" -nt "$cooldown"; then auth=false; else auth=true; fi; fi; connected=false; test -f "$HOME/.desktop-commander-device/provider-connected.marker" && connected=true; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(if pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null; then :; else rc=$?; test "$rc" -eq 1; fi); printf "DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n" "$device" "${enabled:-unknown}" "${active:-unknown}" "$user" "$mainpid" "$canonical" "$noncanonical" "$auth" "$connected"'
               ;;
