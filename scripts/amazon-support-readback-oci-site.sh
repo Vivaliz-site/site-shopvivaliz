@@ -114,18 +114,22 @@ import { createHash } from 'node:crypto';
 
 const CDP='http://127.0.0.1:9227';
 const CASE_LOBBY='https://sellercentral.amazon.com.br/cu/case-lobby';
-const cases=[
-  {
-    caseId:'22153077391',
+const knownCases={
+  '22153077391':{
     orderId:'701-8413776-8628228',
     narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-8413776-8628228. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
   },
-  {
-    caseId:'22153259501',
+  '22153259501':{
     orderId:'701-0172386-7380246',
     narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-0172386-7380246. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
-  }
-];
+  },
+  '22154699381':{orderId:'',narrative:''}
+};
+const requestedCaseIds=String(process.env.AMAZON_SUPPORT_READBACK_CASE_IDS||'22153077391,22153259501')
+  .split(',').map(value=>value.trim()).filter(value=>/^\d{8,14}$/.test(value));
+if(requestedCaseIds.length===0)throw new Error('READBACK_CASE_IDS_REQUIRED');
+const cases=requestedCaseIds.map(caseId=>({caseId,...(knownCases[caseId]||{orderId:'',narrative:''})}));
+const allowMissing=process.env.AMAZON_SUPPORT_READBACK_ALLOW_MISSING==='1';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const sha256=value=>createHash('sha256').update(String(value??'')).digest('hex');
 const decodeEntities=value=>String(value??'')
@@ -258,12 +262,13 @@ async function run(){
       const detailCode='(async()=>{const r=await fetch("/hill/hillservice/mons-api/ViewCase?caseId="+encodeURIComponent('+target+')+"&timeZone=UTC&pageSize=10",{credentials:"include"});if(!r.ok)return JSON.stringify({error:"DETAIL_HTTP_"+r.status});return JSON.stringify(await r.json())})()';
       const detail=JSON.parse(await evalv(detailCode));
       if(detail.error)throw new Error(item.caseId+':'+detail.error);
-      if(!JSON.stringify(detail).includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
+      if(item.orderId && !JSON.stringify(detail).includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
+      const discoveredOrders=[...new Set((JSON.stringify(detail).match(/\\b\\d{3}-\\d{7}-\\d{7}\\b/g)||[]))].slice(0,10);
 
       const evidence=readBackEvidence(detail,item.narrative);
       const result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED';
       const readBack=evidence.found===true;
-      if(!readBack)failures++;
+      if(!readBack && !allowMissing)failures++;
       console.log(JSON.stringify({
         case_id:item.caseId,
         order_id:item.orderId,
@@ -278,7 +283,8 @@ async function run(){
         total_contacts:evidence.total_contacts,
         last_outbound_present:Boolean(lastOutbound),
         last_outbound_sha256:lastOutbound?sha256(lastOutbound):null,
-        last_outbound_length:lastOutbound.length
+        last_outbound_length:lastOutbound.length,
+        discovered_orders:discoveredOrders
       }));
     }catch(error){
       failures++;

@@ -224,7 +224,7 @@ jobs:
               bash scripts/runtime-service-status.sh site
               ;;
             amazon_support_readback)
-              sudo -n bash scripts/amazon-support-readback-oci-site.sh
+              sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
               ;;
             amazon_support_reply)
               sudo -n bash scripts/amazon-support-reply-oci-site.sh
