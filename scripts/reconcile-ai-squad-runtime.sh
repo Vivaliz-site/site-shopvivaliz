@@ -4,12 +4,10 @@ set -euo pipefail
 release_path="${1:-/home/ubuntu/shopvivaliz-deploy/current}"
 codex_installer="$release_path/ops/ai-squad/install-codex-bridge-user-service.sh"
 claude_service="shopvivaliz-squad-claude-bridge.service"
-claude_source="$release_path/deploy/systemd/$claude_service"
-claude_target="/etc/systemd/system/$claude_service"
-claude_runtime="/home/ubuntu/.local/share/shopvivaliz-squad-claude"
-claude_workspace="$claude_runtime/workspace"
+claude_installer="$release_path/ops/ai-squad/install-claude-bridge-user-service.sh"
 
 test -f "$codex_installer"
+test -f "$claude_installer"
 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$codex_installer"
 
 codex_health="$(curl -fsS --max-time 5 http://127.0.0.1:17656/health)"
@@ -19,42 +17,18 @@ if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
   exit 1
 fi
 
-if [ ! -f "$claude_source" ]; then
-  if sudo systemctl cat "$claude_service" >/dev/null 2>&1; then
-    sudo systemctl disable --now "$claude_service"
-  fi
-  sudo rm -f "$claude_target"
-  sudo systemctl daemon-reload
-else
-  sudo install -d -o ubuntu -g ubuntu -m 0700 "$claude_runtime" "$claude_workspace"
-  sudo install -o root -g root -m 0644 "$claude_source" "$claude_target"
-  sudo systemd-analyze verify "$claude_target"
-  sudo systemctl daemon-reload
-  sudo systemctl enable "$claude_service"
-  sudo systemctl stop "$claude_service" || true
-  if command -v fuser >/dev/null 2>&1; then
-    sudo fuser -k 17657/tcp >/dev/null 2>&1 || true
-  fi
-  sudo systemctl start "$claude_service"
-  sudo systemctl is-active --quiet "$claude_service"
+# Claude is canonically a user-level service because it must reuse the
+# authenticated Claude.ai credential store owned by the ubuntu account. The
+# installer always restarts the service, so a newly activated immutable
+# release cannot leave an older bridge process serving port 17657.
+XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$claude_installer"
 
-  health_url="http://127.0.0.1:17657/health"
-  claude_health_ok=false
-  for _ in $(seq 1 20); do
-    if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
-      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-        && printf '%s' "$body" | grep -q '"ok":true' \
-        && printf '%s' "$body" | grep -q '"authenticated":true'; then
-        claude_health_ok=true
-        break
-      fi
-    fi
-    sleep 1
-  done
-  if [ "$claude_health_ok" != true ]; then
-    echo "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=FAILED" >&2
-    exit 1
-  fi
+claude_health="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health)"
+if ! printf '%s' "$claude_health" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
+  || ! printf '%s' "$claude_health" | grep -q '"ok":true' \
+  || ! printf '%s' "$claude_health" | grep -q '"authenticated":true'; then
+  echo "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=FAILED" >&2
+  exit 1
 fi
 
 echo "AI_SQUAD_RUNTIME_RECONCILE=PASS"
