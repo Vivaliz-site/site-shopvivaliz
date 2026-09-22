@@ -38,8 +38,8 @@ $forbidden = [
     "actions: write",
     "set +e",
     "|| true",
-    "sudo -n env RUSTDESK_SERVER_KEY=\"$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install\n          REMOTE",
-    "sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"$pub\" bash -s -- install\n          REMOTE",
+    "sudo -n env RUSTDESK_SERVER_KEY=\"\$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install\n          REMOTE",
+    "sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$pub\" bash -s -- install\n          REMOTE",
 ];
 foreach ($forbidden as $needle) {
     if (strpos($text, $needle) !== false) {
