@@ -94,6 +94,22 @@ $consensus = svais_consensus_prompt('teste', [[
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
 
+$gepetoPrompt = svais_gepeto_review_prompt('teste', [
+    'type' => 'consensus',
+    'provider' => 'openai',
+    'text' => 'consenso final',
+], [[
+    'type' => 'agent_message',
+    'ok' => true,
+    'provider' => 'gemini',
+    'phase' => 'converge',
+    'text' => 'posição final',
+]]);
+ais_assert(str_contains($gepetoPrompt, 'GEPETO'), 'Gepeto review prompt must identify the reviewer role');
+ais_assert(str_contains($gepetoPrompt, 'TAREFA ORIGINAL'), 'Gepeto review prompt must include the original task');
+ais_assert(str_contains($gepetoPrompt, 'consenso final'), 'Gepeto review prompt must include the consensus');
+ais_assert(str_contains($gepetoPrompt, 'posição final'), 'Gepeto review prompt must include supporting transcript');
+
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {
     foreach (['openai', 'anthropic', 'gemini'] as $providerName) {
