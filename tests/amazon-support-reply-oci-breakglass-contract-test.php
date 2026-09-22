@@ -81,6 +81,7 @@ foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwri
 $scriptForbidden=[
   'sv_systemctl stop amazon-returns-seller-central-browser.service',
   'seller-central-safe-t-read-worker.mjs --auth-check',
+  '. /home/ubuntu/amazon-returns-deploy/shared/.env',
   'SELLER_SUPPORT_OPEN',
   'create new case',
   'open new case',
