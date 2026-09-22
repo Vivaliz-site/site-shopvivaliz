@@ -405,6 +405,42 @@ if ($completeCoverage) {
     }
 }
 
+$gepetoReview = null;
+if ($gepetoEnabled && is_array($consensus)) {
+    svais_api_emit(['type' => 'phase_started', 'cycle_id' => $cycleId, 'phase' => 'gepeto'], $stream, $events);
+    try {
+        if (($providerStatus['openai'] ?? '') !== 'ok') {
+            throw new RuntimeException('openai_reviewer_unavailable');
+        }
+        $gepetoPrompt = svais_gepeto_review_prompt($topic, $consensus, $successful);
+        $result = svais_call_provider('openai', $profile, 'moderate', $gepetoPrompt, false);
+        $gepetoReview = [
+            'type' => 'gepeto_review',
+            'cycle_id' => $cycleId,
+            'phase' => 'gepeto',
+            'provider' => 'gepeto',
+            'base_provider' => 'openai',
+            'model' => (string)$result['model'],
+            'text' => (string)$result['text'],
+            'sources' => array_slice((array)$result['sources'], 0, 30),
+            'usage' => $result['usage'],
+            'latency_ms' => (int)$result['latency_ms'],
+            'transport' => (string)($result['transport'] ?? 'direct'),
+            'ok' => true,
+        ];
+        svais_api_emit($gepetoReview, $stream, $events);
+    } catch (Throwable $e) {
+        svais_api_emit([
+            'type' => 'gepeto_error',
+            'cycle_id' => $cycleId,
+            'phase' => 'gepeto',
+            'provider' => 'gepeto',
+            'error' => svais_safe_error($e),
+            'ok' => false,
+        ], $stream, $events);
+    }
+}
+
 $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
 $cycleOk = $completeCoverage && is_array($consensus);
 $done = [
