@@ -26,6 +26,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -45,6 +49,7 @@ on:
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
   push:
     branches: [main]
@@ -69,6 +74,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -88,6 +97,7 @@ on:
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
 
 permissions:
@@ -124,6 +134,7 @@ jobs:
           php tests/desktopkocepsv-launcher-tree-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
           php tests/windows-desktop-commander-private-relay-persistence-contract-test.php
+          php tests/desktop-commander-local-sentinel-contract-test.php
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
