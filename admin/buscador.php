@@ -150,13 +150,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <script>
 const API='/api/agent/buscador.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
-const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
+const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini',gepeto:'Gepeto'};
 const transportNames={codex_chatgpt:'via ChatGPT/Codex',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
 let count=0;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function phaseName(p){return ({research:'Pesquisa independente',critique:'Contraditório',converge:'Convergência',consensus:'Síntese de consenso'}[p]||p);}
+function phaseName(p){return ({research:'Pesquisa independente',critique:'Contraditório',converge:'Convergência',consensus:'Síntese de consenso',gepeto:'Revisão Gepeto'}[p]||p);}
 function transportLabel(t){return transportNames[t]||String(t||'direto');}
 function fmtMs(ms){if(!Number.isFinite(ms))return '—';return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s';}
 function healthState(p){
