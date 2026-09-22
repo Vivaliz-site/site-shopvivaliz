@@ -14,7 +14,7 @@ jobs:
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.title == '[private-access-bootstrap]' &&
         github.event.issue.user.login == 'fredmourao-ai' &&
-        github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+        (github.event.issue.body == 'action=install-rustdesk-and-agent-ssh' || github.event.issue.body == 'action=validate-rustdesk-via-fredwin')
       }}
     runs-on: ubuntu-latest
     environment: Production
@@ -186,7 +186,74 @@ jobs:
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo "PRIVATE_SSH_TUNNELS=PASS"
 
+      - name: Validate both VMs through RustDesk on Fred-Win
+        if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FRED_TUNNEL_PORT=32223
+          FRED_HOSTS_FILE="$RUNNER_TEMP/fredwin-hosts"
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          FRED_IP="$("${SSH_BACKEND[@]}" 'tailscale status --json' | python3 -c 'import json,sys; d=json.load(sys.stdin); ps=[p for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper()]; p=ps[0] if ps else {}; ips=p.get("TailscaleIPs") or []; print(next((x for x in ips if ":" not in x),""))')"
+          test -n "$FRED_IP" || { echo "::error::Fred-Win Tailscale peer not found"; exit 3; }
+          "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$FRED_IP/22'"
+          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:$FRED_IP:22" ubuntu@127.0.0.1
+          sleep 2
+          ssh-keyscan -T 5 -p "$FRED_TUNNEL_PORT" 127.0.0.1 2>/dev/null > "$FRED_HOSTS_FILE"
+          test -s "$FRED_HOSTS_FILE"
+          SSH_FRED=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$FRED_HOSTS_FILE" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$FRED_TUNNEL_PORT" FRED@127.0.0.1)
+          "${SSH_FRED[@]}" 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$env:COMPUTERNAME; whoami"'
+
+          SERVER_KEY="$("${SSH_BACKEND[@]}" 'sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub')"
+          test -n "$SERVER_KEY"
+          export SERVER_KEY_B64="$(printf '%s' "$SERVER_KEY" | base64 -w0)"
+          export SCRIPT_B64="$(base64 -w0 scripts/fredwin-rustdesk-validate.ps1)"
+          python3 - <<'PY' > "$RUNNER_TEMP/fredwin-bootstrap.b64"
+          import base64, os
+          ps = r'''$ErrorActionPreference='Stop'
+          $scriptPath='C:\Windows\Temp\shopvivaliz-rustdesk-validate.ps1'
+          $keyPath='C:\Windows\Temp\shopvivaliz-rustdesk-server-key.txt'
+          [IO.File]::WriteAllBytes($scriptPath,[Convert]::FromBase64String('__SCRIPT_B64__'))
+          [IO.File]::WriteAllText($keyPath,[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SERVER_KEY_B64__')))
+          $task='ShopVivalizRustDeskValidation'
+          $user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+          $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\shopvivaliz-rustdesk-validate.ps1 -ServerKeyFile C:\Windows\Temp\shopvivaliz-rustdesk-server-key.txt'
+          $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+          Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+          Start-ScheduledTask -TaskName $task
+          $deadline=(Get-Date).AddSeconds(55)
+          do { Start-Sleep 2; $done=Test-Path 'C:\Windows\Temp\shopvivaliz-rustdesk-validation\result.txt' } while(-not $done -and (Get-Date) -lt $deadline)
+          if(-not $done){throw 'RustDesk validation timed out'}
+          Get-Content 'C:\Windows\Temp\shopvivaliz-rustdesk-validation\result.txt'
+          Unregister-ScheduledTask -TaskName $task -Confirm:$false
+          '''
+          ps=ps.replace('__SCRIPT_B64__',os.environ['SCRIPT_B64']).replace('__SERVER_KEY_B64__',os.environ['SERVER_KEY_B64'])
+          print(base64.b64encode(ps.encode('utf-16le')).decode())
+          PY
+          BOOTSTRAP_B64="$(cat "$RUNNER_TEMP/fredwin-bootstrap.b64")"
+          "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $BOOTSTRAP_B64" | tee "$RUNNER_TEMP/fredwin-rustdesk-result.txt"
+
+          mkdir -p artifacts/fredwin-rustdesk-validation
+          for name in backend site; do
+            "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\\Windows\\Temp\\shopvivaliz-rustdesk-validation\\$name.png'))\"" | tr -d '\r\n' | base64 -d > "artifacts/fredwin-rustdesk-validation/$name.png"
+            test -s "artifacts/fredwin-rustdesk-validation/$name.png"
+          done
+          cp "$RUNNER_TEMP/fredwin-rustdesk-result.txt" artifacts/fredwin-rustdesk-validation/result.txt
+          file artifacts/fredwin-rustdesk-validation/backend.png artifacts/fredwin-rustdesk-validation/site.png
+          "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath 'C:\\Windows\\Temp\\shopvivaliz-rustdesk-validate.ps1','C:\\Windows\\Temp\\shopvivaliz-rustdesk-server-key.txt' -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath 'C:\\Windows\\Temp\\shopvivaliz-rustdesk-validation' -Recurse -Force -ErrorAction SilentlyContinue\"" >/dev/null
+          echo "FRED_RUSTDESK_VALIDATION=CAPTURED"
+
+      - name: Upload Fred-Win RustDesk validation evidence
+        if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fredwin-rustdesk-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/fredwin-rustdesk-validation/
+          if-no-files-found: error
+
       - name: Install RustDesk server and clients on both VMs
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -204,6 +271,7 @@ jobs:
           echo "RUSTDESK_BOOTSTRAP=BOTH_VMS_INSTALLED"
 
       - name: Provision dedicated private SSH agent access on both VMs
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -234,6 +302,7 @@ jobs:
           echo "AGENT_SSH_BACKEND_PROBE=PASS"
 
       - name: Restore production runner listener without reboot
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -256,6 +325,7 @@ jobs:
           '
 
       - name: Validate private access and RustDesk state
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
         shell: bash
         run: |
           set -Eeuo pipefail
