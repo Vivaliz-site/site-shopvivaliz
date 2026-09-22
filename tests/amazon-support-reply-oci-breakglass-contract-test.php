@@ -120,4 +120,18 @@ $readbackForbidden=[
 ];
 foreach($readbackForbidden as $needle){if(strpos($readbackText,$needle)!==false){fwrite(STDERR,"amazon support read-back contains forbidden write path: {$needle}\n");exit(1);}}
 
+$remoteWorkflow=$root.'/.github/workflows/shopvivaliz-remote-access.yml';
+if(!is_file($remoteWorkflow)){fwrite(STDERR,"remote access workflow missing\n");exit(1);}
+$remoteText=(string)file_get_contents($remoteWorkflow);
+$remoteRequired=[
+  'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]',
+  'amazon_support_readback',
+  'amazon_support_reply',
+  'action.startswith("amazon_support_")',
+  'Amazon Seller Support actions are restricted to the site VM',
+  'sudo -n bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n bash scripts/amazon-support-reply-oci-site.sh',
+];
+foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
+
 echo "amazon-support-bastion-breakglass-contract: ok\n";
