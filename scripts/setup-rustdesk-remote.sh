@@ -200,21 +200,27 @@ EOF
   command -v iptables >/dev/null 2>&1 || die iptables_missing 46
   install_rustdesk_firewall
 
-  docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbs ' || die hbbs_not_running 42
-  docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbr ' || die hbbr_not_running 43
+  if ! docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbs '; then
+    die hbbs_not_running 42
+  fi
+  if ! docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbr '; then
+    die hbbr_not_running 43
+  fi
 
-  hbbs_ready=false
-  hbbr_ready=false
-  for _ in $(seq 1 30); do
-    ss -lnt | grep -q ':21116 ' && hbbs_ready=true
-    ss -lnt | grep -q ':21117 ' && hbbr_ready=true
-    if [ "$hbbs_ready" = true ] && [ "$hbbr_ready" = true ]; then
-      break
-    fi
-    sleep 1
-  done
-  [ "$hbbs_ready" = true ] || die hbbs_port_missing 44
-  [ "$hbbr_ready" = true ] || die hbbr_port_missing 45
+  wait_tcp_listener() {
+    local port="$1" label="$2" error_code="$3"
+    for _ in $(seq 1 45); do
+      if ss -lntH | awk -v needle=":$port" '$4 ~ (needle "$") {found=1} END {exit found ? 0 : 1}'; then
+        echo "RUSTDESK_${label}_LISTENER=ready"
+        return 0
+      fi
+      sleep 1
+    done
+    lower_label="$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')"
+    die "${lower_label}_port_missing" "$error_code"
+  }
+  wait_tcp_listener 21116 HBBS 44
+  wait_tcp_listener 21117 HBBR 45
   echo "RUSTDESK_SERVER_INSTALL=PASS"
   echo "RUSTDESK_SERVER_PRIVATE=$SERVER_PRIVATE_IP"
   echo "RUSTDESK_SERVER_TAILSCALE=$SERVER_TAILSCALE_IP"
