@@ -93,7 +93,7 @@ $readbackText=(string)file_get_contents($readbackScript);
 $readbackRequired=[
   'SearchForCases',
   'ViewCase?caseId=',
-  'pageSize=100',
+  'pageSize=10',
   "result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED'",
   'expected_sha256',
   'matched_sha256',
