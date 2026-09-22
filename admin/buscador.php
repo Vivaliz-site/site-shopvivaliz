@@ -285,7 +285,11 @@ function handleEvent(e){
     document.getElementById('consensus').textContent=e.text||'Consenso vazio.';
   }else if(e.type==='cycle_finished'){
     document.getElementById('duration').textContent=fmtMs(e.duration_ms);
-    document.getElementById('phase').textContent='Concluído';
+    const complete=e.ok===true&&e.complete_provider_coverage===true&&e.consensus_available===true;
+    document.getElementById('phase').textContent=complete?'Concluído':'Incompleto';
+    if(!complete){
+      document.getElementById('consensus').textContent='Ciclo incompleto: consenso bloqueado porque os três provedores não concluíram todas as fases com sucesso.';
+    }
   }
 }
 

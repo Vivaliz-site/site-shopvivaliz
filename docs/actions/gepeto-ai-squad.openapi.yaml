@@ -1,15 +1,15 @@
 openapi: 3.1.0
 info:
-  title: ShopVivaliz AI Squad for Gepeto
+  title: ShopVivaliz Buscador for Gepeto
   version: 1.0.0
-  description: Action restrita para Gepeto consultar o AI Squad da ShopVivaliz.
+  description: Action restrita para Gepeto consultar o Buscador multi-IA da ShopVivaliz.
 servers:
   - url: https://shopvivaliz.com.br
 paths:
-  /api/agent/ai-squad.php:
+  /api/agent/buscador.php:
     get:
-      operationId: getAiSquadHealth
-      summary: Verifica o estado atual do AI Squad
+      operationId: getBuscadorHealth
+      summary: Verifica o estado atual do Buscador
       parameters:
         - in: query
           name: health
@@ -33,8 +33,8 @@ paths:
                 type: object
                 additionalProperties: true
     post:
-      operationId: runAiSquad
-      summary: Executa pesquisa, debate ou consulta paralela no AI Squad
+      operationId: runBuscador
+      summary: Executa pesquisa, debate ou consulta paralela no Buscador
       security:
         - gepetoKey: []
       requestBody:

@@ -47,4 +47,30 @@ $forbidden=[
   'open new case',
 ];
 foreach($forbidden as $needle){if(strpos($text,$needle)!==false){fwrite(STDERR,"amazon support Bastion breakglass contains forbidden pattern: {$needle}\n");exit(1);}}
+
+$script=$root.'/scripts/amazon-support-reply-oci-site.sh';
+if(!is_file($script)){fwrite(STDERR,"amazon support Bastion site script missing\n");exit(1);}
+$scriptText=(string)file_get_contents($script);
+$scriptRequired=[
+  'SELLER_CENTRAL_SERVICE_BUSY',
+  'seller-central-support-lookup-probe.mjs',
+  'SUPPORT_LOOKUP_PROBE=PASS',
+  'SUPPORT_AUTH_CHECK_FAILED',
+  'viewCaseMetaData?.canEditCase===true',
+  'TERMINAL_NOT_EDITABLE',
+  'SearchForCases',
+  'ViewCase?caseId=',
+  "result:'ALREADY_EXISTS',read_back:true",
+  "result:'SENT',read_back:true",
+];
+foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
+$scriptForbidden=[
+  'sv_systemctl stop amazon-returns-seller-central-browser.service',
+  'seller-central-safe-t-read-worker.mjs --auth-check',
+  'SELLER_SUPPORT_OPEN',
+  'create new case',
+  'open new case',
+];
+foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
+
 echo "amazon-support-bastion-breakglass-contract: ok\n";
