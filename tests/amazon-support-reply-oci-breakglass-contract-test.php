@@ -79,6 +79,9 @@ $scriptRequired=[
   'ViewCase?caseId=',
   "result:'ALREADY_EXISTS',read_back:true",
   "result:'SENT',read_back:true",
+  'AMAZON_SUPPORT_REPLY_PROFILE',
+  'current-tickets',
+  '22154699381',
   "['Send','Send message','Enviar','Enviar mensagem']",
   'for(let attempt=0;attempt<20;attempt++){',
 ];
@@ -137,7 +140,7 @@ $remoteRequired=[
   'Amazon Seller Support actions are restricted to the site VM',
   'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
-  'sudo -n bash scripts/amazon-support-reply-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh',
 ];
 foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
 

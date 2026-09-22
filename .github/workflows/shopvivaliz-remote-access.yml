@@ -231,7 +231,7 @@ jobs:
               sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh
               ;;
             amazon_support_reply)
-              sudo -n bash scripts/amazon-support-reply-oci-site.sh
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh
               ;;
             rustdesk_client_install)
               SERVER_KEY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub")"
