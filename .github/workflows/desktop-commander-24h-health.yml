@@ -123,6 +123,7 @@ jobs:
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
           php tests/desktopkocepsv-launcher-tree-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
+          php tests/windows-desktop-commander-private-relay-persistence-contract-test.php
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:

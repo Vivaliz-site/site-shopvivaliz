@@ -46,11 +46,13 @@ function Ensure-Relay {
     if (-not (Test-McpHealth)) { Stop-DesktopMcp; Start-DesktopMcp }
     if (-not (Test-McpHealth)) { throw 'MCP health failed on 127.0.0.1:5557' }
     $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'ssh.exe' -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') })
-    if ($ssh.Count -eq 0) {
+    if ($ssh.Count -ne 1) {
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
         Start-Sleep -Seconds 5
+        $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'ssh.exe' -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') })
     }
+    if ($ssh.Count -ne 1) { throw 'Managed DESKTOP-KOCEPSV reverse tunnel failed to stay running' }
     Log 'DESKTOP-KOCEPSV relay ensure completed'
 }
 function Install-Task {
@@ -68,7 +70,14 @@ function Install-Task {
 }
 function Ensure-Task {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if (-not $task) { Install-Task }
+    if (-not $task) {
+        Install-Task
+        return
+    }
+    if ($task.State -eq 'Disabled') {
+        Enable-ScheduledTask -TaskName $TaskName | Out-Null
+        Write-Output 'TASK_REENABLED=true'
+    }
 }
 
 if ($Mode -eq 'InstallTask') { Install-Task }
