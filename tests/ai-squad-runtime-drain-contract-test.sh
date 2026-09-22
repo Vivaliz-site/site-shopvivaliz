@@ -27,10 +27,15 @@ grep -Fq "document.getElementById('phase').textContent=complete?'Concluído':'In
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 lock="$tmp/runtime.lock"
+ready="$tmp/ready"
 
-php -r '$h=fopen($argv[1],"c"); if(!$h || !flock($h, LOCK_SH)) exit(2); usleep(700000);' "$lock" &
+php -r '$h=fopen($argv[1],"c"); if(!$h || !flock($h, LOCK_SH)) exit(2); file_put_contents($argv[2],"ready"); usleep(700000);' "$lock" "$ready" &
 holder=$!
-sleep 0.1
+for _ in $(seq 1 40); do
+  [ -f "$ready" ] && break
+  sleep 0.05
+done
+test -f "$ready"
 start_ms="$(date +%s%3N)"
 exec 8>"$lock"
 flock -w 3 8
