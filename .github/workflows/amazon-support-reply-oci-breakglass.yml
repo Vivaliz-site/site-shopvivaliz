@@ -131,6 +131,9 @@ jobs:
           for _ in $(seq 1 36); do
             state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
             if [ "$state" = "ACTIVE" ]; then
+              BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+              test -n "$BASTION_SSH_COMMAND"
+              echo "BASTION_SSH_COMMAND=$BASTION_SSH_COMMAND" >> "$GITHUB_ENV"
               echo "BASTION_SITE_SESSION=ACTIVE"
               exit 0
             fi
@@ -146,19 +149,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          bastion_host="host.bastion.$OCI_REGION.oci.oraclecloud.com"
-          ssh -fNT \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o ExitOnForwardFailure=yes \
-            -o ServerAliveInterval=30 \
-            -o StrictHostKeyChecking=accept-new \
-            -o HostKeyAlgorithms=+ssh-rsa \
-            -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-            -o UserKnownHostsFile="$BASTION_KNOWN_HOSTS" \
-            -i "$BASTION_KEY_FILE" \
-            -L "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" \
-            -p 22 "$SITE_SESSION_ID@$bastion_host"
+          test -n "${BASTION_SSH_COMMAND:-}"
+          tunnel_command="${BASTION_SSH_COMMAND//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel_command="${tunnel_command//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          bash -lc "$tunnel_command"
           sleep 3
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 \
