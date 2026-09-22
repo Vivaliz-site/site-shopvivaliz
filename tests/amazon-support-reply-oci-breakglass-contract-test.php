@@ -57,6 +57,7 @@ $forbidden=[
   'SELLER_SUPPORT_OPEN',
   'create new case',
   'open new case',
+  "['Send','Send message','Reply','Enviar','Enviar mensagem','Responder']",
   '. /home/ubuntu/amazon-returns-deploy/shared/.env',
   'tail -20 /tmp/shopvivaliz-support-probe.out',
 ];
@@ -79,6 +80,8 @@ $scriptRequired=[
   'ViewCase?caseId=',
   "result:'ALREADY_EXISTS',read_back:true",
   "result:'SENT',read_back:true",
+  "const submitLabels=['Send','Send message','Enviar','Enviar mensagem'];",
+  'AVAILABLE_SEND_ACTIONS=',
 ];
 foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
 $scriptForbidden=[
