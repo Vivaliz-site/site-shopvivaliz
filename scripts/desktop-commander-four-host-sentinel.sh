@@ -23,13 +23,24 @@ is_unit_healthy() {
     test "$(systemctl is-enabled "$unit")" = enabled
 }
 
-check_relay() {
+relay_exec() {
   local port="$1"
-  local expected="$2"
-  local json
+  local command="$2"
+  local payload response
+  payload="$(python3 -c 'import json,sys; print(json.dumps({"params":{"command":sys.argv[1],"timeout":45}}))' "$command")"
+  response="$(curl -fsS --max-time 55 -H 'Content-Type: application/json' -d "$payload" "http://127.0.0.1:$port/mcp/tool/execute_command")"
+  printf '%s' "$response" | python3 -c 'import json,sys; p=json.load(sys.stdin); r=p.get("result") or {}; sys.exit(1) if r.get("success") is not True else print(str(r.get("output") or ""))'
+}
+
+check_windows_dc() {
+  local port="$1"
+  local status_script="$2"
+  local expected_logon="$3"
+  local command output
+  command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"C:\\site-shopvivaliz\\scripts\\$status_script\""
   for attempt in 1 2 3; do
-    if json="$(curl -fsS --max-time 5 "http://127.0.0.1:$port/health")" &&
-      printf '%s' "$json" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("status")=="ok" and d.get("environment")==sys.argv[1] else 1)' "$expected"; then
+    if output="$(relay_exec "$port" "$command")" &&
+      printf '%s' "$output" | python3 -c 'import sys; vals={}; [vals.__setitem__(*line.split("=",1)) for line in sys.stdin.read().splitlines() if "=" in line]; ok=vals.get("DEVICE_STATE_EXISTS")=="True" and vals.get("CANONICAL_AGENT_COUNT")=="1" and vals.get("NONCANONICAL_AGENT_COUNT")=="0" and vals.get("TASK_EXISTS")=="True" and vals.get("TASK_LOGON_TYPE","").lower()==sys.argv[1] and vals.get("TASK_RUN_LEVEL","").lower()=="highest" and vals.get("AUTH_REQUIRED")=="False" and vals.get("PROVIDER_CONNECTED")=="True"; sys.exit(0 if ok else 1)' "$expected_logon"; then
       return 0
     fi
     sleep 5
@@ -63,8 +74,8 @@ else
   fi
 fi
 
-if check_relay 5557 fred-win; then fredwin=healthy; fi
-if check_relay 5558 desktop-kocepsv; then kocepsv=healthy; fi
+if check_windows_dc 5557 fredwin-desktop-commander-status.ps1 interactive; then fredwin=healthy; fi
+if check_windows_dc 5558 desktopkocepsv-desktop-commander-status.ps1 s4u; then kocepsv=healthy; fi
 
 if test -f "$PEER_KEY" && test -f "$PEER_KNOWN_HOSTS" && check_production; then
   production=healthy
