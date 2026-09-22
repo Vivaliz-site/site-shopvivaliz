@@ -11,7 +11,7 @@ bash -n "$deploy"
 
 grep -Fq "ai-squad-deploy-gate.lock" "$api"
 grep -Fq "ai-squad-runtime.lock" "$api"
-grep -Fq 'flock($gate, LOCK_SH)' "$api"
+grep -Fq 'flock($gate, LOCK_SH | LOCK_NB)' "$api"
 grep -Fq 'flock($runtime, LOCK_SH)' "$api"
 grep -Fq "svais_api_release_runtime_cycle_lock" "$api"
 
@@ -20,6 +20,18 @@ grep -Fq "ai-squad-deploy-gate.lock" "$deploy"
 grep -Fq "ai-squad-runtime.lock" "$deploy"
 grep -Fq 'flock -w 840 "$gate_fd"' "$deploy"
 grep -Fq 'flock -w 840 "$runtime_fd"' "$deploy"
+grep -Fq 'sudo touch "$gate_lock" "$runtime_lock"' "$deploy"
+
+python3 - "$deploy" <<'PY'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+touch = text.index('sudo touch "$gate_lock" "$runtime_lock"')
+open_gate = text.index('exec {gate_fd}>"$gate_lock"', touch)
+open_runtime = text.index('exec {runtime_fd}>"$runtime_lock"', touch)
+if not (touch < open_gate < open_runtime):
+    raise SystemExit("FAIL: lock ownership must be normalized before deploy opens lock files")
+PY
 
 grep -Fq "e.ok===true&&e.complete_provider_coverage===true&&e.consensus_available===true" "$ui"
 grep -Fq "document.getElementById('phase').textContent=complete?'Concluído':'Incompleto'" "$ui"
