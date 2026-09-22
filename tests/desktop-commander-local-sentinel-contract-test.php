@@ -6,7 +6,7 @@ $installer = (string) file_get_contents($root . '/scripts/install-desktop-comman
 $service = (string) file_get_contents($root . '/ops/systemd/shopvivaliz-dc-four-host-sentinel.service');
 $timer = (string) file_get_contents($root . '/ops/systemd/shopvivaliz-dc-four-host-sentinel.timer');
 
-foreach (['127.0.0.1:5557','127.0.0.1:5558','10.0.1.112','shopvivaliz-free-a1-monitor','StrictHostKeyChecking=yes','shopvivaliz-desktop-commander.service','shopvivaliz-desktop-commander-guardian.timer'] as $needle) {
+foreach (['mcp/tool/execute_command','check_windows_dc 5557 fredwin-desktop-commander-status.ps1 interactive','check_windows_dc 5558 desktopkocepsv-desktop-commander-status.ps1 s4u','PROVIDER_CONNECTED','CANONICAL_AGENT_COUNT','10.0.1.112','shopvivaliz-free-a1-monitor','StrictHostKeyChecking=yes','shopvivaliz-desktop-commander.service','shopvivaliz-desktop-commander-guardian.timer'] as $needle) {
     if (!str_contains($script, $needle)) { fwrite(STDERR, "sentinel missing {$needle}\n"); exit(1); }
 }
 foreach (['OnUnitActiveSec=5min','Persistent=true','RandomizedDelaySec=15s'] as $needle) {
