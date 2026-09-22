@@ -276,6 +276,7 @@ svais_api_emit([
     'profile' => $profileName,
     'profile_label' => (string)$profile['label'],
     'mode' => $mode,
+    'gepeto_review' => $gepetoEnabled,
     'providers' => svais_provider_state($profile),
 ], $stream, $events);
 
