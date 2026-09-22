@@ -193,11 +193,11 @@ async function run(){
 
     const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
     if(written!==true)throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
-    const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+    const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Enviar','Enviar mensagem'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
     if(!sent)throw new Error(item.caseId+':SEND_ACTION_MISSING');
 
     let confirmed=false;
-    for(let attempt=0;attempt<6;attempt++){
+    for(let attempt=0;attempt<20;attempt++){
       await sleep(1500);
       const check=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return false;const d=await r.json();return JSON.stringify(d).includes(${JSON.stringify(prefix)})})()`);
       if(check===true){confirmed=true;break}
