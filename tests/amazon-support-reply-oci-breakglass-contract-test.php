@@ -101,6 +101,8 @@ $readbackRequired=[
   'contact_count',
   'total_contacts',
   'last_outbound_sha256',
+  "match_scope:'$.SearchForCases.lastOutboundReply'",
+  'lastOutbound.includes(prefix)',
   'SUPPORT_LOOKUP_PROBE=PASS',
 ];
 foreach($readbackRequired as $needle){if(strpos($readbackText,$needle)===false){fwrite(STDERR,"amazon support read-back missing contract: {$needle}\n");exit(1);}}
