@@ -20,6 +20,8 @@ $required=[
   'SHOPVIVALIZ_VM_SSH_KEY',
   'SITE_PRIVATE_IP: 10.0.1.112',
   'bastion session create-port-forwarding',
+  'ssh-metadata',
+  'BASTION_SSH_COMMAND',
   "ssh-keygen -q -t rsa -b 4096",
   'HostKeyAlgorithms=+ssh-rsa',
   'PubkeyAcceptedAlgorithms=+ssh-rsa',
