@@ -1,4 +1,5 @@
 <?php
+// Authorized-actor CI retrigger; no runtime behavior.
 declare(strict_types=1);
 $root=dirname(__DIR__);
 $workflow=$root.'/.github/workflows/amazon-support-reply-oci-breakglass.yml';
@@ -61,6 +62,7 @@ $scriptRequired=[
   'SELLER_CENTRAL_SERVICE_BUSY',
   'seller-central-support-lookup-probe.mjs',
   'SUPPORT_LOOKUP_PROBE=PASS',
+  'SUPPORT_PROBE_RESULT=',
   'SUPPORT_AUTH_CHECK_FAILED',
   'viewCaseMetaData?.canEditCase===true',
   'TERMINAL_NOT_EDITABLE',
