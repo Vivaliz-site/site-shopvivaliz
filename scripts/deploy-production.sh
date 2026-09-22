@@ -230,7 +230,7 @@ reconcile_ai_squad_bridges() {
   if ! sudo chgrp www-data "$lock_dir" \
     || ! sudo chmod 2770 "$lock_dir" \
     || ! sudo touch "$gate_lock" "$runtime_lock" \
-    || ! sudo chgrp www-data "$gate_lock" "$runtime_lock" \
+    || ! sudo chown ubuntu:www-data "$gate_lock" "$runtime_lock" \
     || ! sudo chmod 0660 "$gate_lock" "$runtime_lock"; then
     log ERROR "Nao foi possivel preparar locks compartilhados do AI Squad"
     return 1
