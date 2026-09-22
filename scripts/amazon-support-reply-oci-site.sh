@@ -90,18 +90,15 @@ test "$ready" = true
 if ! sv_as_ubuntu '
   set -Eeuo pipefail
   set -a
-  . /home/ubuntu/amazon-returns-deploy/shared/.env
   . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
   set +a
   export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9227
   exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
 ' >/tmp/shopvivaliz-support-probe.out 2>&1; then
-  probe_result="$(tail -n 1 /tmp/shopvivaliz-support-probe.out 2>/dev/null)"
-  printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
+  echo 'SUPPORT_PROBE_RESULT={"status":"FAILED","reason":"PROBE_EXEC_FAILED"}'
+  probe_sha="$(sha256sum /tmp/shopvivaliz-support-probe.out | cut -c1-64)"
+  printf 'SUPPORT_PROBE_OUTPUT_SHA256=%s\n' "$probe_sha"
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
-  if ! tail -20 /tmp/shopvivaliz-support-probe.out | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig'; then
-    echo ERROR_CODE=PROBE_DIAG_READ_FAILED
-  fi
   exit 71
 fi
 if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
