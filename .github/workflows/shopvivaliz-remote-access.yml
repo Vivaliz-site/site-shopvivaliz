@@ -38,6 +38,8 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - amazon_support_readback
+          - amazon_support_reply
           - rustdesk_server_install
           - rustdesk_client_install
           - rustdesk_status
@@ -95,7 +97,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_reply", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -218,6 +220,12 @@ jobs:
               ;;
             runtime_status)
               bash scripts/runtime-service-status.sh site
+              ;;
+            amazon_support_readback)
+              sudo -n bash scripts/amazon-support-readback-oci-site.sh
+              ;;
+            amazon_support_reply)
+              sudo -n bash scripts/amazon-support-reply-oci-site.sh
               ;;
             rustdesk_client_install)
               SERVER_KEY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub")"
