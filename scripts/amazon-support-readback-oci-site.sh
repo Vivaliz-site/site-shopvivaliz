@@ -232,7 +232,7 @@ async function run(){
       const lookup=JSON.parse(await evalv(searchCode));
       if(lookup.error)throw new Error(item.caseId+':'+lookup.error);
 
-      const detailCode='(async()=>{const r=await fetch("/hill/hillservice/mons-api/ViewCase?caseId="+encodeURIComponent('+target+')+"&timeZone=UTC&pageSize=100",{credentials:"include"});if(!r.ok)return JSON.stringify({error:"DETAIL_HTTP_"+r.status});return JSON.stringify(await r.json())})()';
+      const detailCode='(async()=>{const r=await fetch("/hill/hillservice/mons-api/ViewCase?caseId="+encodeURIComponent('+target+')+"&timeZone=UTC&pageSize=10",{credentials:"include"});if(!r.ok)return JSON.stringify({error:"DETAIL_HTTP_"+r.status});return JSON.stringify(await r.json())})()';
       const detail=JSON.parse(await evalv(detailCode));
       if(detail.error)throw new Error(item.caseId+':'+detail.error);
       if(!JSON.stringify(detail).includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
