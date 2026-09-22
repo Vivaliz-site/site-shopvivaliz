@@ -6,8 +6,8 @@ if (strpos($src, 'while IFS= read -r candidate; do') === false ||
 ");
     exit(1);
 }
-if (strpos($src, '|| true') !== false) {
-    fwrite(STDERR, "peer repair canonical patch check must remain fail-closed
+if (strpos($src, 'grep -RFl "Proactively refresh credentials before the realtime expiry window (v4)."') !== false) {
+    fwrite(STDERR, "peer repair canonical patch check must not use grep pipeline bypasses
 ");
     exit(1);
 }
