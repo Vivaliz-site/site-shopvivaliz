@@ -7,13 +7,15 @@ if ($env:COMPUTERNAME -ne 'LAPTOP-NIG4IFUU') {
 }
 $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
 $KnownHostsPath = 'C:\Users\FRED\.ssh\known_hosts'
-$VMHost = $env:SHOPVIVALIZ_BACKEND_SSH_HOST
-$VMPortRaw = $env:SHOPVIVALIZ_BACKEND_SSH_PORT
+$DefaultBackendHost = '100.66.174.74'
+$DefaultBackendPort = '22'
+$VMHost = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_HOST', 'Machine')
+$VMPortRaw = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_PORT', 'Machine')
+$VMHost = $VMHost.Trim()
+$VMPortRaw = $VMPortRaw.Trim()
+if ([string]::IsNullOrWhiteSpace($VMHost)) { $VMHost = $DefaultBackendHost }
+if ([string]::IsNullOrWhiteSpace($VMPortRaw)) { $VMPortRaw = $DefaultBackendPort }
 $VMUser = 'ubuntu'
-if ([string]::IsNullOrWhiteSpace($VMHost) -or [string]::IsNullOrWhiteSpace($VMPortRaw)) {
-    Write-Error 'Bastion endpoint missing: set SHOPVIVALIZ_BACKEND_SSH_HOST and SHOPVIVALIZ_BACKEND_SSH_PORT'
-    exit 5
-}
 $VMPort = [int]$VMPortRaw
 $SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 $LogDir = 'C:\site-shopvivaliz\logs'
