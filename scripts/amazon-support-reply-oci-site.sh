@@ -30,13 +30,21 @@ trap cleanup EXIT
 sv_systemctl stop amazon-returns-seller-central-browser.timer
 service_state=""
 for _ in $(seq 1 180); do
-  service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null || true)"
+  if service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null)"; then
+    :
+  else
+    :
+  fi
   case "$service_state" in
     inactive|failed) break ;;
   esac
   sleep 1
 done
-service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null || true)"
+if service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null)"; then
+  :
+else
+  :
+fi
 if [[ "$service_state" != "inactive" && "$service_state" != "failed" ]]; then
   echo ERROR_CODE=SELLER_CENTRAL_SERVICE_BUSY
   exit 72
