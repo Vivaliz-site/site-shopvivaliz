@@ -16,6 +16,9 @@ required = [
     'SITE_BASTION_SSH_COMMAND',
     '<privateKey>',
     '<localPort>',
+    'ssh-keygen -q -t rsa -b 4096',
+    'HostKeyAlgorithms=+ssh-rsa',
+    'PubkeyAcceptedAlgorithms=+ssh-rsa',
 ]
 missing = [needle for needle in required if needle not in text]
 if missing:
