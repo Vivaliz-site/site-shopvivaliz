@@ -108,7 +108,6 @@ Match User $AGENT_USER
     AllowTcpForwarding no
     PermitTunnel no
     GatewayPorts no
-    PermitUserEnvironment no
 EOF
 
   install_ops_wrapper
