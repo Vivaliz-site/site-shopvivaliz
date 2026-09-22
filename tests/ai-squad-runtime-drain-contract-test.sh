@@ -11,8 +11,8 @@ bash -n "$deploy"
 
 grep -Fq "ai-squad-deploy-gate.lock" "$api"
 grep -Fq "ai-squad-runtime.lock" "$api"
-grep -Fq "flock($gate, LOCK_SH)" "$api"
-grep -Fq "flock($runtime, LOCK_SH)" "$api"
+grep -Fq 'flock($gate, LOCK_SH)' "$api"
+grep -Fq 'flock($runtime, LOCK_SH)' "$api"
 grep -Fq "svais_api_release_runtime_cycle_lock" "$api"
 
 grep -Fq "reconcile_ai_squad_bridges()" "$deploy"
