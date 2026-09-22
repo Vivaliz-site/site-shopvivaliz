@@ -37,7 +37,7 @@ $required = [
     "fredwin-desktop-commander-status.ps1",
     "desktopkocepsv-desktop-commander-status.ps1",
     "shopvivaliz-desktop-commander.service",
-    "ALLOW_REPAIR: \${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}",
+    "ALLOW_REPAIR: \${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}",
     "MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0",
     "Desktop Commander 24h Control Plane Status"
 ];
