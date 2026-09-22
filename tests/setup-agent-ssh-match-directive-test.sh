@@ -22,11 +22,16 @@ test -n "$match_line"
 test "$permit_line" -lt "$match_line"
 
 match_block="$(printf '%s\n' "$config" | tail -n +"$match_line")"
-if printf '%s\n' "$match_block" | grep -q '^    PermitUserEnvironment '; then
-  echo "AGENT_SSH_MATCH_DIRECTIVE_TEST=FAIL PermitUserEnvironment_in_Match" >&2
+
+if printf '%s\n' "$match_block" | grep -Eq '^[[:space:]]*PermitUserEnvironment[[:space:]]'; then
+  echo "AGENT_SSH_MATCH_DIRECTIVE_TEST=FAIL forbidden=PermitUserEnvironment" >&2
   exit 1
 fi
 
 printf '%s\n' "$match_block" | grep -q '^    PermitUserRC no$'
+
+for required in   "PasswordAuthentication no"   "KbdInteractiveAuthentication no"   "AuthenticationMethods publickey"   "AllowTcpForwarding no"   "PermitTunnel no"   "GatewayPorts no"; do
+  printf '%s\n' "$match_block" | grep -Fq "$required"
+done
 
 echo "AGENT_SSH_MATCH_DIRECTIVE_TEST=PASS"
