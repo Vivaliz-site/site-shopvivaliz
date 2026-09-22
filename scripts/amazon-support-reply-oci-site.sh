@@ -99,6 +99,7 @@ if ! sv_as_ubuntu '
   probe_result="$(tail -n 1 /tmp/shopvivaliz-support-probe.out 2>/dev/null || true)"
   printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
+  grep -E '^(\\{|\\[|seller_|SUPPORT_|ERROR|Error|error|status|reason|auth_)' /tmp/shopvivaliz-support-probe.out | tail -20 | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig' || true
   exit 71
 fi
 if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
