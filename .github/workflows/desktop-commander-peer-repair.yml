@@ -221,13 +221,16 @@ jobs:
             await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
 
             if(terminal){
-              const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-              if(!reopened) {
-                const actions=await evalv(`(()=>{const labels=[];for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(label&&!labels.includes(label))labels.push(label)}return labels.slice(0,24)})()`);
-                console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'AVAILABLE_ACTIONS',read_back:false,actions:Array.isArray(actions)?actions:[]}));
-                throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
+              const replyAvailable=Boolean(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled)return true}return false})()`));
+              if(!replyAvailable){
+                const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+                if(!reopened) {
+                  const actions=await evalv(`(()=>{const labels=[];for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(label&&!labels.includes(label))labels.push(label)}return labels.slice(0,24)})()`);
+                  console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'AVAILABLE_ACTIONS',read_back:false,actions:Array.isArray(actions)?actions:[]}));
+                  throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
+                }
+                await sleep(1200);
               }
-              await sleep(1200);
             }
 
             let selector='';
