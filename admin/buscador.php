@@ -60,6 +60,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .msg.openai{border-left:4px solid #1f3a70}
 .msg.anthropic{border-left:4px solid #78573a}
 .msg.gemini{border-left:4px solid #3c6ea8}
+.msg.gepeto{border-left:4px solid #6b46c1;background:#fcfaff}
 .msg.error{border-left:4px solid var(--bad);background:#fff7f6}
 .msg.manual{border-left:4px solid #b7791f;background:#fffaf0}
 .manual-note{font-size:.82rem;color:var(--muted);margin:8px 0}
@@ -88,7 +89,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <body>
 <header>
   <h1>Buscador — Pesquisa e Debate</h1>
-  <p>OpenAI + Claude + Gemini pesquisando, criticando e convergindo com evidências ao vivo.</p>
+  <p>OpenAI + Claude + Gemini pesquisando, criticando e convergindo com evidências ao vivo, com revisão final opcional do Gepeto.</p>
 </header>
 <main>
   <section class="panel">
@@ -117,6 +118,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
     <div class="actions">
       <button id="run" class="primary">Iniciar Buscador</button>
       <button id="clear" class="secondary" type="button">Limpar tela</button>
+      <input id="gepeto-review" type="checkbox" checked hidden aria-hidden="true">
       <div class="health" id="health"></div>
     </div>
     <div class="meta" id="models">Carregando configuração dos provedores…</div>
@@ -148,13 +150,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <script>
 const API='/api/agent/buscador.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
-const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
+const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini',gepeto:'Gepeto'};
 const transportNames={codex_chatgpt:'via ChatGPT/Codex',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
 let count=0;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function phaseName(p){return ({research:'Pesquisa independente',critique:'Contraditório',converge:'Convergência',consensus:'Síntese de consenso'}[p]||p);}
+function phaseName(p){return ({research:'Pesquisa independente',critique:'Contraditório',converge:'Convergência',consensus:'Síntese de consenso',gepeto:'Revisão Gepeto'}[p]||p);}
 function transportLabel(t){return transportNames[t]||String(t||'direto');}
 function fmtMs(ms){if(!Number.isFinite(ms))return '—';return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s';}
 function healthState(p){
@@ -258,6 +260,7 @@ function setRunning(v){
   document.getElementById('run').disabled=v;
   document.getElementById('profile').disabled=v;
   document.getElementById('mode').disabled=v;
+  document.getElementById('gepeto-review').disabled=v;
   document.querySelector('.panel')?.classList.toggle('running',v);
   if(!v)document.querySelector('#progress span').style.width='100%';
 }

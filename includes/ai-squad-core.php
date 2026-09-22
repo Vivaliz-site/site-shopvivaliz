@@ -1078,3 +1078,16 @@ function svais_consensus_prompt(string $topic, array $transcript): string
         . "Quando a tarefa pedir ranking ou escolhas, só apresente uma lista final se houver suporte na discussão; "
         . "explique brevemente por que cada item sobreviveu ao contraditório.";
 }
+
+function svais_gepeto_review_prompt(string $topic, array $consensus, array $transcript): string
+{
+    $consensusText = trim((string)($consensus['text'] ?? ''));
+    $history = svais_transcript_text($transcript);
+    return "GEPETO — REVISÃO INDEPENDENTE\n\n"
+        . "TAREFA ORIGINAL:\n{$topic}\n\n"
+        . "CONSENSO PROPOSTO:\n{$consensusText}\n\n"
+        . "EVIDÊNCIAS E POSIÇÕES DE SUPORTE:\n{$history}\n\n"
+        . "Revise o consenso como auditor independente. Procure falso-verde, lacunas de evidência, contradições, premissas não verificadas e riscos operacionais. "
+        . "Não reabra a pesquisa sem necessidade. Entregue: (1) o que está sustentado, (2) o que precisa de ressalva ou correção, (3) próximos passos objetivos. "
+        . "Não invente fatos nem revele chain-of-thought.";
+}
