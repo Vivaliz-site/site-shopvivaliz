@@ -1,3 +1,4 @@
+# Fred-Win RustDesk validation via private OCI/Tailscale control path.
 param(
   [Parameter(Mandatory=$true)][string]$ServerKeyFile
 )
