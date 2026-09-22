@@ -36,6 +36,15 @@ if (!str_contains($api, "'attachment_not_supported'")) {
 if (!str_contains($api, "\$body['agents']")) {
     $errors[] = 'API must honor the UI agents array';
 }
+if (!str_contains($api, '$requestedAgents !== null && !is_array($requestedAgents)')) {
+    $errors[] = 'malformed agents must fail closed instead of defaulting to all agents';
+}
+if (!str_contains($ui, 'setTimeout(r, 5200)')) {
+    $errors[] = 'finite dialogue pacing must respect the 12 requests/minute rate limit';
+}
+if (!str_contains($ui, "typeof data.ok!=='boolean'")) {
+    $errors[] = 'UI must reject invalid/redirected proxy responses';
+}
 if (!str_contains($api, 'flock($handle, LOCK_EX)')) {
     $errors[] = 'rate limit must lock the full read-modify-write cycle';
 }

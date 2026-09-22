@@ -448,6 +448,9 @@ if (array_key_exists('attachment', $body) && $body['attachment'] !== null) {
 }
 
 $requestedAgents = $body['agents'] ?? null;
+if ($requestedAgents !== null && !is_array($requestedAgents)) {
+    squad_json(400, ['error' => 'Invalid agent selection']);
+}
 $agentFilter = isset($body['agent']) ? strtolower(trim((string) $body['agent'])) : '';
 $historyRaw = $body['history'] ?? [];
 $history = [];

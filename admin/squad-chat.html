@@ -147,13 +147,16 @@ async function runCycle(userMsg,isAuto=false){
     const res=await fetch(API_ENDPOINT,{method:'POST',headers:squadHeaders(),body:JSON.stringify(payload)});
     agents.forEach(removeThinking);
     const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||('HTTP '+res.status));
+    if(!Array.isArray(data.responses)||typeof data.ok!=='boolean'||typeof data.partial!=='boolean'){
+      throw new Error('Resposta inválida do Squad; a sessão administrativa pode ter expirado.');
+    }
     const allText=[];
     for(const response of (data.responses||[])){
       addMsg(response.agent,response.text,isAuto,response.provider||'',response.model||'');
       if(response.github_actions&&response.github_actions.length){response.github_actions.forEach(a=>addMsg('system','🔧 '+a,isAuto));}
       allText.push('['+response.name+']: '+response.text);
     }
-    if(!res.ok)throw new Error(data.error||('HTTP '+res.status));
     history.push({role:'user',content:userMsg});
     history.push({role:'assistant',content:allText.join('\n\n')});
     if(history.length>20)history=history.slice(-20);
@@ -262,7 +265,10 @@ async function startDialogue() {
         removeThinking(agentId);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
-        const response = (data.responses || [])[0];
+        if (!Array.isArray(data.responses) || typeof data.ok !== 'boolean') {
+          throw new Error('Resposta inválida do Squad; a sessão administrativa pode ter expirado.');
+        }
+        const response = data.responses[0];
         if (response) {
           if (prevEntry) addReplyTo(prevEntry.name);
           addMsg(agentId, response.text, false, response.provider || '', response.model || '');
@@ -276,11 +282,11 @@ async function startDialogue() {
       const done = round * agents.length + i + 1;
       setStatus(`Debate em andamento… ${done}/${totalTurns} turnos`);
       // Pequena pausa para não estourar rate limit (12 req/min = 1 req/5s margem segura)
-      if (done < totalTurns) await new Promise(r => setTimeout(r, 600));
+      if (done < totalTurns) await new Promise(r => setTimeout(r, 5200));
     }
   }
 
-  addMsg('system', `Debate autônomo concluído: ${rounds} rodadas, ${agents.length} agentes, ${dialogueThread.length} turnos.`);
+  addMsg('system', `Debate guiado concluído: ${rounds} rodadas, ${agents.length} agentes, ${dialogueThread.length} turnos.`);
   setStatus(`Debate concluído — ${dialogueThread.length} turnos de conversa.`);
   busy = false; document.getElementById('sendBtn').disabled = false; scrollBottom();
 }
