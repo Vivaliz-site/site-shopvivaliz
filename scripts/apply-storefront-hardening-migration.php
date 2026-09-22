@@ -107,25 +107,45 @@ try {
     $adminResolution = 'canonical_email';
 
     if (!$admin || empty($admin['id'])) {
-        $domainLookup = $pdo->prepare(
+        // If one or more domain accounts are already administrators, no
+        // privilege decision is needed here: reuse an existing authorized
+        // identity instead of blocking deploy merely because several domain
+        // accounts exist. Never demote or modify the other administrators.
+        $existingAdminLookup = $pdo->prepare(
             "SELECT id, is_admin
                FROM users
               WHERE LOWER(email) LIKE :domain
+                AND is_admin = 1
               ORDER BY id ASC
-              LIMIT 2"
+              LIMIT 1"
         );
-        $domainLookup->execute([':domain' => '%@shopvivaliz.com.br']);
-        $domainAccounts = $domainLookup->fetchAll(PDO::FETCH_ASSOC);
+        $existingAdminLookup->execute([':domain' => '%@shopvivaliz.com.br']);
+        $existingAdmin = $existingAdminLookup->fetch(PDO::FETCH_ASSOC);
 
-        if (count($domainAccounts) === 0) {
-            throw new RuntimeException('No persisted ShopVivaliz domain account is available');
-        }
-        if (count($domainAccounts) !== 1 || empty($domainAccounts[0]['id'])) {
-            throw new RuntimeException('Multiple ShopVivaliz domain accounts exist; refusing to guess admin identity');
-        }
+        if ($existingAdmin && !empty($existingAdmin['id'])) {
+            $admin = $existingAdmin;
+            $adminResolution = 'existing_domain_admin';
+        } else {
+            $domainLookup = $pdo->prepare(
+                "SELECT id, is_admin
+                   FROM users
+                  WHERE LOWER(email) LIKE :domain
+                  ORDER BY id ASC
+                  LIMIT 2"
+            );
+            $domainLookup->execute([':domain' => '%@shopvivaliz.com.br']);
+            $domainAccounts = $domainLookup->fetchAll(PDO::FETCH_ASSOC);
 
-        $admin = $domainAccounts[0];
-        $adminResolution = 'single_domain_account';
+            if (count($domainAccounts) === 0) {
+                throw new RuntimeException('No persisted ShopVivaliz domain account is available');
+            }
+            if (count($domainAccounts) !== 1 || empty($domainAccounts[0]['id'])) {
+                throw new RuntimeException('Multiple non-admin ShopVivaliz domain accounts exist; refusing to guess admin identity');
+            }
+
+            $admin = $domainAccounts[0];
+            $adminResolution = 'single_domain_account';
+        }
     }
 
     $adminId = (int)$admin['id'];
