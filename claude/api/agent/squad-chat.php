@@ -53,11 +53,11 @@ function squad_rate_limit(string $token): void
 {
     $root = dirname(__DIR__, 3);
     $dir = $root . '/logs/squad/rate';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        squad_json(503, ['error' => 'rate_limit_unavailable']);
     }
-    if (!is_dir($dir) || !is_writable($dir)) {
-        return;
+    if (!is_writable($dir)) {
+        squad_json(503, ['error' => 'rate_limit_unavailable']);
     }
 
     $limit = (int) (getenv('SQUAD_RATE_LIMIT_PER_MINUTE') ?: 12);
@@ -67,22 +67,41 @@ function squad_rate_limit(string $token): void
 
     $key = substr(hash('sha256', $token . '|' . ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 24);
     $file = $dir . '/' . $key . '.json';
-    $now = time();
-    $bucket = ['minute' => (int) floor($now / 60), 'count' => 0];
-
-    if (is_file($file)) {
-        $saved = json_decode((string) file_get_contents($file), true);
-        if (is_array($saved) && ($saved['minute'] ?? 0) === (int) floor($now / 60)) {
-            $bucket = $saved;
+    $handle = @fopen($file, 'c+');
+    if (!is_resource($handle) || !flock($handle, LOCK_EX)) {
+        if (is_resource($handle)) {
+            fclose($handle);
         }
+        squad_json(503, ['error' => 'rate_limit_unavailable']);
+    }
+
+    $now = time();
+    $minute = (int) floor($now / 60);
+    rewind($handle);
+    $saved = json_decode((string)stream_get_contents($handle), true);
+    $bucket = ['minute' => $minute, 'count' => 0];
+    if (is_array($saved) && ($saved['minute'] ?? 0) === $minute) {
+        $bucket = $saved;
     }
 
     $bucket['count']++;
     if ($bucket['count'] > $limit) {
-        squad_json(429, ['error' => 'Rate limit exceeded']);
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        squad_json(429, ['error' => 'rate_limit_exceeded']);
     }
 
-    file_put_contents($file, json_encode($bucket), LOCK_EX);
+    $encoded = json_encode($bucket, JSON_UNESCAPED_SLASHES);
+    rewind($handle);
+    $writeOk = is_string($encoded)
+        && ftruncate($handle, 0)
+        && fwrite($handle, $encoded) !== false
+        && fflush($handle);
+    flock($handle, LOCK_UN);
+    fclose($handle);
+    if (!$writeOk) {
+        squad_json(503, ['error' => 'rate_limit_unavailable']);
+    }
 }
 
 function squad_curl_json(string $url, array $headers, array $payload): array
@@ -421,7 +440,17 @@ $userMessage = (string) ($body['message'] ?? '');
 if (squad_len($userMessage) > 8000) {
     squad_json(400, ['error' => 'message too long (max 8000 chars)']);
 }
+if (array_key_exists('attachment', $body) && $body['attachment'] !== null) {
+    squad_json(422, [
+        'error' => 'attachment_not_supported',
+        'message' => 'Attachments are not supported by this endpoint.',
+    ]);
+}
 
+$requestedAgents = $body['agents'] ?? null;
+if ($requestedAgents !== null && !is_array($requestedAgents)) {
+    squad_json(400, ['error' => 'Invalid agent selection']);
+}
 $agentFilter = isset($body['agent']) ? strtolower(trim((string) $body['agent'])) : '';
 $historyRaw = $body['history'] ?? [];
 $history = [];
@@ -523,7 +552,28 @@ $agentConfigs['roo_gemini'] = [
 ];
 
 $allAgents = array_keys($agentConfigs);
-$agentsToRun = $agentFilter === '' ? $allAgents : (in_array($agentFilter, $allAgents, true) ? [$agentFilter] : []);
+if (is_array($requestedAgents)) {
+    if ($requestedAgents === []) {
+        squad_json(400, ['error' => 'No valid agents selected']);
+    }
+    $agentsToRun = [];
+    foreach ($requestedAgents as $requestedAgent) {
+        if (!is_string($requestedAgent)) {
+            squad_json(400, ['error' => 'Invalid agent selection']);
+        }
+        $requestedAgent = strtolower(trim($requestedAgent));
+        if (!in_array($requestedAgent, $allAgents, true)) {
+            squad_json(400, ['error' => 'Invalid agent selection', 'agent' => $requestedAgent]);
+        }
+        if (!in_array($requestedAgent, $agentsToRun, true)) {
+            $agentsToRun[] = $requestedAgent;
+        }
+    }
+} elseif ($agentFilter !== '') {
+    $agentsToRun = in_array($agentFilter, $allAgents, true) ? [$agentFilter] : [];
+} else {
+    $agentsToRun = $allAgents;
+}
 
 if ($agentsToRun === []) {
     squad_json(400, ['error' => 'No valid agents selected']);
@@ -871,14 +921,30 @@ if (!is_dir($logDir)) {
     @mkdir($logDir, 0755, true);
 }
 
-if (svais_cycle_complete_for_consensus($responses, $agentsToRun)) {
+$successfulAgents = array_values(array_map(
+    static fn(array $response): string => (string)$response['agent'],
+    array_filter($responses, static fn(array $response): bool => ($response['ok'] ?? false) === true)
+));
+$failedAgents = array_values(array_map(
+    static fn(array $response): string => (string)$response['agent'],
+    array_filter($responses, static fn(array $response): bool => ($response['ok'] ?? false) !== true)
+));
+$overallOk = count($successfulAgents) === count($agentsToRun) && $failedAgents === [];
+$partial = $successfulAgents !== [] && $failedAgents !== [];
+
+if ($overallOk && svais_cycle_complete_for_consensus($responses, $agentsToRun)) {
     $consensusText = svais_build_consensus($responses, $userMessage);
     $consensusAvailable = $consensusText !== '';
 }
 
-squad_json(200, [
+$status = $overallOk ? 200 : ($partial ? 207 : 502);
+squad_json($status, [
+    'ok'                 => $overallOk,
+    'partial'            => $partial,
     'cycle_id'           => $cycleId,
     'responses'          => $responses,
+    'successful_agents'  => $successfulAgents,
+    'failed_agents'      => $failedAgents,
     'consensus_available' => $consensusAvailable,
     'consensus'          => $consensusAvailable ? $consensusText : null,
     'at'                 => gmdate('c'),

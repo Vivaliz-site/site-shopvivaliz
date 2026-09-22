@@ -26,6 +26,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -39,12 +43,14 @@ on:
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
       - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/desktopkocepsv-package-version-integrity-contract-test.php"
       - "tests/local-auto-sync-dc-separation-contract-test.php"
       - "tests/vm-desktop-commander-guardian-contract-test.php"
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
   push:
     branches: [main]
@@ -69,6 +75,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -82,12 +92,14 @@ on:
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
       - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/desktopkocepsv-package-version-integrity-contract-test.php"
       - "tests/local-auto-sync-dc-separation-contract-test.php"
       - "tests/vm-desktop-commander-guardian-contract-test.php"
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
 
 permissions:
@@ -120,10 +132,12 @@ jobs:
           php tests/production-runner-rescue-contract-test.php
           php tests/desktopkocepsv-recoverable-channel-contract-test.php
           php tests/desktopkocepsv-runner-hardening-contract-test.php
+          php tests/desktopkocepsv-package-version-integrity-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
           php tests/desktopkocepsv-launcher-tree-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
           php tests/windows-desktop-commander-private-relay-persistence-contract-test.php
+          php tests/desktop-commander-local-sentinel-contract-test.php
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
