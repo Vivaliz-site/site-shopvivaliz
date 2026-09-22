@@ -60,6 +60,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .msg.openai{border-left:4px solid #1f3a70}
 .msg.anthropic{border-left:4px solid #78573a}
 .msg.gemini{border-left:4px solid #3c6ea8}
+.msg.gepeto{border-left:4px solid #6b46c1;background:#fcfaff}
 .msg.error{border-left:4px solid var(--bad);background:#fff7f6}
 .msg.manual{border-left:4px solid #b7791f;background:#fffaf0}
 .manual-note{font-size:.82rem;color:var(--muted);margin:8px 0}
@@ -88,7 +89,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 <body>
 <header>
   <h1>Buscador — Pesquisa e Debate</h1>
-  <p>OpenAI + Claude + Gemini pesquisando, criticando e convergindo com evidências ao vivo.</p>
+  <p>OpenAI + Claude + Gemini pesquisando, criticando e convergindo com evidências ao vivo, com revisão final opcional do Gepeto.</p>
 </header>
 <main>
   <section class="panel">
@@ -117,6 +118,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
     <div class="actions">
       <button id="run" class="primary">Iniciar Buscador</button>
       <button id="clear" class="secondary" type="button">Limpar tela</button>
+      <label style="margin:0"><input id="gepeto-review" type="checkbox" checked> Revisão Gepeto</label>
       <div class="health" id="health"></div>
     </div>
     <div class="meta" id="models">Carregando configuração dos provedores…</div>
