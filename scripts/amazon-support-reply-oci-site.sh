@@ -112,7 +112,7 @@ echo SUPPORT_LOOKUP_PROBE=PASS
 cat >/tmp/shopvivaliz-amazon-support-breakglass.mjs <<'NODE'
 const CDP='http://127.0.0.1:9227';
 const CASE_LOBBY='https://sellercentral.amazon.com.br/cu/case-lobby';
-const cases=[
+const legacyCases=[
   {
     caseId:'22153077391',
     orderId:'701-8413776-8628228',
@@ -124,6 +124,19 @@ const cases=[
     narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-0172386-7380246. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
   }
 ];
+const currentCases=[
+  {
+    caseId:'22153259501',
+    orderId:'701-0172386-7380246',
+    narrative:'Olá. Obrigado pelo retorno. Confirmamos que este caso se refere ao pedido 701-0172386-7380246 (ASIN B076PRVLPB). O valor de R$ 36,39 foi apontado em nossa conciliação como pendência, porém, diante da informação de que ele não corresponde aos registros do pedido, não queremos insistir em um valor possivelmente incorreto. Nossa solicitação é a apuração do valor correto do ressarcimento devido à nossa conta de vendedor. Temos ciência de que o comprador já foi reembolsado; não estamos solicitando novo reembolso ao comprador. Até o momento, não identificamos o crédito correspondente ao ressarcimento do seller. Não dispomos da captura original que exibia R$ 36,39. Por isso, pedimos que a análise seja feita com base nos registros oficiais do pedido e nos eventos financeiros da nossa conta. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos o valor creditado, a data do crédito, o ID da transação e/ou do ressarcimento e o relatório ou evento financeiro em que o crédito aparece.'
+  },
+  {
+    caseId:'22154699381',
+    orderId:'',
+    narrative:'Olá. Continuamos precisando de assistência no caso 22154699381. O motivo da nossa solicitação é o ressarcimento devido à nossa conta de vendedor: o comprador foi reembolsado, mas não identificamos o crédito correspondente ao seller. Não estamos questionando nem solicitando novo reembolso ao comprador. Na mensagem enviada pela Amazon neste caso, o número do pedido aparece em branco após "FBA Onsite:", por isso não conseguimos relacionar com segurança o protocolo a um pedido específico usando a informação recebida. Solicitamos que confirmem qual pedido está vinculado a este caso e façam a revisão financeira/logística correspondente. Não temos imagens adicionais do produto para anexar neste momento. Caso seja necessária alguma evidência específica, pedimos que indiquem exatamente qual documento ou tela deve ser fornecido. Se o ressarcimento do vendedor já tiver sido efetuado, solicitamos o valor, a data do crédito, o ID da transação e/ou do ressarcimento e o relatório ou evento financeiro em que o crédito aparece.'
+  }
+];
+const cases=process.env.AMAZON_SUPPORT_REPLY_PROFILE==='current-tickets'?currentCases:legacyCases;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const safeError=value=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9_:-]+/g,'_').slice(0,120);
 
@@ -133,14 +146,15 @@ async function connect(){
   if(!page)throw new Error('NO_CDP_PAGE');
   const ws=new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no});
-  let seq=0;const pending=new Map();
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id||!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
+  let seq=0;const pending=new Map();const networkTrace=[];
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id){if(m.method==='Network.responseReceived'){try{const response=m.params?.response||{};const url=new URL(String(response.url||''));if(url.hostname==='sellercentral.amazon.com.br'&&/\/hill\/|\/cu\//.test(url.pathname)){networkTrace.push({path:url.pathname,status:Number(response.status)||0,mimeType:String(response.mimeType||'').slice(0,80)});if(networkTrace.length>40)networkTrace.shift()}}catch{}}return}if(!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
   const send=(method,params={})=>new Promise((ok,no)=>{const id=++seq;pending.set(id,[ok,no]);ws.send(JSON.stringify({id,method,params}))});
-  return {ws,send,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
+  return {ws,send,networkTrace,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
 }
 
 async function run(){
-  const {ws,send,evalv}=await connect();
+  const {ws,send,evalv,networkTrace}=await connect();
+  await send('Network.enable');
   const navigate=async (url,waitMs=3000)=>{await send('Page.navigate',{url});await sleep(waitMs)};
   await navigate(CASE_LOBBY);
   const href=String(await evalv('location.href'));
@@ -158,7 +172,7 @@ async function run(){
     const detail=JSON.parse(rawDetail);
     if(detail.error)throw new Error(item.caseId+':'+detail.error);
     const serialized=JSON.stringify(detail);
-    if(!serialized.includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
+    if(item.orderId && !serialized.includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
     const canEdit=detail?.viewCaseMetaData?.canEditCase===true;
     const prefix=item.narrative.slice(0,180);
     if(serialized.includes(prefix)){
@@ -193,16 +207,18 @@ async function run(){
 
     const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
     if(written!==true)throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
-    const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+    networkTrace.length=0;
+    const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Enviar','Enviar mensagem'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
     if(!sent)throw new Error(item.caseId+':SEND_ACTION_MISSING');
+    console.log('SEND_CONTROL='+safeError(sent));
 
     let confirmed=false;
-    for(let attempt=0;attempt<6;attempt++){
+    for(let attempt=0;attempt<20;attempt++){
       await sleep(1500);
       const check=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return false;const d=await r.json();return JSON.stringify(d).includes(${JSON.stringify(prefix)})})()`);
       if(check===true){confirmed=true;break}
     }
-    if(!confirmed)throw new Error(item.caseId+':READ_BACK_FAILED');
+    if(!confirmed){console.log('SUBMIT_TRACE='+JSON.stringify(networkTrace.slice(-30)));throw new Error(item.caseId+':READ_BACK_FAILED')}
     console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
     } catch(error) {
       failures++;
