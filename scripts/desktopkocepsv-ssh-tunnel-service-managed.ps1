@@ -44,27 +44,28 @@ $KnownHostsCandidates = @(
 $KeyPath = $KeyCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $KnownHostsPath = $KnownHostsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
-# The Windows hosts can reach the site A1 SSH ingress directly. Keep machine
-# environment variables as an explicit override, but do not let a missing
-# variable permanently disable the watchdog after reboot or account changes.
-$DefaultIngressHost = '137.131.149.55'
-$DefaultIngressPort = '22'
+# Prefer the backend VM's private Tailscale address. Machine-level
+# overrides remain available for controlled migration without editing the script.
+$DefaultBackendHost = '100.66.174.74'
+$DefaultBackendPort = '22'
 $VMHost = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_HOST', 'Machine')
 $VMPortRaw = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_PORT', 'Machine')
 $VMHost = $VMHost.Trim()
 $VMPortRaw = $VMPortRaw.Trim()
 if ([string]::IsNullOrWhiteSpace($VMHost)) {
-    $VMHost = $DefaultIngressHost
-    Log 'SSH ingress host override missing; using canonical site A1 ingress'
+    $VMHost = $DefaultBackendHost
+    Log 'SSH endpoint override missing; using canonical private backend Tailscale address'
 }
 if ([string]::IsNullOrWhiteSpace($VMPortRaw)) {
-    $VMPortRaw = $DefaultIngressPort
-    Log 'SSH ingress port override missing; using canonical site A1 ingress port'
+    $VMPortRaw = $DefaultBackendPort
+    Log 'SSH endpoint port override missing; using canonical backend SSH port'
 }
 $VMUser = 'ubuntu'
 $VMPort = [int]$VMPortRaw
+$SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 if (-not $KeyPath) { Log ('ERROR private key missing; checked: ' + ($KeyCandidates -join ' | ')); exit 2 }
 if (-not $KnownHostsPath) { Log ('ERROR known_hosts missing; checked: ' + ($KnownHostsCandidates -join ' | ')); exit 3 }
+if (!(Test-Path -LiteralPath $SshExe)) { Log 'ERROR Git SSH missing at managed path'; exit 4 }
 Log ('Resolved key=' + $KeyPath + ' known_hosts=' + $KnownHostsPath)
 
 Log 'Managed reverse tunnel service started'
@@ -73,7 +74,7 @@ while ($true) {
     $attempt++
     Log ("Connecting attempt=$attempt forward=5558->127.0.0.1:5557")
     try {
-        & ssh -i $KeyPath -p $VMPort `
+        & $SshExe -i $KeyPath -p $VMPort `
             -R 5558:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
             -o 'ServerAliveInterval=30' `
