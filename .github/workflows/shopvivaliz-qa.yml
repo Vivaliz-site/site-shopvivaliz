@@ -134,6 +134,7 @@ jobs:
           bash tests/setup-rustdesk-relay-key-order-test.sh
           bash tests/fredwin-rustdesk-reverse-ssh-test.sh
           bash tests/oci-bastion-private-access-ssh-metadata-test.sh
+          bash tests/windows-relay-heredoc-quoting-test.sh
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
