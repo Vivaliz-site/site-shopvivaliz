@@ -10,12 +10,12 @@ cleanup() {
     kill -TERM -- "-$browser_pid"
   fi
   rm -f /tmp/shopvivaliz-amazon-support-breakglass.mjs /tmp/shopvivaliz-seller-auth.out
-  systemctl start amazon-returns-seller-central-browser.timer
+  sudo -n systemctl start amazon-returns-seller-central-browser.timer
 }
 trap cleanup EXIT
 
-systemctl stop amazon-returns-seller-central-browser.timer
-systemctl stop amazon-returns-seller-central-browser.service
+sudo -n systemctl stop amazon-returns-seller-central-browser.timer
+sudo -n systemctl stop amazon-returns-seller-central-browser.service
 set -a
 . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
 set +a
