@@ -246,6 +246,7 @@ if (!is_resource($runtimeCycleLock)) {
 }
 
 $stream = ($body['stream'] ?? true) !== false;
+$gepetoEnabled = ($body['gepeto_review'] ?? true) !== false;
 if (!defined('SVAIS_STREAM_HEARTBEAT')) {
     define('SVAIS_STREAM_HEARTBEAT', $stream);
 }
