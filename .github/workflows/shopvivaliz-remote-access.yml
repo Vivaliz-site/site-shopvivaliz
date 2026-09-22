@@ -108,6 +108,8 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if action.startswith("amazon_support_") and target != "shopvivaliz-free-a1":
+              raise SystemExit("Amazon Seller Support actions are restricted to the site VM")
           if action == "rustdesk_server_install" and target != "always-free-arm-1787907847-26":
               raise SystemExit("RustDesk server is restricted to the backend VM")
           if action.startswith("rustdesk_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
