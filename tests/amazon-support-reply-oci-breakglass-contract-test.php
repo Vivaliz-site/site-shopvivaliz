@@ -16,7 +16,7 @@ $required=[
   "github.event.issue.number == 1586",
   "github.event.comment.user.login == 'fredmourao-ai'",
   "github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501'",
-  "github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501'",
+  "github.event.comment.body == '/amazon-support-readback case_ids=22153259501,22154699381'",
   'scripts/amazon-support-readback-oci-site.sh',
   'OCI_CLI_USER',
   'OCI_CLI_TENANCY',
@@ -38,6 +38,7 @@ $required=[
   'scripts/amazon-support-reply-oci-site.sh',
   '22153077391',
   '22153259501',
+  '22154699381',
   'read_back',
   'ALREADY_EXISTS',
   'SENT',
@@ -96,7 +97,7 @@ $readbackText=(string)file_get_contents($readbackScript);
 $readbackRequired=[
   'SearchForCases',
   'ViewCase?caseId=',
-  'pageSize=100',
+  'pageSize=10',
   "result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED'",
   'expected_sha256',
   'matched_sha256',
@@ -104,6 +105,7 @@ $readbackRequired=[
   'contact_count',
   'total_contacts',
   'last_outbound_sha256',
+  'discovered_orders',
   'SUPPORT_LOOKUP_PROBE=PASS',
 ];
 foreach($readbackRequired as $needle){if(strpos($readbackText,$needle)===false){fwrite(STDERR,"amazon support read-back missing contract: {$needle}\n");exit(1);}}
