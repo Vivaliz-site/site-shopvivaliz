@@ -51,7 +51,7 @@ jobs:
           OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
           VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
           VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
-          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-ed25519"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
           BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
           ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
           EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
@@ -71,7 +71,7 @@ jobs:
           key_file=$OCI_KEY_FILE
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
-          ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-oci-bastion-session -f "$BASTION_KEY_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-oci-bastion-session -f "$BASTION_KEY_FILE"
           chmod 600 "$BASTION_KEY_FILE"
           echo "OCI_REGION=$OCI_CLI_REGION" >> "$GITHUB_ENV"
 
@@ -173,7 +173,7 @@ jobs:
             test -n "$metadata_command"
             local tunnel_command="${metadata_command//<privateKey>/$BASTION_KEY_FILE}"
             tunnel_command="${tunnel_command//<localPort>/$port}"
-            tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+            tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
             bash -lc "$tunnel_command"
           }
           open_tunnel "$BACKEND_BASTION_SSH_COMMAND" "$BACKEND_TUNNEL_PORT"
