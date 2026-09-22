@@ -11,7 +11,7 @@ claude_bootstrap="$root/docs/knowledge/claude-vm-bootstrap.md"
 agent_rules="$root/docs/knowledge/agent-rules.md"
 root_claude="$root/CLAUDE.md"
 core="$root/includes/ai-squad-core.php"
-admin="$root/admin/ai-squad.php"
+admin="$root/admin/buscador.php"
 
 test -f "$claude_installer"
 test -f "$claude_bridge"
@@ -46,11 +46,14 @@ start = text.index('if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then')
 end = text.index('log INFO "Producao, runtime e bridges AI Squad ja alinhados', start)
 block = text[start:end]
 for required in (
-    'reconcile_ai_squad_codex_bridge_unit "$CURRENT_LINK"',
-    'reconcile_ai_squad_claude_bridge_unit "$CURRENT_LINK"',
+    'reconcile_ai_squad_bridges "$CURRENT_LINK"',
+    'ai-squad-deploy-gate.lock',
+    'ai-squad-runtime.lock',
 ):
-    if required not in block:
-        raise SystemExit(f"FAIL: aligned-release path missing {required}")
+    if required not in text:
+        raise SystemExit(f"FAIL: deploy drain contract missing {required}")
+if 'reconcile_ai_squad_bridges "$CURRENT_LINK"' not in block:
+    raise SystemExit('FAIL: aligned-release path must use atomic AI Squad bridge reconciliation')
 if 'deploy/systemd/shopvivaliz-squad-claude-bridge.service' in text:
     raise SystemExit("FAIL: deploy must not depend on removed Claude system-level unit")
 print("AI_SQUAD_RUNTIME_RECONCILE_CONTRACT=PASS")
@@ -60,8 +63,8 @@ grep -q 'claude_code' "$docs"
 grep -q 'vertex_oauth' "$docs"
 grep -Fq 'OpenAI: `gpt-5.6-terra`, effort `medium`;' "$docs"
 grep -Fq 'Anthropic: `claude-sonnet-5`, effort `medium`;' "$docs"
-grep -Fq 'Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;' "$docs"
-grep -Fq '`thinkingBudget: 8192`' "$docs"
+grep -Fq 'Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;' "$docs"
+grep -Fq '`thinkingLevel: medium`' "$docs"
 grep -Fq 'manual_chatgpt' "$docs"
 ! grep -q "getenv('OPENAI_API_KEY')" "$core"
 ! grep -q "getenv('ANTHROPIC_API_KEY')" "$core"
@@ -75,6 +78,8 @@ grep -Fq 'consulte a web quando a resposta depender de versão' "$claude_bootstr
 grep -Fq 'documentação oficial' "$claude_bootstrap"
 grep -Fq 'Navegador e pesquisa técnica' "$agent_rules"
 grep -q 'Fable: desabilitado' "$admin"
+grep -Fq "e.ok===true&&e.complete_provider_coverage===true&&e.consensus_available===true" "$admin"
+grep -q "Incompleto" "$admin"
 if grep -q 'Opus 5 primário' "$admin"; then
   echo 'FAIL: admin UI contains stale hard-coded Anthropic model label' >&2
   exit 1

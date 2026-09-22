@@ -19,11 +19,11 @@ ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL')
 ais_assert(($deep['openai']['effort'] ?? '') === 'medium', 'deep OpenAI effort must be medium');
 ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'), 'deep Anthropic model mismatch');
 ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic effort must be medium');
-ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash'), 'deep Gemini model mismatch');
+ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
 ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
-ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingBudget' => 8192], 'Gemini 2.5 MEDIUM must use thinkingBudget 8192');
+ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingLevel' => 'medium'], 'Gemini 3.5 MEDIUM must use thinkingLevel medium');
 $fast = $catalog['fast'];
-ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingBudget' => 1024], 'Gemini 2.5 LOW must use thinkingBudget 1024');
+ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingLevel' => 'low'], 'Gemini 3.5 LOW must use thinkingLevel low');
 ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 'thinking_level' => 'MEDIUM']) === ['thinkingLevel' => 'medium'], 'Gemini 3 must use thinkingLevel');
 
 ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
@@ -305,11 +305,11 @@ foreach (['openai', 'anthropic', 'gemini'] as $providerId) {
     );
 }
 
-$uiSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+$uiSource = (string)file_get_contents(dirname(__DIR__) . '/admin/buscador.php');
 ais_assert(str_contains($uiSource, 'configured_unverified'), 'UI must expose configured-but-unverified state');
 ais_assert(str_contains($uiSource, 'healthState(p)'), 'UI must normalize provider health state');
 ais_assert(!str_contains($uiSource, "(p.configured?'ok':'bad')"), 'UI must not paint configured-only providers green');
-ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate AI Squad health endpoint identity');
+ais_assert(str_contains($uiSource, "j.endpoint!=='buscador'"), 'UI must validate Buscador health endpoint identity');
 
 $coreSource = (string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php');
 ais_assert(!str_contains($coreSource, 'function svais_openai_call'), 'AI Squad core must not retain dormant OpenAI Platform API transport');
@@ -318,16 +318,16 @@ ais_assert(!str_contains($coreSource, 'function svais_anthropic_call'), 'AI Squa
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_vertex_call'), 'AI Squad core must not retain dormant Anthropic Vertex transport');
 ais_assert(!str_contains($coreSource, "getenv('ANTHROPIC_API_KEY')"), 'AI Squad core must not read ANTHROPIC_API_KEY');
 
-$adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+$adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/buscador.php');
 ais_assert(str_contains($adminSource, 'manual_chatgpt'), 'UI must expose manual ChatGPT fallback');
 ais_assert(str_contains($adminSource, 'https://chatgpt.com/'), 'UI must provide explicit ChatGPT fallback action');
 
-$apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/ai-squad.php');
+$apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/buscador.php');
 ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');
 $legacyPolicy = 'opus' . '5_primary_no_fable';
 ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
-$apiSource = file_get_contents(__DIR__ . '/../api/agent/ai-squad.php');
+$apiSource = file_get_contents(__DIR__ . '/../api/agent/buscador.php');
 ais_assert(str_contains($apiSource, 'set_time_limit(900)'), 'AI Squad API must allow deep-research cycles beyond default PHP timeout');
 ais_assert(str_contains($apiSource, 'ignore_user_abort(true)'), 'AI Squad API must finish audit cycle after transient client disconnect');
 ais_assert(str_contains($apiSource, 'svais_cycle_complete_for_consensus'), 'API must gate consensus on complete provider/phase coverage');

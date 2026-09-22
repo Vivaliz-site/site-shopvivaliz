@@ -55,7 +55,8 @@ PY
 
 configure_client_profile() {
   local home="$1" owner="$2" server="$3" key="$4"
-  local cfgdir="$home/.config/rustdesk" cfg="$cfgdir/RustDesk2.toml"
+  local cfgdir="$home/.config/rustdesk"
+  local cfg="$cfgdir/RustDesk2.toml"
   install -d -m 700 -o "$owner" -g "$owner" "$cfgdir"
   cat >"$cfg" <<EOF
 rendezvous_server = '$server:21116'
@@ -172,8 +173,6 @@ services:
     volumes:
       - $SERVER_ROOT/data:/root
     network_mode: "host"
-    depends_on:
-      - hbbr
     restart: unless-stopped
   hbbr:
     container_name: shopvivaliz-rustdesk-hbbr
@@ -185,12 +184,16 @@ services:
     restart: unless-stopped
 EOF
   docker compose -f "$SERVER_ROOT/compose.yml" pull
-  docker compose -f "$SERVER_ROOT/compose.yml" up -d
+  if docker ps -a --format '{{.Names}}' | grep -qx 'shopvivaliz-rustdesk-hbbr'; then
+    docker compose -f "$SERVER_ROOT/compose.yml" stop hbbr
+  fi
+  docker compose -f "$SERVER_ROOT/compose.yml" up -d hbbs
   for _ in $(seq 1 30); do
     [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] && break
     sleep 1
   done
   [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] || die server_key_not_generated 41
+  docker compose -f "$SERVER_ROOT/compose.yml" up -d hbbr
   if [ -f "$SERVER_ROOT/data/id_ed25519" ]; then chmod 600 "$SERVER_ROOT/data/id_ed25519"; fi
   chmod 644 "$SERVER_ROOT/data/id_ed25519.pub"
 
