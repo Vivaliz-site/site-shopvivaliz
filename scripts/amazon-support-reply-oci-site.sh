@@ -96,6 +96,8 @@ if ! sv_as_ubuntu '
   export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9227
   exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
 ' >/tmp/shopvivaliz-support-probe.out 2>&1; then
+  probe_result="$(tail -n 1 /tmp/shopvivaliz-support-probe.out 2>/dev/null || true)"
+  printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
   exit 71
 fi
