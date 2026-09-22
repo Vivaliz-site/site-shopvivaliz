@@ -101,41 +101,27 @@ jobs:
           echo SITE_SUDO_OK=true
 
           cleanup() {
-            if [[ -s /tmp/shopvivaliz-amazon-support-browser.pid ]]; then
-              pid="$(cat /tmp/shopvivaliz-amazon-support-browser.pid 2>/dev/null || true)"
-              [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM -- "-$pid" 2>/dev/null || true
-            fi
-            rm -f /tmp/shopvivaliz-amazon-support-browser.pid /tmp/shopvivaliz-amazon-support-reply.mjs
+            rm -f /tmp/shopvivaliz-amazon-support-reply.mjs
             sudo -n systemctl start amazon-returns-seller-central-browser.timer >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
           sudo -n systemctl stop amazon-returns-seller-central-browser.timer
-          sudo -n systemctl stop amazon-returns-seller-central-browser.service || true
+          sudo -n systemctl start --no-block amazon-returns-seller-central-browser.service
 
-          sudo -n -u ubuntu -g www-data bash -lc '
-            set -Eeuo pipefail
-            set -a
-            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-            set +a
-            setsid "$SELLER_CENTRAL_BROWSER" \
-              --headless=new --no-sandbox --disable-gpu \
-              --remote-debugging-address=127.0.0.1 --remote-debugging-port=9226 \
-              "--user-data-dir=$SELLER_CENTRAL_PROFILE" \
-              --no-first-run --no-default-browser-check about:blank \
-              >/tmp/shopvivaliz-amazon-support-browser.log 2>&1 &
-            echo $! >/tmp/shopvivaliz-amazon-support-browser.pid
-          '
-
-          for _ in $(seq 1 40); do
-            curl -fsS --max-time 1 http://127.0.0.1:9226/json/version >/dev/null 2>&1 && break
+          ready=false
+          for _ in $(seq 1 60); do
+            if curl -fsS --max-time 1 http://127.0.0.1:9225/json/version >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
             sleep 0.5
           done
-          curl -fsS --max-time 2 http://127.0.0.1:9226/json/version >/dev/null
+          test "$ready" = true
           echo SELLER_CENTRAL_CDP_READY=true
 
           cat >/tmp/shopvivaliz-amazon-support-reply.mjs <<'NODE'
-          const CDP='http://127.0.0.1:9226';
+          const CDP='http://127.0.0.1:9225';
           const cases=[
             {
               caseId:'22153077391',
