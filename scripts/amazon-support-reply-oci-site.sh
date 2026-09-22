@@ -96,10 +96,12 @@ if ! sv_as_ubuntu '
   export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9227
   exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
 ' >/tmp/shopvivaliz-support-probe.out 2>&1; then
-  probe_result="$(tail -n 1 /tmp/shopvivaliz-support-probe.out 2>/dev/null || true)"
+  probe_result="$(tail -n 1 /tmp/shopvivaliz-support-probe.out 2>/dev/null)"
   printf 'SUPPORT_PROBE_RESULT=%s\n' "$probe_result"
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
-  grep -E '^(\\{|\\[|seller_|SUPPORT_|ERROR|Error|error|status|reason|auth_)' /tmp/shopvivaliz-support-probe.out | tail -20 | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig' || true
+  if grep -E '^(\\{|\\[|seller_|SUPPORT_|ERROR|Error|error|status|reason|auth_)' /tmp/shopvivaliz-support-probe.out | tail -20 | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig'; then
+    :
+  fi
   exit 71
 fi
 if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
