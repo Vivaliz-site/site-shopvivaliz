@@ -199,16 +199,8 @@ jobs:
           test -n "$SERVER_KEY"
 
           server_key_b64="$(printf '%s' "$SERVER_KEY" | base64 -w0)"
-          "${BACKEND_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -s" <<'REMOTE'
-          set -Eeuo pipefail
-          key="$(printf '%s' "$SERVER_KEY_B64" | base64 -d)"
-          sudo -n env RUSTDESK_SERVER_KEY="$key" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install
-          REMOTE
-          "${SITE_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -s" <<'REMOTE'
-          set -Eeuo pipefail
-          key="$(printf '%s' "$SERVER_KEY_B64" | base64 -d)"
-          sudo -n env RUSTDESK_SERVER_KEY="$key" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install
-          REMOTE
+          "${BACKEND_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -c 'set -Eeuo pipefail; key=\$(printf %s \"\$SERVER_KEY_B64\" | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install'" < scripts/setup-rustdesk-remote.sh
+          "${SITE_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -c 'set -Eeuo pipefail; key=\$(printf %s \"\$SERVER_KEY_B64\" | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install'" < scripts/setup-rustdesk-remote.sh
           echo "RUSTDESK_BOOTSTRAP=BOTH_VMS_INSTALLED"
 
       - name: Provision dedicated private SSH agent access on both VMs
@@ -223,16 +215,8 @@ jobs:
           test -n "$AGENT_PUBKEY"
           pub_b64="$(printf '%s' "$AGENT_PUBKEY" | base64 -w0)"
 
-          "${BACKEND_SSH[@]}" "PUB_B64='$pub_b64' bash -s" <<'REMOTE'
-          set -Eeuo pipefail
-          pub="$(printf '%s' "$PUB_B64" | base64 -d)"
-          sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$pub" bash -s -- install
-          REMOTE
-          "${SITE_SSH[@]}" "PUB_B64='$pub_b64' bash -s" <<'REMOTE'
-          set -Eeuo pipefail
-          pub="$(printf '%s' "$PUB_B64" | base64 -d)"
-          sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$pub" bash -s -- install
-          REMOTE
+          "${BACKEND_SSH[@]}" "PUB_B64='$pub_b64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$pub\" bash -s -- install'" < scripts/setup-agent-ssh.sh
+          "${SITE_SSH[@]}" "PUB_B64='$pub_b64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$pub\" bash -s -- install'" < scripts/setup-agent-ssh.sh
 
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
             kh="$HOME/.ssh/shopvivaliz-agent-known-hosts"
@@ -257,7 +241,7 @@ jobs:
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
             service=shopvivaliz-actions-runner.service
-            workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"
+            if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
             if [ "$workers" -gt 0 ]; then
               echo "RUNNER_LISTENER_RESTART=skipped_worker_active"
             else

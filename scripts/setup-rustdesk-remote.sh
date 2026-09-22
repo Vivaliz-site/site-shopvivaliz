@@ -199,8 +199,19 @@ EOF
 
   docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbs ' || die hbbs_not_running 42
   docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbr ' || die hbbr_not_running 43
-  ss -lnt | grep -q ':21116 ' || die hbbs_port_missing 44
-  ss -lnt | grep -q ':21117 ' || die hbbr_port_missing 45
+
+  hbbs_ready=false
+  hbbr_ready=false
+  for _ in $(seq 1 30); do
+    ss -lnt | grep -q ':21116 ' && hbbs_ready=true
+    ss -lnt | grep -q ':21117 ' && hbbr_ready=true
+    if [ "$hbbs_ready" = true ] && [ "$hbbr_ready" = true ]; then
+      break
+    fi
+    sleep 1
+  done
+  [ "$hbbs_ready" = true ] || die hbbs_port_missing 44
+  [ "$hbbr_ready" = true ] || die hbbr_port_missing 45
   echo "RUSTDESK_SERVER_INSTALL=PASS"
   echo "RUSTDESK_SERVER_PRIVATE=$SERVER_PRIVATE_IP"
   echo "RUSTDESK_SERVER_TAILSCALE=$SERVER_TAILSCALE_IP"
