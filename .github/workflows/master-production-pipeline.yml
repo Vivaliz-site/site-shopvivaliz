@@ -127,7 +127,10 @@ jobs:
             --exclude=.github \
             --exclude=.codex \
             --exclude=.claude \
-            --exclude=docs \
+            --include=docs/ \
+            --include=docs/knowledge/ \
+            --include=docs/knowledge/claude-vm-bootstrap.md \
+            --exclude=docs/*** \
             --exclude=tests \
             --exclude=.env \
             --exclude=tasks-queue.json \

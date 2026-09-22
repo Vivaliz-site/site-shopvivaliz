@@ -14,6 +14,7 @@ import {
   parseClaudeOutput,
   buildSourceRetryPrompt,
   answerClaudeRequest,
+  shouldReprobeAuth,
 } from '../ops/ai-squad/claude-bridge.mjs';
 
 const valid = validateRequest({
@@ -58,6 +59,9 @@ assert.equal(classifyClaudeError('credit balance is too low'), 'quota');
 assert.equal(classifyClaudeError("You've hit your session limit · resets 12:30am (UTC)"), 'quota');
 assert.equal(classifyClaudeError('request_timeout'), 'timeout');
 assert.equal(classifyClaudeError('source_missing'), 'source_missing');
+assert.equal(shouldReprobeAuth({ authenticated: true, checked_at: 0 }, 10000, 5000), false);
+assert.equal(shouldReprobeAuth({ authenticated: false, checked_at: 1000 }, 7001, 5000), true);
+assert.equal(shouldReprobeAuth({ authenticated: false, checked_at: 4000 }, 7001, 5000), false);
 
 const sessionLimitDetail = claudeFailureDetail({
   code: 1,
@@ -151,4 +155,5 @@ const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
 assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health probe must reject auth-status-only false green');
 assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
 assert.match(bridgeSource, /credential_store_configured/, 'health must expose credential-store auth source without secrets');
+assert.match(bridgeSource, /shouldReprobeAuth\(authState\).*scheduleAuthProbe/s, 'false or stale health must schedule a fresh auth probe');
 console.log('AI_SQUAD_CLAUDE_BRIDGE_TEST=PASS');
