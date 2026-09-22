@@ -97,7 +97,9 @@ if ! sv_as_ubuntu '
   exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
 ' >/tmp/shopvivaliz-support-probe.out 2>&1; then
   echo ERROR_CODE=SUPPORT_PROBE_FAILED
-  tail -20 /tmp/shopvivaliz-support-probe.out | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig' || true
+  if ! tail -20 /tmp/shopvivaliz-support-probe.out | sed -E 's/(token|secret|password|authorization)[^ ,}]*/[REDACTED]/Ig'; then
+    echo ERROR_CODE=PROBE_DIAG_READ_FAILED
+  fi
   exit 71
 fi
 if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
