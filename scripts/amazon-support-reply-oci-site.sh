@@ -2,7 +2,20 @@
 set -Eeuo pipefail
 test "$(hostname)" = "shopvivaliz-free-a1"
 echo SITE_IDENTITY=PASS
-sudo -n true
+
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo PRIVILEGE_MODE=ROOT
+  sv_systemctl() { systemctl "$@"; }
+  sv_as_ubuntu() { runuser -u ubuntu -g www-data -- bash -lc "$1"; }
+else
+  if ! sudo -n true; then
+    echo ERROR_CODE=SUDO_UNAVAILABLE
+    exit 70
+  fi
+  echo PRIVILEGE_MODE=SUDO
+  sv_systemctl() { sudo -n systemctl "$@"; }
+  sv_as_ubuntu() { sudo -n -u ubuntu -g www-data bash -lc "$1"; }
+fi
 
 browser_pid=""
 cleanup() {
@@ -10,16 +23,14 @@ cleanup() {
     kill -TERM -- "-$browser_pid"
   fi
   rm -f /tmp/shopvivaliz-amazon-support-breakglass.mjs /tmp/shopvivaliz-seller-auth.out
-  sudo -n systemctl start amazon-returns-seller-central-browser.timer
+  sv_systemctl start amazon-returns-seller-central-browser.timer
 }
 trap cleanup EXIT
 
-sudo -n systemctl stop amazon-returns-seller-central-browser.timer
-sudo -n systemctl stop amazon-returns-seller-central-browser.service
-set -a
-. /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-set +a
+sv_systemctl stop amazon-returns-seller-central-browser.timer
+sv_systemctl stop amazon-returns-seller-central-browser.service
 CDP_URL="http://127.0.0.1:9227"
+echo SYSTEMD_CONTROL=PASS
 
 NODE_BIN=""
 for candidate in /usr/local/bin/node /usr/bin/node; do
@@ -30,7 +41,7 @@ for candidate in /usr/local/bin/node /usr/bin/node; do
 done
 test -n "$NODE_BIN"
 
-sudo -n -u ubuntu -g www-data bash -lc '
+sv_as_ubuntu '
   set -Eeuo pipefail
   set -a
   . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
@@ -56,7 +67,7 @@ for _ in $(seq 1 40); do
 done
 test "$ready" = true
 
-if ! sudo -n -u ubuntu -g www-data bash -lc '
+if ! sv_as_ubuntu '
   set -Eeuo pipefail
   set -a
   . /home/ubuntu/amazon-returns-deploy/shared/.env
