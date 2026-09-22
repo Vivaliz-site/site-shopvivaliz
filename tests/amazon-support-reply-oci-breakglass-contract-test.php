@@ -1,4 +1,5 @@
 <?php
+// Authorized-actor CI retrigger; no runtime behavior.
 declare(strict_types=1);
 $root=dirname(__DIR__);
 $workflow=$root.'/.github/workflows/amazon-support-reply-oci-breakglass.yml';
