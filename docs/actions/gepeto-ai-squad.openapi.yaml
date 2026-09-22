@@ -1,0 +1,80 @@
+openapi: 3.1.0
+info:
+  title: ShopVivaliz AI Squad for Gepeto
+  version: 1.0.0
+  description: Action restrita para Gepeto consultar o AI Squad da ShopVivaliz.
+servers:
+  - url: https://shopvivaliz.com.br
+paths:
+  /api/agent/ai-squad.php:
+    get:
+      operationId: getAiSquadHealth
+      summary: Verifica o estado atual do AI Squad
+      parameters:
+        - in: query
+          name: health
+          required: true
+          schema:
+            type: integer
+            enum: [1]
+        - in: query
+          name: profile
+          required: false
+          schema:
+            type: string
+            enum: [deep_research, balanced, fast]
+            default: deep_research
+      responses:
+        "200":
+          description: Estado dos providers e perfis.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      operationId: runAiSquad
+      summary: Executa pesquisa, debate ou consulta paralela no AI Squad
+      security:
+        - gepetoKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 20000
+                profile:
+                  type: string
+                  enum: [deep_research, balanced, fast]
+                  default: deep_research
+                mode:
+                  type: string
+                  enum: [parallel, debate, research]
+                  default: research
+                stream:
+                  type: boolean
+                  enum: [false]
+                  default: false
+      responses:
+        "200":
+          description: Ciclo completo do AI Squad.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Credencial ausente ou inválida.
+        "429":
+          description: Limite operacional atingido.
+components:
+  securitySchemes:
+    gepetoKey:
+      type: apiKey
+      in: header
+      name: X-Agent-Key
