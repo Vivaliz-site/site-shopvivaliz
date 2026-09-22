@@ -129,6 +129,9 @@ jobs:
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
 
+      - name: Enforce Absolute Audit V5 bridge
+        run: bash scripts/repository-governance-validate.sh absolute-audit
+
       - name: Self-test extreme audit governance
         run: |
           set -euo pipefail
