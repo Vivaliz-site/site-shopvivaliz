@@ -232,13 +232,35 @@ async function run(){
       const lookup=JSON.parse(await evalv(searchCode));
       if(lookup.error)throw new Error(item.caseId+':'+lookup.error);
 
-      const detailCode='(async()=>{const r=await fetch("/hill/hillservice/mons-api/ViewCase?caseId="+encodeURIComponent('+target+')+"&timeZone=UTC&pageSize=100",{credentials:"include"});if(!r.ok)return JSON.stringify({error:"DETAIL_HTTP_"+r.status});return JSON.stringify(await r.json())})()';
+      const expected=normalize(item.narrative);
+      const prefix=expected.slice(0,180);
+      const lastOutbound=normalize(lookup.lastOutboundReply);
+      if(lastOutbound&&prefix&&lastOutbound.includes(prefix)){
+        console.log(JSON.stringify({
+          case_id:item.caseId,
+          order_id:item.orderId,
+          status:lookup.status,
+          result:'ALREADY_EXISTS',
+          read_back:true,
+          match_scope:'$.SearchForCases.lastOutboundReply',
+          expected_sha256:sha256(expected),
+          matched_sha256:sha256(lastOutbound),
+          detail_sha256:null,
+          contact_count:null,
+          total_contacts:null,
+          last_outbound_present:true,
+          last_outbound_sha256:sha256(lastOutbound),
+          last_outbound_length:lastOutbound.length
+        }));
+        continue;
+      }
+
+      const detailCode='(async()=>{const r=await fetch("/hill/hillservice/mons-api/ViewCase?caseId="+encodeURIComponent('+target+')+"&timeZone=UTC&pageSize=10",{credentials:"include"});if(!r.ok)return JSON.stringify({error:"DETAIL_HTTP_"+r.status});return JSON.stringify(await r.json())})()';
       const detail=JSON.parse(await evalv(detailCode));
       if(detail.error)throw new Error(item.caseId+':'+detail.error);
       if(!JSON.stringify(detail).includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
 
       const evidence=readBackEvidence(detail,item.narrative);
-      const lastOutbound=normalize(lookup.lastOutboundReply);
       const result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED';
       const readBack=evidence.found===true;
       if(!readBack)failures++;
