@@ -257,10 +257,16 @@ reconcile_ai_squad_bridges() {
     elif ! reconcile_ai_squad_claude_bridge_unit "$release_path"; then
       status=1
     fi
-    flock -u "$runtime_fd" || true
+    if ! flock -u "$runtime_fd"; then
+      log ERROR "Falha ao liberar lock de runtime do AI Squad"
+      status=1
+    fi
   fi
 
-  flock -u "$gate_fd" || true
+  if ! flock -u "$gate_fd"; then
+    log ERROR "Falha ao liberar gate de deploy do AI Squad"
+    status=1
+  fi
   exec {runtime_fd}>&-
   exec {gate_fd}>&-
   return "$status"
