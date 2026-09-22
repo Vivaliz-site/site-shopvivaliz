@@ -79,6 +79,8 @@ $scriptRequired=[
   'ViewCase?caseId=',
   "result:'ALREADY_EXISTS',read_back:true",
   "result:'SENT',read_back:true",
+  "['Send','Send message','Enviar','Enviar mensagem']",
+  'for(let attempt=0;attempt<20;attempt++){',
 ];
 foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
 $scriptForbidden=[
@@ -87,6 +89,7 @@ $scriptForbidden=[
   'SELLER_SUPPORT_OPEN',
   'create new case',
   'open new case',
+  "['Send','Send message','Reply','Enviar','Enviar mensagem','Responder']",
 ];
 foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
 
@@ -128,10 +131,12 @@ $remoteText=(string)file_get_contents($remoteWorkflow);
 $remoteRequired=[
   'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]',
   'amazon_support_readback',
+  'amazon_support_readback_221530_221532',
   'amazon_support_reply',
   'action.startswith("amazon_support_")',
   'Amazon Seller Support actions are restricted to the site VM',
   'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n bash scripts/amazon-support-reply-oci-site.sh',
 ];
 foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
