@@ -131,7 +131,7 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
     env:
-      ALLOW_REPAIR: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      ALLOW_REPAIR: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure verified VM SSH
@@ -424,7 +424,7 @@ jobs:
           python3 - <<'PY'
           import json
           data=json.load(open('/tmp/dc-control-plane-status.json',encoding='utf-8'))
-          critical_hosts = {'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
+          critical_hosts = {'LAPTOP-NIG4IFUU', 'DESKTOP-KOCEPSV', 'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
           if any(item.get('host') in critical_hosts and item.get('state') != 'healthy' for item in data):
               raise SystemExit(1)
           PY
