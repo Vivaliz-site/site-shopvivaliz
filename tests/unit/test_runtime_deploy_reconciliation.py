@@ -19,6 +19,14 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('ubuntu@163.176.103.253', text)
         self.assertNotIn('|| true', text)
 
+    def test_master_pipeline_packages_only_required_claude_bootstrap_doc(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn('--include=docs/', text)
+        self.assertIn('--include=docs/knowledge/', text)
+        self.assertIn('--include=docs/knowledge/claude-vm-bootstrap.md', text)
+        self.assertIn('--exclude=docs/***', text)
+        self.assertNotIn('--exclude=docs \\n', text)
+
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('printf \'%s\\n\' "$sha" > "$release/.release-sha"', text)
