@@ -453,6 +453,8 @@ $done = [
     'message_count' => count($successful),
     'complete_provider_coverage' => $completeCoverage,
     'consensus_available' => is_array($consensus),
+    'gepeto_requested' => $gepetoEnabled,
+    'gepeto_review_available' => is_array($gepetoReview),
     'duration_ms' => $durationMs,
 ];
 svais_api_emit($done, $stream, $events);
