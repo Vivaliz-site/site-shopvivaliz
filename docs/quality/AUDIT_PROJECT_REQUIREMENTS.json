@@ -1,0 +1,54 @@
+{
+  "schema": "AUDIT_PROJECT_REQUIREMENTS_V1",
+  "project": "Vivaliz-site/site-shopvivaliz",
+  "policy_version": "2026-09-21-absolute-v5",
+  "required_invariants": [
+    {
+      "id": "SITE_PRODUCTION_RELEASE_PARITY_V1",
+      "type": "evidence",
+      "description": "The certified production release, build, config and runtime must match the audited SHA."
+    },
+    {
+      "id": "STOREFRONT_CORE_FUNNEL_REAL_V1",
+      "type": "journey_ids",
+      "description": "The complete customer storefront funnel must be executed in the real browser on the published release.",
+      "required_journey_ids": [
+        "storefront-catalog",
+        "storefront-product",
+        "storefront-cart",
+        "storefront-shipping",
+        "storefront-checkout"
+      ]
+    },
+    {
+      "id": "SITE_ADMIN_AUTH_AND_NAVIGATION_V1",
+      "type": "journey_ids",
+      "description": "Admin login and protected navigation must be exercised through the real UI.",
+      "required_journey_ids": [
+        "admin-login",
+        "admin-protected-navigation"
+      ]
+    },
+    {
+      "id": "SITE_BUSCADOR_THREE_PROVIDER_CHAT_V1",
+      "type": "provider_chat",
+      "description": "Embedded Buscador is only healthy when OpenAI, Claude and Gemini all respond visibly in the same real chat cycle.",
+      "providers": [
+        "openai",
+        "anthropic",
+        "gemini"
+      ],
+      "phases": [
+        "research",
+        "critique",
+        "converge"
+      ],
+      "consensus_required": true
+    },
+    {
+      "id": "SITE_CACHE_PWA_RELEASE_PARITY_V1",
+      "type": "evidence",
+      "description": "Cache/service worker behavior must not serve a stale release after deploy."
+    }
+  ]
+}
