@@ -122,7 +122,7 @@ jobs:
             --bastion-id "$BASTION_ID" \
             --target-private-ip "$SITE_PRIVATE_IP" \
             --target-port 22 \
-            --session-ttl 900 \
+            --session-ttl 1800 \
             --display-name shopvivaliz-site-amazon-support \
             --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
             --query 'data.id' --raw-output)"

@@ -20,6 +20,7 @@ $required=[
   'SHOPVIVALIZ_VM_SSH_KEY',
   'SITE_PRIVATE_IP: 10.0.1.112',
   'bastion session create-port-forwarding',
+  '--session-ttl 1800',
   'shopvivaliz-site-amazon-support',
   'HostKeyAlias=127.0.0.1',
   'sudo -n bash -s',
@@ -34,6 +35,7 @@ $required=[
 foreach($required as $needle){if(strpos($text,$needle)===false){fwrite(STDERR,"amazon support Bastion breakglass missing contract: {$needle}\n");exit(1);}}
 $forbidden=[
   'runs-on: self-hosted',
+  '--session-ttl 900',
   'ComputeInstanceAgentClient',
   'create_instance_agent_command',
   'base64.b64encode',
