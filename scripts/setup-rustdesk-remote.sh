@@ -55,7 +55,7 @@ PY
 
 configure_client_profile() {
   local home="$1" owner="$2" server="$3" key="$4"
-  local cfgdir="$home/.config/rustdesk" cfg="$cfgdir/RustDesk2.toml"
+  local cfgdir="$home/.config/rustdesk"\n  local cfg="$cfgdir/RustDesk2.toml"
   install -d -m 700 -o "$owner" -g "$owner" "$cfgdir"
   cat >"$cfg" <<EOF
 rendezvous_server = '$server:21116'
