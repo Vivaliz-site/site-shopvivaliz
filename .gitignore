@@ -41,7 +41,7 @@ config/runtime-secrets*.php
 
 # Playwright runtime artifacts belong in CI artifacts, never in source control.
 test-results/
-playwright-report/
+playwrright-report/
 storage/order-rate-limit/
 storage/order-idempotency/
 storage/private/
@@ -194,6 +194,9 @@ scratch/*.jpg
 # Isolated agent worktrees
 .worktrees/
 .claude/worktrees/
+
+# Claude Code runtime state (lock de sessão — não versionado)
+.claude/scheduled_tasks.lock
 
 # Editor extension packages are local tooling, never production artifacts.
 *.vsix
