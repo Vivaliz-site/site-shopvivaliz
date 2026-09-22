@@ -3,6 +3,11 @@ set -Eeuo pipefail
 root="$(git rev-parse --show-toplevel)"; cd "$root"
 phase="${1:-manual}"
 
+if [ "$phase" = "absolute-audit" ]; then
+  exec bash scripts/absolute-audit-governance-validate.sh ci
+fi
+
+
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 python3 scripts/validate-recurring-ai-policy.py
 python3 scripts/validate-retired-windows-tasks.py
