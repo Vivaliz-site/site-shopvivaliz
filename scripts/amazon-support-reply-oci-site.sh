@@ -108,11 +108,13 @@ async function run(){
   const href=String(await evalv('location.href'));
   if(/signin|ap\/signin|auth/i.test(href))throw new Error('AUTH_REQUIRED');
 
+  let failures=0;
   for(const item of cases){
+    try {
     const lookup=JSON.parse(await evalv(`(async()=>{for(let page=0;page<10;page++){const r=await fetch('/hill/hillservice/mons-api/SearchForCases',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({page,searchPageSize:50,sortBy:'CreationDate',sortByOrder:'DESC',getCountOnly:false,caseFilters:{caseOwner:'MerchantCases'}})});if(!r.ok)return JSON.stringify({error:'SEARCH_HTTP_'+r.status});const j=await r.json();const rows=Array.isArray(j.caseSearchResultList)?j.caseSearchResultList:[];const x=rows.find(v=>String(v.caseId||'')===${JSON.stringify(item.caseId)});if(x)return JSON.stringify({caseId:String(x.caseId||''),status:String(x.status||''),shortDescription:String(x.shortDescription||'')});if(rows.length<50)break;}return JSON.stringify({error:'NOT_FOUND'})})()`));
     if(lookup.error)throw new Error(item.caseId+':'+lookup.error);
     const normalized=String(lookup.status||'').toUpperCase();
-    if(/RESOLVED|CLOSED|CANCELLED/.test(normalized))throw new Error(item.caseId+':TERMINAL_STATUS:'+normalized);
+    const terminal=/RESOLVED|CLOSED|CANCELLED/.test(normalized);
 
     const rawDetail=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return JSON.stringify({error:'DETAIL_HTTP_'+r.status});return JSON.stringify(await r.json())})()`);
     const detail=JSON.parse(rawDetail);
@@ -126,6 +128,13 @@ async function run(){
     }
 
     await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
+
+    if(terminal){
+      const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+      if(!reopened)throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
+      await sleep(1200);
+    }
+
     let selector='';
     let triggered=false;
     const deadline=Date.now()+15000;
@@ -153,8 +162,13 @@ async function run(){
     }
     if(!confirmed)throw new Error(item.caseId+':READ_BACK_FAILED');
     console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
+    } catch(error) {
+      failures++;
+      console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:'UNKNOWN',result:'ERROR',read_back:false,error:String(error?.message||error).slice(0,160)}));
+    }
   }
   ws.close();
+  if(failures>0) process.exitCode=1;
 }
 
 run().catch(error=>{
