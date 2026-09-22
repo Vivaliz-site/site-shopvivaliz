@@ -146,14 +146,15 @@ async function connect(){
   if(!page)throw new Error('NO_CDP_PAGE');
   const ws=new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no});
-  let seq=0;const pending=new Map();
-  ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id||!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
+  let seq=0;const pending=new Map();const networkTrace=[];
+  ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id){if(m.method==='Network.responseReceived'){try{const response=m.params?.response||{};const url=new URL(String(response.url||''));if(url.hostname==='sellercentral.amazon.com.br'&&/\/hill\/|\/cu\//.test(url.pathname)){networkTrace.push({path:url.pathname,status:Number(response.status)||0,mimeType:String(response.mimeType||'').slice(0,80)});if(networkTrace.length>40)networkTrace.shift()}}catch{}}return}if(!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
   const send=(method,params={})=>new Promise((ok,no)=>{const id=++seq;pending.set(id,[ok,no]);ws.send(JSON.stringify({id,method,params}))});
-  return {ws,send,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
+  return {ws,send,networkTrace,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
 }
 
 async function run(){
-  const {ws,send,evalv}=await connect();
+  const {ws,send,evalv,networkTrace}=await connect();
+  await send('Network.enable');
   const navigate=async (url,waitMs=3000)=>{await send('Page.navigate',{url});await sleep(waitMs)};
   await navigate(CASE_LOBBY);
   const href=String(await evalv('location.href'));
@@ -206,8 +207,10 @@ async function run(){
 
     const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
     if(written!==true)throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
+    networkTrace.length=0;
     const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Enviar','Enviar mensagem'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
     if(!sent)throw new Error(item.caseId+':SEND_ACTION_MISSING');
+    console.log('SEND_CONTROL='+safeError(sent));
 
     let confirmed=false;
     for(let attempt=0;attempt<20;attempt++){
@@ -215,7 +218,7 @@ async function run(){
       const check=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return false;const d=await r.json();return JSON.stringify(d).includes(${JSON.stringify(prefix)})})()`);
       if(check===true){confirmed=true;break}
     }
-    if(!confirmed)throw new Error(item.caseId+':READ_BACK_FAILED');
+    if(!confirmed){console.log('SUBMIT_TRACE='+JSON.stringify(networkTrace.slice(-30)));throw new Error(item.caseId+':READ_BACK_FAILED')}
     console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
     } catch(error) {
       failures++;

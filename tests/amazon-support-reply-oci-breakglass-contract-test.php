@@ -84,6 +84,9 @@ $scriptRequired=[
   '22154699381',
   "['Send','Send message','Enviar','Enviar mensagem']",
   'for(let attempt=0;attempt<20;attempt++){',
+  "await send('Network.enable')",
+  'SEND_CONTROL=',
+  'SUBMIT_TRACE=',
 ];
 foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
 $scriptForbidden=[
@@ -136,11 +139,13 @@ $remoteRequired=[
   'amazon_support_readback',
   'amazon_support_readback_221530_221532',
   'amazon_support_reply',
+  'amazon_support_reply_221530_221532',
   'action.startswith("amazon_support_")',
   'Amazon Seller Support actions are restricted to the site VM',
   'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original bash scripts/amazon-support-reply-oci-site.sh',
 ];
 foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
 
