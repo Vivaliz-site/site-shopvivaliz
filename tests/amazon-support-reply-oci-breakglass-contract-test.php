@@ -20,6 +20,9 @@ $required=[
   'SHOPVIVALIZ_VM_SSH_KEY',
   'SITE_PRIVATE_IP: 10.0.1.112',
   'bastion session create-port-forwarding',
+  "ssh-keygen -q -t rsa -b 4096",
+  'HostKeyAlgorithms=+ssh-rsa',
+  'PubkeyAcceptedAlgorithms=+ssh-rsa',
   '--session-ttl 1800',
   'shopvivaliz-site-amazon-support',
   'HostKeyAlias=127.0.0.1',
@@ -36,6 +39,7 @@ foreach($required as $needle){if(strpos($text,$needle)===false){fwrite(STDERR,"a
 $forbidden=[
   'runs-on: self-hosted',
   '--session-ttl 900',
+  "ssh-keygen -q -t ed25519",
   'ComputeInstanceAgentClient',
   'create_instance_agent_command',
   'base64.b64encode',
