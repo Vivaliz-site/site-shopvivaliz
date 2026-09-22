@@ -10,17 +10,17 @@ if ($html === '') {
     exit(1);
 }
 
-$href = '/admin/ai-squad.php';
+$href = '/admin/buscador.php';
 $occurrences = substr_count($html, $href);
 
 if ($occurrences < 2) {
-    fwrite(STDERR, "Squad Chat admin entry points missing: found {$occurrences}\n");
+    fwrite(STDERR, "Buscador admin entry points missing: found {$occurrences}\n");
     exit(1);
 }
 
-if (strpos($html, '🤖 Squad Chat') === false && strpos($html, '>Squad Chat<') === false) {
-    fwrite(STDERR, "Squad Chat label missing\n");
+if (strpos($html, '🤖 Buscador') === false && strpos($html, '>Buscador<') === false) {
+    fwrite(STDERR, "Buscador label missing\n");
     exit(1);
 }
 
-echo "ADMIN_SQUAD_CHAT_ENTRYPOINT_TEST=PASS\n";
+echo "ADMIN_BUSCADOR_ENTRYPOINT_TEST=PASS\n";
