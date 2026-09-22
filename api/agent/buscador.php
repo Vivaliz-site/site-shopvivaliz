@@ -118,6 +118,53 @@ function svais_api_log_cycle(array $metadata): void
     );
 }
 
+function svais_api_acquire_runtime_cycle_lock()
+{
+    $dir = dirname(__DIR__, 2) . '/storage/private';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750, true);
+    }
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return null;
+    }
+
+    $gate = @fopen($dir . '/ai-squad-deploy-gate.lock', 'c');
+    $runtime = @fopen($dir . '/ai-squad-runtime.lock', 'c');
+    if (!is_resource($gate) || !is_resource($runtime)) {
+        if (is_resource($gate)) fclose($gate);
+        if (is_resource($runtime)) fclose($runtime);
+        return null;
+    }
+
+    // Lock ordering prevents a deploy from restarting either provider bridge
+    // while a research cycle is active. The deploy takes the gate exclusively,
+    // then waits for all shared runtime holders to finish. A new cycle briefly
+    // holds the gate shared while joining the runtime cohort.
+    if (!flock($gate, LOCK_SH)) {
+        fclose($gate);
+        fclose($runtime);
+        return null;
+    }
+    if (!flock($runtime, LOCK_SH)) {
+        flock($gate, LOCK_UN);
+        fclose($gate);
+        fclose($runtime);
+        return null;
+    }
+    flock($gate, LOCK_UN);
+    fclose($gate);
+    return $runtime;
+}
+
+function svais_api_release_runtime_cycle_lock($runtimeLock): void
+{
+    if (!is_resource($runtimeLock)) {
+        return;
+    }
+    flock($runtimeLock, LOCK_UN);
+    fclose($runtimeLock);
+}
+
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $profiles = svais_profile_catalog();
 
@@ -183,6 +230,11 @@ $profile = svais_profile($profileName);
 $mode = strtolower((string)($body['mode'] ?? 'research'));
 if (!in_array($mode, ['parallel', 'debate', 'research'], true)) {
     svais_api_json(422, ['ok' => false, 'error' => 'invalid_mode']);
+}
+
+$runtimeCycleLock = svais_api_acquire_runtime_cycle_lock();
+if (!is_resource($runtimeCycleLock)) {
+    svais_api_json(503, ['ok' => false, 'error' => 'ai_squad_runtime_lock_unavailable']);
 }
 
 $stream = ($body['stream'] ?? true) !== false;
@@ -371,6 +423,8 @@ svais_api_log_cycle([
     'consensus_available' => is_array($consensus),
     'duration_ms' => $durationMs,
 ]);
+
+svais_api_release_runtime_cycle_lock($runtimeCycleLock);
 
 if (!$stream) {
     echo json_encode([
