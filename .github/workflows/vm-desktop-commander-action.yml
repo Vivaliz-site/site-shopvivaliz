@@ -19,6 +19,8 @@ on:
           - disk_audit
           - system_audit
           - install_or_repair
+          - install_four_host_sentinel
+          - sentinel_status
           - restart
           - kill_for_recovery_test
           - recover_session
@@ -90,6 +92,12 @@ jobs:
               ;;
             install_or_repair)
               COMMAND='set -Eeuo pipefail; repo=/home/ubuntu/shopvivaliz-deploy/repo; parent=$(dirname "$repo"); if test -e "$repo" && ! test -e "$repo/.git"; then echo "ERROR deploy path exists without git metadata"; exit 12; fi; if ! test -e "$repo/.git"; then mkdir -p "$parent"; git clone --filter=blob:none --branch main https://github.com/Vivaliz-site/site-shopvivaliz.git "$repo" >/dev/null; fi; cd "$repo"; git fetch origin main >/dev/null; git restore --source=origin/main -- scripts/vm-desktop-commander-supervisor.sh scripts/install-vm-desktop-commander-service.sh scripts/vm-desktop-commander-guardian.sh scripts/patch-desktop-commander-session-persistence.mjs ops/systemd/shopvivaliz-desktop-commander.service ops/systemd/shopvivaliz-desktop-commander-guardian.service ops/systemd/shopvivaliz-desktop-commander-guardian.timer; sudo bash "$repo/scripts/install-vm-desktop-commander-service.sh"'
+              ;;
+            install_four_host_sentinel)
+              COMMAND='set -Eeuo pipefail; repo=/home/ubuntu/shopvivaliz-deploy/repo; cd "$repo"; git fetch origin main >/dev/null; git restore --source=origin/main -- scripts/desktop-commander-four-host-sentinel.sh scripts/install-desktop-commander-four-host-sentinel.sh ops/systemd/shopvivaliz-dc-four-host-sentinel.service ops/systemd/shopvivaliz-dc-four-host-sentinel.timer; sudo bash "$repo/scripts/install-desktop-commander-four-host-sentinel.sh"'
+              ;;
+            sentinel_status)
+              COMMAND='set -Eeuo pipefail; printf "TIMER_ACTIVE="; systemctl is-active shopvivaliz-dc-four-host-sentinel.timer; printf "TIMER_ENABLED="; systemctl is-enabled shopvivaliz-dc-four-host-sentinel.timer; printf "SERVICE_RESULT="; systemctl show -p Result --value shopvivaliz-dc-four-host-sentinel.service; cat /var/lib/shopvivaliz-dc-four-host-sentinel/status.env'
               ;;
             restart)
               COMMAND='set -Eeuo pipefail; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active; then printf "RESTART_SKIPPED=healthy\n"; else sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; fi'
