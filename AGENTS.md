@@ -24,7 +24,9 @@ Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs o
 
 ## 🔴 Auditoria Extrema — cobertura universal obrigatória
 
-Quando houver auditoria completa/extrema, validação de release/apto ou condição definida em `AUDIT_POLICY.md`, todos os agentes (Claude, Codex, Gemini, GPT e demais) devem executar integralmente `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md`.
+Quando houver auditoria completa/extrema, validação de release/apto ou condição definida em `AUDIT_POLICY.md`, todos os agentes (Claude, Codex, Gemini, GPT e demais) devem executar integralmente `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável, `docs/quality/AUDIT_OVERLAY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md` para todo fluxo com UI.
+
+**Browser E2E é gate obrigatório:** o próprio agente deve abrir o ambiente publicado no navegador real da VM e executar o fluxo completo pela UI — navegar, clicar, preencher, submeter, observar resultado, recarregar, revisitar e confirmar persistência/efeito. `curl`, API direta, SQL, script, teste automatizado, healthcheck ou screenshot estático não substituem esse E2E. Não delegar ao usuário a validação que o agente pode executar. Sem E2E real de um fluxo crítico com UI, o estado é `NÃO VALIDADO/INCONCLUSIVO`, nunca `APTO`.
 
 A auditoria deve procurar erros explícitos e silenciosos, dados órfãos, estados eternos, boundaries, negativos, regressões, drift, flaky/falso-verde e classes ainda não previstas (`unknown unknowns`). Achado SAFE corrigível deve ser corrigido, testado e reauditado; relatório sem remediação não encerra a auditoria.
 
