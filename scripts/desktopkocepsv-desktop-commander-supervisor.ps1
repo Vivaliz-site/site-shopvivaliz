@@ -7,6 +7,7 @@ $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
 $LegacyStartupName = 'desktop-commander-remote.vbs'
 $Package = '@wonderwhy-er/desktop-commander@0.2.51'
+$PinnedVersion = '0.2.51'
 $MarkerStaleSeconds = 240
 $MaxLogBytes = 5MB
 $DeviceFile = $null
@@ -33,6 +34,7 @@ $StatusScript = Join-Path $PSScriptRoot 'desktopkocepsv-desktop-commander-status
 $SupervisorLog = Join-Path $LogDir 'desktopkocepsv-desktop-commander.log'
 $CooldownFile = Join-Path $LogDir 'desktopkocepsv-desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktopkocepsv-desktop-commander-provider-connected.marker'
+$PackageRootHint = Join-Path $InstallRoot 'package-root.txt'
 $WindowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -146,6 +148,91 @@ function Deploy-OperationalFiles {
     return (Join-Path $InstallRoot 'desktopkocepsv-desktop-commander-supervisor.ps1')
 }
 
+function Test-PinnedPackageRoot([string]$Root) {
+    if ([string]::IsNullOrWhiteSpace($Root)) { return $false }
+    $manifestPath = Join-Path $Root 'package.json'
+    $entryPoint = Join-Path $Root 'dist\index.js'
+    if (-not (Test-Path -LiteralPath $manifestPath) -or -not (Test-Path -LiteralPath $entryPoint)) { return $false }
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        return ($manifest.name -eq '@wonderwhy-er/desktop-commander' -and $manifest.version -eq $PinnedVersion)
+    }
+    catch { return $false }
+}
+
+function Test-CanonicalRemoteCommand([string]$Command) {
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    if ($Command -match '@wonderwhy-er/desktop-commander@0\.2\.51(?=\s|["''])[^\r\n]*\bremote\b.*--persist-session') { return $true }
+    if ($Command -notmatch '(?<entry>[A-Za-z]:\\[^"]*?@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js).*?\bremote\b.*--persist-session') { return $false }
+    $entryPoint = [string]$Matches['entry']
+    try {
+        $packageRoot = Split-Path -Parent (Split-Path -Parent $entryPoint)
+        return (Test-PinnedPackageRoot -Root $packageRoot)
+    }
+    catch { return $false }
+}
+
+function Resolve-PinnedPackageRoot {
+    if (Test-Path -LiteralPath $PackageRootHint) {
+        $hint = [string](Get-Content -LiteralPath $PackageRootHint -Raw -ErrorAction SilentlyContinue)
+        $hint = $hint.Trim()
+        if (Test-PinnedPackageRoot -Root $hint) {
+            return [pscustomobject]@{ Root = $hint; Source = 'verified_hint' }
+        }
+    }
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    [void]$candidates.Add((Join-Path $InstallRoot 'package\node_modules\@wonderwhy-er\desktop-commander'))
+    foreach ($cacheBase in @(
+        (Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'),
+        (Join-Path $env:APPDATA 'npm-cache\_npx')
+    )) {
+        if (-not (Test-Path -LiteralPath $cacheBase)) { continue }
+        foreach ($dir in @(Get-ChildItem -LiteralPath $cacheBase -Directory -ErrorAction SilentlyContinue)) {
+            [void]$candidates.Add((Join-Path $dir.FullName 'node_modules\@wonderwhy-er\desktop-commander'))
+        }
+    }
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if (Test-PinnedPackageRoot -Root $candidate) {
+            return [pscustomobject]@{ Root = $candidate; Source = 'cache_hit' }
+        }
+    }
+
+    $npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
+    if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
+    if (-not $npx) { throw 'Desktop Commander package preflight failed: npx not found' }
+    $probeScript = "process.stdout.write(process.env.PATH.split(require('path').delimiter)[0])"
+    $probeArgs = @('--yes','--package',$Package,'--','node','-e',$probeScript)
+    $savedErrorPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $probeOutput = @(& $npx @probeArgs 2>$null)
+        $probeExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $savedErrorPreference }
+    if ($probeExitCode -ne 0) { throw "Desktop Commander package preflight failed rc=$probeExitCode" }
+    $binDir = [string]($probeOutput | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Last 1)
+    $binDir = $binDir.Trim()
+    if (-not $binDir) { throw 'Desktop Commander package preflight bin path missing' }
+    $resolvedRoot = Join-Path (Split-Path -Parent $binDir) '@wonderwhy-er\desktop-commander'
+    if (-not (Test-PinnedPackageRoot -Root $resolvedRoot)) { throw 'Desktop Commander package preflight identity mismatch' }
+    return [pscustomobject]@{ Root = $resolvedRoot; Source = 'npx_resolved' }
+}
+
+function Ensure-PinnedPackageRoot {
+    New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+    $resolved = Resolve-PinnedPackageRoot
+    $resolved.Root | Out-File -FilePath $PackageRootHint -Force -Encoding ascii
+    Set-PrivateAcl -Path $PackageRootHint -IsFile $true
+    switch ($resolved.Source) {
+        'verified_hint' { Log 'PACKAGE_PREFLIGHT=verified_hint' }
+        'cache_hit' { Log 'PACKAGE_PREFLIGHT=cache_hit' }
+        'npx_resolved' { Log 'PACKAGE_PREFLIGHT=npx_resolved' }
+        default { throw 'Desktop Commander package preflight returned unknown source' }
+    }
+    return $resolved.Root
+}
+
 function Test-DeviceStateNewerThanCooldown {
     if (-not $DeviceFile) { return $false }
     try {
@@ -171,9 +258,7 @@ function Get-LauncherRoots([object[]]$Launchers) {
 
 function Get-CanonicalRemoteLaunchers {
     $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
-        $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
-        ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
+        Test-CanonicalRemoteCommand -Command ([string]$_.CommandLine)
     })
     return @(Get-LauncherRoots $matches)
 }
@@ -181,9 +266,7 @@ function Get-CanonicalRemoteLaunchers {
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
-        $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
-        ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
+        Test-CanonicalRemoteCommand -Command ([string]$_.CommandLine)
     })
     $canonicalIds = @($canonicalProcesses.ProcessId)
     $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
@@ -350,6 +433,7 @@ function Enable-TaskSchedulerOperationalLog {
 function Install-Task {
     $installMutex = Enter-OwnerMutex
     try {
+        [void](Ensure-PinnedPackageRoot)
         $installedSupervisor = Deploy-OperationalFiles
         $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $installedSupervisor + '" -Mode Ensure'
