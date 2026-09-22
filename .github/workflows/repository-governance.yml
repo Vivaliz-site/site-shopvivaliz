@@ -29,6 +29,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Run canonical absolute governance bridge
+        shell: bash
+        run: bash scripts/repository-governance-validate.sh ci
+
       - name: Initialize diagnostic evidence
         shell: bash
         run: |
