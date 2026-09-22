@@ -17,8 +17,12 @@ if (!str_contains($rootHtaccess, $redirect)) {
 if (!str_contains($rootHtaccess, 'RewriteRule ^admin/squad-chat\.html$ - [F,L,NC]')) {
     $errors[] = 'non-GET legacy squad-chat.html fail-closed rule missing';
 }
-if (!str_contains($adminHtaccess, 'Require all denied')) {
-    $errors[] = 'admin static HTML deny policy missing';
+$adminRedirect = 'RewriteRule ^squad-chat\\.html$ /admin/squad-chat.php [R=302,L,NE,QSD]';
+if (!str_contains($adminHtaccess, $adminRedirect)) {
+    $errors[] = 'admin-scope legacy redirect missing';
+}
+if (!str_contains($adminHtaccess, '<IfModule !mod_rewrite.c>') || !str_contains($adminHtaccess, 'Require all denied')) {
+    $errors[] = 'admin static HTML fallback deny policy missing';
 }
 if (!str_contains($wrapper, "require_once dirname(__DIR__) . '/includes/admin-guard.php';")) {
     $errors[] = 'authenticated wrapper is missing admin guard';
