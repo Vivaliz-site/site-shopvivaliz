@@ -42,6 +42,21 @@ Além dos invariantes de domínio, o overlay deve identificar:
 
 Esses itens passam a integrar o Gate Final quando materiais ao domínio.
 
+## Browser E2E real obrigatório no ShopVivaliz
+
+Para qualquer fluxo web com UI, aplicar obrigatoriamente `AUDIT_BROWSER_E2E_REAL_V1`:
+
+- o **próprio agente** deve executar o fluxo completo no navegador real da VM de navegação;
+- `curl`, API direta, SQL, script, unit/integration test, healthcheck ou screenshot estático são apenas apoio e **não substituem** o E2E pelo browser;
+- não é permitido pular telas chamando diretamente o endpoint que a UI chamaria;
+- o teste deve começar na entrada real, navegar/clicar/preencher/submeter pela UI e terminar na pós-condição visível;
+- após qualquer mutação, recarregar, sair da tela, retornar e confirmar persistência;
+- registrar rede, erros de console/page, estado antes/depois e evidência visual suficiente;
+- quando houver autenticação, reutilizar a sessão gráfica autenticada aprovada da VM; não transferir a responsabilidade ao usuário;
+- browser indisponível, autenticação impossível ou fluxo crítico não exercitado pela UI = `NÃO VALIDADO` e bloqueia `APTO`.
+
+No storefront, quando material ao escopo, o E2E deve percorrer pelo browser pelo menos `catálogo → produto → carrinho → cotação de frete → checkout → confirmação/persistência`. Em superfícies administrativas, deve percorrer `login → navegação até a função → ação real → feedback → reload/revisita → persistência/efeito`.
+
 ## Regras estruturais adicionadas por auditorias anteriores
 
 ### ESC-2026-001 (2026-09-21) — endpoints em diretórios bloqueados pelo .htaccess
