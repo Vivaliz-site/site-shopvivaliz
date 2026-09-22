@@ -260,6 +260,7 @@ function setRunning(v){
   document.getElementById('run').disabled=v;
   document.getElementById('profile').disabled=v;
   document.getElementById('mode').disabled=v;
+  document.getElementById('gepeto-review').disabled=v;
   document.querySelector('.panel')?.classList.toggle('running',v);
   if(!v)document.querySelector('#progress span').style.width='100%';
 }
