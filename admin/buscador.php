@@ -118,7 +118,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
     <div class="actions">
       <button id="run" class="primary">Iniciar Buscador</button>
       <button id="clear" class="secondary" type="button">Limpar tela</button>
-      <label style="margin:0"><input id="gepeto-review" type="checkbox" checked> Revisão Gepeto</label>
       <div class="health" id="health"></div>
     </div>
     <div class="meta" id="models">Carregando configuração dos provedores…</div>
