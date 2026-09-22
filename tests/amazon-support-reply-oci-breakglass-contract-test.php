@@ -9,6 +9,9 @@ $required=[
   'issue_comment:',
   'types: [created]',
   'runs-on: ubuntu-latest',
+  'concurrency:',
+  'group: shopvivaliz-oci-bastion-mutation',
+  'cancel-in-progress: false',
   'environment: Production',
   "github.event.issue.number == 1586",
   "github.event.comment.user.login == 'fredmourao-ai'",
@@ -76,6 +79,14 @@ $scriptRequired=[
   'ViewCase?caseId=',
   "result:'ALREADY_EXISTS',read_back:true",
   "result:'SENT',read_back:true",
+  'AMAZON_SUPPORT_REPLY_PROFILE',
+  'current-tickets',
+  '22154699381',
+  "['Send','Send message','Enviar','Enviar mensagem']",
+  'for(let attempt=0;attempt<20;attempt++){',
+  "await send('Network.enable')",
+  'SEND_CONTROL=',
+  'SUBMIT_TRACE=',
 ];
 foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
 $scriptForbidden=[
@@ -84,6 +95,7 @@ $scriptForbidden=[
   'SELLER_SUPPORT_OPEN',
   'create new case',
   'open new case',
+  "['Send','Send message','Reply','Enviar','Enviar mensagem','Responder']",
 ];
 foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
 
@@ -93,7 +105,7 @@ $readbackText=(string)file_get_contents($readbackScript);
 $readbackRequired=[
   'SearchForCases',
   'ViewCase?caseId=',
-  'pageSize=100',
+  'pageSize=10',
   "result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED'",
   'expected_sha256',
   'matched_sha256',
@@ -101,6 +113,8 @@ $readbackRequired=[
   'contact_count',
   'total_contacts',
   'last_outbound_sha256',
+  "match_scope:'$.SearchForCases.lastOutboundReply'",
+  'lastOutbound.includes(prefix)',
   'SUPPORT_LOOKUP_PROBE=PASS',
 ];
 foreach($readbackRequired as $needle){if(strpos($readbackText,$needle)===false){fwrite(STDERR,"amazon support read-back missing contract: {$needle}\n");exit(1);}}
@@ -116,5 +130,23 @@ $readbackForbidden=[
   '. /home/ubuntu/amazon-returns-deploy/shared/.env',
 ];
 foreach($readbackForbidden as $needle){if(strpos($readbackText,$needle)!==false){fwrite(STDERR,"amazon support read-back contains forbidden write path: {$needle}\n");exit(1);}}
+
+$remoteWorkflow=$root.'/.github/workflows/shopvivaliz-remote-access.yml';
+if(!is_file($remoteWorkflow)){fwrite(STDERR,"remote access workflow missing\n");exit(1);}
+$remoteText=(string)file_get_contents($remoteWorkflow);
+$remoteRequired=[
+  'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]',
+  'amazon_support_readback',
+  'amazon_support_readback_221530_221532',
+  'amazon_support_reply',
+  'amazon_support_reply_221530_221532',
+  'action.startswith("amazon_support_")',
+  'Amazon Seller Support actions are restricted to the site VM',
+  'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original bash scripts/amazon-support-reply-oci-site.sh',
+];
+foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
 
 echo "amazon-support-bastion-breakglass-contract: ok\n";

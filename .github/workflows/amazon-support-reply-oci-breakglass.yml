@@ -9,6 +9,9 @@ permissions:
 
 jobs:
   reply:
+    concurrency:
+      group: shopvivaliz-oci-bastion-mutation
+      cancel-in-progress: false
     if: >-
       ${{
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
