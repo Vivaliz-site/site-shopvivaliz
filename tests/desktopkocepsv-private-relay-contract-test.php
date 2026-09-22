@@ -20,7 +20,9 @@ foreach ([
     'RunLevel Highest',
     'function Ensure-Task',
     'Get-ScheduledTask -TaskName $TaskName',
-    'if (-not $task) { Install-Task }',
+    'if (-not $task) {',
+    'Install-Task',
+    'Enable-ScheduledTask -TaskName $TaskName',
     'Ensure-Task'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
