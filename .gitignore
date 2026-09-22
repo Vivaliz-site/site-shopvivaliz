@@ -197,3 +197,4 @@ scratch/*.jpg
 
 # Editor extension packages are local tooling, never production artifacts.
 *.vsix
+storage/queue.sqlite
