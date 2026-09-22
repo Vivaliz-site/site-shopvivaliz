@@ -6,11 +6,15 @@ O AI Squad é um orquestrador reutilizável para pesquisas, comparações e deci
 
 Interface administrativa:
 
-`/admin/ai-squad.php`
+`/admin/buscador.php`
+
+Alias legado compatível: `/admin/ai-squad.php` redireciona para a interface canônica.
 
 API:
 
-`/api/agent/ai-squad.php`
+`/api/agent/buscador.php`
+
+Alias legado compatível: `/api/agent/ai-squad.php` carrega a API canônica.
 
 A UI mostra a interação em fases:
 
@@ -39,7 +43,7 @@ Preset para pesquisas aprofundadas e debates com evidência atual. O nível oper
 
 - OpenAI: `gpt-5.6-terra`, effort `medium`;
 - Anthropic: `claude-sonnet-5`, effort `medium`;
-- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
 - web search habilitado para os três.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
@@ -48,13 +52,13 @@ Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
 
 - OpenAI: `gpt-5.6-terra`, effort `high`;
 - Anthropic: `claude-sonnet-5`, effort `high`;
-- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`.
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`.
 
 ### `fast`
 
 Perfil de menor custo/latência para tarefas simples.
 
-Para `gemini-2.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingBudget: 8192`; `LOW` usa `thinkingBudget: 1024`. `thinkingLevel` é reservado aos modelos Gemini 3.x que suportam esse campo.
+Para `gemini-3.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingLevel: medium`; `LOW` usa `thinkingLevel: low`.
 
 ## Variáveis de ambiente
 
@@ -83,13 +87,13 @@ Overrides opcionais:
 ## Health
 
 ```bash
-curl -fsS 'https://shopvivaliz.com.br/api/agent/ai-squad.php?health=1&profile=deep_research'
+curl -fsS 'https://shopvivaliz.com.br/api/agent/buscador.php?health=1&profile=deep_research'
 ```
 
 O health esperado contém:
 
 - `ok=true`
-- `endpoint=ai-squad`
+- `endpoint=buscador`
 - `providers` com OpenAI, Anthropic e Gemini;
 - modelo e esforço de cada provider;
 - `health=verified` somente quando o transporte primário possui prova viva de autenticação/disponibilidade;
@@ -106,7 +110,7 @@ Para automações autorizadas, use `Authorization: Bearer <SHOPVIVALIZ_AGENT_KEY
 Exemplo conceitual:
 
 ```bash
-curl -N -X POST 'https://shopvivaliz.com.br/api/agent/ai-squad.php' \
+curl -N -X POST 'https://shopvivaliz.com.br/api/agent/buscador.php' \
   -H 'Authorization: Bearer <agent-key>' \
   -H 'Content-Type: application/json' \
   --data '{"message":"pesquise o tema X","profile":"deep_research","mode":"research","stream":true}'
@@ -122,19 +126,24 @@ A resposta streaming usa NDJSON. Eventos relevantes:
 - `consensus`
 - `cycle_finished`
 
-No modo `research`, consenso válido exige cobertura completa de OpenAI, Claude e Gemini nas fases `research`, `critique` e `converge`. Erro, intervenção manual ou ausência de qualquer provider/fase bloqueia o evento de consenso e força `cycle_finished.ok=false`; respostas parciais nunca podem ser apresentadas como consenso dos três providers.
+No modo `research`, consenso válido exige cobertura completa de OpenAI, Claude e Gemini nas fases `research`, `critique` e `converge`. Erro, intervenção manual ou ausência de qualquer provider/fase bloqueia o evento de consenso e força `cycle_finished.ok=false`; respostas parciais nunca podem ser apresentadas como consenso dos três providers. A UI mostra `Incompleto`, nunca `Concluído`, nesses casos.
+
+### Drenagem segura durante deploy
+
+Cada ciclo real mantém um lock compartilhado em `storage/private/ai-squad-runtime.lock`. O deploy toma primeiro um gate exclusivo e depois o lock de runtime exclusivo antes de reiniciar os bridges Codex/Claude. Assim, deploys aguardam ciclos em andamento terminarem e impedem novos ciclos de começar durante a troca dos bridges; uma publicação não pode converter uma pesquisa ativa em fallback manual ou falso consenso.
 
 ## Testes
 
 ```bash
 php -l includes/ai-squad-core.php
-php -l api/agent/ai-squad.php
-php -l admin/ai-squad.php
+php -l api/agent/buscador.php
+php -l admin/buscador.php
 php tests/ai-squad-core-test.php
 node tests/ai-squad-codex-bridge-test.mjs
 node tests/ai-squad-claude-bridge-test.mjs
 bash tests/ai-squad-three-provider-runtime-contract-test.sh
 bash tests/ai-squad-ui-audit-contract-test.sh
+bash tests/ai-squad-runtime-drain-contract-test.sh
 ```
 
 O teste também falha caso o nome `fable` apareça em qualquer preset.

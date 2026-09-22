@@ -64,15 +64,15 @@ try {
     ]);
   }
 
-  await page.waitForURL(/\/admin\/ai-squad\.php/, { timeout: 30000 });
-  await page.locator('h1').filter({ hasText: 'AI Squad' }).waitFor({ state: 'visible' });
+  await page.waitForURL(/\/admin\/(?:ai-squad|buscador)\.php/, { timeout: 30000 });
+  await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
   await page.waitForFunction(() => {
     const value = document.querySelector('#models')?.textContent || '';
     return value && !value.includes('Carregando') && !value.includes('Não foi possível');
   }, null, { timeout: 30000 });
 
   const modelText = (await page.locator('#models').innerText()).trim();
-  for (const expected of ['gpt-5.6-terra', 'claude-sonnet-5', 'gemini-2.5-flash', 'Fable: desabilitado']) {
+  for (const expected of ['gpt-5.6-terra', 'claude-sonnet-5', 'gemini-3.5-flash', 'Fable: desabilitado']) {
     if (!modelText.includes(expected)) fail('model_contract_missing_' + expected);
   }
   if ((modelText.match(/medium/gi) || []).length < 3) fail('medium_reasoning_not_visible');
@@ -94,7 +94,7 @@ try {
   await page.waitForFunction(() => {
     const phase = (document.querySelector('#phase')?.textContent || '').trim();
     const run = document.querySelector('#run');
-    return phase === 'Concluído' && run && run.disabled === false;
+    return ['Concluído','Incompleto'].includes(phase) && run && run.disabled === false;
   }, null, { timeout: 1100000 });
 
   const summary = await page.evaluate(() => {
@@ -165,6 +165,7 @@ try {
   }));
   console.log('AI_SQUAD_UI_AUDIT=PASS');
 } finally {
+  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
   await context.close().catch(() => {});
   if (ephemeralProfile) fs.rmSync(profileDir, { recursive: true, force: true });
 }
