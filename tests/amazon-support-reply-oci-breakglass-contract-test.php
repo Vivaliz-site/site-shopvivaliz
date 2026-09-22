@@ -52,6 +52,8 @@ $forbidden=[
   'SELLER_SUPPORT_OPEN',
   'create new case',
   'open new case',
+  '. /home/ubuntu/amazon-returns-deploy/shared/.env',
+  'tail -20 /tmp/shopvivaliz-support-probe.out',
 ];
 foreach($forbidden as $needle){if(strpos($text,$needle)!==false){fwrite(STDERR,"amazon support Bastion breakglass contains forbidden pattern: {$needle}\n");exit(1);}}
 
@@ -63,6 +65,8 @@ $scriptRequired=[
   'seller-central-support-lookup-probe.mjs',
   'SUPPORT_LOOKUP_PROBE=PASS',
   'SUPPORT_PROBE_RESULT=',
+  'SUPPORT_PROBE_OUTPUT_SHA256=',
+  'PROBE_NO_JSON_OUTPUT',
   'SUPPORT_AUTH_CHECK_FAILED',
   'viewCaseMetaData?.canEditCase===true',
   'TERMINAL_NOT_EDITABLE',
