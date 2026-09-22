@@ -98,6 +98,8 @@ install_agent_ssh() {
   chmod 600 "$AGENT_HOME/.ssh/authorized_keys"
 
   cat >/etc/ssh/sshd_config.d/70-shopvivaliz-agent.conf <<EOF
+PermitUserEnvironment no
+
 Match User $AGENT_USER
     PasswordAuthentication no
     KbdInteractiveAuthentication no
@@ -108,7 +110,7 @@ Match User $AGENT_USER
     AllowTcpForwarding no
     PermitTunnel no
     GatewayPorts no
-    PermitUserEnvironment no
+    PermitUserRC no
 EOF
 
   install_ops_wrapper
