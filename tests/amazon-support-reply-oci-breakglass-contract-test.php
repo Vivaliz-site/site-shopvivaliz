@@ -13,6 +13,8 @@ $required=[
   "github.event.issue.number == 1586",
   "github.event.comment.user.login == 'fredmourao-ai'",
   "github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501'",
+  "github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501'",
+  'scripts/amazon-support-readback-oci-site.sh',
   'OCI_CLI_USER',
   'OCI_CLI_TENANCY',
   'OCI_CLI_FINGERPRINT',
@@ -84,5 +86,35 @@ $scriptForbidden=[
   'open new case',
 ];
 foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
+
+$readbackScript=$root.'/scripts/amazon-support-readback-oci-site.sh';
+if(!is_file($readbackScript)){fwrite(STDERR,"amazon support read-back script missing\n");exit(1);}
+$readbackText=(string)file_get_contents($readbackScript);
+$readbackRequired=[
+  'SearchForCases',
+  'ViewCase?caseId=',
+  'pageSize=100',
+  "result=evidence.found?'ALREADY_EXISTS':'NOT_CONFIRMED'",
+  'expected_sha256',
+  'matched_sha256',
+  'detail_sha256',
+  'contact_count',
+  'total_contacts',
+  'last_outbound_sha256',
+  'SUPPORT_LOOKUP_PROBE=PASS',
+];
+foreach($readbackRequired as $needle){if(strpos($readbackText,$needle)===false){fwrite(STDERR,"amazon support read-back missing contract: {$needle}\n");exit(1);}}
+$readbackForbidden=[
+  'SELLER_SUPPORT_OPEN',
+  'kat-button',
+  'kat-textarea',
+  'textarea',
+  'SEND_ACTION',
+  'REPLY_ACTION',
+  'Reopen case',
+  'Reabrir caso',
+  '. /home/ubuntu/amazon-returns-deploy/shared/.env',
+];
+foreach($readbackForbidden as $needle){if(strpos($readbackText,$needle)!==false){fwrite(STDERR,"amazon support read-back contains forbidden write path: {$needle}\n");exit(1);}}
 
 echo "amazon-support-bastion-breakglass-contract: ok\n";
