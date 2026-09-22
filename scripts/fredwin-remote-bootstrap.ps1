@@ -60,7 +60,9 @@ function Ensure-Relay {
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
         Start-Sleep -Seconds 5
+        $ssh = @(Get-ManagedSsh)
     }
+    if ($ssh.Count -ne 1) { throw 'Managed Fred-Win reverse tunnel failed to stay running' }
     Log 'Fred-Win relay ensure completed'
 }
 function Install-Task {
@@ -76,6 +78,18 @@ function Install-Task {
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps the Fred-Win private loopback maintenance relay and diagnostic SSH forward available without interactive logon.' -Force | Out-Null
     Write-Output 'RELAY_TASK_INSTALLED=true'
 }
+function Ensure-Task {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if (-not $task) {
+        Install-Task
+        return
+    }
+    if ($task.State -eq 'Disabled') {
+        Enable-ScheduledTask -TaskName $TaskName | Out-Null
+        Write-Output 'RELAY_TASK_REENABLED=true'
+    }
+}
 
 if ($Mode -eq 'InstallTask') { Install-Task }
+Ensure-Task
 Ensure-Relay
