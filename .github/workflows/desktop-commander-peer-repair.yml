@@ -85,7 +85,13 @@ jobs:
                sleep 12
                test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active
                test "$(systemctl is-active shopvivaliz-desktop-commander-guardian.timer)" = active
-               device_js=$(grep -RFl "Proactively refresh credentials before the realtime expiry window (v4)." "$HOME/.npm/_npx"/*/node_modules/@wonderwhy-er/desktop-commander/dist/remote-device/device.js 2>/dev/null | head -1 || true)
+               device_js=""
+               while IFS= read -r candidate; do
+                 if grep -Fq "Proactively refresh credentials before the realtime expiry window (v4)." "$candidate"; then
+                   device_js="$candidate"
+                   break
+                 fi
+               done < <(find "$HOME/.npm/_npx" -path "*/node_modules/@wonderwhy-er/desktop-commander/dist/remote-device/device.js" -type f)
                test -n "$device_js"
                test -f "$HOME/.desktop-commander-device/provider-connected.marker"
                echo PEER_SERVICE_ACTIVE=true
