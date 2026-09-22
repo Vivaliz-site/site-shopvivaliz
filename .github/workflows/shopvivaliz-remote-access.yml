@@ -413,7 +413,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/remote-windows-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 - <<'PY'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ["REMOTE_CMD_B64"]).decode("utf-8")
           port = os.environ["REMOTE_PORT"]
@@ -432,7 +432,7 @@ jobs:
               print(output)
           if result.get("success") is not True:
               raise SystemExit("remote Windows action failed")
-          PY"
+          PY
 
       - name: Cleanup
         if: always()
