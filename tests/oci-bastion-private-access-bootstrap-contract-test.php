@@ -11,6 +11,9 @@ if ($text === false) {
 $required = [
     "name: OCI Bastion Private Access Bootstrap",
     "runs-on: ubuntu-latest",
+    "concurrency:",
+    "group: shopvivaliz-oci-bastion-mutation",
+    "cancel-in-progress: false",
     "github.event.issue.title == '[private-access-bootstrap]'",
     "github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'",
     "bastion session create-port-forwarding",
