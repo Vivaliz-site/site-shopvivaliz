@@ -41,6 +41,6 @@ O contrato para o GPT Builder fica em `docs/actions/gepeto-ai-squad.openapi.yaml
 
 Autenticação: API key em header `X-Agent-Key`, usando exclusivamente a credencial de runtime `GEPETO_ACTION_KEY`.
 
-O Gepeto deve chamar `runBuscador` com `stream=false`. Para pesquisas complexas, usar `profile=deep_research` e `mode=research`. Para checagem rápida, usar `getAiSquadHealth` antes de apresentar o resultado como consenso.
+O Gepeto deve chamar `runBuscador` com `stream=false`. Para pesquisas complexas, usar `profile=deep_research` e `mode=research`. Para checagem rápida, usar `getBuscadorHealth` antes de apresentar o resultado como consenso.
 
 Um health válido precisa ter `ok=true`, `endpoint=buscador` e `providers` presente.
