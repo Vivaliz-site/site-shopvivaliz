@@ -22,13 +22,25 @@ cleanup() {
   if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
     kill -TERM -- "-$browser_pid"
   fi
-  rm -f /tmp/shopvivaliz-amazon-support-breakglass.mjs /tmp/shopvivaliz-seller-auth.out
+  rm -f /tmp/shopvivaliz-amazon-support-breakglass.mjs /tmp/shopvivaliz-support-probe.out
   sv_systemctl start amazon-returns-seller-central-browser.timer
 }
 trap cleanup EXIT
 
 sv_systemctl stop amazon-returns-seller-central-browser.timer
-sv_systemctl stop amazon-returns-seller-central-browser.service
+service_state=""
+for _ in $(seq 1 180); do
+  service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null || true)"
+  case "$service_state" in
+    inactive|failed) break ;;
+  esac
+  sleep 1
+done
+service_state="$(sv_systemctl is-active amazon-returns-seller-central-browser.service 2>/dev/null || true)"
+if [[ "$service_state" != "inactive" && "$service_state" != "failed" ]]; then
+  echo ERROR_CODE=SELLER_CENTRAL_SERVICE_BUSY
+  exit 72
+fi
 CDP_URL="http://127.0.0.1:9227"
 echo SYSTEMD_CONTROL=PASS
 
@@ -74,13 +86,18 @@ if ! sv_as_ubuntu '
   . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
   set +a
   export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9227
-  exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-safe-t-read-worker.mjs --auth-check
-' >/tmp/shopvivaliz-seller-auth.out 2>&1; then
-  echo ERROR_CODE=AUTH_CHECK_FAILED
+  exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-support-lookup-probe.mjs
+' >/tmp/shopvivaliz-support-probe.out 2>&1; then
+  echo ERROR_CODE=SUPPORT_PROBE_FAILED
   exit 71
 fi
-grep -q '"auth_status":"AUTHENTICATED"' /tmp/shopvivaliz-seller-auth.out
+if ! grep -q '"status":"OK"' /tmp/shopvivaliz-support-probe.out \
+  || ! grep -q '"auth_state":"AUTHENTICATED"' /tmp/shopvivaliz-support-probe.out; then
+  echo ERROR_CODE=SUPPORT_AUTH_CHECK_FAILED
+  exit 71
+fi
 echo SELLER_CENTRAL_AUTH=AUTHENTICATED
+echo SUPPORT_LOOKUP_PROBE=PASS
 
 cat >/tmp/shopvivaliz-amazon-support-breakglass.mjs <<'NODE'
 const CDP='http://127.0.0.1:9227';
@@ -114,7 +131,7 @@ async function connect(){
 
 async function run(){
   const {ws,send,evalv}=await connect();
-  const navigate=async url=>{await send('Page.navigate',{url});await sleep(2500)};
+  const navigate=async (url,waitMs=3000)=>{await send('Page.navigate',{url});await sleep(waitMs)};
   await navigate(CASE_LOBBY);
   const href=String(await evalv('location.href'));
   if(/signin|ap\/signin|auth/i.test(href))throw new Error('AUTH_REQUIRED');
@@ -132,18 +149,22 @@ async function run(){
     if(detail.error)throw new Error(item.caseId+':'+detail.error);
     const serialized=JSON.stringify(detail);
     if(!serialized.includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
+    const canEdit=detail?.viewCaseMetaData?.canEditCase===true;
     const prefix=item.narrative.slice(0,180);
     if(serialized.includes(prefix)){
       console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'ALREADY_EXISTS',read_back:true}));
       continue;
     }
 
-    await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
+    await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId),5000);
 
-    if(terminal){
-      const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-      if(!reopened)throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
-      await sleep(1200);
+    if(terminal && !canEdit){
+      const replyAvailable=Boolean(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled)return true}return false})()`));
+      if(!replyAvailable){
+        const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+        if(!reopened)throw new Error(item.caseId+':TERMINAL_NOT_EDITABLE:'+normalized);
+        await sleep(1200);
+      }
     }
 
     let selector='';
