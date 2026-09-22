@@ -193,8 +193,13 @@ async function run(){
 
     const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
     if(written!==true)throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
-    const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-    if(!sent)throw new Error(item.caseId+':SEND_ACTION_MISSING');
+    const submitLabels=['Send','Send message','Enviar','Enviar mensagem'];
+    const sent=String(await evalv(`(()=>{const submitLabels=${JSON.stringify(submitLabels)};for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!submitLabels.includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+    if(!sent){
+      const availableSendActions=await evalv(`(()=>[...document.querySelectorAll('kat-button,button')].map(h=>(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim()).filter(Boolean).slice(0,30))()`);
+      console.log('AVAILABLE_SEND_ACTIONS='+JSON.stringify(Array.isArray(availableSendActions)?availableSendActions:[]));
+      throw new Error(item.caseId+':SEND_ACTION_MISSING');
+    }
 
     let confirmed=false;
     for(let attempt=0;attempt<6;attempt++){
