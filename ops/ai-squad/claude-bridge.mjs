@@ -22,6 +22,7 @@ const MODEL_ALLOWLIST = new Set([
 ]);
 
 let authState = { checked_at: 0, authenticated: false };
+let authProbePromise = null;
 
 export function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -201,6 +202,19 @@ function runClaude(args, input, timeoutMs, token) {
   });
 }
 
+export function shouldReprobeAuth(state, now = Date.now(), minIntervalMs = 5000) {
+  if (state?.authenticated === true) return false;
+  const checkedAt = Number(state?.checked_at || 0);
+  return checkedAt <= 0 || (now - checkedAt) >= minIntervalMs;
+}
+
+function scheduleAuthProbe() {
+  if (authProbePromise) return authProbePromise;
+  authState = { ...authState, checked_at: Date.now() };
+  authProbePromise = probeAuth().finally(() => { authProbePromise = null; });
+  return authProbePromise;
+}
+
 async function probeAuth() {
   const auth = claudeAuthSource();
   if (!auth.configured) {
@@ -376,6 +390,7 @@ function beginHeartbeat(res) {
 
 async function handle(req, res) {
   if (req.method === 'GET' && req.url === '/health') {
+    if (shouldReprobeAuth(authState)) scheduleAuthProbe().catch(() => {});
     const auth = claudeAuthSource();
     const bin = process.env.AI_SQUAD_CLAUDE_BIN || DEFAULT_CLAUDE_BIN;
     const binaryConfigured = fs.existsSync(bin);
@@ -442,7 +457,7 @@ async function main() {
   server.requestTimeout = 310000;
   server.headersTimeout = 10000;
   server.listen(port, host, () => {
-    probeAuth().catch(() => {});
+    scheduleAuthProbe().catch(() => {});
   });
 }
 
