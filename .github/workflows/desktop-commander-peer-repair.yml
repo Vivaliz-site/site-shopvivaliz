@@ -2,6 +2,15 @@ name: Desktop Commander Peer Repair
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: Explicit operation for manual dispatch
+        required: true
+        default: install_or_repair
+        type: choice
+        options:
+          - install_or_repair
+          - amazon_support_reply
   push:
     branches: [main]
     paths:
@@ -23,7 +32,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          action="$(python3 -c 'import json; print(json.load(open("ops/vm-desktop-commander-request.json"))["action"])')"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            action="${{ inputs.action }}"
+          else
+            action="$(python3 -c 'import json; print(json.load(open("ops/vm-desktop-commander-request.json"))["action"])')"
+          fi
           case "$action" in
             install_or_repair|amazon_support_reply) ;;
             *) echo "Unsupported action: $action" >&2; exit 64 ;;
