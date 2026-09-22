@@ -33,11 +33,11 @@ if (!str_contains($wrapper, "file_get_contents(__DIR__ . '/squad-chat.html')")) 
 if (substr_count($adminIndex, '/admin/squad-chat.php') < 3) {
     $errors[] = 'Squad Chat canonical admin entry points missing';
 }
-if (substr_count($adminIndex, '/admin/ai-squad.php') < 3) {
-    $errors[] = 'AI Squad admin entry points missing';
+if (substr_count($adminIndex, '/admin/buscador.php') < 2) {
+    $errors[] = 'Buscador admin entry points missing';
 }
-if (!str_contains($adminIndex, '>🧠 AI Squad<') && !str_contains($adminIndex, '🧠 AI Squad')) {
-    $errors[] = 'AI Squad label missing';
+if (!str_contains($adminIndex, '🤖 Buscador') && !str_contains($adminIndex, '>Buscador<')) {
+    $errors[] = 'Buscador label missing';
 }
 if (!str_contains($adminIndex, '>💬 Squad Chat<') && !str_contains($adminIndex, '💬 Squad Chat')) {
     $errors[] = 'Squad Chat label missing';
