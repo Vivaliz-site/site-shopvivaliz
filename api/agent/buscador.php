@@ -128,19 +128,27 @@ function svais_api_acquire_runtime_cycle_lock()
         return null;
     }
 
-    $gate = @fopen($dir . '/ai-squad-deploy-gate.lock', 'c');
-    $runtime = @fopen($dir . '/ai-squad-runtime.lock', 'c');
+    $gatePath = $dir . '/ai-squad-deploy-gate.lock';
+    $runtimePath = $dir . '/ai-squad-runtime.lock';
+    $gate = @fopen($gatePath, 'c');
+    $runtime = @fopen($runtimePath, 'c');
     if (!is_resource($gate) || !is_resource($runtime)) {
         if (is_resource($gate)) fclose($gate);
         if (is_resource($runtime)) fclose($runtime);
         return null;
     }
+    // When PHP creates the lock files first, keep them group-writable so the
+    // ubuntu deploy user can later take the exclusive drain locks.
+    @chmod($gatePath, 0660);
+    @chmod($runtimePath, 0660);
 
     // Lock ordering prevents a deploy from restarting either provider bridge
     // while a research cycle is active. The deploy takes the gate exclusively,
     // then waits for all shared runtime holders to finish. A new cycle briefly
-    // holds the gate shared while joining the runtime cohort.
-    if (!flock($gate, LOCK_SH)) {
+    // holds the gate shared while joining the runtime cohort. Gate acquisition
+    // is non-blocking so a new UI request fails fast instead of hanging behind
+    // a deploy that is already draining an older cycle.
+    if (!flock($gate, LOCK_SH | LOCK_NB)) {
         fclose($gate);
         fclose($runtime);
         return null;
