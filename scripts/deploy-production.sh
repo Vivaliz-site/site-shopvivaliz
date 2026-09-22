@@ -217,6 +217,48 @@ reconcile_ai_squad_claude_bridge_unit() {
     return 1
   fi
 }
+
+reconcile_ai_squad_bridges() {
+  local release_path="$1"
+  local lock_dir="$SHARED_DIR/storage/private"
+  local gate_lock="$lock_dir/ai-squad-deploy-gate.lock"
+  local runtime_lock="$lock_dir/ai-squad-runtime.lock"
+  local gate_fd runtime_fd
+  local status=0
+
+  mkdir -p "$lock_dir"
+  sudo chgrp www-data "$lock_dir"
+  sudo chmod 2770 "$lock_dir"
+
+  exec {gate_fd}>"$gate_lock"
+  exec {runtime_fd}>"$runtime_lock"
+  sudo chgrp www-data "$gate_lock" "$runtime_lock"
+  sudo chmod 0660 "$gate_lock" "$runtime_lock"
+
+  # Lock ordering matches the web API: gate first, runtime second. Holding the
+  # gate exclusively blocks new cycles; runtime waits for every in-flight
+  # cycle to finish before either bridge can be restarted.
+  if ! flock -w 840 "$gate_fd"; then
+    log ERROR "Timeout aguardando gate exclusivo do AI Squad"
+    status=1
+  elif ! flock -w 840 "$runtime_fd"; then
+    log ERROR "Timeout aguardando ciclos ativos do AI Squad"
+    status=1
+  else
+    log INFO "AI Squad drenado; reconciliando bridges sem interromper ciclos"
+    if ! reconcile_ai_squad_codex_bridge_unit "$release_path"; then
+      status=1
+    elif ! reconcile_ai_squad_claude_bridge_unit "$release_path"; then
+      status=1
+    fi
+    flock -u "$runtime_fd" || true
+  fi
+
+  flock -u "$gate_fd" || true
+  exec {runtime_fd}>&-
+  exec {gate_fd}>&-
+  return "$status"
+}
 reconcile_abandoned_cart_recovery_units() {
   local release_path="$1"
   local installer="$release_path/scripts/install-abandoned-cart-recovery-service.sh"
@@ -361,12 +403,8 @@ rollback_to() {
       return 1
     fi
   fi
-  if ! reconcile_ai_squad_codex_bridge_unit "$RELEASES_DIR/$previous_release"; then
-    log ERROR "Rollback nao conseguiu reconciliar o bridge Codex"
-    return 1
-  fi
-  if ! reconcile_ai_squad_claude_bridge_unit "$RELEASES_DIR/$previous_release"; then
-    log ERROR "Rollback nao conseguiu reconciliar o bridge Claude"
+  if ! reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"; then
+    log ERROR "Rollback nao conseguiu reconciliar os bridges AI Squad sem interromper ciclos"
     return 1
   fi
   if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.timer" ]; then
@@ -646,8 +684,7 @@ fi
 
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
   if ! reconcile_runtime_secrets "$CURRENT_LINK" \
-    || ! reconcile_ai_squad_codex_bridge_unit "$CURRENT_LINK" \
-    || ! reconcile_ai_squad_claude_bridge_unit "$CURRENT_LINK" \
+    || ! reconcile_ai_squad_bridges "$CURRENT_LINK" \
     || ! verify_runtime_health; then
     write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado/AI Squad invalido"
     exit 1
@@ -769,19 +806,11 @@ if ! reconcile_runtime_service_units "$NEW_RELEASE_PATH"; then
   exit 1
 fi
 
-if ! reconcile_ai_squad_codex_bridge_unit "$NEW_RELEASE_PATH"; then
+if ! reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"; then
   if ! rollback_to "$ACTIVE_RELEASE"; then
-    log ERROR "Rollback apos falha ao instalar bridge Codex tambem falhou"
+    log ERROR "Rollback apos falha ao reconciliar bridges AI Squad tambem falhou"
   fi
-  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do bridge Codex falhou"
-  exit 1
-fi
-
-if ! reconcile_ai_squad_claude_bridge_unit "$NEW_RELEASE_PATH"; then
-  if ! rollback_to "$ACTIVE_RELEASE"; then
-    log ERROR "Rollback apos falha ao instalar bridge Claude tambem falhou"
-  fi
-  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do bridge Claude falhou"
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao dos bridges AI Squad falhou"
   exit 1
 fi
 
