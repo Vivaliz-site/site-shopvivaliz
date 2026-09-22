@@ -18,31 +18,48 @@ jobs:
       }}
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       OCI_PROFILE: AGENTS
-      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      SITE_PRIVATE_IP: 10.0.1.112
+      SITE_TUNNEL_PORT: "22212"
 
     steps:
-      - name: Configure protected OCI profile
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Configure protected OCI and VM credentials
         env:
           OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
           OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
           OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
           OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
           OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
-            test -n "${!name:-}" || { echo "::error::Required OCI breakglass secret missing: $name"; exit 1; }
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected breakglass secret missing: $name"; exit 1; }
           done
           OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
           OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
-          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-ed25519"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          RESULT_FILE="$RUNNER_TEMP/amazon-support-result.log"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\nRESULT_FILE=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" "$RESULT_FILE" >> "$GITHUB_ENV"
           install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
           printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
-          chmod 600 "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
           cat > "$OCI_CONFIG_FILE" <<EOF
           [AGENTS]
           user=$OCI_CLI_USER
@@ -52,316 +69,154 @@ jobs:
           key_file=$OCI_KEY_FILE
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-amazon-support-bastion -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+          echo "OCI_REGION=$OCI_CLI_REGION" >> "$GITHUB_ENV"
 
-      - name: Install OCI SDK
+      - name: Install OCI CLI
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet oci
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
 
-      - name: Reply and verify through OCI Run Command
+      - name: Discover Bastion and temporarily allow runner
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 - <<'PY'
-          import base64
-          import json
-          import os
-          import time
-          import oci
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          backend_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$backend_count" = "1"
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state') == 'ACTIVE']
+          if len(active) != 1:
+              raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          test -n "$BASTION_ID"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress, json, sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2], encoding='utf-8'))
+          cidrs=list(dict.fromkeys([str(x) for x in src] + [ip + '/32']))
+          json.dump(cidrs, open(sys.argv[3], 'w', encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
 
-          cfg = oci.config.from_file(os.environ['OCI_CONFIG_FILE'], os.environ['OCI_PROFILE'])
-          search = oci.resource_search.ResourceSearchClient(cfg)
-          compute = oci.core.ComputeClient(cfg)
-          agent = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
-          models = oci.compute_instance_agent.models
-
-          query = "query instance resources where displayName = '" + os.environ['SITE_INSTANCE_NAME'] + "'"
-          items = search.search_resources(
-              oci.resource_search.models.StructuredSearchDetails(query=query, type='Structured')
-          ).data.items
-          if len(items) != 1:
-              raise SystemExit(f'Expected exactly one site instance, found {len(items)}')
-          instance_id = items[0].identifier
-          instance = compute.get_instance(instance_id).data
-          if instance.display_name != os.environ['SITE_INSTANCE_NAME'] or instance.lifecycle_state != 'RUNNING':
-              raise SystemExit('OCI site identity/lifecycle mismatch')
-
-          site_script = r'''#!/usr/bin/env bash
+      - name: Create private site SSH session
+        shell: bash
+        run: |
           set -Eeuo pipefail
-          test "$(hostname)" = "shopvivaliz-free-a1"
-          echo SITE_IDENTITY=PASS
-          sudo -n true
-
-          browser_pid=""
-          cleanup() {
-            if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
-              kill -TERM -- "-$browser_pid"
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          SITE_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" \
+            --target-private-ip "$SITE_PRIVATE_IP" \
+            --target-port 22 \
+            --session-ttl 900 \
+            --display-name shopvivaliz-site-amazon-support \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$SITE_SESSION_ID"
+          echo "SITE_SESSION_ID=$SITE_SESSION_ID" >> "$GITHUB_ENV"
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = "ACTIVE" ]; then
+              echo "BASTION_SITE_SESSION=ACTIVE"
+              exit 0
             fi
-            rm -f /tmp/shopvivaliz-amazon-support-breakglass.mjs /tmp/shopvivaliz-seller-auth.out
-            systemctl start amazon-returns-seller-central-browser.timer
-          }
-          trap cleanup EXIT
-
-          systemctl stop amazon-returns-seller-central-browser.timer
-          systemctl stop amazon-returns-seller-central-browser.service
-          set -a
-          . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-          set +a
-          CDP_URL="http://127.0.0.1:9227"
-
-          NODE_BIN=""
-          for candidate in /usr/local/bin/node /usr/bin/node; do
-            if [[ -x "$candidate" ]] && "$candidate" -e 'process.exit(typeof WebSocket === "function" ? 0 : 1)' >/dev/null 2>&1; then
-              NODE_BIN="$candidate"
-              break
-            fi
+            case "$state" in
+              FAILED|DELETED) echo "::error::Bastion session entered $state"; exit 1 ;;
+            esac
+            sleep 5
           done
-          test -n "$NODE_BIN"
+          echo "::error::Timed out waiting for site Bastion session"
+          exit 1
 
-          sudo -n -u ubuntu -g www-data bash -lc '
-            set -Eeuo pipefail
-            set -a
-            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-            set +a
-            setsid "$SELLER_CENTRAL_BROWSER" \
-              --headless=new --no-sandbox --disable-gpu \
-              --remote-debugging-address=127.0.0.1 --remote-debugging-port=9227 \
-              "--user-data-dir=$SELLER_CENTRAL_PROFILE" \
-              --no-first-run --no-default-browser-check about:blank \
-              >/tmp/shopvivaliz-amazon-support-breakglass-browser.log 2>&1 &
-            echo $! >/tmp/shopvivaliz-amazon-support-breakglass-browser.pid
-          '
-          browser_pid="$(cat /tmp/shopvivaliz-amazon-support-breakglass-browser.pid)"
-          [[ "$browser_pid" =~ ^[0-9]+$ ]]
+      - name: Open verified private SSH tunnel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bastion_host="host.bastion.$OCI_REGION.oci.oraclecloud.com"
+          ssh -fNT \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=30 \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="$BASTION_KNOWN_HOSTS" \
+            -i "$BASTION_KEY_FILE" \
+            -L "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" \
+            -p 22 "$SITE_SESSION_ID@$bastion_host"
+          sleep 3
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 \
+            'test "$(hostname)" = "shopvivaliz-free-a1"; sudo -n true'
+          echo "PRIVATE_SITE_SSH=PASS"
 
-          ready=false
-          for _ in $(seq 1 40); do
-            if curl -fsS --max-time 1 "$CDP_URL/json/version" >/dev/null 2>&1; then
-              ready=true
-              break
-            fi
-            sleep 0.5
-          done
-          test "$ready" = true
-
-          if ! sudo -n -u ubuntu -g www-data bash -lc '
-            set -Eeuo pipefail
-            set -a
-            . /home/ubuntu/amazon-returns-deploy/shared/.env
-            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-            set +a
-            export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9227
-            exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-safe-t-read-worker.mjs --auth-check
-          ' >/tmp/shopvivaliz-seller-auth.out 2>&1; then
-            echo ERROR_CODE=AUTH_CHECK_FAILED
-            exit 71
-          fi
-          grep -q '"auth_status":"AUTHENTICATED"' /tmp/shopvivaliz-seller-auth.out
-          echo SELLER_CENTRAL_AUTH=AUTHENTICATED
-
-          cat >/tmp/shopvivaliz-amazon-support-breakglass.mjs <<'NODE'
-          const CDP='http://127.0.0.1:9227';
-          const CASE_LOBBY='https://sellercentral.amazon.com.br/cu/case-lobby';
-          const cases=[
-            {
-              caseId:'22153077391',
-              orderId:'701-8413776-8628228',
-              narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-8413776-8628228. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
-            },
-            {
-              caseId:'22153259501',
-              orderId:'701-0172386-7380246',
-              narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-0172386-7380246. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
-            }
-          ];
-          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-          const safeError=value=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9_:-]+/g,'_').slice(0,120);
-
-          async function connect(){
-            const targets=await fetch(CDP+'/json').then(r=>r.json());
-            const page=targets.find(x=>x.type==='page'&&x.webSocketDebuggerUrl);
-            if(!page)throw new Error('NO_CDP_PAGE');
-            const ws=new WebSocket(page.webSocketDebuggerUrl);
-            await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no});
-            let seq=0;const pending=new Map();
-            ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id||!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
-            const send=(method,params={})=>new Promise((ok,no)=>{const id=++seq;pending.set(id,[ok,no]);ws.send(JSON.stringify({id,method,params}))});
-            return {ws,send,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
-          }
-
-          async function run(){
-            const {ws,send,evalv}=await connect();
-            const navigate=async url=>{await send('Page.navigate',{url});await sleep(2500)};
-            await navigate(CASE_LOBBY);
-            const href=String(await evalv('location.href'));
-            if(/signin|ap\/signin|auth/i.test(href))throw new Error('AUTH_REQUIRED');
-
-            for(const item of cases){
-              const lookup=JSON.parse(await evalv(`(async()=>{for(let page=0;page<10;page++){const r=await fetch('/hill/hillservice/mons-api/SearchForCases',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({page,searchPageSize:50,sortBy:'CreationDate',sortByOrder:'DESC',getCountOnly:false,caseFilters:{caseOwner:'MerchantCases'}})});if(!r.ok)return JSON.stringify({error:'SEARCH_HTTP_'+r.status});const j=await r.json();const rows=Array.isArray(j.caseSearchResultList)?j.caseSearchResultList:[];const x=rows.find(v=>String(v.caseId||'')===${JSON.stringify(item.caseId)});if(x)return JSON.stringify({caseId:String(x.caseId||''),status:String(x.status||''),shortDescription:String(x.shortDescription||'')});if(rows.length<50)break;}return JSON.stringify({error:'NOT_FOUND'})})()`));
-              if(lookup.error)throw new Error(item.caseId+':'+lookup.error);
-              const normalized=String(lookup.status||'').toUpperCase();
-              if(/RESOLVED|CLOSED|CANCELLED/.test(normalized))throw new Error(item.caseId+':TERMINAL_STATUS:'+normalized);
-
-              const rawDetail=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return JSON.stringify({error:'DETAIL_HTTP_'+r.status});return JSON.stringify(await r.json())})()`);
-              const detail=JSON.parse(rawDetail);
-              if(detail.error)throw new Error(item.caseId+':'+detail.error);
-              const serialized=JSON.stringify(detail);
-              if(!serialized.includes(item.orderId))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
-              const prefix=item.narrative.slice(0,180);
-              if(serialized.includes(prefix)){
-                console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'ALREADY_EXISTS',read_back:true}));
-                continue;
-              }
-
-              await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
-              let selector='';
-              let triggered=false;
-              const deadline=Date.now()+15000;
-              while(Date.now()<deadline){
-                selector=String(await evalv(`(()=>{const usable=h=>{if(!h||h.disabled===true||h.hasAttribute('disabled'))return false;const p=(h.getAttribute('placeholder')||'').toLowerCase();return !p.includes('feedback')};const k=[...document.querySelectorAll('kat-textarea')].find(usable);if(k)return 'kat-textarea';const n=[...document.querySelectorAll('textarea')].find(usable);return n?'textarea':''})()`)||'');
-                if(selector)break;
-                if(!triggered){
-                  const opened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-                  if(opened)triggered=true;
-                }
-                await sleep(500);
-              }
-              if(!selector)throw new Error(item.caseId+':REPLY_ACTION_MISSING');
-
-              const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
-              if(written!==true)throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
-              const sent=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-              if(!sent)throw new Error(item.caseId+':SEND_ACTION_MISSING');
-
-              let confirmed=false;
-              for(let attempt=0;attempt<6;attempt++){
-                await sleep(1500);
-                const check=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return false;const d=await r.json();return JSON.stringify(d).includes(${JSON.stringify(prefix)})})()`);
-                if(check===true){confirmed=true;break}
-              }
-              if(!confirmed)throw new Error(item.caseId+':READ_BACK_FAILED');
-              console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
-            }
-            ws.close();
-          }
-
-          run().catch(error=>{
-            console.error('ERROR_CODE='+safeError(error?.message));
-            process.exit(1);
-          });
-          NODE
-
-          "$NODE_BIN" /tmp/shopvivaliz-amazon-support-breakglass.mjs
-          '''
-
-          def execute_text_command(command_text, display_name, timeout_seconds=120):
-              if not command_text or len(command_text.encode('utf-8')) > 4096:
-                  raise SystemExit('OCI text command exceeds 4096-byte limit')
-              details = models.CreateInstanceAgentCommandDetails(
-                  compartment_id=instance.compartment_id,
-                  execution_time_out_in_seconds=timeout_seconds,
-                  target=models.InstanceAgentCommandTarget(instance_id=instance_id),
-                  content=models.InstanceAgentCommandContent(
-                      source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT', text=command_text),
-                      output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
-                  ),
-                  display_name=display_name,
-              )
-              command_id = agent.create_instance_agent_command(details).data.id
-              execution = None
-              polls = max(10, (timeout_seconds // 3) + 10)
-              for _ in range(polls):
-                  execution = agent.get_instance_agent_command_execution(
-                      instance_agent_command_id=command_id,
-                      instance_id=instance_id,
-                  ).data
-                  if execution.lifecycle_state in {'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'}:
-                      break
-                  time.sleep(3)
-              if execution is None:
-                  raise SystemExit('OCI Run Command produced no execution')
-              output = execution.content
-              raw = getattr(output, 'text', '') or ''
-              exit_code = int(getattr(output, 'exit_code', 1))
-              return execution, raw, exit_code
-
-          remote_b64 = '/tmp/shopvivaliz-amazon-support-breakglass.sh.b64'
-          remote_script = '/tmp/shopvivaliz-amazon-support-breakglass.sh'
-          init_command = (
-              "set -Eeuo pipefail; umask 077; "
-              f"rm -f {remote_b64} {remote_script}; "
-              f": > {remote_b64}"
-          )
-          init_execution, _, init_exit = execute_text_command(
-              init_command,
-              'init-amazon-support-script',
-              60,
-          )
-          if init_execution.lifecycle_state != 'SUCCEEDED' or init_exit != 0:
-              raise SystemExit('OCI Run Command script initialization failed')
-
-          encoded = base64.b64encode(site_script.encode('utf-8')).decode('ascii')
-          chunk_size = 2500
-          for index, offset in enumerate(range(0, len(encoded), chunk_size), start=1):
-              chunk = encoded[offset:offset + chunk_size]
-              append_command = f"printf '%s' '{chunk}' >> {remote_b64}"
-              chunk_execution, _, chunk_exit = execute_text_command(
-                  append_command,
-                  f'append-amazon-support-script-{index:03d}',
-                  60,
-              )
-              if chunk_execution.lifecycle_state != 'SUCCEEDED' or chunk_exit != 0:
-                  raise SystemExit(f'OCI Run Command script chunk {index} failed')
-
-          final_command = (
-              "set -Eeuo pipefail; "
-              f"base64 -d {remote_b64} > {remote_script}; "
-              f"chmod 700 {remote_script}; "
-              f"if bash {remote_script}; then rc=0; else rc=$?; fi; "
-              f"rm -f {remote_b64} {remote_script}; "
-              "exit \"$rc\""
-          )
-          execution, raw, exit_code = execute_text_command(
-              final_command,
-              'execute-amazon-support-script',
-              330,
-          )
-          print('OCI_COMMAND_STATE=' + execution.lifecycle_state)
-          print('OCI_COMMAND_EXIT=' + str(exit_code))
-          results = []
-          for line in raw.splitlines():
-              line = line.strip()
-              if line in {'SITE_IDENTITY=PASS','SELLER_CENTRAL_AUTH=AUTHENTICATED'} or line.startswith('ERROR_CODE='):
+      - name: Reply to existing Amazon cases and verify read-back
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=20 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          remote_rc=0
+          "${SITE_SSH[@]}" 'sudo -n bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          export REMOTE_RC="$remote_rc"
+          python3 - "$RESULT_FILE" <<'PY'
+          import json, os, sys
+          path=sys.argv[1]
+          expected={'22153077391','22153259501'}
+          results={}
+          for raw in open(path, errors='ignore'):
+              line=raw.strip()
+              if line in {'SITE_IDENTITY=PASS','SELLER_CENTRAL_AUTH=AUTHENTICATED','SYSTEMD_CONTROL=PASS'} or line.startswith('PRIVILEGE_MODE=') or line.startswith('ERROR_CODE='):
                   print(line)
                   continue
               if not line.startswith('{'):
                   continue
               try:
-                  item = json.loads(line)
+                  item=json.loads(line)
               except Exception:
                   continue
-              if item.get('case_id') in {'22153077391','22153259501'}:
-                  safe = {k:item.get(k) for k in ('case_id','order_id','status','result','read_back')}
-                  results.append(safe)
-                  print('CASE_RESULT=' + json.dumps(safe, ensure_ascii=False, separators=(',',':')))
-          if execution.lifecycle_state != 'SUCCEEDED' or exit_code != 0:
-              raise SystemExit('Amazon support OCI command failed')
-          if len(results) != 2:
-              raise SystemExit('Amazon support OCI command did not verify both cases')
-          if any(item.get('result') not in {'SENT','ALREADY_EXISTS'} or item.get('read_back') is not True for item in results):
-              raise SystemExit('Amazon support OCI read-back validation failed')
+              cid=str(item.get('case_id') or '')
+              if cid in expected:
+                  safe={k:item.get(k) for k in ('case_id','order_id','status','result','read_back','error') if k in item}
+                  results[cid]=safe
+                  print('CASE_RESULT='+json.dumps(safe,ensure_ascii=False,separators=(',',':')))
+          if int(os.environ['REMOTE_RC']) != 0:
+              raise SystemExit('Amazon support Bastion command failed')
+          if set(results) != expected:
+              raise SystemExit('Amazon support Bastion command did not verify both cases')
+          if any(item.get('result') not in {'SENT','ALREADY_EXISTS'} or item.get('read_back') is not True for item in results.values()):
+              raise SystemExit('Amazon support Bastion read-back validation failed')
           print('AMAZON_SUPPORT_REPLY_VERIFIED=true')
           PY
 
-      - name: Cleanup OCI credentials
+      - name: Cleanup temporary Bastion access and credentials
         if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [ -f "${OCI_KEY_FILE:-}" ]; then
-            shred -u "$OCI_KEY_FILE"
+          if [ -n "${SITE_SESSION_ID:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null
           fi
-          if [ -f "${OCI_CONFIG_FILE:-}" ]; then
-            shred -u "$OCI_CONFIG_FILE"
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null
           fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+          fi
+          for file in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$file" ] && [ -f "$file" ]; then shred -u "$file"; fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "${RESULT_FILE:-}" "$RUNNER_TEMP/bastions.json"
