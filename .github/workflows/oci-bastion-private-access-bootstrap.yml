@@ -51,7 +51,7 @@ jobs:
           OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
           VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
           VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
-          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-ed25519"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
           BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
           ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
           EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
@@ -71,7 +71,7 @@ jobs:
           key_file=$OCI_KEY_FILE
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
-          ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-oci-bastion-session -f "$BASTION_KEY_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-oci-bastion-session -f "$BASTION_KEY_FILE"
           chmod 600 "$BASTION_KEY_FILE"
           echo "OCI_REGION=$OCI_CLI_REGION" >> "$GITHUB_ENV"
 
@@ -157,28 +157,27 @@ jobs:
           printf 'BACKEND_SESSION_ID=%s\nSITE_SESSION_ID=%s\n' "$BACKEND_SESSION_ID" "$SITE_SESSION_ID" >> "$GITHUB_ENV"
           wait_active "$BACKEND_SESSION_ID"
           wait_active "$SITE_SESSION_ID"
+          BACKEND_BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          SITE_BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$BACKEND_BASTION_SSH_COMMAND"
+          test -n "$SITE_BASTION_SSH_COMMAND"
+          printf 'BACKEND_BASTION_SSH_COMMAND=%s\nSITE_BASTION_SSH_COMMAND=%s\n' "$BACKEND_BASTION_SSH_COMMAND" "$SITE_BASTION_SSH_COMMAND" >> "$GITHUB_ENV"
           echo "BASTION_SESSIONS=ACTIVE"
 
       - name: Open verified private SSH tunnels
         shell: bash
         run: |
           set -Eeuo pipefail
-          bastion_host="host.bastion.$OCI_REGION.oci.oraclecloud.com"
           open_tunnel() {
-            local sid="$1" port="$2" target="$3"
-            ssh -fNT \
-              -o BatchMode=yes \
-              -o IdentitiesOnly=yes \
-              -o ExitOnForwardFailure=yes \
-              -o ServerAliveInterval=30 \
-              -o StrictHostKeyChecking=accept-new \
-              -o UserKnownHostsFile="$BASTION_KNOWN_HOSTS" \
-              -i "$BASTION_KEY_FILE" \
-              -L "$port:$target:22" \
-              -p 22 "$sid@$bastion_host"
+            local metadata_command="$1" port="$2"
+            test -n "$metadata_command"
+            local tunnel_command="${metadata_command//<privateKey>/$BASTION_KEY_FILE}"
+            tunnel_command="${tunnel_command//<localPort>/$port}"
+            tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+            bash -lc "$tunnel_command"
           }
-          open_tunnel "$BACKEND_SESSION_ID" "$BACKEND_TUNNEL_PORT" "$BACKEND_PRIVATE_IP"
-          open_tunnel "$SITE_SESSION_ID" "$SITE_TUNNEL_PORT" "$SITE_PRIVATE_IP"
+          open_tunnel "$BACKEND_BASTION_SSH_COMMAND" "$BACKEND_TUNNEL_PORT"
+          open_tunnel "$SITE_BASTION_SSH_COMMAND" "$SITE_TUNNEL_PORT"
           sleep 3
 
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=10 -i "$VM_KEY_FILE")
