@@ -194,10 +194,17 @@ jobs:
           FRED_TUNNEL_PORT=32223
           FRED_HOSTS_FILE="$RUNNER_TEMP/fredwin-hosts"
           SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
-          FRED_IP="$("${SSH_BACKEND[@]}" 'tailscale status --json' | python3 -c 'import json,sys; d=json.load(sys.stdin); ps=[p for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper()]; p=ps[0] if ps else {}; ips=p.get("TailscaleIPs") or []; print(next((x for x in ips if ":" not in x),""))')"
-          test -n "$FRED_IP" || { echo "::error::Fred-Win Tailscale peer not found"; exit 3; }
-          "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$FRED_IP/22'"
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:$FRED_IP:22" ubuntu@127.0.0.1
+          if "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/127.0.0.1/2222'"; then
+            FRED_SSH_SOURCE=reverse_2222
+            ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:127.0.0.1:2222" ubuntu@127.0.0.1
+          else
+            FRED_IP="$("${SSH_BACKEND[@]}" 'tailscale status --json' | python3 -c 'import json,sys; d=json.load(sys.stdin); ps=[p for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper()]; p=ps[0] if ps else {}; ips=p.get("TailscaleIPs") or []; print(next((x for x in ips if ":" not in x),""))')"
+            test -n "$FRED_IP" || { echo "::error::Fred-Win Tailscale peer not found"; exit 3; }
+            "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$FRED_IP/22'"
+            FRED_SSH_SOURCE=tailscale_direct
+            ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:$FRED_IP:22" ubuntu@127.0.0.1
+          fi
+          echo "FRED_SSH_SOURCE=$FRED_SSH_SOURCE"
           sleep 2
           ssh-keyscan -T 5 -p "$FRED_TUNNEL_PORT" 127.0.0.1 2>/dev/null > "$FRED_HOSTS_FILE"
           test -s "$FRED_HOSTS_FILE"

@@ -132,6 +132,7 @@ jobs:
           php tests/liz-internal-origin-regression-test.php
           tests/liz-router-internal-origin-integration.sh
           bash tests/setup-rustdesk-relay-key-order-test.sh
+          bash tests/fredwin-rustdesk-reverse-ssh-test.sh
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
