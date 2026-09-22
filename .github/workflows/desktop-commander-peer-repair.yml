@@ -100,18 +100,53 @@ jobs:
           sudo -n true
           echo SITE_SUDO_OK=true
 
+          support_profile="/tmp/shopvivaliz-amazon-support-profile-$"
+          browser_pid=""
+
           cleanup() {
-            rm -f /tmp/shopvivaliz-amazon-support-reply.mjs
+            if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
+              kill -TERM -- "-$browser_pid" 2>/dev/null || true
+            fi
+            rm -f /tmp/shopvivaliz-amazon-support-reply.mjs /tmp/shopvivaliz-amazon-support-auth.out
+            rm -rf "$support_profile"
             sudo -n systemctl start amazon-returns-seller-central-browser.timer >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
           sudo -n systemctl stop amazon-returns-seller-central-browser.timer
-          sudo -n systemctl start --no-block amazon-returns-seller-central-browser.service
+          sudo -n systemctl stop amazon-returns-seller-central-browser.service || true
+
+          set -a
+          . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
+          set +a
+          test -n "$SELLER_CENTRAL_PROFILE"
+          test -d "$SELLER_CENTRAL_PROFILE"
+          rm -rf "$support_profile"
+          install -d -m 700 "$support_profile"
+          cp -a "$SELLER_CENTRAL_PROFILE/." "$support_profile/"
+          rm -f "$support_profile"/SingletonLock "$support_profile"/SingletonSocket "$support_profile"/SingletonCookie
+          sudo -n chown -R ubuntu:www-data "$support_profile"
+
+          sudo -n -u ubuntu -g www-data env \
+            SELLER_CENTRAL_BROWSER="$SELLER_CENTRAL_BROWSER" \
+            SUPPORT_PROFILE="$support_profile" \
+            bash -lc '
+              set -Eeuo pipefail
+              setsid "$SELLER_CENTRAL_BROWSER" \
+                --headless=new --no-sandbox --disable-gpu \
+                --remote-debugging-address=127.0.0.1 --remote-debugging-port=9226 \
+                "--user-data-dir=$SUPPORT_PROFILE" \
+                --no-first-run --no-default-browser-check about:blank \
+                >/tmp/shopvivaliz-amazon-support-ephemeral-browser.log 2>&1 &
+              echo $! >/tmp/shopvivaliz-amazon-support-ephemeral-browser.pid
+            '
+          browser_pid="$(cat /tmp/shopvivaliz-amazon-support-ephemeral-browser.pid)"
+          rm -f /tmp/shopvivaliz-amazon-support-ephemeral-browser.pid
+          [[ "$browser_pid" =~ ^[0-9]+$ ]]
 
           ready=false
           for _ in $(seq 1 60); do
-            if curl -fsS --max-time 1 http://127.0.0.1:9225/json/version >/dev/null 2>&1; then
+            if curl -fsS --max-time 1 http://127.0.0.1:9226/json/version >/dev/null 2>&1; then
               ready=true
               break
             fi
@@ -120,8 +155,23 @@ jobs:
           test "$ready" = true
           echo SELLER_CENTRAL_CDP_READY=true
 
+          if ! sudo -n -u ubuntu -g www-data bash -lc '
+            set -Eeuo pipefail
+            set -a
+            . /home/ubuntu/amazon-returns-deploy/shared/.env
+            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
+            set +a
+            export SELLER_CENTRAL_CDP_URL=http://127.0.0.1:9226
+            exec /usr/local/bin/node /home/ubuntu/amazon-returns-deploy/current/scripts/amazon-returns/seller-central-safe-t-read-worker.mjs --auth-check
+          ' >/tmp/shopvivaliz-amazon-support-auth.out 2>&1; then
+            echo ERROR_CODE=AUTH_CHECK_FAILED
+            exit 71
+          fi
+          grep -q '"auth_status":"AUTHENTICATED"' /tmp/shopvivaliz-amazon-support-auth.out
+          echo SELLER_CENTRAL_AUTH=AUTHENTICATED
+
           cat >/tmp/shopvivaliz-amazon-support-reply.mjs <<'NODE'
-          const CDP='http://127.0.0.1:9225';
+          const CDP='http://127.0.0.1:9226';
           const cases=[
             {
               caseId:'22153077391',
@@ -171,9 +221,16 @@ jobs:
             await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
 
             if(terminal){
-              const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
-              if(!reopened) throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
-              await sleep(1200);
+              const replyAvailable=Boolean(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled)return true}return false})()`));
+              if(!replyAvailable){
+                const reopened=String(await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!/^(Reopen case|Reopen Case|Reabrir caso|Reabrir)$/i.test(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`)||'');
+                if(!reopened) {
+                  const actions=await evalv(`(()=>{const labels=[];for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(label&&!labels.includes(label))labels.push(label)}return labels.slice(0,24)})()`);
+                  console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'AVAILABLE_ACTIONS',read_back:false,actions:Array.isArray(actions)?actions:[]}));
+                  throw new Error(item.caseId+':TERMINAL_NO_REOPEN_ACTION:'+normalized);
+                }
+                await sleep(1200);
+              }
             }
 
             let selector='';
