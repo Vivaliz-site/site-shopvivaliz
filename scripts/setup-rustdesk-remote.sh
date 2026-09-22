@@ -9,6 +9,7 @@ SERVER_PRIVATE_IP="10.0.1.38"
 SERVER_TAILSCALE_IP="100.66.174.74"
 SERVER_ROOT="/opt/shopvivaliz-rustdesk-server"
 CLIENT_SERVER="${RUSTDESK_ID_SERVER:-$SERVER_PRIVATE_IP}"
+CLIENT_RELAY_SERVER="${RUSTDESK_RELAY_SERVER:-$SERVER_TAILSCALE_IP}"
 CLIENT_KEY="${RUSTDESK_SERVER_KEY:-}"
 PASSWORD_FILE="/etc/shopvivaliz/rustdesk-unattended-password"
 
@@ -54,7 +55,7 @@ PY
 }
 
 configure_client_profile() {
-  local home="$1" owner="$2" server="$3" key="$4"
+  local home="$1" owner="$2" server="$3" relay_server="$4" key="$5"
   local cfgdir="$home/.config/rustdesk"
   local cfg="$cfgdir/RustDesk2.toml"
   install -d -m 700 -o "$owner" -g "$owner" "$cfgdir"
@@ -65,7 +66,7 @@ serial = 0
 
 [options]
 custom-rendezvous-server = '$server'
-relay-server = '$server'
+relay-server = '$relay_server'
 key = '$key'
 EOF
   chown "$owner:$owner" "$cfg"
@@ -99,11 +100,11 @@ install_client() {
   install_client_package
   if systemctl is-active --quiet rustdesk.service; then systemctl stop rustdesk.service; fi
 
-  configure_client_profile /root root "$CLIENT_SERVER" "$CLIENT_KEY"
+  configure_client_profile /root root "$CLIENT_SERVER" "$CLIENT_RELAY_SERVER" "$CLIENT_KEY"
   for u in fredconsole fredrdp ubuntu; do
     if id "$u" >/dev/null 2>&1; then
       home="$(getent passwd "$u" | cut -d: -f6)"
-      [ -n "$home" ] && [ -d "$home" ] && configure_client_profile "$home" "$u" "$CLIENT_SERVER" "$CLIENT_KEY"
+      [ -n "$home" ] && [ -d "$home" ] && configure_client_profile "$home" "$u" "$CLIENT_SERVER" "$CLIENT_RELAY_SERVER" "$CLIENT_KEY"
     fi
   done
 
@@ -177,7 +178,7 @@ services:
   hbbr:
     container_name: shopvivaliz-rustdesk-hbbr
     image: rustdesk/rustdesk-server:latest
-    command: hbbr
+    command: hbbr -k _
     volumes:
       - $SERVER_ROOT/data:/root
     network_mode: "host"
