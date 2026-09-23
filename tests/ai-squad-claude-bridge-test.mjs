@@ -49,10 +49,12 @@ assert(args.includes('--no-session-persistence'));
 assert(args.includes('WebSearch,WebFetch'));
 assert(args.includes('stream-json'));
 assert(args.includes('--verbose'));
+assert.equal(args[args.indexOf('--allowedTools') + 1], 'WebSearch,WebFetch', 'web search tools must be explicitly pre-authorized under dontAsk');
 assert(!args.includes(valid.prompt), 'user prompt must go over stdin, not argv');
 
 const noWebArgs = buildClaudeArgs({ ...valid, web_search: false });
 assert.equal(noWebArgs[noWebArgs.indexOf('--tools') + 1], '');
+assert.equal(noWebArgs.includes('--allowedTools'), false, 'non-web requests must not pre-authorize web tools');
 
 assert.equal(classifyClaudeError('OAuth session expired'), 'auth');
 assert.equal(classifyClaudeError('credit balance is too low'), 'quota');
