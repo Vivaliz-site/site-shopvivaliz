@@ -88,6 +88,15 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertNotRegex(triggers, r"(?m)^  push:\s*$")
 
 
+    def test_repository_governance_fails_closed_on_global_workflow_debt(self):
+        text = self.text("repository-governance.yml")
+        self.assertNotIn("::warning::Repository-wide workflow debt remains", text)
+        self.assertRegex(
+            text,
+            r"(?s)status=0\s+python scripts/maintenance/audit_active_workflows\.py \|\| status=\$\?.*?test -s artifacts/workflow-policy/report\.json.*?test -s artifacts/workflow-policy/report\.md.*?exit \"\$status\"",
+        )
+
+
     def test_checkout_migration_is_preview_only_and_never_edits_production(self):
         text = self.text("agent-vm-readonly-diagnostics.yml")
         self.assertIn("checkout_patch=preview_only", text)
