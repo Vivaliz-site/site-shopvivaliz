@@ -86,6 +86,9 @@ export function buildClaudeArgs(request) {
     '--system-prompt', request.system,
     '--tools', request.web_search ? 'WebSearch,WebFetch' : '',
   ];
+  if (request.web_search) {
+    args.push('--allowedTools', 'WebSearch,WebFetch');
+  }
   return args;
 }
 
