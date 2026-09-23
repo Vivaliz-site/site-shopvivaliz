@@ -226,10 +226,10 @@ jobs:
               bash scripts/runtime-service-status.sh site
               ;;
             amazon_support_readback)
-              sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
+              sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
               ;;
             amazon_support_readback_221530_221532)
-              sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh
+              sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=legacy-original AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh
               ;;
             amazon_support_reply)
               sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh

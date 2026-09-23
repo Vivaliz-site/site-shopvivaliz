@@ -38,3 +38,12 @@ def test_policy_surface_checker_accepts_action_required_replay_contract():
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_protected_conflict_marker_prevents_repeat_repair_dispatch():
+    marker = 'stale-pr-protected-conflict:${head_sha}'
+    assert marker in WORKFLOW
+    assert 'protected_conflict_already_recorded=true' in WORKFLOW
+    marker_pos = WORKFLOW.index(marker)
+    dispatch_pos = WORKFLOW.index('gh workflow run ai-stale-pr-repair.yml')
+    assert marker_pos < dispatch_pos

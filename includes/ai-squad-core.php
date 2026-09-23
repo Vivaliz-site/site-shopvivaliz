@@ -1028,6 +1028,45 @@ function svais_call_provider(string $provider, array $profile, string $phase, st
     return $result;
 }
 
+function svais_topic_requires_web_search(string $topic): bool
+{
+    $normalized = mb_strtolower(trim($topic), 'UTF-8');
+    $normalized = preg_replace('/[^\\p{L}\\p{N}\\s]+/u', ' ', $normalized) ?? $normalized;
+    $normalized = preg_replace('/\\s+/u', ' ', trim($normalized)) ?? trim($normalized);
+    if ($normalized === '') return false;
+
+    $socialOnly = [
+        'oi', 'ola', 'olá', 'oi tudo bem', 'bom dia', 'boa tarde', 'boa noite',
+        'obrigado', 'obrigada', 'valeu', 'ok', 'okay',
+    ];
+    return !in_array($normalized, $socialOnly, true);
+}
+
+function svais_transcript_coverage_note(array $entries, array $requiredPhases): string
+{
+    $expected = ['openai', 'anthropic', 'gemini'];
+    $seen = [];
+    foreach ($entries as $entry) {
+        if (!is_array($entry) || ($entry['ok'] ?? false) !== true) continue;
+        $provider = strtolower(trim((string)($entry['provider'] ?? '')));
+        $phase = strtolower(trim((string)($entry['phase'] ?? '')));
+        if (in_array($provider, $expected, true) && in_array($phase, $requiredPhases, true)) {
+            $seen[$provider][$phase] = true;
+        }
+    }
+
+    $missing = [];
+    foreach ($expected as $provider) {
+        foreach ($requiredPhases as $phase) {
+            if (($seen[$provider][$phase] ?? false) !== true) $missing[] = $provider . '/' . $phase;
+        }
+    }
+    if ($missing === []) return 'COBERTURA: todas as fases anteriores exigidas estão presentes para openai, anthropic e gemini.';
+
+    return 'COBERTURA INCOMPLETA: ausentes: ' . implode(', ', $missing)
+        . '. NÃO declare consenso dos três enquanto houver provider/fase ausente.';
+}
+
 function svais_transcript_text(array $entries): string
 {
     $chunks = [];
@@ -1051,18 +1090,22 @@ function svais_round_prompt(string $topic, string $phase, array $transcript): st
     }
 
     $history = svais_transcript_text($transcript);
+    $requiredPhases = $phase === 'converge' ? ['research', 'critique'] : ['research'];
+    $coverage = svais_transcript_coverage_note($transcript, $requiredPhases);
     if ($phase === 'critique') {
         return "TAREFA ORIGINAL:\n{$topic}\n\n"
-            . "RESULTADOS DOS TRÊS PESQUISADORES:\n{$history}\n\n"
+            . "{$coverage}\n\n"
+            . "RESULTADOS DISPONÍVEIS DOS PESQUISADORES:\n{$history}\n\n"
             . "Faça a revisão contraditória. Confirme ou derrube as afirmações materiais com evidência. "
             . "Aponte explicitamente onde concorda, discorda e o que precisa ser corrigido.";
     }
 
     if ($phase === 'converge') {
         return "TAREFA ORIGINAL:\n{$topic}\n\n"
-            . "DEBATE COMPLETO ATÉ AQUI:\n{$history}\n\n"
+            . "{$coverage}\n\n"
+            . "DEBATE DISPONÍVEL ATÉ AQUI:\n{$history}\n\n"
             . "Formule sua posição final depois do contraditório. Proponha a conclusão comum mais defensável, "
-            . "mas não esconda divergências relevantes.";
+            . "mas não esconda divergências relevantes nem trate cobertura incompleta como consenso dos três.";
     }
 
     return "TAREFA ORIGINAL:\n{$topic}\n\nTRANSCRIÇÃO:\n{$history}";
