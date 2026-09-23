@@ -19,13 +19,13 @@ ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL')
 ais_assert(($deep['openai']['effort'] ?? '') === 'medium', 'deep OpenAI effort must be medium');
 ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'), 'deep Anthropic model mismatch');
 ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic effort must be medium');
-ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash'), 'deep Gemini model mismatch');
+ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
 ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
-ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingBudget' => 8192], 'Gemini 2.5 MEDIUM must use thinkingBudget 8192');
+ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingLevel' => 'medium'], 'Gemini 3.5 MEDIUM must use thinkingLevel medium');
 $balanced = $catalog['balanced'];
-ais_assert(($balanced['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_BALANCED_MODEL') ?: 'gemini-2.5-flash'), 'balanced Gemini model mismatch');
+ais_assert(($balanced['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_BALANCED_MODEL') ?: 'gemini-3.5-flash'), 'balanced Gemini model mismatch');
 ais_assert(($balanced['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'balanced Gemini thinking must be MEDIUM');
-ais_assert(svais_gemini_thinking_config($balanced['gemini']) === ['thinkingBudget' => 8192], 'balanced Gemini 2.5 MEDIUM must use thinkingBudget 8192');
+ais_assert(svais_gemini_thinking_config($balanced['gemini']) === ['thinkingLevel' => 'medium'], 'Gemini 3.5 MEDIUM must use thinkingLevel medium');
 $fast = $catalog['fast'];
 ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingLevel' => 'low'], 'Gemini 3.5 LOW must use thinkingLevel low');
 ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 'thinking_level' => 'MEDIUM']) === ['thinkingLevel' => 'medium'], 'Gemini 3 must use thinkingLevel');
@@ -33,6 +33,10 @@ ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 't
 ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
 ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
 ais_assert(svais_health_state(false, false) === 'unavailable', 'unconfigured provider health mismatch');
+ais_assert(
+    svais_failure_class(new RuntimeException('claude_bridge_oauth_refresh_contention')) === 'oauth_refresh_contention',
+    'OAuth refresh contention must not be reported as quota, auth, or transport'
+);
 
 $geminiProbeCalls = [];
 $geminiProbe = svais_gemini_health_probe(

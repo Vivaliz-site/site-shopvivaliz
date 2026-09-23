@@ -23,6 +23,13 @@ const MODEL_ALLOWLIST = new Set([
 
 let authState = { checked_at: 0, authenticated: false };
 let authProbePromise = null;
+let claudeWorkQueue = Promise.resolve();
+
+export function serializeClaudeWork(work) {
+  const queued = claudeWorkQueue.catch(() => {}).then(work);
+  claudeWorkQueue = queued.catch(() => {});
+  return queued;
+}
 
 export function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -52,6 +59,8 @@ export function sanitizeBridgeError(value) {
 export function classifyClaudeError(value) {
   const text = String(value || '').toLowerCase();
   if (text.includes('source_missing')) return 'source_missing';
+  if (text.includes('refresh oauth token')
+    && (text.includes('another claude code process is refreshing') || text.includes('exited mid-refresh'))) return 'oauth_refresh_contention';
   if (text.includes('oauth') || text.includes('authenticate') || text.includes('authentication') || text.includes('token expired')) return 'auth';
   if (text.includes('quota') || text.includes('usage limit') || text.includes('session limit') || text.includes('rate limit') || text.includes('credit balance')) return 'quota';
   if (text.includes('timed out') || text.includes('timeout')) return 'timeout';
@@ -219,40 +228,42 @@ function scheduleAuthProbe() {
 }
 
 async function probeAuth() {
-  const auth = claudeAuthSource();
-  if (!auth.configured) {
-    authState = { checked_at: Date.now(), authenticated: false };
-    return false;
-  }
-  try {
-    // `claude auth status` can report loggedIn=true for an OAuth token that
-    // cannot perform inference. Health must prove the same non-interactive
-    // path used by the AI Squad, otherwise the UI can go falsely green.
-    const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
-    const statusData = JSON.parse(status.stdout || '{}');
-    if (status.code !== 0 || statusData?.loggedIn !== true) {
+  return serializeClaudeWork(async () => {
+    const auth = claudeAuthSource();
+    if (!auth.configured) {
       authState = { checked_at: Date.now(), authenticated: false };
       return false;
     }
+    try {
+      // `claude auth status` can report loggedIn=true for an OAuth token that
+      // cannot perform inference. Health must prove the same non-interactive
+      // path used by the AI Squad, otherwise the UI can go falsely green.
+      const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
+      const statusData = JSON.parse(status.stdout || '{}');
+      if (status.code !== 0 || statusData?.loggedIn !== true) {
+        authState = { checked_at: Date.now(), authenticated: false };
+        return false;
+      }
 
-    const request = {
-      model: 'claude-sonnet-5',
-      effort: 'low',
-      system: 'AI Squad authentication health probe. Reply only OK.',
-      prompt: 'OK',
-      web_search: false,
-    };
-    const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
-    const data = parseClaudeOutput(result.stdout || '');
-    const ok = result.code === 0
-      && data.is_error !== true
-      && data.result !== '';
-    authState = { checked_at: Date.now(), authenticated: ok };
-    return ok;
-  } catch {
-    authState = { checked_at: Date.now(), authenticated: false };
-    return false;
-  }
+      const request = {
+        model: 'claude-sonnet-5',
+        effort: 'low',
+        system: 'AI Squad authentication health probe. Reply only OK.',
+        prompt: 'OK',
+        web_search: false,
+      };
+      const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
+      const data = parseClaudeOutput(result.stdout || '');
+      const ok = result.code === 0
+        && data.is_error !== true
+        && data.result !== '';
+      authState = { checked_at: Date.now(), authenticated: ok };
+      return ok;
+    } catch {
+      authState = { checked_at: Date.now(), authenticated: false };
+      return false;
+    }
+  });
 }
 
 function extractUrls(text) {
@@ -320,18 +331,31 @@ export function buildSourceRetryPrompt(prompt) {
 }
 
 export async function answerClaudeRequest(request, options = {}) {
+  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, options));
+}
+
+async function answerClaudeRequestUnserialized(request, options = {}) {
   const auth = options.auth || claudeAuthSource();
   if (!auth.configured) throw new Error('missing token');
 
   const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
   const run = options.run || runClaude;
+  const sleep = options.sleep || (delay => new Promise(resolve => setTimeout(resolve, delay)));
   const attempts = request.web_search ? 2 : 1;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const prompt = attempt === 0 ? request.prompt : buildSourceRetryPrompt(request.prompt);
-    const result = await run(buildClaudeArgs(request), prompt, timeoutMs, auth.token);
-    if (result.code !== 0) {
+    let result;
+    let contentionRetries = 0;
+    while (true) {
+      result = await run(buildClaudeArgs(request), prompt, timeoutMs, auth.token);
+      if (result.code === 0) break;
       const detail = claudeFailureDetail(result);
+      if (classifyClaudeError(detail) === 'oauth_refresh_contention' && contentionRetries < 1) {
+        contentionRetries += 1;
+        await sleep(250 * contentionRetries);
+        continue;
+      }
       throw new Error(detail || 'claude_transport_error');
     }
     const data = parseClaudeOutput(result.stdout);
