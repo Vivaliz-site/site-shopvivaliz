@@ -270,6 +270,33 @@ function svais_health_state(bool $verified, bool $configured): string
     return $configured ? 'configured_unverified' : 'unavailable';
 }
 
+function svais_gemini_health_probe(array $cfg, ?callable $invoke = null): array
+{
+    $probeCfg = $cfg;
+    $probeCfg['thinking_level'] = 'LOW';
+    $probeCfg['max_output_tokens'] = min(64, max(16, (int)($cfg['max_output_tokens'] ?? 64)));
+    $timeout = max(5, min(30, (int)(getenv('AI_SQUAD_GEMINI_HEALTH_TIMEOUT') ?: 20)));
+    $invoke ??= static fn(array $probeCfg, string $system, string $prompt, bool $webSearch, int $timeout): array =>
+        svais_gemini_dispatch($probeCfg, $system, $prompt, $webSearch, null, $timeout);
+
+    try {
+        $result = $invoke(
+            $probeCfg,
+            'Buscador Gemini health probe. Responda somente OK.',
+            'OK',
+            false,
+            $timeout
+        );
+        $transport = (string)($result['transport'] ?? '');
+        $verified = trim((string)($result['text'] ?? '')) !== ''
+            && svais_provider_model_matches('gemini', (string)($cfg['model'] ?? ''), (string)($result['model'] ?? ''))
+            && in_array($transport, svais_gemini_transport_order(), true);
+        return ['verified' => $verified, 'transport' => $verified ? $transport : ''];
+    } catch (Throwable) {
+        return ['verified' => false, 'transport' => ''];
+    }
+}
+
 function svais_cycle_coverage(array $transcript, array $providers, array $phases): array
 {
     $providerStatus = [];
@@ -346,7 +373,7 @@ function svais_cycle_complete_for_consensus(array $transcript, array $providers,
 {
     return svais_cycle_coverage($transcript, $providers, $phases)['complete_provider_coverage'] === true;
 }
-function svais_provider_state(array $profile): array
+function svais_provider_state(array $profile, bool $verifyGemini = false, ?callable $geminiProbe = null): array
 {
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
     $vertexConfigured = svais_google_vertex_configured();
@@ -358,6 +385,17 @@ function svais_provider_state(array $profile): array
     $anthropicConfigured = ($claude['configured'] ?? false) === true;
     $anthropicVerified = ($claude['authenticated'] ?? false) === true && ($claude['available'] ?? false) === true;
     $geminiConfigured = $vertexConfigured || $geminiDirectConfigured;
+    $geminiHealth = ['verified' => false, 'transport' => ''];
+    if ($verifyGemini && $geminiConfigured) {
+        $geminiProbe ??= static fn(array $cfg): array => svais_gemini_health_probe($cfg);
+        try {
+            $candidate = $geminiProbe($profile['gemini']);
+            if (is_array($candidate)) $geminiHealth = $candidate;
+        } catch (Throwable) {
+            $geminiHealth = ['verified' => false, 'transport' => ''];
+        }
+    }
+    $geminiVerified = ($geminiHealth['verified'] ?? false) === true;
     return [
         'openai' => [
             'configured' => $openAiConfigured,
@@ -389,9 +427,10 @@ function svais_provider_state(array $profile): array
         ],
         'gemini' => [
             'configured' => $geminiConfigured,
-            'health' => svais_health_state(false, $geminiConfigured),
+            'health' => svais_health_state($geminiVerified, $geminiConfigured),
             'vertex_oauth_configured' => $vertexConfigured,
             'direct_configured' => $geminiDirectConfigured,
+            'verified_transport' => $geminiVerified ? (string)($geminiHealth['transport'] ?? '') : '',
             'transport_order' => svais_gemini_transport_order(),
             'model' => (string)$profile['gemini']['model'],
             'reasoning' => strtolower((string)$profile['gemini']['thinking_level']),
@@ -731,7 +770,7 @@ function svais_gemini_thinking_config(array $cfg): array
     return ['thinkingLevel' => $level];
 }
 
-function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bool $webSearch, int $timeout = 240): array
 {
     $oauth = svais_google_oauth_context();
     $payload = [
@@ -759,7 +798,7 @@ function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bo
             'Authorization: Bearer ' . (string)$oauth['access_token'],
         ],
         $payload,
-        240
+        max(5, min(240, $timeout))
     );
 
     $urls = [];
@@ -773,7 +812,7 @@ function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bo
     ];
 }
 
-function svais_gemini_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+function svais_gemini_call(array $cfg, string $system, string $prompt, bool $webSearch, int $timeout = 240): array
 {
     $key = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: ''));
     if ($key === '') {
@@ -803,7 +842,7 @@ function svais_gemini_call(array $cfg, string $system, string $prompt, bool $web
             'x-goog-api-key: ' . $key,
         ],
         $payload,
-        240
+        max(5, min(240, $timeout))
     );
 
     $urls = [];
@@ -878,7 +917,8 @@ function svais_gemini_dispatch(
     string $system,
     string $prompt,
     bool $webSearch,
-    ?callable $invoke = null
+    ?callable $invoke = null,
+    int $timeout = 240
 ): array {
     $invoke ??= static function (
         string $transport,
@@ -886,10 +926,10 @@ function svais_gemini_dispatch(
         string $system,
         string $prompt,
         bool $webSearch
-    ): array {
+    ) use ($timeout): array {
         return match ($transport) {
-            'vertex_oauth' => svais_gemini_vertex_call($cfg, $system, $prompt, $webSearch),
-            'direct' => svais_gemini_call($cfg, $system, $prompt, $webSearch),
+            'vertex_oauth' => svais_gemini_vertex_call($cfg, $system, $prompt, $webSearch, $timeout),
+            'direct' => svais_gemini_call($cfg, $system, $prompt, $webSearch, $timeout),
             default => throw new InvalidArgumentException('unknown_gemini_transport'),
         };
     };
