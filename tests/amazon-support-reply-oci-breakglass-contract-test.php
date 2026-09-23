@@ -83,7 +83,7 @@ $scriptRequired=[
   'CHAT_CHANNEL_MISSING',
   'CHAT_DRAFT_VERIFY_FAILED',
   'CHAT_READ_BACK_FAILED',
-  'tab-id=\\\"Chat\\\"',
+  'kat-tab[tab-id=',
   "await send('Input.insertText'",
   "scrollIntoView({block:'center'",
   'ViewCase.contactList[channelType=CHAT]',
