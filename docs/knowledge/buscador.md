@@ -39,7 +39,7 @@ Preset para pesquisas aprofundadas e debates com evidência atual. O nível oper
 
 - OpenAI: `gpt-5.6-terra`, effort `medium`;
 - Anthropic: `claude-sonnet-5`, effort `medium`;
-- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
 - web search habilitado para os três.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do Buscador.
@@ -48,13 +48,13 @@ Por decisão operacional, Fable não faz parte de nenhum preset do Buscador.
 
 - OpenAI: `gpt-5.6-terra`, effort `high`;
 - Anthropic: `claude-sonnet-5`, effort `high`;
-- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`.
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`.
 
 ### `fast`
 
 Perfil de menor custo/latência para tarefas simples.
 
-Para `gemini-2.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingBudget: 8192`; `LOW` usa `thinkingBudget: 1024`. `thinkingLevel` é reservado aos modelos Gemini 3.x que suportam esse campo.
+Para `gemini-3.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingLevel: medium`; `LOW` usa `thinkingLevel: low`. `thinkingBudget` permanece reservado aos modelos Gemini 2.5.
 
 ## Variáveis de ambiente
 
@@ -128,14 +128,16 @@ No modo `research`, consenso válido exige cobertura completa de OpenAI, Claude 
 ## Testes
 
 ```bash
-php -l includes/buscador-core.php
+php -l includes/ai-squad-core.php
 php -l api/agent/buscador.php
 php -l admin/buscador.php
-php tests/buscador-core-test.php
-node tests/buscador-codex-bridge-test.mjs
-node tests/buscador-claude-bridge-test.mjs
-bash tests/buscador-three-provider-runtime-contract-test.sh
-bash tests/buscador-ui-audit-contract-test.sh
+php tests/ai-squad-core-test.php
+php tests/buscador-reliability-contract-test.php
+php tests/buscador-mcp-auth-contract-test.php
+node tests/ai-squad-codex-bridge-test.mjs
+node tests/ai-squad-claude-bridge-test.mjs
+bash tests/ai-squad-three-provider-runtime-contract-test.sh
+bash tests/ai-squad-ui-audit-contract-test.sh
 ```
 
 O teste também falha caso o nome `fable` apareça em qualquer preset.
