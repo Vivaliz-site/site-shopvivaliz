@@ -17,6 +17,8 @@ $required=[
   "github.event.comment.user.login == 'fredmourao-ai'",
   "github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501'",
   "github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501'",
+  "github.event.comment.body == '/amazon-support-chat-reply case_ids=22199842931'",
+  'AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22199842931',
   'scripts/amazon-support-readback-oci-site.sh',
   'OCI_CLI_USER',
   'OCI_CLI_TENANCY',
@@ -73,17 +75,27 @@ $scriptRequired=[
   'SUPPORT_PROBE_OUTPUT_SHA256=',
   'PROBE_EXEC_FAILED',
   'SUPPORT_AUTH_CHECK_FAILED',
-  'viewCaseMetaData?.canEditCase===true',
-  'TERMINAL_NOT_EDITABLE',
   'SearchForCases',
   'ViewCase?caseId=',
+  'GetReplyChannels?caseId=',
+  "const REQUIRED_CHANNEL='Chat'",
+  'CHAT_OUTSIDE_HOURS',
+  'CHAT_CHANNEL_MISSING',
+  'CHAT_DRAFT_VERIFY_FAILED',
+  'CHAT_READ_BACK_FAILED',
+  'kat-tab[tab-id=',
+  "await send('Input.insertText'",
+  "scrollIntoView({block:'center'",
+  'ViewCase.contactList[channelType=CHAT]',
   "result:'ALREADY_EXISTS',read_back:true",
   "result:'SENT',read_back:true",
   'AMAZON_SUPPORT_REPLY_PROFILE',
+  'AMAZON_SUPPORT_REPLY_CASE_IDS',
   'current-tickets',
   '22154699381',
-  "['Send','Send message','Enviar','Enviar mensagem']",
-  'for(let attempt=0;attempt<20;attempt++){',
+  '22199842931',
+  '702-9207715-8524262',
+  'for(let attempt=0;attempt<30;attempt++){',
   "await send('Network.enable')",
   'SEND_CONTROL=',
   'SUBMIT_TRACE=',
@@ -96,8 +108,29 @@ $scriptForbidden=[
   'create new case',
   'open new case',
   "['Send','Send message','Reply','Enviar','Enviar mensagem','Responder']",
+  'tab-id="Email"',
+  'Reopen case',
+  'Reabrir caso',
 ];
 foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
+if(preg_match('/tab-id=\\\\?"Email\\\\?"/',$scriptText)){fwrite(STDERR,"amazon support Bastion site script must not select Email channel\n");exit(1);}
+
+$peerWorkflow=$root.'/.github/workflows/desktop-commander-peer-repair.yml';
+if(!is_file($peerWorkflow)){fwrite(STDERR,"peer repair workflow missing\n");exit(1);}
+$peerText=(string)file_get_contents($peerWorkflow);
+$peerRequired=[
+  'scripts/amazon-support-reply-oci-site.sh',
+  'AMAZON_SUPPORT_REPLY_PROFILE=legacy-original',
+  'AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501',
+  'bash /tmp/shopvivaliz-amazon-support-reply-oci-site.sh',
+];
+foreach($peerRequired as $needle){if(strpos($peerText,$needle)===false){fwrite(STDERR,"peer Amazon support route missing canonical delegation: {$needle}\n");exit(1);}}
+$peerForbidden=[
+  'shopvivaliz-amazon-support-reply.mjs',
+  'TERMINAL_NO_REOPEN_ACTION',
+  "document.querySelectorAll('kat-textarea')",
+];
+foreach($peerForbidden as $needle){if(strpos($peerText,$needle)!==false){fwrite(STDERR,"peer Amazon support route contains duplicate browser logic: {$needle}\n");exit(1);}}
 
 $readbackScript=$root.'/scripts/amazon-support-readback-oci-site.sh';
 if(!is_file($readbackScript)){fwrite(STDERR,"amazon support read-back script missing\n");exit(1);}
@@ -143,13 +176,15 @@ $remoteRequired=[
   'amazon_support_readback',
   'amazon_support_readback_221530_221532',
   'amazon_support_reply',
+  'amazon_support_chat_reply_221998',
   'amazon_support_reply_221530_221532',
   'action.startswith("amazon_support_")',
   'Amazon Seller Support actions are restricted to the site VM',
   'sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=legacy-original AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh',
-  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original bash scripts/amazon-support-reply-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22199842931 bash scripts/amazon-support-reply-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-reply-oci-site.sh',
 ];
 foreach($remoteRequired as $needle){if(strpos($remoteText,$needle)===false){fwrite(STDERR,"remote Amazon support control missing contract: {$needle}\n");exit(1);}}
 

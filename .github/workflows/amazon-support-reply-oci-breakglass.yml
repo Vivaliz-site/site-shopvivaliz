@@ -19,7 +19,8 @@ jobs:
         github.event.comment.user.login == 'fredmourao-ai' &&
         (
           github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501' ||
-          github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501'
+          github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501' ||
+          github.event.comment.body == '/amazon-support-chat-reply case_ids=22199842931'
         )
       }}
     runs-on: ubuntu-latest
@@ -176,15 +177,21 @@ jobs:
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           remote_rc=0
           if [[ "$SUPPORT_REQUEST_BODY" == '/amazon-support-readback case_ids=22153077391,22153259501' ]]; then
+            EXPECTED_CASE_IDS='22153077391,22153259501'
             "${SITE_SSH[@]}" 'sudo -n bash -s' < scripts/amazon-support-readback-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          elif [[ "$SUPPORT_REQUEST_BODY" == '/amazon-support-chat-reply case_ids=22199842931' ]]; then
+            EXPECTED_CASE_IDS='22199842931'
+            "${SITE_SSH[@]}" 'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22199842931 bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
           else
-            "${SITE_SSH[@]}" 'sudo -n bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+            EXPECTED_CASE_IDS='22153077391,22153259501'
+            "${SITE_SSH[@]}" 'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501 bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
           fi
           export REMOTE_RC="$remote_rc"
+          export EXPECTED_CASE_IDS
           python3 - "$RESULT_FILE" <<'PY'
           import json, os, sys
           path=sys.argv[1]
-          expected={'22153077391','22153259501'}
+          expected={x for x in os.environ['EXPECTED_CASE_IDS'].split(',') if x}
           results={}
           for raw in open(path, errors='ignore'):
               line=raw.strip()
@@ -205,7 +212,7 @@ jobs:
           if int(os.environ['REMOTE_RC']) != 0:
               raise SystemExit('Amazon support Bastion command failed')
           if set(results) != expected:
-              raise SystemExit('Amazon support Bastion command did not verify both cases')
+              raise SystemExit('Amazon support Bastion command did not verify the requested cases')
           if any(item.get('result') not in {'SENT','ALREADY_EXISTS'} or item.get('read_back') is not True for item in results.values()):
               raise SystemExit('Amazon support Bastion read-back validation failed')
           print('AMAZON_SUPPORT_REPLY_VERIFIED=true')
