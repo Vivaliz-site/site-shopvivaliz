@@ -66,7 +66,37 @@
 
   Run: `git add includes/ai-squad-core.php scripts/ai-squad-ui-audit.mjs tests/ai-squad-core-test.php tests/ai-squad-ui-audit-contract-test.sh docs/knowledge/buscador.md docs/superpowers/plans/2026-09-23-buscador-gemini-audit-contract.md && git commit -m "fix(buscador): align Gemini UI audit with production model"`
 
-### Task 2: Validate the merged production release and real UI journey
+### Task 2: Serialize Claude Code work around OAuth refresh
+
+**Files:**
+- Modify: `ops/ai-squad/claude-bridge.mjs`
+- Modify: `includes/ai-squad-core.php`
+- Modify: `tests/ai-squad-claude-bridge-test.mjs`
+- Modify: `tests/ai-squad-core-test.php`
+
+**Interfaces:**
+- Consumes: bridge requests, health probes, and Claude Code's credential-store OAuth refresh behavior.
+- Produces: one serialized Claude work stream, explicit `oauth_refresh_contention`, and one bounded retry without a persistent-failure false green.
+
+- [x] **Step 1: Write failing contention tests.**
+
+  Require the observed OAuth refresh message to classify as `oauth_refresh_contention`, require concurrent bridge work to run one at a time, require the PHP boundary to retain that class, and require one 250 ms retry for a transient contention.
+
+- [x] **Step 2: Verify RED.**
+
+  Run: `php tests/ai-squad-core-test.php` and `node tests/ai-squad-claude-bridge-test.mjs`.
+
+  Expected: the old bridge reports generic `auth` and permits concurrent work.
+
+- [x] **Step 3: Implement the minimal queue and retry.**
+
+  Serialize both health probes and provider requests through one recovered promise chain. Retry only an explicit OAuth refresh contention once with a bounded delay; rethrow every persistent failure.
+
+- [x] **Step 4: Verify GREEN.**
+
+  Run: `php -l includes/ai-squad-core.php && node --check ops/ai-squad/claude-bridge.mjs && php tests/ai-squad-core-test.php && node tests/ai-squad-claude-bridge-test.mjs && bash tests/ai-squad-three-provider-runtime-contract-test.sh`.
+
+### Task 3: Validate the merged production release and real UI journey
 
 **Files:**
 - No source changes expected; use the production release, GitHub PR/Actions, and browser-worker evidence.

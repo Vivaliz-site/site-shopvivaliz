@@ -50,6 +50,7 @@ function svais_failure_class(Throwable $e): string
     $message = strtolower($e->getMessage());
     if (str_contains($message, 'model_mismatch')) return 'model';
     if (str_contains($message, 'source_missing')) return 'source_missing';
+    if (str_contains($message, 'oauth_refresh_contention')) return 'oauth_refresh_contention';
     if (str_contains($message, 'timeout')) return 'timeout';
     if (str_contains($message, 'not_configured')) return 'not_configured';
     if (str_contains($message, 'quota')
