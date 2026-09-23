@@ -29,7 +29,7 @@ A UI mostra a interação em fases:
 - A UI identifica `direto` ou `via OpenRouter`; fallback de transporte nunca é apresentado como troca silenciosa de modelo.
 - Secrets são lidos apenas por `config/bootstrap-env.php` a partir do runtime protegido.
 - O log persistente contém somente metadados do ciclo; prompt e respostas completas não são persistidos por padrão.
-- Nunca registrar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `SQUAD_TOKEN` ou `SHOPVIVALIZ_AGENT_KEY`.
+- Nunca registrar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `SQUAD_TOKEN`, `SHOPVIVALIZ_AGENT_KEY` ou `BUSCADOR_MCP_KEY`.
 
 ## Perfis
 
@@ -99,6 +99,10 @@ O health esperado contém:
 - estados de autenticação/transportes em booleanos, nunca a credencial.
 
 A UI não pode converter `configured=true` em indicador verde. Verde exige `health=verified`; configuração sem verificação deve aparecer como estado distinto.
+
+## Integração do Gepeto Plugin
+
+O Gepeto migrado usa o Buscador MCP privado como integração canônica. O MCP mantém `BUSCADOR_MCP_KEY` somente no runtime protegido e força `stream=false` nas chamadas de `runBuscador`. A antiga Action do GPT é legado e não é o transporte canônico do Plugin.
 
 ## API externa
 
