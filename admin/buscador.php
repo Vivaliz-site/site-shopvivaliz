@@ -69,6 +69,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .agent{font-weight:850}.agent small{font-weight:500;color:var(--muted);display:block;margin-top:2px}
 .latency{font-size:.75rem;color:var(--muted);white-space:nowrap}
 .msg-body{white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}
+.fallback-note{margin-top:10px;padding:8px 10px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:.78rem}
 .sources{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:.78rem}
 .sources a{display:block;color:#245b93;text-decoration:none;margin:3px 0;overflow-wrap:anywhere}
 .side{display:flex;flex-direction:column;gap:16px}
@@ -149,7 +150,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 const API='/api/agent/buscador.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
 const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
-const transportNames={codex_chatgpt:'via ChatGPT/Codex',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
+const transportNames={codex_chatgpt:'via ChatGPT/Codex',claude_code:'via Claude Code',vertex_oauth:'via Vertex OAuth',direct:'API direta',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
 let count=0;
 
@@ -171,6 +172,12 @@ function setProviderHealth(provider,state,note=''){
   pill.title=note||healthLabel(state);
 }
 function linkSource(url){const u=esc(url);return '<a target="_blank" rel="noopener noreferrer" href="'+u+'">'+u+'</a>';}
+function fallbackTrail(e){
+  const attempts=Array.isArray(e?.transport_attempts)?e.transport_attempts:[];
+  if(!attempts.length)return '';
+  const prior=attempts.map(a=>transportLabel(a.transport)+' ('+String(a.class||'falha')+')').join(' → ');
+  return '<div class="fallback-note"><b>Fallback real:</b> '+esc(prior)+' → '+esc(transportLabel(e.transport||'direct'))+'</div>';
+}
 
 function addPhase(phase){
   document.getElementById('empty')?.remove();
@@ -190,6 +197,7 @@ function addMessage(e){
     '<small>'+esc(e.model||phaseName(e.phase||''))+' · '+esc(transportLabel(e.transport||'direct'))+'</small></div>'+
     '<div class="latency">'+(e.latency_ms?fmtMs(e.latency_ms):'')+'</div></div>'+
     '<div class="msg-body">'+esc(e.text||e.error||'Sem resposta.')+'</div>'+
+    fallbackTrail(e)+
     (sources.length?'<div class="sources"><b>Fontes detectadas</b>'+sources.map(linkSource).join('')+'</div>':'');
   document.getElementById('feed').appendChild(div);
   div.scrollIntoView({behavior:'smooth',block:'nearest'});
