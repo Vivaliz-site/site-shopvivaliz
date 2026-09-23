@@ -17,7 +17,19 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('\"ubuntu@127.0.0.1:$release_dir/\"', text)
         self.assertEqual(text.count('runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]'), 2)
         self.assertNotIn('ubuntu@163.176.103.253', text)
-        self.assertNotIn('|| true', text)
+        allowed_probe = 'safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"'
+        self.assertIn(allowed_probe, text)
+        self.assertEqual(text.count('|| true'), 1)
+
+    def test_master_pipeline_classifies_cumulative_undeployed_impact(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("deployment/latest.json?ref=deployment-evidence", text)
+        self.assertIn("fetch-depth: 0", text)
+        self.assertIn('git merge-base --is-ancestor "$evidence_sha" "$DEPLOY_SHA"', text)
+        self.assertIn('git diff --name-only "$evidence_sha" "$DEPLOY_SHA"', text)
+        self.assertIn('if [ "$evidence_sha" = "$DEPLOY_SHA" ]; then', text)
+        self.assertIn("deployment evidence base unavailable or non-ancestor -> conservative deploy required", text)
+        self.assertNotIn('git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA"', text)
 
     def test_master_pipeline_packages_only_required_claude_bootstrap_doc(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")

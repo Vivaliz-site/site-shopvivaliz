@@ -114,7 +114,7 @@ import { createHash } from 'node:crypto';
 
 const CDP='http://127.0.0.1:9227';
 const CASE_LOBBY='https://sellercentral.amazon.com.br/cu/case-lobby';
-const knownCases={
+const legacyCases={
   '22153077391':{
     orderId:'701-8413776-8628228',
     narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-8413776-8628228. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
@@ -122,9 +122,20 @@ const knownCases={
   '22153259501':{
     orderId:'701-0172386-7380246',
     narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-0172386-7380246. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
-  },
-  '22154699381':{orderId:'',narrative:''}
+  }
 };
+const currentCases={
+  '22153259501':{
+    orderId:'701-0172386-7380246',
+    narrative:'Olá. Obrigado pelo retorno. Confirmamos que este caso se refere ao pedido 701-0172386-7380246 (ASIN B076PRVLPB). O valor de R$ 36,39 foi apontado em nossa conciliação como pendência, porém, diante da informação de que ele não corresponde aos registros do pedido, não queremos insistir em um valor possivelmente incorreto. Nossa solicitação é a apuração do valor correto do ressarcimento devido à nossa conta de vendedor. Temos ciência de que o comprador já foi reembolsado; não estamos solicitando novo reembolso ao comprador. Até o momento, não identificamos o crédito correspondente ao ressarcimento do seller. Não dispomos da captura original que exibia R$ 36,39. Por isso, pedimos que a análise seja feita com base nos registros oficiais do pedido e nos eventos financeiros da nossa conta. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos o valor creditado, a data do crédito, o ID da transação e/ou do ressarcimento e o relatório ou evento financeiro em que o crédito aparece.'
+  },
+  '22154699381':{
+    orderId:'',
+    narrative:'Olá. Continuamos precisando de assistência no caso 22154699381. O motivo da nossa solicitação é o ressarcimento devido à nossa conta de vendedor: o comprador foi reembolsado, mas não identificamos o crédito correspondente ao seller. Não estamos questionando nem solicitando novo reembolso ao comprador. Na mensagem enviada pela Amazon neste caso, o número do pedido aparece em branco após "FBA Onsite:", por isso não conseguimos relacionar com segurança o protocolo a um pedido específico usando a informação recebida. Solicitamos que confirmem qual pedido está vinculado a este caso e façam a revisão financeira/logística correspondente. Não temos imagens adicionais do produto para anexar neste momento. Caso seja necessária alguma evidência específica, pedimos que indiquem exatamente qual documento ou tela deve ser fornecido. Se o ressarcimento do vendedor já tiver sido efetuado, solicitamos o valor, a data do crédito, o ID da transação e/ou do ressarcimento e o relatório ou evento financeiro em que o crédito aparece.'
+  }
+};
+const profile=String(process.env.AMAZON_SUPPORT_READBACK_PROFILE||'legacy-original').trim();
+const knownCases=profile==='current-tickets'?currentCases:legacyCases;
 const requestedCaseIds=String(process.env.AMAZON_SUPPORT_READBACK_CASE_IDS||'22153077391,22153259501')
   .split(',').map(value=>value.trim()).filter(value=>/^\d{8,14}$/.test(value));
 if(requestedCaseIds.length===0)throw new Error('READBACK_CASE_IDS_REQUIRED');
