@@ -34,6 +34,33 @@ ais_assert(svais_health_state(true, true) === 'verified', 'health state verified
 ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
 ais_assert(svais_health_state(false, false) === 'unavailable', 'unconfigured provider health mismatch');
 
+$geminiProbeCalls = [];
+$geminiProbe = svais_gemini_health_probe(
+    $deep['gemini'],
+    function (array $cfg, string $system, string $prompt, bool $webSearch, int $timeout) use (&$geminiProbeCalls, $deep): array {
+        $geminiProbeCalls[] = [$cfg, $system, $prompt, $webSearch, $timeout];
+        return [
+            'text' => 'OK',
+            'sources' => [],
+            'usage' => [],
+            'model' => $deep['gemini']['model'],
+            'transport' => 'vertex_oauth',
+        ];
+    }
+);
+ais_assert(($geminiProbe['verified'] ?? false) === true, 'Gemini live health probe success must verify provider');
+ais_assert(($geminiProbe['transport'] ?? '') === 'vertex_oauth', 'Gemini live health probe must report verified transport');
+ais_assert(count($geminiProbeCalls) === 1, 'Gemini live health probe must execute exactly one dispatch');
+ais_assert(($geminiProbeCalls[0][0]['thinking_level'] ?? '') === 'LOW', 'Gemini health probe must use low thinking effort');
+ais_assert(($geminiProbeCalls[0][0]['max_output_tokens'] ?? 0) <= 64, 'Gemini health probe must keep output bounded');
+ais_assert($geminiProbeCalls[0][3] === false, 'Gemini health probe must not use web search');
+ais_assert(($geminiProbeCalls[0][4] ?? 999) <= 30, 'Gemini health probe must use a short provider timeout');
+$geminiProbeFailure = svais_gemini_health_probe(
+    $deep['gemini'],
+    static function (): array { throw new RuntimeException('provider_transport_error'); }
+);
+ais_assert(($geminiProbeFailure['verified'] ?? true) === false, 'Gemini failed live probe must not report verified');
+
 $serialized = strtolower(json_encode($catalog, JSON_UNESCAPED_SLASHES) ?: '');
 ais_assert(!str_contains($serialized, 'fable'), 'Fable must not appear in any AI Squad preset');
 putenv('AI_SQUAD_TEST_ANTHROPIC_MODEL=claude-fable-5');
@@ -302,6 +329,18 @@ ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mism
 
 $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
+
+$previousGoogleApiKey = getenv('GOOGLE_API_KEY');
+putenv('GOOGLE_API_KEY=unit-test-placeholder');
+$verifiedGeminiState = svais_provider_state(
+    $deep,
+    true,
+    static fn(array $cfg): array => ['verified' => true, 'transport' => 'vertex_oauth']
+);
+if ($previousGoogleApiKey === false) putenv('GOOGLE_API_KEY');
+else putenv('GOOGLE_API_KEY=' . $previousGoogleApiKey);
+ais_assert(($verifiedGeminiState['gemini']['health'] ?? '') === 'verified', 'live Gemini health probe success must produce verified health');
+ais_assert(($verifiedGeminiState['gemini']['verified_transport'] ?? '') === 'vertex_oauth', 'Gemini health must expose the transport proven by live probe');
 ais_assert(($state['openai']['manual_chatgpt_fallback'] ?? false) === true, 'health manual ChatGPT fallback missing');
 ais_assert(($state['openai']['platform_api_fallback'] ?? true) === false, 'OpenAI health must explicitly disable Platform API fallback');
 ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
@@ -339,6 +378,7 @@ ais_assert(str_contains($adminSource, 'manual_chatgpt'), 'UI must expose manual 
 ais_assert(str_contains($adminSource, 'https://chatgpt.com/'), 'UI must provide explicit ChatGPT fallback action');
 
 $apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/buscador.php');
+ais_assert(str_contains($apiSource, 'svais_provider_state($profile, true)'), 'health endpoint must request live Gemini verification');
 ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');
 $legacyPolicy = 'opus' . '5_primary_no_fable';
 ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
