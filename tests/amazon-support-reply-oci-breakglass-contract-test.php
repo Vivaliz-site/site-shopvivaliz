@@ -113,6 +113,24 @@ $scriptForbidden=[
   'Reabrir caso',
 ];
 foreach($scriptForbidden as $needle){if(strpos($scriptText,$needle)!==false){fwrite(STDERR,"amazon support Bastion site script contains forbidden pattern: {$needle}\n");exit(1);}}
+if(preg_match('/tab-id=\\\\?"Email\\\\?"/',$scriptText)){fwrite(STDERR,"amazon support Bastion site script must not select Email channel\n");exit(1);}
+
+$peerWorkflow=$root.'/.github/workflows/desktop-commander-peer-repair.yml';
+if(!is_file($peerWorkflow)){fwrite(STDERR,"peer repair workflow missing\n");exit(1);}
+$peerText=(string)file_get_contents($peerWorkflow);
+$peerRequired=[
+  'scripts/amazon-support-reply-oci-site.sh',
+  'AMAZON_SUPPORT_REPLY_PROFILE=legacy-original',
+  'AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501',
+  'bash /tmp/shopvivaliz-amazon-support-reply-oci-site.sh',
+];
+foreach($peerRequired as $needle){if(strpos($peerText,$needle)===false){fwrite(STDERR,"peer Amazon support route missing canonical delegation: {$needle}\n");exit(1);}}
+$peerForbidden=[
+  'shopvivaliz-amazon-support-reply.mjs',
+  'TERMINAL_NO_REOPEN_ACTION',
+  "document.querySelectorAll('kat-textarea')",
+];
+foreach($peerForbidden as $needle){if(strpos($peerText,$needle)!==false){fwrite(STDERR,"peer Amazon support route contains duplicate browser logic: {$needle}\n");exit(1);}}
 
 $readbackScript=$root.'/scripts/amazon-support-readback-oci-site.sh';
 if(!is_file($readbackScript)){fwrite(STDERR,"amazon support read-back script missing\n");exit(1);}
