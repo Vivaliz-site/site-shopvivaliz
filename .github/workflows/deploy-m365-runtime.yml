@@ -268,7 +268,7 @@ jobs:
               "$BACKUP/" /opt/m365/
             /opt/m365/venv/bin/python -m compileall -q /opt/m365/python
             echo "m365_rollback=PASS"
-            REMOTE
+          REMOTE
             exit "$rc"
           fi
 

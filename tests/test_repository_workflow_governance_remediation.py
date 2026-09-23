@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,21 @@ AUTO_EVIDENCE = (
 class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
     def text(self, name: str) -> str:
         return (WORKFLOWS / name).read_text(encoding="utf-8-sig")
+
+    def run_body(self, name: str, step_name: str) -> str:
+        text = self.text(name)
+        marker = f"      - name: {step_name}\n"
+        step_start = text.index(marker)
+        run_marker = "        run: |\n"
+        run_start = text.index(run_marker, step_start) + len(run_marker)
+        next_step = text.find("\n      - name:", run_start)
+        block = text[run_start:] if next_step < 0 else text[run_start:next_step]
+        return "\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines()) + "\n"
+
+    def test_m365_activation_shell_is_syntactically_valid(self):
+        script = self.run_body("deploy-m365-runtime.yml", "Activate exact M365 source and validate")
+        result = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_publication_workflows_never_publish_or_destructively_reset(self):
         for name in PUBLISH:
