@@ -57,6 +57,7 @@ assert.equal(noWebArgs[noWebArgs.indexOf('--tools') + 1], '');
 assert.equal(noWebArgs.includes('--allowedTools'), false, 'non-web requests must not pre-authorize web tools');
 
 assert.equal(classifyClaudeError('OAuth session expired'), 'auth');
+assert.equal(classifyClaudeError('Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh'), 'oauth_refresh_contention');
 assert.equal(classifyClaudeError('credit balance is too low'), 'quota');
 assert.equal(classifyClaudeError("You've hit your session limit · resets 12:30am (UTC)"), 'quota');
 assert.equal(classifyClaudeError('request_timeout'), 'timeout');
@@ -117,6 +118,50 @@ await assert.rejects(() => answerClaudeRequest(valid, {
   },
 }), /source_missing/);
 assert.equal(sourceMissingCalls, 2, 'source-less web response must fail after the single retry');
+
+const nonWebRequest = { ...valid, web_search: false };
+let queuedActive = 0;
+let queuedMaxActive = 0;
+const queuedRun = async () => {
+  queuedActive += 1;
+  queuedMaxActive = Math.max(queuedMaxActive, queuedActive);
+  await new Promise(resolve => setTimeout(resolve, 15));
+  queuedActive -= 1;
+  return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Resposta serializada.' }), stderr: '' };
+};
+await Promise.all([
+  answerClaudeRequest(nonWebRequest, { auth: { configured: true, token: '' }, run: queuedRun }),
+  answerClaudeRequest(nonWebRequest, { auth: { configured: true, token: '' }, run: queuedRun }),
+]);
+assert.equal(queuedMaxActive, 1, 'Claude work must serialize concurrent requests to protect OAuth refresh');
+
+let refreshRetryCalls = 0;
+const refreshBackoffs = [];
+const refreshRetryResult = await answerClaudeRequest(nonWebRequest, {
+  auth: { configured: true, token: '' },
+  sleep: async delay => { refreshBackoffs.push(delay); },
+  run: async () => {
+    refreshRetryCalls += 1;
+    if (refreshRetryCalls === 1) {
+      return { code: 1, stdout: '', stderr: 'Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh' };
+    }
+    return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Resposta após refresh serializado.' }), stderr: '' };
+  },
+});
+assert.equal(refreshRetryCalls, 2, 'OAuth refresh contention must have exactly one bounded retry');
+assert.deepEqual(refreshBackoffs, [250], 'OAuth refresh contention retry must use bounded backoff');
+assert.equal(refreshRetryResult.ok, true);
+
+let persistentRefreshCalls = 0;
+await assert.rejects(() => answerClaudeRequest(nonWebRequest, {
+  auth: { configured: true, token: '' },
+  sleep: async () => {},
+  run: async () => {
+    persistentRefreshCalls += 1;
+    return { code: 1, stdout: '', stderr: 'Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh' };
+  },
+}), /refresh OAuth token/);
+assert.equal(persistentRefreshCalls, 2, 'persistent OAuth refresh contention must fail after one bounded retry');
 
 const safe = sanitizeBridgeError('Authorization: Bearer sk-ant-oat-secret user@example.com');
 assert(!safe.includes('sk-ant-oat-secret'));
