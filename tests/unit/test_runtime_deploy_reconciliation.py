@@ -19,6 +19,16 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('ubuntu@163.176.103.253', text)
         self.assertNotIn('|| true', text)
 
+    def test_master_pipeline_classifies_cumulative_undeployed_impact(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("deployment/latest.json?ref=deployment-evidence", text)
+        self.assertIn("fetch-depth: 0", text)
+        self.assertIn('git merge-base --is-ancestor "$evidence_sha" "$DEPLOY_SHA"', text)
+        self.assertIn('git diff --name-only "$evidence_sha" "$DEPLOY_SHA"', text)
+        self.assertIn('if [ "$evidence_sha" = "$DEPLOY_SHA" ]; then', text)
+        self.assertIn("deployment evidence base unavailable or non-ancestor -> conservative deploy required", text)
+        self.assertNotIn('git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA"', text)
+
     def test_master_pipeline_packages_only_required_claude_bootstrap_doc(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('--include=docs/', text)
