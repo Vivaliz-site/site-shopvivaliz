@@ -183,7 +183,7 @@ if ($method === 'GET' && ($_GET['health'] ?? '') === '1') {
         'ok' => true,
         'endpoint' => 'buscador',
         'profile' => $profileName,
-        'providers' => svais_provider_state($profile),
+        'providers' => svais_provider_state($profile, true),
         'profiles' => array_map(static fn(array $p): string => (string)$p['label'], $profiles),
         'anthropic_policy' => 'claude_code_account_only_no_fable',
     ]);

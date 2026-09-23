@@ -63,7 +63,7 @@ As variáveis abaixo são referências de configuração. Valores nunca devem se
 Transportes operacionais atuais:
 
 - OpenAI: `codex_chatgpt` com perfis ChatGPT Business autenticados; o bridge tenta os perfis configurados em ordem e, se todos estiverem sem cota/indisponíveis, emite fallback explícito `manual_chatgpt`. O Buscador não usa `OPENAI_API_KEY` como fallback.
-- Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/buscador/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter;
+- Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/buscador/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter. O bridge mantém `restricted` + `dontAsk` e, somente quando `web_search=true`, pré-autoriza explicitamente `WebSearch,WebFetch`; nenhuma outra ferramenta recebe permissão automática;
 - Gemini: `vertex_oauth` → API direta quando configurada. O OpenRouter não faz parte da cadeia operacional enquanto não houver credencial validada ao vivo.
 
 Credenciais opcionais dos provedores que ainda usam API são mantidas apenas no runtime protegido. Para OpenAI, a política do Buscador é login ChatGPT Business via Codex, sem fallback para `OPENAI_API_KEY`. Gemini pode usar `GEMINI_API_KEY`/`GOOGLE_API_KEY` como fallback direto conforme a ordem de transportes documentada.
@@ -92,7 +92,8 @@ O health esperado contém:
 - `endpoint=buscador`
 - `providers` com OpenAI, Anthropic e Gemini;
 - modelo e esforço de cada provider;
-- `health=verified` somente quando o transporte primário possui prova viva de autenticação/disponibilidade;
+- `health=verified` somente quando o transporte possui prova viva de autenticação/disponibilidade;
+- no Gemini, o GET de health executa um probe mínimo sem pesquisa web, com thinking `LOW`, saída curta e timeout reduzido; em sucesso também publica `verified_transport`;
 - `health=configured_unverified` quando existe transporte configurado, mas sem prova viva equivalente;
 - `health=unavailable` quando nenhum transporte está configurado;
 - estados de autenticação/transportes em booleanos, nunca a credencial.
