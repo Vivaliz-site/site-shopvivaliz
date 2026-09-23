@@ -134,11 +134,24 @@ const currentCases=[
     caseId:'22154699381',
     orderId:'',
     narrative:'Olá. Continuamos precisando de assistência no caso 22154699381. O motivo da nossa solicitação é o ressarcimento devido à nossa conta de vendedor: o comprador foi reembolsado, mas não identificamos o crédito correspondente ao seller. Não estamos questionando nem solicitando novo reembolso ao comprador. Na mensagem enviada pela Amazon neste caso, o número do pedido aparece em branco após "FBA Onsite:", por isso não conseguimos relacionar com segurança o protocolo a um pedido específico usando a informação recebida. Solicitamos que confirmem qual pedido está vinculado a este caso e façam a revisão financeira/logística correspondente. Não temos imagens adicionais do produto para anexar neste momento. Caso seja necessária alguma evidência específica, pedimos que indiquem exatamente qual documento ou tela deve ser fornecido. Se o ressarcimento do vendedor já tiver sido efetuado, solicitamos o valor, a data do crédito, o ID da transação e/ou do ressarcimento e o relatório ou evento financeiro em que o crédito aparece.'
+  },
+  {
+    caseId:'22199842931',
+    orderId:'702-9207715-8524262',
+    narrative:'Olá Sara. Aqui é Fred, da ShopVivaLiz. Dando continuidade ao caso 22199842931, referente ao pedido 702-9207715-8524262, ASIN B0CF6R46NF. O problema permanece: o comprador foi reembolsado, mas não identificamos em nossa conta de vendedor o crédito correspondente ao ressarcimento FBA. Valor esperado do ressarcimento: R$ 485,75. Crédito efetivamente conciliado: R$ 0,00. Saldo pendente: R$ 485,75. Solicito a revisão manual do ressarcimento FBA e o pagamento do saldo devido ao vendedor. Caso a Amazon considere que o ressarcimento já foi efetuado, por favor informe o valor creditado, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Caso seja necessária alguma evidência adicional, peço que indiquem exatamente qual tela ou documento deve ser fornecido.'
   }
 ];
-const cases=process.env.AMAZON_SUPPORT_REPLY_PROFILE==='current-tickets'?currentCases:legacyCases;
+const profile=process.env.AMAZON_SUPPORT_REPLY_PROFILE==='current-tickets'?'current-tickets':'legacy-original';
+const profileCases=profile==='current-tickets'?currentCases:legacyCases;
+const requestedCaseIds=String(process.env.AMAZON_SUPPORT_REPLY_CASE_IDS||'').split(',').map(x=>x.trim()).filter(Boolean);
+const requestedSet=new Set(requestedCaseIds);
+const cases=requestedCaseIds.length?profileCases.filter(item=>requestedSet.has(item.caseId)):profileCases;
+const unknownRequested=requestedCaseIds.filter(id=>!profileCases.some(item=>item.caseId===id));
+const REQUIRED_CHANNEL='Chat';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const safeError=value=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9_:-]+/g,'_').slice(0,120);
+const normalizeText=value=>String(value??'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g,' ').trim().normalize('NFC').toLowerCase();
+const collectStrings=(value,out=[])=>{if(value==null)return out;if(typeof value==='string')out.push(value);else if(Array.isArray(value))for(const item of value)collectStrings(item,out);else if(typeof value==='object')for(const item of Object.values(value))collectStrings(item,out);return out};
 
 async function connect(){
   const targets=await fetch(CDP+'/json').then(r=>r.json());
