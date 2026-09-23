@@ -53,6 +53,7 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertIsNotNone(match, name)
         return match.group("body")
 
+    # #1757 intentionally allows one bounded repair on schedule; push remains observation-only.
     def test_desktop_commander_scheduled_health_allows_one_bounded_repair(self):
         text = self.text("desktop-commander-24h-health.yml")
         self.assertIn(
