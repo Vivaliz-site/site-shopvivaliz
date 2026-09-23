@@ -8,10 +8,6 @@ on:
         required: true
         default: 'd31763c8c309f1a2d2f270a65574c7c47f14a707'
         type: string
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/deploy-m365-runtime.yml"
 
 permissions:
   contents: read
@@ -215,8 +211,8 @@ jobs:
           BACKUP: ${{ steps.backup.outputs.path }}
         run: |
           set -Eeuo pipefail
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i ~/.ssh/vmkey ubuntu@10.0.1.38 "TARGET_SHA='$TARGET_SHA' STAGE='$STAGE' bash -se" <<'REMOTE'
+          rc=0
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i ~/.ssh/vmkey ubuntu@10.0.1.38 "TARGET_SHA='$TARGET_SHA' STAGE='$STAGE' bash -se" <<'REMOTE' || rc=$?
           set -Eeuo pipefail
           rsync -a --delete \
             --exclude='.env' \
@@ -251,8 +247,6 @@ jobs:
           test "$(cat /opt/m365/logs/deployed-sha.txt)" = "$TARGET_SHA"
           echo "m365_deploy=PASS"
           REMOTE
-          rc=$?
-          set -e
           if [ "$rc" -ne 0 ]; then
             echo "M365 activation failed; restoring previous application tree" >&2
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i ~/.ssh/vmkey ubuntu@10.0.1.38 "BACKUP='$BACKUP' bash -se" <<'REMOTE'
@@ -274,7 +268,7 @@ jobs:
               "$BACKUP/" /opt/m365/
             /opt/m365/venv/bin/python -m compileall -q /opt/m365/python
             echo "m365_rollback=PASS"
-            REMOTE
+          REMOTE
             exit "$rc"
           fi
 

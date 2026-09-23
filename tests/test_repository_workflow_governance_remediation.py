@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,21 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
     def text(self, name: str) -> str:
         return (WORKFLOWS / name).read_text(encoding="utf-8-sig")
 
+    def run_body(self, name: str, step_name: str) -> str:
+        text = self.text(name)
+        marker = f"      - name: {step_name}\n"
+        step_start = text.index(marker)
+        run_marker = "        run: |\n"
+        run_start = text.index(run_marker, step_start) + len(run_marker)
+        next_step = text.find("\n      - name:", run_start)
+        block = text[run_start:] if next_step < 0 else text[run_start:next_step]
+        return "\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines()) + "\n"
+
+    def test_m365_activation_shell_is_syntactically_valid(self):
+        script = self.run_body("deploy-m365-runtime.yml", "Activate exact M365 source and validate")
+        result = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_publication_workflows_never_publish_or_destructively_reset(self):
         for name in PUBLISH:
             text = self.text(name)
@@ -53,10 +69,15 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertIsNotNone(match, name)
         return match.group("body")
 
-    def test_desktop_commander_automatic_health_cannot_repair(self):
+    # #1757 intentionally allows one bounded repair on schedule; push remains observation-only.
+    def test_desktop_commander_scheduled_health_allows_one_bounded_repair(self):
         text = self.text("desktop-commander-24h-health.yml")
-        self.assertIn("ALLOW_REPAIR: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}", text)
+        self.assertIn(
+            "ALLOW_REPAIR: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}",
+            text,
+        )
         self.assertIn("MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0", text)
+        self.assertNotIn("github.event_name == 'push' && '1'", text)
 
     def test_windows_private_peer_recovery_is_manual_only(self):
         triggers = self.trigger_body("windows-private-peer-recovery.yml")
@@ -81,6 +102,15 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertRegex(triggers, r"(?m)^  workflow_dispatch:\s*$")
         self.assertRegex(triggers, r"(?m)^  schedule:\s*$")
         self.assertNotRegex(triggers, r"(?m)^  push:\s*$")
+
+
+    def test_repository_governance_fails_closed_on_global_workflow_debt(self):
+        text = self.text("repository-governance.yml")
+        self.assertNotIn("::warning::Repository-wide workflow debt remains", text)
+        self.assertRegex(
+            text,
+            r"(?s)status=0\s+python scripts/maintenance/audit_active_workflows\.py \|\| status=\$\?.*?test -s artifacts/workflow-policy/report\.json.*?test -s artifacts/workflow-policy/report\.md.*?exit \"\$status\"",
+        )
 
 
     def test_checkout_migration_is_preview_only_and_never_edits_production(self):
