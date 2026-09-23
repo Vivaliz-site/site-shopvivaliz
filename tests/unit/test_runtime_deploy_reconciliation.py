@@ -17,7 +17,9 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('\"ubuntu@127.0.0.1:$release_dir/\"', text)
         self.assertEqual(text.count('runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]'), 2)
         self.assertNotIn('ubuntu@163.176.103.253', text)
-        self.assertNotIn('|| true', text)
+        allowed_probe = 'safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"'
+        self.assertIn(allowed_probe, text)
+        self.assertEqual(text.count('|| true'), 1)
 
     def test_master_pipeline_classifies_cumulative_undeployed_impact(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
