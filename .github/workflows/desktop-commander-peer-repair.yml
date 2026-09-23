@@ -296,8 +296,8 @@ jobs:
             -o ConnectTimeout=10 -i ~/.ssh/vmkey \
             /tmp/shopvivaliz-amazon-support-site.sh ubuntu@10.0.1.38:/tmp/shopvivaliz-amazon-support-site.sh
 
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          rc=0
+          if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
             'set -Eeuo pipefail
@@ -311,9 +311,16 @@ jobs:
                ubuntu@10.0.1.112 "bash /tmp/shopvivaliz-amazon-support-site.sh"
              rc=$?
              rm -f /tmp/shopvivaliz-amazon-support-site.sh
-             exit "$rc"' | tee /tmp/shopvivaliz-amazon-support-result.log
-          rc=${PIPESTATUS[0]}
-          set -e
+             exit "$rc"' | tee /tmp/shopvivaliz-amazon-support-result.log; then
+            :
+          else
+            statuses=("${PIPESTATUS[@]}")
+            if [ "${statuses[0]}" -ne 0 ]; then
+              rc="${statuses[0]}"
+            else
+              rc="${statuses[1]}"
+            fi
+          fi
           rm -f /tmp/shopvivaliz-amazon-support-site.sh
           printf '%s\\n' "$rc" >/tmp/shopvivaliz-amazon-support-result.rc
           exit "$rc"
