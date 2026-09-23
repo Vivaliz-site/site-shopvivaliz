@@ -51,7 +51,7 @@ function svais_api_auth_mode(): string
     }
 
     $candidates = [];
-    foreach (['GEPETO_ACTION_KEY', 'SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'SQUAD_TOKEN'] as $name) {
+    foreach (['BUSCADOR_MCP_KEY', 'GEPETO_ACTION_KEY', 'SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'SQUAD_TOKEN'] as $name) {
         $value = getenv($name);
         if (is_string($value) && trim($value) !== '') {
             $candidates[] = trim($value);
