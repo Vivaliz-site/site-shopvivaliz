@@ -21,6 +21,8 @@ class StalePrRepairNoopTest(unittest.TestCase):
     def test_protected_conflict_is_persisted_without_ai_writeback(self):
         text = WORKFLOW.read_text(encoding='utf-8')
         self.assertIn('issues: write', text)
+        self.assertIn('pull-requests: write', text)
+        self.assertNotIn('pull-requests: read', text)
         self.assertIn('Record protected conflict block', text)
         self.assertIn("steps.merge.outputs.safe == 'false'", text)
         self.assertIn('stale-pr-protected-conflict:', text)
