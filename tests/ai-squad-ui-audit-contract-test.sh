@@ -25,14 +25,17 @@ grep -Fq "fs.rmSync(profileDir" "$ui_audit"
 grep -q 'shopvivaliz-admin-test.credentials.json' "$ui_audit"
 grep -q "deep_research" "$ui_audit"
 grep -Fq "(?:ai-squad|buscador)" "$ui_audit"
-grep -q "gemini-2.5-flash" "$ui_audit"
+grep -q "gemini-3.5-flash" "$ui_audit"
 grep -Fq "['Concluído','Incompleto']" "$ui_audit"
 grep -q "research" "$ui_audit"
 grep -q "Pesquisa independente" "$ui_audit"
 grep -q "Contraditório" "$ui_audit"
 grep -q "Convergência" "$ui_audit"
 grep -q "Síntese de consenso" "$ui_audit"
-grep -q "gemini-2.5-flash" "$ui_audit"
+if grep -q "gemini-2.5-flash" "$ui_audit"; then
+  echo "FAIL: UI auditor still accepts the stale Gemini 2.5 model contract" >&2
+  exit 1
+fi
 grep -Fq "(?:ai-squad|buscador)" "$ui_audit"
 grep -q "Incompleto" "$ui_audit"
 grep -q "msg.error" "$ui_audit"
