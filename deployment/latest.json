@@ -5,12 +5,12 @@
     "validate": "success"
   },
   "results": [
-    "OK release SHA marker: be27de8b4bbbcd50107505d194829b4036224227",
+    "OK release SHA marker: d8cbeb8cff6ae716b30670addc711fc7c2a0b8c2",
     "OK official master production pipeline: validate=success deploy=success monitor=success"
   ],
-  "sha": "be27de8b4bbbcd50107505d194829b4036224227",
+  "sha": "d8cbeb8cff6ae716b30670addc711fc7c2a0b8c2",
   "status": "PRODUCTION_UPDATED",
-  "verified_at": "2026-09-23T02:25:19.921884+00:00",
-  "workflow_run_id": "35809924414",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/35809924414"
+  "verified_at": "2026-09-23T10:21:46.374801+00:00",
+  "workflow_run_id": "35847861071",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/35847861071"
 }
