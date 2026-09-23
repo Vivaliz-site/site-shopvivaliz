@@ -116,6 +116,10 @@ $readbackRequired=[
   "match_scope:'$.SearchForCases.lastOutboundReply'",
   'lastOutbound.includes(prefix)',
   'SUPPORT_LOOKUP_PROBE=PASS',
+  'AMAZON_SUPPORT_READBACK_PROFILE',
+  "profile==='current-tickets'",
+  'O valor de R$ 36,39 foi apontado em nossa conciliação como pendência',
+  'Continuamos precisando de assistência no caso 22154699381',
 ];
 foreach($readbackRequired as $needle){if(strpos($readbackText,$needle)===false){fwrite(STDERR,"amazon support read-back missing contract: {$needle}\n");exit(1);}}
 $readbackForbidden=[
@@ -142,8 +146,8 @@ $remoteRequired=[
   'amazon_support_reply_221530_221532',
   'action.startswith("amazon_support_")',
   'Amazon Seller Support actions are restricted to the site VM',
-  'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
-  'sudo -n env AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh',
+  'sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=legacy-original AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh',
   'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original bash scripts/amazon-support-reply-oci-site.sh',
 ];

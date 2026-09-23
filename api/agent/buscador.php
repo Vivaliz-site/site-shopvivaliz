@@ -51,7 +51,7 @@ function svais_api_auth_mode(): string
     }
 
     $candidates = [];
-    foreach (['GEPETO_ACTION_KEY', 'SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'SQUAD_TOKEN'] as $name) {
+    foreach (['BUSCADOR_MCP_KEY', 'GEPETO_ACTION_KEY', 'SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'SQUAD_TOKEN'] as $name) {
         $value = getenv($name);
         if (is_string($value) && trim($value) !== '') {
             $candidates[] = trim($value);
@@ -234,6 +234,7 @@ if (!isset($profiles[$profileName])) {
     svais_api_json(422, ['ok' => false, 'error' => 'invalid_profile']);
 }
 $profile = svais_profile($profileName);
+$webSearchOverride = svais_topic_requires_web_search($topic) ? null : false;
 
 $mode = strtolower((string)($body['mode'] ?? 'research'));
 if (!in_array($mode, ['parallel', 'debate', 'research'], true)) {
@@ -308,7 +309,7 @@ foreach ($phases as $phase) {
         ], $stream, $events);
 
         try {
-            $result = svais_call_provider($provider, $profile, $phase, $prompt);
+            $result = svais_call_provider($provider, $profile, $phase, $prompt, $webSearchOverride);
             $entry = [
                 'type' => 'agent_message',
                 'cycle_id' => $cycleId,
@@ -320,6 +321,7 @@ foreach ($phases as $phase) {
                 'usage' => $result['usage'],
                 'latency_ms' => (int)$result['latency_ms'],
                 'transport' => (string)($result['transport'] ?? 'direct'),
+                'transport_attempts' => (array)($result['transport_attempts'] ?? []),
                 'ok' => true,
             ];
             $transcript[] = $entry;
@@ -392,6 +394,7 @@ if ($completeCoverage) {
                 'sources' => array_slice((array)$result['sources'], 0, 30),
                 'usage' => $result['usage'],
                 'transport' => (string)($result['transport'] ?? 'direct'),
+                'transport_attempts' => (array)($result['transport_attempts'] ?? []),
                 'ok' => true,
             ];
             svais_api_emit($consensus, $stream, $events);
