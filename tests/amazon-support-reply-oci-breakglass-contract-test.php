@@ -98,6 +98,10 @@ $scriptRequired=[
   'for(let attempt=0;attempt<30;attempt++){',
   "await send('Network.enable')",
   'SEND_CONTROL=',
+  'SEND_CANDIDATES=',
+  'const stack=[tab]',
+  'if(el.shadowRoot)stack.push(el.shadowRoot)',
+  "meta.type==='submit'",
   'SUBMIT_TRACE=',
 ];
 foreach($scriptRequired as $needle){if(strpos($scriptText,$needle)===false){fwrite(STDERR,"amazon support Bastion site script missing contract: {$needle}\n");exit(1);}}
