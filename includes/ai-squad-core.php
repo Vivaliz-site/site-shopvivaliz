@@ -475,7 +475,7 @@ function svais_http_json(string $url, array $headers, array $payload, int $timeo
     [$curlOk, $body, $status, $curlError] = svais_bridge_curl_exec($ch);
     curl_close($ch);
 
-    if ($body === false || $curlError !== '') {
+    if ($curlOk === false || !is_string($body) || $curlError !== '') {
         throw new RuntimeException('provider_transport_error');
     }
 
@@ -498,18 +498,27 @@ function svais_http_json(string $url, array $headers, array $payload, int $timeo
 }
 
 
+function svais_bridge_stream_chunk(string $chunk, string &$body, ?callable $heartbeatEmitter = null): int
+{
+    $body .= $chunk;
+    if (defined('SVAIS_STREAM_HEARTBEAT') && SVAIS_STREAM_HEARTBEAT === true && trim($chunk) === '') {
+        if ($heartbeatEmitter !== null) {
+            $heartbeatEmitter("\n");
+        } else {
+            echo "\n";
+            @ob_flush();
+            flush();
+        }
+    }
+    return strlen($chunk);
+}
+
 function svais_bridge_curl_exec(CurlHandle $ch): array
 {
     $body = '';
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
     curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function (CurlHandle $handle, string $chunk) use (&$body): int {
-        $body .= $chunk;
-        if (defined('SVAIS_STREAM_HEARTBEAT') && SVAIS_STREAM_HEARTBEAT === true && trim($chunk) === '') {
-            echo "\n";
-            @ob_flush();
-            flush();
-        }
-        return strlen($chunk);
+        return svais_bridge_stream_chunk($chunk, $body);
     });
     $ok = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -543,12 +552,10 @@ function svais_codex_bridge_call(array $cfg, string $system, string $prompt, boo
         CURLOPT_TIMEOUT => $timeout,
         CURLOPT_PROXY => '',
     ]);
-    $body = curl_exec($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
+    [$curlOk, $body, $status, $curlError] = svais_bridge_curl_exec($ch);
     curl_close($ch);
 
-    if (!is_string($body) || $curlError !== '') {
+    if ($curlOk === false || !is_string($body) || $curlError !== '') {
         throw new RuntimeException('codex_bridge_transport_error');
     }
     $data = json_decode($body, true);
@@ -605,7 +612,7 @@ function svais_claude_bridge_call(array $cfg, string $system, string $prompt, bo
     [$curlOk, $body, $status, $curlError] = svais_bridge_curl_exec($ch);
     curl_close($ch);
 
-    if (!is_string($body) || $curlError !== '') {
+    if ($curlOk === false || !is_string($body) || $curlError !== '') {
         throw new RuntimeException('claude_bridge_transport_error');
     }
     $data = json_decode($body, true);

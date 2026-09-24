@@ -7,4 +7,8 @@ if grep -q "headless: true" "$script"; then
   echo "stale unconditional headless mode" >&2
   exit 1
 fi
+if grep -Fq "!process.env.DISPLAY" "$script"; then
+  echo "automatic headless fallback would invalidate the graphical E2E gate" >&2
+  exit 1
+fi
 echo "ai-squad-ui-browser-mode-contract: PASS"
