@@ -33,6 +33,20 @@ ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 't
 ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
 ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
 ais_assert(svais_health_state(false, false) === 'unavailable', 'unconfigured provider health mismatch');
+ais_assert(function_exists('svais_bridge_stream_chunk'), 'bridge stream chunk helper missing');
+if (!defined('SVAIS_STREAM_HEARTBEAT')) {
+    define('SVAIS_STREAM_HEARTBEAT', true);
+}
+$heartbeatBody = '';
+$heartbeatEmitted = [];
+$heartbeatLength = svais_bridge_stream_chunk(
+    "\n",
+    $heartbeatBody,
+    static function (string $chunk) use (&$heartbeatEmitted): void { $heartbeatEmitted[] = $chunk; }
+);
+ais_assert($heartbeatLength === 1, 'heartbeat chunk length mismatch');
+ais_assert($heartbeatBody === "\n", 'heartbeat chunk must remain in provider body');
+ais_assert($heartbeatEmitted === ["\n"], 'blank bridge heartbeat must be relayed to streaming client');
 ais_assert(
     svais_failure_class(new RuntimeException('claude_bridge_oauth_refresh_contention')) === 'oauth_refresh_contention',
     'OAuth refresh contention must not be reported as quota, auth, or transport'

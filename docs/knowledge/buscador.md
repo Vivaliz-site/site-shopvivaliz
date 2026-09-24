@@ -102,7 +102,7 @@ A UI não pode converter `configured=true` em indicador verde. Verde exige `heal
 
 ## Integração do Gepeto Plugin
 
-O Gepeto migrado usa o Buscador MCP privado como integração canônica. O MCP mantém `BUSCADOR_MCP_KEY` somente no runtime protegido e força `stream=false` nas chamadas de `runBuscador`. A antiga Action do GPT é legado e não é o transporte canônico do Plugin.
+O Gepeto migrado usa o Buscador MCP privado como integração canônica. O MCP mantém `BUSCADOR_MCP_KEY` somente no runtime protegido e usa **streaming NDJSON** no upstream de `runBuscador`, agregando os eventos no adaptador antes de responder ao Plugin; isso preserva heartbeats de ciclos longos sem expor o stream como parâmetro da tool. A antiga Action do GPT é legado e não é o transporte canônico do Plugin.
 
 ## API externa
 
