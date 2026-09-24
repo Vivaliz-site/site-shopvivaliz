@@ -79,14 +79,7 @@ try {
 
   await page.locator('#profile').selectOption('deep_research');
   await page.locator('#mode').selectOption('research');
-  const prompt = [
-    'Pesquise ofertas reais no Brasil de raquetes de tênis novas, premium/primeira linha.',
-    'Critérios: 295–305 g sem corda; cabeça preferencialmente 100 in², aceitando 98–102 in² em oportunidade excepcional; modelos 2020–2025 aceitos.',
-    'Priorize liquidação/queima real e desconto alvo acima de 40%, mas registre as melhores oportunidades mesmo abaixo disso.',
-    'Compare Head Speed/Extreme/Gravity/Radical MP, Babolat Pure Drive/Pure Aero 98/Pure Strike, Wilson Blade 98/Clash 98/Pro Staff 97, Yonex Ezone 100/VCore 100 e Tecnifibre TF40/TFight 300.',
-    'Para cada oferta, exija loja, URL, preço atual, preço anterior quando verificável, desconto calculado e especificações. Não invente preço, desconto ou disponibilidade.',
-    'Os três agentes devem pesquisar independentemente, criticar os achados uns dos outros e convergir para 3 oportunidades factualmente sustentadas.',
-  ].join(' ');
+  const prompt = 'Pesquise na web raquetes Yonex com cabeça de 100 in² atualmente em liquidação/promoção, disponíveis para compra no Brasil. Procure oportunidades reais, não apenas preço anunciado como promoção. Verifique preço atual, preço anterior quando comprovável, percentual de desconto, peso, tamanho da cabeça, loja, disponibilidade e URL da fonte. Priorize modelos de performance/primeira linha, novos, preferencialmente entre 295 e 305 g. Compare as ofertas encontradas e identifique as melhores oportunidades considerando qualidade da raquete, desconto real e preço final. Não invente preço, estoque ou desconto; toda afirmação comercial deve ter fonte verificável.';
   await page.locator('#message').fill(prompt);
 
   await page.locator('#run').click();
