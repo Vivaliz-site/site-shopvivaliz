@@ -126,6 +126,7 @@ try {
       health: Array.from(document.querySelectorAll('#health .pill')).map(x => (x.textContent || '').trim()),
     };
   });
+  console.log('AI_SQUAD_UI_SUMMARY=' + JSON.stringify(summary));
 
   const expectedPhases = ['Pesquisa independente', 'Contraditório', 'Convergência', 'Síntese de consenso'];
   for (const phase of expectedPhases) {
