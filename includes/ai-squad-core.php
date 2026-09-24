@@ -45,6 +45,14 @@ function svais_gemini_transport_order(): array
     return ['vertex_oauth', 'direct'];
 }
 
+function svais_provider_request_timeout(): int
+{
+    // Bound each provider call so a transient upstream stall cannot hold the
+    // whole nine-message cycle forever. The cycle remains fail-closed when a
+    // bounded call expires and records timeout/transport evidence.
+    return max(30, min(240, (int)(getenv('AI_SQUAD_PROVIDER_TIMEOUT') ?: 120)));
+}
+
 function svais_failure_class(Throwable $e): string
 {
     $message = strtolower($e->getMessage());
@@ -525,7 +533,7 @@ function svais_codex_bridge_call(array $cfg, string $system, string $prompt, boo
     if ($ch === false) {
         throw new RuntimeException('codex_bridge_transport_error');
     }
-    $timeout = max(30, min(300, (int)(getenv('AI_SQUAD_CODEX_HTTP_TIMEOUT') ?: 240)));
+    $timeout = min(240, svais_provider_request_timeout());
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -584,7 +592,7 @@ function svais_claude_bridge_call(array $cfg, string $system, string $prompt, bo
     if ($ch === false) {
         throw new RuntimeException('claude_bridge_transport_error');
     }
-    $timeout = max(30, min(300, (int)(getenv('AI_SQUAD_CLAUDE_HTTP_TIMEOUT') ?: 240)));
+    $timeout = min(240, svais_provider_request_timeout());
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -921,6 +929,7 @@ function svais_gemini_dispatch(
     ?callable $invoke = null,
     int $timeout = 240
 ): array {
+    $timeout = min(240, $timeout, svais_provider_request_timeout());
     $invoke ??= static function (
         string $transport,
         array $cfg,
