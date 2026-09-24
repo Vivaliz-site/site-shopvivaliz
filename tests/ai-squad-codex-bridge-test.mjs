@@ -11,6 +11,7 @@ import {
   remainingRequestMs,
   resolveCodexWebSearchMode,
   isDirectInvocation,
+  beginHeartbeat,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -74,6 +75,34 @@ assert.match(
   'cold health probes must run profiles concurrently'
 );
 
+
+const heartbeatWrites = [];
+const heartbeatHeaders = [];
+let scheduledDelay = null;
+let scheduledTick = null;
+let clearedTimer = null;
+let endedPayload = null;
+const fakeTimer = { fake: true, unref() {} };
+const fakeResponse = {
+  destroyed: false,
+  writableEnded: false,
+  writeHead(status, headers) { heartbeatHeaders.push({ status, headers }); },
+  write(chunk) { heartbeatWrites.push(chunk); },
+  end(payload) { this.writableEnded = true; endedPayload = payload; },
+};
+const finishHeartbeat = beginHeartbeat(
+  fakeResponse,
+  (fn, ms) => { scheduledTick = fn; scheduledDelay = ms; return fakeTimer; },
+  (timer) => { clearedTimer = timer; },
+);
+assert.equal(scheduledDelay, 15000);
+assert.deepEqual(heartbeatWrites, ['\n']);
+scheduledTick();
+assert.deepEqual(heartbeatWrites, ['\n', '\n']);
+finishHeartbeat({ ok: true });
+assert.equal(heartbeatHeaders[0].status, 200);
+assert.equal(endedPayload, JSON.stringify({ ok: true }));
+assert.equal(clearedTimer, fakeTimer);
 const safe = sanitizeBridgeError(
   'Authorization: Bearer sk-secret-token quota reached for user@example.com'
 );

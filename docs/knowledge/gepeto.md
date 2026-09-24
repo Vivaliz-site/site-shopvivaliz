@@ -43,7 +43,7 @@ A integração atual do Gepeto com o Buscador é o **Buscador MCP** privado. O P
 
 O MCP autentica no endpoint canônico `/api/agent/buscador.php` com a credencial dedicada de runtime `BUSCADOR_MCP_KEY`, armazenada somente no runtime protegido. A chave nunca entra em instruções, Knowledge, logs, argumentos de processo nem respostas do Plugin.
 
-O Gepeto deve chamar `runBuscador` com `stream=false`. Para pesquisas complexas, usar `profile=deep_research` e `mode=research`. Para checagem rápida, usar `getBuscadorHealth` antes de apresentar o resultado como consenso.
+O Gepeto deve chamar `runBuscador` normalmente; o adaptador MCP usa **streaming NDJSON internamente** no upstream para manter ciclos longos vivos através do proxy e agrega os eventos antes de devolver o resultado estruturado ao Plugin. Para pesquisas complexas, usar `profile=deep_research` e `mode=research`. Para checagem rápida, usar `getBuscadorHealth` antes de apresentar o resultado como consenso.
 
 Um health válido exige `ok=true`, `endpoint=buscador` e OpenAI, Anthropic e Gemini presentes e verificados. Consenso completo exige cobertura das fases obrigatórias, evento `consensus` e `cycle_finished` bem-sucedido.
 
