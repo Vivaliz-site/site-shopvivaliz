@@ -20,6 +20,8 @@ $checks = [
     'legacy key is not current exclusive auth' => !str_contains($doc, 'usando exclusivamente a credencial de runtime `GEPETO_ACTION_KEY`'),
     'Buscador docs list the real core test' => str_contains($buscadorDoc, 'php tests/ai-squad-core-test.php'),
     'Buscador docs list the real reliability contract' => str_contains($buscadorDoc, 'php tests/buscador-reliability-contract-test.php'),
+    'Gepeto docs require streaming MCP upstream' => str_contains($doc, 'streaming') && !str_contains($doc, 'stream=false'),
+    'Buscador docs require streaming MCP upstream' => str_contains($buscadorDoc, 'streaming') && !str_contains($buscadorDoc, 'stream=false'),
     'Buscador docs do not list removed core test' => !str_contains($buscadorDoc, 'buscador-core-test.php'),
     'Buscador docs do not list removed bridge test prefix' => !str_contains($buscadorDoc, 'buscador-claude-bridge-test.mjs'),
 ];

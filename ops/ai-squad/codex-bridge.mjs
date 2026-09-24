@@ -414,19 +414,19 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
-function beginHeartbeat(res) {
+export function beginHeartbeat(res, schedule = setInterval, cancel = clearInterval) {
   res.writeHead(200, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Accel-Buffering': 'no',
   });
   res.write('\n');
-  const timer = setInterval(() => {
+  const timer = schedule(() => {
     if (!res.destroyed && !res.writableEnded) res.write('\n');
   }, 15000);
   timer.unref?.();
   return (payload) => {
-    clearInterval(timer);
+    cancel(timer);
     if (!res.writableEnded) res.end(JSON.stringify(payload));
   };
 }

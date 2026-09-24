@@ -282,7 +282,7 @@ async function run(){
         const disabled=Boolean(h.disabled||h.hasAttribute?.('disabled')||b.disabled);
         metas.push({h,b,r,labels,type,disabled,variant:norm(h.getAttribute?.('variant'))});
       }
-      const labelRe=/^(send|enviar|send message|enviar mensagem)$/i;
+      const labelRe=/^(send|enviar|send message|enviar mensagem|chat now)$/i;
       let chosen=metas.find(meta=>!meta.disabled&&meta.labels.some(label=>labelRe.test(label)));
       if(!chosen){
         const submit=metas.filter(meta=>!meta.disabled&&meta.type==='submit');
