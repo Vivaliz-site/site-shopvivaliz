@@ -6,8 +6,7 @@ const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubun
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
-const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true'
-  || (!process.env.DISPLAY && String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim() !== 'false');
+const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true';
 const ephemeralProfile = configuredProfileDir === '';
 const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
@@ -54,9 +53,17 @@ const context = await chromium.launchPersistentContext(profileDir, {
 });
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(20000);
+const consoleErrors = [];
+const pageErrors = [];
+const requestFailures = [];
+const serverErrors = [];
+page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
+page.on('requestfailed', request => requestFailures.push({ url: request.url(), error: request.failure()?.errorText || '' }));
+page.on('response', response => { if (response.status() >= 500) serverErrors.push({ url: response.url(), status: response.status() }); });
 
 try {
-  await page.goto('https://shopvivaliz.com.br/admin/ai-squad.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.goto('https://shopvivaliz.com.br/admin/buscador.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
   if (page.url().includes('/auth/login.php')) {
     await page.locator('#email').fill(raw.email);
     await page.locator('#password').fill(raw.password);
@@ -123,7 +130,10 @@ try {
       consensusLength: (document.querySelector('#consensus')?.textContent || '').trim().length,
       phases,
       messages,
-      health: Array.from(document.querySelectorAll('#health .pill')).map(x => (x.textContent || '').trim()),
+      health: Array.from(document.querySelectorAll('#health .pill')).map(x => ({
+        text: (x.textContent || '').trim(),
+        dotClass: x.querySelector('.dot')?.className || '',
+      })),
     };
   });
   console.log('AI_SQUAD_UI_SUMMARY=' + JSON.stringify(summary));
@@ -146,11 +156,27 @@ try {
     if (!research || research.sourceLinks < 1) fail('research_sources_missing_' + provider);
   }
   if (summary.consensusLength < 120) fail('consensus_too_short');
-  if (summary.health.length !== 3 || summary.health.some(x => !x.includes('verificado'))) {
+  if (summary.health.length !== 3 || summary.health.some(x => !x.dotClass.split(/\s+/).includes('ok'))) {
     fail('final_provider_health_not_verified');
   }
+  if (consoleErrors.length) fail('console_error_present');
+  if (pageErrors.length) fail('pageerror_present');
+  if (requestFailures.length) fail('requestfailed_present');
+  if (serverErrors.length) fail('http_5xx_present');
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => document.querySelectorAll('#health .pill').length === 3, null, { timeout: 30000 });
+  const reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
+    text: (x.textContent || '').trim(),
+    dotClass: x.querySelector('.dot')?.className || '',
+  })));
+  if (reloadHealth.length !== 3 || reloadHealth.some(x => !x.dotClass.split(/\s+/).includes('ok'))) fail('reload_provider_health_not_verified');
+  if (consoleErrors.length) fail('console_error_after_reload');
+  if (pageErrors.length) fail('pageerror_after_reload');
+  if (requestFailures.length) fail('requestfailed_after_reload');
+  if (serverErrors.length) fail('http_5xx_after_reload');
   console.log(JSON.stringify({
     cycle: summary.cycle,
     phase: summary.phase,
@@ -161,6 +187,8 @@ try {
     providerCounts: Object.fromEntries(['openai','anthropic','gemini'].map(p => [p, summary.messages.filter(x => x.provider === p).length])),
     researchSourceCounts: Object.fromEntries(['openai','anthropic','gemini'].map(p => [p, summary.messages.find(x => x.provider === p && x.phase === 'Pesquisa independente')?.sourceLinks || 0])),
     health: summary.health,
+    reloadHealth,
+    browserMode: browserHeadless ? 'headless' : 'headed',
     consensusLength: summary.consensusLength,
     duration: summary.duration,
     screenshot: screenshotPath,

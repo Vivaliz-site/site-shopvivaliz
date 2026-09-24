@@ -99,6 +99,7 @@ $scriptRequired=[
   "await send('Network.enable')",
   'SEND_CONTROL=',
   'SEND_CANDIDATES=',
+  'chat now',
   'const stack=[tab]',
   'if(el.shadowRoot)stack.push(el.shadowRoot)',
   "meta.type==='submit'",
