@@ -6,6 +6,8 @@ const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubun
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
+const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true'
+  || (!process.env.DISPLAY && String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim() !== 'false');
 const ephemeralProfile = configuredProfileDir === '';
 const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
@@ -38,7 +40,7 @@ const browserPath = configuredBrowserPath || chromium.executablePath();
 if (!browserPath || !fs.existsSync(browserPath)) fail('chromium_missing');
 const context = await chromium.launchPersistentContext(profileDir, {
   executablePath: browserPath,
-  headless: true,
+  headless: browserHeadless,
   viewport: { width: 1440, height: 900 },
   env: { ...process.env, LIBGL_ALWAYS_SOFTWARE: '1' },
   args: [
