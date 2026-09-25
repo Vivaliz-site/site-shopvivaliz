@@ -147,7 +147,7 @@ const requestedCaseIds=String(process.env.AMAZON_SUPPORT_REPLY_CASE_IDS||'').spl
 const requestedSet=new Set(requestedCaseIds);
 const cases=requestedCaseIds.length?profileCases.filter(item=>requestedSet.has(item.caseId)):profileCases;
 const unknownRequested=requestedCaseIds.filter(id=>!profileCases.some(item=>item.caseId===id));
-const REQUIRED_CHANNEL='Chat';
+const REQUIRED_CHANNEL=process.env.AMAZON_SUPPORT_REPLY_CHANNEL==='Email'?'Email':'Chat';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const safeError=value=>String(value||'UNKNOWN').replace(/[^A-Za-z0-9_:-]+/g,'_').slice(0,120);
 const normalizeText=value=>String(value??'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g,' ').trim().normalize('NFC').toLowerCase();
@@ -181,7 +181,7 @@ async function run(){
   if(/signin|ap\/signin|auth/i.test(href))throw new Error('AUTH_REQUIRED');
   if(unknownRequested.length)throw new Error('UNAPPROVED_CASE_ID:'+unknownRequested.join(','));
   if(!cases.length)throw new Error('NO_APPROVED_CASES_SELECTED');
-  if(REQUIRED_CHANNEL!=='Chat')throw new Error('CHANNEL_POLICY_INVALID');
+  if(!['Chat','Email'].includes(REQUIRED_CHANNEL))throw new Error('CHANNEL_POLICY_INVALID');
 
   let failures=0;
   for(const item of cases){
@@ -195,15 +195,89 @@ async function run(){
     const detailText=normalizeText(collectStrings(detail).join(' '));
     if(item.orderId&&!detailText.includes(normalizeText(item.orderId)))throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
     const prefix=normalizeText(item.narrative.slice(0,180));
-    const chatAlready=(Array.isArray(detail.contactList)?detail.contactList:[]).some(contact=>String(contact?.channelType||'').toUpperCase()==='CHAT'&&normalizeText(collectStrings(contact).join(' ')).includes(prefix));
-    if(chatAlready){
-      console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:detail?.viewCaseMetaData?.caseStatus||lookup.status,result:'ALREADY_EXISTS',read_back:true,match_scope:'ViewCase.contactList[channelType=CHAT]',contact_count:Array.isArray(detail.contactList)?detail.contactList.length:null,total_contacts:detail.totalNumberOfContacts??null}));
+    const channelAlready=(Array.isArray(detail.contactList)?detail.contactList:[]).some(contact=>String(contact?.channelType||'').toUpperCase()===REQUIRED_CHANNEL.toUpperCase()&&normalizeText(collectStrings(contact).join(' ')).includes(prefix));
+    if(channelAlready){
+      console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:detail?.viewCaseMetaData?.caseStatus||lookup.status,result:'ALREADY_EXISTS',read_back:true,match_scope:'ViewCase.contactList[channelType='+REQUIRED_CHANNEL.toUpperCase()+']',contact_count:Array.isArray(detail.contactList)?detail.contactList.length:null,total_contacts:detail.totalNumberOfContacts??null}));
       continue;
     }
 
     const channelsExpr="(async()=>{const r=await fetch('/hill/hillservice/mons-api/GetReplyChannels?caseId='+encodeURIComponent("+JSON.stringify(item.caseId)+"),{credentials:'include'});if(!r.ok)return JSON.stringify({error:'CHANNELS_HTTP_'+r.status});return JSON.stringify(await r.json())})()";
     const channels=JSON.parse(await evalv(channelsExpr));
     if(channels.error)throw new Error(item.caseId+':'+channels.error);
+    if(REQUIRED_CHANNEL==='Email'){
+      const emailChannel=(Array.isArray(channels.channels)?channels.channels:[]).find(channel=>String(channel?.type||'')==='Email');
+      if(!emailChannel)throw new Error(item.caseId+':EMAIL_CHANNEL_MISSING');
+
+      await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId),5000);
+
+      let emailTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\\\"Email\\\"]'))"));
+      if(!emailTabPresent){
+        const replyRect=await evalv("(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(!b||b.disabled)continue;b.scrollIntoView({block:'center',inline:'nearest'});const r=b.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight}}return null})()");
+        if(!(await trustedClick(replyRect)))throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+        for(let attempt=0;attempt<20;attempt++){await sleep(250);emailTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\\\"Email\\\"]'))"));if(emailTabPresent)break}
+      }
+      if(!emailTabPresent)throw new Error(item.caseId+':EMAIL_TAB_MISSING');
+
+      const emailTabRect=await evalv("(()=>{const h=document.querySelector('kat-tab[tab-id=\\\"Email\\\"]')?.shadowRoot?.querySelector('[role=tab]');if(!h)return null;h.scrollIntoView({block:'center',inline:'nearest'});const r=h.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight}})()");
+      if(!(await trustedClick(emailTabRect)))throw new Error(item.caseId+':EMAIL_TAB_NOT_CLICKABLE');
+      await sleep(300);
+      let selectedEmail=String(await evalv("document.querySelector('kat-tab[tab-id=\\\"Email\\\"]')?.parentElement?.getAttribute('selected')||''"));
+      if(selectedEmail!=='Email'){
+        await evalv("(()=>{const e=document.querySelector('kat-tab[tab-id=\\\"Email\\\"]');const t=e?.parentElement;if(t&&typeof t._setSelected==='function'){t._setSelected('Email');return true}return false})()");
+        await sleep(200);
+        selectedEmail=String(await evalv("document.querySelector('kat-tab[tab-id=\\\"Email\\\"]')?.parentElement?.getAttribute('selected')||''"));
+      }
+      if(selectedEmail!=='Email')throw new Error(item.caseId+':EMAIL_TAB_NOT_SELECTED');
+
+      const currentEmailDraft=String(await evalv("document.querySelector('kat-tab[tab-id=\\\"Email\\\"] kat-textarea')?.value||''"));
+      if(currentEmailDraft&&currentEmailDraft!==item.narrative)throw new Error(item.caseId+':EMAIL_DRAFT_NOT_EMPTY');
+      if(!currentEmailDraft){
+        const focused=await evalv("(()=>{const h=document.querySelector('kat-tab[tab-id=\\\"Email\\\"] kat-textarea');const t=h?.shadowRoot?.querySelector('textarea');if(!t)return false;t.focus();return document.activeElement===h&&h.shadowRoot?.activeElement===t})()");
+        if(focused!==true)throw new Error(item.caseId+':EMAIL_FOCUS_FAILED');
+        await send('Input.insertText',{text:item.narrative});
+        await sleep(250);
+      }
+      const exactEmailDraft=await evalv("(()=>{const h=document.querySelector('kat-tab[tab-id=\\\"Email\\\"] kat-textarea');const t=h?.shadowRoot?.querySelector('textarea');return Boolean(h&&t&&h.value==="+JSON.stringify(item.narrative)+"&&t.value==="+JSON.stringify(item.narrative)+")})()");
+      if(exactEmailDraft!==true)throw new Error(item.caseId+':EMAIL_DRAFT_VERIFY_FAILED');
+
+      networkTrace.length=0;
+      const emailSendProbe=await evalv(`(()=>{
+        const tab=document.querySelector('kat-tab[tab-id="Email"]');
+        if(!tab)return{rect:null,candidates:[]};
+        const norm=value=>String(value||'').replace(/\\s+/g,' ').trim();
+        const nodes=[];const stack=[tab];const seen=new Set();
+        while(stack.length){const root=stack.pop();if(!root||seen.has(root))continue;seen.add(root);for(const el of root.children||[]){nodes.push(el);stack.push(el);if(el.shadowRoot)stack.push(el.shadowRoot)}}
+        const buttons=nodes.filter(el=>el?.tagName==='KAT-BUTTON'||el?.tagName==='BUTTON');
+        const metas=[];
+        for(const h of buttons){const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(!b)continue;const r=b.getBoundingClientRect?.();if(!r||r.width<=0||r.height<=0)continue;const labels=[h.getAttribute?.('label'),h.getAttribute?.('aria-label'),h.getAttribute?.('title'),h.innerText,b.getAttribute?.('aria-label'),b.getAttribute?.('title'),b.innerText].map(norm).filter(Boolean);const type=norm(h.getAttribute?.('type')||b.getAttribute?.('type')).toLowerCase();const disabled=Boolean(h.disabled||h.hasAttribute?.('disabled')||b.disabled);metas.push({h,b,r,labels,type,disabled,variant:norm(h.getAttribute?.('variant'))})}
+        const labelRe=/^(send|enviar|send email|enviar e-mail|enviar email)$/i;
+        let chosen=metas.find(meta=>!meta.disabled&&meta.labels.some(label=>labelRe.test(label)));
+        if(!chosen){const submit=metas.filter(meta=>!meta.disabled&&meta.type==='submit');if(submit.length===1)chosen=submit[0]}
+        const candidates=metas.slice(0,20).map(meta=>({tag:meta.h.tagName,labels:[...new Set(meta.labels)].slice(0,4).map(value=>value.slice(0,60)),type:meta.type,variant:meta.variant,disabled:meta.disabled}));
+        if(!chosen)return{rect:null,candidates};
+        const b=chosen.b;b.scrollIntoView({block:'center',inline:'nearest'});const r=b.getBoundingClientRect();
+        return{rect:{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight,label:chosen.labels[0]||chosen.type||'Send'},candidates};
+      })()`);
+      const emailSendRect=emailSendProbe?.rect||null;
+      if(!(await trustedClick(emailSendRect))){
+        console.log('EMAIL_SEND_CANDIDATES='+JSON.stringify(emailSendProbe?.candidates||[]));
+        throw new Error(item.caseId+':EMAIL_SEND_ACTION_MISSING');
+      }
+      console.log('EMAIL_SEND_CONTROL='+safeError(emailSendRect?.label||'Send'));
+
+      let emailConfirmed=null;
+      for(let attempt=0;attempt<30;attempt++){
+        await sleep(1000);
+        const checked=await readDetail();
+        if(checked.error)continue;
+        const emailMatch=(Array.isArray(checked.contactList)?checked.contactList:[]).find(contact=>String(contact?.channelType||'').toUpperCase()==='EMAIL'&&normalizeText(collectStrings(contact).join(' ')).includes(prefix));
+        if(emailMatch){emailConfirmed={detail:checked,contact:emailMatch};break}
+      }
+      if(!emailConfirmed){console.log('EMAIL_SUBMIT_TRACE='+JSON.stringify(networkTrace.slice(-30)));throw new Error(item.caseId+':EMAIL_READ_BACK_FAILED')}
+      console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:emailConfirmed.detail?.viewCaseMetaData?.caseStatus||lookup.status,result:'SENT',read_back:true,match_scope:'ViewCase.contactList[channelType=EMAIL]',contact_count:Array.isArray(emailConfirmed.detail.contactList)?emailConfirmed.detail.contactList.length:null,total_contacts:emailConfirmed.detail.totalNumberOfContacts??null}));
+      continue;
+    }
+
     const chatChannel=(Array.isArray(channels.channels)?channels.channels:[]).find(channel=>String(channel?.type||'')===REQUIRED_CHANNEL);
     if(!chatChannel)throw new Error(item.caseId+':CHAT_CHANNEL_MISSING');
     const chatOptions=chatChannel?.metadata?.chatMetadata?.target?.options||{};
