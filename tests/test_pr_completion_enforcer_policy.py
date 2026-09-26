@@ -11,10 +11,13 @@ def test_enforcer_uses_only_latest_run_per_required_workflow():
     assert "historical failures ignored after newer success" in WORKFLOW
 
 
-def test_enforcer_requests_branch_repair_instead_of_only_labeling():
-    assert "workflow_dispatch" in WORKFLOW
+def test_enforcer_syncs_stale_branch_with_external_vm_auth():
     assert "repair-pr-branch" in WORKFLOW
-    assert "ai-stale-pr-repair.yml" in WORKFLOW
+    assert "external_auth_branch_sync=true" in WORKFLOW
+    assert "REMOTE_HEAL_SCRIPT" in WORKFLOW
+    assert "scripts/pr_conflict_vm_heal.sh" in WORKFLOW
+    assert "update-branch" not in WORKFLOW
+    assert "ai-stale-pr-repair.yml" not in WORKFLOW
 
 
 def test_draft_prs_are_not_silently_ignored():
