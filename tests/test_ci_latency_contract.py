@@ -42,5 +42,14 @@ class PrCompletionLatencyContractTests(unittest.TestCase):
         self.assertNotIn("\"rev-list\", \"--count\"", text)
 
 
+    def test_conflict_healer_reserves_oracle_only_for_real_candidates(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "pr-conflict-auto-healer.yml").read_text(encoding="utf-8")
+        self.assertIn("conflict-preflight", workflow)
+        self.assertIn("needs: conflict-preflight", workflow)
+        self.assertIn("needs.conflict-preflight.outputs.should_heal == 'true'", workflow)
+        self.assertIn("TARGET_PRS", workflow)
+        self.assertIn("mergeable", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
