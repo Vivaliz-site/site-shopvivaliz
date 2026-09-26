@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 PROMPT_FILE="${1:?prompt file required}"
+SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -26,6 +27,16 @@ record() {
 cleanup_attempt() {
   git restore --worktree --staged .
   git clean -fd --exclude="$ATTEMPTS" --exclude="$OUTPUT"
+}
+
+persist_running_checkpoint() {
+  [ -n "$SHOPVIVALIZ_TASK_ID" ] || return 0
+
+  if ! python3 scripts/agent_task_state.py show --task "$SHOPVIVALIZ_TASK_ID" >/dev/null 2>&1; then
+    python3 scripts/agent_task_state.py start       --task "$SHOPVIVALIZ_TASK_ID"       --goal "Continuar tarefa finita delegada ate estado terminal"       --agent executor-failover >/dev/null
+  fi
+
+  python3 scripts/agent_task_state.py progress     --task "$SHOPVIVALIZ_TASK_ID"     --next-action "retomar a tarefa com a proxima rota segura disponivel; Codex permanece ultima opcao"     --evidence "todos os executores finitos desta rodada ficaram indisponiveis ou nao produziram mudanca verificavel"     >/dev/null
 }
 
 try_provider() {
@@ -68,4 +79,8 @@ for provider in "${ORDER[@]}"; do
 done
 
 echo "Nenhum executor produziu mudança real; preservar checkpoint RUNNING para retomada." | tee -a "$OUTPUT"
+if [ -n "$SHOPVIVALIZ_TASK_ID" ]; then
+  persist_running_checkpoint
+  exit 75
+fi
 exit 0
