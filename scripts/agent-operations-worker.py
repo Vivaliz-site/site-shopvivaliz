@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_docs_gate import verify_receipt
-from agent_task_state import TaskStateError, is_terminal, load_task, record_progress, start_task
+from agent_task_state import RUNTIME_DIR as TASK_STATE_DIR, TaskStateError, is_terminal, load_task, record_progress, start_task
+from task_continuation_watchdog import read_requests
 from task_queue_lib import load_queue, save_queue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,74 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _continuation_state(task_id: str) -> dict[str, Any]:
+    safe = "".join(ch for ch in task_id if ch.isalnum() or ch in "._-").strip(".-")
+    if not safe:
+        return {}
+    path = Path(TASK_STATE_DIR) / f"{safe[:160]}.json"
+    return read_json(path)
+
+
+def enqueue_continuation_requests(runtime_state: dict[str, Any]) -> int:
+    """Bridge stale checkpoint requests into the existing finite agent command path."""
+    requests = read_requests(Path(TASK_STATE_DIR))
+    existing_ids = {
+        str(row.get("id", "")).strip()
+        for row in read_jsonl(INTERVENTIONS_FILE)
+        if str(row.get("id", "")).strip()
+    }
+    enqueued = 0
+
+    for request in requests:
+        if str(request.get("status", "")).strip() != "queued":
+            continue
+        request_id = str(request.get("id", "")).strip()
+        task_id = str(request.get("task_id", "")).strip()
+        next_action = str(request.get("next_action", "")).strip()
+        if not request_id or not task_id or not next_action or request_id in existing_ids:
+            continue
+
+        current = _continuation_state(task_id)
+        if str(current.get("status", "")).strip() != "RUNNING":
+            continue
+        if str(current.get("updated_at", "")).strip() != str(request.get("checkpoint_updated_at", "")).strip():
+            continue
+        if str(current.get("next_action", "")).strip() != next_action:
+            continue
+
+        agent_id = str(request.get("agent_id", "")).strip().lower()
+        if agent_id not in AGENTS:
+            agent_id = "gpt"
+
+        intervention = {
+            "id": request_id,
+            "agent_id": agent_id,
+            "message": (
+                f"Retome automaticamente a tarefa {task_id} a partir do checkpoint persistido. "
+                f"Proxima acao: {next_action}. Continue ate CONCLUIDO ou BLOCKED_EXTERNAL comprovado."
+            ),
+            "source": "task-continuation-watchdog",
+            "created_at": utc_now(),
+            "status": "queued",
+            "kind": "auto-resume",
+            "task_id": task_id,
+            "checkpoint_updated_at": request.get("checkpoint_updated_at"),
+            "continuation_fingerprint": request.get("fingerprint"),
+        }
+        append_jsonl(INTERVENTIONS_FILE, intervention)
+        existing_ids.add(request_id)
+        push_step(
+            runtime_state,
+            agent_id,
+            f"Checkpoint estagnado detectado; retomada automatica acionada para {task_id}: {next_action}",
+            kind="auto-resume",
+            extra={"task_id": task_id, "request_id": request_id},
+        )
+        enqueued += 1
+
+    return enqueued
 
 
 def bootstrap_runtime_state() -> dict[str, Any]:
@@ -444,14 +513,19 @@ def process_supervisor_interventions(queue: dict[str, Any], runtime_state: dict[
         agent_id = str(row.get("agent_id", "")).lower()
         if agent_id not in AGENTS:
             continue
-        push_step(runtime_state, agent_id, "Pausado por Intervenção do Supervisor", kind="pause", extra={"command_id": row.get("id")})
-        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="supervisor", extra={"command_id": row.get("id")})
-        reply = build_agent_reply(agent_id, row, queue, supervisor_mode=True)
+        auto_resume = str(row.get("kind", "")).lower() == "auto-resume"
+        if auto_resume:
+            push_step(runtime_state, agent_id, "Retomada automatica recebida do watchdog de continuidade", kind="auto-resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
+        else:
+            push_step(runtime_state, agent_id, "Pausado por Intervenção do Supervisor", kind="pause", extra={"command_id": row.get("id")})
+        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="auto-resume" if auto_resume else "supervisor", extra={"command_id": row.get("id")})
+        reply = build_agent_reply(agent_id, row, queue, supervisor_mode=not auto_resume)
         append_jsonl(INTERVENTION_RESPONSES_FILE, reply)
         if reply.get("status") == "docs_preflight_required":
             push_step(runtime_state, agent_id, "Intervenção registrada; agente deve ler docs antes de retomar qualquer alteração", kind="docs-preflight-required", extra={"command_id": row.get("id")})
         else:
-            push_step(runtime_state, agent_id, "Retomando o trabalho real após intervenção humana", kind="resume", extra={"command_id": row.get("id")})
+            message = "Retomando o trabalho real a partir do checkpoint" if auto_resume else "Retomando o trabalho real após intervenção humana"
+            push_step(runtime_state, agent_id, message, kind="resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
         processed += 1
     return processed
 
@@ -462,6 +536,7 @@ def main() -> int:
     assigned = assign_pending_tasks(runtime_state)
     queue = load_queue()
     record_agent_activity(queue, runtime_state)
+    continuation_enqueued = enqueue_continuation_requests(runtime_state)
     processed = process_commands(queue, runtime_state)
     supervisor_processed = process_supervisor_interventions(queue, runtime_state)
     write_heartbeats(queue, runtime_state)
@@ -469,6 +544,7 @@ def main() -> int:
     print(json.dumps({
         "ok": True,
         "assigned": assigned,
+        "continuation_requests_enqueued": continuation_enqueued,
         "commands_processed": processed,
         "supervisor_commands_processed": supervisor_processed,
         "generated_at": utc_now(),

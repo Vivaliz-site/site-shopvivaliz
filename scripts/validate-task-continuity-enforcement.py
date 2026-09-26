@@ -31,7 +31,9 @@ REQUIRED_TOKENS = (
     "agent_task_state.py",
 )
 STATE = ROOT / "scripts" / "agent_task_state.py"
+WATCHDOG = ROOT / "scripts" / "task_continuation_watchdog.py"
 TEST = ROOT / "tests" / "test_task_continuity_enforcement.py"
+WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
 FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
 
@@ -74,8 +76,18 @@ else:
         if token not in state_text:
             errors.append(f"scripts/agent_task_state.py: missing {token}")
 
+if not WATCHDOG.is_file():
+    errors.append("missing scripts/task_continuation_watchdog.py")
+else:
+    watchdog_text = WATCHDOG.read_text(encoding="utf-8", errors="replace")
+    for token in ("auto_resume", "stale_seconds", "_resume-requests.jsonl"):
+        if token not in watchdog_text:
+            errors.append(f"scripts/task_continuation_watchdog.py: missing {token}")
+
 if not TEST.is_file():
     errors.append("missing tests/test_task_continuity_enforcement.py")
+if not WATCHDOG_TEST.is_file():
+    errors.append("missing tests/test_task_continuation_watchdog.py")
 
 if not GOVERNANCE.is_file():
     errors.append("missing scripts/repository-governance-validate.sh")
@@ -85,6 +97,8 @@ else:
         errors.append("repository governance does not execute task-continuity validator")
     if "tests.test_task_continuity_enforcement" not in governance:
         errors.append("repository governance does not execute task-continuity regression tests")
+    if "tests.test_task_continuation_watchdog" not in governance:
+        errors.append("repository governance does not execute auto-resume regression tests")
 
 if errors:
     print("TASK CONTINUITY ENFORCEMENT: FAIL", file=sys.stderr)
