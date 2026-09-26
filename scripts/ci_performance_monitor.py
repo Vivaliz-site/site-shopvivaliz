@@ -76,9 +76,10 @@ def analyze_runs(
             if conclusion == "action_required":
                 row["action_required"] += 1
 
+        status = str(run.get("status") or "").strip().lower()
         started = _parse_time(run.get("run_started_at") or run.get("created_at"))
         ended = _parse_time(run.get("updated_at"))
-        if started is not None and ended is not None and ended >= started:
+        if status == "completed" and started is not None and ended is not None and ended >= started:
             duration = (ended - started).total_seconds()
             row["duration_samples"] += 1
             row["total_duration_seconds"] += duration
