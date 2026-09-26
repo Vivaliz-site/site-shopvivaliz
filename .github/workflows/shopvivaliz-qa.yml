@@ -4,7 +4,22 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - 'api/**'
+      - 'admin/**'
+      - 'includes/**'
+      - 'scripts/*.php'
+      - 'scripts/*.js'
+      - 'tests/*.php'
+      - 'tests/*.js'
+      - 'blog/**'
+      - '*.php'
+      - '.github/workflows/shopvivaliz-qa.yml'
   workflow_dispatch:
+
+concurrency:
+  group: shopvivaliz-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

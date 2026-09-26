@@ -2,6 +2,15 @@ name: PR Policy Enforcement
 
 on:
   pull_request:
+    paths:
+      - 'scripts/check_pr_completion_policy.py'
+      - 'scripts/pr_conflict_gemini_healer.py'
+      - 'scripts/pr_gate_replay.py'
+      - 'scripts/pr_conflict_vm_heal.sh'
+      - 'scripts/merge_green_pr_via_vm.sh'
+      - 'tests/test_pr_conflict_gemini_healer.py'
+      - 'tests/test_pr_gate_replay.py'
+      - '.github/workflows/pr-policy-enforcement.yml'
   push:
     branches: [main]
   workflow_dispatch:

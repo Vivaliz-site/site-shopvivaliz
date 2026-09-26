@@ -2,6 +2,13 @@ name: Policy Engine
 
 on:
   pull_request:
+    paths:
+      - 'scripts/check-erp.js'
+      - 'scripts/policy*'
+      - 'scripts/*policy*'
+      - 'tests/*policy*'
+      - 'erp/**'
+      - '.github/workflows/policy-engine.yml'
   workflow_dispatch:
     inputs:
       base_sha:
@@ -12,6 +19,10 @@ on:
         description: Exact PR head SHA being replayed
         required: true
         type: string
+
+concurrency:
+  group: policy-engine-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
