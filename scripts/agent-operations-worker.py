@@ -217,14 +217,23 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
         if task.get("assigned_to"):
             continue
         agent_id = choose_agent(task)
+        task["assigned_to"] = [agent_id]
+        task["assignment_updated_at"] = utc_now()
         valid, reason = docs_preflight(agent_id, task)
         if not valid:
             command = docs_read_command(agent_id, task)
+            task["execution_phase"] = "docs_preflight"
+            assigned.append({
+                "id": task.get("id") or task.get("task_id"),
+                "title": task.get("title"),
+                "agent_id": agent_id,
+                "phase": "docs_preflight",
+            })
             set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {task.get('title', task_id_for(task))}")
             push_step(
                 runtime_state,
                 agent_id,
-                f"Tarefa não atribuída ainda: {reason}. Ler docs antes de alterar: {command}",
+                f"Tarefa atribuída; mutações aguardam o preflight obrigatório: {reason}. Próximo passo: {command}",
                 kind="docs-preflight-required",
                 extra={"task_id": task_id_for(task), "command": command},
             )
@@ -234,10 +243,15 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
                 next_action=command,
                 evidence=reason,
             )
+            changed = True
             continue
-        task["assigned_to"] = [agent_id]
-        task["assignment_updated_at"] = utc_now()
-        assigned.append({"id": task.get("id") or task.get("task_id"), "title": task.get("title"), "agent_id": agent_id})
+        task["execution_phase"] = "execution"
+        assigned.append({
+            "id": task.get("id") or task.get("task_id"),
+            "title": task.get("title"),
+            "agent_id": agent_id,
+            "phase": "execution",
+        })
         push_step(
             runtime_state,
             agent_id,
