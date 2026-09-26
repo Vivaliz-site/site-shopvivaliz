@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKER = "TASK_CONTINUITY_ENFORCEMENT_V3"
 CODEX_MARKER = "CODEX_LAST_RESORT_V1"
 RESUME_ORDER_MARKER = "CHATGPT_RESUME_ORDER_V5"
-RESUME_ORDER_POLICY = "chatgpt_common_then_work_then_cli"
+RESUME_ORDER_POLICY = "chatgpt_common_then_work_then_cli"\nDETACHED_MARKER = "DETACHED_CONTINUATION_EXECUTOR_V6"
 NORMATIVE = (
     ROOT / "AGENTS.md",
     ROOT / "AI-TO-CLI-PROTOCOL.md",
@@ -37,7 +37,7 @@ WATCHDOG = ROOT / "scripts" / "task_continuation_watchdog.py"
 TEST = ROOT / "tests" / "test_task_continuity_enforcement.py"
 WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
-FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
+FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"\nDISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"\nDISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"\nLOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
 
 errors: list[str] = []
 for path in NORMATIVE:
@@ -69,7 +69,7 @@ else:
         "chatgpt_work",
         "cli_last",
         "agent_task_state.py progress",
-        "exit 75",
+        "exit 75",\n        "SHOPVIVALIZ_RESUME_RESULT_MODE",\n        "task_state_signature",\n        "task_state_advanced",
     ):
         if token not in fallback_text:
             errors.append(f"scripts/autonomous-provider-failover.sh: missing {token}")
@@ -124,6 +124,40 @@ else:
         if token not in worker_text:
             errors.append(f"scripts/agent-operations-worker.py: missing {token}")
 
+if not DISPATCHER.is_file():
+    errors.append("missing scripts/task_resume_dispatcher.py")
+else:
+    dispatcher_text = DISPATCHER.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "_resume-executions.jsonl",
+        "SHOPVIVALIZ_RESUME_RESULT_MODE",
+        "task_state",
+        "cli_last",
+        "max_requests",
+    ):
+        if token not in dispatcher_text:
+            errors.append(f"scripts/task_resume_dispatcher.py: missing {token}")
+
+if not DISPATCHER_TEST.is_file():
+    errors.append("missing tests/test_task_resume_dispatcher.py")
+
+continuity_docs = ROOT / "docs" / "knowledge" / "task-continuity.md"
+if not continuity_docs.is_file() or DETACHED_MARKER not in continuity_docs.read_text(encoding="utf-8", errors="replace"):
+    errors.append(f"docs/knowledge/task-continuity.md: missing {DETACHED_MARKER}")
+
+if not LOOP.is_file():
+    errors.append("missing scripts/autonomous-agent-loop.sh")
+else:
+    loop_text = LOOP.read_text(encoding="utf-8", errors="replace")
+    try:
+        watchdog_pos = loop_text.index("task_continuation_watchdog.py")
+        dispatcher_pos = loop_text.index("task_resume_dispatcher.py")
+        worker_pos = loop_text.index("agent-operations-worker.py")
+        if not (watchdog_pos < dispatcher_pos < worker_pos):
+            errors.append("autonomous loop must run watchdog -> dispatcher -> worker")
+    except ValueError:
+        errors.append("autonomous loop missing continuity execution stages")
+
 if not TEST.is_file():
     errors.append("missing tests/test_task_continuity_enforcement.py")
 if not WATCHDOG_TEST.is_file():
@@ -139,6 +173,8 @@ else:
         errors.append("repository governance does not execute task-continuity regression tests")
     if "tests.test_task_continuation_watchdog" not in governance:
         errors.append("repository governance does not execute auto-resume regression tests")
+    if "tests.test_task_resume_dispatcher" not in governance:
+        errors.append("repository governance does not execute detached-resume regression tests")
 
 if errors:
     print("TASK CONTINUITY ENFORCEMENT: FAIL", file=sys.stderr)
