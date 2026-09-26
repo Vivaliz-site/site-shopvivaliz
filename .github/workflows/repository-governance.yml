@@ -19,9 +19,6 @@ on:
 permissions:
   contents: read
 
-env:
-  GITHUB_TOKEN: ${{ github.token }}
-
 concurrency:
   group: repository-governance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -84,24 +81,7 @@ jobs:
             test "$head" = "$REPLAY_HEAD_SHA"
             PR_CONTEXT="true"
             base="$REPLAY_BASE_SHA"
-          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
-            base="$PUSH_BEFORE_SHA"
-          elif git cat-file -e origin/main^{commit} 2>/dev/null; then
-            base="$(git merge-base HEAD origin/main)"
-          else
-            base="$(git rev-parse HEAD^)"
-          fi
-
-          git cat-file -e "${base}^{commit}"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "pr_context=$PR_CONTEXT" >> "$GITHUB_OUTPUT"
-          {
-            echo "base=$base"
-            echo "head=$head"
-            echo "pr_context=$PR_CONTEXT"
-          } >> artifacts/repository-governance/run-context.txt
-
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+
       - name: Compile governance and canonical entrypoints
         run: |
           python -m py_compile \
