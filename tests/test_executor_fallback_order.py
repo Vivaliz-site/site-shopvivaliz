@@ -8,8 +8,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
     def test_codex_is_last_provider_in_finite_failover(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("ORDER=(gemini anthropic codex)", script)
-        self.assertLess(script.index("gemini)"), script.index("anthropic)"))
-        self.assertLess(script.index("anthropic)"), script.index("codex)"))
+        self.assertLess(script.index("\n    gemini)"), script.index("\n    anthropic)"))
+        self.assertLess(script.index("anthropic)"), script.index("\n    codex)"))
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
