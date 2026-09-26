@@ -186,8 +186,11 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
-- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl` e não é
-  repetido automaticamente, evitando loop pago. A tarefa continua `RUNNING`.
+- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; como
+  o recovery de background não usa IA paga, o mesmo checkpoint pode ser tentado
+  novamente após cooldown (900 s padrão, configurável por
+  `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
+  ciclo. A tarefa continua `RUNNING` até progresso real ou terminal válido.
 - Nenhuma saída de provider, prompt ou segredo é publicada no ledger; somente
   metadados de execução e resultado.
 <!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
