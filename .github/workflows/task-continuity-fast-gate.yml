@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - 'scripts/agent_task_state.py'
-      - 'scripts/agent-operations-worker.py'
+      - 'scripts/agent-operations-worker.py'\n      - 'scripts/task_resume_dispatcher.py'
       - 'scripts/validate-task-continuity-enforcement.py'
-      - 'tests/test_task_continuity_enforcement.py'
+      - 'tests/test_task_continuity_enforcement.py'\n      - 'tests/test_task_resume_dispatcher.py'
       - 'tests/test_ci_feedback_optimization.py'
       - 'tests/test_pr_gate_scope.py'
       - 'tests/test_executor_fallback_order.py'
@@ -51,8 +51,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
       - name: Compile continuity runtime
-        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/validate-task-continuity-enforcement.py
+        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/validate-task-continuity-enforcement.py
       - name: Run focused continuity regression
-        run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order -v
+        run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order -v
       - name: Validate continuity policy
         run: python3 scripts/validate-task-continuity-enforcement.py
