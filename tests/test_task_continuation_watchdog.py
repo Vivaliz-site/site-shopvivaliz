@@ -195,6 +195,10 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertIn("ChatGPT Work", docs)
         self.assertIn("CLI", docs)
 
+        validator = (root / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("CHATGPT_RESUME_ORDER_V5", validator)
+        self.assertIn("chatgpt_common_then_work_then_cli", validator)
+
     def test_operations_worker_ignores_superseded_resume_request(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
