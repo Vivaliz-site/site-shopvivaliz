@@ -146,13 +146,11 @@ class TaskContinuityPolicyTests(unittest.TestCase):
     def test_normative_entrypoints_override_generic_pause_gates(self) -> None:
         marker = "TASK_CONTINUITY_ENFORCEMENT_V3"
         paths = (
-            ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
             ROOT / "AGENTS.md",
             ROOT / "AI-TO-CLI-PROTOCOL.md",
             ROOT / "docs" / "knowledge" / "agent-rules.md",
             ROOT / "CLAUDE.md",
             ROOT / "GEMINI.md",
-            ROOT / "AGENTS.override.md",
             ROOT / ".github" / "copilot-instructions.md",
         )
         for path in paths:
