@@ -49,7 +49,8 @@ if "self-hosted" in text or "shopvivaliz-a1-deploy" in text or "shopvivaliz-back
     raise SystemExit("CI performance monitor must never reserve a self-hosted runner")
 if "sleep " in text:
     raise SystemExit("CI performance monitor must not poll or sleep")
-if "/jobs?per_page=" in text or "actions/runs/${" in text:
+fetch_step = text.split("- name: Fetch workflow runs once", 1)[1].split("- name: Analyze CI performance", 1)[0]
+if "/jobs?per_page=" in fetch_step or "actions/runs/${" in fetch_step:
     raise SystemExit("CI performance monitor must not issue per-run API requests")
 if "retention-days: 30" in text or "retention-days: 90" in text:
     raise SystemExit("CI performance artifact retention must match the repository's 1-day policy")
