@@ -7,7 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MARKER = "TASK_CONTINUITY_ENFORCEMENT_V3"
 CODEX_MARKER = "CODEX_LAST_RESORT_V1"
 RESUME_ORDER_MARKER = "CHATGPT_RESUME_ORDER_V5"
-RESUME_ORDER_POLICY = "chatgpt_common_then_work_then_cli"\nDETACHED_MARKER = "DETACHED_CONTINUATION_EXECUTOR_V6"
+RESUME_ORDER_POLICY = "chatgpt_common_then_work_then_cli"
+DETACHED_MARKER = "DETACHED_CONTINUATION_EXECUTOR_V6"
 NORMATIVE = (
     ROOT / "AGENTS.md",
     ROOT / "AI-TO-CLI-PROTOCOL.md",
@@ -37,7 +38,10 @@ WATCHDOG = ROOT / "scripts" / "task_continuation_watchdog.py"
 TEST = ROOT / "tests" / "test_task_continuity_enforcement.py"
 WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
-FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"\nDISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"\nDISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"\nLOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
+FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
+DISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"
+DISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"
+LOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
 
 errors: list[str] = []
 for path in NORMATIVE:
@@ -69,7 +73,10 @@ else:
         "chatgpt_work",
         "cli_last",
         "agent_task_state.py progress",
-        "exit 75",\n        "SHOPVIVALIZ_RESUME_RESULT_MODE",\n        "task_state_signature",\n        "task_state_advanced",
+        "exit 75",
+        "SHOPVIVALIZ_RESUME_RESULT_MODE",
+        "task_state_signature",
+        "task_state_advanced",
     ):
         if token not in fallback_text:
             errors.append(f"scripts/autonomous-provider-failover.sh: missing {token}")
