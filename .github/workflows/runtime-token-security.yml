@@ -1,6 +1,10 @@
 name: Runtime Token Security Audit
 
 on:
+  workflow_run:
+    workflows: [Master Production Pipeline 24/7]
+    types: [completed]
+    branches: [main]
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
@@ -29,40 +33,90 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preflight:
+  production-evidence-gate:
+    name: Route runtime audit without deploy polling
     runs-on: ubuntu-latest
+    timeout-minutes: 4
     outputs:
-      expected_sha: ${{ steps.production_impact.outputs.expected_sha }}
+      should_run: ${{ steps.route.outputs.should_run }}
     steps:
-      - name: Checkout push revision for production impact
+      - name: Checkout push revision only for production-impact classification
         if: ${{ github.event_name == 'push' }}
         uses: actions/checkout@v6
         with:
           fetch-depth: 2
           persist-credentials: false
-      - name: Classify production impact
-        id: production_impact
+
+      - name: Route direct or post-deploy audit
+        id: route
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEPLOY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -Eeuo pipefail
-          expected_sha=''
-          if [[ "${{ github.event_name }}" == 'push' ]]; then
-            git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
-            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
-            [[ "$should_deploy" == 'true' ]] && expected_sha="$GITHUB_SHA"
-          fi
-          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
 
-  await-release:
-    needs: preflight
-    uses: ./.github/workflows/production-release-await.yml
-    with:
-      expected_sha: ${{ needs.preflight.outputs.expected_sha }}
-      attempts: 30
-      sleep_seconds: 20
+          if [[ "$EVENT_NAME" == 'schedule' || "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "direct_runtime_audit=true"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == 'push' ]]; then
+            git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/runtime-token-production-impact.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/runtime-token-production-impact.txt)"
+            if [[ "$should_deploy" == 'true' ]]; then
+              echo "defer_to_post_deploy_event=true"
+              exit 0
+            fi
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "nondeploy_push_audit_now=true"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" != 'workflow_run' || "$DEPLOY_CONCLUSION" != 'success' ]]; then
+            echo "deploy_workflow_not_success=true"
+            exit 0
+          fi
+
+          evidence_file="$(mktemp)"
+          trap 'rm -f "$evidence_file"' EXIT
+          if ! gh api -H 'Accept: application/vnd.github.raw+json'             "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence"             > "$evidence_file"; then
+            echo "deployment_evidence_unavailable=true"
+            exit 0
+          fi
+
+          read -r deployed_sha status validate deploy smoke < <(python3 - "$evidence_file" <<'PY'
+          import json, re, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          jobs=data.get('jobs') or {}
+          sha=str(data.get('sha','')).lower()
+          if not re.fullmatch(r'[0-9a-f]{40}', sha):
+              sha=''
+          print(
+              sha,
+              str(data.get('status','')),
+              str(jobs.get('validate','')),
+              str(jobs.get('deploy','')),
+              str(jobs.get('smoke_test','')),
+          )
+          PY
+          )
+
+          expected_sha="${DEPLOY_HEAD_SHA,,}"
+          if [[ "$status" == 'PRODUCTION_UPDATED'              && "$validate" == 'success'              && "$deploy" == 'success'              && "$smoke" == 'success'              && -n "$expected_sha"              && "$deployed_sha" == "$expected_sha" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "post_deploy_runtime_audit=true"
+          else
+            echo "stale_or_nondeploy_event=true expected=${expected_sha:-none} deployed=${deployed_sha:-none}"
+          fi
 
   audit:
-    needs: await-release
+    needs: production-evidence-gate
+    if: ${{ needs.production-evidence-gate.outputs.should_run == 'true' }}
     name: Audit production runtime credentials
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
