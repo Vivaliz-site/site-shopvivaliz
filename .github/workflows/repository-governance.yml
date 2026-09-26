@@ -152,6 +152,7 @@ jobs:
             -v
           python tests/test_production_deploy_event_gate.py
           python tests/test_ecommerce_excellence_deploy_wait_retry.py
+          python tests/test_ai_stale_pr_repair_cache.py
           php tests/nondeploy-release-wait-cost-guard-test.php
 
       - name: Enforce Absolute Audit V5 bridge
