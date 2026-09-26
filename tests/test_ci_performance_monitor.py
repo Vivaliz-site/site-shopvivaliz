@@ -122,6 +122,24 @@ class CiPerformanceMonitorTest(unittest.TestCase):
         self.assertEqual(report["workflows"][0]["average_duration_seconds"], 300.0)
         self.assertEqual(report["workflows"][0]["failure_rate"], 0.5)
 
+    def test_in_progress_run_does_not_contribute_partial_duration(self) -> None:
+        active = run(4, "Fast Gate", "", end="2026-09-26T10:10:00Z")
+        active["status"] = "in_progress"
+        active["conclusion"] = None
+        payload = {"workflow_runs": [
+            run(1, "Fast Gate", "success"),
+            run(2, "Fast Gate", "success"),
+            run(3, "Fast Gate", "success"),
+            active,
+        ]}
+        report = self.analyze(payload)
+        row = report["workflows"][0]
+        self.assertEqual(row["total_runs"], 4)
+        self.assertEqual(row["terminal_runs"], 3)
+        self.assertEqual(row["duration_samples"], 3)
+        self.assertEqual(row["average_duration_seconds"], 60.0)
+        self.assertFalse(report["regression"])
+
     def test_missing_timestamps_do_not_corrupt_duration_metrics(self) -> None:
         first = run(1, "Partial Time", "success")
         second = run(2, "Partial Time", "success")
