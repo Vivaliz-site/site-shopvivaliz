@@ -15,6 +15,17 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("target_pr_count", text)
         self.assertIn("stale_gate_event", text)
 
+    def test_scheduled_finalizer_never_reserves_self_hosted_runner_for_repo_wide_sweep(self) -> None:
+        text = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        gate = text.split("  enforce:", 1)[0]
+        self.assertIn("GITHUB_EVENT_NAME", gate)
+        self.assertIn("schedule_no_self_hosted_sweep=true", gate)
+        self.assertIn("if [[ \"$GITHUB_EVENT_NAME\" == 'schedule' ]]", gate)
+        enforce = text.split("  enforce:", 1)[1]
+        self.assertIn("GITHUB_EVENT_NAME", enforce)
+        self.assertIn("workflow_dispatch", enforce)
+        self.assertNotIn("pulls?state=open&base=main", enforce.split("workflow_dispatch", 1)[0])
+
     def test_completion_enforcer_keeps_fanout_wait_on_hosted_runner(self) -> None:
         text = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
         hosted = text.split("  enforce:", 1)[0]
