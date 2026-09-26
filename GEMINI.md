@@ -24,3 +24,8 @@ Em qualquer Auditoria Extrema, leia primeiro `AUDIT_POLICY.md` e todo o conjunto
 - Quando o runtime tiver acesso ao repositório, persistir o estado em `scripts/agent_task_state.py`; antes de alegar término, o gate `terminal --task <id>` deve aceitar o estado.
 - Contrato detalhado: `docs/knowledge/task-continuity.md`.
 <!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+Preservar a cota do Codex. Para continuidade de tarefas, priorizar rotas determinísticas/controle remoto auditável e executores alternativos autenticados adequados ao trabalho; usar Codex somente como último recurso finito. Falta de cota, rate limit ou indisponibilidade do Codex mantém a tarefa `RUNNING` e nunca constitui, isoladamente, `BLOCKED_EXTERNAL`.
+<!-- /CODEX_LAST_RESORT_V1 -->
