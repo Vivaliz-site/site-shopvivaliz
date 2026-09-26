@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 PROMPT_FILE="${1:?prompt file required}"
 SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
-SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
+SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"\nSHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -43,7 +43,24 @@ persist_running_checkpoint() {
 try_provider() {
   local provider="$1"
   shift
+  local before_state="" after_state=""
+  if [ "$SHOPVIVALIZ_RESUME_RESULT_MODE" = "task_state" ]; then
+    before_state="$(task_state_signature || true)"
+  fi
   if "$@" >> "$OUTPUT" 2>&1; then code=0; else code=$?; fi
+
+  if [ "$SHOPVIVALIZ_RESUME_RESULT_MODE" = "task_state" ]; then
+    after_state="$(task_state_signature || true)"
+    if [ -n "$before_state" ] && [ -n "$after_state" ] && [ "$after_state" != "$before_state" ]; then
+      record "$provider" "task_state_advanced" "$code"
+      echo "Provider $provider avançou o checkpoint durável."
+      return 0
+    fi
+    record "$provider" "no_task_state_progress" "$code"
+    cleanup_attempt
+    return 1
+  fi
+
   if has_change; then
     record "$provider" "change_produced" "$code"
     echo "Provider $provider produziu alteração auditável."
@@ -59,7 +76,9 @@ PROMPT="$(cat "$PROMPT_FILE")"
 # CHATGPT_RESUME_ORDER_V5: CLI is the final fallback only.
 if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
   echo "CLI bloqueada: ordem obrigatoria = chatgpt_common -> chatgpt_work -> cli_last." | tee -a "$OUTPUT"
-  persist_running_checkpoint
+  if [ "$SHOPVIVALIZ_RESUME_RESULT_MODE" != "task_state" ]; then
+    persist_running_checkpoint
+  fi
   exit 75
 fi
 
@@ -87,9 +106,11 @@ for provider in "${ORDER[@]}"; do
   esac
 done
 
-echo "Nenhum executor produziu mudança real; preservar checkpoint RUNNING para retomada." | tee -a "$OUTPUT"
+echo "Nenhum executor produziu progresso durável; preservar checkpoint RUNNING para retomada." | tee -a "$OUTPUT"
 if [ -n "$SHOPVIVALIZ_TASK_ID" ]; then
-  persist_running_checkpoint
+  if [ "$SHOPVIVALIZ_RESUME_RESULT_MODE" != "task_state" ]; then
+    persist_running_checkpoint
+  fi
   exit 75
 fi
 exit 0
