@@ -165,6 +165,40 @@ async function connect(){
   return {ws,send,networkTrace,evalv:async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value};
 }
 
+
+async function findReplyControl(evalv){
+  return await evalv(`(()=>{
+    const norm=value=>String(value||'').replace(/\\s+/g,' ').trim();
+    const nodes=[];const stack=[document];const seen=new Set();
+    while(stack.length){
+      const root=stack.pop();
+      if(!root||seen.has(root))continue;
+      seen.add(root);
+      for(const el of root.children||[]){
+        nodes.push(el);
+        stack.push(el);
+        if(el.shadowRoot)stack.push(el.shadowRoot);
+      }
+    }
+    const metas=[];
+    for(const h of nodes){
+      if(!h||!['KAT-BUTTON','BUTTON'].includes(h.tagName))continue;
+      const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;
+      if(!b)continue;
+      const r=b.getBoundingClientRect?.();
+      if(!r||r.width<=0||r.height<=0)continue;
+      const labels=[h.getAttribute?.('label'),h.getAttribute?.('aria-label'),h.getAttribute?.('title'),h.innerText,b.getAttribute?.('aria-label'),b.getAttribute?.('title'),b.innerText].map(norm).filter(Boolean);
+      const disabled=Boolean(h.disabled||h.hasAttribute?.('disabled')||b.disabled);
+      metas.push({h,b,r,labels,disabled});
+    }
+    const chosen=metas.find(meta=>!meta.disabled&&meta.labels.some(label=>/^(reply|responder)$/i.test(label)));
+    const candidates=metas.slice(0,30).map(meta=>({tag:meta.h.tagName,labels:[...new Set(meta.labels)].slice(0,5).map(value=>value.slice(0,80)),disabled:meta.disabled}));
+    if(!chosen)return{rect:null,candidates};
+    const b=chosen.b;b.scrollIntoView({block:'center',inline:'nearest'});const r=b.getBoundingClientRect();
+    return{rect:{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight,label:chosen.labels[0]||'Reply'},candidates};
+  })()`);
+}
+
 async function run(){
   const {ws,send,evalv,networkTrace}=await connect();
   await send('Network.enable');
@@ -212,8 +246,11 @@ async function run(){
 
       let emailTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\\\"Email\\\"]'))"));
       if(!emailTabPresent){
-        const replyRect=await evalv("(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(!b||b.disabled)continue;b.scrollIntoView({block:'center',inline:'nearest'});const r=b.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight}}return null})()");
-        if(!(await trustedClick(replyRect)))throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+        const replyProbe=await findReplyControl(evalv);
+        if(!(await trustedClick(replyProbe?.rect||null))){
+          console.log('REPLY_CONTROL_CANDIDATES='+JSON.stringify(replyProbe?.candidates||[]));
+          throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+        }
         for(let attempt=0;attempt<20;attempt++){await sleep(250);emailTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\\\"Email\\\"]'))"));if(emailTabPresent)break}
       }
       if(!emailTabPresent)throw new Error(item.caseId+':EMAIL_TAB_MISSING');
@@ -288,8 +325,11 @@ async function run(){
 
     let chatTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\"Chat\"]'))"));
     if(!chatTabPresent){
-      const replyRect=await evalv("(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(!b||b.disabled)continue;b.scrollIntoView({block:'center',inline:'nearest'});const r=b.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,vw:innerWidth,vh:innerHeight}}return null})()");
-      if(!(await trustedClick(replyRect)))throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+      const replyProbe=await findReplyControl(evalv);
+      if(!(await trustedClick(replyProbe?.rect||null))){
+        console.log('REPLY_CONTROL_CANDIDATES='+JSON.stringify(replyProbe?.candidates||[]));
+        throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+      }
       for(let attempt=0;attempt<20;attempt++){await sleep(250);chatTabPresent=Boolean(await evalv("Boolean(document.querySelector('kat-tab[tab-id=\"Chat\"]'))"));if(chatTabPresent)break}
     }
     if(!chatTabPresent)throw new Error(item.caseId+':CHAT_TAB_MISSING');
