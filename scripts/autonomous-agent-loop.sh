@@ -47,6 +47,13 @@ shutdown_requested=0
 trap 'shutdown_requested=1; log "Shutdown signal received; finishing current cycle."' INT TERM
 
 run_cycle() {
+  # Re-resolve the mutable current symlink every cycle. A long-lived systemd
+  # process must not remain pinned to the release that was active at startup.
+  if ! cd "$PROJECT_DIR"; then
+    log "ERROR project dir unavailable during cycle: $PROJECT_DIR"
+    return 1
+  fi
+
   log "Cycle started."
   printf '[%s] %s\n' "$(ts)" "Cycle started." >> "$EXECUTION_LOG_FILE"
   log "Governance active: no price changes, no campaign publishing, no budget increases, no deploys, no financial actions."
