@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 PROMPT_FILE="${1:?prompt file required}"
 SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
+SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -55,8 +56,16 @@ try_provider() {
 
 PROMPT="$(cat "$PROMPT_FILE")"
 
-# Ordem de preservacao de cota: Gemini -> Claude -> Codex.
-# Codex e reserva de ultima opcao para tarefas finitas explicitamente autorizadas.
+# CHATGPT_RESUME_ORDER_V5: CLI is the final fallback only.
+if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
+  echo "CLI bloqueada: ordem obrigatoria = chatgpt_common -> chatgpt_work -> cli_last." | tee -a "$OUTPUT"
+  persist_running_checkpoint
+  exit 75
+fi
+
+# Esta e a terceira camada (CLI) da politica de retomada.
+# Dentro da CLI, preservar cota: Gemini -> Claude -> Codex.
+# Codex continua sendo a ultima opcao dentro da ultima camada.
 ORDER=(gemini anthropic codex)
 
 for provider in "${ORDER[@]}"; do
