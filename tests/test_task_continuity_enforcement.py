@@ -172,5 +172,18 @@ class TaskContinuityPolicyTests(unittest.TestCase):
         self.assertIn("next_action=", worker)
 
 
+    def test_pr_feedback_workflows_cancel_superseded_runs(self) -> None:
+        workflows = (
+            ROOT / ".github" / "workflows" / "mandatory-validation-gate.yml",
+            ROOT / ".github" / "workflows" / "history-integrity.yml",
+            ROOT / ".github" / "workflows" / "agents-hourly-deep-audit.yml",
+        )
+        for workflow in workflows:
+            text = workflow.read_text(encoding="utf-8")
+            self.assertIn("concurrency:", text, str(workflow))
+            self.assertIn("cancel-in-progress: true", text, str(workflow))
+
+
+
 if __name__ == "__main__":
     unittest.main()
