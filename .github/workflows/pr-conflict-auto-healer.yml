@@ -16,7 +16,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  conflict-preflight:
+    name: Select PRs that actually need conflict healing
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      should_heal: ${{ steps.select.outputs.should_heal }}
+      target_prs: ${{ steps.select.outputs.target_prs }}
+    steps:
+      - name: Filter mergeable PRs before reserving Oracle
+        id: select
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$EVENT_NAME" == 'pull_request_target' && -n "${EVENT_PR:-}" ]]; then
+            candidates=("$EVENT_PR")
+          else
+            mapfile -t candidates < <(
+              gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
+                --jq '.[] | select(.draft == false) | .number'
+            )
+          fi
+
+          selected=()
+          for pr in "${candidates[@]}"; do
+            meta="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}")"
+            state="$(jq -r '.state' <<<"$meta")"
+            draft="$(jq -r '.draft' <<<"$meta")"
+            head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
+            base_ref="$(jq -r '.base.ref' <<<"$meta")"
+            mergeable="$(jq -r '.mergeable' <<<"$meta")"
+
+            if [[ "$state" != 'open' || "$draft" == 'true' || "$head_repo" != "$GITHUB_REPOSITORY" || "$base_ref" != 'main' ]]; then
+              echo "pr_${pr}_preflight_ineligible=true"
+              continue
+            fi
+
+            if [[ "$mergeable" == 'true' ]]; then
+              echo "pr_${pr}_already_mergeable=true"
+              continue
+            fi
+
+            # mergeable=false means a real conflict. null/unknown is handled
+            # conservatively by the Oracle healer so correctness never depends
+            # on GitHub having finished its mergeability calculation.
+            selected+=("$pr")
+            echo "pr_${pr}_conflict_candidate=true mergeable=${mergeable}"
+          done
+
+          target_prs="$(IFS=,; echo "${selected[*]}")"
+          echo "target_prs=$target_prs" >> "$GITHUB_OUTPUT"
+          if [[ "${#selected[@]}" -gt 0 ]]; then
+            echo 'should_heal=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'should_heal=false' >> "$GITHUB_OUTPUT"
+          fi
+          echo "candidate_pr_count=${#candidates[@]}"
+          echo "heal_candidate_count=${#selected[@]}"
+
   heal:
+    needs: conflict-preflight
+    if: ${{ needs.conflict-preflight.outputs.should_heal == 'true' }}
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 30
@@ -25,6 +89,7 @@ jobs:
       VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
+      TARGET_PRS: ${{ needs.conflict-preflight.outputs.target_prs }}
 
     steps:
       - name: Checkout trusted healer from main
@@ -103,15 +168,7 @@ jobs:
           REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
-            prs=("${{ github.event.pull_request.number }}")
-          else
-            mapfile -t prs < <(
-              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
-                --jq '.[] | select(.draft == false) | .number'
-            )
-          fi
-
+          IFS=',' read -r -a prs <<< "${TARGET_PRS}"
           echo "candidate_pr_count=${#prs[@]}"
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
