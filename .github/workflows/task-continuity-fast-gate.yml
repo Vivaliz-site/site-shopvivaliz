@@ -4,9 +4,11 @@ on:
   pull_request:
     paths:
       - 'scripts/agent_task_state.py'
-      - 'scripts/agent-operations-worker.py'\n      - 'scripts/task_resume_dispatcher.py'
+      - 'scripts/agent-operations-worker.py'
+      - 'scripts/task_resume_dispatcher.py'
       - 'scripts/validate-task-continuity-enforcement.py'
-      - 'tests/test_task_continuity_enforcement.py'\n      - 'tests/test_task_resume_dispatcher.py'
+      - 'tests/test_task_continuity_enforcement.py'
+      - 'tests/test_task_resume_dispatcher.py'
       - 'tests/test_ci_feedback_optimization.py'
       - 'tests/test_pr_gate_scope.py'
       - 'tests/test_executor_fallback_order.py'
