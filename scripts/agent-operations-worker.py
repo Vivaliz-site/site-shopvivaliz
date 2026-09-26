@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_docs_gate import verify_receipt
+from agent_task_state import TaskStateError, is_terminal, load_task, record_progress, start_task
 from task_queue_lib import load_queue, save_queue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,6 +153,28 @@ def task_scope_docs(task: dict[str, Any]) -> list[str]:
     return [str(item).strip() for item in raw if str(item).strip()]
 
 
+def persist_task_continuity(
+    agent_id: str,
+    task: dict[str, Any],
+    *,
+    next_action: str,
+    evidence: str | None = None,
+) -> None:
+    """Persist a non-terminal next action so progress cannot look like completion."""
+    task_id = task_id_for(task)
+    action = str(next_action).strip()
+    if not task_id or not action:
+        return
+    goal = str(task.get("title") or task.get("description") or task_id).strip()
+    try:
+        current = load_task(task_id)
+    except TaskStateError:
+        current = start_task(task_id, goal, agent_id)
+    if is_terminal(current):
+        return
+    record_progress(task_id, next_action=action, evidence=evidence)
+
+
 def docs_preflight(agent_id: str, task: dict[str, Any]) -> tuple[bool, str]:
     task_id = task_id_for(task)
     if not task_id:
@@ -194,27 +217,53 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
         if task.get("assigned_to"):
             continue
         agent_id = choose_agent(task)
+        task["assigned_to"] = [agent_id]
+        task["assignment_updated_at"] = utc_now()
         valid, reason = docs_preflight(agent_id, task)
         if not valid:
             command = docs_read_command(agent_id, task)
+            task["execution_phase"] = "docs_preflight"
+            assigned.append({
+                "id": task.get("id") or task.get("task_id"),
+                "title": task.get("title"),
+                "agent_id": agent_id,
+                "phase": "docs_preflight",
+            })
             set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {task.get('title', task_id_for(task))}")
             push_step(
                 runtime_state,
                 agent_id,
-                f"Tarefa não atribuída ainda: {reason}. Ler docs antes de alterar: {command}",
+                f"Tarefa atribuída; mutações aguardam o preflight obrigatório: {reason}. Próximo passo: {command}",
                 kind="docs-preflight-required",
                 extra={"task_id": task_id_for(task), "command": command},
             )
+            persist_task_continuity(
+                agent_id,
+                task,
+                next_action=command,
+                evidence=reason,
+            )
+            changed = True
             continue
-        task["assigned_to"] = [agent_id]
-        task["assignment_updated_at"] = utc_now()
-        assigned.append({"id": task.get("id") or task.get("task_id"), "title": task.get("title"), "agent_id": agent_id})
+        task["execution_phase"] = "execution"
+        assigned.append({
+            "id": task.get("id") or task.get("task_id"),
+            "title": task.get("title"),
+            "agent_id": agent_id,
+            "phase": "execution",
+        })
         push_step(
             runtime_state,
             agent_id,
             f"Preflight de documentação confirmado; assumindo a tarefa '{task.get('title')}'",
             kind="assignment",
             extra={"task_id": task_id_for(task)},
+        )
+        persist_task_continuity(
+            agent_id,
+            task,
+            next_action="ler o contexto completo da tarefa e executar a primeira ação segura",
+            evidence="docs preflight verified",
         )
         changed = True
     if changed:
@@ -252,6 +301,7 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
             valid, reason = docs_preflight(agent_id, current_task)
             if not valid:
                 command = docs_read_command(agent_id, current_task)
+                persist_task_continuity(agent_id, current_task, next_action=command, evidence=f"docs preflight pending during execution: {reason}")
                 set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {focus}")
                 push_step(
                     runtime_state,
@@ -260,7 +310,14 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
                     kind="docs-preflight-required",
                     extra={"task_id": task_id_for(current_task), "command": command},
                 )
+                persist_task_continuity(
+                    agent_id,
+                    current_task,
+                    next_action=command,
+                    evidence=reason,
+                )
                 continue
+            persist_task_continuity(agent_id, current_task, next_action=f"executar e verificar: {validation_command_for(agent_id, focus)}", evidence="docs preflight valid; execution continues")
             push_step(
                 runtime_state,
                 agent_id,
@@ -268,12 +325,19 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
                 kind="task-context",
                 extra={"task_id": task_id_for(current_task)},
             )
+            validation_command = validation_command_for(agent_id, focus)
             push_step(
                 runtime_state,
                 agent_id,
-                f"Executando comando de teste: {validation_command_for(agent_id, focus)}",
+                f"Executando comando de teste: {validation_command}",
                 kind="validation",
                 extra={"task_id": task_id_for(current_task)},
+            )
+            persist_task_continuity(
+                agent_id,
+                current_task,
+                next_action=f"executar e avaliar: {validation_command}",
+                evidence="task context loaded",
             )
         else:
             push_step(runtime_state, agent_id, "Sem tarefa atribuída agora; aguardando novas missões da auto-geração", kind="idle")
@@ -308,6 +372,12 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
         valid, reason = docs_preflight(agent_id, tasks[0])
         if not valid:
             read_command = docs_read_command(agent_id, tasks[0])
+            persist_task_continuity(
+                agent_id,
+                tasks[0],
+                next_action=read_command,
+                evidence=reason,
+            )
             return {
                 "agent": AGENTS[agent_id]["name"],
                 "agent_id": agent_id,
@@ -316,6 +386,13 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
                 "command_id": command.get("id"),
                 "status": "docs_preflight_required",
             }
+    if tasks:
+        persist_task_continuity(
+            agent_id,
+            tasks[0],
+            next_action="continuar executando a tarefa original após processar o comando recebido",
+            evidence="command acknowledged",
+        )
     return {
         "agent": AGENTS[agent_id]["name"],
         "agent_id": agent_id,

@@ -12,8 +12,11 @@ name: Inventario de testes (nao bloqueante)
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: test-inventory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

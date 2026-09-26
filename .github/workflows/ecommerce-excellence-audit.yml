@@ -2,6 +2,16 @@ name: Ecommerce Excellence Audit
 
 on:
   pull_request:
+    paths:
+      - 'api/**'
+      - 'admin/**'
+      - 'includes/**'
+      - 'scripts/ecommerce*'
+      - 'tests/test_ecommerce*'
+      - 'public/**'
+      - 'assets/**'
+      - '*.php'
+      - '.github/workflows/ecommerce-excellence-audit.yml'
   push:
     branches:
       - main
