@@ -21,6 +21,7 @@ class GateDispatch:
 
 
 GATES: dict[str, str] = {
+    "Mandatory Validation Gate": "mandatory-validation-gate.yml",
     "Quality Gate": "quality-gate.yml",
     "ShopVivaliz QA": "shopvivaliz-qa.yml",
     "Repository Governance": "repository-governance.yml",
