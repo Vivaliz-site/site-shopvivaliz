@@ -62,7 +62,7 @@ def build_dispatch_plan(
         raise ValueError(f"unsupported required gate: {gate}")
 
     inputs: dict[str, str] = {}
-    if gate == "Policy Engine":
+    if gate in {"Policy Engine", "Repository Governance"}:
         inputs = {"base_sha": base_sha, "head_sha": head_sha}
     elif gate == "Autonomy Boundary":
         inputs = {
