@@ -29,6 +29,12 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("RUNNING", policy)
         self.assertIn("BLOCKED_EXTERNAL", policy)
 
+    def test_finite_failover_persists_running_checkpoint_when_all_executors_fail(self) -> None:
+        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        self.assertIn("SHOPVIVALIZ_TASK_ID", script)
+        self.assertIn("agent_task_state.py progress", script)
+        self.assertIn("exit 75", script)
+
 
 if __name__ == "__main__":
     unittest.main()
