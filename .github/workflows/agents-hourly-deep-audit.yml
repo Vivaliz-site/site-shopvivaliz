@@ -19,20 +19,6 @@ on:
       - 'tasks-queue.json'
       - 'docs/MEMORIA-AGENTES.md'
       - 'docs/HISTORICO-AGENTES-*.md'
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/**'
-      - '.ai/**'
-      - 'agents/**'
-      - 'config/**'
-      - '.githooks/**'
-      - 'README.md'
-      - 'AUTONOMOUS_TRIO_GUIDE.md'
-      - 'tasks-queue.json'
-      - 'docs/MEMORIA-AGENTES.md'
-      - 'docs/HISTORICO-AGENTES-*.md'
-
 permissions:
   contents: read
 
