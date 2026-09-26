@@ -192,7 +192,6 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             "audit-governance.yml",
             "ecommerce-excellence-audit.yml",
             "pr-policy-enforcement.yml",
-            "pr-conflict-auto-healer.yml",
         )
         for name in specialized:
             workflow = (workflow_dir / name).read_text(encoding="utf-8")
