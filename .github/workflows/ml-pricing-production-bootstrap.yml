@@ -33,7 +33,7 @@ jobs:
           test -x "$current/ops/deploy/bootstrap-host.sh"
           echo "TARGET_OK release=$expected"
 
-      - name: Publish direct DNS for ACME
+      - name: Publish proxied production DNS
         id: dns
         shell: bash
         run: |
@@ -46,14 +46,14 @@ jobs:
           record_id="$(python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if len(r)==1 else "")' <<<"$records")"
           count="$(python3 -c 'import json,sys; print(len((json.load(sys.stdin).get("result") or [])))' <<<"$records")"
           test "$count" -le 1
-          payload="$(python3 -c 'import json,os; print(json.dumps({"type":"A","name":os.environ["PRICING_HOST"],"content":os.environ["ORIGIN_IP"],"ttl":1,"proxied":False}))')"
+          payload="$(python3 -c 'import json,os; print(json.dumps({"type":"A","name":os.environ["PRICING_HOST"],"content":os.environ["ORIGIN_IP"],"ttl":1,"proxied":True}))')"
           if test -z "$record_id"; then
             response="$(curl -fsS -X POST "${auth[@]}" --data "$payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records")"
             record_id="$(python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("success") is True; print(d["result"]["id"])' <<<"$response")"
             created=1
           else
             response="$(curl -fsS -X PATCH "${auth[@]}" --data "$payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id")"
-            python3 -c 'import json,sys; assert json.load(sys.stdin).get("success") is True' <<<"$response"
+            python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("success") is True and d["result"].get("proxied") is True' <<<"$response"
             created=0
           fi
           {
@@ -61,15 +61,15 @@ jobs:
             echo "record_id=$record_id"
             echo "created=$created"
           } >> "$GITHUB_OUTPUT"
-          echo "DNS_DIRECT_READY=1"
+          echo "DNS_PROXY_READY=1"
 
-      - name: Wait for direct DNS
+      - name: Wait for edge DNS
         shell: bash
         run: |
           set -Eeuo pipefail
           for _ in $(seq 1 40); do
             answer="$(curl -fsS -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=$PRICING_HOST&type=A")"
-            if python3 -c 'import json,sys,os; d=json.load(sys.stdin); raise SystemExit(0 if os.environ["ORIGIN_IP"] in [x.get("data") for x in d.get("Answer",[])] else 1)' <<<"$answer"; then
+            if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if (d.get("Answer") or []) else 1)' <<<"$answer"; then
               echo "DNS_PROPAGATED=1"
               exit 0
             fi
@@ -85,15 +85,28 @@ jobs:
           sudo -n /home/ubuntu/ml-pricing-api-deploy/current/ops/deploy/bootstrap-host.sh
           sudo -n apache2ctl configtest
           systemctl is-active --quiet apache2
-      - name: Obtain or renew origin certificate
+
+      - name: Obtain or renew origin certificate with DNS-01
         shell: bash
         run: |
           set -Eeuo pipefail
-          if ! command -v certbot >/dev/null 2>&1; then
+          if ! dpkg-query -W -f='${Status}' python3-certbot-dns-cloudflare 2>/dev/null | grep -q 'ok installed'; then
             sudo -n apt-get update
-            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot
+            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
           fi
-          sudo -n certbot certonly             --webroot -w /home/ubuntu/ml-pricing-api-deploy/current/public             -d "$PRICING_HOST"             --non-interactive --agree-tos --register-unsafely-without-email             --keep-until-expiring
+          cred="$RUNNER_TEMP/ml-pricing-cloudflare.ini"
+          umask 077
+          printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$cred"
+          trap 'rm -f "$cred"' EXIT
+          sudo -n certbot certonly \
+            --dns-cloudflare \
+            --dns-cloudflare-credentials "$cred" \
+            --dns-cloudflare-propagation-seconds 30 \
+            -d "$PRICING_HOST" \
+            --non-interactive --agree-tos --register-unsafely-without-email \
+            --keep-until-expiring
+          rm -f "$cred"
+          trap - EXIT
           sudo -n test -s "/etc/letsencrypt/live/$PRICING_HOST/fullchain.pem"
           echo "CERTIFICATE_READY=1"
 
