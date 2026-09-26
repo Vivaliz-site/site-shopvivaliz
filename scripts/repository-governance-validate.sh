@@ -21,7 +21,7 @@ python3 -m unittest tests.test_executor_fallback_order -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
-python3 -m unittest tests.test_workflow_latency_budget -v
+python3 -m unittest tests.test_workflow_latency_budget -v\npython3 -m unittest tests.test_ci_performance_monitor -v
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
