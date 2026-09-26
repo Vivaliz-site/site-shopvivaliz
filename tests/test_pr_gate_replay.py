@@ -24,6 +24,7 @@ class PrGateReplayTest(unittest.TestCase):
         self.assertEqual(
             list(GATES),
             [
+                "Mandatory Validation Gate",
                 "Quality Gate",
                 "ShopVivaliz QA",
                 "Repository Governance",
@@ -55,6 +56,29 @@ class PrGateReplayTest(unittest.TestCase):
             dict(governance.inputs),
             {"base_sha": "a" * 40, "head_sha": "b" * 40},
         )
+
+        mandatory = build_command("Mandatory Validation Gate", **self.common)
+        self.assertEqual(
+            mandatory,
+            [
+                "gh",
+                "workflow",
+                "run",
+                "mandatory-validation-gate.yml",
+                "--repo",
+                "Vivaliz-site/site-shopvivaliz",
+                "--ref",
+                "fix/example-branch",
+            ],
+        )
+
+        mandatory_workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "mandatory-validation-gate.yml"
+        ).read_text()
+        self.assertIn("workflow_dispatch:", mandatory_workflow)
 
         quality = build_command("Quality Gate", **self.common)
         self.assertEqual(
