@@ -1,99 +1,59 @@
 from pathlib import Path
-import os
-import re
-import subprocess
-import tempfile
 
 WORKFLOW = Path('.github/workflows/ecommerce-excellence-audit.yml')
 text = WORKFLOW.read_text(encoding='utf-8')
 
-hosted = re.search(
-    r"  await-production-evidence:\n(?P<body>.*?)(?=\n  [a-zA-Z0-9_-]+:)",
-    text,
-    re.S,
-)
-if not hosted:
-    raise SystemExit('hosted production-evidence wait job not found')
-hosted_body = hosted.group('body')
-if 'runs-on: ubuntu-latest' not in hosted_body:
-    raise SystemExit('production evidence wait must run on ubuntu-latest')
-
-live = re.search(
-    r"  live-production-audit:\n(?P<body>.*?)(?=\n  [a-zA-Z0-9_-]+:|\Z)",
-    text,
-    re.S,
-)
-if not live:
-    raise SystemExit('live production audit job not found')
-live_body = live.group('body')
-if 'shopvivaliz-a1-deploy' not in live_body:
-    raise SystemExit('live production audit must still run on Oracle production runner')
-if 'Wait for exact SHA production evidence' in live_body or 'sleep 20' in live_body:
-    raise SystemExit('Oracle production runner must not be reserved while waiting for deployment evidence')
-
-match = re.search(
-    r"      - name: Wait for exact SHA production evidence\n(?P<body>.*?)(?=\n  live-production-audit:)",
-    text,
-    re.S,
-)
-if not match:
-    raise SystemExit('wait-for-production-evidence step not found')
-
-body = match.group('body')
 required = [
-    'set -euo pipefail',
-    'for _ in $(seq 1 36); do',
-    "if gh api -H 'Accept: application/vnd.github.raw+json' \\",
-    'if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<\'PYEOF\'',
-    'sleep 20',
-    'test "$ready" = \'1\'',
+    'workflow_run:',
+    'workflows: [Master Production Pipeline 24/7]',
+    'types: [completed]',
+    'branches: [main]',
+    'production-evidence-gate:',
+    'runs-on: ubuntu-latest',
+    "DEPLOY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}",
+    "DEPLOY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}",
+    'deployment/latest.json?ref=deployment-evidence',
+    'deployed_sha',
+    'should_run',
+    'audit_sha',
 ]
-missing = [item for item in required if item not in body]
+missing = [fragment for fragment in required if fragment not in text]
 if missing:
-    raise SystemExit('retry contract missing: ' + ', '.join(missing))
+    raise SystemExit('event-driven production audit contract missing: ' + ', '.join(missing))
 
-run_match = re.search(r"        run: \|\n(?P<script>.*)$", body, re.S)
-if not run_match:
-    raise SystemExit('wait step run script not found')
-script_lines = run_match.group('script').splitlines()
-script = '\n'.join(line[10:] if line.startswith('          ') else line for line in script_lines) + '\n'
+if 'await-production-evidence:' in text:
+    raise SystemExit('legacy hosted polling job must be removed')
+if 'for _ in $(seq 1 36); do' in text or 'sleep 20' in text:
+    raise SystemExit('ecommerce production audit must not poll/sleep while waiting for deploy')
 
-expected = 'a' * 40
-with tempfile.TemporaryDirectory() as td:
-    root = Path(td)
-    bindir = root / 'bin'
-    bindir.mkdir()
-    counter = root / 'gh-count'
-    gh = bindir / 'gh'
-    gh.write_text(
-        '#!/usr/bin/env bash\n'
-        'set -euo pipefail\n'
-        'n=0\n'
-        'test ! -f "$FAKE_GH_COUNTER" || n=$(cat "$FAKE_GH_COUNTER")\n'
-        'n=$((n+1))\n'
-        'printf "%s" "$n" > "$FAKE_GH_COUNTER"\n'
-        'if [ "$n" -eq 1 ]; then sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; else sha="$EXPECTED_SHA"; fi\n'
-        'printf \'{"sha":"%s","status":"PRODUCTION_UPDATED","jobs":{"validate":"success","deploy":"success","smoke_test":"success"}}\\n\' "$sha"\n',
-        encoding='utf-8',
-    )
-    gh.chmod(0o755)
-    sleep = bindir / 'sleep'
-    sleep.write_text('#!/usr/bin/env bash\nexit 0\n', encoding='utf-8')
-    sleep.chmod(0o755)
-    shell = root / 'wait.sh'
-    shell.write_text(script, encoding='utf-8')
-    env = os.environ.copy()
-    env.update({
-        'PATH': f'{bindir}:{env.get("PATH", "")}',
-        'EXPECTED_SHA': expected,
-        'GITHUB_REPOSITORY': 'Vivaliz-site/site-shopvivaliz',
-        'FAKE_GH_COUNTER': str(counter),
-    })
-    result = subprocess.run(['bash', str(shell)], env=env, text=True, capture_output=True)
-    if result.returncode != 0:
-        raise SystemExit(f'retry behavior failed rc={result.returncode}: {result.stderr}{result.stdout}')
-    attempts = int(counter.read_text(encoding='utf-8'))
-    if attempts != 2:
-        raise SystemExit(f'expected exactly 2 evidence attempts, got {attempts}')
+static = text.split('  static-audit:', 1)[1].split('\n  ', 1)[0]
+if "if: ${{ github.event_name != 'workflow_run' }}" not in static:
+    raise SystemExit('static audit must skip post-deploy workflow_run events')
 
-print('ecommerce excellence hosted deployment wait retry contract: PASS')
+gate = text.split('  production-evidence-gate:', 1)[1].split('\n  live-production-audit:', 1)[0]
+if 'runs-on: ubuntu-latest' not in gate:
+    raise SystemExit('production evidence gate must stay on hosted runner')
+if 'for ' in gate and 'workflow_run' not in gate:
+    raise SystemExit('production evidence gate must not contain retry loops')
+if 'gh api' not in gate:
+    raise SystemExit('production evidence gate must read immutable deployment evidence')
+if 'DEPLOY_CONCLUSION' not in gate or 'DEPLOY_HEAD_SHA' not in gate:
+    raise SystemExit('production evidence gate must bind to the completed deploy event')
+if 'echo "should_run=false"' not in gate:
+    raise SystemExit('non-deploy/failed master runs must skip live audit')
+if 'echo "should_run=true"' not in gate:
+    raise SystemExit('exact deployed master runs must enable live audit')
+
+live = text.split('  live-production-audit:', 1)[1]
+if 'needs: production-evidence-gate' not in live:
+    raise SystemExit('live audit must depend on evidence gate')
+if "needs.production-evidence-gate.outputs.should_run == 'true'" not in live:
+    raise SystemExit('live audit must require exact production evidence')
+if 'shopvivaliz-a1-deploy' not in live:
+    raise SystemExit('live audit must remain on Oracle production runner')
+if 'ref: ${{ needs.production-evidence-gate.outputs.audit_sha }}' not in live:
+    raise SystemExit('live audit checkout must use the deployed SHA, not event/default ref')
+if 'sleep 20' in live or 'deployment_wait_attempt' in live:
+    raise SystemExit('Oracle production runner must never wait for deployment')
+
+print('ecommerce excellence event-driven post-deploy contract: PASS')
