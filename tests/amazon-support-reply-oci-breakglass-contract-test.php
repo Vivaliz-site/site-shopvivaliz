@@ -96,6 +96,8 @@ $scriptRequired=[
   'EMAIL_DRAFT_VERIFY_FAILED',
   'EMAIL_READ_BACK_FAILED',
   'EMAIL_SEND_CANDIDATES=',
+  'REPLY_CONTROL_CANDIDATES=',
+  'async function findReplyControl(evalv)',
   'ViewCase.contactList[channelType=EMAIL]',
   'current-tickets',
   '22154699381',

@@ -4,6 +4,7 @@ set -euo pipefail
 release_path="${1:-/home/ubuntu/shopvivaliz-deploy/current}"
 codex_installer="$release_path/ops/ai-squad/install-codex-bridge-user-service.sh"
 claude_service="shopvivaliz-squad-claude-bridge.service"
+legacy_claude_service="shopvivaliz-claude-bridge.service"
 claude_installer="$release_path/ops/ai-squad/install-claude-bridge-user-service.sh"
 
 test -f "$codex_installer"
@@ -18,9 +19,12 @@ if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
 fi
 
 # Claude is canonically a user-level service because it must reuse the
-# authenticated Claude.ai credential store owned by the ubuntu account. The
-# installer always restarts the service, so a newly activated immutable
-# release cannot leave an older bridge process serving port 17657.
+# authenticated Claude.ai credential store owned by the ubuntu account.
+# Retire the pre-Squad service first; it used the same port (17657) and can
+# otherwise keep the canonical bridge in an EADDRINUSE restart loop.
+if XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user cat "$legacy_claude_service" >/dev/null 2>&1; then
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user disable --now "$legacy_claude_service"
+fi
 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$claude_installer"
 
 claude_health="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health)"
