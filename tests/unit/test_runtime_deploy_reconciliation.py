@@ -104,9 +104,21 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn("deployment_wait_attempt", guard_job)
 
         token = (ROOT / ".github/workflows/runtime-token-security.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: ./.github/workflows/production-release-await.yml", token)
-        self.assertIn("expected_sha: ${{ needs.preflight.outputs.expected_sha }}", token)
+        self.assertIn("workflow_run:", token)
+        self.assertIn("workflows: [Master Production Pipeline 24/7]", token)
+        self.assertIn("production-evidence-gate:", token)
+        self.assertNotIn("uses: ./.github/workflows/production-release-await.yml", token)
+        self.assertNotIn("sleep_seconds:", token)
+        self.assertNotIn("attempts:", token)
+        gate = token.split("  production-evidence-gate:\n", 1)[1].split("  audit:\n", 1)[0]
+        self.assertIn("runs-on: ubuntu-latest", gate)
+        self.assertIn("DEPLOY_HEAD_SHA", gate)
+        self.assertIn("DEPLOY_CONCLUSION", gate)
+        self.assertIn("deployment/latest.json?ref=deployment-evidence", gate)
+        self.assertIn('echo "should_run=false"', gate)
         audit_job = token.split("  audit:\n", 1)[1]
+        self.assertIn("needs: production-evidence-gate", audit_job)
+        self.assertIn("needs.production-evidence-gate.outputs.should_run == 'true'", audit_job)
         self.assertNotIn("deployment_wait_attempt", audit_job)
 
     def test_runtime_env_guard_smokes_local_release(self) -> None:
