@@ -65,5 +65,16 @@ class CiFeedbackOptimizationTests(unittest.TestCase):
             self.assertIn("cancel-in-progress: true", text, name)
 
 
+    def test_task_continuity_fast_gate_executes_resume_order_regressions(self) -> None:
+        gate = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/task_continuation_watchdog.py", gate)
+        self.assertIn("scripts/autonomous-agent-loop.sh", gate)
+        self.assertIn("scripts/autonomous-provider-failover.sh", gate)
+        self.assertIn("tests/test_task_continuation_watchdog.py", gate)
+        self.assertIn("tests.test_task_continuation_watchdog", gate)
+        self.assertIn("GEPETO-POLICY.md", gate)
+        self.assertIn("docs/knowledge/dev-agent-briefing.md", gate)
+
+
 if __name__ == "__main__":
     unittest.main()
