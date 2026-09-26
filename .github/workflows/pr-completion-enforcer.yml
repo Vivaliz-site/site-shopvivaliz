@@ -39,6 +39,11 @@ jobs:
           set -Eeuo pipefail
           target_pr="${TRIGGER_PR:-}"
           echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
+            echo 'should_run=false' >> "$GITHUB_OUTPUT"
+            echo 'schedule_no_self_hosted_sweep=true'
+            exit 0
+          fi
           if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' ]]; then
             if [[ -z "$target_pr" || -z "${SOURCE_HEAD_SHA:-}" ]]; then
               echo 'should_run=false' >> "$GITHUB_OUTPUT"
@@ -196,8 +201,11 @@ jobs:
 
           if [[ -n "${TARGET_PR:-}" ]]; then
             prs=("$TARGET_PR")
-          else
+          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
             mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+          else
+            echo "no_target_pr_for_event=${GITHUB_EVENT_NAME}; self-hosted finalizer skipped"
+            exit 0
           fi
           echo "target_pr_count=${#prs[@]}"
           echo 'draft_policy=promote_internal_ready'
