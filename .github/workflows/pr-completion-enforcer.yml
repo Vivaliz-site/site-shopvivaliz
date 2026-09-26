@@ -23,25 +23,79 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-completion-enforcer
+  group: pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number || 'sweep' }}
   cancel-in-progress: true
 
 jobs:
   production-runner-gate:
-    name: Keep PR finalizer off the runner while production deploy is active
+    name: Start finalizer only when the triggering PR is actionable
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
+      target_pr: ${{ steps.gate.outputs.target_pr }}
+      required_gates_ready: ${{ steps.gate.outputs.required_gates_ready }}
     steps:
-      - name: Check production deploy queue after event fan-out settles
+      - name: Short-circuit pending or stale gate fan-out
         id: gate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGER_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          TRIGGER_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -Eeuo pipefail
-          sleep 20
+          target_pr="${TRIGGER_PR:-}"
+          echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
+          echo 'required_gates_ready=false' >> "$GITHUB_OUTPUT"
+
+          if [[ "$TRIGGER_EVENT" == 'workflow_run' ]]; then
+            if [[ -z "$target_pr" ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'workflow_run_without_pr=true'
+              exit 0
+            fi
+
+            current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}" --jq '.head.sha')"
+            if [[ -z "${TRIGGER_HEAD_SHA:-}" || "$current_head" != "$TRIGGER_HEAD_SHA" ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo "stale_gate_event=true target_pr=$target_pr"
+              exit 0
+            fi
+
+            required=(
+              'Quality Gate'
+              'ShopVivaliz QA'
+              'Repository Governance'
+              'Policy Engine'
+              'Autonomy Boundary'
+              'History Integrity'
+              'Ecommerce Excellence Audit'
+              'PR Policy Enforcement'
+            )
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${current_head}&per_page=100")"
+            pending=0
+            for workflow_name in "${required[@]}"; do
+              state="$(jq -r --arg name "$workflow_name" '
+                [.workflow_runs[] | select(.name == $name)]
+                | sort_by(.created_at)
+                | last
+                | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
+              ' <<<"$runs")"
+              echo "gate_${workflow_name// /_}=$state"
+              case "$state" in
+                queued:*|in_progress:*|requested:*|waiting:*|pending:*) pending=1 ;;
+              esac
+            done
+            if [[ "$pending" -eq 1 ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'required_gates_ready=false'
+              exit 0
+            fi
+            echo 'required_gates_ready=true' >> "$GITHUB_OUTPUT"
+          fi
+
           active="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow master-production-pipeline.yml --limit 30 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length')"
           if [[ "$active" -gt 0 ]]; then
             echo 'should_run=false' >> "$GITHUB_OUTPUT"
@@ -61,6 +115,7 @@ jobs:
       VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
+      TARGET_PR: ${{ needs.production-runner-gate.outputs.target_pr }}
 
     steps:
       - name: Checkout trusted finalizer from main
@@ -120,7 +175,7 @@ jobs:
             trusted/scripts/merge_green_pr_via_vm.sh \
             "${VM_USER}@${VM_HOST}:${remote_script}"
 
-      - name: Repair and finalize every internal PR
+      - name: Repair and finalize target PR or scheduled sweep
         id: finalize
         shell: bash
         env:
@@ -138,8 +193,13 @@ jobs:
             'PR Policy Enforcement'
           )
 
-          mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
-          echo "open_pr_count=${#prs[@]}"
+          if [[ -n "${TARGET_PR:-}" ]]; then
+            target_prs=("$TARGET_PR")
+          else
+            mapfile -t target_prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+          fi
+          prs=("${target_prs[@]}")
+          echo "target_prs=${#prs[@]}"
           echo 'draft_policy=promote_internal_ready'
           echo 'historical failures ignored after newer success'
           echo 'latest_required_runs=latest-run-per-required-workflow'
