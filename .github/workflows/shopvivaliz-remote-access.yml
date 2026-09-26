@@ -38,6 +38,7 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - amazon_safet_readback_52214
           - amazon_support_readback
           - amazon_support_readback_221530_221532
           - amazon_support_reply
@@ -102,7 +103,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_safet_readback_52214", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -113,8 +114,8 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
-          if action.startswith("amazon_support_") and target != "shopvivaliz-free-a1":
-              raise SystemExit("Amazon Seller Support actions are restricted to the site VM")
+          if action.startswith("amazon_") and target != "shopvivaliz-free-a1":
+              raise SystemExit("Amazon actions are restricted to the site VM")
           if action == "rustdesk_server_install" and target != "always-free-arm-1787907847-26":
               raise SystemExit("RustDesk server is restricted to the backend VM")
           if action.startswith("rustdesk_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
@@ -227,6 +228,9 @@ jobs:
               ;;
             runtime_status)
               bash scripts/runtime-service-status.sh site
+              ;;
+            amazon_safet_readback_52214)
+              sudo -n bash scripts/amazon-safet-readback-oci-site.sh
               ;;
             amazon_support_readback)
               sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
