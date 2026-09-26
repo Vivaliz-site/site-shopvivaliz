@@ -161,7 +161,7 @@ def analyze_runs(
 
 
 def _pct(value: float) -> str:
-    return f"{value * 100:.1f}%"
+    return f"{value * 100:g}%"
 
 
 def _cell(value: Any) -> str:
