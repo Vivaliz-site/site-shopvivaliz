@@ -78,6 +78,12 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('17656/health', helper)
         self.assertIn('"web_search_mode":"live"', helper)
         self.assertIn('shopvivaliz-squad-claude-bridge.service', helper)
+        self.assertIn('shopvivaliz-claude-bridge.service', helper)
+        self.assertIn('disable --now "$legacy_claude_service"', helper)
+        self.assertLess(
+            helper.index('disable --now "$legacy_claude_service"'),
+            helper.index('bash "$claude_installer"'),
+        )
         self.assertIn('install-claude-bridge-user-service.sh', helper)
         self.assertNotIn('/etc/systemd/system', helper)
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
