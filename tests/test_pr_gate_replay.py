@@ -24,6 +24,7 @@ class PrGateReplayTest(unittest.TestCase):
         self.assertEqual(
             list(GATES),
             [
+                "Mandatory Validation Gate",
                 "Quality Gate",
                 "ShopVivaliz QA",
                 "Repository Governance",
@@ -56,6 +57,10 @@ class PrGateReplayTest(unittest.TestCase):
             {"base_sha": "a" * 40, "head_sha": "b" * 40},
         )
 
+        mandatory = build_dispatch_plan("Mandatory Validation Gate", **self.common)
+        self.assertEqual(mandatory.workflow, "mandatory-validation-gate.yml")
+        self.assertEqual(dict(mandatory.inputs), {})
+
         quality = build_command("Quality Gate", **self.common)
         self.assertEqual(
             quality,
@@ -83,6 +88,11 @@ class PrGateReplayTest(unittest.TestCase):
         self.assertIn("missing|completed:action_required)", enforcer)
         self.assertIn("action_required_gate_replayed=true", enforcer)
         self.assertIn("failed_required_gate_auto_replayed=false", enforcer)
+
+    def test_mandatory_validation_gate_supports_manual_replay(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "mandatory-validation-gate.yml").read_text()
+        self.assertIn("workflow_dispatch:", workflow)
 
     def test_repository_governance_replay_preserves_pr_comparison_context(self) -> None:
         plan = build_dispatch_plan("Repository Governance", **self.common)
