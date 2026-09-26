@@ -98,6 +98,19 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertFalse(state.is_terminal(current))
 
 
+    def test_runtime_state_uses_shared_directory_inside_immutable_deploy(self) -> None:
+        deploy_root = Path("/home/ubuntu/shopvivaliz-deploy/releases/20260926-170000-abc")
+        resolved = state.resolve_runtime_dir(deploy_root, configured="")
+        self.assertEqual(
+            resolved,
+            Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
+        )
+
+        local_root = Path("/tmp/site-shopvivaliz")
+        local = state.resolve_runtime_dir(local_root, configured="")
+        self.assertEqual(local, local_root / "storage" / "private" / "agent-task-state")
+
+
 class OperationsWorkerContinuityTests(unittest.TestCase):
     def test_pending_task_gets_owner_even_when_docs_preflight_is_not_ready(self) -> None:
         worker = load_operations_worker()
