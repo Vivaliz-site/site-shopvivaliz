@@ -43,10 +43,8 @@ def test_policy_surface_checker_accepts_action_required_replay_contract():
     assert completed.returncode == 0, completed.stderr
 
 
-def test_protected_conflict_marker_prevents_repeat_repair_dispatch():
-    marker = 'stale-pr-protected-conflict:${head_sha}'
-    assert marker in WORKFLOW
-    assert 'protected_conflict_already_recorded=true' in WORKFLOW
-    marker_pos = WORKFLOW.index(marker)
-    dispatch_pos = WORKFLOW.index('gh workflow run ai-stale-pr-repair.yml')
-    assert marker_pos < dispatch_pos
+def test_external_sync_failure_is_visible_and_fail_closed():
+    assert 'external_auth_branch_sync_failed=true' in WORKFLOW
+    assert 'repair-required-now' in WORKFLOW
+    assert 'repair_required_count=$((repair_required_count + 1))' in WORKFLOW
+    assert 'gh workflow run ai-stale-pr-repair.yml' not in WORKFLOW
