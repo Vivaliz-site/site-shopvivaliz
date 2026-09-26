@@ -44,6 +44,12 @@ class WorkflowLatencyBudgetTests(unittest.TestCase):
         self.assertIn("paths:", header)
         self.assertIn(".github/scripts/ai_conflict_resolver.py", header)
 
+    def test_conflict_healer_uses_hosted_preflight_before_oracle_runner(self) -> None:
+        text = self.read("pr-conflict-auto-healer.yml")
+        self.assertIn("jobs:\n  preflight:", text)
+        self.assertIn("needs: preflight", text)
+        self.assertIn("needs.preflight.outputs.should_heal == 'true'", text)
+
     def test_finalizer_no_longer_requires_history_integrity(self) -> None:
         text = self.read("pr-completion-enforcer.yml")
         required = text.split("required=(", 1)[1].split(")", 1)[0]
