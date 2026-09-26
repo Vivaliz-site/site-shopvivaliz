@@ -16,7 +16,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number || 'sweep' }}
+  group: pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number || github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -38,12 +38,27 @@ jobs:
         run: |
           set -Eeuo pipefail
           target_pr="${TRIGGER_PR:-}"
-          echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            echo 'should_run=false' >> "$GITHUB_OUTPUT"
-            echo 'schedule_no_self_hosted_sweep=true'
-            exit 0
+            target_pr="$(
+              gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" |
+                jq -r --arg repo "$GITHUB_REPOSITORY" '
+                  [.[] | select(.head.repo.full_name == $repo)]
+                  | sort_by(
+                      (if ([.labels[].name] | index("repair-required-now")) then 0 else 1 end),
+                      .updated_at
+                    )
+                  | .[0].number // empty
+                '
+            )"
+            echo 'schedule_target_budget=1'
+            if [[ -z "$target_pr" ]]; then
+              echo "target_pr=" >> "$GITHUB_OUTPUT"
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'schedule_no_internal_open_pr=true'
+              exit 0
+            fi
           fi
+          echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' ]]; then
             if [[ -z "$target_pr" || -z "${SOURCE_HEAD_SHA:-}" ]]; then
               echo 'should_run=false' >> "$GITHUB_OUTPUT"
