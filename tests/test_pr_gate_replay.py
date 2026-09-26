@@ -50,6 +50,12 @@ class PrGateReplayTest(unittest.TestCase):
         ecommerce = build_dispatch_plan("Ecommerce Excellence Audit", **self.common)
         self.assertEqual(dict(ecommerce.inputs), {"pr_replay": "true"})
 
+        governance = build_dispatch_plan("Repository Governance", **self.common)
+        self.assertEqual(
+            dict(governance.inputs),
+            {"base_sha": "a" * 40, "head_sha": "b" * 40},
+        )
+
         quality = build_command("Quality Gate", **self.common)
         self.assertEqual(
             quality,
