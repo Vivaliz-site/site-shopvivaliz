@@ -157,3 +157,40 @@ Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
 Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 
+
+<!-- DETACHED_CONTINUATION_EXECUTOR_V6 -->
+## Execução desacoplada após interrupção do ChatGPT
+
+Policy: `DETACHED_CONTINUATION_EXECUTOR_V6`.
+
+A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
+**execução real**, e não apenas em um ACK/timeline.
+
+- `scripts/task_resume_dispatcher.py` roda depois do watchdog e antes do worker.
+- Cada fingerprint de checkpoint recebe no máximo **uma tentativa finita**.
+- O dispatcher valida que o pedido ainda corresponde ao `RUNNING` atual; pedidos
+  superseded/terminais são ignorados.
+- A execução ocorre em clone efêmero isolado, nunca em `current/` nem na release
+  ativa.
+- O executor recebe `SHOPVIVALIZ_RESUME_STAGE=cli_last` somente porque o próprio
+  turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
+  invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
+  não alteração da preferência interativa normal.
+- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1` e
+  só pode usar provedores permitidos para automação recorrente; atualmente,
+  `Gemini` é a rota automática. **Claude/GPT/Codex não podem ser fallback
+  silencioso de daemon/cron.**
+- Em execução finita/interativa fora do background permanece a ordem
+  `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
+  login ChatGPT, sem `OPENAI_API_KEY`.
+- Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
+  estados durável mudar materialmente (status/next_action/evidência/verificação)
+  ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
+- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; como
+  o recovery de background não usa IA paga, o mesmo checkpoint pode ser tentado
+  novamente após cooldown (900 s padrão, configurável por
+  `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
+  ciclo. A tarefa continua `RUNNING` até progresso real ou terminal válido.
+- Nenhuma saída de provider, prompt ou segredo é publicada no ledger; somente
+  metadados de execução e resultado.
+<!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
