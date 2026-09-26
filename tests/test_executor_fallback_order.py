@@ -14,7 +14,6 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
         for rel in (
-            "REGRAS-AGENTES-CENTRALIZADAS.md",
             "AGENTS.md",
             "docs/knowledge/task-continuity.md",
             "docs/knowledge/agent-rules.md",
@@ -22,6 +21,12 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
             text = (ROOT / rel).read_text(encoding="utf-8")
             self.assertIn(marker, text, rel)
             self.assertIn("Codex", text, rel)
+
+    def test_codex_policy_does_not_require_hash_pinned_global_blobs(self) -> None:
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")\nREQUIRED_TOKENS", 1)[0]
+        self.assertNotIn("REGRAS-AGENTES-CENTRALIZADAS.md", codex_block)
+        self.assertNotIn("AGENTS.override.md", codex_block)
 
     def test_codex_exhaustion_is_not_terminal_blocker(self) -> None:
         policy = (ROOT / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
