@@ -331,16 +331,24 @@ export function buildSourceRetryPrompt(prompt) {
 }
 
 export async function answerClaudeRequest(request, options = {}) {
-  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, options));
+  const now = options.now || Date.now;
+  const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(DEFAULT_TIMEOUT_MS, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
+  const deadline = options.deadline ?? (now() + timeoutMs);
+  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, {
+    ...options,
+    now,
+    timeoutMs,
+    deadline,
+  }));
 }
 
 async function answerClaudeRequestUnserialized(request, options = {}) {
   const auth = options.auth || claudeAuthSource();
   if (!auth.configured) throw new Error('missing token');
 
-  const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(DEFAULT_TIMEOUT_MS, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
+  const timeoutMs = options.timeoutMs;
   const now = options.now || Date.now;
-  const deadline = now() + timeoutMs;
+  const deadline = options.deadline ?? (now() + timeoutMs);
   const run = options.run || runClaude;
   const sleep = options.sleep || (delay => new Promise(resolve => setTimeout(resolve, delay)));
   const attempts = request.web_search ? 2 : 1;
