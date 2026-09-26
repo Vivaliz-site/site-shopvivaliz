@@ -51,9 +51,9 @@ if 'gh api' not in gate:
     raise SystemExit('production evidence gate must read immutable deployment evidence')
 if 'DEPLOY_CONCLUSION' not in gate or 'DEPLOY_HEAD_SHA' not in gate:
     raise SystemExit('production evidence gate must bind to the completed deploy event')
-if 'echo "should_run=false"' not in gate:
+if 'should_run=false' not in gate:
     raise SystemExit('non-deploy/failed master runs must skip live audit')
-if 'echo "should_run=true"' not in gate:
+if 'should_run=true' not in gate:
     raise SystemExit('exact deployed master runs must enable live audit')
 if 'exit 0' in gate:
     raise SystemExit('production evidence gate must not use explicit fail-open exits')
