@@ -13,6 +13,7 @@ python3 scripts/validate-recurring-ai-policy.py
 python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
+python3 -m unittest tests.test_task_continuity_enforcement -v
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
