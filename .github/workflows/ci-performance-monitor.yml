@@ -1,0 +1,129 @@
+name: CI Performance Monitor
+
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: ci-performance-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    name: Aggregate last 24h of GitHub Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout monitor code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Fetch workflow runs once
+        id: fetch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          SINCE="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh api --paginate --slurp             "repos/${GITHUB_REPOSITORY}/actions/runs?created=>=${SINCE}&per_page=100"             > /tmp/ci-performance-runs.json
+          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+
+      - name: Analyze CI performance
+        id: analyze
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          python3 scripts/ci_performance_monitor.py             --input /tmp/ci-performance-runs.json             --output-json artifacts/ci-performance-24h.json             --output-md artifacts/ci-performance-24h.md             --window-hours 24             --min-samples 3             --avg-seconds-threshold 150             --failure-rate-threshold 0.20
+          cat artifacts/ci-performance-24h.md >> "$GITHUB_STEP_SUMMARY"
+          regression="$(python3 -c 'import json; print(str(bool(json.load(open("artifacts/ci-performance-24h.json", encoding="utf-8"))["regression"])).lower())')"
+          echo "regression=$regression" >> "$GITHUB_OUTPUT"
+
+      - name: Upload daily CI performance report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-performance-24h-${{ github.run_id }}
+          path: |
+            artifacts/ci-performance-24h.json
+            artifacts/ci-performance-24h.md
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upsert regression issue
+        if: steps.analyze.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          REPORT_JSON: artifacts/ci-performance-24h.json
+          REPORT_MD: artifacts/ci-performance-24h.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- ci-performance-monitor -->';
+            const title = '[CI Performance] Regression monitor';
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_JSON, 'utf8'));
+            const markdown = fs.readFileSync(process.env.REPORT_MD, 'utf8').slice(0, 58000);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const query = `repo:${owner}/${repo} is:issue in:title "${title}"`;
+            const search = await github.rest.search.issuesAndPullRequests({
+              q: query,
+              per_page: 20,
+              sort: 'updated',
+              order: 'desc'
+            });
+            const existing = search.data.items.find(item => item.title === title);
+            const body = [
+              marker,
+              markdown,
+              '',
+              `Last monitor run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`
+            ].join('\n');
+
+            if (report.regression) {
+              if (existing) {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  state: 'open',
+                  title,
+                  body
+                });
+                core.notice(`ci_performance_issue_updated=${existing.number}`);
+              } else {
+                const created = await github.rest.issues.create({
+                  owner,
+                  repo,
+                  title,
+                  body
+                });
+                core.notice(`ci_performance_issue_created=${created.data.number}`);
+              }
+            } else if (existing && existing.state === 'open') {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: `CI performance recovered in run ${context.runId}; closing the monitor issue.`
+              });
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                state: 'closed'
+              });
+              core.notice(`ci_performance_issue_closed=${existing.number}`);
+            } else {
+              core.notice('ci_performance_healthy_no_open_issue=true');
+            }
