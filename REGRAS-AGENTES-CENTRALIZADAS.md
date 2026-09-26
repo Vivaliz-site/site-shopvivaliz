@@ -602,3 +602,13 @@ Esta politica vale para todos os agentes e prevalece sobre qualquer instrucao an
 - Toda sessao invisivel/headless transitoria deve ter ownership rastreavel e TTL padrao de 2 horas renovavel por heartbeat; limpar recursos da tarefa ao concluir e nunca usar kill global por nome de processo.
 
 Regra principal: **browser/navegacao sempre na VM backend; Windows nunca e fallback.**
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+
+- Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
+- Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
+- Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
+- `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+<!-- /CODEX_LAST_RESORT_V1 -->
