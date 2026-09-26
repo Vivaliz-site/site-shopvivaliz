@@ -95,3 +95,48 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
 - Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
 <!-- /CODEX_LAST_RESORT_V1 -->
+
+<!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
+## Retomada automática de checkpoint
+
+Policy: `TASK_CONTINUITY_AUTO_RESUME_V4`.
+
+O estado durável V3 impede falso término. A camada V4 evita que um checkpoint `RUNNING`
+fique esquecido quando o turno, streaming, CLI, sessão ou executor é interrompido.
+
+### Watchdog determinístico
+
+`scripts/task_continuation_watchdog.py` roda antes do
+`scripts/agent-operations-worker.py` no loop autônomo.
+
+Contrato padrão:
+
+- um checkpoint `RUNNING` com `next_action` e sem atualização por **120 segundos**
+  torna-se elegível para retomada;
+- cada revisão do checkpoint gera no máximo um pedido persistente
+  `auto_resume` em `_resume-requests.jsonl`;
+- se o checkpoint avançar, uma nova revisão pode gerar nova retomada;
+- checkpoint fresco, `CONCLUIDO` ou `BLOCKED_EXTERNAL` não dispara retomada;
+- pedido antigo é ignorado se `updated_at` ou `next_action` já mudou;
+- o worker converte o pedido válido em intervenção operacional
+  `source=task-continuation-watchdog` e `kind=auto-resume`;
+- o watchdog não chama provider de IA, navegador, rede ou shell e não cria loop pago.
+
+O limiar pode ser alterado no runtime por
+`SHOPVIVALIZ_TASK_STALE_SECONDS`, preservando 120 segundos como padrão.
+
+### Interrupção do próprio ChatGPT
+
+Uma queda de transmissão do aplicativo ChatGPT ocorre fora do processo do
+repositório e não pode ser reaberta diretamente por código hospedado na VM.
+Quando o runtime do ChatGPT oferecer automações, uma automação de segurança pode
+consultar os checkpoints e iniciar uma nova execução de retomada. O checkpoint
+do repositório continua sendo a fonte para descobrir objetivo, evidência e
+`next_action`, evitando reconstrução manual da conversa.
+
+### Gate
+
+`scripts/validate-task-continuity-enforcement.py` deve falhar se o watchdog,
+seu teste, a integração no governance ou os tokens obrigatórios desaparecerem.
+<!-- /TASK_CONTINUITY_AUTO_RESUME_V4 -->
+

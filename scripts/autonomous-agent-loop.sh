@@ -87,6 +87,14 @@ run_cycle() {
   fi
   log "Autonomous continuous cycle completed."
 
+  if [ -f "scripts/task_continuation_watchdog.py" ]; then
+    if ! python3 scripts/task_continuation_watchdog.py --stale-seconds "${SHOPVIVALIZ_TASK_STALE_SECONDS:-120}"; then
+      log "ERROR task continuation watchdog failed."
+      return 1
+    fi
+    log "Task continuation watchdog completed."
+  fi
+
   if [ -f "scripts/agent-operations-worker.py" ]; then
     if ! python3 scripts/agent-operations-worker.py; then
       log "ERROR agent operations worker failed."
