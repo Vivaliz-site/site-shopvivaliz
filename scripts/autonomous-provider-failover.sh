@@ -44,8 +44,9 @@ try_provider() {
 
 PROMPT="$(cat "$PROMPT_FILE")"
 
-# Ordem economica: OpenAI mini, Gemini Flash e Claude Haiku apenas como ultimo fallback.
-ORDER=(openai gemini anthropic)
+# Ordem de preservacao de cota: Gemini -> Claude -> Codex.
+# Codex e reserva de ultima opcao para tarefas finitas explicitamente autorizadas.
+ORDER=(gemini anthropic codex)
 
 for provider in "${ORDER[@]}"; do
   case "$provider" in
