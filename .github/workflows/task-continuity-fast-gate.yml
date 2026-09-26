@@ -25,8 +25,10 @@ on:
     paths:
       - 'scripts/agent_task_state.py'
       - 'scripts/agent-operations-worker.py'
+      - 'scripts/task_resume_dispatcher.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'tests/test_task_continuity_enforcement.py'
+      - 'tests/test_task_resume_dispatcher.py'
       - 'docs/knowledge/task-continuity.md'
       - 'docs/knowledge/agent-rules.md'
       - 'AGENTS.md'
