@@ -12,6 +12,7 @@ on:
       - 'docs/quality/**'
       - 'scripts/validate-audit-governance.py'
       - 'scripts/validate-global-audit-policy.py'
+      - 'scripts/validate-global-audit-policy-authenticated.py'
       - 'scripts/certify-audit-manifest.py'
       - 'tests/test_certify_audit_manifest.py'
       - 'scripts/absolute-audit-governance-validate.sh'
@@ -70,7 +71,13 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
-          bash scripts/absolute-audit-governance-validate.sh ci
+          python3 -m py_compile scripts/certify-audit-manifest.py scripts/validate-audit-governance.py scripts/validate-global-audit-policy.py scripts/validate-global-audit-policy-authenticated.py scripts/validate-main-merge-provenance.py
+          python3 -m unittest tests/test_certify_audit_manifest.py tests/test_validate_main_merge_provenance.py
+          python3 scripts/validate-audit-governance.py --output-dir artifacts/audit-governance-self-test
+          python3 scripts/validate-global-audit-policy-authenticated.py --output-dir artifacts/global-audit-policy
+          test -s artifacts/audit-governance-self-test/report.json
+          test -s artifacts/global-audit-policy/report.json
+          echo "ABSOLUTE_AUDIT_GOVERNANCE_BRIDGE=PASS"
       - name: Compile audit tooling
         run: |
           set -Eeuo pipefail
@@ -88,4 +95,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
-          python3 scripts/validate-global-audit-policy.py --output-dir artifacts/global-audit-policy
+          test -s artifacts/global-audit-policy/report.json
