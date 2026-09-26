@@ -179,5 +179,20 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertLess(watchdog_pos, worker_pos)
 
 
+    def test_active_production_runtime_has_continuity_watchdog(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = root / ".github" / "workflows" / "task-continuity-runtime-watchdog.yml"
+        self.assertTrue(workflow.is_file(), "active production continuity watchdog workflow is missing")
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn("cron: '2-57/5 * * * *'", text)
+        self.assertIn("[self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]", text)
+        self.assertIn("/home/ubuntu/shopvivaliz-deploy/current", text)
+        self.assertIn("task_continuation_watchdog.py", text)
+        self.assertIn("SHOPVIVALIZ_TASK_STALE_SECONDS", text)
+        self.assertIn("actions/upload-artifact@v4", text)
+        self.assertIn("task-continuity-runtime", text)
+        self.assertNotIn("agent-operations-worker.py", text)
+
+
 if __name__ == "__main__":
     unittest.main()
