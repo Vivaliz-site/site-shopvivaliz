@@ -131,6 +131,45 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(second, 0)
         self.assertEqual(len(worker.read_jsonl(worker.INTERVENTIONS_FILE)), 1)
 
+    def test_stale_task_always_requests_chatgpt_first_even_if_previous_agent_was_cli(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-chatgpt-first", "retomar no ChatGPT", "claude")
+        state.record_progress(
+            "task-chatgpt-first",
+            next_action="validar o gate pendente",
+            evidence="checkpoint salvo antes da interrupcao",
+        )
+        self._age_task("task-chatgpt-first", seconds=600)
+
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+        request = watchdog.read_requests(self.runtime)[0]
+
+        self.assertEqual(request["agent_id"], "gpt")
+        self.assertEqual(request["preferred_executor"], "chatgpt")
+        self.assertEqual(request["previous_agent_id"], "claude")
+        self.assertEqual(request["fallback_policy"], "chatgpt_then_cli_last")
+
+    def test_worker_routes_auto_resume_to_gpt_even_when_request_contains_previous_cli_agent(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-route-gpt", "retomar no ChatGPT", "gemini")
+        state.record_progress("task-route-gpt", next_action="continuar validacao")
+        self._age_task("task-route-gpt", seconds=600)
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+
+        worker = load_operations_worker()
+        worker.TASK_STATE_DIR = self.runtime
+        worker.INTERVENTIONS_FILE = self.runtime / "_agent-interventions.jsonl"
+        worker.push_step = lambda *args, **kwargs: None
+
+        self.assertEqual(worker.enqueue_continuation_requests({"agents": {}}), 1)
+        intervention = worker.read_jsonl(worker.INTERVENTIONS_FILE)[0]
+        self.assertEqual(intervention["agent_id"], "gpt")
+        self.assertEqual(intervention["preferred_executor"], "chatgpt")
+        self.assertEqual(intervention["fallback_policy"], "chatgpt_then_cli_last")
+        self.assertIn("ChatGPT", intervention["message"])
+
     def test_operations_worker_ignores_superseded_resume_request(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
