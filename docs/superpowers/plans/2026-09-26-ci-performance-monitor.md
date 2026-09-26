@@ -80,3 +80,7 @@
 - [ ] **Step 2: Review for false-alert/spam risk and required permissions.**
 - [ ] **Step 3: Merge after green gates.**
 - [ ] **Step 4: Trigger one manual monitor run and verify hosted runner, report artifact, summary, and issue behavior.**
+
+## Execution Rulings
+
+- Ruling: the no-per-run-API contract inspects the workflow-runs fetch step, not arbitrary actions/runs/<id> hyperlinks in issue evidence. A report link is not an API request; treating it as one creates a false positive while providing no N+1 protection.
