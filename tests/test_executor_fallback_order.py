@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 class ExecutorFallbackOrderTests(unittest.TestCase):
     def test_codex_is_last_provider_in_finite_failover(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        self.assertIn("ORDER=(gemini anthropic openai)", script)
+        self.assertIn("ORDER=(gemini anthropic codex)", script)
         self.assertLess(script.index("gemini)"), script.index("anthropic)"))
-        self.assertLess(script.index("anthropic)"), script.index("openai)"))
+        self.assertLess(script.index("anthropic)"), script.index("codex)"))
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
