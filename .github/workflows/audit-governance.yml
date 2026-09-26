@@ -1,6 +1,13 @@
 name: Audit Governance
 on:
   pull_request:
+    paths:
+      - 'AUDIT_POLICY.md'
+      - 'docs/quality/**'
+      - 'scripts/validate-audit-governance.py'
+      - 'scripts/validate-global-audit-policy.py'
+      - 'tests/test_certify_audit_manifest.py'
+      - '.github/workflows/audit-governance.yml'
   push:
     branches: [main]
   workflow_dispatch:
