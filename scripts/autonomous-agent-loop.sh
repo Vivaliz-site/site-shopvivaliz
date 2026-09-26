@@ -37,10 +37,13 @@ exec >> "$LOG_FILE" 2>&1
 
 if command -v flock >/dev/null 2>&1; then
   inherited_lock_ok=0
-  if [ "$SHOPVIVALIZ_AGENT_LOCK_INHERITED" = "fd9" ] && [ -e "/proc/$/fd/9" ]; then
-    inherited_target="$(readlink -f "/proc/$/fd/9" 2>/dev/null || true)"
-    lock_target="$(readlink -f "$LOCK_FILE" 2>/dev/null || true)"
-    if [ -n "$inherited_target" ] && [ "$inherited_target" = "$lock_target" ]; then
+  if [ "$SHOPVIVALIZ_AGENT_LOCK_INHERITED" = "fd9" ] && [ -e "/proc/self/fd/9" ]; then
+    inherited_target=""
+    lock_target=""
+    if inherited_target="$(readlink -f "/proc/self/fd/9" 2>/dev/null)" \
+      && lock_target="$(readlink -f "$LOCK_FILE" 2>/dev/null)" \
+      && [ -n "$inherited_target" ] \
+      && [ "$inherited_target" = "$lock_target" ]; then
       inherited_lock_ok=1
     fi
   fi
@@ -56,7 +59,7 @@ else
   if [ "$SHOPVIVALIZ_AGENT_LOCK_INHERITED" != "mkdir" ]; then
     if ! mkdir "$LOCK_DIR" 2>/dev/null; then
       log "Another shopvivaliz autonomous agent instance is already running."
-      exit 0
+      exit 75
     fi
   elif [ ! -d "$LOCK_DIR" ]; then
     log "Inherited lock directory missing during self-refresh."
@@ -79,7 +82,7 @@ run_cycle() {
   if [ "$CURRENT_SCRIPT_REALPATH" != "$START_SCRIPT_REALPATH" ]; then
     log "Current release changed; self-refreshing autonomous agent."
     export SHOPVIVALIZ_AGENT_REEXEC=1
-    if command -v flock >/dev/null 2>&1 && [ -e "/proc/$/fd/9" ]; then
+    if command -v flock >/dev/null 2>&1 && [ -e "/proc/self/fd/9" ]; then
       export SHOPVIVALIZ_AGENT_LOCK_INHERITED=fd9
     else
       export SHOPVIVALIZ_AGENT_LOCK_INHERITED=mkdir
