@@ -84,6 +84,19 @@ class PrGateReplayTest(unittest.TestCase):
         self.assertIn("action_required_gate_replayed=true", enforcer)
         self.assertIn("failed_required_gate_auto_replayed=false", enforcer)
 
+    def test_repository_governance_replay_preserves_pr_comparison_context(self) -> None:
+        plan = build_dispatch_plan("Repository Governance", **self.common)
+        self.assertEqual(
+            dict(plan.inputs),
+            {"base_sha": "a" * 40, "head_sha": "b" * 40},
+        )
+
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "repository-governance.yml").read_text()
+        self.assertIn("base_sha:", workflow)
+        self.assertIn("head_sha:", workflow)
+        self.assertIn("REPLAY_BASE_SHA", workflow)
+        self.assertIn("REPLAY_HEAD_SHA", workflow)
+
     def test_unknown_gate_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported required gate"):
             build_dispatch_plan("Unknown Gate", **self.common)
