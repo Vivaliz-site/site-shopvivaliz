@@ -15,9 +15,7 @@ NORMATIVE = (
     ROOT / ".github" / "copilot-instructions.md",
 )
 CODEX_NORMATIVE = (
-    ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
     ROOT / "AGENTS.md",
-    ROOT / "AGENTS.override.md",
     ROOT / "docs" / "knowledge" / "task-continuity.md",
     ROOT / "docs" / "knowledge" / "agent-rules.md",
     ROOT / "docs" / "knowledge" / "dev-agent-briefing.md",
