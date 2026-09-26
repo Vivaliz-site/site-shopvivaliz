@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts import agent_task_state as state
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+
+def load_operations_worker():
+    path = ROOT / "scripts" / "agent-operations-worker.py"
+    spec = importlib.util.spec_from_file_location("continuation_worker_test", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load operations worker")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 
 class TaskContinuationWatchdogTests(unittest.TestCase):
@@ -82,6 +98,57 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
         self.assertEqual(result["eligible"], 0)
         self.assertEqual(result["dispatched"], 0)
+
+    def test_operations_worker_consumes_resume_request_once(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-worker", "retomar automaticamente", "gpt")
+        state.record_progress(
+            "task-worker",
+            next_action="executar validacao pendente",
+            evidence="checkpoint antes da interrupcao",
+        )
+        self._age_task("task-worker", seconds=600)
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+
+        worker = load_operations_worker()
+        worker.TASK_STATE_DIR = self.runtime
+        worker.INTERVENTIONS_FILE = self.runtime / "_agent-interventions.jsonl"
+        worker.push_step = lambda *args, **kwargs: None
+
+        runtime_state = {"agents": {}}
+        first = worker.enqueue_continuation_requests(runtime_state)
+        self.assertEqual(first, 1)
+
+        interventions = worker.read_jsonl(worker.INTERVENTIONS_FILE)
+        self.assertEqual(len(interventions), 1)
+        self.assertEqual(interventions[0]["kind"], "auto-resume")
+        self.assertEqual(interventions[0]["source"], "task-continuation-watchdog")
+        self.assertEqual(interventions[0]["task_id"], "task-worker")
+        self.assertIn("executar validacao pendente", interventions[0]["message"])
+
+        second = worker.enqueue_continuation_requests(runtime_state)
+        self.assertEqual(second, 0)
+        self.assertEqual(len(worker.read_jsonl(worker.INTERVENTIONS_FILE)), 1)
+
+    def test_operations_worker_ignores_superseded_resume_request(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-moved", "checkpoint mudou", "gpt")
+        state.record_progress("task-moved", next_action="acao antiga")
+        self._age_task("task-moved", seconds=600)
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+
+        state.record_progress("task-moved", next_action="acao nova")
+
+        worker = load_operations_worker()
+        worker.TASK_STATE_DIR = self.runtime
+        worker.INTERVENTIONS_FILE = self.runtime / "_agent-interventions.jsonl"
+        worker.push_step = lambda *args, **kwargs: None
+
+        self.assertEqual(worker.enqueue_continuation_requests({"agents": {}}), 0)
+        self.assertEqual(worker.read_jsonl(worker.INTERVENTIONS_FILE), [])
+
 
     def test_watchdog_is_deterministic_and_does_not_invoke_paid_ai(self) -> None:
         root = Path(__file__).resolve().parents[1]
