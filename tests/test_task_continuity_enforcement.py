@@ -108,5 +108,12 @@ class TaskContinuityPolicyTests(unittest.TestCase):
         self.assertIn("python3 scripts/validate-task-continuity-enforcement.py", governance)
 
 
+    def test_operations_worker_persists_nonterminal_continuation(self) -> None:
+        worker = (ROOT / "scripts" / "agent-operations-worker.py").read_text(encoding="utf-8")
+        self.assertIn("from agent_task_state import", worker)
+        self.assertIn("persist_task_continuity", worker)
+        self.assertIn("next_action=", worker)
+
+
 if __name__ == "__main__":
     unittest.main()
