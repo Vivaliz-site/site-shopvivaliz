@@ -144,12 +144,19 @@ def run_once(
         if not task_id:
             continue
 
+        previous_agent_id = str(payload.get("agent_id", "")).strip() or "gpt"
         request = {
             "id": f"resume-{fingerprint[:20]}",
             "kind": "auto_resume",
             "status": "queued",
             "task_id": task_id,
-            "agent_id": str(payload.get("agent_id", "")).strip() or "gpt",
+            "agent_id": "gpt",
+            "preferred_executor": "chatgpt_common",
+            "secondary_executor": "chatgpt_work",
+            "final_fallback": "cli",
+            "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
+            "fallback_policy": "chatgpt_common_then_work_then_cli",
+            "previous_agent_id": previous_agent_id,
             "goal": str(payload.get("goal", "")).strip(),
             "next_action": next_action,
             "checkpoint_updated_at": str(payload.get("updated_at", "")).strip(),
