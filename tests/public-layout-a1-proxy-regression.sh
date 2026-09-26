@@ -5,6 +5,7 @@ workflow=.github/workflows/public-layout-audit.yml
 layout_script=scripts/public-layout-audit.mjs
 parity_script=scripts/production-runtime-parity.mjs
 installer=scripts/install-shopvivaliz-backend-browser-runner.sh
+remote_workflow=.github/workflows/shopvivaliz-remote-access.yml
 
 grep -Fq 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]' "$workflow"
 ! grep -Fq 'runs-on: ubuntu-latest' "$workflow"
@@ -25,3 +26,9 @@ grep -Fq 'ExecStart=/home/ubuntu/actions-runner-shopvivaliz-browser/run.sh' "$in
 ! grep -Fq './svc.sh install' "$installer"
 ! grep -Fq 'sudo ./svc.sh' "$installer"
 echo 'public-layout-backend-browser-runner-regression: ok'
+
+grep -Fq 'backend_browser_runner_install' "$remote_workflow"
+grep -Fq 'backend_browser_runner_status' "$remote_workflow"
+grep -Fq 'scripts/install-shopvivaliz-backend-browser-runner.sh' "$remote_workflow"
+grep -Fq 'actions/runners/registration-token' "$remote_workflow"
+grep -Fq 'always-free-arm-1787907847-26' "$remote_workflow"
