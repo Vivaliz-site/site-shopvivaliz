@@ -23,6 +23,9 @@ jobs:
           php-version: '8.4'
           tools: composer:v2
           coverage: none
+      - name: Validate current PR history lineage
+        run: python3 scripts/maintenance/validate_current_history_lineage.py
+
       - name: Validate repository change
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
