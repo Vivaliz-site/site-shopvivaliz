@@ -72,16 +72,24 @@ if (!str_contains($quality, 'php tests/nondeploy-release-wait-cost-guard-test.ph
     $errors[] = 'quality_gate_missing_nondeploy_wait_contract';
 }
 
-if ($errors !== []) {
-    fwrite(STDERR, json_encode(['ok' => false, 'errors' => $errors], JSON_UNESCAPED_SLASHES) . PHP_EOL);
-    exit(1);
-}
-
-echo "nondeploy-release-wait-cost-guard: ok\n";
-
 $runtimeToken = (string)file_get_contents($root . '/.github/workflows/runtime-token-security.yml');
 if (str_contains($runtimeToken, 'uses: ./.github/workflows/production-release-await.yml')
     || str_contains($runtimeToken, 'sleep_seconds:')
     || str_contains($runtimeToken, 'attempts:')) {
     $errors[] = 'runtime_token_security_must_not_poll_for_deploy';
 }
+$runtimeGate = strstr($runtimeToken, "  production-evidence-gate:\n") ?: '';
+$runtimeGate = $runtimeGate !== '' ? (explode("\n  audit:\n", $runtimeGate, 2)[0] ?? '') : '';
+if (str_contains($runtimeGate, 'exit 0')) {
+    $errors[] = 'runtime_token_security_event_gate_must_not_fail_open';
+}
+if (!str_contains($runtimeToken, 'group: runtime-token-security-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.ref }}')) {
+    $errors[] = 'runtime_token_security_requires_event_scoped_concurrency';
+}
+
+if ($errors !== []) {
+    fwrite(STDERR, json_encode(['ok' => false, 'errors' => $errors], JSON_UNESCAPED_SLASHES) . PHP_EOL);
+    exit(1);
+}
+
+echo "nondeploy-release-wait-cost-guard: ok\n";
