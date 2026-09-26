@@ -9,8 +9,10 @@ from typing import Iterable
 
 RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Quality Gate", (
-        "blog/**", "includes/**", "tests/**", "package.json", "package-lock.json",
-        "composer.json", "composer.lock", ".github/workflows/quality-gate.yml",
+        "blog/**", "includes/blog-**", "tests/blog-**", "tests/google-indexing-**",
+        "tests/asset-source-**", "tests/claude-workflow-**", "tests/nondeploy-release-**",
+        "package.json", "package-lock.json", "composer.json", "composer.lock",
+        ".github/workflows/quality-gate.yml",
     )),
     ("ShopVivaliz QA", (
         "api/**", "admin/**", "includes/**", "public/**", "assets/**", "blog/**",
