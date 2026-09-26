@@ -153,6 +153,25 @@ class CiPerformanceMonitorTest(unittest.TestCase):
         self.assertEqual(row["average_duration_seconds"], 60.0)
         self.assertFalse(report["regression"])
 
+    def test_duplicate_run_ids_are_counted_once(self) -> None:
+        duplicate = run(1, "Dedup Gate", "success")
+        payload = [
+            {"workflow_runs": [
+                duplicate,
+                run(2, "Dedup Gate", "success"),
+            ]},
+            {"workflow_runs": [
+                dict(duplicate),
+                run(3, "Dedup Gate", "success"),
+            ]},
+        ]
+        report = self.analyze(payload)
+        row = report["workflows"][0]
+        self.assertEqual(row["total_runs"], 3)
+        self.assertEqual(row["terminal_runs"], 3)
+        self.assertEqual(row["duration_samples"], 3)
+        self.assertEqual(row["total_duration_seconds"], 180.0)
+
     def test_slurped_pages_are_flattened_and_ranked_by_total_duration(self) -> None:
         payload = [
             {"workflow_runs": [
