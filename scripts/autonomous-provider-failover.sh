@@ -62,12 +62,12 @@ ORDER=(gemini anthropic codex)
 for provider in "${ORDER[@]}"; do
   case "$provider" in
     gemini)
-      [ -n "${GEMINI_API_KEY:-}" ] || { record gemini missing_key 127; continue; }
-      try_provider gemini gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
+      command -v gemini >/dev/null 2>&1 || { record gemini missing_cli 127; continue; }
+      try_provider gemini env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
       ;;
     anthropic)
-      [ -n "${ANTHROPIC_API_KEY:-}" ] || { record anthropic missing_key 127; continue; }
-      try_provider anthropic claude --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT" && exit 0
+      command -v claude >/dev/null 2>&1 || { record anthropic missing_cli 127; continue; }
+      try_provider anthropic env -u ANTHROPIC_API_KEY claude --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT" && exit 0
       ;;
     codex)
       # Never let a platform API key take precedence over the approved native
