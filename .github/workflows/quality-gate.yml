@@ -18,6 +18,12 @@ on:
       - 'composer.json'
       - 'composer.lock'
       - '.github/workflows/quality-gate.yml'
+      - '.github/workflows/public-layout-audit.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
+      - 'scripts/public-layout-audit.mjs'
+      - 'scripts/production-runtime-parity.mjs'
+      - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
+      - 'tests/public-layout-*.sh'
   workflow_dispatch:
 
 permissions:

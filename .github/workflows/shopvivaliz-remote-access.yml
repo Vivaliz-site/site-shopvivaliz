@@ -50,6 +50,8 @@ on:
           - rustdesk_status
           - agent_ssh_install
           - agent_ssh_status
+          - backend_browser_runner_install
+          - backend_browser_runner_status
       reason:
         description: Audit reason
         required: true
@@ -102,7 +104,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -121,6 +123,8 @@ jobs:
               raise SystemExit("RustDesk actions are restricted to the two Linux VMs")
           if action.startswith("agent_ssh_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
               raise SystemExit("Agent SSH actions are restricted to the two Linux VMs")
+          if action.startswith("backend_browser_runner_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Backend browser runner actions are restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -315,6 +319,43 @@ jobs:
             repo_status)
               CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
               "${SSH[@]}" "$CMD"
+              ;;
+            backend_browser_runner_install)
+              remote_script="/tmp/install-shopvivaliz-backend-browser-runner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/install-shopvivaliz-backend-browser-runner.sh
+              "${SSH[@]}" "set -Eeuo pipefail
+                script='$remote_script'
+                cleanup() { rm -f \"\$script\" \"\${token_file:-}\"; }
+                trap cleanup EXIT
+                if [[ ! -f /home/ubuntu/actions-runner-shopvivaliz-browser/.runner ]]; then
+                  command -v gh >/dev/null
+                  command -v jq >/dev/null
+                  token_file=\$(mktemp)
+                  chmod 600 \"\$token_file\"
+                  gh api --method POST repos/Vivaliz-site/site-shopvivaliz/actions/runners/registration-token > \"\$token_file\"
+                  token=\$(jq -r '.token // empty' \"\$token_file\")
+                  test -n \"\$token\"
+                  RUNNER_TOKEN=\"\$token\" bash \"\$script\"
+                  unset token RUNNER_TOKEN
+                else
+                  bash \"\$script\"
+                fi
+                echo BACKEND_BROWSER_RUNNER_INSTALL=PASS"
+              ;;
+            backend_browser_runner_status)
+              "${SSH[@]}" 'set -Eeuo pipefail
+                runtime="/run/user/$(id -u)"
+                export XDG_RUNTIME_DIR="$runtime"
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+                unit=actions.runner.shopvivaliz-backend-browser.service
+                systemctl --user is-enabled --quiet "$unit"
+                systemctl --user is-active --quiet "$unit"
+                test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+                curl -fsS http://127.0.0.1:17777/health | jq -e ".ok == true and .endpoint == \"browser-worker\" and .browser_path_exists == true" >/dev/null
+                gh api repos/Vivaliz-site/site-shopvivaliz/actions/runners?per_page=100 \
+                  --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
+                  | grep -Fxq shopvivaliz-backend-browser
+                echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
