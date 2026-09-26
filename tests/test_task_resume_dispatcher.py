@@ -87,6 +87,7 @@ state = json.loads(state_path.read_text())
 capture = {
     "resume_stage": os.environ.get("SHOPVIVALIZ_RESUME_STAGE"),
     "result_mode": os.environ.get("SHOPVIVALIZ_RESUME_RESULT_MODE"),
+    "background_mode": os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND"),
     "task_id": task_id,
     "prompt": Path(sys.argv[1]).read_text(),
 }
@@ -130,6 +131,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         capture = json.loads(self.capture.read_text())
         self.assertEqual(capture["resume_stage"], "cli_last")
         self.assertEqual(capture["result_mode"], "task_state")
+        self.assertEqual(capture["background_mode"], "1")
         self.assertEqual(capture["task_id"], "resume-e2e")
         self.assertIn("finish without abandonment", capture["prompt"])
         self.assertIn("continue real work", capture["prompt"])
@@ -191,6 +193,13 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             max_requests=1,
         )
         self.assertEqual(second["executed"], 0)
+
+    def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
+        failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)
+        self.assertIn("BACKGROUND_ORDER=(gemini)", failover)
+        self.assertIn('ORDER=("${BACKGROUND_ORDER[@]}")', failover)
+        self.assertIn("background_paid_fallback_forbidden=true", failover)
 
     def test_autonomous_loop_re_resolves_current_release_every_cycle(self) -> None:
         loop = (SCRIPTS / "autonomous-agent-loop.sh").read_text(encoding="utf-8")
