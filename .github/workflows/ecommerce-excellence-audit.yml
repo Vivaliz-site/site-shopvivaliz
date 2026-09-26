@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ecommerce-excellence-${{ github.ref }}
+  group: ecommerce-excellence-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -201,13 +201,8 @@ jobs:
             if ! gh api -H 'Accept: application/vnd.github.raw+json' \
               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
               > "$evidence_file"; then
-              if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
-                eligible=false
-                echo "deployment_evidence_unavailable_for_event=true"
-              else
-                echo '::error::Current production evidence is unavailable'
-                exit 1
-              fi
+              echo '::error::Current production evidence is unavailable'
+              exit 1
             fi
           fi
 
@@ -230,13 +225,8 @@ jobs:
             )
 
             if [[ "$status" != 'PRODUCTION_UPDATED' || "$validate" != 'success' || "$deploy" != 'success' || "$smoke" != 'success' || -z "$deployed_sha" ]]; then
-              if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
-                eligible=false
-                echo "deployment_evidence_not_ready_or_not_a_deploy=true"
-              else
-                echo '::error::Current production evidence is not a verified deploy'
-                exit 1
-              fi
+              echo '::error::Current production evidence is not a verified deploy'
+              exit 1
             fi
           fi
 
