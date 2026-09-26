@@ -225,6 +225,7 @@ def _execute(
         env["SHOPVIVALIZ_TASK_ID"] = task_id
         env["SHOPVIVALIZ_RESUME_STAGE"] = "cli_last"
         env["SHOPVIVALIZ_RESUME_RESULT_MODE"] = "task_state"
+        env["SHOPVIVALIZ_RESUME_BACKGROUND"] = "1"
         env["SHOPVIVALIZ_RESUME_SOURCE"] = "task-continuation-watchdog"
         env["SHOPVIVALIZ_RESUME_REQUEST_ID"] = str(request.get("id", ""))
         env["SHOPVIVALIZ_RESUME_FINGERPRINT"] = str(request.get("fingerprint", ""))
