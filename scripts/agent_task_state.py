@@ -19,7 +19,24 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_DIR = ROOT / "storage" / "private" / "agent-task-state"
+
+
+def resolve_runtime_dir(root: Path, configured: str = "") -> Path:
+    """Keep task state outside immutable releases while preserving local-dev behavior."""
+    configured_path = str(configured).strip()
+    if configured_path:
+        return Path(configured_path).expanduser()
+
+    resolved = root.resolve()
+    parts = resolved.parts
+    if "shopvivaliz-deploy" in parts and "releases" in parts:
+        deploy_index = parts.index("shopvivaliz-deploy")
+        deploy_root = Path(*parts[: deploy_index + 1])
+        return deploy_root / "shared" / "agent-task-state"
+    return resolved / "storage" / "private" / "agent-task-state"
+
+
+RUNTIME_DIR = resolve_runtime_dir(ROOT, os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", ""))
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
