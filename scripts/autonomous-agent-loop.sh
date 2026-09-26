@@ -8,6 +8,13 @@ INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-60}"
 LOCK_FILE="${SHOPVIVALIZ_AGENT_LOCK:-/tmp/shopvivaliz-agent.lock}"
 STOP_FILE="${SHOPVIVALIZ_AGENT_STOP_FILE:-$PROJECT_DIR/.agent-stop}"
 
+START_SCRIPT_REALPATH="$(readlink -f "$0" 2>/dev/null || true)"
+if [ -z "$START_SCRIPT_REALPATH" ]; then
+  START_SCRIPT_REALPATH="$0"
+fi
+SHOPVIVALIZ_AGENT_REEXEC="${SHOPVIVALIZ_AGENT_REEXEC:-0}"
+SHOPVIVALIZ_AGENT_LOCK_INHERITED="${SHOPVIVALIZ_AGENT_LOCK_INHERITED:-}"
+
 ts() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
@@ -29,19 +36,35 @@ cd "$PROJECT_DIR" || exit 1
 exec >> "$LOG_FILE" 2>&1
 
 if command -v flock >/dev/null 2>&1; then
-  exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    log "Another shopvivaliz autonomous agent instance is already running."
-    exit 0
+  inherited_lock_ok=0
+  if [ "$SHOPVIVALIZ_AGENT_LOCK_INHERITED" = "fd9" ] && [ -e "/proc/$/fd/9" ]; then
+    inherited_target="$(readlink -f "/proc/$/fd/9" 2>/dev/null || true)"
+    lock_target="$(readlink -f "$LOCK_FILE" 2>/dev/null || true)"
+    if [ -n "$inherited_target" ] && [ "$inherited_target" = "$lock_target" ]; then
+      inherited_lock_ok=1
+    fi
+  fi
+  if [ "$inherited_lock_ok" -ne 1 ]; then
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+      log "Another shopvivaliz autonomous agent instance is already running."
+      exit 0
+    fi
   fi
 else
   LOCK_DIR="${LOCK_FILE}.d"
-  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    log "Another shopvivaliz autonomous agent instance is already running."
-    exit 0
+  if [ "$SHOPVIVALIZ_AGENT_LOCK_INHERITED" != "mkdir" ]; then
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      log "Another shopvivaliz autonomous agent instance is already running."
+      exit 0
+    fi
+  elif [ ! -d "$LOCK_DIR" ]; then
+    log "Inherited lock directory missing during self-refresh."
+    exit 1
   fi
   trap 'rmdir "$LOCK_DIR" 2>/dev/null || true; exit 0' INT TERM EXIT
 fi
+unset SHOPVIVALIZ_AGENT_LOCK_INHERITED
 
 shutdown_requested=0
 trap 'shutdown_requested=1; log "Shutdown signal received; finishing current cycle."' INT TERM
@@ -49,6 +72,18 @@ trap 'shutdown_requested=1; log "Shutdown signal received; finishing current cyc
 run_cycle() {
   # Re-resolve the mutable current symlink every cycle. A long-lived systemd
   # process must not remain pinned to the release that was active at startup.
+  CURRENT_SCRIPT_REALPATH="$(readlink -f "$PROJECT_DIR/scripts/autonomous-agent-loop.sh" 2>/dev/null || true)"
+  if [ -n "$CURRENT_SCRIPT_REALPATH" ] && [ "$CURRENT_SCRIPT_REALPATH" != "$START_SCRIPT_REALPATH" ]; then
+    log "Current release changed; self-refreshing autonomous agent."
+    export SHOPVIVALIZ_AGENT_REEXEC=1
+    if command -v flock >/dev/null 2>&1 && [ -e "/proc/$/fd/9" ]; then
+      export SHOPVIVALIZ_AGENT_LOCK_INHERITED=fd9
+    else
+      export SHOPVIVALIZ_AGENT_LOCK_INHERITED=mkdir
+    fi
+    exec /bin/bash "$PROJECT_DIR/scripts/autonomous-agent-loop.sh"
+  fi
+
   if ! cd "$PROJECT_DIR"; then
     log "ERROR project dir unavailable during cycle: $PROJECT_DIR"
     return 1
@@ -138,7 +173,12 @@ run_cycle() {
   return 0
 }
 
-log "ShopVivaliz autonomous agent started. project=$PROJECT_DIR interval=${INTERVAL_SECONDS}s"
+if [ "$SHOPVIVALIZ_AGENT_REEXEC" = "1" ]; then
+  log "ShopVivaliz autonomous agent self-refresh completed. script=$START_SCRIPT_REALPATH"
+else
+  log "ShopVivaliz autonomous agent started. project=$PROJECT_DIR interval=${INTERVAL_SECONDS}s"
+fi
+unset SHOPVIVALIZ_AGENT_REEXEC
 
 while [ "$shutdown_requested" -eq 0 ]; do
   run_cycle || log "Cycle failed; systemd Restart=always will also recover hard failures."
