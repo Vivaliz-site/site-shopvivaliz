@@ -3,14 +3,7 @@ name: PR Completion Enforcer
 on:
   workflow_run:
     workflows:
-      - Quality Gate
-      - ShopVivaliz QA
-      - Repository Governance
-      - Policy Engine
-      - Autonomy Boundary
-      - History Integrity
-      - Ecommerce Excellence Audit
-      - PR Policy Enforcement
+      - Mandatory Validation Gate
     types: [completed]
   schedule:
     - cron: '*/15 * * * *'
@@ -23,79 +16,57 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number || 'sweep' }}
+  group: pr-completion-enforcer
   cancel-in-progress: true
 
 jobs:
   production-runner-gate:
-    name: Start finalizer only when the triggering PR is actionable
+    name: Keep PR finalizer off the runner while production deploy is active
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
-      target_pr: ${{ steps.gate.outputs.target_pr }}
-      required_gates_ready: ${{ steps.gate.outputs.required_gates_ready }}
     steps:
-      - name: Short-circuit pending or stale gate fan-out
+      - name: Check production deploy queue after event fan-out settles
         id: gate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIGGER_EVENT: ${{ github.event_name }}
-          TRIGGER_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
-          TRIGGER_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -Eeuo pipefail
-          target_pr="${TRIGGER_PR:-}"
-          echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
-          echo 'required_gates_ready=false' >> "$GITHUB_OUTPUT"
-
-          if [[ "$TRIGGER_EVENT" == 'workflow_run' ]]; then
-            if [[ -z "$target_pr" ]]; then
-              echo 'should_run=false' >> "$GITHUB_OUTPUT"
-              echo 'workflow_run_without_pr=true'
-              exit 0
-            fi
-
-            current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}" --jq '.head.sha')"
-            if [[ -z "${TRIGGER_HEAD_SHA:-}" || "$current_head" != "$TRIGGER_HEAD_SHA" ]]; then
-              echo 'should_run=false' >> "$GITHUB_OUTPUT"
-              echo "stale_gate_event=true target_pr=$target_pr"
-              exit 0
-            fi
-
-            required=(
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" ]]; then
+            settle_required=(
               'Quality Gate'
               'ShopVivaliz QA'
               'Repository Governance'
               'Policy Engine'
               'Autonomy Boundary'
-              'History Integrity'
               'Ecommerce Excellence Audit'
               'PR Policy Enforcement'
             )
-            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${current_head}&per_page=100")"
-            pending=0
-            for workflow_name in "${required[@]}"; do
-              state="$(jq -r --arg name "$workflow_name" '
-                [.workflow_runs[] | select(.name == $name)]
-                | sort_by(.created_at)
-                | last
-                | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
-              ' <<<"$runs")"
-              echo "gate_${workflow_name// /_}=$state"
-              case "$state" in
-                queued:*|in_progress:*|requested:*|waiting:*|pending:*) pending=1 ;;
-              esac
+            for attempt in $(seq 1 24); do
+              runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SOURCE_HEAD_SHA}&per_page=100")"
+              unsettled=0
+              for workflow_name in "${settle_required[@]}"; do
+                state="$(jq -r --arg name "$workflow_name" '
+                  [.workflow_runs[] | select(.name == $name)]
+                  | sort_by(.created_at)
+                  | last
+                  | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
+                ' <<<"$runs")"
+                case "$state" in
+                  completed:*) ;;
+                  *) unsettled=$((unsettled + 1)) ;;
+                esac
+              done
+              echo "fanout_settle_attempt=${attempt} unsettled=${unsettled}"
+              if [[ "$unsettled" -eq 0 ]]; then
+                break
+              fi
+              sleep 5
             done
-            if [[ "$pending" -eq 1 ]]; then
-              echo 'should_run=false' >> "$GITHUB_OUTPUT"
-              echo 'required_gates_ready=false'
-              exit 0
-            fi
-            echo 'required_gates_ready=true' >> "$GITHUB_OUTPUT"
           fi
-
           active="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow master-production-pipeline.yml --limit 30 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "pending" or .status == "waiting" or .status == "requested")] | length')"
           if [[ "$active" -gt 0 ]]; then
             echo 'should_run=false' >> "$GITHUB_OUTPUT"
@@ -115,7 +86,6 @@ jobs:
       VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
-      TARGET_PR: ${{ needs.production-runner-gate.outputs.target_pr }}
 
     steps:
       - name: Checkout trusted finalizer from main
@@ -131,7 +101,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash -n trusted/scripts/merge_green_pr_via_vm.sh
-          python3 -m py_compile trusted/scripts/pr_gate_replay.py
+          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py
 
       - name: Configure verified Oracle SSH
         shell: bash
@@ -175,31 +145,20 @@ jobs:
             trusted/scripts/merge_green_pr_via_vm.sh \
             "${VM_USER}@${VM_HOST}:${remote_script}"
 
-      - name: Repair and finalize target PR or scheduled sweep
+      - name: Repair and finalize every internal PR
         id: finalize
         shell: bash
         env:
           REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
         run: |
           set -Eeuo pipefail
-          required=(
-            'Quality Gate'
-            'ShopVivaliz QA'
+          always_required=(
+            'Mandatory Validation Gate'
             'Repository Governance'
-            'Policy Engine'
-            'Autonomy Boundary'
-            'History Integrity'
-            'Ecommerce Excellence Audit'
-            'PR Policy Enforcement'
           )
 
-          if [[ -n "${TARGET_PR:-}" ]]; then
-            target_prs=("$TARGET_PR")
-          else
-            mapfile -t target_prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
-          fi
-          prs=("${target_prs[@]}")
-          echo "target_prs=${#prs[@]}"
+          mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+          echo "open_pr_count=${#prs[@]}"
           echo 'draft_policy=promote_internal_ready'
           echo 'historical failures ignored after newer success'
           echo 'latest_required_runs=latest-run-per-required-workflow'
@@ -208,6 +167,7 @@ jobs:
           merged_count=0
           repair_required_count=0
           waiting_count=0
+          stale_update_count=0
 
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
@@ -233,6 +193,15 @@ jobs:
 
             relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
             if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" && "$head_sha" != "$SOURCE_HEAD_SHA" ]]; then
+                echo "pr_${pr}_stale_update_skipped_not_source=true"
+                continue
+              fi
+              if [[ "$GITHUB_EVENT_NAME" != 'workflow_run' && "$stale_update_count" -ge 1 ]]; then
+                echo "pr_${pr}_stale_update_skipped_budget=true"
+                continue
+              fi
+              stale_update_count=$((stale_update_count + 1))
               echo "pr_${pr}_repair-pr-branch=true"
               if gh api --method PUT "repos/${REPO}/pulls/${pr}/update-branch" \
                 -f expected_head_sha="$head_sha" >/tmp/update-branch-${pr}.json 2>/tmp/update-branch-${pr}.err; then
@@ -253,13 +222,23 @@ jobs:
               continue
             fi
 
+            mapfile -t changed_files < <(
+              gh api "repos/${REPO}/pulls/${pr}/files?per_page=100" --paginate --jq '.[].filename'
+            )
+            mapfile -t specialized_required < <(
+              python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
+            )
+            applicable_required=("${always_required[@]}" "${specialized_required[@]}")
+            printf 'pr_%s_changed_files=%s\n' "$pr" "${#changed_files[@]}"
+            printf 'pr_%s_applicable_required=%s\n' "$pr" "${applicable_required[*]}"
+
             runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
             ready=1
             pending=0
             failed_required=()
             replay_required=()
 
-            for workflow_name in "${required[@]}"; do
+            for workflow_name in "${applicable_required[@]}"; do
               state="$(jq -r --arg name "$workflow_name" '
                 [.workflow_runs[] | select(.name == $name)]
                 | sort_by(.created_at)

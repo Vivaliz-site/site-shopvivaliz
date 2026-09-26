@@ -10,6 +10,11 @@ on:
       - "AI_CONFLICT_RULES.md"
   pull_request:
     types: [opened, reopened, synchronize]
+    paths:
+      - ".github/scripts/ai_conflict_resolver.py"
+      - ".github/workflows/ai-conflict-resolver.yml"
+      - "tests/test_ai_conflict_resolver.py"
+      - "AI_CONFLICT_RULES.md"
   workflow_dispatch:
 
 permissions:

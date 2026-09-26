@@ -3,6 +3,19 @@ name: Autonomy Boundary
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'api/**'
+      - 'admin/**'
+      - 'includes/**'
+      - 'scripts/enforce-autonomy-policy.py'
+      - 'scripts/**price**'
+      - 'scripts/**stock**'
+      - 'scripts/**inventory**'
+      - 'tests/**autonomy**'
+      - 'tests/**price**'
+      - 'tests/**stock**'
+      - 'tests/**inventory**'
+      - '.github/workflows/autonomy-boundary.yml'
   workflow_dispatch:
     inputs:
       base_sha:
@@ -22,6 +35,10 @@ on:
         required: false
         default: ''
         type: string
+
+concurrency:
+  group: autonomy-boundary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

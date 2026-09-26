@@ -553,3 +553,43 @@ Se existir UI, o próprio agente executa E2E real no navegador gráfico no mesmo
 <!-- AUDIT_MERGE_ENFORCEMENT_V1 -->
 ## Enforcement absoluto de merge/main
 Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate local deve executar `scripts/absolute-audit-governance-validate.sh`, e todo push em `main`/`master` deve passar pelo **Absolute Audit Main Guard** com prova de PR mesclado. Não trate a existência do workflow como evidência de branch protection.
+
+<!-- TASK_CONTINUITY_ENFORCEMENT_V3 -->
+## Continuidade obrigatória até estado terminal
+
+- Estados finais permitidos para uma tarefa iniciada: `CONCLUIDO` com validação fresca, ou `BLOCKED_EXTERNAL` com impedimento externo objetivo e intransponível após esgotar alternativas seguras.
+- Pedido explícito do usuário para executar, implementar, corrigir, auditar, resolver ou continuar até conclusão, somado à autorização operacional vigente, já satisfaz gates genéricos de aprovação de plano/design para ações reversíveis e dentro do escopo. Não parar apenas para pedir "posso continuar?" ou aprovação intermediária equivalente.
+- Essa autorização não elimina confirmações obrigatórias de segurança/plataforma para ação destrutiva ou irreversível não autorizada exatamente, cobrança real, segredo, login/CAPTCHA/recovery ou ampliação material de escopo.
+- Falha de ferramenta, plugin, CLI, API, navegador, sessão, runner, workflow, timeout ou rota primária é estado `RUNNING`, nunca terminal enquanto existir fallback seguro ou próxima ação executável.
+- Tarefa simples segue a mesma regra: progresso parcial, diagnóstico ou erro recuperável não autorizam encerrar.
+- Quando o runtime tiver acesso ao repositório, persistir o estado em `scripts/agent_task_state.py`; antes de alegar término, o gate `terminal --task <id>` deve aceitar o estado.
+- Contrato detalhado: `docs/knowledge/task-continuity.md`.
+<!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+
+- Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
+- Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
+- Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
+- `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+<!-- /CODEX_LAST_RESORT_V1 -->
+
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+## Ordem obrigatória de retomada
+
+Policy: `CHATGPT_RESUME_ORDER_V5`.
+
+Para qualquer tarefa abandonada, interrompida ou com checkpoint `RUNNING`, a ordem é fixa:
+
+1. **ChatGPT comum** — primeira opção; retoma do checkpoint no próximo turno disponível.
+2. **ChatGPT Work** — segunda opção, quando a tarefa exige continuidade persistente/multi-etapas.
+3. **CLI** — terceira e última opção, somente depois das duas camadas ChatGPT anteriores terem sido tentadas ou comprovadamente indisponíveis/inadequadas.
+
+Roteamento persistido: `chatgpt_common_then_work_then_cli`.
+Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
+
+Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+

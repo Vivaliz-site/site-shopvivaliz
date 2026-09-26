@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from agent_docs_gate import verify_receipt
+from agent_task_state import RUNTIME_DIR as TASK_STATE_DIR, TaskStateError, is_terminal, load_task, record_progress, start_task
+from task_continuation_watchdog import read_requests
 from task_queue_lib import load_queue, save_queue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,6 +93,83 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def _continuation_state(task_id: str) -> dict[str, Any]:
+    safe = "".join(ch for ch in task_id if ch.isalnum() or ch in "._-").strip(".-")
+    if not safe:
+        return {}
+    path = Path(TASK_STATE_DIR) / f"{safe[:160]}.json"
+    return read_json(path)
+
+
+def enqueue_continuation_requests(runtime_state: dict[str, Any]) -> int:
+    """Bridge stale checkpoint requests into the existing finite agent command path."""
+    requests = read_requests(Path(TASK_STATE_DIR))
+    existing_ids = {
+        str(row.get("id", "")).strip()
+        for row in read_jsonl(INTERVENTIONS_FILE)
+        if str(row.get("id", "")).strip()
+    }
+    enqueued = 0
+
+    for request in requests:
+        if str(request.get("status", "")).strip() != "queued":
+            continue
+        request_id = str(request.get("id", "")).strip()
+        task_id = str(request.get("task_id", "")).strip()
+        next_action = str(request.get("next_action", "")).strip()
+        if not request_id or not task_id or not next_action or request_id in existing_ids:
+            continue
+
+        current = _continuation_state(task_id)
+        if str(current.get("status", "")).strip() != "RUNNING":
+            continue
+        if str(current.get("updated_at", "")).strip() != str(request.get("checkpoint_updated_at", "")).strip():
+            continue
+        if str(current.get("next_action", "")).strip() != next_action:
+            continue
+
+        agent_id = "gpt"
+        executor_order = request.get("executor_order")
+        if executor_order != ["chatgpt_common", "chatgpt_work", "cli"]:
+            executor_order = ["chatgpt_common", "chatgpt_work", "cli"]
+
+        intervention = {
+            "id": request_id,
+            "agent_id": agent_id,
+            "preferred_executor": "chatgpt_common",
+            "secondary_executor": "chatgpt_work",
+            "final_fallback": "cli",
+            "executor_order": executor_order,
+            "fallback_policy": "chatgpt_common_then_work_then_cli",
+            "previous_agent_id": str(request.get("previous_agent_id", "")).strip(),
+            "message": (
+                f"Retome automaticamente a tarefa {task_id} a partir do checkpoint persistido. "
+                f"Proxima acao: {next_action}. Ordem obrigatoria: ChatGPT comum primeiro; "
+                "ChatGPT Work somente se o ChatGPT comum nao puder sustentar a continuidade; "
+                "CLI apenas como ultima opcao. Continue ate CONCLUIDO ou BLOCKED_EXTERNAL comprovado."
+            ),
+            "source": "task-continuation-watchdog",
+            "created_at": utc_now(),
+            "status": "queued",
+            "kind": "auto-resume",
+            "task_id": task_id,
+            "checkpoint_updated_at": request.get("checkpoint_updated_at"),
+            "continuation_fingerprint": request.get("fingerprint"),
+        }
+        append_jsonl(INTERVENTIONS_FILE, intervention)
+        existing_ids.add(request_id)
+        push_step(
+            runtime_state,
+            agent_id,
+            f"Checkpoint estagnado detectado; retomada automatica acionada para {task_id}: {next_action}",
+            kind="auto-resume",
+            extra={"task_id": task_id, "request_id": request_id},
+        )
+        enqueued += 1
+
+    return enqueued
+
+
 def bootstrap_runtime_state() -> dict[str, Any]:
     runtime_state = read_json(RUNTIME_STATE_FILE)
     agents_state = runtime_state.setdefault("agents", {})
@@ -152,6 +231,28 @@ def task_scope_docs(task: dict[str, Any]) -> list[str]:
     return [str(item).strip() for item in raw if str(item).strip()]
 
 
+def persist_task_continuity(
+    agent_id: str,
+    task: dict[str, Any],
+    *,
+    next_action: str,
+    evidence: str | None = None,
+) -> None:
+    """Persist a non-terminal next action so progress cannot look like completion."""
+    task_id = task_id_for(task)
+    action = str(next_action).strip()
+    if not task_id or not action:
+        return
+    goal = str(task.get("title") or task.get("description") or task_id).strip()
+    try:
+        current = load_task(task_id)
+    except TaskStateError:
+        current = start_task(task_id, goal, agent_id)
+    if is_terminal(current):
+        return
+    record_progress(task_id, next_action=action, evidence=evidence)
+
+
 def docs_preflight(agent_id: str, task: dict[str, Any]) -> tuple[bool, str]:
     task_id = task_id_for(task)
     if not task_id:
@@ -194,27 +295,53 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
         if task.get("assigned_to"):
             continue
         agent_id = choose_agent(task)
+        task["assigned_to"] = [agent_id]
+        task["assignment_updated_at"] = utc_now()
         valid, reason = docs_preflight(agent_id, task)
         if not valid:
             command = docs_read_command(agent_id, task)
+            task["execution_phase"] = "docs_preflight"
+            assigned.append({
+                "id": task.get("id") or task.get("task_id"),
+                "title": task.get("title"),
+                "agent_id": agent_id,
+                "phase": "docs_preflight",
+            })
             set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {task.get('title', task_id_for(task))}")
             push_step(
                 runtime_state,
                 agent_id,
-                f"Tarefa não atribuída ainda: {reason}. Ler docs antes de alterar: {command}",
+                f"Tarefa atribuída; mutações aguardam o preflight obrigatório: {reason}. Próximo passo: {command}",
                 kind="docs-preflight-required",
                 extra={"task_id": task_id_for(task), "command": command},
             )
+            persist_task_continuity(
+                agent_id,
+                task,
+                next_action=command,
+                evidence=reason,
+            )
+            changed = True
             continue
-        task["assigned_to"] = [agent_id]
-        task["assignment_updated_at"] = utc_now()
-        assigned.append({"id": task.get("id") or task.get("task_id"), "title": task.get("title"), "agent_id": agent_id})
+        task["execution_phase"] = "execution"
+        assigned.append({
+            "id": task.get("id") or task.get("task_id"),
+            "title": task.get("title"),
+            "agent_id": agent_id,
+            "phase": "execution",
+        })
         push_step(
             runtime_state,
             agent_id,
             f"Preflight de documentação confirmado; assumindo a tarefa '{task.get('title')}'",
             kind="assignment",
             extra={"task_id": task_id_for(task)},
+        )
+        persist_task_continuity(
+            agent_id,
+            task,
+            next_action="ler o contexto completo da tarefa e executar a primeira ação segura",
+            evidence="docs preflight verified",
         )
         changed = True
     if changed:
@@ -252,6 +379,7 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
             valid, reason = docs_preflight(agent_id, current_task)
             if not valid:
                 command = docs_read_command(agent_id, current_task)
+                persist_task_continuity(agent_id, current_task, next_action=command, evidence=f"docs preflight pending during execution: {reason}")
                 set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {focus}")
                 push_step(
                     runtime_state,
@@ -260,7 +388,14 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
                     kind="docs-preflight-required",
                     extra={"task_id": task_id_for(current_task), "command": command},
                 )
+                persist_task_continuity(
+                    agent_id,
+                    current_task,
+                    next_action=command,
+                    evidence=reason,
+                )
                 continue
+            persist_task_continuity(agent_id, current_task, next_action=f"executar e verificar: {validation_command_for(agent_id, focus)}", evidence="docs preflight valid; execution continues")
             push_step(
                 runtime_state,
                 agent_id,
@@ -268,12 +403,19 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
                 kind="task-context",
                 extra={"task_id": task_id_for(current_task)},
             )
+            validation_command = validation_command_for(agent_id, focus)
             push_step(
                 runtime_state,
                 agent_id,
-                f"Executando comando de teste: {validation_command_for(agent_id, focus)}",
+                f"Executando comando de teste: {validation_command}",
                 kind="validation",
                 extra={"task_id": task_id_for(current_task)},
+            )
+            persist_task_continuity(
+                agent_id,
+                current_task,
+                next_action=f"executar e avaliar: {validation_command}",
+                evidence="task context loaded",
             )
         else:
             push_step(runtime_state, agent_id, "Sem tarefa atribuída agora; aguardando novas missões da auto-geração", kind="idle")
@@ -308,6 +450,12 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
         valid, reason = docs_preflight(agent_id, tasks[0])
         if not valid:
             read_command = docs_read_command(agent_id, tasks[0])
+            persist_task_continuity(
+                agent_id,
+                tasks[0],
+                next_action=read_command,
+                evidence=reason,
+            )
             return {
                 "agent": AGENTS[agent_id]["name"],
                 "agent_id": agent_id,
@@ -316,6 +464,13 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
                 "command_id": command.get("id"),
                 "status": "docs_preflight_required",
             }
+    if tasks:
+        persist_task_continuity(
+            agent_id,
+            tasks[0],
+            next_action="continuar executando a tarefa original após processar o comando recebido",
+            evidence="command acknowledged",
+        )
     return {
         "agent": AGENTS[agent_id]["name"],
         "agent_id": agent_id,
@@ -367,14 +522,19 @@ def process_supervisor_interventions(queue: dict[str, Any], runtime_state: dict[
         agent_id = str(row.get("agent_id", "")).lower()
         if agent_id not in AGENTS:
             continue
-        push_step(runtime_state, agent_id, "Pausado por Intervenção do Supervisor", kind="pause", extra={"command_id": row.get("id")})
-        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="supervisor", extra={"command_id": row.get("id")})
-        reply = build_agent_reply(agent_id, row, queue, supervisor_mode=True)
+        auto_resume = str(row.get("kind", "")).lower() == "auto-resume"
+        if auto_resume:
+            push_step(runtime_state, agent_id, "Retomada automatica recebida do watchdog de continuidade", kind="auto-resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
+        else:
+            push_step(runtime_state, agent_id, "Pausado por Intervenção do Supervisor", kind="pause", extra={"command_id": row.get("id")})
+        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="auto-resume" if auto_resume else "supervisor", extra={"command_id": row.get("id")})
+        reply = build_agent_reply(agent_id, row, queue, supervisor_mode=not auto_resume)
         append_jsonl(INTERVENTION_RESPONSES_FILE, reply)
         if reply.get("status") == "docs_preflight_required":
             push_step(runtime_state, agent_id, "Intervenção registrada; agente deve ler docs antes de retomar qualquer alteração", kind="docs-preflight-required", extra={"command_id": row.get("id")})
         else:
-            push_step(runtime_state, agent_id, "Retomando o trabalho real após intervenção humana", kind="resume", extra={"command_id": row.get("id")})
+            message = "Retomando o trabalho real a partir do checkpoint" if auto_resume else "Retomando o trabalho real após intervenção humana"
+            push_step(runtime_state, agent_id, message, kind="resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
         processed += 1
     return processed
 
@@ -385,6 +545,7 @@ def main() -> int:
     assigned = assign_pending_tasks(runtime_state)
     queue = load_queue()
     record_agent_activity(queue, runtime_state)
+    continuation_enqueued = enqueue_continuation_requests(runtime_state)
     processed = process_commands(queue, runtime_state)
     supervisor_processed = process_supervisor_interventions(queue, runtime_state)
     write_heartbeats(queue, runtime_state)
@@ -392,6 +553,7 @@ def main() -> int:
     print(json.dumps({
         "ok": True,
         "assigned": assigned,
+        "continuation_requests_enqueued": continuation_enqueued,
         "commands_processed": processed,
         "supervisor_commands_processed": supervisor_processed,
         "generated_at": utc_now(),
