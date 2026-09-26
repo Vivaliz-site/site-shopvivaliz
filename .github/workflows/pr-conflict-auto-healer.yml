@@ -16,7 +16,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    name: Detect whether Oracle conflict healing is actually needed
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should_heal: ${{ steps.detect.outputs.should_heal }}
+    steps:
+      - name: Inspect mergeability without reserving the Oracle runner
+        id: detect
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -Eeuo pipefail
+          should_heal=false
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' && -n "${PR_NUMBER:-}" ]]; then
+            for attempt in $(seq 1 6); do
+              payload="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+              mergeable="$(jq -r '.mergeable // "unknown"' <<<"$payload")"
+              mergeable_state="$(jq -r '.mergeable_state // "unknown"' <<<"$payload")"
+              if [[ "$mergeable" == 'false' || "$mergeable_state" == 'dirty' ]]; then
+                should_heal=true
+                break
+              fi
+              if [[ "$mergeable" == 'true' ]]; then
+                break
+              fi
+              sleep 2
+            done
+            if [[ "$mergeable" == 'unknown' ]]; then
+              should_heal=true
+            fi
+          else
+            mapfile -t prs < <(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+            for pr in "${prs[@]}"; do
+              payload="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}")"
+              mergeable="$(jq -r '.mergeable // "unknown"' <<<"$payload")"
+              mergeable_state="$(jq -r '.mergeable_state // "unknown"' <<<"$payload")"
+              if [[ "$mergeable" == 'false' || "$mergeable_state" == 'dirty' || "$mergeable" == 'unknown' ]]; then
+                should_heal=true
+                break
+              fi
+            done
+          fi
+          echo "should_heal=${should_heal}" >> "$GITHUB_OUTPUT"
+          echo "oracle_runner_required=${should_heal}"
+
   heal:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.should_heal == 'true' }}
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 30
