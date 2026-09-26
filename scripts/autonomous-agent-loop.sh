@@ -95,6 +95,22 @@ run_cycle() {
     log "Task continuation watchdog completed."
   fi
 
+  if [ -f "scripts/task_resume_dispatcher.py" ]; then
+    if python3 scripts/task_resume_dispatcher.py \
+      --timeout-seconds "${SHOPVIVALIZ_RESUME_TIMEOUT_SECONDS:-900}" \
+      --max-requests "${SHOPVIVALIZ_RESUME_MAX_REQUESTS:-1}"; then
+      log "Detached task resume dispatcher completed."
+    else
+      resume_rc=$?
+      if [ "$resume_rc" -eq 75 ]; then
+        log "Detached task resume attempt made no durable progress; checkpoint remains RUNNING."
+      else
+        log "ERROR detached task resume dispatcher failed with rc=$resume_rc."
+        return 1
+      fi
+    fi
+  fi
+
   if [ -f "scripts/agent-operations-worker.py" ]; then
     if ! python3 scripts/agent-operations-worker.py; then
       log "ERROR agent operations worker failed."
