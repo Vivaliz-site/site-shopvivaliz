@@ -50,7 +50,7 @@ function svais_provider_request_timeout(): int
     // Bound each provider call so a transient upstream stall cannot hold the
     // whole nine-message cycle forever. The cycle remains fail-closed when a
     // bounded call expires and records timeout/transport evidence.
-    return max(30, min(240, (int)(getenv('AI_SQUAD_PROVIDER_TIMEOUT') ?: 120)));
+    return max(30, min(240, (int)(getenv('AI_SQUAD_PROVIDER_TIMEOUT') ?: 240)));
 }
 
 function svais_failure_class(Throwable $e): string

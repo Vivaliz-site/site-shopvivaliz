@@ -129,7 +129,7 @@ jobs:
           VISUAL_ARTIFACT_ID=''
           VISUAL_ARTIFACT_NAME=''
           VISUAL_ARTIFACT_DIGEST=''
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 60); do
             runs="$(gh api -X GET "repos/$GH_REPO/actions/workflows/storefront-browser-audit.yml/runs"               -f event=pull_request -f head_sha="$POLICY_HEAD_SHA" -f status=success -f per_page=20)"
             VISUAL_RUN_ID="$(jq -r --arg sha "$POLICY_HEAD_SHA"               '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
             if [[ -n "$VISUAL_RUN_ID" ]]; then

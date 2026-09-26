@@ -96,6 +96,23 @@ assert.deepEqual(parsedLegacy.sources, ['https://example.org/legacy']);
 
 assert.match(buildSourceRetryPrompt('pesquise'), /WebSearch/);
 assert.match(buildSourceRetryPrompt('pesquise'), /https?:\/\//);
+let budgetNow = 1000;
+const budgetTimeouts = [];
+const budgetedRetry = await answerClaudeRequest(valid, {
+  auth: { configured: true, token: '' },
+  timeoutMs: 10000,
+  now: () => budgetNow,
+  run: async (callArgs, prompt, timeoutMs) => {
+    budgetTimeouts.push(timeoutMs);
+    if (budgetTimeouts.length === 1) {
+      budgetNow = 8000;
+      return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Resposta sem URL.' }), stderr: '' };
+    }
+    return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Fonte: https://example.com/budget' }), stderr: '' };
+  },
+});
+assert.deepEqual(budgetTimeouts, [10000, 3000], 'source retry must consume the original total request deadline');
+assert.equal(budgetedRetry.ok, true);
 const sourceRetryCalls = [];
 const sourceRetryResult = await answerClaudeRequest(valid, {
   auth: { configured: true, token: '' },
@@ -134,6 +151,38 @@ await Promise.all([
   answerClaudeRequest(nonWebRequest, { auth: { configured: true, token: '' }, run: queuedRun }),
 ]);
 assert.equal(queuedMaxActive, 1, 'Claude work must serialize concurrent requests to protect OAuth refresh');
+
+let queueNow = 0;
+let releaseBlocker;
+let markBlockerStarted;
+const blockerStarted = new Promise(resolve => { markBlockerStarted = resolve; });
+const blockerGate = new Promise(resolve => { releaseBlocker = resolve; });
+const blocker = answerClaudeRequest(nonWebRequest, {
+  auth: { configured: true, token: '' },
+  timeoutMs: 10000,
+  now: () => queueNow,
+  run: async () => {
+    markBlockerStarted();
+    await blockerGate;
+    return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Blocker concluído.' }), stderr: '' };
+  },
+});
+await blockerStarted;
+const queuedBudgetTimeouts = [];
+const queuedBudgetRequest = answerClaudeRequest(valid, {
+  auth: { configured: true, token: '' },
+  timeoutMs: 10000,
+  now: () => queueNow,
+  run: async (callArgs, prompt, timeoutMs) => {
+    queuedBudgetTimeouts.push(timeoutMs);
+    return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Fonte: https://example.com/queued-budget' }), stderr: '' };
+  },
+});
+queueNow = 7000;
+releaseBlocker();
+await blocker;
+await queuedBudgetRequest;
+assert.deepEqual(queuedBudgetTimeouts, [3000], 'queue wait must consume the original Claude request deadline');
 
 let refreshRetryCalls = 0;
 const refreshBackoffs = [];

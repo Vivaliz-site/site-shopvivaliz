@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_PORT = 17657;
-const DEFAULT_TIMEOUT_MS = 240000;
+const DEFAULT_TIMEOUT_MS = 225000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const DEFAULT_CLAUDE_BIN = '/home/ubuntu/.local/bin/claude';
@@ -331,14 +331,24 @@ export function buildSourceRetryPrompt(prompt) {
 }
 
 export async function answerClaudeRequest(request, options = {}) {
-  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, options));
+  const now = options.now || Date.now;
+  const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(DEFAULT_TIMEOUT_MS, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
+  const deadline = options.deadline ?? (now() + timeoutMs);
+  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, {
+    ...options,
+    now,
+    timeoutMs,
+    deadline,
+  }));
 }
 
 async function answerClaudeRequestUnserialized(request, options = {}) {
   const auth = options.auth || claudeAuthSource();
   if (!auth.configured) throw new Error('missing token');
 
-  const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
+  const timeoutMs = options.timeoutMs;
+  const now = options.now || Date.now;
+  const deadline = options.deadline ?? (now() + timeoutMs);
   const run = options.run || runClaude;
   const sleep = options.sleep || (delay => new Promise(resolve => setTimeout(resolve, delay)));
   const attempts = request.web_search ? 2 : 1;
@@ -348,7 +358,9 @@ async function answerClaudeRequestUnserialized(request, options = {}) {
     let result;
     let contentionRetries = 0;
     while (true) {
-      result = await run(buildClaudeArgs(request), prompt, timeoutMs, auth.token);
+      const remainingMs = Math.max(0, deadline - now());
+      if (remainingMs <= 0) throw new Error('request_timeout');
+      result = await run(buildClaudeArgs(request), prompt, remainingMs, auth.token);
       if (result.code === 0) break;
       const detail = claudeFailureDetail(result);
       if (classifyClaudeError(detail) === 'oauth_refresh_contention' && contentionRetries < 1) {
