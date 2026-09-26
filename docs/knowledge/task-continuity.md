@@ -140,3 +140,20 @@ do repositório continua sendo a fonte para descobrir objetivo, evidência e
 seu teste, a integração no governance ou os tokens obrigatórios desaparecerem.
 <!-- /TASK_CONTINUITY_AUTO_RESUME_V4 -->
 
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+## Ordem obrigatória de retomada
+
+Policy: `CHATGPT_RESUME_ORDER_V5`.
+
+Para qualquer tarefa abandonada, interrompida ou com checkpoint `RUNNING`, a ordem é fixa:
+
+1. **ChatGPT comum** — primeira opção; retoma do checkpoint no próximo turno disponível.
+2. **ChatGPT Work** — segunda opção, quando a tarefa exige continuidade persistente/multi-etapas.
+3. **CLI** — terceira e última opção, somente depois das duas camadas ChatGPT anteriores terem sido tentadas ou comprovadamente indisponíveis/inadequadas.
+
+Roteamento persistido: `chatgpt_common_then_work_then_cli`.
+Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
+
+Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+
