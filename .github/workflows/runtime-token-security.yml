@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: runtime-token-security
+  group: runtime-token-security-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -57,39 +57,35 @@ jobs:
           DEPLOY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -Eeuo pipefail
-          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          should_run=false
+          route='none'
 
           if [[ "$EVENT_NAME" == 'schedule' || "$EVENT_NAME" == 'workflow_dispatch' ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "direct_runtime_audit=true"
-            exit 0
-          fi
-
-          if [[ "$EVENT_NAME" == 'push' ]]; then
+            should_run=true
+            route='direct_runtime_audit'
+          elif [[ "$EVENT_NAME" == 'push' ]]; then
             git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/runtime-token-production-impact.txt
             should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/runtime-token-production-impact.txt)"
             if [[ "$should_deploy" == 'true' ]]; then
-              echo "defer_to_post_deploy_event=true"
-              exit 0
+              route='defer_to_post_deploy_event'
+            else
+              should_run=true
+              route='nondeploy_push_audit_now'
             fi
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "nondeploy_push_audit_now=true"
-            exit 0
-          fi
+          elif [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+            if [[ "$DEPLOY_CONCLUSION" != 'success' ]]; then
+              route='deploy_workflow_not_success'
+            else
+              evidence_file="$(mktemp)"
+              trap 'rm -f "$evidence_file"' EXIT
+              if ! gh api -H 'Accept: application/vnd.github.raw+json' \
+                "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+                > "$evidence_file"; then
+                echo '::error::Current production evidence is unavailable'
+                exit 1
+              fi
 
-          if [[ "$EVENT_NAME" != 'workflow_run' || "$DEPLOY_CONCLUSION" != 'success' ]]; then
-            echo "deploy_workflow_not_success=true"
-            exit 0
-          fi
-
-          evidence_file="$(mktemp)"
-          trap 'rm -f "$evidence_file"' EXIT
-          if ! gh api -H 'Accept: application/vnd.github.raw+json'             "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence"             > "$evidence_file"; then
-            echo "deployment_evidence_unavailable=true"
-            exit 0
-          fi
-
-          read -r deployed_sha status validate deploy smoke < <(python3 - "$evidence_file" <<'PY'
+              read -r deployed_sha status validate deploy smoke < <(python3 - "$evidence_file" <<'PY'
           import json, re, sys
           data=json.load(open(sys.argv[1], encoding='utf-8'))
           jobs=data.get('jobs') or {}
@@ -104,15 +100,29 @@ jobs:
               str(jobs.get('smoke_test','')),
           )
           PY
-          )
+              )
 
-          expected_sha="${DEPLOY_HEAD_SHA,,}"
-          if [[ "$status" == 'PRODUCTION_UPDATED'              && "$validate" == 'success'              && "$deploy" == 'success'              && "$smoke" == 'success'              && -n "$expected_sha"              && "$deployed_sha" == "$expected_sha" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "post_deploy_runtime_audit=true"
+              if [[ "$status" != 'PRODUCTION_UPDATED' || "$validate" != 'success' || "$deploy" != 'success' || "$smoke" != 'success' || -z "$deployed_sha" ]]; then
+                echo '::error::Current production evidence is not a verified deploy'
+                exit 1
+              fi
+
+              expected_sha="${DEPLOY_HEAD_SHA,,}"
+              if [[ -n "$expected_sha" && "$deployed_sha" == "$expected_sha" ]]; then
+                should_run=true
+                route='post_deploy_runtime_audit'
+              else
+                route='stale_or_nondeploy_event'
+                echo "stale_or_nondeploy_event=true expected=${expected_sha:-none} deployed=$deployed_sha"
+              fi
+            fi
           else
-            echo "stale_or_nondeploy_event=true expected=${expected_sha:-none} deployed=${deployed_sha:-none}"
+            echo "::error::Unsupported runtime token event: $EVENT_NAME"
+            exit 1
           fi
+
+          echo "runtime_token_route=$route"
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
   audit:
     needs: production-evidence-gate
