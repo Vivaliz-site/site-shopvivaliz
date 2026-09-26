@@ -194,6 +194,17 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         )
         self.assertEqual(second["executed"], 0)
 
+        retried = dispatcher.run_once(
+            runtime_dir=self.runtime,
+            project_dir=self.project,
+            executor=self._executor(advance=False),
+            timeout_seconds=30,
+            max_requests=1,
+            retry_after_seconds=0,
+        )
+        self.assertEqual(retried["executed"], 1)
+        self.assertEqual(retried["no_progress"], 1)
+
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)
