@@ -128,16 +128,25 @@ def enqueue_continuation_requests(runtime_state: dict[str, Any]) -> int:
         if str(current.get("next_action", "")).strip() != next_action:
             continue
 
-        agent_id = str(request.get("agent_id", "")).strip().lower()
-        if agent_id not in AGENTS:
-            agent_id = "gpt"
+        agent_id = "gpt"
+        executor_order = request.get("executor_order")
+        if executor_order != ["chatgpt_common", "chatgpt_work", "cli"]:
+            executor_order = ["chatgpt_common", "chatgpt_work", "cli"]
 
         intervention = {
             "id": request_id,
             "agent_id": agent_id,
+            "preferred_executor": "chatgpt_common",
+            "secondary_executor": "chatgpt_work",
+            "final_fallback": "cli",
+            "executor_order": executor_order,
+            "fallback_policy": "chatgpt_common_then_work_then_cli",
+            "previous_agent_id": str(request.get("previous_agent_id", "")).strip(),
             "message": (
                 f"Retome automaticamente a tarefa {task_id} a partir do checkpoint persistido. "
-                f"Proxima acao: {next_action}. Continue ate CONCLUIDO ou BLOCKED_EXTERNAL comprovado."
+                f"Proxima acao: {next_action}. Ordem obrigatoria: ChatGPT comum primeiro; "
+                "ChatGPT Work somente se o ChatGPT comum nao puder sustentar a continuidade; "
+                "CLI apenas como ultima opcao. Continue ate CONCLUIDO ou BLOCKED_EXTERNAL comprovado."
             ),
             "source": "task-continuation-watchdog",
             "created_at": utc_now(),
