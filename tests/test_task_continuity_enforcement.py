@@ -184,6 +184,27 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             self.assertIn("cancel-in-progress: true", text, str(workflow))
 
 
+    def test_ci_fanout_is_path_scoped_for_specialized_pr_gates(self) -> None:
+        workflow_dir = ROOT / ".github" / "workflows"
+        specialized = (
+            "quality-gate.yml",
+            "shopvivaliz-qa.yml",
+            "policy-engine.yml",
+            "autonomy-boundary.yml",
+            "audit-governance.yml",
+            "ecommerce-excellence-audit.yml",
+            "pr-policy-enforcement.yml",
+            "pr-conflict-auto-healer.yml",
+        )
+        for name in specialized:
+            workflow = (workflow_dir / name).read_text(encoding="utf-8")
+            self.assertIn("paths:", workflow, name)
+
+    def test_continuity_fast_gate_has_short_timeout(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("timeout-minutes: 3", workflow)
+        self.assertIn("tests.test_task_continuity_enforcement", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
