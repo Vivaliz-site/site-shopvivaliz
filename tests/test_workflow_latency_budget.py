@@ -59,9 +59,10 @@ class WorkflowLatencyBudgetTests(unittest.TestCase):
 
     def test_finalizer_no_longer_requires_history_integrity(self) -> None:
         text = self.read("pr-completion-enforcer.yml")
-        required = text.split("required=(", 1)[1].split(")", 1)[0]
-        self.assertNotIn("History Integrity", required)
-        self.assertIn("Mandatory Validation Gate", required)
+        always_required = text.split("always_required=(", 1)[1].split(")", 1)[0]
+        self.assertNotIn("History Integrity", always_required)
+        self.assertIn("Mandatory Validation Gate", always_required)
+        self.assertIn("Repository Governance", always_required)
 
 
     def test_specialized_pr_filters_do_not_use_repo_wide_test_or_script_globs(self) -> None:
