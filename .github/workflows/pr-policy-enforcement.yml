@@ -51,6 +51,12 @@ jobs:
           set -Eeuo pipefail
           python3 -m unittest tests.test_pr_gate_replay -v
 
+      - name: Run CI latency regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_ci_latency_contract -v
+
       - name: Verify policy enforcement surfaces
         shell: bash
         run: |
