@@ -147,6 +147,13 @@ jobs:
               body
             });
 
+      - name: Restore local Ollama model cache
+        if: steps.meta.outputs.eligible == 'true' && steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-models-${{ runner.os }}-${{ runner.arch }}-${{ env.OLLAMA_MODEL }}
+
       - name: Install local Ollama for real conflicts
         if: steps.meta.outputs.eligible == 'true' && steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
         shell: bash
