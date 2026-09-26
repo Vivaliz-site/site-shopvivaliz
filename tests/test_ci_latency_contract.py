@@ -22,6 +22,19 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("fanout_settle_attempt", hosted)
         self.assertIn("master-production-pipeline.yml", hosted)
 
+    def test_stale_pr_sync_avoids_native_bot_update_branch(self) -> None:
+        workflow = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
+        self.assertNotIn("update-branch", workflow)
+        self.assertNotIn("ai-stale-pr-repair.yml", workflow)
+        self.assertIn("external_auth_branch_sync=true", workflow)
+        self.assertIn("REMOTE_HEAL_SCRIPT", workflow)
+
+    def test_clean_stale_pr_sync_does_not_require_gemini(self) -> None:
+        healer = (ROOT / "scripts" / "pr_conflict_vm_heal.sh").read_text(encoding="utf-8")
+        merge_pos = healer.index('if [[ "$merge_clean" -eq 0 ]]')
+        credential_pos = healer.index("--credential-preflight")
+        self.assertGreater(credential_pos, merge_pos)
+
     def test_history_integrity_avoids_blob_downloads(self) -> None:
         workflow = (WF / "history-integrity.yml").read_text(encoding="utf-8")
         validator = (ROOT / "scripts" / "maintenance" / "validate_sanitized_history.py").read_text(encoding="utf-8")
