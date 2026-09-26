@@ -16,6 +16,15 @@ class RepositoryGovernanceSecretDebtTests(unittest.TestCase):
         self.assertIn('--head-report "artifacts/secret-references/report.json"', text)
         self.assertIn('if [ "$EVENT_NAME" = "pull_request" ]', text)
 
+    def test_replayed_pr_governance_keeps_base_and_head_context(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:\n    inputs:", text)
+        self.assertIn("base_sha:", text)
+        self.assertIn("head_sha:", text)
+        self.assertIn("REPLAY_BASE_SHA", text)
+        self.assertIn("REPLAY_HEAD_SHA", text)
+        self.assertIn('PR_CONTEXT="true"', text)
+
     def test_non_pr_secret_audit_remains_fail_closed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn('exit "$status"', text)
