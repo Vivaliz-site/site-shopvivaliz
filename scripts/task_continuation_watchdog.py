@@ -15,7 +15,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent_task_state import RUNTIME_DIR
+try:
+    from .agent_task_state import RUNTIME_DIR
+except ImportError:  # direct CLI execution from repository root
+    from agent_task_state import RUNTIME_DIR
 
 REQUESTS_FILE = "_resume-requests.jsonl"
 DEFAULT_STALE_SECONDS = 120
