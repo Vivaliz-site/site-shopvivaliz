@@ -301,6 +301,7 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
             valid, reason = docs_preflight(agent_id, current_task)
             if not valid:
                 command = docs_read_command(agent_id, current_task)
+                persist_task_continuity(agent_id, current_task, next_action=command, evidence=f"docs preflight pending during execution: {reason}")
                 set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {focus}")
                 push_step(
                     runtime_state,
@@ -316,6 +317,7 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
                     evidence=reason,
                 )
                 continue
+            persist_task_continuity(agent_id, current_task, next_action=f"executar e verificar: {validation_command_for(agent_id, focus)}", evidence="docs preflight valid; execution continues")
             push_step(
                 runtime_state,
                 agent_id,
