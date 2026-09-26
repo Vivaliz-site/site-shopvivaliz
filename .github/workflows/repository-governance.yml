@@ -81,7 +81,24 @@ jobs:
             test "$head" = "$REPLAY_HEAD_SHA"
             PR_CONTEXT="true"
             base="$REPLAY_BASE_SHA"
-          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+            base="$PUSH_BEFORE_SHA"
+          elif git cat-file -e origin/main^{commit} 2>/dev/null; then
+            base="$(git merge-base HEAD origin/main)"
+          else
+            base="$(git rev-parse HEAD^)"
+          fi
+
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "pr_context=$PR_CONTEXT" >> "$GITHUB_OUTPUT"
+          {
+            echo "base=$base"
+            echo "head=$head"
+            echo "pr_context=$PR_CONTEXT"
+          } >> artifacts/repository-governance/run-context.txt
+
       - name: Compile governance and canonical entrypoints
         run: |
           python -m py_compile \
@@ -185,190 +202,6 @@ jobs:
           test -s artifacts/secret-references/report.md
 
           if [ "$PR_CONTEXT" = "true" ] && [ "$status" -ne 0 ]; then
-            base_dir="$RUNNER_TEMP/secret-audit-base-${GITHUB_RUN_ID}"
-            git worktree add --detach "$base_dir" "${{ steps.base.outputs.base }}"
-            if (
-              cd "$base_dir"
-              mkdir -p artifacts/secret-references
-              python scripts/maintenance/audit_secret_references.py >/dev/null 2>&1
-            ); then
-              test -s "$base_dir/artifacts/secret-references/report.json"
-            else
-              test -s "$base_dir/artifacts/secret-references/report.json"
-            fi
-
-            compare_status=0
-            python scripts/maintenance/compare_secret_audit_reports.py \
-              --base-report "$base_dir/artifacts/secret-references/report.json" \
-              --head-report "artifacts/secret-references/report.json" || compare_status=$?
-            git worktree remove --force "$base_dir"
-            if [ "$compare_status" -ne 0 ]; then
-              exit "$compare_status"
-            fi
-            echo "::warning::Repository-wide secret-reference debt is unchanged from the PR base; no new blocking finding was introduced."
-            status=0
-          fi
-
-          exit "$status"
-
-      - name: Verify final reorganization contract
-        if: always()
-        run: python scripts/maintenance/finalize_reorganization.py
-
-      - name: Verify evidence files
-        if: always()
-        run: |
-          test -s artifacts/repository-governance/run-context.txt
-          test -s artifacts/repository-governance/report.json
-          test -s artifacts/repository-governance/report.md
-          test -s artifacts/workflow-policy/report.json
-          test -s artifacts/workflow-policy/report.md
-          test -s artifacts/secret-references/report.json
-          test -s artifacts/secret-references/report.md
-          test -s artifacts/system-health/report.json
-          test -s artifacts/reorganization-final/report.json
-          test -s artifacts/reorganization-final/report.md
-          test -s artifacts/generated-index/repository-file-index.md
-          test -s artifacts/generated-index/repository-hygiene.md
-          test -s artifacts/audit-governance-self-test/report.json
-          test -s artifacts/audit-governance-self-test/report.md
-
-      - name: Upload governance evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: repository-governance-${{ github.run_id }}
-          path: |
-            artifacts/repository-governance/
-            artifacts/workflow-policy/
-            artifacts/secret-references/
-            artifacts/system-health/
-            artifacts/reorganization-final/
-            artifacts/disabled-executors/
-            artifacts/generated-index/
-            artifacts/audit-governance-self-test/
-          if-no-files-found: error
-          retention-days: 90
-; then
-            base="$PUSH_BEFORE_SHA"
-          elif git cat-file -e origin/main^{commit} 2>/dev/null; then
-            base="$(git merge-base HEAD origin/main)"
-          else
-            base="$(git rev-parse HEAD^)"
-          fi
-
-          git cat-file -e "${base}^{commit}"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "pr_context=$PR_CONTEXT" >> "$GITHUB_OUTPUT"
-          {
-            echo "base=$base"
-            echo "head=$head"
-            echo "pr_context=$PR_CONTEXT"
-          } >> artifacts/repository-governance/run-context.txt
-
-      - name: Compile governance and canonical entrypoints
-        run: |
-          python -m py_compile \
-            git-auto-sync.py \
-            scripts/maintenance/audit_automation_changes.py \
-            scripts/maintenance/audit_active_workflows.py \
-            scripts/maintenance/audit_secret_references.py \
-            scripts/maintenance/compare_secret_audit_reports.py \
-            scripts/maintenance/system_health_check.py \
-            scripts/maintenance/finalize_reorganization.py \
-            scripts/validate-audit-governance.py \
-            scripts/generate_repository_index.py \
-            scripts/all-documented-agents.py \
-            scripts/heartbeat-executor.py \
-            scripts/system-health-check.py \
-            oauth-auto-exec.py \
-            scripts/ai/retired_executor.py \
-            scripts/ai/autonomous_executor.py \
-            scripts/ai/continuous_executor.py \
-            scripts/ai/parallel_executor.py \
-            scripts/marketplace/olist/sync_master.py \
-            scripts/marketplace/olist/oauth_login.py \
-            scripts/marketplace/shopee/retired_credential_tool.py \
-            scripts/autonomous-executor.py \
-            scripts/continuous-executor.py \
-            scripts/parallel-executor.py \
-            scripts/olist-sync-master.py \
-            scripts/olist-oauth-login.py \
-            scripts/get_token.py \
-            scripts/run_playwright.py \
-            scripts/shopee_full_pipeline.py \
-            scripts/test_final.py \
-            scripts/test_shopee_simple.py \
-            scripts/test_shopee_api.py \
-            claude/api/shopee-integration/scripts/run_playwright.py \
-            claude/api/shopee-integration/scripts/test_final.py \
-            claude/api/shopee-integration/scripts/test_shopee_api.py
-
-      - name: Run governance unit tests
-        run: |
-          python -m unittest \
-            tests.unit.test_audit_automation_changes \
-            tests.unit.test_audit_active_workflows \
-            tests.unit.test_agent_evidence_state \
-            tests.unit.test_compare_secret_audit_reports \
-            tests.unit.test_git_auto_sync \
-            tests.unit.test_generate_repository_index \
-            tests.unit.test_olist_entrypoints_safe \
-            tests.unit.test_repository_governance_secret_debt \
-            tests.unit.test_shopee_legacy_credentials_safe \
-            -v
-
-      - name: Enforce Absolute Audit V5 bridge
-        run: bash scripts/repository-governance-validate.sh absolute-audit
-
-      - name: Self-test extreme audit governance
-        run: |
-          set -euo pipefail
-          python scripts/validate-audit-governance.py --output-dir artifacts/audit-governance-self-test
-
-      - name: Generate repository inventory snapshot
-        run: |
-          set -euo pipefail
-          python scripts/generate_repository_index.py
-          cp docs/knowledge/repository-file-index.md artifacts/generated-index/repository-file-index.md
-          cp docs/audits/repository-hygiene.md artifacts/generated-index/repository-hygiene.md
-          python scripts/generate_repository_index.py --check
-
-      - name: Validate canonical queue and agent health
-        run: python scripts/maintenance/system_health_check.py
-
-      - name: Audit changed automation surfaces
-        if: always()
-        run: |
-          python scripts/maintenance/audit_automation_changes.py \
-            --base "${{ steps.base.outputs.base }}" \
-            --head "${{ github.sha }}"
-
-      - name: Audit all active workflows
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          status=0
-          python scripts/maintenance/audit_active_workflows.py || status=$?
-          test -s artifacts/workflow-policy/report.json
-          test -s artifacts/workflow-policy/report.md
-          exit "$status"
-
-      - name: Audit token and secret references
-        if: always()
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          status=0
-          python scripts/maintenance/audit_secret_references.py || status=$?
-          test -s artifacts/secret-references/report.json
-          test -s artifacts/secret-references/report.md
-
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "$status" -ne 0 ]; then
             base_dir="$RUNNER_TEMP/secret-audit-base-${GITHUB_RUN_ID}"
             git worktree add --detach "$base_dir" "${{ steps.base.outputs.base }}"
             if (
