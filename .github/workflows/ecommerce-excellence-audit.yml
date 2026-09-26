@@ -15,6 +15,11 @@ on:
   push:
     branches:
       - main
+  workflow_run:
+    workflows:
+      - Master Production Pipeline 24/7
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       pr_replay:
@@ -27,13 +32,15 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: ecommerce-excellence-${{ github.ref }}
+  group: ecommerce-excellence-${{ github.event_name }}-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: true
 
 jobs:
   static-audit:
+    if: github.event_name != 'workflow_run'
     name: Validate all tracked project files
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -49,7 +56,7 @@ jobs:
         with:
           php-version: '8.3'
 
-      - name: Validate deployment evidence retry contract
+      - name: Validate deployment event contract
         run: python3 tests/test_ecommerce_excellence_deploy_wait_retry.py
 
       - name: Validate static scanner precision contracts
@@ -161,79 +168,25 @@ jobs:
             artifacts/ecommerce-static.md
           retention-days: 30
 
-  classify-production-impact:
-    name: Classify production impact for live audit
-    if: github.event_name != 'pull_request' && inputs.pr_replay != true
-    runs-on: ubuntu-latest
-    outputs:
-      should_deploy: ${{ steps.scope.outputs.should_deploy }}
-    steps:
-      - name: Checkout exact commit
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          fetch-depth: 2
-
-      - name: Reuse canonical production-impact classifier
-        id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = 'push' ]; then
-            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > /tmp/ecommerce-live-changed-paths.txt
-            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/ecommerce-live-changed-paths.txt)"
-          else
-            should_deploy=true
-          fi
-          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
-
-  await-production-evidence:
-    name: Wait for production evidence without reserving Oracle runner
-    needs: classify-production-impact
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true) || (github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 14
-    steps:
-      - name: Wait for exact SHA production evidence
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
-        run: |
-          set -euo pipefail
-          ready=0
-          for _ in $(seq 1 36); do
-            if gh api -H 'Accept: application/vnd.github.raw+json' \
-              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
-              > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
-              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PYEOF'
-          import json, sys
-          expected=sys.argv[1].lower()
-          data=json.load(open(sys.argv[2], encoding='utf-8'))
-          if expected:
-              assert str(data.get('sha','')).lower() == expected
-          assert data.get('status') == 'PRODUCTION_UPDATED'
-          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate','deploy','smoke_test'))
-          PYEOF
-              then
-                ready=1
-                break
-              fi
-            fi
-            sleep 20
-          done
-          test "$ready" = '1'
-
+  production-audit-gate:
+    if: github.event_name == 'workflow_run' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true)
+    uses: ./.github/workflows/production-deploy-event-gate.yml
+    with:
+      event_name: ${{ github.event_name }}
+      source_run_id: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.id) || '' }}
+      expected_sha: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+      source_conclusion: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || '' }}
   live-production-audit:
     name: Validate real production from Oracle
-    needs: [classify-production-impact, await-production-evidence]
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true) || (github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true')
+    needs: production-audit-gate
+    if: needs.production-audit-gate.outputs.should_run == 'true'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 25
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v6
         with:
+          ref: ${{ needs.production-audit-gate.outputs.production_sha }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -325,7 +278,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ecommerce-live-audit-${{ github.sha }}
+          name: ecommerce-live-audit-${{ needs.production-audit-gate.outputs.production_sha }}
           path: |
             artifacts/ecommerce-live.json
             artifacts/ecommerce-live.md
