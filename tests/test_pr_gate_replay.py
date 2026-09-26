@@ -50,6 +50,12 @@ class PrGateReplayTest(unittest.TestCase):
         ecommerce = build_dispatch_plan("Ecommerce Excellence Audit", **self.common)
         self.assertEqual(dict(ecommerce.inputs), {"pr_replay": "true"})
 
+        governance = build_dispatch_plan("Repository Governance", **self.common)
+        self.assertEqual(
+            dict(governance.inputs),
+            {"base_sha": "a" * 40, "head_sha": "b" * 40},
+        )
+
         quality = build_command("Quality Gate", **self.common)
         self.assertEqual(
             quality,
@@ -77,6 +83,25 @@ class PrGateReplayTest(unittest.TestCase):
         self.assertIn("missing|completed:action_required)", enforcer)
         self.assertIn("action_required_gate_replayed=true", enforcer)
         self.assertIn("failed_required_gate_auto_replayed=false", enforcer)
+
+    def test_repository_governance_replay_preserves_pr_comparison_context(self) -> None:
+        plan = build_dispatch_plan("Repository Governance", **self.common)
+        self.assertEqual(
+            dict(plan.inputs),
+            {"base_sha": "a" * 40, "head_sha": "b" * 40},
+        )
+
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "repository-governance.yml").read_text()
+        self.assertIn("base_sha:", workflow)
+        self.assertIn("head_sha:", workflow)
+        self.assertIn("REPLAY_BASE_SHA", workflow)
+        self.assertIn("REPLAY_HEAD_SHA", workflow)
+
+    def test_repository_governance_workflow_has_single_job_body(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "repository-governance.yml").read_text()
+        self.assertEqual(workflow.count("- name: Compile governance and canonical entrypoints"), 1)
+        self.assertEqual(workflow.count("- name: Audit token and secret references"), 1)
+        self.assertEqual(workflow.count("- name: Upload governance evidence"), 1)
 
     def test_unknown_gate_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported required gate"):

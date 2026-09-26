@@ -1,7 +1,6 @@
 name: History Integrity
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -14,7 +13,7 @@ permissions:
 
 concurrency:
   group: history-integrity-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify-history:
