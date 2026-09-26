@@ -50,6 +50,13 @@ class WorkflowLatencyBudgetTests(unittest.TestCase):
         self.assertIn("needs: preflight", text)
         self.assertIn("needs.preflight.outputs.should_heal == 'true'", text)
 
+    def test_finalizer_throttles_stale_branch_updates(self) -> None:
+        text = self.read("pr-completion-enforcer.yml")
+        self.assertIn("SOURCE_HEAD_SHA", text)
+        self.assertIn("stale_update_count=0", text)
+        self.assertIn("stale_update_skipped_not_source", text)
+        self.assertIn("stale_update_skipped_budget", text)
+
     def test_finalizer_no_longer_requires_history_integrity(self) -> None:
         text = self.read("pr-completion-enforcer.yml")
         required = text.split("required=(", 1)[1].split(")", 1)[0]

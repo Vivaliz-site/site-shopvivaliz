@@ -173,6 +173,7 @@ jobs:
           merged_count=0
           repair_required_count=0
           waiting_count=0
+          stale_update_count=0
 
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
@@ -198,6 +199,15 @@ jobs:
 
             relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
             if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" && "$head_sha" != "$SOURCE_HEAD_SHA" ]]; then
+                echo "pr_${pr}_stale_update_skipped_not_source=true"
+                continue
+              fi
+              if [[ "$GITHUB_EVENT_NAME" != 'workflow_run' && "$stale_update_count" -ge 1 ]]; then
+                echo "pr_${pr}_stale_update_skipped_budget=true"
+                continue
+              fi
+              stale_update_count=$((stale_update_count + 1))
               echo "pr_${pr}_repair-pr-branch=true"
               if gh api --method PUT "repos/${REPO}/pulls/${pr}/update-branch" \
                 -f expected_head_sha="$head_sha" >/tmp/update-branch-${pr}.json 2>/tmp/update-branch-${pr}.err; then
