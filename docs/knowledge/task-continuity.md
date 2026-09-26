@@ -85,3 +85,13 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - Auditorias informativas, inventários e verificações horárias não pertencem ao hot path de todo PR.
 - Não aplique `on.pull_request.paths` a workflow potencialmente obrigatório: o GitHub pode deixar o check esperado em `Pending`. Prefira workflow sempre disparado com jobs baratos/skipped, ou gate agregador.
 - Dentro de Actions, autentique consultas GitHub com o `GITHUB_TOKEN` efêmero quando possível para evitar o limite baixo de chamadas REST anônimas.
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+
+- Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
+- Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
+- Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
+- `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+<!-- /CODEX_LAST_RESORT_V1 -->
