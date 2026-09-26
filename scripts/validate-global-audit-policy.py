@@ -47,15 +47,14 @@ def load_manifest() -> tuple[dict, bool]:
     if repo == CANONICAL_REPO:
         return local, True
 
-    headers = {
-        "Accept": "application/vnd.github.raw+json",
-        "User-Agent": "shopvivaliz-absolute-audit-v5",
-        "Cache-Control": "no-cache",
-    }
-    github_token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
-    request = urllib.request.Request(REMOTE_MANIFEST, headers=headers)
+    request = urllib.request.Request(
+        REMOTE_MANIFEST,
+        headers={
+            "Accept": "application/vnd.github.raw+json",
+            "User-Agent": "shopvivaliz-absolute-audit-v5",
+            "Cache-Control": "no-cache",
+        },
+    )
     with urllib.request.urlopen(request, timeout=20) as response:
         remote = json.loads(response.read().decode("utf-8"))
 
