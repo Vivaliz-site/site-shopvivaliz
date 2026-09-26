@@ -192,6 +192,12 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         )
         self.assertEqual(second["executed"], 0)
 
+    def test_autonomous_loop_re_resolves_current_release_every_cycle(self) -> None:
+        loop = (SCRIPTS / "autonomous-agent-loop.sh").read_text(encoding="utf-8")
+        self.assertGreaterEqual(loop.count('cd "$PROJECT_DIR"'), 2)
+        cycle = loop.split("run_cycle() {", 1)[1]
+        self.assertLess(cycle.index('cd "$PROJECT_DIR"'), cycle.index("autonomous-continuous-cycle.py"))
+
     def test_autonomous_loop_orders_watchdog_dispatcher_then_worker(self) -> None:
         loop = (SCRIPTS / "autonomous-agent-loop.sh").read_text(encoding="utf-8")
         watchdog = loop.index("task_continuation_watchdog.py")
