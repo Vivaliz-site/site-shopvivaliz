@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - 'api/**'
+      - 'admin/**'
+      - 'includes/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'blog/**'
+      - '*.php'
+      - '.github/workflows/shopvivaliz-qa.yml'
   workflow_dispatch:
 
 concurrency:
