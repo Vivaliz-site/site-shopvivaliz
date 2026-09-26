@@ -1,0 +1,57 @@
+name: Production Deploy Event Gate
+
+on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        description: Completed Master Production Pipeline run id
+        required: false
+        type: string
+        default: ''
+      expected_sha:
+        description: Exact deployed SHA expected for workflow_run events
+        required: false
+        type: string
+        default: ''
+      source_conclusion:
+        description: Conclusion of the source production pipeline
+        required: false
+        type: string
+        default: ''
+      event_name:
+        description: Caller event name
+        required: true
+        type: string
+    outputs:
+      should_run:
+        description: Whether a live production audit should run
+        value: ${{ jobs.resolve.outputs.should_run }}
+      production_sha:
+        description: Immutable production SHA verified by deployment evidence
+        value: ${{ jobs.resolve.outputs.production_sha }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      production_sha: ${{ steps.gate.outputs.production_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Resolve production audit trigger
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ inputs.event_name }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SOURCE_CONCLUSION: ${{ inputs.source_conclusion }}
+        run: bash scripts/production-deploy-event-gate.sh

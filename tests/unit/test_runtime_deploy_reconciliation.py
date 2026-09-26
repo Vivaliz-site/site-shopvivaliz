@@ -103,10 +103,18 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         guard_job = env_guard.split("  guard:\n", 1)[1]
         self.assertNotIn("deployment_wait_attempt", guard_job)
 
+        event_gate = (ROOT / ".github/workflows/production-deploy-event-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_call:", event_gate)
+        self.assertIn("scripts/production-deploy-event-gate.sh", event_gate)
+        self.assertNotIn("sleep ", event_gate)
+
         token = (ROOT / ".github/workflows/runtime-token-security.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: ./.github/workflows/production-release-await.yml", token)
-        self.assertIn("expected_sha: ${{ needs.preflight.outputs.expected_sha }}", token)
+        self.assertIn("workflow_run:", token)
+        self.assertIn("Master Production Pipeline 24/7", token)
+        self.assertIn("uses: ./.github/workflows/production-deploy-event-gate.yml", token)
+        self.assertNotIn("uses: ./.github/workflows/production-release-await.yml", token)
         audit_job = token.split("  audit:\n", 1)[1]
+        self.assertIn("needs: production-audit-gate", audit_job)
         self.assertNotIn("deployment_wait_attempt", audit_job)
 
     def test_runtime_env_guard_smokes_local_release(self) -> None:

@@ -4,65 +4,31 @@ on:
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'scripts/maintenance/runtime_token_audit.py'
-      - 'scripts/maintenance/token_reference_audit.py'
-      - '.github/workflows/runtime-token-security.yml'
-      - 'config/constants.php'
-      - 'includes/integration-health.php'
-      - 'daemon-*-token-renewer.py'
-      - 'daemon-token-renewer.py'
-      - '**/*.php'
-      - '**/*.py'
-      - '**/*.sh'
-      - '**/*.yml'
-      - '**/*.yaml'
-
+  workflow_run:
+    workflows:
+      - Master Production Pipeline 24/7
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: runtime-token-security
+  group: runtime-token-security-${{ github.event_name }}-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  preflight:
-    runs-on: ubuntu-latest
-    outputs:
-      expected_sha: ${{ steps.production_impact.outputs.expected_sha }}
-    steps:
-      - name: Checkout push revision for production impact
-        if: ${{ github.event_name == 'push' }}
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - name: Classify production impact
-        id: production_impact
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          expected_sha=''
-          if [[ "${{ github.event_name }}" == 'push' ]]; then
-            git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
-            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
-            [[ "$should_deploy" == 'true' ]] && expected_sha="$GITHUB_SHA"
-          fi
-          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
-
-  await-release:
-    needs: preflight
-    uses: ./.github/workflows/production-release-await.yml
+  production-audit-gate:
+    if: github.event_name == 'workflow_run' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/production-deploy-event-gate.yml
     with:
-      expected_sha: ${{ needs.preflight.outputs.expected_sha }}
-      attempts: 30
-      sleep_seconds: 20
-
+      event_name: ${{ github.event_name }}
+      source_run_id: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.id) || '' }}
+      expected_sha: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+      source_conclusion: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || '' }}
   audit:
-    needs: await-release
+    needs: production-audit-gate
+    if: needs.production-audit-gate.outputs.should_run == 'true'
     name: Audit production runtime credentials
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
