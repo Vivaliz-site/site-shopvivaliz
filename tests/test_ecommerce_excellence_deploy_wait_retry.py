@@ -29,7 +29,7 @@ if 'for _ in $(seq 1 36); do' in text or 'sleep 20' in text:
 
 def job_body(name: str) -> str:
     match = re.search(
-        rf"^  {re.escape(name)}:\\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\\n|\\Z)",
+        rf"^  {re.escape(name)}:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
         text,
         re.M | re.S,
     )
