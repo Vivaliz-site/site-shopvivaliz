@@ -12,11 +12,12 @@ emit_skip() {
   printf 'should_run=false\nproduction_sha=\n' >> "$GITHUB_OUTPUT"
 }
 
+main() {
 if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
   if [[ "$SOURCE_CONCLUSION" != 'success' ]]; then
     echo "source_pipeline_not_success=$SOURCE_CONCLUSION"
     emit_skip
-    exit 0
+    return 0
   fi
   [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] || { echo '::error::Invalid source run id'; exit 2; }
   [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid expected deploy SHA'; exit 2; }
@@ -27,7 +28,7 @@ if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
     skipped)
       echo 'source_deploy_skipped=true'
       emit_skip
-      exit 0
+      return 0
       ;;
     success)
       ;;
@@ -78,3 +79,6 @@ fi
 
 printf 'should_run=true\nproduction_sha=%s\n' "$deployed_sha" >> "$GITHUB_OUTPUT"
 echo "production_audit_ready=true production_sha=$deployed_sha"
+}
+
+main "$@"
