@@ -146,9 +146,12 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         request = watchdog.read_requests(self.runtime)[0]
 
         self.assertEqual(request["agent_id"], "gpt")
-        self.assertEqual(request["preferred_executor"], "chatgpt")
+        self.assertEqual(request["preferred_executor"], "chatgpt_common")
+        self.assertEqual(request["secondary_executor"], "chatgpt_work")
+        self.assertEqual(request["final_fallback"], "cli")
+        self.assertEqual(request["executor_order"], ["chatgpt_common", "chatgpt_work", "cli"])
         self.assertEqual(request["previous_agent_id"], "claude")
-        self.assertEqual(request["fallback_policy"], "chatgpt_then_cli_last")
+        self.assertEqual(request["fallback_policy"], "chatgpt_common_then_work_then_cli")
 
     def test_worker_routes_auto_resume_to_gpt_even_when_request_contains_previous_cli_agent(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
@@ -166,9 +169,31 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(worker.enqueue_continuation_requests({"agents": {}}), 1)
         intervention = worker.read_jsonl(worker.INTERVENTIONS_FILE)[0]
         self.assertEqual(intervention["agent_id"], "gpt")
-        self.assertEqual(intervention["preferred_executor"], "chatgpt")
-        self.assertEqual(intervention["fallback_policy"], "chatgpt_then_cli_last")
-        self.assertIn("ChatGPT", intervention["message"])
+        self.assertEqual(intervention["preferred_executor"], "chatgpt_common")
+        self.assertEqual(intervention["secondary_executor"], "chatgpt_work")
+        self.assertEqual(intervention["final_fallback"], "cli")
+        self.assertEqual(intervention["executor_order"], ["chatgpt_common", "chatgpt_work", "cli"])
+        self.assertEqual(intervention["fallback_policy"], "chatgpt_common_then_work_then_cli")
+        self.assertIn("ChatGPT comum", intervention["message"])
+        self.assertIn("ChatGPT Work", intervention["message"])
+        self.assertIn("CLI", intervention["message"])
+
+    def test_cli_fallback_is_rejected_without_prior_chatgpt_tiers_exhausted(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        fallback = (root / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        self.assertIn('SHOPVIVALIZ_RESUME_STAGE', fallback)
+        self.assertIn('cli_last', fallback)
+        self.assertIn('chatgpt_common', fallback)
+        self.assertIn('chatgpt_work', fallback)
+        self.assertIn('exit 75', fallback)
+
+    def test_docs_define_chatgpt_common_then_work_then_cli_order(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        docs = (root / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
+        self.assertIn("CHATGPT_RESUME_ORDER_V5", docs)
+        self.assertIn("ChatGPT comum", docs)
+        self.assertIn("ChatGPT Work", docs)
+        self.assertIn("CLI", docs)
 
     def test_operations_worker_ignores_superseded_resume_request(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
