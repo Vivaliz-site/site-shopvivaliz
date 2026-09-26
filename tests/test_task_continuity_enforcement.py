@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import importlib.util
 import sys
 import tempfile
 import unittest
@@ -9,6 +11,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import agent_task_state as state  # noqa: E402
+
+
+
+def load_operations_worker():
+    path = ROOT / "scripts" / "agent-operations-worker.py"
+    spec = importlib.util.spec_from_file_location("agent_operations_worker_test", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load agent operations worker")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class AgentTaskStateTests(unittest.TestCase):
@@ -83,6 +96,37 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(current["status"], "RUNNING")
         self.assertEqual(current["next_action"], "executar a proxima validacao")
         self.assertFalse(state.is_terminal(current))
+
+
+class OperationsWorkerContinuityTests(unittest.TestCase):
+    def test_pending_task_gets_owner_even_when_docs_preflight_is_not_ready(self) -> None:
+        worker = load_operations_worker()
+        queue = {
+            "queue": [
+                {
+                    "id": "task-preflight",
+                    "title": "Tarefa simples",
+                    "description": "Executar sem abandono",
+                    "status": "pending",
+                    "priority": "medium",
+                }
+            ]
+        }
+        saved = []
+        worker.load_queue = lambda: queue
+        worker.save_queue = lambda value, runtime_actor=None: saved.append(copy.deepcopy(value))
+        worker.choose_agent = lambda task: "gpt"
+        worker.docs_preflight = lambda agent_id, task: (False, "missing docs receipt")
+        worker.push_step = lambda *args, **kwargs: None
+        worker.persist_task_continuity = lambda *args, **kwargs: None
+
+        assigned = worker.assign_pending_tasks({"agents": {}})
+
+        self.assertEqual(queue["queue"][0]["assigned_to"], ["gpt"])
+        self.assertEqual(queue["queue"][0]["execution_phase"], "docs_preflight")
+        self.assertEqual(assigned[0]["agent_id"], "gpt")
+        self.assertEqual(assigned[0]["phase"], "docs_preflight")
+        self.assertTrue(saved, "ownership must be persisted even before docs receipt")
 
 
 class TaskContinuityPolicyTests(unittest.TestCase):
