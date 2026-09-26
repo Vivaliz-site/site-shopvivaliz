@@ -19,6 +19,7 @@ def require(condition: bool, message: str) -> None:
 
 require(SCRIPT.is_file(), 'production deploy event gate script missing')
 require(GATE.is_file(), 'production deploy event gate reusable workflow missing')
+require('exit 0' not in SCRIPT.read_text(encoding='utf-8'), 'audit gate must not use fail-open exit 0 paths')
 
 gate = GATE.read_text(encoding='utf-8')
 ecom = ECOM.read_text(encoding='utf-8')
