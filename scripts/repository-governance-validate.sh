@@ -23,6 +23,7 @@ python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
 python3 -m unittest tests.test_workflow_latency_budget -v
 python3 -m unittest tests.test_ci_performance_monitor -v
+python3 tests/test_ci_performance_monitor_workflow.py
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
