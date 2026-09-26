@@ -96,7 +96,15 @@ jobs:
           fi
           cred="$RUNNER_TEMP/ml-pricing-cloudflare.ini"
           umask 077
-          printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$cred"
+          CRED_FILE="$cred" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          Path(os.environ["CRED_FILE"]).write_text(
+              "dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n",
+              encoding="utf-8",
+          )
+          PY
           trap 'rm -f "$cred"' EXIT
           sudo -n certbot certonly \
             --dns-cloudflare \
