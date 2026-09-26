@@ -185,26 +185,34 @@ jobs:
           DEPLOY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -Eeuo pipefail
-          echo "should_run=false" >> "$GITHUB_OUTPUT"
-          echo "audit_sha=" >> "$GITHUB_OUTPUT"
+          should_run=false
+          audit_sha=''
+          eligible=true
 
           if [[ "$EVENT_NAME" == 'workflow_run' && "$DEPLOY_CONCLUSION" != 'success' ]]; then
+            eligible=false
             echo "deploy_workflow_not_success=true"
-            exit 0
           fi
 
           evidence_file="$(mktemp)"
           trap 'rm -f "$evidence_file"' EXIT
-          if ! gh api -H 'Accept: application/vnd.github.raw+json'             "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence"             > "$evidence_file"; then
-            if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
-              echo "deployment_evidence_unavailable_for_event=true"
-              exit 0
+
+          if [[ "$eligible" == true ]]; then
+            if ! gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > "$evidence_file"; then
+              if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+                eligible=false
+                echo "deployment_evidence_unavailable_for_event=true"
+              else
+                echo '::error::Current production evidence is unavailable'
+                exit 1
+              fi
             fi
-            echo '::error::Current production evidence is unavailable'
-            exit 1
           fi
 
-          read -r deployed_sha status validate deploy smoke < <(python3 - "$evidence_file" <<'PY'
+          if [[ "$eligible" == true ]]; then
+            read -r deployed_sha status validate deploy smoke < <(python3 - "$evidence_file" <<'PY'
           import json, re, sys
           data=json.load(open(sys.argv[1], encoding='utf-8'))
           jobs=data.get('jobs') or {}
@@ -219,28 +227,35 @@ jobs:
               str(jobs.get('smoke_test','')),
           )
           PY
-          )
+            )
 
-          if [[ "$status" != 'PRODUCTION_UPDATED' || "$validate" != 'success' || "$deploy" != 'success' || "$smoke" != 'success' || -z "$deployed_sha" ]]; then
-            if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
-              echo "deployment_evidence_not_ready_or_not_a_deploy=true"
-              exit 0
+            if [[ "$status" != 'PRODUCTION_UPDATED' || "$validate" != 'success' || "$deploy" != 'success' || "$smoke" != 'success' || -z "$deployed_sha" ]]; then
+              if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+                eligible=false
+                echo "deployment_evidence_not_ready_or_not_a_deploy=true"
+              else
+                echo '::error::Current production evidence is not a verified deploy'
+                exit 1
+              fi
             fi
-            echo '::error::Current production evidence is not a verified deploy'
-            exit 1
           fi
 
-          if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+          if [[ "$eligible" == true && "$EVENT_NAME" == 'workflow_run' ]]; then
             expected_sha="${DEPLOY_HEAD_SHA,,}"
             if [[ -z "$expected_sha" || "$deployed_sha" != "$expected_sha" ]]; then
+              eligible=false
               echo "stale_or_nondeploy_event=true expected=${expected_sha:-none} deployed=$deployed_sha"
-              exit 0
             fi
           fi
 
-          echo "audit_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
-          echo "should_run=true" >> "$GITHUB_OUTPUT"
-          echo "production_evidence_exact=true"
+          if [[ "$eligible" == true ]]; then
+            should_run=true
+            audit_sha="$deployed_sha"
+            echo "production_evidence_exact=true"
+          fi
+
+          echo "audit_sha=$audit_sha" >> "$GITHUB_OUTPUT"
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
   live-production-audit:
     name: Validate real production from Oracle
