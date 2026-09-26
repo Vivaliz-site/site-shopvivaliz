@@ -11,13 +11,15 @@ foreach (['workflow_call:', 'runs-on: ubuntu-latest', 'if [[ -z "$EXPECTED_SHA" 
 
 $cases = [
     '.github/workflows/runtime-token-security.yml' => [
-        'id: production_impact',
-        'bash scripts/should-deploy-production.sh',
-        '[[ "$should_deploy" == \'true\' ]] && expected_sha="$GITHUB_SHA"',
-        'uses: ./.github/workflows/production-release-await.yml',
-        'expected_sha: ${{ needs.preflight.outputs.expected_sha }}',
+        'workflow_run:',
+        'workflows: [Master Production Pipeline 24/7]',
+        'production-evidence-gate:',
+        'DEPLOY_HEAD_SHA',
+        'DEPLOY_CONCLUSION',
+        'deployment/latest.json?ref=deployment-evidence',
         'audit:',
-        'needs: await-release',
+        'needs: production-evidence-gate',
+        "needs.production-evidence-gate.outputs.should_run == 'true'",
     ],
     '.github/workflows/runtime-env-keyset-lock.yml' => [
         'id: production_impact',
@@ -76,3 +78,10 @@ if ($errors !== []) {
 }
 
 echo "nondeploy-release-wait-cost-guard: ok\n";
+
+$runtimeToken = (string)file_get_contents($root . '/.github/workflows/runtime-token-security.yml');
+if (str_contains($runtimeToken, 'uses: ./.github/workflows/production-release-await.yml')
+    || str_contains($runtimeToken, 'sleep_seconds:')
+    || str_contains($runtimeToken, 'attempts:')) {
+    $errors[] = 'runtime_token_security_must_not_poll_for_deploy';
+}
