@@ -38,6 +38,7 @@ TEST = ROOT / "tests" / "test_task_continuity_enforcement.py"
 WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
 FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
+FAST_GATE = ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml"
 
 errors: list[str] = []
 for path in NORMATIVE:
@@ -128,6 +129,23 @@ if not TEST.is_file():
     errors.append("missing tests/test_task_continuity_enforcement.py")
 if not WATCHDOG_TEST.is_file():
     errors.append("missing tests/test_task_continuation_watchdog.py")
+
+
+if not FAST_GATE.is_file():
+    errors.append("missing .github/workflows/task-continuity-fast-gate.yml")
+else:
+    fast_gate_text = FAST_GATE.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "scripts/task_continuation_watchdog.py",
+        "scripts/autonomous-agent-loop.sh",
+        "scripts/autonomous-provider-failover.sh",
+        "tests/test_task_continuation_watchdog.py",
+        "tests.test_task_continuation_watchdog",
+        "GEPETO-POLICY.md",
+        "docs/knowledge/dev-agent-briefing.md",
+    ):
+        if token not in fast_gate_text:
+            errors.append(f".github/workflows/task-continuity-fast-gate.yml: missing {token}")
 
 if not GOVERNANCE.is_file():
     errors.append("missing scripts/repository-governance-validate.sh")
