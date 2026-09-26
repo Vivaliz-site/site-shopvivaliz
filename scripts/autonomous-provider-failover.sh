@@ -5,6 +5,7 @@ PROMPT_FILE="${1:?prompt file required}"
 SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
 SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
 SHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
+SHOPVIVALIZ_RESUME_BACKGROUND="${SHOPVIVALIZ_RESUME_BACKGROUND:-0}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -104,9 +105,16 @@ if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
 fi
 
 # Esta e a terceira camada (CLI) da politica de retomada.
-# Dentro da CLI, preservar cota: Gemini -> Claude -> Codex.
-# Codex continua sendo a ultima opcao dentro da ultima camada.
-ORDER=(gemini anthropic codex)
+# Em recovery de background, a politica recorrente permite apenas IA gratuita/local
+# aprovada. Claude/Codex continuam exigindo gatilho humano explicito.
+BACKGROUND_ORDER=(gemini)
+if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  ORDER=("${BACKGROUND_ORDER[@]}")
+  echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+else
+  # Execucao finita/interativa: preservar cota, Gemini -> Claude -> Codex.
+  ORDER=(gemini anthropic codex)
+fi
 
 for provider in "${ORDER[@]}"; do
   case "$provider" in
