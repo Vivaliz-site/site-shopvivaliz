@@ -37,11 +37,22 @@ LOCK_FILE = "_resume-dispatch.lock"
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
+DEFAULT_RETRY_AFTER_SECONDS = 900
 DEFAULT_REPOSITORY_URL = "https://github.com/Vivaliz-site/site-shopvivaliz.git"
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_utc(value: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
 
 
 def _safe_task_id(value: str) -> str:
@@ -269,6 +280,7 @@ def run_once(
     executor: Sequence[str] | None = None,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     max_requests: int = DEFAULT_MAX_REQUESTS,
+    retry_after_seconds: int = DEFAULT_RETRY_AFTER_SECONDS,
 ) -> dict[str, Any]:
     runtime = Path(runtime_dir or RUNTIME_DIR)
     project = Path(project_dir or ROOT)
@@ -295,11 +307,12 @@ def run_once(
             summary["locked"] = True
             return summary
 
-        attempted = {
-            str(row.get("fingerprint", "")).strip()
-            for row in _read_jsonl(ledger_path)
-            if str(row.get("fingerprint", "")).strip()
-        }
+        ledger_rows = _read_jsonl(ledger_path)
+        latest_by_fingerprint: dict[str, dict[str, Any]] = {}
+        for row in ledger_rows:
+            fingerprint = str(row.get("fingerprint", "")).strip()
+            if fingerprint:
+                latest_by_fingerprint[fingerprint] = row
 
         for request in read_requests(runtime):
             summary["scanned"] += 1
@@ -310,8 +323,20 @@ def run_once(
 
             fingerprint = str(request.get("fingerprint", "")).strip()
             task_id = str(request.get("task_id", "")).strip()
-            if not fingerprint or not task_id or fingerprint in attempted:
+            if not fingerprint or not task_id:
                 continue
+
+            previous = latest_by_fingerprint.get(fingerprint)
+            if previous:
+                previous_result = str(previous.get("result", "")).strip()
+                if previous_result in {"progress", "terminal"}:
+                    continue
+                previous_at = _parse_utc(str(previous.get("created_at", "")))
+                cooldown = max(0, int(retry_after_seconds))
+                if previous_at is not None and cooldown > 0:
+                    elapsed = (datetime.now(timezone.utc) - previous_at).total_seconds()
+                    if elapsed < cooldown:
+                        continue
 
             state = _load_json(_state_path(runtime, task_id))
             if not _request_matches_state(request, state):
@@ -339,7 +364,7 @@ def run_once(
                 "created_at": utc_now(),
             }
             _append_jsonl(ledger_path, row)
-            attempted.add(fingerprint)
+            latest_by_fingerprint[fingerprint] = row
 
             if result == "terminal":
                 summary["terminal"] += 1
@@ -367,6 +392,16 @@ def main() -> int:
         type=int,
         default=int(os.getenv("SHOPVIVALIZ_RESUME_MAX_REQUESTS", str(DEFAULT_MAX_REQUESTS))),
     )
+    parser.add_argument(
+        "--retry-after-seconds",
+        type=int,
+        default=int(
+            os.getenv(
+                "SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS",
+                str(DEFAULT_RETRY_AFTER_SECONDS),
+            )
+        ),
+    )
     args = parser.parse_args()
 
     result = run_once(
@@ -374,6 +409,7 @@ def main() -> int:
         project_dir=Path(args.project_dir).expanduser() if args.project_dir else None,
         timeout_seconds=args.timeout_seconds,
         max_requests=args.max_requests,
+        retry_after_seconds=args.retry_after_seconds,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if result["executed"] and not (result["progressed"] or result["terminal"]):
