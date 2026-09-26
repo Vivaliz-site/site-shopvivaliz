@@ -51,6 +51,9 @@ REQUIRED = {
         "failed_required_gate_auto_replayed=false",
         "merged_via_oracle=true",
         "github_write_token_copied_to_actions=false",
+        "github.event.workflow_run.pull_requests[0].number",
+        "required_gates_ready",
+        "target_prs",
     ],
     ".github/workflows/pr-policy-enforcement.yml": [
         "pull_request:",
@@ -124,6 +127,17 @@ REQUIRED = {
         "merge_method='squash'",
         "external_github_auth_used=true",
     ],
+    ".github/workflows/history-integrity.yml": [
+        "filter: blob:none",
+        "validate_sanitized_history.py",
+    ],
+    "scripts/maintenance/validate_sanitized_history.py": [
+        "--filter=blob:none",
+        "existing_commit_shas",
+        "branches_containing_root",
+        "tags_containing_root",
+        "batched_ref_contains",
+    ],
     "tests/test_pr_conflict_gemini_healer.py": [
         "test_private_env_parser_reads_only_gemini_names",
         "test_credential_environment_uses_private_file_and_deduplicates",
@@ -150,6 +164,7 @@ FORBIDDEN = {
         "GH_REPO_TOKEN",
         "gh pr merge",
         "VM_HOST: 163.176.103.253",
+        "sleep 20",
         GIT_PUSH,
     ],
 }
