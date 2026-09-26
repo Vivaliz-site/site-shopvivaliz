@@ -57,6 +57,10 @@ if 'should_run=true' not in gate:
     raise SystemExit('exact deployed master runs must enable live audit')
 if 'exit 0' in gate:
     raise SystemExit('production evidence gate must not use explicit fail-open exits')
+if 'deployment_evidence_unavailable_for_event=true' in gate:
+    raise SystemExit('evidence transport failures must fail closed, not silently skip the audit')
+if 'group: ecommerce-excellence-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.ref }}' not in text:
+    raise SystemExit('push and post-deploy audits must use separate concurrency lanes')
 
 live = job_body('live-production-audit')
 if 'needs: production-evidence-gate' not in live:
