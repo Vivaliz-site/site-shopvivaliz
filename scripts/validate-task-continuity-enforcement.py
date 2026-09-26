@@ -77,6 +77,9 @@ else:
         "SHOPVIVALIZ_RESUME_RESULT_MODE",
         "task_state_signature",
         "task_state_advanced",
+        "SHOPVIVALIZ_RESUME_BACKGROUND",
+        "BACKGROUND_ORDER=(gemini)",
+        "background_paid_fallback_forbidden=true",
     ):
         if token not in fallback_text:
             errors.append(f"scripts/autonomous-provider-failover.sh: missing {token}")
