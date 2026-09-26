@@ -64,6 +64,19 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertNotIn("def is_ancestor", text)
         self.assertNotIn("def commit_count", text)
 
+    def test_stale_pr_repair_restores_ollama_model_cache_before_pull(self) -> None:
+        text = (WF / "ai-stale-pr-repair.yml").read_text(encoding="utf-8")
+        self.assertIn("uses: actions/cache@v4", text)
+        self.assertIn("path: ~/.ollama/models", text)
+        self.assertIn("runner.os", text)
+        self.assertIn("runner.arch", text)
+        self.assertIn("env.OLLAMA_MODEL", text)
+        cache_pos = text.index("uses: actions/cache@v4")
+        install_pos = text.index("Install local Ollama for real conflicts")
+        pull_pos = text.index('ollama pull "$OLLAMA_MODEL"')
+        self.assertLess(cache_pos, install_pos)
+        self.assertLess(install_pos, pull_pos)
+
     def test_conflict_healer_reserves_oracle_only_after_hosted_preflight(self) -> None:
         text = (WF / "pr-conflict-auto-healer.yml").read_text(encoding="utf-8")
         preflight = text.split("  heal:", 1)[0]
