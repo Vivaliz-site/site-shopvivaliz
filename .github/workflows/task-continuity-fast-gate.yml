@@ -1,0 +1,58 @@
+name: Task Continuity Fast Gate
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/agent_task_state.py'
+      - 'scripts/agent-operations-worker.py'
+      - 'scripts/validate-task-continuity-enforcement.py'
+      - 'tests/test_task_continuity_enforcement.py'
+      - 'tests/test_ci_feedback_optimization.py'
+      - 'tests/test_pr_gate_scope.py'
+      - 'tests/test_executor_fallback_order.py'
+      - 'docs/knowledge/task-continuity.md'
+      - 'docs/knowledge/agent-rules.md'
+      - 'AGENTS.md'
+      - 'AI-TO-CLI-PROTOCOL.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
+      - '.github/copilot-instructions.md'
+      - '.github/workflows/task-continuity-fast-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/agent_task_state.py'
+      - 'scripts/agent-operations-worker.py'
+      - 'scripts/validate-task-continuity-enforcement.py'
+      - 'tests/test_task_continuity_enforcement.py'
+      - 'docs/knowledge/task-continuity.md'
+      - 'docs/knowledge/agent-rules.md'
+      - 'AGENTS.md'
+      - 'AI-TO-CLI-PROTOCOL.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
+      - '.github/copilot-instructions.md'
+      - '.github/workflows/task-continuity-fast-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-continuity-fast-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  continuity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Compile continuity runtime
+        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/validate-task-continuity-enforcement.py
+      - name: Run focused continuity regression
+        run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order -v
+      - name: Validate continuity policy
+        run: python3 scripts/validate-task-continuity-enforcement.py

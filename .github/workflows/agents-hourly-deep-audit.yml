@@ -19,26 +19,12 @@ on:
       - 'tasks-queue.json'
       - 'docs/MEMORIA-AGENTES.md'
       - 'docs/HISTORICO-AGENTES-*.md'
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/**'
-      - '.ai/**'
-      - 'agents/**'
-      - 'config/**'
-      - '.githooks/**'
-      - 'README.md'
-      - 'AUTONOMOUS_TRIO_GUIDE.md'
-      - 'tasks-queue.json'
-      - 'docs/MEMORIA-AGENTES.md'
-      - 'docs/HISTORICO-AGENTES-*.md'
-
 permissions:
   contents: read
 
 concurrency:
   group: agents-hourly-deep-audit-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   audit:

@@ -4,6 +4,20 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    paths:
+      - 'blog/**'
+      - 'includes/**'
+      - 'scripts/repair-blog-editorial-content.php'
+      - 'tests/blog-**'
+      - 'tests/google-indexing-canonical-regression-test.php'
+      - 'tests/asset-source-dist-parity-test.php'
+      - 'tests/claude-workflow-cost-guard-test.php'
+      - 'tests/nondeploy-release-wait-cost-guard-test.php'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/quality-gate.yml'
   workflow_dispatch:
 
 permissions:

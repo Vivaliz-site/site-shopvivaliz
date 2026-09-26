@@ -368,3 +368,8 @@ Depois de ler o contexto, antes de qualquer mutação:
 **Código, documentação e runtime precisam concordar.**
 
 Se apenas um deles estiver correto, a tarefa não terminou.
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+Preservar a cota do Codex. Para continuidade de tarefas, priorizar rotas determinísticas/controle remoto auditável e executores alternativos autenticados adequados ao trabalho; usar Codex somente como último recurso finito. Falta de cota, rate limit ou indisponibilidade do Codex mantém a tarefa `RUNNING` e nunca constitui, isoladamente, `BLOCKED_EXTERNAL`.
+<!-- /CODEX_LAST_RESORT_V1 -->
