@@ -56,6 +56,10 @@ REQUIRED = {
         "TARGET_PR",
         "target_pr_count",
         "stale_gate_event",
+        "external_auth_branch_sync=true",
+        "native_update_branch_forbidden=true",
+        "scripts/pr_conflict_vm_heal.sh",
+        "scripts/pr_conflict_gemini_healer.py",
     ],
     ".github/workflows/pr-policy-enforcement.yml": [
         "pull_request:",
@@ -167,6 +171,8 @@ FORBIDDEN = {
         "GH_REPO_TOKEN",
         "gh pr merge",
         "VM_HOST: 163.176.103.253",
+        "update-branch",
+        "ai-stale-pr-repair.yml",
         GIT_PUSH,
     ],
 }
