@@ -15,16 +15,19 @@ class CiLatencyContractTests(unittest.TestCase):
         self.assertIn("target_pr_count", text)
         self.assertIn("stale_gate_event", text)
 
-    def test_scheduled_finalizer_never_reserves_self_hosted_runner_for_repo_wide_sweep(self) -> None:
+    def test_scheduled_finalizer_limits_self_hosted_recovery_to_one_pr(self) -> None:
         text = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
         gate = text.split("  enforce:", 1)[0]
         self.assertIn("GITHUB_EVENT_NAME", gate)
-        self.assertIn("schedule_no_self_hosted_sweep=true", gate)
+        self.assertIn("schedule_target_budget=1", gate)
         self.assertIn("if [[ \"$GITHUB_EVENT_NAME\" == 'schedule' ]]", gate)
+        self.assertIn("pulls?state=open&base=main&per_page=100", gate)
+        self.assertNotIn("schedule_no_self_hosted_sweep=true", gate)
         enforce = text.split("  enforce:", 1)[1]
-        self.assertIn("GITHUB_EVENT_NAME", enforce)
+        self.assertIn("TARGET_PR", enforce)
         self.assertIn("workflow_dispatch", enforce)
-        self.assertNotIn("pulls?state=open&base=main", enforce.split("workflow_dispatch", 1)[0])
+        before_manual_sweep = enforce.split("elif [[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]", 1)[0]
+        self.assertNotIn("pulls?state=open&base=main", before_manual_sweep)
 
     def test_completion_enforcer_keeps_fanout_wait_on_hosted_runner(self) -> None:
         text = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
