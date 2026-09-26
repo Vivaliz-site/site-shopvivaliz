@@ -64,5 +64,12 @@ class WorkflowLatencyBudgetTests(unittest.TestCase):
         self.assertIn("Mandatory Validation Gate", required)
 
 
+    def test_specialized_pr_filters_do_not_use_repo_wide_test_or_script_globs(self) -> None:
+        for name in ("quality-gate.yml", "shopvivaliz-qa.yml"):
+            header = self.read(name).split("workflow_dispatch:", 1)[0]
+            self.assertNotIn("- 'tests/**'", header, name)
+            self.assertNotIn("- 'scripts/**'", header, name)
+
+
 if __name__ == "__main__":
     unittest.main()
