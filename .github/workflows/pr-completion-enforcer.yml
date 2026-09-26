@@ -101,7 +101,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash -n trusted/scripts/merge_green_pr_via_vm.sh
-          python3 -m py_compile trusted/scripts/pr_gate_replay.py
+          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py
 
       - name: Configure verified Oracle SSH
         shell: bash
@@ -152,15 +152,9 @@ jobs:
           REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
         run: |
           set -Eeuo pipefail
-          required=(
+          always_required=(
             'Mandatory Validation Gate'
-            'Quality Gate'
-            'ShopVivaliz QA'
             'Repository Governance'
-            'Policy Engine'
-            'Autonomy Boundary'
-            'Ecommerce Excellence Audit'
-            'PR Policy Enforcement'
           )
 
           mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
@@ -228,13 +222,23 @@ jobs:
               continue
             fi
 
+            mapfile -t changed_files < <(
+              gh api "repos/${REPO}/pulls/${pr}/files?per_page=100" --paginate --jq '.[].filename'
+            )
+            mapfile -t specialized_required < <(
+              python3 trusted/scripts/pr_gate_scope.py "${changed_files[@]/#/--file=}"
+            )
+            applicable_required=("${always_required[@]}" "${specialized_required[@]}")
+            printf 'pr_%s_changed_files=%s\n' "$pr" "${#changed_files[@]}"
+            printf 'pr_%s_applicable_required=%s\n' "$pr" "${applicable_required[*]}"
+
             runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
             ready=1
             pending=0
             failed_required=()
             replay_required=()
 
-            for workflow_name in "${required[@]}"; do
+            for workflow_name in "${applicable_required[@]}"; do
               state="$(jq -r --arg name "$workflow_name" '
                 [.workflow_runs[] | select(.name == $name)]
                 | sort_by(.created_at)
