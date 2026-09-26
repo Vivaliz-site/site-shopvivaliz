@@ -60,8 +60,11 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
-            base="$PR_BASE_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ] && git cat-file -e origin/main^{commit} 2>/dev/null; then
+            # The event base SHA can become stale while a long-lived PR is open.
+            # Compare from the actual divergence point with current main so files
+            # added later to main are not misclassified as PR regressions.
+            base="$(git merge-base HEAD origin/main)"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
             base="$PUSH_BEFORE_SHA"
           elif git cat-file -e origin/main^{commit} 2>/dev/null; then
