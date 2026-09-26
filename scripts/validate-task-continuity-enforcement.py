@@ -99,7 +99,6 @@ else:
             errors.append(f"scripts/task_continuation_watchdog.py: missing {token}")
 
 routing_docs = (
-    ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
     ROOT / "AGENTS.md",
     ROOT / "docs" / "knowledge" / "agent-rules.md",
     ROOT / "docs" / "knowledge" / "task-continuity.md",
