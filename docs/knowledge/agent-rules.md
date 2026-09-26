@@ -127,3 +127,21 @@ Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações 
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
 - Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
 <!-- /CODEX_LAST_RESORT_V1 -->
+
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+## Ordem obrigatória de retomada
+
+Policy: `CHATGPT_RESUME_ORDER_V5`.
+
+Para qualquer tarefa abandonada, interrompida ou com checkpoint `RUNNING`, a ordem é fixa:
+
+1. **ChatGPT comum** — primeira opção; retoma do checkpoint no próximo turno disponível.
+2. **ChatGPT Work** — segunda opção, quando a tarefa exige continuidade persistente/multi-etapas.
+3. **CLI** — terceira e última opção, somente depois das duas camadas ChatGPT anteriores terem sido tentadas ou comprovadamente indisponíveis/inadequadas.
+
+Roteamento persistido: `chatgpt_common_then_work_then_cli`.
+Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
+
+Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+
