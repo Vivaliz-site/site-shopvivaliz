@@ -150,6 +150,18 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(worker.read_jsonl(worker.INTERVENTIONS_FILE), [])
 
 
+    def test_continuity_validator_requires_auto_resume_components(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        validator = (root / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("task_continuation_watchdog.py", validator)
+        self.assertIn("tests.test_task_continuation_watchdog", validator)
+
+        docs = (root / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
+        self.assertIn("TASK_CONTINUITY_AUTO_RESUME_V4", docs)
+        self.assertIn("task_continuation_watchdog.py", docs)
+        self.assertIn("120", docs)
+
+
     def test_watchdog_is_deterministic_and_does_not_invoke_paid_ai(self) -> None:
         root = Path(__file__).resolve().parents[1]
         script = (root / "scripts" / "task_continuation_watchdog.py").read_text(encoding="utf-8")
