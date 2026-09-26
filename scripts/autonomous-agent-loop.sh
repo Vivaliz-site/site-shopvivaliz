@@ -8,9 +8,9 @@ INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-60}"
 LOCK_FILE="${SHOPVIVALIZ_AGENT_LOCK:-/tmp/shopvivaliz-agent.lock}"
 STOP_FILE="${SHOPVIVALIZ_AGENT_STOP_FILE:-$PROJECT_DIR/.agent-stop}"
 
-START_SCRIPT_REALPATH="$(readlink -f "$0" 2>/dev/null || true)"
-if [ -z "$START_SCRIPT_REALPATH" ]; then
-  START_SCRIPT_REALPATH="$0"
+if ! START_SCRIPT_REALPATH="$(readlink -f "$0" 2>/dev/null)"; then
+  printf '[%s] ERROR cannot resolve agent script path: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$0" >&2
+  exit 1
 fi
 SHOPVIVALIZ_AGENT_REEXEC="${SHOPVIVALIZ_AGENT_REEXEC:-0}"
 SHOPVIVALIZ_AGENT_LOCK_INHERITED="${SHOPVIVALIZ_AGENT_LOCK_INHERITED:-}"
@@ -48,7 +48,7 @@ if command -v flock >/dev/null 2>&1; then
     exec 9>"$LOCK_FILE"
     if ! flock -n 9; then
       log "Another shopvivaliz autonomous agent instance is already running."
-      exit 0
+      exit 75
     fi
   fi
 else
@@ -72,8 +72,11 @@ trap 'shutdown_requested=1; log "Shutdown signal received; finishing current cyc
 run_cycle() {
   # Re-resolve the mutable current symlink every cycle. A long-lived systemd
   # process must not remain pinned to the release that was active at startup.
-  CURRENT_SCRIPT_REALPATH="$(readlink -f "$PROJECT_DIR/scripts/autonomous-agent-loop.sh" 2>/dev/null || true)"
-  if [ -n "$CURRENT_SCRIPT_REALPATH" ] && [ "$CURRENT_SCRIPT_REALPATH" != "$START_SCRIPT_REALPATH" ]; then
+  if ! CURRENT_SCRIPT_REALPATH="$(readlink -f "$PROJECT_DIR/scripts/autonomous-agent-loop.sh" 2>/dev/null)"; then
+    log "ERROR cannot resolve current autonomous-agent-loop.sh."
+    return 1
+  fi
+  if [ "$CURRENT_SCRIPT_REALPATH" != "$START_SCRIPT_REALPATH" ]; then
     log "Current release changed; self-refreshing autonomous agent."
     export SHOPVIVALIZ_AGENT_REEXEC=1
     if command -v flock >/dev/null 2>&1 && [ -e "/proc/$/fd/9" ]; then
