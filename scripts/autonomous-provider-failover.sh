@@ -3,7 +3,8 @@ set -Eeuo pipefail
 
 PROMPT_FILE="${1:?prompt file required}"
 SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
-SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"\nSHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
+SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
+SHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -19,9 +20,29 @@ has_change() {
   ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]
 }
 
+task_state_signature() {
+  [ -n "$SHOPVIVALIZ_TASK_ID" ] || return 0
+  python3 scripts/agent_task_state.py show --task "$SHOPVIVALIZ_TASK_ID" 2>/dev/null | python3 -c '
+import hashlib, json, sys
+p=json.load(sys.stdin)
+e=p.get("evidence") if isinstance(p.get("evidence"), list) else []
+basis={
+  "status": str(p.get("status", "")).strip(),
+  "next_action": str(p.get("next_action", "")).strip(),
+  "verification": str(p.get("verification") or "").strip(),
+  "evidence_count": len(e),
+  "last_evidence": str(e[-1]) if e else "",
+  "blocker": p.get("blocker"),
+}
+raw=json.dumps(basis, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+print(hashlib.sha256(raw.encode()).hexdigest())
+'
+}
+
 record() {
   local provider="$1" status="$2" code="$3"
-  printf '{"provider":"%s","status":"%s","exit_code":%s,"timestamp":"%s"}\n' \
+  printf '{"provider":"%s","status":"%s","exit_code":%s,"timestamp":"%s"}
+' \
     "$provider" "$status" "$code" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$ATTEMPTS"
 }
 
