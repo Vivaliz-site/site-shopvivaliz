@@ -6,6 +6,9 @@ on:
     branches: [main, master]
 permissions:
   contents: read
+concurrency:
+  group: mandatory-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   validation-gate:
     runs-on: ubuntu-latest
