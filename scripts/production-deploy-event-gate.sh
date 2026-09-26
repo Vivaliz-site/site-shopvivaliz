@@ -42,7 +42,7 @@ elif [[ "$EVENT_NAME" == 'schedule' || "$EVENT_NAME" == 'workflow_dispatch' ]]; 
 else
   echo "unsupported_audit_event=$EVENT_NAME"
   emit_skip
-  exit 0
+  return 0
 fi
 
 evidence_file="$(mktemp)"
