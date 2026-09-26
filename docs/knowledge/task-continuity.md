@@ -76,3 +76,12 @@ python3 scripts/agent_task_state.py terminal --task <id>
 ```
 
 Exit code diferente de zero significa que ainda há trabalho e a resposta deve ser apenas atualização de progresso, seguida da próxima ação executável — nunca encerramento.
+
+
+## Economia de fan-out do CI
+
+- Agrupe alterações relacionadas em um único commit/ref update quando a ferramenta permitir; um commit por arquivo multiplica eventos `synchronize`.
+- Use TDD isolado durante a edição e publique uma unidade verificável; um RED remoto explícito basta antes do GREEN.
+- Auditorias informativas, inventários e verificações horárias não pertencem ao hot path de todo PR.
+- Não aplique `on.pull_request.paths` a workflow potencialmente obrigatório: o GitHub pode deixar o check esperado em `Pending`. Prefira workflow sempre disparado com jobs baratos/skipped, ou gate agregador.
+- Dentro de Actions, autentique consultas GitHub com o `GITHUB_TOKEN` efêmero quando possível para evitar o limite baixo de chamadas REST anônimas.

@@ -13,6 +13,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
 concurrency:
   group: audit-governance-${{ github.ref }}
   cancel-in-progress: true

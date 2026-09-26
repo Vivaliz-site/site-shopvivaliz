@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
 concurrency:
   group: repository-governance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
