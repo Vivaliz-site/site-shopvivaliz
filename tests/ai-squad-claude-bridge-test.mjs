@@ -96,6 +96,23 @@ assert.deepEqual(parsedLegacy.sources, ['https://example.org/legacy']);
 
 assert.match(buildSourceRetryPrompt('pesquise'), /WebSearch/);
 assert.match(buildSourceRetryPrompt('pesquise'), /https?:\/\//);
+let budgetNow = 1000;
+const budgetTimeouts = [];
+const budgetedRetry = await answerClaudeRequest(valid, {
+  auth: { configured: true, token: '' },
+  timeoutMs: 10000,
+  now: () => budgetNow,
+  run: async (callArgs, prompt, timeoutMs) => {
+    budgetTimeouts.push(timeoutMs);
+    if (budgetTimeouts.length === 1) {
+      budgetNow = 8000;
+      return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Resposta sem URL.' }), stderr: '' };
+    }
+    return { code: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Fonte: https://example.com/budget' }), stderr: '' };
+  },
+});
+assert.deepEqual(budgetTimeouts, [10000, 3000], 'source retry must consume the original total request deadline');
+assert.equal(budgetedRetry.ok, true);
 const sourceRetryCalls = [];
 const sourceRetryResult = await answerClaudeRequest(valid, {
   auth: { configured: true, token: '' },
