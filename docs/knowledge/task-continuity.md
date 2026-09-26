@@ -176,9 +176,13 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- Dentro da camada CLI finita permanece a ordem `Gemini -> Claude -> Codex`;
-  Codex continua sendo a última opção e usa login ChatGPT, sem
-  `OPENAI_API_KEY`.
+- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1` e
+  só pode usar provedores permitidos para automação recorrente; atualmente,
+  `Gemini` é a rota automática. **Claude/GPT/Codex não podem ser fallback
+  silencioso de daemon/cron.**
+- Em execução finita/interativa fora do background permanece a ordem
+  `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
+  login ChatGPT, sem `OPENAI_API_KEY`.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
