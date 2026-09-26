@@ -122,8 +122,8 @@ jobs:
           canonical=0; noncanonical=0
           while IFS= read -r line; do
             test -z "$line" && continue
-            case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac
-          done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
+            case "$line" in *"0.2.51"*"/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac
+          done < <(pgrep -af '[d]esktop-commander.*remote.*--persist-session' 2>/dev/null || true)
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth"
           python3 - <<'PORTS'
           import socket

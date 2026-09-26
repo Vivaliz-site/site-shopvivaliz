@@ -69,10 +69,10 @@ jobs:
           while IFS= read -r line; do
             test -z "$line" && continue
             case "$line" in
-              *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
+              *"0.2.51"*"/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
             esac
           done < <(
-            if pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null; then
+            if pgrep -af '[d]esktop-commander.*remote.*--persist-session' 2>/dev/null; then
               :
             else
               rc=$?
