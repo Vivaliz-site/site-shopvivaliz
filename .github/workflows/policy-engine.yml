@@ -13,6 +13,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: policy-engine-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
