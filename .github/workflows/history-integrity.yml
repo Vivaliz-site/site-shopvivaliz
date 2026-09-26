@@ -1,6 +1,7 @@
 name: History Integrity
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -13,7 +14,7 @@ permissions:
 
 concurrency:
   group: history-integrity-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify-history:
@@ -21,10 +22,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout complete repository
+      - name: Checkout commit graph without repository blobs
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Set up Python
