@@ -150,6 +150,9 @@ jobs:
             tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
+          python tests/test_production_deploy_event_gate.py
+          python tests/test_ecommerce_excellence_deploy_wait_retry.py
+          php tests/nondeploy-release-wait-cost-guard-test.php
 
       - name: Enforce Absolute Audit V5 bridge
         run: bash scripts/repository-governance-validate.sh absolute-audit
