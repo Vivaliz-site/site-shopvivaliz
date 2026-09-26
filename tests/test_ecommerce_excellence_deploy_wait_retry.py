@@ -55,6 +55,8 @@ if 'echo "should_run=false"' not in gate:
     raise SystemExit('non-deploy/failed master runs must skip live audit')
 if 'echo "should_run=true"' not in gate:
     raise SystemExit('exact deployed master runs must enable live audit')
+if 'exit 0' in gate:
+    raise SystemExit('production evidence gate must not use explicit fail-open exits')
 
 live = job_body('live-production-audit')
 if 'needs: production-evidence-gate' not in live:
