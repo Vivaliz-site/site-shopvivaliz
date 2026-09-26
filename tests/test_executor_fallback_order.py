@@ -42,6 +42,11 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini", script)
         self.assertIn("env -u ANTHROPIC_API_KEY claude", script)
 
+    def test_continuity_validator_enforces_codex_last_resort(self) -> None:
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("CODEX_LAST_RESORT_V1", validator)
+        self.assertIn("autonomous-provider-failover.sh", validator)
+
 
 if __name__ == "__main__":
     unittest.main()
