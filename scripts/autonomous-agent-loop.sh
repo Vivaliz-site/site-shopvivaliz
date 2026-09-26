@@ -105,7 +105,8 @@ run_cycle() {
   if [ -f "scripts/task_resume_dispatcher.py" ]; then
     if python3 scripts/task_resume_dispatcher.py \
       --timeout-seconds "${SHOPVIVALIZ_RESUME_TIMEOUT_SECONDS:-900}" \
-      --max-requests "${SHOPVIVALIZ_RESUME_MAX_REQUESTS:-1}"; then
+      --max-requests "${SHOPVIVALIZ_RESUME_MAX_REQUESTS:-1}" \
+      --retry-after-seconds "${SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS:-900}"; then
       log "Detached task resume dispatcher completed."
     else
       resume_rc=$?
