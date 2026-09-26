@@ -9,7 +9,7 @@ class CiLatencyContractTests(unittest.TestCase):
     def test_completion_enforcer_scopes_workflow_run_to_triggering_pr(self) -> None:
         text = (WF / "pr-completion-enforcer.yml").read_text(encoding="utf-8")
         self.assertIn("pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number", text)
-        self.assertIn("|| 'sweep' }}", text)
+        self.assertIn("|| github.event_name }}", text)
         self.assertIn("TRIGGER_PR", text)
         self.assertIn("TARGET_PR", text)
         self.assertIn("target_pr_count", text)
