@@ -1,0 +1,100 @@
+name: ChatGPT Profile Inventory Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-profile-inventory-20260927
+    paths:
+      - '.github/workflows/chatgpt-profile-inventory-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 6
+    steps:
+      - name: Inventory browser profiles without secret values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          df -h /
+          sudo -n python3 - <<'PY'
+          import os, pwd, sqlite3, stat, time
+
+          roots = ['/home/ubuntu', '/home/fredrdp', '/home/fredconsole']
+          prune_names = {
+              '.git','node_modules','.npm','actions-runner-shopvivaliz',
+              'actions-runner-shopvivaliz-browser','shopvivaliz-deploy',
+              'site-shopvivaliz','releases','vendor'
+          }
+          cookie_paths=[]
+          local_state_roots=set()
+          for root in roots:
+              if not os.path.isdir(root):
+                  continue
+              for dirpath, dirnames, filenames in os.walk(root):
+                  rel=os.path.relpath(dirpath,root)
+                  depth=0 if rel=='.' else rel.count(os.sep)+1
+                  if depth > 9:
+                      dirnames[:] = []
+                      continue
+                  dirnames[:] = [d for d in dirnames if d not in prune_names]
+                  if 'Cookies' in filenames:
+                      cookie_paths.append(os.path.join(dirpath,'Cookies'))
+                  if 'Local State' in filenames:
+                      local_state_roots.add(dirpath)
+
+          def user_of(path):
+              try: return pwd.getpwuid(os.stat(path).st_uid).pw_name
+              except Exception: return '?'
+
+          def qcount(db, pattern):
+              try:
+                  con=sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=1)
+                  try:
+                      return con.execute('select count(*) from cookies where host_key like ?', (pattern,)).fetchone()[0]
+                  finally:
+                      con.close()
+              except Exception:
+                  return -1
+
+          print('COOKIE_DATABASES_SAFE_BEGIN')
+          seen=set()
+          for db in sorted(set(cookie_paths)):
+              try:
+                  st=os.stat(db)
+              except Exception:
+                  continue
+              profile_dir=os.path.dirname(db)
+              if os.path.basename(profile_dir) == 'Network':
+                  profile_dir=os.path.dirname(profile_dir)
+              user_data_dir=os.path.dirname(profile_dir)
+              key=(user_data_dir,profile_dir,db)
+              if key in seen: continue
+              seen.add(key)
+              print(
+                  'cookie_db=' + db +
+                  ' owner=' + user_of(db) +
+                  ' bytes=' + str(st.st_size) +
+                  ' mtime=' + str(int(st.st_mtime)) +
+                  ' user_data_dir=' + user_data_dir +
+                  ' profile_dir=' + os.path.basename(profile_dir) +
+                  ' chatgpt_rows=' + str(qcount(db,'%chatgpt.com%')) +
+                  ' openai_rows=' + str(qcount(db,'%openai.com%')) +
+                  ' google_rows=' + str(qcount(db,'%google.com%'))
+              )
+          print('COOKIE_DATABASES_SAFE_END')
+
+          print('LOCAL_STATE_ROOTS_SAFE_BEGIN')
+          for p in sorted(local_state_roots):
+              try:
+                  st=os.stat(os.path.join(p,'Local State'))
+                  print('user_data_dir=' + p + ' owner=' + user_of(p) + ' local_state_mtime=' + str(int(st.st_mtime)) + ' local_state_bytes=' + str(st.st_size))
+              except Exception:
+                  pass
+          print('LOCAL_STATE_ROOTS_SAFE_END')
+          PY
