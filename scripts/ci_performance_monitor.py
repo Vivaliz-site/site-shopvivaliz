@@ -25,11 +25,12 @@ def _parse_time(value: Any) -> datetime | None:
 
 
 def _flatten_runs(payload: Any) -> list[dict[str, Any]]:
+    flattened: list[dict[str, Any]] = []
     if isinstance(payload, dict):
         rows = payload.get("workflow_runs")
-        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-    if isinstance(payload, list):
-        flattened: list[dict[str, Any]] = []
+        if isinstance(rows, list):
+            flattened.extend(row for row in rows if isinstance(row, dict))
+    elif isinstance(payload, list):
         for page in payload:
             if isinstance(page, dict):
                 rows = page.get("workflow_runs")
@@ -37,9 +38,20 @@ def _flatten_runs(payload: Any) -> list[dict[str, Any]]:
                     flattened.extend(row for row in rows if isinstance(row, dict))
             elif isinstance(page, list):
                 flattened.extend(row for row in page if isinstance(row, dict))
-        return flattened
-    return []
 
+    deduped: list[dict[str, Any]] = []
+    seen_run_ids: set[str] = set()
+    for row in flattened:
+        raw_id = row.get("id")
+        if raw_id is None or not str(raw_id).strip():
+            deduped.append(row)
+            continue
+        run_id = str(raw_id).strip()
+        if run_id in seen_run_ids:
+            continue
+        seen_run_ids.add(run_id)
+        deduped.append(row)
+    return deduped
 
 def analyze_runs(
     payload: Any,
