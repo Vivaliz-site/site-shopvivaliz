@@ -1,0 +1,74 @@
+name: Probe Delete Repo Auth Backend Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/probe-delete-repo-auth-backend-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-delete-repo-auth-backend-once
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    env:
+      EXECUTION_ID: chatgpt-20260927-global-continuity-cleanup-backend-auth-probe
+    steps:
+      - name: Probe backend and Windows gh sessions safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "EXECUTION_ID=$EXECUTION_ID"
+          echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
+
+          probe_user() {
+            local label="$1" user="$2" home="$3"
+            local flag=false
+            if id -u "$user" >/dev/null 2>&1 && sudo -n -u "$user" test -d "$home/.config/gh" 2>/dev/null; then
+              if sudo -n -u "$user" env HOME="$home" GH_CONFIG_DIR="$home/.config/gh" \
+                bash -c 'env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
+                flag=true
+              fi
+            fi
+            echo "AUTH_SOURCE=$label delete_repo=$flag"
+          }
+
+          probe_user BACKEND_UBUNTU ubuntu /home/ubuntu
+          probe_user BACKEND_FREDRDP fredrdp /home/fredrdp
+          probe_user BACKEND_AGENT shopvivaliz-agent /home/shopvivaliz-agent
+
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          ps = r'''$ErrorActionPreference="SilentlyContinue"; if(-not (Get-Command gh -ErrorAction SilentlyContinue)){Write-Output "false"; exit 0}; $raw=(& gh api -i user 2>&1 | Out-String); if($raw -match "(?im)^x-oauth-scopes:.*delete_repo"){Write-Output "true"}else{Write-Output "false"}'''
+
+          for port, label in ((5557, "FREDWIN"), (5558, "KOCEPSV")):
+              body = json.dumps({"params": {"command": "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command " + ps, "timeout": 45}}).encode()
+              request = urllib.request.Request(
+                  f"http://127.0.0.1:{port}/mcp/tool/execute_command",
+                  data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              flag = "false"
+              try:
+                  with urllib.request.urlopen(request, timeout=55) as response:
+                      payload = json.loads(response.read().decode())
+                  result = payload.get("result") or {}
+                  if result.get("success") is True:
+                      output = str(result.get("output") or "").strip().lower()
+                      if output.splitlines() and output.splitlines()[-1].strip() == "true":
+                          flag = "true"
+              except Exception:
+                  pass
+              print(f"AUTH_SOURCE={label} delete_repo={flag}")
+          PY
