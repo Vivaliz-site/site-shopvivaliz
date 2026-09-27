@@ -132,6 +132,8 @@ jobs:
           test -n "$launcher"
           test -x "$launcher"
           command -v tmux >/dev/null
+          command -v python3 >/dev/null
+          python3 -m py_compile "$WORKTREE/scripts/codex-mesh-bridge.py"
 
           version="$("$launcher" --version)"
           "$launcher" --help 2>&1 | grep -Eq -- '(^|[[:space:]])(-m|--model)([=[:space:]]|$)'
@@ -198,7 +200,7 @@ jobs:
 
           tmux new-session -d -s "$session" -c "$WORKTREE" "env -u RUNNER_TRACKING_ID bash --noprofile --norc"
           sleep 1
-          tmux send-keys -t "$session:0.0" -l "env -u RUNNER_TRACKING_ID TERM=xterm-256color '$launcher'"
+          tmux send-keys -t "$session:0.0" -l "env -u RUNNER_TRACKING_ID TERM=xterm-256color '$launcher' -c 'mcp_servers.codex_bridge.command=\"python3\"' -c 'mcp_servers.codex_bridge.required=false' -c 'mcp_servers.codex-mesh-bridge.enabled=false' -c 'mcp_servers.google-ads-readonly.enabled=false'"
           tmux send-keys -t "$session:0.0" Enter
           sleep 8
 
