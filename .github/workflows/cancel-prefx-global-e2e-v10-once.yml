@@ -1,0 +1,68 @@
+name: Cancel Pre-Fix Global E2E V10 Once
+
+on:
+  push:
+    branches:
+      - ops/cancel-prefx-global-e2e-v10-20260927
+    paths:
+      - ".github/workflows/cancel-prefx-global-e2e-v10-once.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_NAME: "Global Task Continuity E2E All Repositories"
+    steps:
+      - name: Cancel only the two exact pre-fix certification runs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          cancel_exact() {
+            local run_id="$1" expected_sha="$2"
+            local run_json name sha status
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            name="$(jq -r '.name' <<<"$run_json")"
+            sha="$(jq -r '.head_sha' <<<"$run_json")"
+            status="$(jq -r '.status' <<<"$run_json")"
+
+            test "$name" = "$EXPECTED_NAME"
+            test "$sha" = "$expected_sha"
+
+            case "$status" in
+              completed)
+                echo "TARGET_ALREADY_TERMINAL run_id=$run_id"
+                return 0
+                ;;
+              queued|pending|in_progress|waiting|requested)
+                gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null
+                ;;
+              *)
+                echo "ERROR unexpected status run_id=$run_id status=$status" >&2
+                return 1
+                ;;
+            esac
+
+            for attempt in {1..20}; do
+              run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+              if [ "$status" = "completed" ]; then
+                echo "CANCEL_CONFIRMED run_id=$run_id conclusion=$conclusion attempt=$attempt"
+                test "$conclusion" = "cancelled"
+                return 0
+              fi
+              sleep 3
+            done
+            echo "ERROR run did not become cancelled run_id=$run_id" >&2
+            return 1
+          }
+
+          cancel_exact 36335669160 ec3484f55bb146ae199cf92a45b66237ae9f68a2
+          cancel_exact 36336890428 d3e628919caf7f5c4ef66789c038761655991f0d
