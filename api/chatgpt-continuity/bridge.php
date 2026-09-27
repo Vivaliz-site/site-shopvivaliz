@@ -31,8 +31,29 @@ function sv_cgn_bridge_store(): SvChatgptContinuityPendingNudgeStore
     return new SvChatgptContinuityPendingNudgeStore($dir . '/pending-nudges.json');
 }
 
-$expectedToken = getenv('CHATGPT_CONTINUITY_BRIDGE_TOKEN');
-$expectedToken = is_string($expectedToken) ? trim($expectedToken) : '';
+function sv_cgn_bridge_expected_token(): string
+{
+    $direct = getenv('CHATGPT_CONTINUITY_BRIDGE_TOKEN');
+    $direct = is_string($direct) ? trim($direct) : '';
+    if ($direct !== '') {
+        return $direct;
+    }
+
+    $configuredFile = getenv('CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE');
+    $configuredFile = is_string($configuredFile) ? trim($configuredFile) : '';
+    $tokenFile = $configuredFile !== ''
+        ? $configuredFile
+        : dirname(__DIR__, 2) . '/storage/private/chatgpt-continuity/bridge.token';
+
+    if (!is_file($tokenFile) || !is_readable($tokenFile)) {
+        return '';
+    }
+
+    $raw = @file_get_contents($tokenFile);
+    return is_string($raw) ? trim($raw) : '';
+}
+
+$expectedToken = sv_cgn_bridge_expected_token();
 if (!SvRemoteBridgeAuth::authorized($expectedToken, sv_cgn_bridge_auth_header())) {
     header('WWW-Authenticate: Bearer realm="ShopVivaliz ChatGPT Continuity Bridge"');
     sv_cgn_bridge_reply(['status' => 'UNAUTHORIZED'], 401);

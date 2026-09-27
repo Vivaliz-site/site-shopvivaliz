@@ -8,21 +8,25 @@
 // This worker is that new message, sent automatically instead of requiring
 // the human to notice and type it.
 //
+// Canonical runtime: always-free-arm-1787907847-26, attached to the existing
+// authenticated ChatGPT browser over CDP 127.0.0.1:9555. The Windows
+// installer is retained only as a legacy/fallback route.
+//
 // Unlike scripts/amazon-returns/seller-central-bridge-worker.mjs, this
 // worker NEVER spawns its own browser instance: doing so would create a
 // separate, logged-out browser context, not the user's real conversation.
 // It only attaches, via CDP, to a browser the user already launched with a
-// remote-debugging port open (see docs/AGENT-VM-PROMPTS.md for the launch
-// flag). If that port is not reachable, the worker fails loudly with an
-// actionable message instead of silently doing nothing.
+// remote-debugging port open. If that port is not reachable, the worker
+// fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
-  || 'https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php';
+  || 'http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php';
+const BRIDGE_HOST_HEADER = process.env.CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER || 'shopvivaliz.com.br';
 const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
-  || 'C:\\ShopVivaliz\\chatgpt-continuity-bridge\\bridge.token';
-const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9223';
+  || '/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token';
+const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
@@ -45,6 +49,7 @@ async function bridge(operation, payload = {}) {
       'content-type': 'application/json',
       accept: 'application/json',
       'user-agent': 'ShopVivaliz-ChatgptContinuityBridge/1.0',
+      ...(BRIDGE_HOST_HEADER ? { Host: BRIDGE_HOST_HEADER } : {}),
     },
     body: JSON.stringify({ operation, ...payload }),
     signal: AbortSignal.timeout(20000),

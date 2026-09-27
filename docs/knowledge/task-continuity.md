@@ -241,10 +241,12 @@ executa e conclui uma tarefa sintética por conta própria.
   fabricado, sem depender de produção).
 - **Distinção obrigatória, sempre explícita:** retomada desacoplada
   (watchdog + dispatcher + Gemini continuando estado persistido) **não é**
-  reabertura da mesma conversa do aplicativo ChatGPT. Essa reabertura
-  (`ChatGPT session re-entry`) permanece **não implementada/indisponível**
-  pela VM. Nenhuma documentação pode sugerir que ChatGPT comum/Work é
-  programaticamente despertado por este mecanismo.
+  reabertura da mesma conversa do aplicativo ChatGPT. Desde
+  `CHATGPT_SESSION_REENTRY_V10`, a reentrada da conversa existe como uma
+  camada separada: o pedido `chatgpt_common` é enfileirado no bridge HTTPS e
+  um worker da VM backend anexa via CDP `127.0.0.1:9555` ao navegador
+  ChatGPT já autenticado do usuário. O worker nunca cria um browser/perfil
+  paralelo e nunca usa Codex como fallback automático.
 - Falha do E2E (qualquer motivo: nenhum pedido observado, dispatcher não
   executou, `no_progress`, checkpoint não terminal, verificação ausente,
   só ACK do worker, `task_id` não correlacionado, evidência antiga) nunca é
@@ -294,8 +296,43 @@ Contrato:
   conseguir alcançar o controlador; criar estado local sem watchdog seria um
   falso-verde e é proibido.
 
-A retomada continua sendo detached recovery. Ela não reabre a mesma conversa do
-aplicativo ChatGPT.
+A certificação global V8 continua medindo **detached recovery**. A reentrada da
+mesma conversa ChatGPT é uma camada adicional e independente, definida abaixo,
+e não pode ser usada para falsificar PASS do E2E V8.
+
+<!-- CHATGPT_SESSION_REENTRY_V10 -->
+## Reentrada da conversa ChatGPT após interrupção
+
+Policy: `CHATGPT_SESSION_REENTRY_V10`.
+
+A rota canônica é **VM backend**, nunca Fred-Win/KOCEPSV como navegador
+operacional:
+
+1. o watchdog produz o pedido `preferred_executor=chatgpt_common`;
+2. `scripts/chatgpt_continuity_nudge_dispatcher.py` envia o pedido, de forma
+   deduplicada, para `api/chatgpt-continuity/bridge.php`;
+3. o bridge usa fila durável em `storage/private/chatgpt-continuity` e
+   autenticação Bearer; o token pode vir de env ou de arquivo protegido;
+4. `shopvivaliz-chatgpt-continuity.service` roda em
+   `always-free-arm-1787907847-26` e anexa ao browser canônico por
+   `http://127.0.0.1:9555`;
+5. o worker só envia `continue` quando não há geração ativa. O monitor de
+   reforço só atua quando um banner explícito de interrupção persiste depois
+   da janela de confirmação, evitando duplicar a tentativa de recuperação do
+   próprio cliente.
+
+O instalador canônico é
+`scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
+Windows permanece somente como legado/fallback e não é a rota operacional
+padrão. O worker nunca deve imprimir token/cookie/storage de sessão e nunca
+deve iniciar outro perfil do navegador.
+
+Não executar probes sintéticos repetitivos para “testar” a conta. A prova
+operacional preferida é: heartbeat autenticado do bridge + serviço backend
+ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
+natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
+a mitigação instalada/armada, não “continuidade E2E comprovada”.
+<!-- /CHATGPT_SESSION_REENTRY_V10 -->
 
 
 ### Resiliência de quota Gemini no background
