@@ -2,7 +2,9 @@ name: Cancel Obsolete Global Continuity E2E Once
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - ops/cancel-obsolete-global-e2e-20260927
     paths:
       - ".github/workflows/cancel-obsolete-global-continuity-e2e-once.yml"
 
