@@ -27,6 +27,23 @@ AGENTS = load("all_documented_agents", "scripts/all-documented-agents.py")
 
 
 class QueueEvidenceTests(unittest.TestCase):
+    def test_required_automation_paths_skip_repository_only_workflows_in_deployed_release(self):
+        self.assertTrue(
+            hasattr(HEALTH, "required_automation_paths"),
+            "system health must distinguish repository checkout from deployed release",
+        )
+        with self.subTest(context="deployed-release"):
+            root = Path("/tmp/shopvivaliz-release-without-git-metadata")
+            paths = HEALTH.required_automation_paths(root)
+            self.assertNotIn(root / ".github/workflows/agents-hourly-deep-audit.yml", paths)
+            self.assertNotIn(root / ".github/workflows/repository-governance.yml", paths)
+            self.assertIn(root / "scripts/maintenance/system_health_check.py", paths)
+        with self.subTest(context="repository-checkout"):
+            root = Path("/tmp/shopvivaliz-repository-checkout")
+            paths = HEALTH.required_automation_paths(root, repository_checkout=True)
+            self.assertIn(root / ".github/workflows/agents-hourly-deep-audit.yml", paths)
+            self.assertIn(root / ".github/workflows/repository-governance.yml", paths)
+
     def test_accepts_failed_and_blocked_without_completion(self):
         payload = {
             "tasks": [
