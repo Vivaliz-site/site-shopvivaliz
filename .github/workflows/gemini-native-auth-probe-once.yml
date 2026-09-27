@@ -30,10 +30,11 @@ jobs:
           test -x "$bin"
           tmp="$(mktemp)"
           trap 'rm -f "$tmp"' EXIT
-          set +e
-          timeout 60 env             -u GEMINI_API_KEY             -u GOOGLE_API_KEY             -u GOOGLE_GEMINI_API_KEY             "$bin"               --model gemini-2.5-flash               --approval-mode auto_edit               --prompt 'Reply with exactly GEMINI_NATIVE_AUTH_OK and do not use tools.'               >"$tmp" 2>&1
-          rc=$?
-          set -e
+          if timeout 60 env             -u GEMINI_API_KEY             -u GOOGLE_API_KEY             -u GOOGLE_GEMINI_API_KEY             "$bin"               --model gemini-2.5-flash               --approval-mode auto_edit               --prompt 'Reply with exactly GEMINI_NATIVE_AUTH_OK and do not use tools.'               >"$tmp" 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
 
           if grep -Fq 'GEMINI_NATIVE_AUTH_OK' "$tmp"; then
             echo "GEMINI_NATIVE_AUTH=PASS"
