@@ -105,6 +105,82 @@ def build_gemini_command(*, executable: str, model: str, prompt: str) -> list[st
         prompt,
     ]
 
+
+_FAILURE_CLASSIFIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "approval_required",
+        (
+            "waiting for user confirmation",
+            "requires approval",
+            "confirmation required",
+        ),
+    ),
+    (
+        "tool_not_registered",
+        (
+            "tool 'run_shell_command' not found",
+            "tool not found",
+        ),
+    ),
+    (
+        "tool_not_allowed",
+        (
+            "not in the list of allowed tools",
+            "not allowed",
+            "blocked by policy",
+        ),
+    ),
+    (
+        "authentication_failed",
+        (
+            "permission_denied",
+            "authentication failed",
+            "unauthorized",
+            "invalid api key",
+        ),
+    ),
+    (
+        "quota_exhausted",
+        (
+            "resource_exhausted",
+            "quota exceeded",
+            "rate limit",
+        ),
+    ),
+    (
+        "model_unavailable",
+        (
+            "not_found",
+            "is not available",
+            "model not found",
+        ),
+    ),
+    (
+        "workspace_untrusted",
+        (
+            "not trusted",
+            "trust this folder",
+        ),
+    ),
+)
+
+
+def classify_gemini_failure(output: str, returncode: int) -> str | None:
+    """Classify a failed run into a bounded, allowlisted reason code.
+
+    Only the classification survives past this function — callers must never
+    persist `output` itself. Unmatched or empty output on failure still
+    yields a safe, non-empty classification.
+    """
+    if returncode == 0:
+        return None
+    haystack = output.lower()
+    for reason, needles in _FAILURE_CLASSIFIERS:
+        if any(needle in haystack for needle in needles):
+            return reason
+    return "unknown_safe_error"
+
+
 def _resolve_binary(configured: str) -> str:
     candidate = Path(configured).expanduser()
     if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -188,6 +264,9 @@ def run(
             sys.stdout.write("\n")
     print(f"background_gemini_credential_source={source}")
     print(f"background_gemini_exit_code={completed.returncode}")
+    reason = classify_gemini_failure(output, completed.returncode)
+    if reason is not None:
+        print(f"background_gemini_reason={reason}")
     return int(completed.returncode)
 
 
