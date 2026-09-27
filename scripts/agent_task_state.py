@@ -40,6 +40,8 @@ RUNTIME_DIR = resolve_runtime_dir(ROOT, os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
+DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 class TaskStateError(RuntimeError):
@@ -55,6 +57,13 @@ def _safe_id(value: str, label: str) -> str:
     if not normalized:
         raise TaskStateError(f"{label} is required")
     return normalized[:160]
+
+
+def _safe_repository(value: str) -> str:
+    repository = str(value).strip()
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise TaskStateError("repository must be owner/name")
+    return repository
 
 
 def _path(task_id: str) -> Path:
@@ -100,16 +109,23 @@ def is_terminal(payload: dict[str, Any]) -> bool:
     return str(payload.get("status", "")) in TERMINAL_STATES
 
 
-def start_task(task_id: str, goal: str, agent_id: str = "") -> dict[str, Any]:
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
         raise TaskStateError("goal is required")
+    repository_name = _safe_repository(
+        repository
+        or os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", "")
+        or os.getenv("GITHUB_REPOSITORY", "")
+        or DEFAULT_REPOSITORY
+    )
     now = utc_now()
     payload = {
         "schema_version": SCHEMA_VERSION,
         "task_id": task,
         "agent_id": str(agent_id).strip(),
+        "repository": repository_name,
         "goal": goal_text,
         "status": "RUNNING",
         "next_action": "determine and execute the next safe action required by the original goal",
@@ -248,6 +264,7 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--task", required=True)
     start.add_argument("--goal", required=True)
     start.add_argument("--agent", default="")
+    start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
 
     progress = sub.add_parser("progress")
     progress.add_argument("--task", required=True)
@@ -285,7 +302,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent)
+            payload = start_task(args.task, args.goal, args.agent, args.repository)
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":
