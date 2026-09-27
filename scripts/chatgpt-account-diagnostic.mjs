@@ -14,6 +14,7 @@ const CONSOLE_OUTPUT = path.join(OUTPUT_DIR, 'console-errors.json');
 const BLOCKER_SCREENSHOT = path.join(OUTPUT_DIR, 'blocker.png');
 fs.mkdirSync(OUTPUT_DIR, { recursive: true, mode: 0o700 });
 const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();
+const forcedProfileDirectory = String(process.env.CHATGPT_ACCOUNT_PROFILE_DIRECTORY || '').trim();
 const forcedRoute = String(process.env.CHATGPT_ACCOUNT_BROWSER_ROUTE || '').trim();
 const playwrightCandidates = [
   String(process.env.CHATGPT_ACCOUNT_PLAYWRIGHT_MODULE || '').trim(),
@@ -350,6 +351,7 @@ try {
           '--disable-vulkan',
           '--use-gl=swiftshader',
           '--use-angle=swiftshader',
+          ...(forcedProfileDirectory ? [`--profile-directory=${forcedProfileDirectory}`] : []),
         ],
       });
     } catch {
