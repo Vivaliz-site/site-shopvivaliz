@@ -157,6 +157,11 @@ def run_once(
             "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
             "fallback_policy": "chatgpt_common_then_work_then_cli",
             "previous_agent_id": previous_agent_id,
+            "human_authorized_executors": sorted({
+                str(item).strip().lower()
+                for item in payload.get("human_authorized_executors", [])
+                if str(item).strip()
+            }),
             "goal": str(payload.get("goal", "")).strip(),
             "next_action": next_action,
             "checkpoint_updated_at": str(payload.get("updated_at", "")).strip(),
