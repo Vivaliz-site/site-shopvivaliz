@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: shopvivaliz-backend-oci-control
+  group: shopvivaliz-backend-disk-cleanup-once
   cancel-in-progress: false
 
 jobs:
