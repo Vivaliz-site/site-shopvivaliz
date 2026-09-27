@@ -1,0 +1,125 @@
+name: ChatGPT Account Diagnostic Direct
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && trim(github.event.comment.body) == '/chatgpt-account-diag-v1')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify backend browser runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          curl -fsS http://127.0.0.1:17777/health | jq -e '.ok == true and .endpoint == "browser-worker" and .browser_path_exists == true' >/dev/null
+          test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+          echo "BACKEND_BROWSER_RUNTIME=PASS"
+
+      - name: Run ChatGPT account diagnostic
+        id: diag
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="$RUNNER_TEMP/chatgpt-account-diagnostic"
+          primary="$root/primary"
+          legacy="$root/legacy"
+          legacy_profile="/home/fredrdp/.config/shopvivaliz-chromium"
+          shared_browser="/opt/shopvivaliz-browser/chrome-linux/chrome"
+          rm -rf "$root"
+          install -d -m 0700 "$primary" "$legacy"
+
+          diag_rc=0
+          CHATGPT_ACCOUNT_DIAG_DIR="$primary" \
+          CHATGPT_ACCOUNT_DIAG_OUTPUT="$primary/diagnostic.json" \
+            node scripts/chatgpt-account-diagnostic.mjs || diag_rc=$?
+
+          primary_blocker="$(jq -r '.blocker // empty' "$primary/diagnostic.json" 2>/dev/null || true)"
+          selected="$primary"
+
+          if [ "$diag_rc" -ne 0 ] && [ "$primary_blocker" = "composer_unavailable" ]; then
+            if ! id -u fredrdp >/dev/null 2>&1 || ! sudo -n -u fredrdp test -d "$legacy_profile"; then
+              echo "CHATGPT_ACCOUNT_DIRECT_BLOCKER=legacy_profile_missing_or_unreadable"
+              diag_rc=2
+            elif (ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- "$legacy_profile"; then
+              echo "CHATGPT_ACCOUNT_DIRECT_BLOCKER=legacy_profile_in_use_without_cdp"
+              diag_rc=2
+            else
+              if ! sudo -n -u fredrdp test -x "$shared_browser"; then
+                source="$(readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium)"
+                test -x "$source"
+                src_dir="$(dirname "$source")"
+                sudo -n install -d -m 0755 /opt/shopvivaliz-browser
+                sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new
+                sudo -n cp -a --reflink=auto "$src_dir" /opt/shopvivaliz-browser/chrome-linux.new
+                sudo -n chmod -R a+rX /opt/shopvivaliz-browser/chrome-linux.new
+                sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux
+                sudo -n mv /opt/shopvivaliz-browser/chrome-linux.new /opt/shopvivaliz-browser/chrome-linux
+              fi
+              sudo -n -u fredrdp test -x "$shared_browser"
+              sudo -n chown -R fredrdp:fredrdp "$legacy"
+
+              diag_rc=0
+              if command -v xvfb-run >/dev/null 2>&1; then
+                sudo -n -u fredrdp env \
+                  HOME=/home/fredrdp \
+                  CHATGPT_ACCOUNT_BROWSER_PATH="$shared_browser" \
+                  CHATGPT_ACCOUNT_FORCE_PROFILE="$legacy_profile" \
+                  CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback \
+                  CHATGPT_ACCOUNT_DIAG_DIR="$legacy" \
+                  CHATGPT_ACCOUNT_DIAG_OUTPUT="$legacy/diagnostic.json" \
+                  xvfb-run -a -s '-screen 0 1440x900x24 -ac' \
+                  node "$GITHUB_WORKSPACE/scripts/chatgpt-account-diagnostic.mjs" || diag_rc=$?
+              else
+                sudo -n -u fredrdp env \
+                  HOME=/home/fredrdp DISPLAY=:98 \
+                  CHATGPT_ACCOUNT_BROWSER_PATH="$shared_browser" \
+                  CHATGPT_ACCOUNT_FORCE_PROFILE="$legacy_profile" \
+                  CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback \
+                  CHATGPT_ACCOUNT_DIAG_DIR="$legacy" \
+                  CHATGPT_ACCOUNT_DIAG_OUTPUT="$legacy/diagnostic.json" \
+                  node "$GITHUB_WORKSPACE/scripts/chatgpt-account-diagnostic.mjs" || diag_rc=$?
+              fi
+              selected="$legacy"
+            fi
+          fi
+
+          test -s "$selected/diagnostic.json"
+          test -s "$selected/sanitized.har.json"
+          test -s "$selected/console-errors.json"
+
+          echo "selected_dir=$selected" >> "$GITHUB_OUTPUT"
+          jq '{started_at,finished_at,auth_state,browser_route,model_label,attempts,request_failure_count,console_error_count,page_error_count,blocker,ok}' "$selected/diagnostic.json"
+
+          if [ "$diag_rc" -ne 0 ]; then
+            exit "$diag_rc"
+          fi
+          echo "CHATGPT_ACCOUNT_DIRECT_DIAG=PASS"
+
+      - name: Upload ChatGPT account diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-account-diagnostic-\${{ github.run_id }}-\${{ github.run_attempt }}
+          path: |
+            \${{ runner.temp }}/chatgpt-account-diagnostic/**/diagnostic.json
+            \${{ runner.temp }}/chatgpt-account-diagnostic/**/sanitized.har.json
+            \${{ runner.temp }}/chatgpt-account-diagnostic/**/console-errors.json
+            \${{ runner.temp }}/chatgpt-account-diagnostic/**/attempt-*.png
+          if-no-files-found: warn
+          retention-days: 7
