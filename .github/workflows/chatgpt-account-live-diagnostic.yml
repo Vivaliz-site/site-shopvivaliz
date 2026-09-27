@@ -35,6 +35,19 @@ jobs:
             echo "CDP_9555=UNAVAILABLE"
           fi
           rm -f /tmp/cdp-version.json
+          echo "FREDRDP_BROWSER_PATHS"
+          if sudo -n -u fredrdp true 2>/dev/null; then
+            sudo -n -u fredrdp bash -lc '
+              for x in chromium chromium-browser google-chrome google-chrome-stable; do
+                p=$(command -v "$x" 2>/dev/null || true)
+                [ -n "$p" ] && printf "%s=%s\n" "$x" "$p"
+              done
+              find "$HOME" -maxdepth 5 -type f \( -name chromium -o -name chromium-browser -o -name google-chrome -o -name google-chrome-stable \) -perm /111 -print 2>/dev/null | sed -n "1,30p"
+            '
+            ps -eo user,pid,args | grep -E '[c]hromium|[c]hrome' | sed -E 's#(--user-data-dir=)[^ ]+#\1:profile#g; s#(--remote-debugging-port=)[0-9]+#\1:port#g' | sed -n '1,40p' || true
+          else
+            echo "FREDRDP_SUDO=UNAVAILABLE"
+          fi
 
       - name: Run controlled ChatGPT diagnostic
         id: diag
