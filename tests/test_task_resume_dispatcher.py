@@ -292,6 +292,24 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         serialized = json.dumps(diagnostic, sort_keys=True)
         self.assertNotIn("super-secret-value", serialized)
         self.assertNotIn("prompt body", serialized)
+
+    def test_executor_artifact_summary_extracts_sanitized_failure_reason(self) -> None:
+        dispatcher = load_dispatcher()
+        workspace = self.root / "workspace-reason"
+        logs = workspace / "logs"
+        logs.mkdir(parents=True)
+        raw = (
+            "Waiting for user confirmation to run this command\n"
+            "background_gemini_reason=approval_required\n"
+            "background_gemini_exit_code=1\n"
+        )
+        (logs / "autonomous-provider-output.txt").write_text(raw, encoding="utf-8")
+
+        diagnostic = dispatcher._summarize_executor_artifacts(workspace)
+
+        self.assertEqual(diagnostic["background_gemini_reason"], "approval_required")
+        serialized = json.dumps(diagnostic, sort_keys=True)
+        self.assertNotIn("Waiting for user confirmation", serialized)
         self.assertNotIn("SECRET_TOKEN", serialized)
 
     def test_run_once_persists_structured_diagnostic_in_ledger(self) -> None:

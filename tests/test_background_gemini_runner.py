@@ -153,6 +153,74 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             settings_path = workspace / ".gemini" / "settings.json"
             self.assertFalse(settings_path.exists(), "workspace settings must be cleaned up")
 
+    def test_classify_gemini_failure_recognizes_only_allowlisted_reasons(self) -> None:
+        # Regression: the second production E2E (run 36296738560) showed
+        # background_gemini_exit_code=1 with no further signal — not enough
+        # to know whether it is an approval-dialog block (the auto_edit +
+        # non-interactive hypothesis), an auth/quota/model problem, or
+        # something else. Classify from Gemini's own (already
+        # credential-redacted) output into a bounded, allowlisted reason so
+        # the next production run tells us which, without ever persisting
+        # the raw message.
+        cases = [
+            ("Waiting for user confirmation to run this command", "approval_required"),
+            ("This action requires approval before it can proceed", "approval_required"),
+            ("Error executing tool run_shell_command: Tool 'run_shell_command' not found.", "tool_not_registered"),
+            ("run_shell_command(python3 scripts/agent_task_state.py) is not in the list of allowed tools", "tool_not_allowed"),
+            ("401 Unauthorized: invalid API key", "authentication_failed"),
+            ("PERMISSION_DENIED: authentication failed", "authentication_failed"),
+            ("429 RESOURCE_EXHAUSTED: quota exceeded for this project", "quota_exhausted"),
+            ("rate limit exceeded, please retry later", "quota_exhausted"),
+            ("404 NOT_FOUND: model gemini-2.5-flash is not available", "model_unavailable"),
+            ("this workspace folder is not trusted", "workspace_untrusted"),
+            ("some completely novel failure text never seen before", "unknown_safe_error"),
+            ("", "unknown_safe_error"),
+        ]
+        for output, expected in cases:
+            with self.subTest(output=output):
+                self.assertEqual(self.mod.classify_gemini_failure(output, 1), expected)
+
+    def test_classify_gemini_failure_is_not_computed_on_success(self) -> None:
+        self.assertIsNone(self.mod.classify_gemini_failure("anything at all", 0))
+
+    def test_run_prints_sanitized_reason_line_on_nonzero_exit(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/bin/sh\n"
+                "echo 'Waiting for user confirmation to run this command'\n"
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                import io
+                import contextlib
+
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = self.mod.run(
+                        model="gemini-2.5-flash",
+                        prompt_file=prompt_file,
+                        env_file=env_file,
+                        gemini_bin=str(gemini_bin),
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 1)
+            self.assertIn("background_gemini_reason=approval_required", buf.getvalue())
+
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("run_background_gemini.py", failover)

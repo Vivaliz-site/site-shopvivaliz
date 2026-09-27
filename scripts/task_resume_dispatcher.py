@@ -204,6 +204,7 @@ _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
     "background_gemini_error",
     "background_gemini_exit_code",
+    "background_gemini_reason",
 )
 
 
@@ -234,6 +235,9 @@ def _summarize_executor_artifacts(workspace: Path) -> dict[str, Any]:
                 value = entry.split("=", 1)[1].strip()
                 if value.lstrip("-").isdigit():
                     diagnostic["background_gemini_exit_code"] = int(value)
+                continue
+            if entry.startswith("background_gemini_reason="):
+                diagnostic["background_gemini_reason"] = entry.split("=", 1)[1].strip()
 
     attempts_path = logs_dir / "autonomous-provider-attempts.jsonl"
     attempts = _read_jsonl(attempts_path)
