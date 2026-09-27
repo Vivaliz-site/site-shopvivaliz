@@ -148,6 +148,12 @@ async function errorBannerPresent(cdp) {
     || haystack.includes('algo deu errado')
     || haystack.includes('there was an error generating')
     || haystack.includes('houve um erro ao gerar')
+    // Confirmed live on ChatGPT Free (mobile app), 2026-09-27: this is the
+    // actual banner text observed, not a guess -- "streaming interrupted,
+    // waiting for the complete message".
+    || haystack.includes('streaming interrupted')
+    || haystack.includes('transmissão interrompida')
+    || haystack.includes('transmissao interrompida')
   );
 }
 
@@ -206,17 +212,37 @@ async function pollBridgeOnce() {
   console.log(`chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status}`);
 }
 
-async function reinforcementCheckOnce() {
+// "Streaming interrupted, waiting for the complete message" is shown while
+// ChatGPT's own client is already retrying -- confirmed live: the banner
+// carries a spinner, not a dead end. Nudging on the very first sighting
+// risks colliding with that in-flight auto-retry (duplicate/garbled
+// message). Requiring the banner to still be present after a short grace
+// window filters out the transient flash and only acts once the client's
+// own retry has genuinely given up.
+const REINFORCEMENT_CONFIRM_DELAY_MS = Math.max(3000, Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_CONFIRM_MS || 8000));
+
+async function reinforcementCheckOnce(
+  connect = () => Cdp.connectToChatgptTab(),
+  confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
+) {
   let cdp;
   try {
-    cdp = await Cdp.connectToChatgptTab();
-    if (await errorBannerPresent(cdp)) {
-      const sent = await sendContinueMessage(cdp);
-      console.log(`chatgpt_continuity_reinforcement error_banner_detected sent=${sent}`);
+    cdp = await connect();
+    if (!(await errorBannerPresent(cdp))) return { action: 'no_banner' };
+    await sleep(confirmDelayMs);
+    cdp.close();
+    cdp = await connect();
+    if (!(await errorBannerPresent(cdp))) {
+      console.log('chatgpt_continuity_reinforcement error_banner_self_resolved');
+      return { action: 'self_resolved' };
     }
-  } catch {
+    const sent = await sendContinueMessage(cdp);
+    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=${sent}`);
+    return { action: 'confirmed', sent };
+  } catch (error) {
     // The reinforcement monitor is best-effort: the checkpoint-driven path
     // above is the primary trigger and already surfaces real failures.
+    return { action: 'error', detail: text(error?.message) };
   } finally {
     cdp?.close();
   }
@@ -251,4 +277,5 @@ export {
   errorBannerPresent,
   sendContinueMessage,
   attemptNudge,
+  reinforcementCheckOnce,
 };

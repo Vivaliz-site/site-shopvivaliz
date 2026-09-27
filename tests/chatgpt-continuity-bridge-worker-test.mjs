@@ -4,6 +4,7 @@ import {
   composerIsUsable,
   errorBannerPresent,
   attemptNudge,
+  reinforcementCheckOnce,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -37,6 +38,13 @@ async function run() {
   assert.equal(await composerIsUsable(fakeCdp({ composerUsable: false })), false);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
+  // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
+  // observed banner text, not a guess.
+  assert.equal(
+    await errorBannerPresent(fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' })),
+    true,
+  );
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
@@ -58,6 +66,35 @@ async function run() {
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
 
   console.log('attemptNudge branches: PASS');
+
+  // reinforcementCheckOnce: no banner at all -> no-op, no second connect.
+  {
+    let connectCalls = 0;
+    const result = await reinforcementCheckOnce(async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); }, 1);
+    assert.equal(result.action, 'no_banner');
+    assert.equal(connectCalls, 1, 'a clean page must not trigger the confirm re-check');
+  }
+
+  // Banner flashes then clears by the confirm re-check (client's own retry
+  // succeeded) -> must NOT send a message.
+  {
+    let connectCalls = 0;
+    const result = await reinforcementCheckOnce(async () => {
+      connectCalls += 1;
+      return fakeCdp({ pageText: connectCalls === 1 ? 'Streaming interrupted. Waiting for the complete message...' : 'Here is the finished answer.' });
+    }, 1);
+    assert.equal(result.action, 'self_resolved');
+    assert.equal(connectCalls, 2, 'must re-check exactly once after the confirm delay');
+  }
+
+  // Banner still present on the confirm re-check -> must send.
+  {
+    const result = await reinforcementCheckOnce(async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }), 1);
+    assert.equal(result.action, 'confirmed');
+    assert.equal(result.sent, true);
+  }
+
+  console.log('reinforcementCheckOnce branches: PASS');
 }
 
 run().then(() => {
