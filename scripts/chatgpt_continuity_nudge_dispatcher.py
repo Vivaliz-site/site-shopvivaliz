@@ -7,7 +7,7 @@ by real execution: nothing previously acted on it beyond an inert queue ACK
 (see docs/knowledge/task-continuity.md, DETACHED_CONTINUATION_EXECUTOR_V6:
 "ACK de fila... nao e execucao"). This script closes that gap for the
 chatgpt_common tier specifically: it POSTs an `enqueue` to
-api/chatgpt-continuity/bridge.php, which the Windows browser worker
+api/chatgpt-continuity/bridge.php, which the canonical backend browser worker
 (scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs) later
 `pull`s to type a "continue" message into the user's own, already-logged-in
 ChatGPT conversation via CDP.
