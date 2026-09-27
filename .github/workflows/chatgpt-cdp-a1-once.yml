@@ -1,0 +1,146 @@
+name: ChatGPT CDP Diagnostic via A1 Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/chatgpt-cdp-a1-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-cdp-a1-once
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Configure verified private SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Verify exact live ChatGPT browser session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=15
+            -i "$HOME/.ssh/shopvivaliz_vmkey"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'set -Eeuo pipefail
+            test "$(hostname)" = "always-free-arm-1787907847-26"
+            python3 - <<"PY"
+          import os,pwd
+          profile="/home/fredrdp/.config/shopvivaliz-chromium"
+          port="9555"
+          roots=[]
+          for item in os.listdir("/proc"):
+              if not item.isdigit():
+                  continue
+              try:
+                  st=os.stat(f"/proc/{item}")
+                  if pwd.getpwuid(st.st_uid).pw_name != "fredrdp":
+                      continue
+                  args=[x.decode("utf-8","replace") for x in open(f"/proc/{item}/cmdline","rb").read().split(b"\0") if x]
+                  if not args:
+                      continue
+                  if f"--user-data-dir={profile}" in args and f"--remote-debugging-port={port}" in args:
+                      roots.append(item)
+              except Exception:
+                  pass
+          print(f"CHATGPT_CDP_ROOT_COUNT={len(roots)}")
+          if len(roots) != 1:
+              raise SystemExit(20)
+          PY
+            curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version |
+              jq -e ".Browser != null and .webSocketDebuggerUrl != null" >/dev/null
+            echo CHATGPT_CDP_LIVE=PASS'
+
+      - name: Run sanitized ChatGPT diagnostic through live CDP
+        id: diag
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=15
+            -i "$HOME/.ssh/shopvivaliz_vmkey"
+          )
+          scp_opts=("${ssh_opts[@]}")
+          tag="chatgpt-cdp-a1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote="/tmp/$tag"
+          local="$RUNNER_TEMP/$tag"
+          mkdir -p "$local"
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '$remote'; install -d -m 0700 '$remote'"
+          scp "${scp_opts[@]}" scripts/chatgpt-account-diagnostic.mjs "ubuntu@10.0.1.38:$remote/diag.mjs"
+
+          set +e
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "set -Eeuo pipefail
+            export CHATGPT_ACCOUNT_DIAG_DIR='$remote/evidence'
+            export CHATGPT_ACCOUNT_DIAG_OUTPUT='$remote/evidence/diagnostic.json'
+            install -d -m 0700 '$remote/evidence'
+            node '$remote/diag.mjs'"
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+          scp -r "${scp_opts[@]}" "ubuntu@10.0.1.38:$remote/evidence/." "$local/" || true
+          if [ -s "$local/diagnostic.json" ]; then
+            jq '{started_at,finished_at,auth_state,browser_route,model_label,attempts,request_failure_count,console_error_count,page_error_count,blocker,blocker_page,ok}' "$local/diagnostic.json"
+          fi
+          echo "evidence_dir=$local" >> "$GITHUB_OUTPUT"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '$remote'" || true
+
+      - name: Upload sanitized support evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-cdp-a1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.diag.outputs.evidence_dir }}/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce diagnostic outcome
+        if: always()
+        env:
+          DIAG_RC: ${{ steps.diag.outputs.rc }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$DIAG_RC"
+          test "$DIAG_RC" = 0
+
+      - name: Cleanup local SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
