@@ -1,0 +1,74 @@
+name: Global Task Continuity E2E Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/global-task-continuity-e2e-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-task-continuity-e2e-once
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate probe syntax
+        run: python3 -m py_compile scripts/task_continuity_e2e.py scripts/agent_task_state.py
+
+      - name: Certify all governed repositories sequentially
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+          test -d "$runtime_dir"
+          mkdir -p artifacts/global-continuity-e2e
+          repos=(
+            "Vivaliz-site/site-shopvivaliz"
+            "Vivaliz-site/-shopvivaliz-pipeline"
+            "Vivaliz-site/amazon-returns-safet"
+            "Vivaliz-site/ml-pricing-api"
+            "Vivaliz-site/mercadolivre-returns-recovery"
+            "Vivaliz-site/shopvivaliz-m365"
+            "Vivaliz-site/buscador"
+            "fredmourao-ai/mei-mg-email"
+            "fredmourao-ai/solange-rolla-consultorio"
+          )
+          failed=0
+          : > artifacts/global-continuity-e2e/summary.tsv
+          for repository in "${repos[@]}"; do
+            slug="${repository//\//__}"
+            report="artifacts/global-continuity-e2e/${slug}.json"
+            echo "=== continuity e2e: $repository ==="
+            if python3 scripts/task_continuity_e2e.py \
+              --runtime-dir "$runtime_dir" \
+              --repository "$repository" \
+              --timeout-seconds 480 \
+              --poll-interval-seconds 10 \
+              | tee "$report"; then
+              printf '%s\tPASS\n' "$repository" >> artifacts/global-continuity-e2e/summary.tsv
+            else
+              printf '%s\tFAIL\n' "$repository" >> artifacts/global-continuity-e2e/summary.tsv
+              failed=1
+            fi
+          done
+          cat artifacts/global-continuity-e2e/summary.tsv
+          exit "$failed"
+
+      - name: Upload sanitized global E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-task-continuity-e2e
+          path: artifacts/global-continuity-e2e/
+          retention-days: 7
