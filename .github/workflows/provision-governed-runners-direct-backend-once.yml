@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: provision-governed-runners-direct-backend-once
@@ -67,3 +68,11 @@ jobs:
           provision Vivaliz-site/mercadolivre-returns-recovery governed-mlrr-ci mlrr-ci
           provision Vivaliz-site/shopvivaliz-m365 governed-m365-ci m365-ci
           echo GOVERNED_BACKEND_RUNNERS_DIRECT=PASS
+
+      - name: Cancel obsolete queued A1 provisioner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/36326355400/cancel" >/dev/null 2>&1 || true
