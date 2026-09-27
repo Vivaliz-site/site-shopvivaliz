@@ -205,6 +205,89 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
 
+    def test_recent_successful_chatgpt_nudge_defers_detached_executor(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        now = dispatcher.utc_now()
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": now,
+                    "bridge_ok": True,
+                    "http_status": 200,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = dispatcher.run_once(
+            runtime_dir=self.runtime,
+            project_dir=self.project,
+            executor=self._executor(advance=True),
+            timeout_seconds=30,
+            max_requests=1,
+        )
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result.get("deferred_chatgpt"), 1)
+        self.assertFalse(self.capture.exists(), "detached executor must not run while ChatGPT gets first recovery window")
+
+    def test_old_or_failed_chatgpt_nudge_does_not_block_detached_fallback_forever(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "fingerprint": "fingerprint-v1",
+                            "task_id": "resume-e2e",
+                            "repository": "Vivaliz-site/site-shopvivaliz",
+                            "dispatched_at": "2020-01-01T00:00:00Z",
+                            "bridge_ok": True,
+                            "http_status": 200,
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "fingerprint": "fingerprint-v1",
+                            "task_id": "resume-e2e",
+                            "repository": "Vivaliz-site/site-shopvivaliz",
+                            "dispatched_at": dispatcher.utc_now(),
+                            "bridge_ok": False,
+                            "http_status": 0,
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
     def test_detached_prompt_names_the_headless_approved_task_state_command(self) -> None:
         dispatcher = (SCRIPTS / "task_resume_dispatcher.py").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
