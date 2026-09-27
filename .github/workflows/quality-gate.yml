@@ -26,6 +26,7 @@ on:
       - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
       - 'tests/public-layout-*.sh'
       - 'tests/chatgpt-account-diagnostic-contract-test.sh'
+      - 'tests/chatgpt-web-automation-risk-guard-test.sh'
   workflow_dispatch:
 
 permissions:
@@ -113,6 +114,7 @@ jobs:
           bash tests/catalog-single-mobile-nav-regression.sh
           bash tests/product-modal-image-regression.sh
           bash tests/chatgpt-account-diagnostic-contract-test.sh
+          bash tests/chatgpt-web-automation-risk-guard-test.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
