@@ -21,7 +21,6 @@ GOVERNED = {
     "Vivaliz-site/buscador",
     "fredmourao-ai/mei-mg-email",
     "fredmourao-ai/solange-rolla-consultorio",
-    "fredmourao-ai/solange-rolla",
 }
 
 
