@@ -31,14 +31,18 @@ jobs:
 
           probe_user() {
             local label="$1" user="$2" home="$3"
-            local flag=false
+            local authenticated=false
+            local delete_scope=false
+            local headers=""
             if id -u "$user" >/dev/null 2>&1 && sudo -n -u "$user" test -d "$home/.config/gh" 2>/dev/null; then
-              if sudo -n -u "$user" env HOME="$home" GH_CONFIG_DIR="$home/.config/gh" \
-                bash -c 'env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
-                flag=true
+              if headers="$(sudo -n -u "$user" env HOME="$home" GH_CONFIG_DIR="$home/.config/gh" bash -c 'env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null' 2>/dev/null)"; then
+                authenticated=true
+                if tr -d '\r' <<<"$headers" | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
+                  delete_scope=true
+                fi
               fi
             fi
-            echo "AUTH_SOURCE=$label delete_repo=$flag"
+            echo "AUTH_SOURCE=$label authenticated=$authenticated delete_repo=$delete_scope"
           }
 
           probe_user BACKEND_UBUNTU ubuntu /home/ubuntu
@@ -49,7 +53,7 @@ jobs:
           import json
           import urllib.request
 
-          ps = r'''$ErrorActionPreference="SilentlyContinue"; if(-not (Get-Command gh -ErrorAction SilentlyContinue)){Write-Output "false"; exit 0}; $raw=(& gh api -i user 2>&1 | Out-String); if($raw -match "(?im)^x-oauth-scopes:.*delete_repo"){Write-Output "true"}else{Write-Output "false"}'''
+          ps = r'''$ErrorActionPreference="SilentlyContinue"; if(-not (Get-Command gh -ErrorAction SilentlyContinue)){Write-Output "authenticated=false delete_repo=false"; exit 0}; $raw=(& gh api -i user 2>&1 | Out-String); if($LASTEXITCODE -ne 0){Write-Output "authenticated=false delete_repo=false"; exit 0}; $delete=($raw -match "(?im)^x-oauth-scopes:.*delete_repo"); Write-Output ("authenticated=true delete_repo=" + $delete.ToString().ToLower())'''
 
           for port, label in ((5557, "FREDWIN"), (5558, "KOCEPSV")):
               body = json.dumps({"params": {"command": "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command " + ps, "timeout": 45}}).encode()
@@ -59,16 +63,22 @@ jobs:
                   headers={"Content-Type": "application/json"},
                   method="POST",
               )
-              flag = "false"
+              state = "authenticated=false delete_repo=false"
               try:
                   with urllib.request.urlopen(request, timeout=55) as response:
                       payload = json.loads(response.read().decode())
                   result = payload.get("result") or {}
                   if result.get("success") is True:
-                      output = str(result.get("output") or "").strip().lower()
-                      if output.splitlines() and output.splitlines()[-1].strip() == "true":
-                          flag = "true"
+                      output = str(result.get("output") or "").strip().lower().splitlines()
+                      if output:
+                          candidate = output[-1].strip()
+                          if candidate in {
+                              "authenticated=true delete_repo=true",
+                              "authenticated=true delete_repo=false",
+                              "authenticated=false delete_repo=false",
+                          }:
+                              state = candidate
               except Exception:
                   pass
-              print(f"AUTH_SOURCE={label} delete_repo={flag}")
+              print(f"AUTH_SOURCE={label} {state}")
           PY
