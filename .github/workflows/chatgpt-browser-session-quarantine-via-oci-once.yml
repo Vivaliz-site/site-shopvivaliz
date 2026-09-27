@@ -112,7 +112,7 @@ jobs:
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           BACKEND_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
             --bastion-id "$BASTION_ID" --target-private-ip "$BACKEND_PRIVATE_IP" --target-port 22 \
-            --session-ttl 900 --display-name chatgpt-session-quarantine \
+            --session-ttl 1800 --display-name chatgpt-session-quarantine \
             --ssh-public-key-file "$BASTION_KEY_FILE.pub" --query 'data.id' --raw-output)"
           echo "BACKEND_SESSION_ID=$BACKEND_SESSION_ID" >> "$GITHUB_ENV"
           for _ in $(seq 1 36); do
