@@ -183,19 +183,22 @@ jobs:
           set -Eeuo pipefail
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SCP_SITE=(scp -q "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -P "$SITE_TUNNEL_PORT")
+          "${SCP_SITE[@]}" scripts/agent_task_state.py "ubuntu@127.0.0.1:/tmp/shopvivaliz-agent-task-state-global-cleanup.py"
+          "${SITE_SSH[@]}" 'chmod 600 /tmp/shopvivaliz-agent-task-state-global-cleanup.py'
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
             cd /home/ubuntu/shopvivaliz-deploy/repo
             export SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
             task=global-continuity-cleanup-20260927
             goal="Delete fredmourao-ai/solange-rolla and remove the two already-merged cleanup branches, then verify final state."
-            if python3 scripts/agent_task_state.py show --task "$task" >/tmp/global-cleanup-state.json 2>/dev/null; then
+            if python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py show --task "$task" >/tmp/global-cleanup-state.json 2>/dev/null; then
               status="$(python3 -c "import json; print(json.load(open('/tmp/global-cleanup-state.json')).get('status',''))")"
               case "$status" in
                 BLOCKED_EXTERNAL)
-                  python3 scripts/agent_task_state.py resume --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." >/dev/null
+                  python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py resume --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." >/dev/null
                   ;;
                 RUNNING|READY_TO_COMPLETE)
-                  python3 scripts/agent_task_state.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
+                  python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
                   ;;
                 CONCLUIDO)
                   echo TASK_ALREADY_CONCLUIDO=true
@@ -206,8 +209,8 @@ jobs:
                   ;;
               esac
             else
-              python3 scripts/agent_task_state.py start --task "$task" --goal "$goal" --agent chatgpt-bastion-cleanup --repository Vivaliz-site/site-shopvivaliz >/dev/null
-              python3 scripts/agent_task_state.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
+              python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py start --task "$task" --goal "$goal" --agent chatgpt-bastion-cleanup --repository Vivaliz-site/site-shopvivaliz >/dev/null
+              python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
             fi
             rm -f /tmp/global-cleanup-state.json
             echo TASK_CHECKPOINT=PASS'
@@ -306,9 +309,9 @@ jobs:
             cd /home/ubuntu/shopvivaliz-deploy/repo
             export SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
             task=global-continuity-cleanup-20260927
-            python3 scripts/agent_task_state.py ready --task "$task" --evidence "fredmourao-ai/solange-rolla no longer resolves after authorized GitHub deletion" --verification "Legacy superseded repository deletion confirmed; merged branch cleanup attempted as cosmetic follow-up." >/dev/null
-            python3 scripts/agent_task_state.py complete --task "$task" >/dev/null
-            python3 scripts/agent_task_state.py terminal --task "$task" >/dev/null
+            python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py ready --task "$task" --evidence "fredmourao-ai/solange-rolla no longer resolves after authorized GitHub deletion" --verification "Legacy superseded repository deletion confirmed; merged branch cleanup attempted as cosmetic follow-up." >/dev/null
+            python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py complete --task "$task" >/dev/null
+            python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py terminal --task "$task" >/dev/null
             echo TASK_TERMINAL=CONCLUIDO
 
             gh_native api --method DELETE "repos/Vivaliz-site/site-shopvivaliz/git/refs/heads/ops/global-continuity-cleanup-bastion-20260927" >/dev/null 2>&1 || true
