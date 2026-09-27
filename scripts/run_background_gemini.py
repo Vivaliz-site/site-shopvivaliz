@@ -8,11 +8,11 @@ removes unrelated AI provider secrets from the Gemini child environment.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Mapping
 
@@ -64,7 +64,16 @@ def build_child_env(base: Mapping[str, str], credential: str) -> dict[str, str]:
 
 
 
-def build_headless_policy_text() -> str:
+def build_headless_tools_core() -> list[str]:
+    """Bounded list of tools this headless recovery run may register.
+
+    gemini-cli's --admin-policy TOML rules for run_shell_command are
+    silently ignored in non-interactive `--prompt` + `--approval-mode
+    auto_edit` mode (upstream: google-gemini/gemini-cli#20469 — the tool
+    is not even registered, "Tool 'run_shell_command' not found").
+    `tools.core` in `.gemini/settings.json` gates tool registration
+    itself, so it is not subject to that policy-engine bypass.
+    """
     prefixes = (
         "python3 scripts/agent_task_state.py",
         "./scripts/agent_task_state.py",
@@ -78,27 +87,20 @@ def build_headless_policy_text() -> str:
         "bash tests/",
         "bash scripts/repository-governance-validate.sh",
     )
-    quoted = ", ".join(repr(item) for item in prefixes)
-    return (
-        "[[rule]]\n"
-        'toolName = "run_shell_command"\n'
-        f"commandPrefix = [{quoted}]\n"
-        'decision = "allow"\n'
-        "priority = 900\n"
-        'modes = ["autoEdit"]\n'
-        "interactive = false\n"
-    )
+    return [f"run_shell_command({prefix})" for prefix in prefixes]
 
 
-def build_gemini_command(*, executable: str, model: str, prompt: str, policy_path: Path) -> list[str]:
+def build_gemini_settings_json(tools_core: list[str]) -> str:
+    return json.dumps({"tools": {"core": tools_core}}, indent=2, sort_keys=True) + "\n"
+
+
+def build_gemini_command(*, executable: str, model: str, prompt: str) -> list[str]:
     return [
         executable,
         "--model",
         model,
         "--approval-mode",
         "auto_edit",
-        "--admin-policy",
-        str(policy_path),
         "--prompt",
         prompt,
     ]
@@ -143,23 +145,21 @@ def run(
 
     prompt = prompt_file.read_text(encoding="utf-8", errors="strict")
     child = build_child_env(os.environ, credential)
-    policy_path: Path | None = None
+    gemini_dir = Path(".gemini")
+    settings_path = gemini_dir / "settings.json"
+    gemini_dir_created = not gemini_dir.exists()
+    settings_created = False
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
+        gemini_dir.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(
+            build_gemini_settings_json(build_headless_tools_core()),
             encoding="utf-8",
-            prefix="shopvivaliz-gemini-policy-",
-            suffix=".toml",
-            delete=False,
-        ) as handle:
-            handle.write(build_headless_policy_text())
-            handle.flush()
-            policy_path = Path(handle.name)
+        )
+        settings_created = True
         command = build_gemini_command(
             executable=executable,
             model=model,
             prompt=prompt,
-            policy_path=policy_path,
         )
         completed = subprocess.run(
             command,
@@ -173,8 +173,13 @@ def run(
         print("background_gemini_error=exec_failed", file=sys.stderr)
         return 127
     finally:
-        if policy_path is not None:
-            policy_path.unlink(missing_ok=True)
+        if settings_created:
+            settings_path.unlink(missing_ok=True)
+        if gemini_dir_created:
+            try:
+                gemini_dir.rmdir()
+            except OSError:
+                pass
 
     output = (completed.stdout or "").replace(credential, "***")
     if output:
