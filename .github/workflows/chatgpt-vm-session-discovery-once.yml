@@ -35,6 +35,47 @@ jobs:
             loginctl show-session "$sid" -p Id -p Name -p User -p Type -p Class -p State -p Remote -p Display -p Leader 2>/dev/null || true
           done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
 
+          echo "BROWSER_PARENT_CHAIN_SAFE"
+          sudo -n python3 - <<'PY'
+          import os,pwd
+          target='/home/fredrdp/.config/shopvivaliz-chromium'
+          roots=[]
+          for item in os.listdir('/proc'):
+              if not item.isdigit(): continue
+              try:
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args: continue
+                  joined=' '.join(args)
+                  if target in joined and os.path.basename(args[0]) in {'chrome','chromium','shopvivaliz-chromium'}:
+                      roots.append(int(item))
+              except Exception:
+                  pass
+          for start in sorted(roots)[:4]:
+              print(f'chain_start={start}')
+              pid=start
+              seen=set()
+              for _ in range(12):
+                  if pid<=1 or pid in seen: break
+                  seen.add(pid)
+                  try:
+                      st=os.stat(f'/proc/{pid}')
+                      user=pwd.getpwuid(st.st_uid).pw_name
+                      args=[x.decode('utf-8','replace') for x in open(f'/proc/{pid}/cmdline','rb').read().split(b'\0') if x]
+                      stat=open(f'/proc/{pid}/stat',encoding='utf-8').read().split()
+                      ppid=int(stat[3]) if len(stat)>3 else 0
+                      exe=os.path.basename(args[0]) if args else ''
+                      safe_args=[]
+                      for a in args[1:8]:
+                          if 'token' in a.lower() or 'secret' in a.lower() or 'cookie' in a.lower():
+                              safe_args.append('[REDACTED]')
+                          else:
+                              safe_args.append(a[:180])
+                      print(f'pid={pid} ppid={ppid} user={user} exe={exe} args={" ".join(safe_args)}')
+                      pid=ppid
+                  except Exception:
+                      break
+          PY
+
           echo "BROWSER_PROCESS_ANCESTRY_SAFE"
           sudo -n python3 - <<'PY'
           import os,pwd
@@ -198,4 +239,5 @@ jobs:
           PY
 
 
-# passive-rerun-marker: 2026-09-27T23:27Z ancestry
+
+# passive-rerun-marker: 2026-09-27T23:28Z parent-chain
