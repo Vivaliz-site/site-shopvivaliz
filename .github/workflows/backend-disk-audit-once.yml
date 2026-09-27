@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   control:
-    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/backend-oci '))
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 25
