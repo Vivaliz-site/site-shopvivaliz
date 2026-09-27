@@ -253,6 +253,82 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertIn("tests.test_task_resume_dispatcher", validator)
         self.assertIn("SHOPVIVALIZ_RESUME_RESULT_MODE", failover)
         self.assertIn("task_state", failover)
+    def test_executor_artifact_summary_is_sanitized_and_structured(self) -> None:
+        dispatcher = load_dispatcher()
+        workspace = self.root / "workspace"
+        logs = workspace / "logs"
+        logs.mkdir(parents=True)
+        raw = (
+            "prompt body must never persist\n"
+            "SECRET_TOKEN=super-secret-value\n"
+            "background_paid_fallback_forbidden=true\n"
+            "background_gemini_error=tool_denied\n"
+            "background_gemini_exit_code=75\n"
+        )
+        (logs / "autonomous-provider-output.txt").write_text(raw, encoding="utf-8")
+        (logs / "autonomous-provider-attempts.jsonl").write_text(
+            json.dumps(
+                {
+                    "provider": "gemini",
+                    "status": "no_task_state_progress",
+                    "exit_code": 0,
+                    "timestamp": "2026-09-27T02:00:00Z",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        diagnostic = dispatcher._summarize_executor_artifacts(workspace)
+
+        self.assertEqual(diagnostic["provider"], "gemini")
+        self.assertEqual(diagnostic["provider_status"], "no_task_state_progress")
+        self.assertEqual(diagnostic["provider_attempt_exit_code"], 0)
+        self.assertEqual(diagnostic["background_gemini_error"], "tool_denied")
+        self.assertEqual(diagnostic["background_gemini_exit_code"], 75)
+        self.assertTrue(diagnostic["background_paid_fallback_forbidden"])
+        self.assertGreater(diagnostic["provider_output_bytes"], 0)
+        self.assertEqual(len(diagnostic["provider_output_sha256"]), 64)
+        serialized = json.dumps(diagnostic, sort_keys=True)
+        self.assertNotIn("super-secret-value", serialized)
+        self.assertNotIn("prompt body", serialized)
+        self.assertNotIn("SECRET_TOKEN", serialized)
+
+    def test_run_once_persists_structured_diagnostic_in_ledger(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        original_execute = dispatcher._execute
+        try:
+            dispatcher._execute = lambda **kwargs: (
+                "no_progress",
+                75,
+                state,
+                {
+                    "provider": "gemini",
+                    "provider_status": "no_task_state_progress",
+                    "provider_output_sha256": "a" * 64,
+                    "provider_output_bytes": 123,
+                },
+            )
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            dispatcher._execute = original_execute
+
+        self.assertEqual(result["no_progress"], 1)
+        ledger = [
+            json.loads(line)
+            for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(ledger[-1]["diagnostic"]["provider"], "gemini")
+        self.assertEqual(ledger[-1]["diagnostic"]["provider_output_bytes"], 123)
+
 
 
 if __name__ == "__main__":

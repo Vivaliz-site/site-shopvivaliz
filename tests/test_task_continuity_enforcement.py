@@ -181,6 +181,33 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             self.assertIn("concurrency:", text, str(workflow))
             self.assertIn("cancel-in-progress: true", text, str(workflow))
 
+    def test_production_e2e_gate_is_required_and_cannot_invoke_recovery_stages(self) -> None:
+        probe = ROOT / "scripts" / "task_continuity_e2e.py"
+        workflow = ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        self.assertTrue(probe.is_file(), "production continuity E2E probe is required")
+        self.assertTrue(workflow.is_file(), "production continuity E2E workflow is required")
+
+        probe_text = probe.read_text(encoding="utf-8")
+        self.assertIn("continuity_e2e_pass", probe_text)
+        self.assertNotIn("task_continuation_watchdog", probe_text)
+        self.assertNotIn("task_resume_dispatcher", probe_text)
+        self.assertNotIn("run_once(", probe_text)
+
+        workflow_text = workflow.read_text(encoding="utf-8")
+        self.assertIn("scripts/task_continuity_e2e.py", workflow_text)
+        self.assertIn("shopvivaliz-a1-deploy", workflow_text)
+
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("task_continuity_e2e.py", validator)
+        self.assertIn("task-continuity-production-e2e.yml", validator)
+
+        docs = (ROOT / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
+        self.assertIn("DETACHED_TASK_RECOVERY_E2E_V7", docs)
+        self.assertIn("continuity_e2e_pass", docs)
+
+        audit = (ROOT / "AUDIT_POLICY.md").read_text(encoding="utf-8")
+        self.assertIn("continuity_e2e_pass", audit)
+
 
 
 if __name__ == "__main__":
