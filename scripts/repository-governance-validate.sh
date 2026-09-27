@@ -14,6 +14,7 @@ python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
 python3 scripts/validate-task-continuity-enforcement.py
+bash tests/chatgpt-account-diagnostic-contract-test.sh
 python3 -m unittest tests.test_task_continuity_enforcement -v
 python3 -m unittest tests.test_task_continuation_watchdog -v
 python3 -m unittest tests.test_task_resume_dispatcher -v
