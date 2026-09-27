@@ -38,6 +38,8 @@ TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
 DEFAULT_RETRY_AFTER_SECONDS = 900
+DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS = 900
+CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 ALLOWED_REPOSITORIES = frozenset({
     "Vivaliz-site/site-shopvivaliz",
     "Vivaliz-site/-shopvivaliz-pipeline",
@@ -113,6 +115,42 @@ def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _recent_successful_chatgpt_nudge(
+    runtime_dir: Path,
+    request: dict[str, Any],
+    *,
+    grace_seconds: int = DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS,
+) -> bool:
+    """Give chatgpt_common its bounded first chance before detached fallback."""
+    if str(request.get("preferred_executor", "")).strip() != "chatgpt_common":
+        return False
+
+    fingerprint = str(request.get("fingerprint", "")).strip()
+    task_id = str(request.get("task_id", "")).strip()
+    repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+    if not fingerprint or not task_id:
+        return False
+
+    now = datetime.now(timezone.utc)
+    grace = max(0, int(grace_seconds))
+    for row in reversed(_read_jsonl(runtime_dir / CHATGPT_NUDGE_LEDGER_FILE)):
+        if str(row.get("fingerprint", "")).strip() != fingerprint:
+            continue
+        if str(row.get("task_id", "")).strip() != task_id:
+            continue
+        row_repository = str(row.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+        if row_repository != repository:
+            continue
+        if row.get("bridge_ok") is not True:
+            continue
+        dispatched_at = _parse_utc(str(row.get("dispatched_at", "")))
+        if dispatched_at is None:
+            continue
+        age_seconds = (now - dispatched_at).total_seconds()
+        return 0 <= age_seconds <= grace
+    return False
 
 
 def _state_signature(payload: dict[str, Any]) -> str:
@@ -387,6 +425,7 @@ def run_once(
         "terminal": 0,
         "no_progress": 0,
         "failed": 0,
+        "deferred_chatgpt": 0,
         "generated_at": utc_now(),
     }
 
@@ -414,6 +453,10 @@ def run_once(
             fingerprint = str(request.get("fingerprint", "")).strip()
             task_id = str(request.get("task_id", "")).strip()
             if not fingerprint or not task_id:
+                continue
+
+            if _recent_successful_chatgpt_nudge(runtime, request):
+                summary["deferred_chatgpt"] += 1
                 continue
 
             previous = latest_by_fingerprint.get(fingerprint)
