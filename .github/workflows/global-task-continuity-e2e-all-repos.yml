@@ -45,14 +45,30 @@ jobs:
             "Vivaliz-site/shopvivaliz-m365"
             "Vivaliz-site/-shopvivaliz-pipeline"
           )
+          failed=0
+          : > continuity-e2e-reports/summary.tsv
           for repository in "${repositories[@]}"; do
             slug="${repository//\//__}"
+            report="continuity-e2e-reports/${slug}.json"
+            stdout_log="continuity-e2e-reports/${slug}.stdout.log"
             echo "::group::continuity_e2e repository=$repository"
-            python3 scripts/task_continuity_e2e.py               --runtime-dir "$runtime_dir"               --repository "$repository"               --timeout-seconds 480               --poll-interval-seconds 10               | tee "continuity-e2e-reports/${slug}.json"
-            python3 - "continuity-e2e-reports/${slug}.json" "$repository" <<'PY'
+
+            probe_rc=0
+            python3 scripts/task_continuity_e2e.py \
+              --runtime-dir "$runtime_dir" \
+              --repository "$repository" \
+              --timeout-seconds 480 \
+              --poll-interval-seconds 10 \
+              --report-path "$report" \
+              > "$stdout_log" || probe_rc=$?
+
+            validation_rc=0
+            if [[ -s "$report" ]]; then
+              python3 - "$report" "$repository" <<'PY' || validation_rc=$?
           import json, sys
           path, repository = sys.argv[1:]
           report = json.load(open(path, encoding="utf-8"))
+          assert report.get("repository") == repository, report
           assert report.get("pass") is True, report
           assert report.get("observed_request") is True, report
           assert report.get("final_status") == "CONCLUIDO", report
@@ -63,15 +79,33 @@ jobs:
           assert diagnostic.get("provider") == "gemini", report
           assert diagnostic.get("background_paid_fallback_forbidden") is True, report
           assert diagnostic.get("provider_status") == "task_state_advanced", report
+          assert diagnostic.get("background_gemini_exit_code") == 0, report
           print(f"GLOBAL_CONTINUITY_E2E=PASS repository={repository} task_id={report.get('task_id')}")
           PY
+            else
+              validation_rc=1
+              echo "GLOBAL_CONTINUITY_E2E=FAIL repository=$repository reason=missing_report"
+            fi
+
+            if [[ "$probe_rc" -eq 0 && "$validation_rc" -eq 0 ]]; then
+              printf '%s\tPASS\n' "$repository" >> continuity-e2e-reports/summary.tsv
+            else
+              printf '%s\tFAIL\n' "$repository" >> continuity-e2e-reports/summary.tsv
+              failed=1
+            fi
+            rm -f "$stdout_log"
             echo "::endgroup::"
           done
+
+          cat continuity-e2e-reports/summary.tsv
+          exit "$failed"
 
       - name: Upload sanitized per-repository reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: global-task-continuity-e2e-reports
-          path: continuity-e2e-reports/*.json
+          path: |
+            continuity-e2e-reports/*.json
+            continuity-e2e-reports/summary.tsv
           retention-days: 7
