@@ -1,0 +1,69 @@
+name: Provision Governed Runners Direct Backend Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/provision-governed-runners-direct-backend-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provision-governed-runners-direct-backend-once
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Provision allowlisted sibling CI runners locally
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v gh >/dev/null
+          command -v jq >/dev/null
+          script="$GITHUB_WORKSPACE/scripts/install-governed-repo-runner.sh"
+          test -x "$script"
+
+          provision() {
+            local repo="$1" name="$2" label="$3"
+            local root="/home/ubuntu/actions-runner-${label}"
+            if [[ -f "$root/.runner" ]]; then
+              TARGET_REPO="$repo" RUNNER_NAME="$name" RUNNER_LABEL="$label" bash "$script"
+            else
+              token_file="$(mktemp)"
+              trap 'rm -f "$token_file"' RETURN
+              chmod 600 "$token_file"
+              gh api --method POST "repos/${repo}/actions/runners/registration-token" > "$token_file"
+              token="$(jq -r '.token // empty' "$token_file")"
+              test -n "$token"
+              TARGET_REPO="$repo" RUNNER_NAME="$name" RUNNER_LABEL="$label" RUNNER_TOKEN="$token" bash "$script"
+              unset token RUNNER_TOKEN
+              rm -f "$token_file"
+              trap - RETURN
+            fi
+
+            online=""
+            for attempt in $(seq 1 12); do
+              online="$(gh api "repos/${repo}/actions/runners?per_page=100" \
+                --jq ".runners[] | select(.name==\"${name}\") | select(.status==\"online\") | .name" || true)"
+              if [[ "$online" == "$name" ]]; then
+                break
+              fi
+              sleep 5
+            done
+            [[ "$online" == "$name" ]]
+            echo "RUNNER_READY repo=$repo name=$name label=$label"
+          }
+
+          provision Vivaliz-site/ml-pricing-api governed-ml-pricing-ci ml-pricing-ci
+          provision Vivaliz-site/mercadolivre-returns-recovery governed-mlrr-ci mlrr-ci
+          provision Vivaliz-site/shopvivaliz-m365 governed-m365-ci m365-ci
+          echo GOVERNED_BACKEND_RUNNERS_DIRECT=PASS
