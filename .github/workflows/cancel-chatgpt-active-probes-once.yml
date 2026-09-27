@@ -1,0 +1,37 @@
+name: Cancel Active ChatGPT Turn Probes Once
+
+on:
+  push:
+    branches:
+      - diag/cancel-chatgpt-active-probes-20260927
+    paths:
+      - '.github/workflows/cancel-chatgpt-active-probes-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel only active ChatGPT workflows that can submit turns
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh api "repos/$REPO/actions/runs?per_page=100" --paginate             --jq '.workflow_runs[] | select((.status=="queued" or .status=="in_progress" or .status=="pending") and (
+              .name=="ChatGPT CDP Diagnostic via A1 Once" or
+              .name=="ChatGPT Account Diagnostic Direct" or
+              .name=="ChatGPT Account Diagnostic Bastion Once" or
+              .name=="ChatGPT Live Turn Probe Once"
+            )) | [.id,.name,.status] | @tsv' |
+          while IFS=$'\t' read -r id name status; do
+            [ -n "$id" ] || continue
+            echo "CANCELING id=$id name=$name status=$status"
+            gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null
+          done
+          echo CHATGPT_ACTIVE_TURN_PROBE_CANCEL=PASS
