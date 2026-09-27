@@ -11,6 +11,7 @@ REPORT = ROOT / "artifacts" / "system-health" / "report.json"
 QUEUE_PATH = ROOT / "tasks-queue.json"
 ALLOWED_STATES = {"pending", "running", "blocked", "failed", "completed_verified"}
 REQUIRED_COMPLETION_EVIDENCE = {"run_id", "artifact", "commit_sha", "verification"}
+CANONICAL_COMPLETION_VERIFICATION = {"run_id", "commit_sha", "pull_request", "artifact_digest", "verified_at"}
 
 REPOSITORY_ONLY_REQUIRED = (
     Path(".github/workflows/agents-hourly-deep-audit.yml"),
@@ -142,13 +143,26 @@ def validate_queue(payload: object) -> tuple[list[str], dict[str, object]]:
             errors.append(f"{task_id}: success=true is only valid for completed_verified")
 
         if status == "completed_verified":
-            evidence = raw_task.get("evidence")
-            missing = sorted(
-                field for field in REQUIRED_COMPLETION_EVIDENCE
-                if not isinstance(evidence, dict) or not evidence.get(field)
+            verification = raw_task.get("verification")
+            canonical_verified = (
+                isinstance(verification, dict)
+                and all(
+                    verification.get(field)
+                    for field in CANONICAL_COMPLETION_VERIFICATION
+                )
+                and verification.get("tests_passed") is True
+                and verification.get("read_back_verified") is True
             )
-            if missing:
-                errors.append(f"{task_id}: completed_verified lacks evidence fields: {', '.join(missing)}")
+            if not canonical_verified:
+                evidence = raw_task.get("evidence")
+                missing = sorted(
+                    field for field in REQUIRED_COMPLETION_EVIDENCE
+                    if not isinstance(evidence, dict) or not evidence.get(field)
+                )
+                if missing:
+                    errors.append(
+                        f"{task_id}: completed_verified lacks evidence fields: {', '.join(missing)}"
+                    )
             if not completed_at:
                 errors.append(f"{task_id}: completed_verified requires completed_at")
             if last_success is not True:
