@@ -1,0 +1,210 @@
+name: ChatGPT Browser Session Quarantine via OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-discovery-20260927
+    paths:
+      - '.github/workflows/chatgpt-browser-session-quarantine-via-oci-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-oci-bastion-mutation
+  cancel-in-progress: false
+
+jobs:
+  quarantine:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      BACKEND_TUNNEL_PORT: "22214"
+
+    steps:
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C chatgpt-session-quarantine -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+
+      - name: Discover Bastion and temporarily allow runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state')=='ACTIVE']
+          if len(active)!=1: raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress,json,sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2],encoding='utf-8'))
+          if not isinstance(src,list): raise SystemExit('Bastion CIDR allowlist is not a list')
+          json.dump(list(dict.fromkeys([str(x) for x in src]+[ip+'/32'])),open(sys.argv[3],'w',encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+
+      - name: Create verified backend tunnel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          BACKEND_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" --target-private-ip "$BACKEND_PRIVATE_IP" --target-port 22 \
+            --session-ttl 900 --display-name chatgpt-session-quarantine \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" --query 'data.id' --raw-output)"
+          echo "BACKEND_SESSION_ID=$BACKEND_SESSION_ID" >> "$GITHUB_ENV"
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then break; fi
+            case "$state" in FAILED|DELETED) exit 1;; esac
+            sleep 5
+          done
+          test "$state" = ACTIVE
+          cmd="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          cmd="${cmd//<privateKey>/$BASTION_KEY_FILE}"
+          cmd="${cmd//<localPort>/$BACKEND_TUNNEL_PORT}"
+          cmd="${cmd/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          bash -lc "$cmd"
+          sleep 2
+          SSH=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT")
+          ssh "${SSH[@]}" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+          echo PRIVATE_BACKEND_SSH=PASS
+
+      - name: Quarantine exact legacy ChatGPT browser and verify
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT")
+          ssh "${SSH[@]}" ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          profile='/home/fredrdp/.config/shopvivaliz-chromium'
+          port='9555'
+          mapfile -t roots < <(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]; port=sys.argv[2]
+          for item in sorted((x for x in os.listdir('/proc') if x.isdigit()),key=int):
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name!='fredrdp': continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args: continue
+                  exe=os.path.basename(args[0])
+                  if exe in {'chrome','chromium','shopvivaliz-chromium'} and f'--user-data-dir={profile}' in args and f'--remote-debugging-port={port}' in args:
+                      print(item)
+              except Exception: pass
+          PY
+          )
+          if [ "${#roots[@]}" -gt 1 ]; then echo "ERROR multiple matching roots" >&2; exit 2; fi
+          if [ "${#roots[@]}" -eq 1 ]; then
+            pid="${roots[0]}"; echo MATCHING_BROWSER_ROOT=1
+            sudo -n kill -TERM "$pid"
+            for _ in $(seq 1 15); do sudo -n kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+            if sudo -n kill -0 "$pid" 2>/dev/null; then sudo -n kill -KILL "$pid"; sleep 2; fi
+          else
+            echo MATCHING_BROWSER_ROOT=0
+          fi
+          remaining="$(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]; port=sys.argv[2]; n=0
+          for item in os.listdir('/proc'):
+              if not item.isdigit(): continue
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name!='fredrdp': continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args: continue
+                  joined=' '.join(args); exe=os.path.basename(args[0])
+                  if ('chrom' in exe or 'chrome' in exe) and (profile in joined or f'--remote-debugging-port={port}' in joined): n+=1
+              except Exception: pass
+          print(n)
+          PY
+          )"
+          echo "MATCHING_BROWSER_PROCESSES_AFTER=$remaining"
+          test "$remaining" = 0
+          ! curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/json/version" >/dev/null 2>&1
+          test -d "$profile"
+          echo PROFILE_PRESERVED=true
+          echo CHATGPT_BROWSER_SESSION_QUARANTINE=PASS
+          REMOTE
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then
+            "${OCI[@]}" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null 2>&1 || true
+          fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || true
+          fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null 2>&1; then
+            pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" || true
+          fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
