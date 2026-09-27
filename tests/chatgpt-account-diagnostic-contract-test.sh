@@ -34,6 +34,9 @@ grep -Fq 'function resolveBrowserPath' "$diag"
 grep -Fq "'/usr/bin/chromium'" "$diag"
 grep -Fq "'/snap/bin/chromium'" "$diag"
 grep -Fq 'chromium.executablePath()' "$diag"
+grep -Fq 'function discoverUserPlaywrightBrowser' "$diag"
+grep -Fq "'.cache/ms-playwright'" "$diag"
+grep -Fq "'chrome-linux/chrome'" "$diag"
 
 if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
   echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2
