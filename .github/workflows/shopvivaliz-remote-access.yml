@@ -360,6 +360,18 @@ jobs:
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
               ;;
+            chatgpt_account_diag)
+              remote_script="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              remote_json="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/chatgpt-account-diagnostic.mjs
+              diag_rc=0
+              "${SSH[@]}" "CHATGPT_ACCOUNT_DIAG_OUTPUT='$remote_json' node '$remote_script'" || diag_rc=$?
+              "${SSH[@]}" "test -s '$remote_json'; rm -f '$remote_script' '$remote_json'"
+              if [ "$diag_rc" -ne 0 ]; then
+                exit "$diag_rc"
+              fi
+              echo "CHATGPT_ACCOUNT_DIAG=PASS"
+              ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
                 agent_ssh_install) MODE=install ;;
