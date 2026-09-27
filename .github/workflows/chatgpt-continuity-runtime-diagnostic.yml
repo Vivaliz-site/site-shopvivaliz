@@ -112,3 +112,38 @@ jobs:
                   print(f'{name}_RELAY=unavailable')
                   print(f'{name}_DIAG_ERROR={type(exc).__name__}')
           PY
+
+
+  hosted-bridge-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CONTINUITY_TOKEN: ${{ secrets.CHATGPT_CONTINUITY_BRIDGE_TOKEN }}
+    steps:
+      - name: Verify deployed bridge without credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          endpoint='https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php'
+          code="$(curl -sS -o /tmp/unauth-body -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' "$endpoint")"
+          echo "BRIDGE_UNAUTH_HTTP=$code"
+          test "$code" = "401"
+
+      - name: Verify configured bridge token without exposing it
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${CONTINUITY_TOKEN:-}" ]; then
+            echo "GITHUB_CONTINUITY_SECRET=missing"
+            exit 0
+          fi
+          echo "GITHUB_CONTINUITY_SECRET=present"
+          endpoint='https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php'
+          code="$(curl -sS -o /tmp/auth-body -w '%{http_code}' --max-time 15             -H "Authorization: Bearer $CONTINUITY_TOKEN"             -H 'Content-Type: application/json'             --data '{"operation":"heartbeat"}' "$endpoint")"
+          echo "BRIDGE_AUTH_HTTP=$code"
+          if [ "$code" = "200" ] && grep -Fq '"status":"OK"' /tmp/auth-body; then
+            echo "BRIDGE_AUTH_HEARTBEAT=pass"
+          else
+            echo "BRIDGE_AUTH_HEARTBEAT=fail"
+            exit 1
+          fi
