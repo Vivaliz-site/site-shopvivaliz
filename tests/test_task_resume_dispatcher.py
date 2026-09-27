@@ -264,6 +264,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             "background_paid_fallback_forbidden=true\n"
             "background_gemini_error=tool_denied\n"
             "background_gemini_exit_code=75\n"
+            "background_gemini_model=gemini-flash-latest\n"
         )
         (logs / "autonomous-provider-output.txt").write_text(raw, encoding="utf-8")
         (logs / "autonomous-provider-attempts.jsonl").write_text(
@@ -286,6 +287,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(diagnostic["provider_attempt_exit_code"], 0)
         self.assertEqual(diagnostic["background_gemini_error"], "tool_denied")
         self.assertEqual(diagnostic["background_gemini_exit_code"], 75)
+        self.assertEqual(diagnostic["background_gemini_model"], "gemini-flash-latest")
         self.assertTrue(diagnostic["background_paid_fallback_forbidden"])
         self.assertGreater(diagnostic["provider_output_bytes"], 0)
         self.assertEqual(len(diagnostic["provider_output_sha256"]), 64)
