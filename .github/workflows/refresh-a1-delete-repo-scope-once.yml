@@ -1,0 +1,153 @@
+name: Refresh A1 Delete Repo Scope Once
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-a1-delete-repo-scope-once
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      github.event.comment.body == '/refresh-a1-delete-repo-scope-v1 CONFIRM'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    env:
+      TASK_ID: global-continuity-cleanup-20260927
+      BACKEND_HOST: 10.0.1.38
+      REMOTE_HELPER: /tmp/shopvivaliz-github-device-auth-${{ github.run_id }}.mjs
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Persist task checkpoint before authorization
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          goal='Delete fredmourao-ai/solange-rolla and remove the two already-merged cleanup branches, then verify final state.'
+          if python3 scripts/agent_task_state.py show --task "$TASK_ID" >"$RUNNER_TEMP/task-state.json" 2>/dev/null; then
+            status="$(python3 - "$RUNNER_TEMP/task-state.json" <<'PY'
+          import json, sys
+          print(json.load(open(sys.argv[1], encoding="utf-8")).get("status", ""))
+          PY
+          )"
+            case "$status" in
+              BLOCKED_EXTERNAL)
+                python3 scripts/agent_task_state.py resume --task "$TASK_ID" --next-action "Add delete_repo to the A1 native gh session through the authenticated backend browser, then rerun the reviewed deletion workflow." >/dev/null
+                ;;
+              RUNNING|READY_TO_COMPLETE)
+                python3 scripts/agent_task_state.py progress --task "$TASK_ID" --next-action "Add delete_repo to the A1 native gh session through the authenticated backend browser, then rerun the reviewed deletion workflow." --evidence "A1 scope-refresh run $GITHUB_RUN_ID started." >/dev/null
+                ;;
+              CONCLUIDO)
+                echo "TASK_ALREADY_CONCLUIDO=true"
+                exit 0
+                ;;
+              *)
+                echo "ERROR unsupported task state: $status" >&2
+                exit 4
+                ;;
+            esac
+          else
+            python3 scripts/agent_task_state.py start --task "$TASK_ID" --goal "$goal" --agent chatgpt-github-actions --repository "$GITHUB_REPOSITORY" >/dev/null
+            python3 scripts/agent_task_state.py progress --task "$TASK_ID" --next-action "Add delete_repo to the A1 native gh session through the authenticated backend browser, then rerun the reviewed deletion workflow." --evidence "A1 scope-refresh run $GITHUB_RUN_ID started." >/dev/null
+          fi
+          rm -f "$RUNNER_TEMP/task-state.json"
+          echo "TASK_CHECKPOINT=PASS"
+
+      - name: Configure temporary private SSH to backend
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$RUNNER_TEMP/a1-delete-scope"
+          KEY_FILE="$RUNNER_TEMP/a1-delete-scope/vm.key"
+          HOSTS_FILE="$RUNNER_TEMP/a1-delete-scope/known_hosts"
+          printf '%s\n' "$VM_KEY" > "$KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$HOSTS_FILE"
+          chmod 600 "$KEY_FILE" "$HOSTS_FILE"
+          printf 'KEY_FILE=%s\nHOSTS_FILE=%s\n' "$KEY_FILE" "$HOSTS_FILE" >> "$GITHUB_ENV"
+
+      - name: Refresh A1 scope through backend browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null
+
+          if env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
+            echo "A1_DELETE_REPO_SCOPE=ALREADY_PRESENT"
+            exit 0
+          fi
+
+          LOG_FILE="$RUNNER_TEMP/a1-delete-scope/gh-refresh.log"
+          : > "$LOG_FILE"
+          chmod 600 "$LOG_FILE"
+
+          printf '\n\n\n' | BROWSER=true GH_CONFIG_DIR="$GH_CONFIG_DIR" env -u GH_TOKEN -u GITHUB_TOKEN \
+            script -qefc 'gh auth refresh -h github.com -s delete_repo' /dev/null >"$LOG_FILE" 2>&1 &
+          refresh_pid=$!
+
+          device_code=''
+          for _ in $(seq 1 90); do
+            device_code="$(grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' "$LOG_FILE" 2>/dev/null | tail -n 1 || true)"
+            if [ -n "$device_code" ]; then break; fi
+            if ! kill -0 "$refresh_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          test -n "$device_code" || { echo "ERROR device code was not emitted" >&2; exit 6; }
+
+          SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
+          SCP=(scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
+
+          "${SCP[@]}" scripts/github-device-auth-delete-repo.mjs "ubuntu@$BACKEND_HOST:$REMOTE_HELPER"
+          "${SSH[@]}" "ubuntu@$BACKEND_HOST" "chmod 600 '$REMOTE_HELPER'"
+
+          browser_result="$(
+            printf '%s\n' "$device_code" |
+              "${SSH[@]}" "ubuntu@$BACKEND_HOST" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 node '$REMOTE_HELPER'"
+          )"
+          device_code=''
+          grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"
+
+          scope_ok=false
+          for _ in $(seq 1 30); do
+            if env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
+              scope_ok=true
+              break
+            fi
+            sleep 1
+          done
+          test "$scope_ok" = true
+          wait "$refresh_pid" || true
+          echo "A1_DELETE_REPO_SCOPE=PASS"
+
+      - name: Record authorization progress
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/agent_task_state.py progress --task "$TASK_ID" --next-action "Trigger the reviewed superseded-repository deletion workflow and verify GitHub returns not found; then remove the two merged branches." --evidence "A1 native gh session now has delete_repo scope, verified without exposing credential material." >/dev/null
+          echo "TASK_PROGRESS=PASS"
+
+      - name: Cleanup temporary auth transport
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [ -n "${KEY_FILE:-}" ] && [ -n "${HOSTS_FILE:-}" ]; then
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=8 -i "$KEY_FILE" "ubuntu@$BACKEND_HOST" "rm -f '$REMOTE_HELPER'" >/dev/null 2>&1
+          fi
+          rm -rf "$RUNNER_TEMP/a1-delete-scope"
