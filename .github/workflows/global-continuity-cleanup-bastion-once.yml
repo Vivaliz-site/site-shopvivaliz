@@ -192,7 +192,7 @@ jobs:
             task=global-continuity-cleanup-20260927
             goal="Delete fredmourao-ai/solange-rolla and remove the two already-merged cleanup branches, then verify final state."
             if python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py show --task "$task" >/tmp/global-cleanup-state.json 2>/dev/null; then
-              status="$(python3 -c "import json; print(json.load(open('/tmp/global-cleanup-state.json')).get('status',''))")"
+              status="$(jq -r ".status // empty" /tmp/global-cleanup-state.json)"
               case "$status" in
                 BLOCKED_EXTERNAL)
                   python3 /tmp/shopvivaliz-agent-task-state-global-cleanup.py resume --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." >/dev/null
