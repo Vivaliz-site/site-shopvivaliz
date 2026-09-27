@@ -11,6 +11,7 @@ const OUTPUT = process.env.CHATGPT_ACCOUNT_DIAG_OUTPUT || '/tmp/chatgpt-account-
 const OUTPUT_DIR = process.env.CHATGPT_ACCOUNT_DIAG_DIR || path.dirname(OUTPUT);
 const HAR_OUTPUT = path.join(OUTPUT_DIR, 'sanitized.har.json');
 const CONSOLE_OUTPUT = path.join(OUTPUT_DIR, 'console-errors.json');
+const BLOCKER_SCREENSHOT = path.join(OUTPUT_DIR, 'blocker.png');
 fs.mkdirSync(OUTPUT_DIR, { recursive: true, mode: 0o700 });
 const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();
 const forcedRoute = String(process.env.CHATGPT_ACCOUNT_BROWSER_ROUTE || '').trim();
@@ -132,6 +133,55 @@ async function findComposer(page) {
   return null;
 }
 
+async function collectBlockerEvidence(page) {
+  const state = await page.evaluate(() => {
+    const body = String(document.body?.innerText || '').toLowerCase();
+    const controls = Array.from(document.querySelectorAll('button,a'))
+      .map(node => String(node.textContent || '').trim().toLowerCase())
+      .filter(Boolean);
+    const composerCandidates = document.querySelectorAll(
+      '#prompt-textarea, textarea[data-testid*="prompt"], textarea, div[contenteditable="true"]'
+    ).length;
+    return {
+      title_length: String(document.title || '').length,
+      composer_candidate_count: composerCandidates,
+      login_prompt_present: controls.some(text => /^(log in|sign in|entrar|fazer login)$/.test(text)),
+      signup_prompt_present: controls.some(text => /^(sign up|criar conta|cadastre-se)$/.test(text)),
+      session_expired_present: /session expired|your session has expired|sessão expirou|sua sessão expirou/.test(body),
+      challenge_present: /verify you are human|checking your browser|verifique se você é humano|verificando seu navegador|additional checks|verificações adicionais/.test(body),
+      visible_error: classifyVisibleFlags(body),
+    };
+  }).catch(() => ({
+    title_length: 0,
+    composer_candidate_count: 0,
+    login_prompt_present: false,
+    signup_prompt_present: false,
+    session_expired_present: false,
+    challenge_present: false,
+    visible_error: '',
+  }));
+
+  result.blocker_page = {
+    url: safePath(page.url()),
+    ...state,
+  };
+
+  const main = page.locator('main').first();
+  try {
+    if (await main.isVisible({ timeout: 1000 })) {
+      await main.screenshot({
+        path: BLOCKER_SCREENSHOT,
+        mask: [
+          main.locator('input'),
+          main.locator('[data-testid*="profile"]'),
+          main.locator('[data-testid*="account"]'),
+        ],
+      });
+    }
+  } catch {}
+  result.blocker_screenshot = fs.existsSync(BLOCKER_SCREENSHOT) ? path.basename(BLOCKER_SCREENSHOT) : '';
+}
+
 async function modelLabel(page) {
   try {
     const labels = await page.locator('button').evaluateAll(nodes => nodes
@@ -208,6 +258,8 @@ const result = {
   page_error_count: 0,
   request_failure_count: 0,
   blocker: '',
+  blocker_page: null,
+  blocker_screenshot: '',
   ok: false,
 };
 
@@ -450,6 +502,7 @@ try {
   if (!initialComposer) {
     result.auth_state = 'not_ready_or_not_authenticated';
     result.blocker = 'composer_unavailable';
+    await collectBlockerEvidence(page);
     persist();
     throw new Error(result.blocker);
   }
@@ -461,6 +514,7 @@ try {
     await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
     const composer = await findComposer(page);
     if (!composer) {
+      await collectBlockerEvidence(page);
       result.attempts.push({
         attempt,
         started_at: nowIso(),
@@ -564,6 +618,8 @@ try {
         response_date: x.response_date,
       })),
     blocker: result.blocker,
+    blocker_page: result.blocker_page,
+    blocker_screenshot: result.blocker_screenshot,
     ok: result.ok,
   };
   console.log('CHATGPT_ACCOUNT_DIAGNOSTIC=' + JSON.stringify(publicSummary));
@@ -580,6 +636,8 @@ try {
     browser_worker_available: result.browser_worker_available,
     canonical_profile_exists: result.canonical_profile_exists,
     blocker: result.blocker,
+    blocker_page: result.blocker_page,
+    blocker_screenshot: result.blocker_screenshot,
     ok: false,
   }));
   process.exitCode = 2;
