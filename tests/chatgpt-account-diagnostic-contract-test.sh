@@ -3,10 +3,12 @@ set -Eeuo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 workflow="$root/.github/workflows/shopvivaliz-remote-access.yml"
+direct_workflow="$root/.github/workflows/chatgpt-account-diagnostic-direct.yml"
 diag="$root/scripts/chatgpt-account-diagnostic.mjs"
 
 test -f "$workflow"
 test -f "$diag"
+test -f "$direct_workflow"
 
 grep -Fq 'chatgpt_account_diag' "$workflow"
 grep -Fq 'ChatGPT account diagnostic is restricted to the backend VM' "$workflow"
@@ -21,6 +23,13 @@ grep -Fq 'x-oai-turn-trace-id' "$diag"
 grep -Fq 'cf-ray' "$diag"
 grep -Fq 'url.search = ' "$diag"
 grep -Fq 'CHATGPT_ACCOUNT_DIAGNOSTIC=' "$diag"
+grep -Fq 'sanitized.har.json' "$diag"
+grep -Fq 'console-errors.json' "$diag"
+grep -Fq 'attempt-' "$diag"
+grep -Fq "request_id: headers['x-oai-request-id']" "$diag"
+grep -Fq "turn_trace_id: headers['x-oai-turn-trace-id']" "$diag"
+grep -Fq "cf_ray: headers['cf-ray']" "$diag"
+grep -Fq 'page.locator(' "$diag"
 grep -Fq "const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';" "$diag"
 grep -Fq 'browser_worker_profile_fallback' "$diag"
 grep -Fq 'canonical_profile_in_use_without_cdp' "$diag"
@@ -50,3 +59,12 @@ if grep -Eiq 'authorization|set-cookie|document\.cookie|localStorage|sessionStor
 fi
 
 echo "CHATGPT_ACCOUNT_DIAGNOSTIC_CONTRACT=PASS"
+
+grep -Fq "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]" "$direct_workflow"
+grep -Fq "/chatgpt-account-diag-v1" "$direct_workflow"
+grep -Fq "sudo -n -u fredrdp" "$direct_workflow"
+grep -Fq "/opt/shopvivaliz-browser/chrome-linux/chrome" "$direct_workflow"
+grep -Fq "actions/upload-artifact@" "$direct_workflow"
+grep -Fq "sanitized.har.json" "$direct_workflow"
+grep -Fq "console-errors.json" "$direct_workflow"
+grep -Fq "CHATGPT_ACCOUNT_DIRECT_DIAG=PASS" "$direct_workflow"
