@@ -1,0 +1,114 @@
+name: ChatGPT Continuity Runtime Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chatgpt-continuity-runtime-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    if: github.event.pull_request.head.ref == 'diag/chatgpt-continuity-runtime-20260927'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Inspect backend browser continuity prerequisites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "BACKEND_CONTINUITY_DIAGNOSTIC_BEGIN"
+
+          if curl -fsS --max-time 5 http://127.0.0.1:9555/json/version >/tmp/cdp-version.json 2>/dev/null; then
+            echo "BACKEND_CDP_9555=reachable"
+          else
+            echo "BACKEND_CDP_9555=unreachable"
+          fi
+
+          if curl -fsS --max-time 5 http://127.0.0.1:9555/json >/tmp/cdp-tabs.json 2>/dev/null; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          tabs=json.loads(Path('/tmp/cdp-tabs.json').read_text())
+          pages=[t for t in tabs if t.get('type')=='page']
+          chat=[t for t in pages if str(t.get('url','')).startswith('https://chatgpt.com/')]
+          conv=[t for t in chat if '/c/' in str(t.get('url',''))]
+          print(f"BACKEND_CHATGPT_TAB_COUNT={len(chat)}")
+          print(f"BACKEND_CHATGPT_CONVERSATION_TAB_COUNT={len(conv)}")
+          PY
+          else
+            echo "BACKEND_CHATGPT_TAB_COUNT=unknown"
+            echo "BACKEND_CHATGPT_CONVERSATION_TAB_COUNT=unknown"
+          fi
+
+          if pgrep -f 'chatgpt-continuity-bridge-worker.mjs' >/dev/null 2>&1; then
+            echo "BACKEND_CONTINUITY_WORKER_PROCESS=running"
+          else
+            echo "BACKEND_CONTINUITY_WORKER_PROCESS=missing"
+          fi
+
+          if systemctl --user list-unit-files --no-legend 2>/dev/null | grep -q '^shopvivaliz-chatgpt-continuity\.service'; then
+            if systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service; then
+              echo "BACKEND_CONTINUITY_SERVICE=active"
+            else
+              echo "BACKEND_CONTINUITY_SERVICE=inactive"
+            fi
+          else
+            echo "BACKEND_CONTINUITY_SERVICE=missing"
+          fi
+
+          for candidate in             /home/ubuntu/.config/shopvivaliz/chatgpt-continuity-bridge.token             /home/ubuntu/.config/chatgpt-continuity/bridge.token             /home/ubuntu/ShopVivaliz/chatgpt-continuity-bridge/bridge.token; do
+            if [ -s "$candidate" ]; then
+              echo "BACKEND_CONTINUITY_TOKEN_FILE=present"
+              break
+            fi
+          done
+          if ! find /home/ubuntu/.config -maxdepth 3 -type f -name 'bridge.token' -size +0c -print -quit 2>/dev/null | grep -q .; then
+            echo "BACKEND_CONTINUITY_TOKEN_FILE=not_found_in_expected_config"
+          fi
+
+          echo "BACKEND_CONTINUITY_DIAGNOSTIC_END"
+
+      - name: Inspect Windows continuity prerequisites via private relays
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, urllib.request, urllib.error
+
+          hosts = {'FRED_WIN': 5557, 'KOCEPSV': 5558}
+          command = r'''powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $t=Get-ScheduledTask -TaskName 'ShopVivaliz ChatGPT Continuity Bridge' -ErrorAction SilentlyContinue; if($null -eq $t){Write-Output 'CONTINUITY_TASK=missing'} else {Write-Output ('CONTINUITY_TASK='+$t.State)}; Write-Output ('TOKEN_FILE_PRESENT='+(Test-Path 'C:\ShopVivaliz\chatgpt-continuity-bridge\bridge.token')); $l=Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction SilentlyContinue; Write-Output ('CDP_9223_LISTENING='+[bool]$l)"'''
+
+          for name, port in hosts.items():
+              try:
+                  with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=5) as r:
+                      health=json.loads(r.read().decode())
+                  if health.get('status') != 'ok':
+                      print(f'{name}_RELAY=unhealthy')
+                      continue
+                  print(f'{name}_RELAY=ok')
+                  body=json.dumps({'params': {'command': command, 'timeout': 60}}).encode()
+                  req=urllib.request.Request(
+                      f'http://127.0.0.1:{port}/mcp/tool/execute_command',
+                      data=body,
+                      headers={'Content-Type':'application/json'},
+                      method='POST',
+                  )
+                  with urllib.request.urlopen(req, timeout=70) as r:
+                      payload=json.loads(r.read().decode())
+                  result=payload.get('result') or {}
+                  output=str(result.get('output') or '').strip()
+                  print(f'{name}_COMMAND_SUCCESS={str(result.get("success") is True).lower()}')
+                  for line in output.splitlines():
+                      line=line.strip()
+                      if line.startswith(('CONTINUITY_TASK=','TOKEN_FILE_PRESENT=','CDP_9223_LISTENING=')):
+                          print(f'{name}_{line}')
+              except Exception as exc:
+                  print(f'{name}_RELAY=unavailable')
+                  print(f'{name}_DIAG_ERROR={type(exc).__name__}')
+          PY
