@@ -1,0 +1,114 @@
+name: Recover Browser Runner Through OCI Once
+
+on:
+  push:
+    branches:
+      - ops/recover-browser-runner-oci-20260927
+    paths:
+      - '.github/workflows/recover-browser-runner-oci-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure OCI profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for n in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do test -n "${!n:-}"; done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Recover browser runner safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+
+          script="$RUNNER_TEMP/recover-browser-runner.sh"
+          cat > "$script" <<'REMOTE'
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "RUN_AS=$(id -un)"
+          echo "DISK_BEFORE"
+          df -h /
+          uid="$(id -u ubuntu)"
+          runtime="/run/user/$uid"
+          unit="actions.runner.shopvivaliz-backend-browser.service"
+          test -S "$runtime/bus"
+          echo "UNIT_BEFORE=$(sudo -n -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active "$unit" 2>/dev/null || true)"
+          sudo -n -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user daemon-reload
+          sudo -n -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user restart "$unit"
+          sleep 5
+          sudo -n -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet "$unit"
+          pid="$(sudo -n -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user show -p MainPID --value "$unit")"
+          test "$pid" -gt 0
+          echo "UNIT_AFTER=active"
+          echo "MAINPID_PRESENT=true"
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:17777/health | jq -e '.ok == true and .endpoint == "browser-worker" and .browser_path_exists == true' >/dev/null
+          echo "BROWSER_WORKER=healthy"
+          echo "BROWSER_RUNNER_OCI_RECOVERY=PASS"
+          REMOTE
+
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$instance_id" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$compartment_id" --display-name "Recover browser runner safely" --content "file://$content" --target "file://$target" --timeout-in-seconds 120 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 36); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$instance_id")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS) sleep 5 ;;
+              *) exit 31 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output" | grep -E '^(HOST=|RUN_AS=|DISK_BEFORE|Filesystem|/dev/|UNIT_|MAINPID_|BROWSER_|BROWSER_RUNNER_)' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+
+      - name: Erase temporary OCI key
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          rm -f "${OCI_CONFIG_FILE:-}"
