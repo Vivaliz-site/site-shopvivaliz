@@ -1,0 +1,58 @@
+name: Cancel Obsolete Governed Rollout Runs Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cancel-obsolete-governed-rollout-runs-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cancel-obsolete-governed-rollout-runs-once
+  cancel-in-progress: false
+
+jobs:
+  cancel-obsolete:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    steps:
+      - name: Cancel only obsolete rollout runs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v gh >/dev/null
+          branch='feat/global-task-continuity-v8-rollout-20260927'
+
+          cancel_repo() {
+            local repo="$1" pr="$2"
+            local head
+            head="$(gh pr view "$pr" --repo "$repo" --json headRefOid --jq .headRefOid)"
+            test -n "$head"
+            echo "rollout_head repo=$repo pr=$pr sha=$head"
+
+            gh api "repos/$repo/actions/runs?branch=$branch&per_page=100" \
+              --paginate \
+              --jq '.workflow_runs[] | [.id,.head_sha,.status] | @tsv' |
+            while IFS=$'\t' read -r run_id run_sha status; do
+              test -n "$run_id" || continue
+              if [ "$run_sha" = "$head" ]; then
+                echo "preserve_current repo=$repo run=$run_id status=$status"
+                continue
+              fi
+              case "$status" in
+                queued|pending|in_progress|waiting|requested)
+                  gh api --method POST "repos/$repo/actions/runs/$run_id/force-cancel" >/dev/null 2>&1 \
+                    || gh api --method POST "repos/$repo/actions/runs/$run_id/cancel" >/dev/null 2>&1 \
+                    || true
+                  echo "obsolete_cancel_requested repo=$repo run=$run_id sha=$run_sha status=$status"
+                  ;;
+              esac
+            done
+          }
+
+          cancel_repo Vivaliz-site/ml-pricing-api 44
+          cancel_repo Vivaliz-site/mercadolivre-returns-recovery 65
+          cancel_repo Vivaliz-site/shopvivaliz-m365 33
+          echo OBSOLETE_GOVERNED_ROLLOUT_RUNS_CLEANUP=PASS
