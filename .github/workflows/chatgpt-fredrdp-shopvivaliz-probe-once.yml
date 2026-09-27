@@ -32,6 +32,17 @@ jobs:
           runner_uid="$(id -u)"
           runner_gid="$(id -g)"
           test -d "$profile"
+          if ! sudo -n -u fredrdp test -x "$browser"; then
+            source=/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome
+            src_dir=/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux
+            test -x "$source"
+            sudo -n install -d -m 0755 /opt/shopvivaliz-browser
+            sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new
+            sudo -n cp -a --reflink=auto "$src_dir" /opt/shopvivaliz-browser/chrome-linux.new
+            sudo -n chmod -R a+rX /opt/shopvivaliz-browser/chrome-linux.new
+            sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux
+            sudo -n mv /opt/shopvivaliz-browser/chrome-linux.new /opt/shopvivaliz-browser/chrome-linux
+          fi
           sudo -n -u fredrdp test -x "$browser"
           if (ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- "$profile"; then
             echo "PROFILE_IN_USE=true"
