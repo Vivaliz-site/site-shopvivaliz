@@ -21,6 +21,8 @@ python3 -m unittest tests.test_task_resume_dispatcher -v
 python3 -m unittest tests.test_global_task_continuity_v8 -v
 python3 -m unittest tests.test_checkpoint_first_zero_window -v
 python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
+python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
+bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
 python3 -m unittest tests.test_executor_fallback_order -v
 python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
