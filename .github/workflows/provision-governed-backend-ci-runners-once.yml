@@ -67,9 +67,16 @@ jobs:
               rm -f "$token_file"
               token_file=""
             fi
-            gh api "repos/${repo}/actions/runners?per_page=100" \
-              --jq ".runners[] | select(.name==\"${name}\") | select(.status==\"online\") | .name" \
-              | grep -Fxq "$name"
+            online=""
+            for attempt in $(seq 1 12); do
+              online="$(gh api "repos/${repo}/actions/runners?per_page=100" \
+                --jq ".runners[] | select(.name==\"${name}\") | select(.status==\"online\") | .name" || true)"
+              if [[ "$online" == "$name" ]]; then
+                break
+              fi
+              sleep 5
+            done
+            [[ "$online" == "$name" ]]
           }
 
           provision Vivaliz-site/ml-pricing-api governed-ml-pricing-ci ml-pricing-ci
