@@ -98,6 +98,27 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertFalse(state.is_terminal(current))
 
 
+    def test_explicit_codex_authorization_is_persisted_in_durable_state(self) -> None:
+        state.start_task("task-codex-auth", "Continuar com Codex autorizado", "gpt")
+        current = state.authorize_executor(
+            "task-codex-auth",
+            executor="codex",
+            evidence="usuario autorizou Codex explicitamente nesta conversa",
+        )
+        self.assertEqual(current["human_authorized_executors"], ["codex"])
+        self.assertEqual(current["human_authorizations"][-1]["executor"], "codex")
+        self.assertIn("usuario autorizou Codex", current["human_authorizations"][-1]["evidence"])
+        self.assertEqual(current["history"][-1]["event"], "executor_authorized")
+
+    def test_unknown_background_executor_cannot_be_human_authorized(self) -> None:
+        state.start_task("task-bad-auth", "Nao ampliar autorizacao", "gpt")
+        with self.assertRaises(state.TaskStateError):
+            state.authorize_executor(
+                "task-bad-auth",
+                executor="anthropic",
+                evidence="nao autorizado nesta conversa",
+            )
+
     def test_runtime_state_uses_shared_directory_inside_immutable_deploy(self) -> None:
         deploy_root = Path("/home/ubuntu/shopvivaliz-deploy/releases/20260926-170000-abc")
         resolved = state.resolve_runtime_dir(deploy_root, configured="")
