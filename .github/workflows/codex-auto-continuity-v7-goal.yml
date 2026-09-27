@@ -1,0 +1,208 @@
+name: Codex Auto Continuity V7 Goal
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  activate-goal:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      startsWith(github.event.comment.body, '/codex-auto-continuity-v7-goal ')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve bounded Goal request
+        id: req
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          event_path, output_path = sys.argv[1:3]
+          event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+          body = str((event.get("comment") or {}).get("body") or "").strip()
+          match = re.fullmatch(r"/codex-auto-continuity-v7-goal\s+prompt_comment=(\d+)", body)
+          if not match:
+              raise SystemExit("invalid bounded Goal request")
+          with Path(output_path).open("a", encoding="utf-8") as fh:
+              fh.write(f"prompt_comment={match.group(1)}\n")
+          PY
+
+      - name: Fetch original handoff without logging body
+        id: prompt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMPT_COMMENT: ${{ steps.req.outputs.prompt_comment }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          raw="$RUNNER_TEMP/codex-continuity-v7.raw"
+          prompt="$RUNNER_TEMP/codex-continuity-v7.prompt"
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$PROMPT_COMMENT" --jq '.body' > "$raw"
+          chmod 600 "$raw"
+          first="$(sed -n '1p' "$raw")"
+          test "$first" = "/codex-auto-continuity-v7"
+          tail -n +2 "$raw" > "$prompt"
+          chmod 600 "$prompt"
+          test "$(wc -c < "$prompt")" -gt 1000
+          printf 'path=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+          printf 'sha256=%s\n' "$(sha256sum "$prompt" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          rm -f "$raw"
+
+      - name: Prepare or reuse isolated continuity worktree
+        id: worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          branch="fix/continuity-e2e-gate-v7-20260927"
+          src="$HOME/src/site-shopvivaliz-continuity-codex"
+          preferred="$HOME/worktrees/site-shopvivaliz/continuity-e2e-gate-v7"
+
+          mkdir -p "$HOME/src" "$HOME/worktrees/site-shopvivaliz"
+          if [ ! -d "$src/.git" ]; then
+            gh repo clone "$GITHUB_REPOSITORY" "$src"
+          fi
+          git -C "$src" fetch origin --prune
+
+          existing="$(
+            git -C "$src" worktree list --porcelain |
+            awk -v want="refs/heads/$branch" '
+              $1=="worktree" { path=$2 }
+              $1=="branch" && $2==want { print path; exit }
+            '
+          )"
+
+          if [ -n "$existing" ]; then
+            worktree="$existing"
+          elif [ -e "$preferred/.git" ]; then
+            worktree="$preferred"
+          else
+            if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
+              git -C "$src" worktree add "$preferred" "$branch"
+            else
+              git -C "$src" worktree add --track -b "$branch" "$preferred" "origin/$branch"
+            fi
+            worktree="$preferred"
+          fi
+
+          test -e "$worktree/.git"
+          test "$(git -C "$worktree" branch --show-current)" = "$branch"
+          printf 'path=%s\n' "$worktree" >> "$GITHUB_OUTPUT"
+          printf 'head=%s\n' "$(git -C "$worktree" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          printf 'dirty_count=%s\n' "$(git -C "$worktree" status --porcelain | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Activate persistent Codex Goal in detached TUI thread
+        id: goal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+          PROMPT_SHA: ${{ steps.prompt.outputs.sha256 }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+          HEAD_SHA: ${{ steps.worktree.outputs.head }}
+          DIRTY_COUNT: ${{ steps.worktree.outputs.dirty_count }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          session="codex-continuity-v7-goal"
+          goal_file="$RUNNER_TEMP/codex-continuity-v7.goal"
+          state_dir="$HOME/.local/state/shopvivaliz-codex-goals"
+          state_file="$state_dir/continuity-v7.json"
+
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          command -v tmux >/dev/null
+
+          version="$("$launcher" --version)"
+          python3 - "$version" <<'PY'
+          import re
+          import sys
+          match = re.search(r"(\d+)\.(\d+)\.(\d+)", sys.argv[1])
+          if not match:
+              raise SystemExit("unable to parse Codex version")
+          version = tuple(map(int, match.groups()))
+          if version < (0, 128, 0):
+              raise SystemExit("Codex build does not support Goals")
+          PY
+
+          cat > "$goal_file" <<'EOF'
+          /goal Finalize the ShopVivaliz task-continuity V7 work on PR #1867 to CONCLUIDO/APTO with fresh production evidence: merge the valid implementation, deploy the exact resulting main SHA through the canonical immutable-release pipeline, and prove a new autonomous production E2E where the watchdog and dispatcher act without manual invocation, real background Gemini advances the same correlated checkpoint to CONCLUIDO with verification=continuity_e2e_pass, the matching execution ledger has no no_progress, background_paid_fallback_forbidden=true remains true, executor diagnostics are sanitized, worker ACK is never accepted as execution evidence, and all applicable continuity/Extreme Audit gates pass. Preserve existing branch/worktree work and valid concurrent commits; use TDD and fault injection for new defects; never edit current/ or an active release; never expose secrets. After every failed attempt, inspect the evidence, choose the next safe corrective action, implement/test/merge/deploy again, and continue while a valid path remains. Do not mark the Goal complete on unit tests, RC=0, ACKs, stale evidence, or partial deployment. If and only if an external blocker remains after exhausting safe alternatives, record BLOCKED_EXTERNAL with objective evidence and an exact resume condition. Before terminal exit, post a sanitized comment on issue #1586 beginning CODEX_GOAL_CONTINUITY_V7_TERMINAL= and include status, PR #1867 state, main SHA, deployed release SHA, production E2E task_id, verification, and gate result without secrets.
+          EOF
+          chmod 600 "$goal_file"
+
+          if tmux has-session -t "$session" 2>/dev/null; then
+            gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ALREADY_ACTIVE session=$session worktree=$WORKTREE head=$HEAD_SHA"
+            exit 0
+          fi
+
+          tmux new-session -d -s "$session" -c "$WORKTREE"             "env -u RUNNER_TRACKING_ID TERM=xterm-256color '$launcher'"
+          sleep 5
+          tmux has-session -t "$session"
+
+          tmux load-buffer -b codex_goal "$goal_file"
+          tmux paste-buffer -b codex_goal -t "$session:0.0"
+          tmux send-keys -t "$session:0.0" Enter
+          sleep 3
+
+          tmux load-buffer -b codex_prompt "$PROMPT_FILE"
+          tmux paste-buffer -b codex_prompt -t "$session:0.0"
+          tmux send-keys -t "$session:0.0" Enter
+          sleep 5
+          tmux has-session -t "$session"
+
+          install -d -m 700 "$state_dir"
+          goal_sha="$(sha256sum "$goal_file" | awk '{print $1}')"
+          umask 077
+          python3 - "$state_file" "$session" "$WORKTREE" "$HEAD_SHA" "$PROMPT_SHA" "$goal_sha" "$DIRTY_COUNT" <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path, session, worktree, head, prompt_sha, goal_sha, dirty_count = sys.argv[1:8]
+          payload = {
+              "schema_version": 1,
+              "session": session,
+              "worktree": worktree,
+              "initial_head": head,
+              "prompt_sha256": prompt_sha,
+              "goal_sha256": goal_sha,
+              "initial_dirty_count": int(dirty_count),
+              "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "status": "ACTIVE",
+          }
+          target = Path(path)
+          target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          os.chmod(target, 0o600)
+          PY
+
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ACTIVE session=$session branch=fix/continuity-e2e-gate-v7-20260927 head=$HEAD_SHA dirty_count=$DIRTY_COUNT prompt_sha256=$PROMPT_SHA goal_sha256=$goal_sha"
+          echo "CODEX_GOAL_CONTINUITY_V7=ACTIVE"
+
+      - name: Cleanup transient Goal input
+        if: always()
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f -- "${PROMPT_FILE:-}" "$RUNNER_TEMP/codex-continuity-v7.goal" "$RUNNER_TEMP/codex-continuity-v7.raw"
