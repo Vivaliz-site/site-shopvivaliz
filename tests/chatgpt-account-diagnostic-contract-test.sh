@@ -26,6 +26,10 @@ grep -Fq 'CHATGPT_ACCOUNT_DIAGNOSTIC=' "$diag"
 grep -Fq 'sanitized.har.json' "$diag"
 grep -Fq 'console-errors.json' "$diag"
 grep -Fq 'attempt-' "$diag"
+grep -Fq 'blocker.png' "$diag"
+grep -Fq 'blocker_page' "$diag"
+grep -Fq 'session_expired_present' "$diag"
+grep -Fq 'login_prompt_present' "$diag"
 grep -Fq "request_id: headers['x-oai-request-id']" "$diag"
 grep -Fq "turn_trace_id: headers['x-oai-turn-trace-id']" "$diag"
 grep -Fq "cf_ray: headers['cf-ray']" "$diag"
@@ -77,6 +81,11 @@ if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "
   exit 1
 fi
 grep -Fq "actions/upload-artifact@" "$direct_workflow"
+if grep -Fq '\\${{ runner.temp }}' "$direct_workflow" || grep -Fq '\\${{ github.run_id }}' "$direct_workflow"; then
+  echo "direct diagnostic artifact expressions must not be escaped" >&2
+  exit 1
+fi
+grep -Fq '${{ runner.temp }}/chatgpt-account-diagnostic/**/blocker.png' "$direct_workflow"
 grep -Fq "sanitized.har.json" "$direct_workflow"
 grep -Fq "console-errors.json" "$direct_workflow"
 grep -Fq "CHATGPT_ACCOUNT_DIRECT_DIAG=PASS" "$direct_workflow"
