@@ -1,0 +1,52 @@
+name: Register Continuity Tasks Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/register-continuity-tasks-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 5
+    env:
+      SHOPVIVALIZ_AGENT_TASK_STATE_DIR: /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Register durable tasks in canonical runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          ensure_task() {
+            local id="$1" goal="$2" next="$3" evidence="$4"
+            if python3 scripts/agent_task_state.py show --task "$id" >/dev/null 2>&1; then
+              status="$(python3 scripts/agent_task_state.py show --task "$id" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+              if [ "$status" = "RUNNING" ]; then
+                python3 scripts/agent_task_state.py progress --task "$id" --next-action "$next" --evidence "$evidence" >/dev/null
+              else
+                echo "TASK_ALREADY_TERMINAL id=$id status=$status"
+              fi
+            else
+              python3 scripts/agent_task_state.py start                 --task "$id"                 --goal "$goal"                 --agent chatgpt                 --repository Vivaliz-site/site-shopvivaliz >/dev/null
+              python3 scripts/agent_task_state.py progress                 --task "$id"                 --next-action "$next"                 --evidence "$evidence" >/dev/null
+            fi
+          }
+
+          ensure_task             chatgpt-freeze-root-cause-20260927             "Resolver as interrupcoes recorrentes do ChatGPT e garantir que tarefas nao sejam abandonadas; investigar ate causa/fix confirmados ou bloqueio externo real, preservando continuidade automatica desacoplada da UI."             "Continue root-cause isolation from current evidence; keep detached continuation operational, avoid synthetic ChatGPT Web turns, inspect runtime evidence, and persist concrete progress until the product freeze is resolved or OpenAI provides a confirmed server/account fix."             "A1 agent active at 2026-09-27T23:38:55Z; bridge token absent; no nudge ledger for this task; VM legacy ChatGPT browser quarantined stable with 0 processes and CDP 9555 closed before another natural iOS stream interruption."
+
+          ensure_task             global-continuity-cleanup-v2-20260927             "Revalidar e concluir a limpeza operacional do GLOBAL_TASK_CONTINUITY_V8 porque o task antigo foi marcado CONCLUIDO mas o repo legado e duas branches ainda resolvem."             "Recheck live GitHub state; delete fredmourao-ai/solange-rolla if an authorized delete_repo route is now available; delete the two already-merged branches if permitted; otherwise persist the exact proven blocker without falsely claiming completion."             "Fresh GitHub check after the old terminal state: legacy repo still present; test/checkpoint-first-zero-window-20260927 still present; fix/authenticated-global-audit-policy-bridge-20260927 still present."
+
+          for id in chatgpt-freeze-root-cause-20260927 global-continuity-cleanup-v2-20260927; do
+            python3 scripts/agent_task_state.py show --task "$id" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("TASK_REGISTERED", d["task_id"], d["status"], d["updated_at"], d["next_action"][:180])'
+          done
