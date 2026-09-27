@@ -98,6 +98,18 @@ jobs:
           echo "FREDCONSOLE_BROWSER_PROFILE_DISCOVERY"
           sudo -n find /home/fredconsole -xdev -maxdepth 7 -type f \( -name Cookies -o -name "Local State" -o -name Preferences \) -printf '%p size=%s mtime=%T@\n' 2>/dev/null | sort | head -n 120 || true
 
+          echo "FREDCONSOLE_BROWSER_DIRS_SAFE"
+          sudo -n find /home/fredconsole -xdev -maxdepth 6 -type d \( -iname '*chrom*' -o -iname '*chrome*' -o -iname '*opera*' -o -iname '*browser*' -o -iname '*google*' \) -printf '%p\n' 2>/dev/null | sort | head -n 160 || true
+          echo "FREDCONSOLE_X11_METADATA"
+          for p in /home/fredconsole/.Xauthority /run/user/1003/gdm/Xauthority /run/user/1003/.mutter-Xwaylandauth.*; do
+            [ -e "$p" ] || continue
+            stat -c 'path=%n owner=%U mode=%a size=%s mtime=%Y' "$p" 2>/dev/null || true
+          done
+          command -v chromium || true
+          command -v google-chrome || true
+          command -v opera || true
+          test -x /opt/shopvivaliz-browser/chrome-linux/chrome && echo "SHARED_CHROMIUM=present" || true
+
           echo "PROFILE_METADATA"
           sudo -n python3 - <<'PY'
           import os, pwd, time
