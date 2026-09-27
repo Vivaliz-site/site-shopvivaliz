@@ -86,6 +86,8 @@ if grep -Fq '\\${{ runner.temp }}' "$direct_workflow" || grep -Fq '\\${{ github.
   exit 1
 fi
 grep -Fq '${{ runner.temp }}/chatgpt-account-diagnostic/**/blocker.png' "$direct_workflow"
+grep -Fq 'sudo -n rm -rf "$root"' "$direct_workflow"
+grep -Fq 'sudo -n chown -R "$(id -u):$(id -g)" "$legacy"' "$direct_workflow"
 grep -Fq "sanitized.har.json" "$direct_workflow"
 grep -Fq "console-errors.json" "$direct_workflow"
 grep -Fq "CHATGPT_ACCOUNT_DIRECT_DIAG=PASS" "$direct_workflow"
