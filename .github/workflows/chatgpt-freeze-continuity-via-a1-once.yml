@@ -1,0 +1,205 @@
+name: ChatGPT Freeze Continuity via A1 Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-freeze-continuity-live-20260927
+    paths:
+      - '.github/workflows/chatgpt-freeze-continuity-via-a1-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-freeze-continuity-via-a1-once
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 12
+    steps:
+      - name: Configure backend private SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/chatgpt-freeze.key"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/chatgpt-freeze.known_hosts"
+          chmod 600 "$HOME/.ssh/chatgpt-freeze.key" "$HOME/.ssh/chatgpt-freeze.known_hosts"
+
+      - name: Resume exact VM ChatGPT session and monitor
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o ConnectTimeout=15
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/chatgpt-freeze.known_hosts"
+            -i "$HOME/.ssh/chatgpt-freeze.key"
+          )
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const TARGET='ChatGPT Freeze Continuity';
+          const RESUME='Continue exatamente de onde parou na tarefa ChatGPT Freeze Continuity. Nao recomece do zero. Prossiga ate concluir ou ate existir um bloqueio externo real e comprovado.';
+
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const context=browser.contexts()[0];
+          if(!context) throw new Error('cdp_context_missing');
+          const pages=context.pages();
+          if(!pages.length) throw new Error('no_browser_pages');
+
+          async function titleOf(p){try{return await p.title();}catch{return '';}}
+
+          let page=null;
+          for(const p of pages){
+            const t=await titleOf(p);
+            if(p.url().startsWith('https://chatgpt.com/') && t.toLowerCase().includes(TARGET.toLowerCase())){
+              page=p; break;
+            }
+          }
+          page=page || pages.find(p=>p.url().startsWith('https://chatgpt.com/')) || pages[0];
+          await page.bringToFront().catch(()=>{});
+          page.setDefaultTimeout(10000);
+
+          let targetLocated=(await titleOf(page)).toLowerCase().includes(TARGET.toLowerCase());
+          if(!targetLocated && page.url().startsWith('https://chatgpt.com/')){
+            const links=page.locator('a[href*="/c/"]');
+            const count=await links.count().catch(()=>0);
+            for(let i=0;i<count;i++){
+              const link=links.nth(i);
+              let txt='';
+              try{txt=(await link.innerText()).trim();}catch{}
+              if(txt.toLowerCase()===TARGET.toLowerCase()){
+                await link.click();
+                await page.waitForTimeout(2500);
+                targetLocated=true;
+                break;
+              }
+            }
+          }
+          if(!targetLocated){
+            const titles=[];
+            for(const p of pages){
+              if(p.url().startsWith('https://chatgpt.com/')) titles.push((await titleOf(p)).slice(0,120));
+            }
+            console.log('FREEZE_CONTINUITY_TARGET_FOUND=false');
+            console.log('CHATGPT_OPEN_TAB_TITLES='+JSON.stringify(titles));
+            process.exit(21);
+          }
+
+          const state=async()=>await page.evaluate(()=>{
+            const messages=Array.from(document.querySelectorAll('[data-message-author-role]'));
+            const assistant=messages.filter(x=>x.getAttribute('data-message-author-role')==='assistant');
+            const user=messages.filter(x=>x.getAttribute('data-message-author-role')==='user');
+            const buttons=Array.from(document.querySelectorAll('button'));
+            const stopVisible=buttons.some(b=>{
+              const label=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase();
+              return /stop|parar/.test(label)&&b.offsetParent!==null;
+            });
+            const body=String(document.body?.innerText||'').toLowerCase();
+            return {
+              assistantCount:assistant.length,
+              userCount:user.length,
+              lastAssistantLength:String(assistant.at(-1)?.textContent||'').length,
+              composerCount:document.querySelectorAll('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').length,
+              stopVisible,
+              streamInterrupted:/transmissão interrompida|stream interrupted/.test(body),
+              reflectionFailed:/a reflexão falhou|thinking failed/.test(body),
+              requestTimeout:/esgotou-se o tempo limite da solicitação|request timed out|request timeout/.test(body),
+              stoppedThinking:/parou de pensar|stopped thinking/.test(body),
+              additionalChecks:/verificações adicionais|additional checks/.test(body),
+            };
+          });
+
+          const before=await state();
+          console.log('FREEZE_CONTINUITY_TARGET_FOUND=true');
+          console.log('FREEZE_CONTINUITY_BEFORE='+JSON.stringify(before));
+
+          if(!before.stopVisible){
+            if(before.composerCount<1) throw new Error('composer_missing');
+            const composer=page.locator('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').first();
+            try{await composer.fill(RESUME);}catch{await composer.click();await page.keyboard.insertText(RESUME);}
+            let sent=false;
+            for(const sel of ['button[data-testid="send-button"]','button[aria-label*="Send"]','button[aria-label*="Enviar"]']){
+              const b=page.locator(sel).first();
+              try{if(await b.isVisible({timeout:500})){await b.click();sent=true;break;}}catch{}
+            }
+            if(!sent) await composer.press('Enter');
+            console.log('FREEZE_CONTINUITY_RESUME_SENT=true');
+          }else{
+            console.log('FREEZE_CONTINUITY_RESUME_SENT=false reason=turn_already_active');
+          }
+
+          const started=Date.now();
+          let latest=await state();
+          let terminal=false;
+          let lastLog=0;
+          while(Date.now()-started<480000){
+            await page.waitForTimeout(5000);
+            latest=await state();
+            const elapsed=Date.now()-started;
+            if(elapsed-lastLog>=30000){
+              console.log('FREEZE_CONTINUITY_MONITOR='+JSON.stringify({
+                elapsed_ms:elapsed,
+                assistantCount:latest.assistantCount,
+                lastAssistantLength:latest.lastAssistantLength,
+                stopVisible:latest.stopVisible,
+                streamInterrupted:latest.streamInterrupted,
+                reflectionFailed:latest.reflectionFailed,
+                requestTimeout:latest.requestTimeout,
+                stoppedThinking:latest.stoppedThinking,
+                additionalChecks:latest.additionalChecks
+              }));
+              lastLog=elapsed;
+            }
+            const error=latest.streamInterrupted||latest.reflectionFailed||latest.requestTimeout||latest.stoppedThinking;
+            const progressed=latest.assistantCount>before.assistantCount||latest.lastAssistantLength>before.lastAssistantLength;
+            if(error){
+              console.log('FREEZE_CONTINUITY_OUTCOME=visible_error');
+              terminal=true; break;
+            }
+            if(progressed&&!latest.stopVisible){
+              console.log('FREEZE_CONTINUITY_OUTCOME=assistant_turn_completed');
+              terminal=true; break;
+            }
+          }
+          if(!terminal) console.log('FREEZE_CONTINUITY_OUTCOME=monitor_window_elapsed');
+          console.log('FREEZE_CONTINUITY_FINAL='+JSON.stringify(latest));
+          NODE
+          REMOTE
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/chatgpt-freeze.key" "$HOME/.ssh/chatgpt-freeze.known_hosts"
