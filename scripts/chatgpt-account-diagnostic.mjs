@@ -58,9 +58,42 @@ async function loadChromium() {
   throw new Error('playwright_runtime_missing');
 }
 
+function discoverUserPlaywrightBrowser() {
+  const home = String(process.env.HOME || '').trim();
+  if (!home) return '';
+  const root = home + '/.cache/ms-playwright';
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort()
+      .reverse();
+  } catch {
+    return '';
+  }
+
+  const relatives = [
+    'chrome-linux/chrome',
+    'chrome-linux64/chrome',
+    'chrome-linux-arm64/chrome',
+  ];
+  for (const entry of entries) {
+    for (const relative of relatives) {
+      const candidate = root + '/' + entry + '/' + relative;
+      try {
+        const stat = fs.statSync(candidate);
+        if (stat.isFile() && (stat.mode & 0o111) !== 0) return candidate;
+      } catch {}
+    }
+  }
+  return '';
+}
+
 function resolveBrowserPath(chromium) {
   const candidates = [
     String(process.env.CHATGPT_ACCOUNT_BROWSER_PATH || '').trim(),
+    discoverUserPlaywrightBrowser(),
     CANONICAL_BROWSER,
     '/usr/bin/chromium',
     '/snap/bin/chromium',
