@@ -179,13 +179,13 @@ function persist() {
 }
 
 let page;
+let fallbackContext = null;
+let launchedFallback = false;
 try {
   const { chromium, candidate } = await loadChromium();
   result.playwright_module = candidate.replace(/^\/home\/[^/]+\//, '/home/:user/');
   let browser;
   let context;
-  let fallbackContext = null;
-  let launchedFallback = false;
 
   try {
     browser = await chromium.connectOverCDP('http://127.0.0.1:9555');
@@ -429,7 +429,5 @@ try {
   process.exitCode = 2;
 } finally {
   if (page) await page.close().catch(() => {});
-  if (typeof launchedFallback !== 'undefined' && launchedFallback && typeof fallbackContext !== 'undefined' && fallbackContext) {
-    await fallbackContext.close().catch(() => {});
-  }
+  if (launchedFallback && fallbackContext) await fallbackContext.close().catch(() => {});
 }
