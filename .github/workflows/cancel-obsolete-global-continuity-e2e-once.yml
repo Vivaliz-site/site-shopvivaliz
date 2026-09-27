@@ -1,0 +1,24 @@
+name: Cancel Obsolete Global Continuity E2E Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cancel-obsolete-global-continuity-e2e-once.yml"
+
+permissions:
+  contents: read
+
+# Shares the exact group of the obsolete quota-bound matrix. This one-shot
+# intentionally cancels the older in-progress run so the A1 can execute the
+# Gemini native-auth diagnostic that addresses the proven root cause.
+concurrency:
+  group: global-task-continuity-e2e-all-repos-once
+  cancel-in-progress: true
+
+jobs:
+  release-a1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo OBSOLETE_GLOBAL_CONTINUITY_E2E_CANCELLED_FOR_ROOT_CAUSE_DIAG=PASS
