@@ -151,25 +151,82 @@ jobs:
           truncate -s -1 "$goal_file"
           chmod 600 "$goal_file"
 
+          diagnose_pane() {
+            pane_log="$RUNNER_TEMP/codex-continuity-v7-pane.txt"
+            tmux capture-pane -p -t "$session:0.0" -S -200 > "$pane_log" 2>/dev/null || true
+            chmod 600 "$pane_log" 2>/dev/null || true
+            python3 - "$pane_log" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          if not path.is_file():
+              raise SystemExit(0)
+          text = path.read_text(encoding="utf-8", errors="replace")
+          text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+          keywords = (
+              "error", "failed", "failure", "login", "usage limit", "rate limit",
+              "quota", "not a terminal", "unknown", "unrecognized", "invalid",
+              "panic", "authentication", "unauthorized", "token expired",
+          )
+          emitted = 0
+          for raw in text.splitlines()[-200:]:
+              line = raw.strip()
+              if not line or not any(word in line.lower() for word in keywords):
+                  continue
+              line = re.sub(r"(?i)sk-[A-Za-z0-9_-]+", "<redacted>", line)
+              line = re.sub(r"(?i)(token|secret|password|cookie|authorization)\s*[:=]\s*\S+", r"\1=<redacted>", line)
+              line = re.sub(r"\b[A-Za-z0-9_-]{48,}\b", "<redacted>", line)
+              print("CODEX_TUI_DIAGNOSTIC=" + line[:500])
+              emitted += 1
+              if emitted >= 20:
+                  break
+          PY
+          }
+
           if tmux has-session -t "$session" 2>/dev/null; then
-            gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ALREADY_ACTIVE session=$session worktree=$WORKTREE head=$HEAD_SHA"
-            exit 0
+            current="$(tmux display-message -p -t "$session:0.0" '#{pane_current_command}')"
+            if [ "$current" != "bash" ]; then
+              gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ALREADY_ACTIVE session=$session worktree=$WORKTREE head=$HEAD_SHA pane_command=$current"
+              exit 0
+            fi
+            tmux kill-session -t "$session"
           fi
 
-          tmux new-session -d -s "$session" -c "$WORKTREE"             "env -u RUNNER_TRACKING_ID TERM=xterm-256color '$launcher'"
-          sleep 5
-          tmux has-session -t "$session"
+          tmux new-session -d -s "$session" -c "$WORKTREE" "env -u RUNNER_TRACKING_ID bash --noprofile --norc"
+          sleep 1
+          tmux send-keys -t "$session:0.0" -l "env -u RUNNER_TRACKING_ID TERM=xterm-256color '$launcher'"
+          tmux send-keys -t "$session:0.0" Enter
+          sleep 8
+
+          current="$(tmux display-message -p -t "$session:0.0" '#{pane_current_command}')"
+          if [ "$current" = "bash" ]; then
+            diagnose_pane
+            exit 78
+          fi
 
           tmux load-buffer -b codex_goal "$goal_file"
           tmux paste-buffer -b codex_goal -t "$session:0.0"
           tmux send-keys -t "$session:0.0" Enter
-          sleep 3
+          sleep 4
+
+          current="$(tmux display-message -p -t "$session:0.0" '#{pane_current_command}')"
+          if [ "$current" = "bash" ]; then
+            diagnose_pane
+            exit 79
+          fi
 
           instruction="Read and execute the complete authoritative handoff at $PROMPT_FILE now. Do not summarize it first; continue the existing branch/PR work from its checkpoint and obey the active Goal until terminal evidence exists."
           tmux send-keys -t "$session:0.0" -l "$instruction"
           tmux send-keys -t "$session:0.0" Enter
-          sleep 5
-          tmux has-session -t "$session"
+          sleep 8
+
+          current="$(tmux display-message -p -t "$session:0.0" '#{pane_current_command}')"
+          if [ "$current" = "bash" ]; then
+            diagnose_pane
+            exit 80
+          fi
 
           install -d -m 700 "$state_dir"
           goal_sha="$(sha256sum "$goal_file" | awk '{print $1}')"
@@ -198,7 +255,7 @@ jobs:
           os.chmod(target, 0o600)
           PY
 
-          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ACTIVE session=$session branch=fix/continuity-e2e-gate-v7-20260927 head=$HEAD_SHA dirty_count=$DIRTY_COUNT prompt_sha256=$PROMPT_SHA goal_sha256=$goal_sha"
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_GOAL_CONTINUITY_V7=ACTIVE session=$session branch=fix/continuity-e2e-gate-v7-20260927 head=$HEAD_SHA dirty_count=$DIRTY_COUNT pane_command=$current prompt_sha256=$PROMPT_SHA goal_sha256=$goal_sha"
           echo "CODEX_GOAL_CONTINUITY_V7=ACTIVE"
 
       - name: Cleanup transient Goal input
@@ -208,4 +265,4 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          rm -f -- "$RUNNER_TEMP/codex-continuity-v7.goal" "$RUNNER_TEMP/codex-continuity-v7.raw"
+          rm -f -- "$RUNNER_TEMP/codex-continuity-v7.goal" "$RUNNER_TEMP/codex-continuity-v7.raw" "$RUNNER_TEMP/codex-continuity-v7-pane.txt"
