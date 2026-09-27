@@ -13,6 +13,9 @@ SCRIPTS = ROOT / "scripts"
 import sys
 sys.path.insert(0, str(SCRIPTS))
 
+import agent_task_state as task_state
+import task_continuation_watchdog as watchdog
+
 
 def load_dispatcher():
     path = SCRIPTS / "chatgpt_continuity_nudge_dispatcher.py"
@@ -32,14 +35,21 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             token_file = root / "bridge.token"
             token_file.write_text("file-token-1234567890\n", encoding="utf-8")
             token_file.chmod(0o600)
-            request = {
-                "preferred_executor": "chatgpt_common",
-                "status": "queued",
-                "fingerprint": "fp-1",
-                "task_id": "task-1",
-                "repository": "Vivaliz-site/site-shopvivaliz",
-            }
-            (root / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
+            original_state_runtime = task_state.RUNTIME_DIR
+            original_watchdog_runtime = watchdog.RUNTIME_DIR
+            task_state.RUNTIME_DIR = root
+            watchdog.RUNTIME_DIR = root
+            try:
+                task_state.start_task("task-1", "goal", "gpt")
+                task_state.record_progress("task-1", next_action="continue safely")
+                state_path = root / "task-1.json"
+                payload = json.loads(state_path.read_text(encoding="utf-8"))
+                payload["updated_at"] = "2020-01-01T00:00:00Z"
+                state_path.write_text(json.dumps(payload), encoding="utf-8")
+                watchdog.run_once(stale_seconds=1, runtime_dir=root)
+            finally:
+                task_state.RUNTIME_DIR = original_state_runtime
+                watchdog.RUNTIME_DIR = original_watchdog_runtime
             calls: list[dict] = []
 
             def fake_enqueue(**kwargs):

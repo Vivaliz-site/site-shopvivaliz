@@ -117,6 +117,56 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         )
         self.assertEqual(len(self.calls), 1, "a failed attempt must not be retried on every single tick")
 
+    def test_terminal_checkpoint_never_dispatches_historical_queued_request(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.mark_ready("task-1", evidence=["done"], verification="verified")
+        state.complete_task("task-1")
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_stale_checkpoint"], 1)
+        self.assertEqual(len(self.calls), 0)
+
+    def test_request_must_match_current_checkpoint_fingerprint(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.record_progress("task-1", next_action="newer action after the queued request")
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_stale_checkpoint"], 1)
+        self.assertEqual(len(self.calls), 0)
+
+    def test_failed_bridge_attempt_becomes_retryable_after_cooldown(self) -> None:
+        self._stale_checkpoint_and_request()
+        calls: list[dict] = []
+
+        def failing_enqueue(**kwargs):
+            calls.append(kwargs)
+            return {"ok": False, "http_status": 0, "error": "transport_error"}
+
+        first = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=failing_enqueue,
+        )
+        self.assertEqual(first["dispatched"], 0)
+        self.assertEqual(len(calls), 1)
+
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+        retried = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=failing_enqueue,
+        )
+        self.assertEqual(retried["retry_attempted"], 1)
+        self.assertEqual(len(calls), 2)
+
     def test_ignores_requests_that_are_not_preferred_executor_chatgpt_common(self) -> None:
         self._stale_checkpoint_and_request()
         # Corrupt the only request row to a different preferred_executor and
