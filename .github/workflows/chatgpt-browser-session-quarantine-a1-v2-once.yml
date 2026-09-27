@@ -1,0 +1,183 @@
+name: ChatGPT Browser Session Quarantine A1 V2 Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/chatgpt-browser-session-quarantine-a1-v2-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-browser-session-quarantine-a1-v2-once
+  cancel-in-progress: false
+
+jobs:
+  quarantine:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Configure verified private SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Quarantine exact legacy ChatGPT browser root
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=15
+            -i "$HOME/.ssh/shopvivaliz_vmkey"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          profile='/home/fredrdp/.config/shopvivaliz-chromium'
+          port='9555'
+
+          mapfile -t roots < <(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]; port=sys.argv[2]
+          for item in sorted((x for x in os.listdir('/proc') if x.isdigit()), key=int):
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name != 'fredrdp':
+                      continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args:
+                      continue
+                  exe=os.path.basename(args[0])
+                  if exe not in {'chrome','chromium','shopvivaliz-chromium'}:
+                      continue
+                  if f'--user-data-dir={profile}' in args and f'--remote-debugging-port={port}' in args:
+                      print(item)
+              except Exception:
+                  pass
+          PY
+          )
+
+          printf 'MATCHING_BROWSER_ROOTS_BEFORE=%s\n' "${#roots[@]}"
+          if [ "${#roots[@]}" -gt 1 ]; then
+            echo "ERROR multiple matching browser roots" >&2
+            exit 2
+          fi
+
+          if [ "${#roots[@]}" -eq 1 ]; then
+            pid="${roots[0]}"
+            sudo -n kill -TERM "$pid"
+            for _ in $(seq 1 20); do
+              sudo -n kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+            done
+            if sudo -n kill -0 "$pid" 2>/dev/null; then
+              sudo -n kill -KILL "$pid"
+              sleep 2
+            fi
+          fi
+
+          remaining="$(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]; port=sys.argv[2]
+          count=0
+          for item in os.listdir('/proc'):
+              if not item.isdigit():
+                  continue
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name != 'fredrdp':
+                      continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args:
+                      continue
+                  exe=os.path.basename(args[0])
+                  joined=' '.join(args)
+                  if ('chrom' in exe or 'chrome' in exe) and (profile in joined or f'--remote-debugging-port={port}' in joined):
+                      count += 1
+              except Exception:
+                  pass
+          print(count)
+          PY
+          )"
+          echo "MATCHING_BROWSER_PROCESSES_AFTER=$remaining"
+          test "$remaining" = "0"
+
+          if curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/json/version" >/dev/null 2>&1; then
+            echo "ERROR CDP port still reachable" >&2
+            exit 3
+          fi
+          test -d "$profile"
+          echo "PROFILE_PRESERVED=true"
+          echo "CHATGPT_BROWSER_SESSION_QUARANTINE=PASS"
+          REMOTE
+
+      - name: Verify no relaunch after grace period
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sleep 20
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o ConnectTimeout=15
+            -i "$HOME/.ssh/shopvivaliz_vmkey"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'set -Eeuo pipefail
+            profile="/home/fredrdp/.config/shopvivaliz-chromium"
+            port="9555"
+            count="$(sudo -n python3 - "$profile" "$port" <<"PY"
+          import os,pwd,sys
+          profile=sys.argv[1]; port=sys.argv[2]
+          n=0
+          for item in os.listdir("/proc"):
+              if not item.isdigit(): continue
+              try:
+                  st=os.stat(f"/proc/{item}")
+                  if pwd.getpwuid(st.st_uid).pw_name != "fredrdp": continue
+                  args=[x.decode("utf-8","replace") for x in open(f"/proc/{item}/cmdline","rb").read().split(b"\0") if x]
+                  if not args: continue
+                  exe=os.path.basename(args[0])
+                  joined=" ".join(args)
+                  if ("chrom" in exe or "chrome" in exe) and (profile in joined or f"--remote-debugging-port={port}" in joined):
+                      n += 1
+              except Exception:
+                  pass
+          print(n)
+          PY
+          )"
+            echo "MATCHING_BROWSER_PROCESSES_AFTER_GRACE=$count"
+            test "$count" = "0"
+            if curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/json/version" >/dev/null 2>&1; then
+              echo "ERROR CDP port relaunched" >&2
+              exit 4
+            fi
+            echo CHATGPT_BROWSER_SESSION_QUARANTINE_STABLE=PASS'
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
