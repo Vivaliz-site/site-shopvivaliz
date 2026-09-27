@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Mapping
 
@@ -64,46 +65,150 @@ def build_child_env(base: Mapping[str, str], credential: str) -> dict[str, str]:
 
 
 
+HEADLESS_SHELL_PREFIXES: tuple[str, ...] = (
+    "python3 scripts/agent_task_state.py",
+    "./scripts/agent_task_state.py",
+    "python3 -m unittest",
+    "git status",
+    "git diff",
+    "git add",
+    "git commit",
+    "git push",
+    "gh pr",
+    "bash tests/",
+    "bash scripts/repository-governance-validate.sh",
+)
+
+
 def build_headless_tools_core() -> list[str]:
     """Bounded list of tools this headless recovery run may register.
 
-    gemini-cli's --admin-policy TOML rules for run_shell_command are
-    silently ignored in non-interactive `--prompt` + `--approval-mode
-    auto_edit` mode (upstream: google-gemini/gemini-cli#20469 — the tool
-    is not even registered, "Tool 'run_shell_command' not found").
-    `tools.core` in `.gemini/settings.json` gates tool registration
-    itself, so it is not subject to that policy-engine bypass.
+    Non-interactive `--prompt` + `--approval-mode auto_edit` never
+    registers run_shell_command at all without this (upstream:
+    google-gemini/gemini-cli#20469, "Tool 'run_shell_command' not
+    found"). `tools.core` in `.gemini/settings.json` gates tool
+    *registration*. Registration alone is not authorization, though: see
+    build_headless_admin_policy_text().
     """
-    prefixes = (
-        "python3 scripts/agent_task_state.py",
-        "./scripts/agent_task_state.py",
-        "python3 -m unittest",
-        "git status",
-        "git diff",
-        "git add",
-        "git commit",
-        "git push",
-        "gh pr",
-        "bash tests/",
-        "bash scripts/repository-governance-validate.sh",
-    )
-    return [f"run_shell_command({prefix})" for prefix in prefixes]
+    return [f"run_shell_command({prefix})" for prefix in HEADLESS_SHELL_PREFIXES]
 
 
 def build_gemini_settings_json(tools_core: list[str]) -> str:
     return json.dumps({"tools": {"core": tools_core}}, indent=2, sort_keys=True) + "\n"
 
 
-def build_gemini_command(*, executable: str, model: str, prompt: str) -> list[str]:
+def build_headless_admin_policy_text(prefixes: tuple[str, ...]) -> str:
+    """Explicit allow rule for the same bounded prefixes tools.core registers.
+
+    Per the current upstream policy-engine docs, a run_shell_command call
+    that matches no rule falls back to the "ask_user" decision, which is
+    treated as "deny" in non-interactive mode — confirmed by production
+    evidence (run 36296738560): tools.core alone fixed registration but
+    still exited nonzero with no explicit approval. commandPrefix/toolName
+    accept arrays, so one rule covers every bounded prefix; the admin tier
+    (highest priority) ensures this allow always wins.
+    """
+    quoted = ", ".join(repr(prefix) for prefix in prefixes)
+    return (
+        "[[rule]]\n"
+        'toolName = "run_shell_command"\n'
+        f"commandPrefix = [{quoted}]\n"
+        'decision = "allow"\n'
+        "priority = 900\n"
+        "interactive = false\n"
+    )
+
+
+def build_gemini_command(
+    *, executable: str, model: str, prompt: str, admin_policy_path: Path
+) -> list[str]:
     return [
         executable,
         "--model",
         model,
         "--approval-mode",
         "auto_edit",
+        "--admin-policy",
+        str(admin_policy_path),
         "--prompt",
         prompt,
     ]
+
+
+_FAILURE_CLASSIFIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "approval_required",
+        (
+            "waiting for user confirmation",
+            "requires approval",
+            "confirmation required",
+        ),
+    ),
+    (
+        "tool_not_registered",
+        (
+            "tool 'run_shell_command' not found",
+            "tool not found",
+        ),
+    ),
+    (
+        "tool_not_allowed",
+        (
+            "not in the list of allowed tools",
+            "not allowed",
+            "blocked by policy",
+        ),
+    ),
+    (
+        "authentication_failed",
+        (
+            "permission_denied",
+            "authentication failed",
+            "unauthorized",
+            "invalid api key",
+        ),
+    ),
+    (
+        "quota_exhausted",
+        (
+            "resource_exhausted",
+            "quota exceeded",
+            "rate limit",
+        ),
+    ),
+    (
+        "model_unavailable",
+        (
+            "not_found",
+            "is not available",
+            "model not found",
+        ),
+    ),
+    (
+        "workspace_untrusted",
+        (
+            "not trusted",
+            "trust this folder",
+        ),
+    ),
+)
+
+
+def classify_gemini_failure(output: str, returncode: int) -> str | None:
+    """Classify a failed run into a bounded, allowlisted reason code.
+
+    Only the classification survives past this function — callers must never
+    persist `output` itself. Unmatched or empty output on failure still
+    yields a safe, non-empty classification.
+    """
+    if returncode == 0:
+        return None
+    haystack = output.lower()
+    for reason, needles in _FAILURE_CLASSIFIERS:
+        if any(needle in haystack for needle in needles):
+            return reason
+    return "unknown_safe_error"
+
 
 def _resolve_binary(configured: str) -> str:
     candidate = Path(configured).expanduser()
@@ -149,6 +254,7 @@ def run(
     settings_path = gemini_dir / "settings.json"
     gemini_dir_created = not gemini_dir.exists()
     settings_created = False
+    policy_path: Path | None = None
     try:
         gemini_dir.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(
@@ -156,10 +262,21 @@ def run(
             encoding="utf-8",
         )
         settings_created = True
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix="shopvivaliz-gemini-admin-policy-",
+            suffix=".toml",
+            delete=False,
+        ) as handle:
+            handle.write(build_headless_admin_policy_text(HEADLESS_SHELL_PREFIXES))
+            handle.flush()
+            policy_path = Path(handle.name)
         command = build_gemini_command(
             executable=executable,
             model=model,
             prompt=prompt,
+            admin_policy_path=policy_path,
         )
         completed = subprocess.run(
             command,
@@ -180,6 +297,8 @@ def run(
                 gemini_dir.rmdir()
             except OSError:
                 pass
+        if policy_path is not None:
+            policy_path.unlink(missing_ok=True)
 
     output = (completed.stdout or "").replace(credential, "***")
     if output:
@@ -188,6 +307,9 @@ def run(
             sys.stdout.write("\n")
     print(f"background_gemini_credential_source={source}")
     print(f"background_gemini_exit_code={completed.returncode}")
+    reason = classify_gemini_failure(output, completed.returncode)
+    if reason is not None:
+        print(f"background_gemini_reason={reason}")
     return int(completed.returncode)
 
 

@@ -61,13 +61,12 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         )
 
     def test_headless_tools_core_allows_only_bounded_shell_prefixes(self) -> None:
-        # Regression: gemini-cli's --admin-policy TOML rules for
-        # run_shell_command are silently ignored in non-interactive
-        # --prompt + --approval-mode auto_edit mode (upstream issue
-        # google-gemini/gemini-cli#20469: the tool is not even registered,
-        # "Tool 'run_shell_command' not found"). tools.core in
-        # .gemini/settings.json gates tool *registration* itself, so it
-        # is not subject to that policy-engine bypass.
+        # tools.core in .gemini/settings.json gates tool *registration*:
+        # without it, non-interactive --prompt + --approval-mode auto_edit
+        # never even registers run_shell_command (upstream issue
+        # google-gemini/gemini-cli#20469, "Tool 'run_shell_command' not
+        # found"). Registration alone is not authorization, though — see
+        # test_admin_policy_toml_allows_exactly_the_same_bounded_prefixes.
         tools_core = self.mod.build_headless_tools_core()
         for prefix in (
             "python3 scripts/agent_task_state.py",
@@ -101,15 +100,53 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         settings = json.loads(settings_text)
         self.assertEqual(settings["tools"]["core"], tools_core)
 
-    def test_gemini_command_has_no_admin_policy_flag_and_no_yolo(self) -> None:
+    def test_admin_policy_toml_allows_exactly_the_same_bounded_prefixes(self) -> None:
+        # Regression: production evidence (run 36296738560, SHA 7cc91072,
+        # after tools.core alone shipped in #1877) showed
+        # background_gemini_exit_code=1 with no more "Tool not found" —
+        # confirming tools.core fixed *registration*. Per the current
+        # upstream policy-engine docs, an unmatched run_shell_command call
+        # falls back to the "ask_user" decision, which is treated as
+        # "deny" in non-interactive mode. Only an explicit `decision =
+        # "allow"` rule avoids that silent deny. commandPrefix/toolName
+        # support arrays (confirmed in docs/reference/policy-engine.md),
+        # so a single rule can list every bounded prefix.
+        import tomllib
+
+        prefixes = self.mod.HEADLESS_SHELL_PREFIXES
+        policy_text = self.mod.build_headless_admin_policy_text(prefixes)
+        parsed = tomllib.loads(policy_text)
+        rules = parsed["rule"]
+        self.assertEqual(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule["toolName"], "run_shell_command")
+        self.assertEqual(set(rule["commandPrefix"]), set(prefixes))
+        self.assertEqual(rule["decision"], "allow")
+        self.assertIsInstance(rule["priority"], int)
+        self.assertEqual(rule.get("interactive"), False)
+        for forbidden in ("sudo ", "systemctl ", "ssh ", "rm -rf", "python3 -c", "bash -c"):
+            self.assertFalse(any(forbidden in prefix for prefix in rule["commandPrefix"]))
+
+    def test_tools_core_and_admin_policy_derive_from_the_same_canonical_prefix_list(self) -> None:
+        tools_core = self.mod.build_headless_tools_core()
+        core_prefixes = {entry[len("run_shell_command(") : -1] for entry in tools_core}
+        self.assertEqual(core_prefixes, set(self.mod.HEADLESS_SHELL_PREFIXES))
+
+    def test_gemini_command_includes_admin_policy_flag_and_still_no_yolo(self) -> None:
         command = self.mod.build_gemini_command(
             executable="/home/ubuntu/.local/bin/gemini",
             model="gemini-2.5-flash",
             prompt="continue task",
+            admin_policy_path=Path("/tmp/fixture-policy.toml"),
         )
         self.assertIn("--approval-mode", command)
         self.assertEqual(command[command.index("--approval-mode") + 1], "auto_edit")
-        self.assertNotIn("--admin-policy", command)
+        self.assertIn("--admin-policy", command)
+        self.assertEqual(
+            command[command.index("--admin-policy") + 1],
+            "/tmp/fixture-policy.toml",
+        )
+        self.assertNotIn("--yolo", command)
         self.assertNotIn("yolo", command)
 
     def test_run_writes_workspace_settings_json_with_bounded_tools_core(self) -> None:
@@ -152,6 +189,124 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             )
             settings_path = workspace / ".gemini" / "settings.json"
             self.assertFalse(settings_path.exists(), "workspace settings must be cleaned up")
+
+    def test_run_writes_admin_policy_toml_passes_its_path_and_cleans_up(self) -> None:
+        import json
+        import tempfile
+        import tomllib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            observed_path = workspace / "observed.json"
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "argv = sys.argv[1:]\n"
+                'policy_path = argv[argv.index("--admin-policy") + 1]\n'
+                'with open(policy_path, encoding="utf-8") as fh:\n'
+                "    policy_text = fh.read()\n"
+                f'with open({str(observed_path)!r}, "w", encoding="utf-8") as out:\n'
+                '    json.dump({"policy_path": policy_path, "policy_text": policy_text}, out)\n'
+                "sys.exit(0)\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                rc = self.mod.run(
+                    model="gemini-2.5-flash",
+                    prompt_file=prompt_file,
+                    env_file=env_file,
+                    gemini_bin=str(gemini_bin),
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 0)
+            observed = json.loads(observed_path.read_text(encoding="utf-8"))
+            observed_policy = tomllib.loads(observed["policy_text"])
+            rule = observed_policy["rule"][0]
+            self.assertEqual(rule["decision"], "allow")
+            self.assertIn("python3 scripts/agent_task_state.py", rule["commandPrefix"])
+            self.assertFalse(
+                Path(observed["policy_path"]).exists(),
+                "ephemeral admin-policy file must be removed after the run",
+            )
+
+    def test_classify_gemini_failure_recognizes_only_allowlisted_reasons(self) -> None:
+        # Regression: the second production E2E (run 36296738560) showed
+        # background_gemini_exit_code=1 with no further signal — not enough
+        # to know whether it is an approval-dialog block (the auto_edit +
+        # non-interactive hypothesis), an auth/quota/model problem, or
+        # something else. Classify from Gemini's own (already
+        # credential-redacted) output into a bounded, allowlisted reason so
+        # the next production run tells us which, without ever persisting
+        # the raw message.
+        cases = [
+            ("Waiting for user confirmation to run this command", "approval_required"),
+            ("This action requires approval before it can proceed", "approval_required"),
+            ("Error executing tool run_shell_command: Tool 'run_shell_command' not found.", "tool_not_registered"),
+            ("run_shell_command(python3 scripts/agent_task_state.py) is not in the list of allowed tools", "tool_not_allowed"),
+            ("401 Unauthorized: invalid API key", "authentication_failed"),
+            ("PERMISSION_DENIED: authentication failed", "authentication_failed"),
+            ("429 RESOURCE_EXHAUSTED: quota exceeded for this project", "quota_exhausted"),
+            ("rate limit exceeded, please retry later", "quota_exhausted"),
+            ("404 NOT_FOUND: model gemini-2.5-flash is not available", "model_unavailable"),
+            ("this workspace folder is not trusted", "workspace_untrusted"),
+            ("some completely novel failure text never seen before", "unknown_safe_error"),
+            ("", "unknown_safe_error"),
+        ]
+        for output, expected in cases:
+            with self.subTest(output=output):
+                self.assertEqual(self.mod.classify_gemini_failure(output, 1), expected)
+
+    def test_classify_gemini_failure_is_not_computed_on_success(self) -> None:
+        self.assertIsNone(self.mod.classify_gemini_failure("anything at all", 0))
+
+    def test_run_prints_sanitized_reason_line_on_nonzero_exit(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/bin/sh\n"
+                "echo 'Waiting for user confirmation to run this command'\n"
+                "exit 1\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                import io
+                import contextlib
+
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = self.mod.run(
+                        model="gemini-2.5-flash",
+                        prompt_file=prompt_file,
+                        env_file=env_file,
+                        gemini_bin=str(gemini_bin),
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 1)
+            self.assertIn("background_gemini_reason=approval_required", buf.getvalue())
 
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
