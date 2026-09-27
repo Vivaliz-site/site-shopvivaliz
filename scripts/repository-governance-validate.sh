@@ -17,6 +17,7 @@ python3 scripts/validate-task-continuity-enforcement.py
 python3 -m unittest tests.test_task_continuity_enforcement -v
 python3 -m unittest tests.test_task_continuation_watchdog -v
 python3 -m unittest tests.test_task_resume_dispatcher -v
+python3 -m unittest tests.test_global_task_continuity_v8 -v
 python3 -m unittest tests.test_executor_fallback_order -v
 python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
