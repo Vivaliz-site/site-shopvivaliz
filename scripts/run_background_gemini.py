@@ -20,7 +20,7 @@ from typing import Mapping
 DEFAULT_ENV_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/.env")
 DEFAULT_GEMINI_BIN = Path("/home/ubuntu/.local/bin/gemini")
 SUPPORTED_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GEMINI_API_KEY")
-DEFAULT_FALLBACK_MODELS = ("gemini-2.5-flash-lite",)
+DEFAULT_FALLBACK_MODELS = ("gemini-flash-lite-latest",)
 RETRYABLE_GEMINI_REASONS = frozenset({"quota_exhausted", "model_unavailable", "authentication_failed"})
 SECRET_KEYS_TO_REMOVE = (
     "OPENAI_API_KEY",
