@@ -48,7 +48,6 @@ ALLOWED_REPOSITORIES = frozenset({
     "Vivaliz-site/buscador",
     "fredmourao-ai/mei-mg-email",
     "fredmourao-ai/solange-rolla-consultorio",
-    "fredmourao-ai/solange-rolla",
 })
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
