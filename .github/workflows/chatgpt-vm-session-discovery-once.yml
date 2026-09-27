@@ -175,3 +175,5 @@ jobs:
                       markers.append(f'{rel}:mtime={int(s.st_mtime)}:size={s.st_size}')
               print(f'profile={p} owner={owner} mtime={int(st.st_mtime)} markers={"|".join(markers)}')
           PY
+
+# passive-rerun-marker: 2026-09-27T23:22Z
