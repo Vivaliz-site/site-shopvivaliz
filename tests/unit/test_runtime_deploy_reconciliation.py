@@ -94,7 +94,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn("ai_squad_runtime_changed_between_releases()", text)
         self.assertIn("verify_ai_squad_bridges_health()", text)
 
-        activate = text.split('mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"', 1)[1]
+        activate = text.split('ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"', 1)[1]
         activate = activate.split("if ! reconcile_abandoned_cart_recovery_units", 1)[0]
         self.assertIn(
             'if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$ACTIVE_RELEASE" "$NEW_RELEASE_PATH"; then',
