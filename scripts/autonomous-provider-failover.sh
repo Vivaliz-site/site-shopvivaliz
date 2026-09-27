@@ -6,6 +6,7 @@ SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
 SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
 SHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
 SHOPVIVALIZ_RESUME_BACKGROUND="${SHOPVIVALIZ_RESUME_BACKGROUND:-0}"
+SHOPVIVALIZ_RESUME_HUMAN_AUTHORIZED_EXECUTORS="${SHOPVIVALIZ_RESUME_HUMAN_AUTHORIZED_EXECUTORS:-}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
@@ -109,8 +110,13 @@ fi
 # aprovada. Claude/Codex continuam exigindo gatilho humano explicito.
 BACKGROUND_ORDER=(gemini)
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
-  ORDER=("${BACKGROUND_ORDER[@]}")
-  echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+  if printf ',%s,' "$SHOPVIVALIZ_RESUME_HUMAN_AUTHORIZED_EXECUTORS" | grep -Fq ',codex,'; then
+    ORDER=(codex gemini)
+    echo "background_human_authorized_codex=true" | tee -a "$OUTPUT"
+  else
+    ORDER=("${BACKGROUND_ORDER[@]}")
+    echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+  fi
 else
   # Execucao finita/interativa: preservar cota, Gemini -> Claude -> Codex.
   ORDER=(gemini anthropic codex)

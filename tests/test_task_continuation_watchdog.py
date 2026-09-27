@@ -153,6 +153,26 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(request["previous_agent_id"], "claude")
         self.assertEqual(request["fallback_policy"], "chatgpt_common_then_work_then_cli")
 
+    def test_watchdog_preserves_explicit_codex_authorization(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-codex-resume", "Continuar com Codex apos queda", "gpt")
+        state.authorize_executor(
+            "task-codex-resume",
+            executor="codex",
+            evidence="usuario autorizou Codex explicitamente nesta conversa",
+        )
+        state.record_progress(
+            "task-codex-resume",
+            next_action="continuar execucao com Codex autorizado",
+            evidence="checkpoint antes da interrupcao",
+        )
+        self._age_task("task-codex-resume", seconds=600)
+
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+        request = watchdog.read_requests(self.runtime)[0]
+        self.assertEqual(request["human_authorized_executors"], ["codex"])
+
     def test_worker_routes_auto_resume_to_gpt_even_when_request_contains_previous_cli_agent(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 

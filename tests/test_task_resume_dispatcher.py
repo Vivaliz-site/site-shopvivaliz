@@ -48,6 +48,8 @@ class DetachedTaskResumeTests(unittest.TestCase):
             "evidence": ["checkpoint before interrupted stream"],
             "verification": None,
             "blocker": None,
+            "human_authorized_executors": ["codex"],
+            "human_authorizations": [{"executor": "codex", "evidence": "explicit user authorization"}],
             "created_at": "2026-09-26T19:59:00Z",
             "updated_at": updated_at,
             "history": [],
@@ -88,6 +90,7 @@ capture = {
     "resume_stage": os.environ.get("SHOPVIVALIZ_RESUME_STAGE"),
     "result_mode": os.environ.get("SHOPVIVALIZ_RESUME_RESULT_MODE"),
     "background_mode": os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND"),
+    "authorized_executors": os.environ.get("SHOPVIVALIZ_RESUME_HUMAN_AUTHORIZED_EXECUTORS"),
     "task_id": task_id,
     "prompt": Path(sys.argv[1]).read_text(),
 }
@@ -132,6 +135,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(capture["resume_stage"], "cli_last")
         self.assertEqual(capture["result_mode"], "task_state")
         self.assertEqual(capture["background_mode"], "1")
+        self.assertEqual(capture["authorized_executors"], "codex")
         self.assertEqual(capture["task_id"], "resume-e2e")
         self.assertIn("finish without abandonment", capture["prompt"])
         self.assertIn("continue real work", capture["prompt"])
@@ -210,6 +214,13 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
         self.assertIn("python3 scripts/agent_task_state.py complete", dispatcher)
         self.assertIn("python3 scripts/agent_task_state.py progress", dispatcher)
+
+    def test_background_resume_may_use_codex_only_when_human_authorized(self) -> None:
+        failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        self.assertIn("SHOPVIVALIZ_RESUME_HUMAN_AUTHORIZED_EXECUTORS", failover)
+        self.assertIn("background_human_authorized_codex=true", failover)
+        self.assertIn("ORDER=(codex gemini)", failover)
+        self.assertIn("env -u OPENAI_API_KEY -u CODEX_API_KEY codex exec", failover)
 
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
