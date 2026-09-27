@@ -52,7 +52,6 @@ on:
           - agent_ssh_status
           - backend_browser_runner_install
           - backend_browser_runner_status
-          - chatgpt_account_diag
       reason:
         description: Audit reason
         required: true
@@ -105,7 +104,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "chatgpt_account_diag"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -126,8 +125,6 @@ jobs:
               raise SystemExit("Agent SSH actions are restricted to the two Linux VMs")
           if action.startswith("backend_browser_runner_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("Backend browser runner actions are restricted to the backend VM")
-          if action == "chatgpt_account_diag" and target != "always-free-arm-1787907847-26":
-              raise SystemExit("ChatGPT account diagnostic is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -359,58 +356,6 @@ jobs:
                   --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
-              ;;
-            chatgpt_account_diag)
-              remote_script="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
-              remote_json="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-              legacy_json="/tmp/chatgpt-account-diagnostic-legacy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-              legacy_profile="/home/fredrdp/.config/shopvivaliz-chromium"
-              shared_browser="/opt/shopvivaliz-browser/chrome-linux/chrome"
-              "${SSH[@]}" "cat > '$remote_script' && chmod 755 '$remote_script'" < scripts/chatgpt-account-diagnostic.mjs
-
-              diag_rc=0
-              "${SSH[@]}" "CHATGPT_ACCOUNT_DIAG_OUTPUT='$remote_json' node '$remote_script'" || diag_rc=$?
-              primary_blocker="$("${SSH[@]}" "jq -r '.blocker // empty' '$remote_json'")"
-
-              if [ "$diag_rc" -ne 0 ] && [ "$primary_blocker" = "composer_unavailable" ]; then
-                if "${SSH[@]}" "id -u fredrdp >/dev/null 2>&1 && sudo -n -u fredrdp test -d '$legacy_profile'"; then
-                  if "${SSH[@]}" "(ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- '$legacy_profile'"; then
-                    echo 'CHATGPT_ACCOUNT_DIAGNOSTIC={"browser_route":"legacy_fredrdp_profile_fallback","blocker":"legacy_profile_in_use_without_cdp","ok":false}'
-                    diag_rc=2
-                  else
-                    "${SSH[@]}" "set -Eeuo pipefail
-                      shared='$shared_browser'
-                      if ! sudo -n -u fredrdp test -x \"\$shared\"; then
-                        source=$(readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium)
-                        test -x \"\$source\"
-                        src_dir=$(dirname \"\$source\")
-                        sudo -n install -d -m 0755 /opt/shopvivaliz-browser
-                        sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new
-                        sudo -n cp -a --reflink=auto \"\$src_dir\" /opt/shopvivaliz-browser/chrome-linux.new
-                        sudo -n chmod -R a+rX /opt/shopvivaliz-browser/chrome-linux.new
-                        sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux
-                        sudo -n mv /opt/shopvivaliz-browser/chrome-linux.new /opt/shopvivaliz-browser/chrome-linux
-                      fi
-                      sudo -n -u fredrdp test -x \"\$shared\""
-                    diag_rc=0
-                    if "${SSH[@]}" "command -v xvfb-run >/dev/null 2>&1"; then
-                      "${SSH[@]}" "sudo -n -u fredrdp env HOME=/home/fredrdp CHATGPT_ACCOUNT_BROWSER_PATH='$shared_browser' CHATGPT_ACCOUNT_FORCE_PROFILE='$legacy_profile' CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback CHATGPT_ACCOUNT_DIAG_OUTPUT='$legacy_json' xvfb-run -a -s '-screen 0 1440x900x24 -ac' node '$remote_script'" || diag_rc=$?
-                    else
-                      "${SSH[@]}" "sudo -n -u fredrdp env HOME=/home/fredrdp DISPLAY=:98 CHATGPT_ACCOUNT_BROWSER_PATH='$shared_browser' CHATGPT_ACCOUNT_FORCE_PROFILE='$legacy_profile' CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback CHATGPT_ACCOUNT_DIAG_OUTPUT='$legacy_json' node '$remote_script'" || diag_rc=$?
-                    fi
-                    "${SSH[@]}" "sudo -n -u fredrdp test -s '$legacy_json'; sudo -n -u fredrdp rm -f '$legacy_json'"
-                  fi
-                else
-                  echo 'CHATGPT_ACCOUNT_DIAGNOSTIC={"browser_route":"legacy_fredrdp_profile_fallback","blocker":"legacy_profile_missing_or_unreadable","ok":false}'
-                  diag_rc=2
-                fi
-              fi
-
-              "${SSH[@]}" "rm -f '$remote_script' '$remote_json'"
-              if [ "$diag_rc" -ne 0 ]; then
-                exit "$diag_rc"
-              fi
-              echo "CHATGPT_ACCOUNT_DIAG=PASS"
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
