@@ -1,0 +1,33 @@
+name: ChatGPT Backend Emergency Cleanup
+
+on:
+  push:
+    branches:
+      - ops/chatgpt-backend-cleanup-20260927
+    paths:
+      - '.github/workflows/chatgpt-backend-emergency-cleanup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Remove only failed diagnostic temp copy
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          echo "DISK_BEFORE"
+          df -h /
+          if [ -e /opt/shopvivaliz-browser/chrome-linux.new ]; then
+            sudo -n du -sh /opt/shopvivaliz-browser/chrome-linux.new || true
+            sudo -n rm -rf --one-file-system /opt/shopvivaliz-browser/chrome-linux.new
+          fi
+          test ! -e /opt/shopvivaliz-browser/chrome-linux.new
+          echo "DISK_AFTER"
+          df -h /
+          echo "CHATGPT_BACKEND_EMERGENCY_CLEANUP=PASS"
