@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .agent_task_state import RUNTIME_DIR
+    from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
 except ImportError:  # direct CLI execution from repository root
-    from agent_task_state import RUNTIME_DIR
+    from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
 
 REQUESTS_FILE = "_resume-requests.jsonl"
 DEFAULT_STALE_SECONDS = 120
@@ -62,6 +62,7 @@ def _read_state(path: Path) -> dict[str, Any] | None:
 def _fingerprint(payload: dict[str, Any]) -> str:
     basis = "\n".join(
         [
+            str(payload.get("repository", DEFAULT_REPOSITORY)).strip(),
             str(payload.get("task_id", "")).strip(),
             str(payload.get("updated_at", "")).strip(),
             str(payload.get("next_action", "")).strip(),
@@ -150,6 +151,7 @@ def run_once(
             "kind": "auto_resume",
             "status": "queued",
             "task_id": task_id,
+            "repository": str(payload.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
             "agent_id": "gpt",
             "preferred_executor": "chatgpt_common",
             "secondary_executor": "chatgpt_work",

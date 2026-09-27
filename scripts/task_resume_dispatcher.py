@@ -25,10 +25,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 try:
-    from .agent_task_state import RUNTIME_DIR
+    from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
     from .task_continuation_watchdog import read_requests
 except ImportError:
-    from agent_task_state import RUNTIME_DIR
+    from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
     from task_continuation_watchdog import read_requests
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +38,18 @@ TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
 DEFAULT_RETRY_AFTER_SECONDS = 900
-DEFAULT_REPOSITORY_URL = "https://github.com/Vivaliz-site/site-shopvivaliz.git"
+ALLOWED_REPOSITORIES = frozenset({
+    "Vivaliz-site/site-shopvivaliz",
+    "Vivaliz-site/-shopvivaliz-pipeline",
+    "Vivaliz-site/amazon-returns-safet",
+    "Vivaliz-site/ml-pricing-api",
+    "Vivaliz-site/mercadolivre-returns-recovery",
+    "Vivaliz-site/shopvivaliz-m365",
+    "Vivaliz-site/buscador",
+    "fredmourao-ai/mei-mg-email",
+    "fredmourao-ai/solange-rolla-consultorio",
+})
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def utc_now() -> str:
@@ -58,6 +69,15 @@ def _parse_utc(value: str) -> datetime | None:
 def _safe_task_id(value: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value).strip()).strip(".-")
     return safe[:160]
+
+
+def _safe_repository(value: str) -> str:
+    repository = str(value or DEFAULT_REPOSITORY).strip()
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise ValueError("invalid repository identity")
+    if repository not in ALLOWED_REPOSITORIES:
+        raise ValueError("repository is not governed by global continuity")
+    return repository
 
 
 def _state_path(runtime_dir: Path, task_id: str) -> Path:
@@ -116,6 +136,10 @@ def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bo
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
+    request_repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+    state_repository = str(state.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+    if request_repository != state_repository:
+        return False
     if str(request.get("checkpoint_updated_at", "")).strip() != str(state.get("updated_at", "")).strip():
         return False
     if str(request.get("next_action", "")).strip() != str(state.get("next_action", "")).strip():
@@ -125,6 +149,7 @@ def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bo
 
 def _build_prompt(request: dict[str, Any], state: dict[str, Any]) -> str:
     task_id = str(state.get("task_id", "")).strip()
+    repository = _safe_repository(state.get("repository", DEFAULT_REPOSITORY))
     goal = str(state.get("goal", "")).strip()
     next_action = str(state.get("next_action", "")).strip()
     state_json = json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True)
@@ -134,6 +159,7 @@ You are executing one finite recovery turn for a ShopVivaliz task whose
 interactive ChatGPT stream stopped before terminal completion.
 
 Task id: {task_id}
+Repository: {repository}
 Original goal: {goal}
 Required next action: {next_action}
 
@@ -169,32 +195,30 @@ def _default_work_root() -> Path:
     return Path.home() / ".cache" / "shopvivaliz-task-resume"
 
 
-def _prepare_workspace(task_id: str) -> Path:
+def _prepare_workspace(task_id: str, repository: str) -> Path:
     work_root = _default_work_root()
     work_root.mkdir(parents=True, exist_ok=True)
     workspace = Path(tempfile.mkdtemp(prefix=f"{_safe_task_id(task_id)}-", dir=work_root))
-    repository_url = str(os.getenv("SHOPVIVALIZ_RESUME_REPOSITORY_URL", DEFAULT_REPOSITORY_URL)).strip()
-    if shutil.which("gh"):
-        subprocess.run(
-            ["gh", "auth", "setup-git"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=30,
-        )
+    repository_name = _safe_repository(repository)
+    gh = shutil.which("gh")
+    if not gh:
+        raise OSError("authenticated GitHub CLI is required for governed repository recovery")
     subprocess.run(
         [
-            "git",
+            gh,
+            "repo",
             "clone",
+            repository_name,
+            str(workspace),
+            "--",
             "--quiet",
             "--filter=blob:none",
             "--no-tags",
-            "--branch",
-            "main",
-            repository_url,
-            str(workspace),
+            "--single-branch",
         ],
         check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         timeout=120,
     )
     return workspace
@@ -266,6 +290,7 @@ def _execute(
     timeout_seconds: int,
 ) -> tuple[str, int | None, dict[str, Any], dict[str, Any]]:
     task_id = str(state.get("task_id", "")).strip()
+    repository = _safe_repository(state.get("repository", DEFAULT_REPOSITORY))
     before = _state_signature(state)
     prompt_path: Path | None = None
     workspace: Path | None = None
@@ -282,9 +307,9 @@ def _execute(
             os.fsync(handle.fileno())
 
         if executor is None:
-            workspace = _prepare_workspace(task_id)
+            workspace = _prepare_workspace(task_id, repository)
             cwd = workspace
-            command = [str(workspace / "scripts" / "autonomous-provider-failover.sh"), str(prompt_path)]
+            command = [str(project_dir / "scripts" / "autonomous-provider-failover.sh"), str(prompt_path)]
         else:
             cwd = project_dir
             command = [*executor, str(prompt_path)]
@@ -292,6 +317,7 @@ def _execute(
         env = os.environ.copy()
         env["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = str(runtime_dir)
         env["SHOPVIVALIZ_TASK_ID"] = task_id
+        env["SHOPVIVALIZ_TASK_REPOSITORY"] = repository
         env["SHOPVIVALIZ_RESUME_STAGE"] = "cli_last"
         env["SHOPVIVALIZ_RESUME_RESULT_MODE"] = "task_state"
         env["SHOPVIVALIZ_RESUME_BACKGROUND"] = "1"
@@ -416,6 +442,7 @@ def run_once(
             row = {
                 "request_id": str(request.get("id", "")).strip(),
                 "task_id": task_id,
+                "repository": str(state.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
                 "fingerprint": fingerprint,
                 "result": result,
                 "executor_exit_code": exit_code,

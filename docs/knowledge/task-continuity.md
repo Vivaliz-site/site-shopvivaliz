@@ -251,3 +251,49 @@ executa e conclui uma tarefa sintética por conta própria.
   motivo para declarar `NÃO APTO` e parar: é `RUNNING`. Levantar causa raiz,
   TDD (RED → GREEN), commit/PR/merge/deploy, e repetir o E2E.
 <!-- /DETACHED_TASK_RECOVERY_E2E_V7 -->
+
+
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+## Continuidade global multi-repositório
+
+Policy: `GLOBAL_TASK_CONTINUITY_V8`.
+
+A certificação V7 do `site-shopvivaliz` é o controlador canônico para todos os
+repositórios governados. Não devem existir dez watchdogs concorrentes para a
+mesma política: o A1 mantém um único runtime durável e cada checkpoint carrega
+obrigatoriamente a identidade `repository=owner/name`.
+
+Repositórios governados:
+
+- `Vivaliz-site/site-shopvivaliz`
+- `Vivaliz-site/-shopvivaliz-pipeline`
+- `Vivaliz-site/amazon-returns-safet`
+- `Vivaliz-site/ml-pricing-api`
+- `Vivaliz-site/mercadolivre-returns-recovery`
+- `Vivaliz-site/shopvivaliz-m365`
+- `Vivaliz-site/buscador`
+- `fredmourao-ai/mei-mg-email`
+- `fredmourao-ai/solange-rolla-consultorio`
+
+Contrato:
+
+- `agent_task_state.py start` persiste a identidade do repositório.
+- O watchdog copia essa identidade para o pedido de retomada e inclui o repo no
+  fingerprint.
+- O dispatcher rejeita repos fora da allowlist e rejeita request/checkpoint com
+  repositórios divergentes.
+- O clone efêmero usa `gh repo clone` com a autenticação nativa já existente no
+  host, permitindo repos públicos e privados sem colocar token em prompt/log.
+- O executor Gemini e a policy headless permanecem no controlador canônico;
+  cada repo consumidor contém somente o adapter `scripts/agent_task_state.py`
+  necessário para atualizar o mesmo checkpoint durável.
+- O E2E de produção aceita `--repository owner/name`; APTO global exige
+  `continuity_e2e_pass` real para cada repositório governado, nunca apenas
+  presença estática dos adapters.
+- Fora do host/control-plane canônico, o adapter deve falhar fechado se não
+  conseguir alcançar o controlador; criar estado local sem watchdog seria um
+  falso-verde e é proibido.
+
+A retomada continua sendo detached recovery. Ela não reabre a mesma conversa do
+aplicativo ChatGPT.
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
