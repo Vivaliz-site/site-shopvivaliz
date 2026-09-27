@@ -1,4 +1,4 @@
-name: ChatGPT CDP 9555 Owner via OCI Once
+name: ChatGPT Session and Continuity Runtime via OCI Once
 
 on:
   push:
@@ -135,6 +135,28 @@ jobs:
             echo reachable=false
           fi
           rm -f /tmp/cdp-version.json
+
+          echo WINDOWS_CONTINUITY_BRIDGE_STATE
+          python3 - <<'PY'
+          import json, urllib.request
+          ps = r'''$ErrorActionPreference="SilentlyContinue"; $name="ShopVivaliz ChatGPT Continuity Bridge"; $task=Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue; $taskExists=($null -ne $task); $taskState=if($taskExists){[string]$task.State}else{"Missing"}; $dir=Test-Path 'C:\ShopVivaliz\chatgpt-continuity-bridge'; $tokenFile=Test-Path 'C:\ShopVivaliz\chatgpt-continuity-bridge\bridge.token'; $worker=Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'chatgpt-continuity-bridge-worker\.mjs' } | Select-Object -First 1; $workerRunning=($null -ne $worker); $cdp=(Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0; [pscustomobject]@{task_exists=$taskExists;task_state=$taskState;install_dir=$dir;token_file_exists=$tokenFile;worker_running=$workerRunning;cdp_9223_listening=$cdp}|ConvertTo-Json -Compress'''
+          for port,label in ((5557,'FREDWIN'),(5558,'KOCEPSV')):
+              body=json.dumps({'params':{'command':'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' + ps,'timeout':45}}).encode()
+              req=urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+              state={'reachable':False}
+              try:
+                  with urllib.request.urlopen(req,timeout=55) as response:
+                      payload=json.loads(response.read().decode())
+                  result=payload.get('result') or {}
+                  if result.get('success') is True:
+                      lines=str(result.get('output') or '').strip().splitlines()
+                      if lines:
+                          parsed=json.loads(lines[-1])
+                          state={'reachable':True,**parsed}
+              except Exception:
+                  pass
+              print('WINDOWS_BRIDGE '+label+' '+json.dumps(state,separators=(',',':')))
+          PY
           REMOTE
 
       - name: Cleanup
