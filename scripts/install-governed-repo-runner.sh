@@ -22,6 +22,15 @@ esac
 [[ "$(uname -m)" == "aarch64" ]] || { echo "ERROR ARM64 required" >&2; exit 2; }
 command -v curl >/dev/null
 command -v systemctl >/dev/null
+command -v loginctl >/dev/null
+command -v sudo >/dev/null
+
+runner_user="$(id -un)"
+sudo -n loginctl enable-linger "$runner_user"
+[[ "$(loginctl show-user "$runner_user" -p Linger --value)" == "yes" ]] || {
+  echo "ERROR user linger is required for persistent runner services" >&2
+  exit 2
+}
 
 runner_root="/home/ubuntu/actions-runner-${runner_label}"
 runner_unit="actions.runner.${runner_name}.service"
@@ -29,7 +38,11 @@ work_dir="_work-${runner_label}"
 runtime="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$runtime}"
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$runtime/bus}"
-[[ -S "$runtime/bus" ]] || { echo "ERROR user systemd bus unavailable" >&2; exit 2; }
+for attempt in $(seq 1 10); do
+  [[ -S "$runtime/bus" ]] && break
+  sleep 1
+done
+[[ -S "$runtime/bus" ]] || { echo "ERROR user systemd bus unavailable after linger enablement" >&2; exit 2; }
 
 install_unit() {
   local unit_dir="$HOME/.config/systemd/user"
