@@ -63,7 +63,7 @@ def main() -> int:
     gates = required_specialized_gates(args.file)
     if args.json:
         print(json.dumps(gates, ensure_ascii=False))
-    else:
+    elif gates:
         print("\n".join(gates))
     return 0
 
