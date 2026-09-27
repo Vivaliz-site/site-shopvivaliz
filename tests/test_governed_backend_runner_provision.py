@@ -24,6 +24,10 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         self.assertIn("ubuntu@10.0.1.38", text)
         self.assertIn("persist-credentials: false", text)
         self.assertNotIn("pull_request:", text)
+        self.assertIn("for attempt in {1..12}", text)
+        self.assertIn("sleep 2", text)
+        self.assertIn("governed_runner=online", text)
+        self.assertIn("did not become online", text)
 
 if __name__ == "__main__":
     unittest.main()
