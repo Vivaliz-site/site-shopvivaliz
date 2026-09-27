@@ -128,7 +128,7 @@ jobs:
             echo "ERROR CDP port still reachable" >&2
             exit 3
           fi
-          test -d "$profile"
+          sudo -n test -d "$profile"
           echo "PROFILE_PRESERVED=true"
           echo "CHATGPT_BROWSER_SESSION_QUARANTINE=PASS"
           REMOTE
