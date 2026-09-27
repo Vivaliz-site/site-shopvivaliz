@@ -124,6 +124,50 @@ def start_task(task_id: str, goal: str, agent_id: str = "") -> dict[str, Any]:
     return payload
 
 
+def authorize_executor(
+    task_id: str,
+    *,
+    executor: str,
+    evidence: str,
+) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot grant executor authorization")
+
+    executor_id = str(executor).strip().lower()
+    evidence_text = str(evidence).strip()
+    if executor_id not in HUMAN_AUTHORIZABLE_EXECUTORS:
+        raise TaskStateError(
+            "executor is not eligible for persisted human authorization: "
+            + executor_id
+        )
+    if not evidence_text:
+        raise TaskStateError("executor authorization requires explicit human evidence")
+
+    authorized = {
+        str(item).strip().lower()
+        for item in payload.get("human_authorized_executors", [])
+        if str(item).strip()
+    }
+    authorized.add(executor_id)
+    payload["human_authorized_executors"] = sorted(authorized)
+    payload.setdefault("human_authorizations", []).append(
+        {
+            "executor": executor_id,
+            "evidence": evidence_text,
+            "at": utc_now(),
+        }
+    )
+    _history(
+        payload,
+        "executor_authorized",
+        executor=executor_id,
+        evidence=evidence_text,
+    )
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 def record_progress(task_id: str, *, next_action: str, evidence: str | None = None) -> dict[str, Any]:
     payload = _load(task_id)
     if is_terminal(payload):
@@ -249,6 +293,11 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--goal", required=True)
     start.add_argument("--agent", default="")
 
+    authorize = sub.add_parser("authorize-executor")
+    authorize.add_argument("--task", required=True)
+    authorize.add_argument("--executor", required=True)
+    authorize.add_argument("--evidence", required=True)
+
     progress = sub.add_parser("progress")
     progress.add_argument("--task", required=True)
     progress.add_argument("--next-action", required=True)
@@ -286,6 +335,12 @@ def main() -> int:
     try:
         if args.command == "start":
             payload = start_task(args.task, args.goal, args.agent)
+        elif args.command == "authorize-executor":
+            payload = authorize_executor(
+                args.task,
+                executor=args.executor,
+                evidence=args.evidence,
+            )
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":
