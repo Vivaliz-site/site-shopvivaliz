@@ -1,0 +1,130 @@
+name: ChatGPT VM Session OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-oci-20260927
+    paths:
+      - '.github/workflows/chatgpt-vm-session-oci-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+    steps:
+      - name: Configure OCI profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for n in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do test -n "${!n:-}"; done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Inspect safe session metadata through OCI Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          test -n "$instance_id"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+
+          script="$RUNNER_TEMP/inspect.sh"
+          cat > "$script" <<'REMOTE'
+          set -u
+          echo "HOST=$(hostname)"
+          echo "RUN_AS=$(id -un)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          echo "DISK"
+          df -h /
+          echo "LOGIN_SESSIONS"
+          loginctl list-sessions --no-legend 2>/dev/null || true
+          for sid in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+            echo "SESSION=$sid"
+            loginctl show-session "$sid" -p Name -p User -p Type -p Class -p State -p Remote -p Display -p Leader 2>/dev/null || true
+          done
+          echo "BROWSER_WORKER_HEALTH"
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:17777/health 2>/dev/null | jq '{ok,endpoint,browser_path_exists}' 2>/dev/null || true
+          echo "BROWSER_PROCESSES_SAFE"
+          ps -eo user=,pid=,args= 2>/dev/null | awk '
+            /chromium|chrome/ {
+              user=$1; pid=$2; line=$0;
+              udd=""; rdp=""; prof="";
+              if (match(line,/--user-data-dir=[^ ]+/)) udd=substr(line,RSTART,RLENGTH);
+              if (match(line,/--remote-debugging-port=[^ ]+/)) rdp=substr(line,RSTART,RLENGTH);
+              if (match(line,/--profile-directory=[^ ]+/)) prof=substr(line,RSTART,RLENGTH);
+              printf "user=%s pid=%s %s %s %s\n",user,pid,udd,prof,rdp;
+            }'
+          echo "PROFILE_METADATA"
+          for p in             /home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt             /home/ubuntu/.config/chromium             /home/ubuntu/.config/google-chrome             /home/fredrdp/.config/shopvivaliz-chromium             /home/fredrdp/.config/chromium             /home/fredrdp/.config/google-chrome
+          do
+            if [ -e "$p" ]; then
+              stat -c 'profile=%n owner=%U mode=%a mtime=%Y' "$p" 2>/dev/null || true
+              for q in "Local State" "Default" "Default/Cookies" "Default/Network/Cookies" "Default/Preferences"; do
+                if [ -e "$p/$q" ]; then
+                  stat -c "marker=$q size=%s mtime=%Y" "$p/$q" 2>/dev/null || true
+                fi
+              done
+            fi
+          done
+          echo "SAFE_SESSION_INSPECTION=PASS"
+          REMOTE
+
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$instance_id" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$compartment_id" --display-name "Inspect ChatGPT browser session safely" --content "file://$content" --target "file://$target" --timeout-in-seconds 120 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 36); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$instance_id")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS) sleep 5 ;;
+              *) exit 31 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output"
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+
+      - name: Erase temporary OCI key
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          rm -f "${OCI_CONFIG_FILE:-}"
