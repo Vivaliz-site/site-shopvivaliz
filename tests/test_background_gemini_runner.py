@@ -60,6 +60,52 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "/home/ubuntu/.local/bin/gemini",
         )
 
+    def test_headless_policy_allows_only_bounded_shell_prefixes(self) -> None:
+        policy = self.mod.build_headless_policy_text()
+        self.assertIn('toolName = "run_shell_command"', policy)
+        self.assertIn('decision = "allow"', policy)
+        self.assertIn('interactive = false', policy)
+        self.assertIn('modes = ["autoEdit"]', policy)
+        for prefix in (
+            "python3 scripts/agent_task_state.py",
+            "./scripts/agent_task_state.py",
+            "python3 -m unittest",
+            "git status",
+            "git diff",
+            "git add",
+            "git commit",
+            "git push",
+            "gh pr ",
+            "bash tests/",
+            "bash scripts/repository-governance-validate.sh",
+        ):
+            self.assertIn(prefix, policy)
+        for forbidden in (
+            "sudo ",
+            "systemctl ",
+            "ssh ",
+            "rm -rf",
+            "python3 -c",
+            "bash -c",
+        ):
+            self.assertNotIn(forbidden, policy)
+
+    def test_gemini_command_uses_ephemeral_admin_policy_without_yolo(self) -> None:
+        command = self.mod.build_gemini_command(
+            executable="/home/ubuntu/.local/bin/gemini",
+            model="gemini-2.5-flash",
+            prompt="continue task",
+            policy_path=Path("/tmp/continuity-policy.toml"),
+        )
+        self.assertIn("--approval-mode", command)
+        self.assertEqual(command[command.index("--approval-mode") + 1], "auto_edit")
+        self.assertIn("--admin-policy", command)
+        self.assertEqual(
+            command[command.index("--admin-policy") + 1],
+            "/tmp/continuity-policy.toml",
+        )
+        self.assertNotIn("yolo", command)
+
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("run_background_gemini.py", failover)
