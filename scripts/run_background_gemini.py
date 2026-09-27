@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Mapping
 
@@ -62,6 +63,46 @@ def build_child_env(base: Mapping[str, str], credential: str) -> dict[str, str]:
     return child
 
 
+
+def build_headless_policy_text() -> str:
+    prefixes = (
+        "python3 scripts/agent_task_state.py",
+        "./scripts/agent_task_state.py",
+        "python3 -m unittest",
+        "git status",
+        "git diff",
+        "git add",
+        "git commit",
+        "git push",
+        "gh pr",
+        "bash tests/",
+        "bash scripts/repository-governance-validate.sh",
+    )
+    quoted = ", ".join(repr(item) for item in prefixes)
+    return (
+        "[[rule]]\n"
+        'toolName = "run_shell_command"\n'
+        f"commandPrefix = [{quoted}]\n"
+        'decision = "allow"\n'
+        "priority = 900\n"
+        'modes = ["autoEdit"]\n'
+        "interactive = false\n"
+    )
+
+
+def build_gemini_command(*, executable: str, model: str, prompt: str, policy_path: Path) -> list[str]:
+    return [
+        executable,
+        "--model",
+        model,
+        "--approval-mode",
+        "auto_edit",
+        "--admin-policy",
+        str(policy_path),
+        "--prompt",
+        prompt,
+    ]
+
 def _resolve_binary(configured: str) -> str:
     candidate = Path(configured).expanduser()
     if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -102,17 +143,24 @@ def run(
 
     prompt = prompt_file.read_text(encoding="utf-8", errors="strict")
     child = build_child_env(os.environ, credential)
-    command = [
-        executable,
-        "--model",
-        model,
-        "--approval-mode",
-        "auto_edit",
-        "--prompt",
-        prompt,
-    ]
-
+    policy_path: Path | None = None
     try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix="shopvivaliz-gemini-policy-",
+            suffix=".toml",
+            delete=False,
+        ) as handle:
+            handle.write(build_headless_policy_text())
+            handle.flush()
+            policy_path = Path(handle.name)
+        command = build_gemini_command(
+            executable=executable,
+            model=model,
+            prompt=prompt,
+            policy_path=policy_path,
+        )
         completed = subprocess.run(
             command,
             env=child,
@@ -124,6 +172,9 @@ def run(
     except OSError:
         print("background_gemini_error=exec_failed", file=sys.stderr)
         return 127
+    finally:
+        if policy_path is not None:
+            policy_path.unlink(missing_ok=True)
 
     output = (completed.stdout or "").replace(credential, "***")
     if output:

@@ -205,6 +205,12 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
 
+    def test_detached_prompt_names_the_headless_approved_task_state_command(self) -> None:
+        dispatcher = (SCRIPTS / "task_resume_dispatcher.py").read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
+        self.assertIn("python3 scripts/agent_task_state.py complete", dispatcher)
+        self.assertIn("python3 scripts/agent_task_state.py progress", dispatcher)
+
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)

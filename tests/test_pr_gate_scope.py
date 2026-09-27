@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -25,6 +27,20 @@ class PrGateScopeTests(unittest.TestCase):
             "tests/test_task_continuity_enforcement.py",
         ])
         self.assertEqual(gates, [])
+
+    def test_empty_scope_cli_emits_no_blank_gate(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "pr_gate_scope.py"),
+                "--file=scripts/agent_task_state.py",
+                "--file=tests/test_task_continuity_enforcement.py",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.stdout, "")
 
     def test_storefront_change_selects_runtime_gates(self) -> None:
         scope = load_scope()
