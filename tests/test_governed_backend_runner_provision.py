@@ -24,6 +24,8 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         self.assertIn("ubuntu@10.0.1.38", text)
         self.assertIn("persist-credentials: false", text)
         self.assertNotIn("pull_request:", text)
+        self.assertIn('cron: "7,22,37,52 * * * *"', text)
+        self.assertIn("workflow_dispatch:", text)
         self.assertIn("for attempt in {1..12}", text)
         self.assertIn("sleep 2", text)
         self.assertIn("governed_runner=online", text)
