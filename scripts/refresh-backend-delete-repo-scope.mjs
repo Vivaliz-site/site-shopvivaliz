@@ -26,8 +26,10 @@ async function run() {
   const refresh = spawn('script', ['-qefc', `bash ${refreshScript}`, '/dev/null'], {
     cwd: ROOT,
     env: { ...process.env, BROWSER: 'true', GH_CONFIG_DIR: '/home/ubuntu/.config/gh', GH_TOKEN: '', GITHUB_TOKEN: '' },
-    stdio: ['ignore', out, out],
+    stdio: ['pipe', out, out],
   });
+  refresh.stdin.write('\n\n\n');
+  refresh.stdin.end();
 
   let deviceCode = '';
   const deadline = Date.now() + maxWaitMs;
