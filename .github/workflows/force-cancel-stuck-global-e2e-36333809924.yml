@@ -1,0 +1,62 @@
+name: Force Cancel Stuck Global Continuity E2E 36333809924
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/force-cancel-stuck-global-e2e-36333809924.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    env:
+      TARGET_RUN_ID: "36333809924"
+      EXPECTED_NAME: "Global Task Continuity E2E All Repositories"
+      EXPECTED_SHA: "5d6e798fd121b6ca5087a9c4404feff5e2eddebf"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Force-cancel only the exact stuck certification run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+          name="$(jq -r '.name' <<<"$run_json")"
+          sha="$(jq -r '.head_sha' <<<"$run_json")"
+          status="$(jq -r '.status' <<<"$run_json")"
+
+          test "$name" = "$EXPECTED_NAME"
+          test "$sha" = "$EXPECTED_SHA"
+
+          case "$status" in
+            queued|pending|in_progress|waiting|requested)
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/force-cancel" >/dev/null
+              ;;
+            completed)
+              echo "TARGET_ALREADY_TERMINAL run_id=$TARGET_RUN_ID"
+              exit 0
+              ;;
+            *)
+              echo "ERROR unexpected status: $status" >&2
+              exit 1
+              ;;
+          esac
+
+          for attempt in {1..20}; do
+            current="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+            current_status="$(jq -r '.status' <<<"$current")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$current")"
+            if [ "$current_status" = "completed" ]; then
+              echo "FORCE_CANCEL_CONFIRMED run_id=$TARGET_RUN_ID conclusion=$conclusion attempt=$attempt"
+              test "$conclusion" = "cancelled"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "ERROR run did not become cancelled within convergence window" >&2
+          exit 1
