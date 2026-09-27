@@ -34,6 +34,11 @@ grep -Fq 'function resolveBrowserPath' "$diag"
 grep -Fq "'/usr/bin/chromium'" "$diag"
 grep -Fq "'/snap/bin/chromium'" "$diag"
 grep -Fq 'chromium.executablePath()' "$diag"
+grep -Fq '/opt/shopvivaliz-browser/chrome-linux/chrome' "$workflow"
+grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$workflow"
+grep -Fq 'cp -a --reflink=auto' "$workflow"
+grep -Fq 'xvfb-run -a' "$workflow"
+grep -Fq 'CHATGPT_ACCOUNT_BROWSER_PATH=' "$workflow"
 
 if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
   echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2
