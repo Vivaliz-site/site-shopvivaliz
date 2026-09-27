@@ -54,6 +54,23 @@ if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "
 fi
 grep -Fq 'xvfb-run -a' "$workflow"
 grep -Fq 'CHATGPT_ACCOUNT_BROWSER_PATH=' "$workflow"
+if grep -Fq 'test -x "$source"' "$workflow"; then
+  echo "remote diagnostic must escape source expansion inside the nested SSH command" >&2
+  exit 1
+fi
+grep -Fq 'test -x "\$source"' "$workflow"
+python3 - "$workflow" "$direct_workflow" <<'PY'
+from pathlib import Path
+import sys
+remote = Path(sys.argv[1]).read_text()
+direct = Path(sys.argv[2]).read_text()
+remote_cleanup = 'sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new\n                      if ! sudo -n -u fredrdp test -x'
+direct_cleanup = 'sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new\n              if ! sudo -n -u fredrdp test -x'
+if remote_cleanup not in remote:
+    raise SystemExit('remote diagnostic must clean stale browser staging before reuse check')
+if direct_cleanup not in direct:
+    raise SystemExit('direct diagnostic must clean stale browser staging before reuse check')
+PY
 
 if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
   echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2
