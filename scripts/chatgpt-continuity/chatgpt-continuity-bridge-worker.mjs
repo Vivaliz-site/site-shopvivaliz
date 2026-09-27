@@ -8,13 +8,16 @@
 // This worker is that new message, sent automatically instead of requiring
 // the human to notice and type it.
 //
+// Canonical runtime: always-free-arm-1787907847-26, attached to the existing
+// authenticated ChatGPT browser over CDP 127.0.0.1:9555. The Windows
+// installer is retained only as a legacy/fallback route.
+//
 // Unlike scripts/amazon-returns/seller-central-bridge-worker.mjs, this
 // worker NEVER spawns its own browser instance: doing so would create a
 // separate, logged-out browser context, not the user's real conversation.
 // It only attaches, via CDP, to a browser the user already launched with a
-// remote-debugging port open (see docs/AGENT-VM-PROMPTS.md for the launch
-// flag). If that port is not reachable, the worker fails loudly with an
-// actionable message instead of silently doing nothing.
+// remote-debugging port open. If that port is not reachable, the worker
+// fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
