@@ -182,6 +182,15 @@ def poll_for_terminal_evidence(
     }
 
 
+def write_report(report: dict[str, Any], report_path: str = "") -> str:
+    text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    if report_path:
+        destination = Path(report_path).expanduser()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(text + "\n", encoding="utf-8")
+    return text
+
+
 def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     state = observation.get("final_state") or {}
@@ -229,6 +238,11 @@ def main() -> int:
     parser.add_argument("--poll-interval-seconds", type=int, default=DEFAULT_POLL_INTERVAL_SECONDS)
     parser.add_argument("--task-id", default="")
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
+    parser.add_argument(
+        "--report-path",
+        default="",
+        help="Optional path for the final single JSON report, separate from stdout.",
+    )
     args = parser.parse_args()
 
     runtime_dir = Path(args.runtime_dir).expanduser()
@@ -264,7 +278,7 @@ def main() -> int:
         "final_verification": (observation.get("final_state") or {}).get("verification"),
         "generated_at": utc_now(),
     }
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    print(write_report(report, args.report_path))
     return 0 if ok else 1
 
 
