@@ -227,7 +227,7 @@ jobs:
           # The prior cancelled attempt may have left the exact refresh subprocess behind.
           # Kill only PIDs whose full command is this task-specific gh refresh.
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
-            mapfile -t stale < <(pgrep -af "gh auth refresh -h github.com -s delete_repo" | awk "{print \$1}" || true)
+            mapfile -t stale < <(ps -eo pid=,comm=,args= | awk '\$2=="gh" && /auth refresh -h github.com -s delete_repo/ {print \$1}' || true)
             for pid in "${stale[@]}"; do
               [ -n "$pid" ] || continue
               args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
