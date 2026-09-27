@@ -17,7 +17,8 @@ fail() {
 }
 
 [[ "$(id -u)" -ne 0 ]] || fail 'run as ubuntu, not root'
-command -v node >/dev/null || fail 'node is required'
+node_bin="$(command -v node || true)"
+[[ -n "$node_bin" ]] || fail 'node is required'
 command -v systemctl >/dev/null || fail 'systemctl is required'
 command -v curl >/dev/null || fail 'curl is required'
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
@@ -46,7 +47,7 @@ Environment=CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=$token_file
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
-ExecStart=/usr/bin/node $worker
+ExecStart=$node_bin $worker
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
