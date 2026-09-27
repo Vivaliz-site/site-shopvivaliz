@@ -1,4 +1,4 @@
-name: Provision Governed Backend CI Runners Once
+name: Governed Backend CI Runners Health
 # retry-marker: 2026-09-27-v2
 
 on:
@@ -6,12 +6,16 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/provision-governed-backend-ci-runners-once.yml"
+      - "scripts/install-governed-repo-runner.sh"
+  workflow_dispatch:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: provision-governed-backend-ci-runners-once
+  group: governed-backend-ci-runners-health
   cancel-in-progress: false
 
 jobs:
