@@ -224,32 +224,82 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SCP_BACKEND=(scp -q "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
 
-          if "${SITE_SSH[@]}" 'GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
+          # The prior cancelled attempt may have left the exact refresh subprocess behind.
+          # Kill only PIDs whose full command is this task-specific gh refresh.
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            mapfile -t stale < <(pgrep -af "gh auth refresh -h github.com -s delete_repo" | awk "{print \$1}" || true)
+            for pid in "${stale[@]}"; do
+              [ -n "$pid" ] || continue
+              args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+              case "$args" in
+                *"gh auth refresh -h github.com -s delete_repo"*)
+                  kill -TERM "$pid" 2>/dev/null || true
+                  ;;
+              esac
+            done
+            sleep 1
+            rm -f /tmp/shopvivaliz-gh-refresh-global-cleanup.log
+          '
+
+          if "${SITE_SSH[@]}" 'timeout 15s bash -lc '\''GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'\'''; then
             echo "A1_DELETE_REPO_SCOPE=ALREADY_PRESENT"
           else
             "${SCP_BACKEND[@]}" scripts/github-device-auth-delete-repo.mjs "ubuntu@127.0.0.1:$REMOTE_HELPER"
             "${BACKEND_SSH[@]}" "chmod 600 '$REMOTE_HELPER'"
 
-            "${SITE_SSH[@]}" "set -Eeuo pipefail; export GH_CONFIG_DIR=/home/ubuntu/.config/gh; : > '$REMOTE_AUTH_LOG'; chmod 600 '$REMOTE_AUTH_LOG'; printf '\n\n\n' | BROWSER=true env -u GH_TOKEN -u GITHUB_TOKEN script -qefc 'gh auth refresh -h github.com -s delete_repo' /dev/null > '$REMOTE_AUTH_LOG' 2>&1" &
+            "${SITE_SSH[@]}" 'set -Eeuo pipefail
+              export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+              unset GH_TOKEN GITHUB_TOKEN
+              log=/tmp/shopvivaliz-gh-refresh-global-cleanup.log
+              : > "$log"
+              chmod 600 "$log"
+              printf "\n\n\n" | timeout 180s script -qefc "gh auth refresh -h github.com -s delete_repo" /dev/null > "$log" 2>&1
+            ' &
             refresh_ssh_pid=$!
 
             device_code=""
-            for _ in $(seq 1 90); do
-              device_code="$("${SITE_SSH[@]}" "grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' '$REMOTE_AUTH_LOG' 2>/dev/null | tail -n 1" || true)"
+            for _ in $(seq 1 75); do
+              device_code="$("${SITE_SSH[@]}" 'grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" /tmp/shopvivaliz-gh-refresh-global-cleanup.log 2>/dev/null | tail -n 1' || true)"
               if [ -n "$device_code" ]; then break; fi
               if ! kill -0 "$refresh_ssh_pid" 2>/dev/null; then break; fi
               sleep 1
             done
-            test -n "$device_code" || { echo "::error::GitHub device code was not emitted"; exit 6; }
+            if [ -z "$device_code" ]; then
+              set +e
+              wait "$refresh_ssh_pid"
+              refresh_rc=$?
+              set -e
+              echo "GH_REFRESH_DEVICE_CODE=NOT_EMITTED rc=$refresh_rc"
+              "${SITE_SSH[@]}" 'sed -E "s/[A-Z0-9]{4}-[A-Z0-9]{4}/[REDACTED_DEVICE_CODE]/g" /tmp/shopvivaliz-gh-refresh-global-cleanup.log 2>/dev/null | tail -n 12' || true
+              exit 6
+            fi
 
-            browser_result="$(printf '%s\n' "$device_code" | "${BACKEND_SSH[@]}" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 node '$REMOTE_HELPER'")"
+            set +e
+            browser_result="$(printf '%s\n' "$device_code" | "${BACKEND_SSH[@]}" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 timeout 120s node '$REMOTE_HELPER'")"
+            browser_rc=$?
+            set -e
             device_code=""
-            grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"
+            printf '%s\n' "$browser_result" | tail -n 4
+            if [ "$browser_rc" -ne 0 ] || ! grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"; then
+              kill "$refresh_ssh_pid" 2>/dev/null || true
+              wait "$refresh_ssh_pid" 2>/dev/null || true
+              echo "::error::Backend GitHub device authorization failed"
+              exit 7
+            fi
+
+            set +e
             wait "$refresh_ssh_pid"
+            refresh_rc=$?
+            set -e
+            if [ "$refresh_rc" -ne 0 ]; then
+              echo "GH_REFRESH_RC=$refresh_rc"
+              "${SITE_SSH[@]}" 'sed -E "s/[A-Z0-9]{4}-[A-Z0-9]{4}/[REDACTED_DEVICE_CODE]/g" /tmp/shopvivaliz-gh-refresh-global-cleanup.log 2>/dev/null | tail -n 12' || true
+              exit 8
+            fi
 
             scope_ok=false
-            for _ in $(seq 1 30); do
-              if "${SITE_SSH[@]}" 'GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
+            for _ in $(seq 1 20); do
+              if "${SITE_SSH[@]}" 'timeout 15s bash -lc '\''GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'\'''; then
                 scope_ok=true
                 break
               fi
@@ -257,6 +307,8 @@ jobs:
             done
             test "$scope_ok" = true
           fi
+          "${SITE_SSH[@]}" 'rm -f /tmp/shopvivaliz-gh-refresh-global-cleanup.log' || true
+          "${BACKEND_SSH[@]}" "rm -f '$REMOTE_HELPER'" || true
           echo "A1_DELETE_REPO_SCOPE=PASS"
 
       - name: Delete legacy repository and merged cleanup refs
