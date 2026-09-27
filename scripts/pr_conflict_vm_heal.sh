@@ -25,12 +25,9 @@ fail() {
 [[ "$head_ref" != 'main' && "$head_ref" != 'master' ]] || fail 'protected branch publication is forbidden'
 [[ "$head_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]] || fail 'unsafe PR head ref syntax'
 [[ "$head_ref" != *'..'* && "$head_ref" != *'@{'* && "$head_ref" != */. && "$head_ref" != ./* && "$head_ref" != */ ]] || fail 'unsafe PR head ref structure'
-[[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
-[[ -r "$shared_env" ]] || fail 'private runtime env unavailable'
 command -v git >/dev/null || fail 'git unavailable on Oracle'
 command -v curl >/dev/null || fail 'curl unavailable on Oracle'
 command -v jq >/dev/null || fail 'jq unavailable on Oracle'
-command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
 
 fetch_pr_meta() {
   curl -fsSL --connect-timeout 10 --max-time 30 --retry 3 --retry-delay 1 \
@@ -75,9 +72,6 @@ git fetch --no-tags origin \
 git checkout -B "$head_ref" "origin/$head_ref" >/dev/null
 [[ "$(git rev-parse HEAD)" == "$expected_head_sha" ]] || fail 'checked-out SHA differs from expected'
 
-# Prove a private rotating pool exists without printing any value.
-GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight
-
 before_sha="$(git rev-parse HEAD)"
 merge_clean=0
 if git merge --no-edit --no-ff origin/main; then
@@ -88,6 +82,11 @@ if [[ "$merge_clean" -eq 0 ]]; then
   mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
   (( ${#unresolved[@]} > 0 )) || fail 'merge failed without conflict entries'
   printf 'pr_conflict_count=%s\n' "${#unresolved[@]}"
+  [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
+  [[ -r "$shared_env" ]] || fail 'private runtime env unavailable'
+  command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
+  # Only real conflicts consume the private Gemini pool.
+  GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer" --credential-preflight
   GEMINI_ENV_FILE="$shared_env" python3 "$trusted_healer"
   [[ -z "$(git diff --name-only --diff-filter=U)" ]] || fail 'unmerged paths remain after Gemini'
   git diff --cached --check

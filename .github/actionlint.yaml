@@ -1,3 +1,4 @@
 self-hosted-runner:
   labels:
     - shopvivaliz-a1-deploy
+    - shopvivaliz-backend-browser

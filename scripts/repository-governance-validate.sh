@@ -16,11 +16,17 @@ python3 scripts/validate-audit-governance.py
 python3 scripts/validate-task-continuity-enforcement.py
 python3 -m unittest tests.test_task_continuity_enforcement -v
 python3 -m unittest tests.test_task_continuation_watchdog -v
+python3 -m unittest tests.test_task_resume_dispatcher -v
 python3 -m unittest tests.test_executor_fallback_order -v
+python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
 python3 -m unittest tests.test_workflow_latency_budget -v
+python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
+python3 -m unittest tests.test_ci_performance_monitor -v
+python3 tests/test_ci_performance_monitor_workflow.py
+python3 -m unittest tests.test_ci_performance_fetch -v
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
