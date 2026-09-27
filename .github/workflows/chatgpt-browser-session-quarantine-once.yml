@@ -1,0 +1,108 @@
+name: ChatGPT Browser Session Quarantine Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-discovery-20260927
+    paths:
+      - '.github/workflows/chatgpt-browser-session-quarantine-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-browser-session-quarantine-once
+  cancel-in-progress: false
+
+jobs:
+  quarantine:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Quarantine legacy authenticated ChatGPT browser session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          profile='/home/fredrdp/.config/shopvivaliz-chromium'
+          port='9555'
+
+          mapfile -t roots < <(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]
+          port=sys.argv[2]
+          for item in sorted((x for x in os.listdir('/proc') if x.isdigit()), key=int):
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name != 'fredrdp':
+                      continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args:
+                      continue
+                  exe=os.path.basename(args[0])
+                  if exe not in {'chrome','chromium','shopvivaliz-chromium'}:
+                      continue
+                  if f'--user-data-dir={profile}' not in args:
+                      continue
+                  if f'--remote-debugging-port={port}' not in args:
+                      continue
+                  print(item)
+              except Exception:
+                  pass
+          PY
+          )
+
+          if [ "${#roots[@]}" -gt 1 ]; then
+            echo "ERROR multiple matching browser roots: ${#roots[@]}" >&2
+            exit 2
+          fi
+
+          if [ "${#roots[@]}" -eq 1 ]; then
+            pid="${roots[0]}"
+            echo "MATCHING_BROWSER_ROOT=1"
+            sudo -n kill -TERM "$pid"
+            for _ in $(seq 1 15); do
+              if ! sudo -n kill -0 "$pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if sudo -n kill -0 "$pid" 2>/dev/null; then
+              sudo -n kill -KILL "$pid"
+              sleep 2
+            fi
+          else
+            echo "MATCHING_BROWSER_ROOT=0"
+          fi
+
+          remaining="$(sudo -n python3 - "$profile" "$port" <<'PY'
+          import os,pwd,sys
+          profile=sys.argv[1]
+          port=sys.argv[2]
+          count=0
+          for item in os.listdir('/proc'):
+              if not item.isdigit():
+                  continue
+              try:
+                  st=os.stat(f'/proc/{item}')
+                  if pwd.getpwuid(st.st_uid).pw_name != 'fredrdp':
+                      continue
+                  args=[x.decode('utf-8','replace') for x in open(f'/proc/{item}/cmdline','rb').read().split(b'\0') if x]
+                  if not args:
+                      continue
+                  joined=' '.join(args)
+                  if profile in joined or f'--remote-debugging-port={port}' in joined:
+                      exe=os.path.basename(args[0])
+                      if 'chrom' in exe or 'chrome' in exe:
+                          count += 1
+              except Exception:
+                  pass
+          print(count)
+          PY
+          )"
+          test "$remaining" = "0"
+          if curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$port/json/version" >/dev/null 2>&1; then
+            echo "ERROR CDP port still reachable" >&2
+            exit 3
+          fi
+          echo "CHATGPT_BROWSER_SESSION_QUARANTINE=PASS"
