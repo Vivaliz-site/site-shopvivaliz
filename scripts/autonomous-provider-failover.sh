@@ -119,6 +119,13 @@ fi
 for provider in "${ORDER[@]}"; do
   case "$provider" in
     gemini)
+      if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+        try_provider gemini \
+          python3 scripts/run_background_gemini.py \
+            --model "$GEMINI_MODEL" \
+            --prompt-file "$PROMPT_FILE" && exit 0
+        continue
+      fi
       command -v gemini >/dev/null 2>&1 || { record gemini missing_cli 127; continue; }
       try_provider gemini env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
       ;;
