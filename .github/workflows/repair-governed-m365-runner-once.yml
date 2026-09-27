@@ -1,0 +1,56 @@
+name: Repair Governed M365 Runner Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/repair-governed-m365-runner-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-governed-m365-runner-once
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Repair only governed M365 CI runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v gh >/dev/null
+          command -v systemctl >/dev/null
+
+          repo='Vivaliz-site/shopvivaliz-m365'
+          name='governed-m365-ci'
+          label='m365-ci'
+          root="/home/ubuntu/actions-runner-${label}"
+          unit="actions.runner.${name}.service"
+
+          test -f "$root/.runner"
+
+          systemctl --user daemon-reload
+          if ! systemctl --user is-active --quiet "$unit"; then
+            systemctl --user restart "$unit"
+          fi
+          systemctl --user is-enabled --quiet "$unit"
+          systemctl --user is-active --quiet "$unit"
+
+          for attempt in {1..15}; do
+            state="$(gh api "repos/$repo/actions/runners?per_page=100" \
+              --jq ".runners[] | select(.name==\"${name}\") | [.status,.busy] | @tsv" || true)"
+            if [[ "$state" == online$'\t'* ]]; then
+              printf 'governed_runner=online repo=%s name=%s attempt=%s\n' "$repo" "$name" "$attempt"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "ERROR governed M365 runner did not become online" >&2
+          systemctl --user --no-pager --full status "$unit" >&2 || true
+          exit 1
