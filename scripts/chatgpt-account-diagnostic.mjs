@@ -6,6 +6,7 @@ const CDP_URL = 'http://127.0.0.1:9555';
 const BROWSER_WORKER_URL = 'http://127.0.0.1:17777';
 const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';
 const CANONICAL_BROWSER = '/home/ubuntu/.local/bin/shopvivaliz-browser-chromium';
+const USER_PLAYWRIGHT_CACHE_SUFFIX = '.cache/ms-playwright';
 const OUTPUT = process.env.CHATGPT_ACCOUNT_DIAG_OUTPUT || '/tmp/chatgpt-account-diagnostic.json';
 const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();
 const forcedRoute = String(process.env.CHATGPT_ACCOUNT_BROWSER_ROUTE || '').trim();
@@ -61,7 +62,7 @@ async function loadChromium() {
 function discoverUserPlaywrightBrowser() {
   const home = String(process.env.HOME || '').trim();
   if (!home) return '';
-  const root = home + '/.cache/ms-playwright';
+  const root = home + '/' + USER_PLAYWRIGHT_CACHE_SUFFIX;
   let entries = [];
   try {
     entries = fs.readdirSync(root, { withFileTypes: true })
