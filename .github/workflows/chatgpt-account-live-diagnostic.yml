@@ -1,4 +1,4 @@
-name: ChatGPT Diagnostic Runtime Cleanup
+name: ChatGPT Account Live Diagnostic
 
 on:
   push:
@@ -11,23 +11,164 @@ permissions:
   contents: read
 
 jobs:
-  cleanup:
+  diagnose:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
-      - name: Remove failed temporary browser copy
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate backend browser runtime
         shell: bash
         run: |
           set -Eeuo pipefail
           echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
           echo "UTC=$(date -u +%FT%TZ)"
-          echo "DISK_BEFORE"
-          df -h /
-          if [ -d /opt/shopvivaliz-browser/chrome-linux.new ]; then
-            sudo -n du -sh /opt/shopvivaliz-browser/chrome-linux.new || true
-            sudo -n rm -rf --one-file-system /opt/shopvivaliz-browser/chrome-linux.new
+          echo "BROWSER_WORKER_HEALTH"
+          curl -fsS http://127.0.0.1:17777/health | jq '{ok,endpoint,browser_path_exists,display}'
+          echo "BROWSER_WORKER_SESSIONS"
+          curl -fsS http://127.0.0.1:17777/sessions | jq '{sessions:[(.sessions // [])[] | {profile,persistent,status,ttlSeconds}]}'
+          echo "CDP_9555"
+          if curl -fsS --max-time 3 http://127.0.0.1:9555/json/version >/tmp/cdp-version.json; then
+            jq '{Browser,ProtocolVersion}' /tmp/cdp-version.json
+            echo "CDP_9555=READY"
+          else
+            echo "CDP_9555=UNAVAILABLE"
           fi
-          test ! -e /opt/shopvivaliz-browser/chrome-linux.new
-          echo "DISK_AFTER"
-          df -h /
-          echo "CHATGPT_DIAG_RUNTIME_CLEANUP=PASS"
+          rm -f /tmp/cdp-version.json
+          echo "BROWSER_PROCESS_METADATA"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, pwd
+          for proc in sorted(Path('/proc').iterdir(), key=lambda p: int(p.name) if p.name.isdigit() else 10**12):
+              if not proc.name.isdigit():
+                  continue
+              try:
+                  raw=(proc/'cmdline').read_bytes().split(b'\0')
+                  args=[x.decode('utf-8','replace') for x in raw if x]
+                  if not args or not any(k in os.path.basename(args[0]).lower() for k in ('chromium','chrome')):
+                      continue
+                  st=(proc/'status').read_text(errors='replace')
+                  uid_line=next((x for x in st.splitlines() if x.startswith('Uid:')), '')
+                  uid=int(uid_line.split()[1]) if uid_line else -1
+                  try: user=pwd.getpwuid(uid).pw_name
+                  except Exception: user=str(uid)
+                  flags={}
+                  for key in ('--user-data-dir=','--profile-directory=','--remote-debugging-port='):
+                      value=next((a[len(key):] for a in args if a.startswith(key)), '')
+                      if value:
+                          flags[key[:-1]]=value
+                  print({'pid':int(proc.name),'user':user,**flags})
+              except Exception:
+                  pass
+          PY
+          echo "PROFILE_STATE"
+          test -d /home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt && echo "ubuntu_worker_profile=present" || echo "ubuntu_worker_profile=missing"
+          if id -u fredrdp >/dev/null 2>&1; then
+            sudo -n -u fredrdp test -d /home/fredrdp/.config/shopvivaliz-chromium && echo "fredrdp_visual_profile=present" || echo "fredrdp_visual_profile=missing"
+          else
+            echo "fredrdp_user=missing"
+          fi
+
+      - name: Run primary canonical profile diagnostic
+        id: primary
+        shell: bash
+        env:
+          CHATGPT_ACCOUNT_DIAG_OUTPUT: ${{ runner.temp }}/chatgpt-account-primary.json
+        run: |
+          set +e
+          node scripts/chatgpt-account-diagnostic.mjs
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          blocker="$(jq -r '.blocker // empty' "$CHATGPT_ACCOUNT_DIAG_OUTPUT" 2>/dev/null)"
+          echo "blocker=$blocker" >> "$GITHUB_OUTPUT"
+          jq '{
+            schema,started_at,finished_at,auth_state,browser_route,
+            browser_worker_available,canonical_profile_exists,model_label,
+            attempts,request_failure_count,console_error_count,page_error_count,
+            blocker,ok
+          }' "$CHATGPT_ACCOUNT_DIAG_OUTPUT"
+          exit 0
+
+      - name: Try canonical visual fredrdp profile
+        id: visual
+        if: steps.primary.outputs.rc != '0' && steps.primary.outputs.blocker == 'composer_unavailable'
+        shell: bash
+        run: |
+          set +e
+          profile=/home/fredrdp/.config/shopvivaliz-chromium
+          out="${RUNNER_TEMP}/chatgpt-account-visual.json"
+          if ! id -u fredrdp >/dev/null 2>&1; then
+            echo "rc=2" >> "$GITHUB_OUTPUT"
+            echo "blocker=fredrdp_user_missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! sudo -n -u fredrdp test -d "$profile"; then
+            echo "rc=2" >> "$GITHUB_OUTPUT"
+            echo "blocker=fredrdp_visual_profile_missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ps -eo user=,args= | awk -v p="$profile" '$1=="fredrdp" && index($0,p)>0 {found=1} END{exit !found}'; then
+            echo "rc=2" >> "$GITHUB_OUTPUT"
+            echo "blocker=fredrdp_profile_in_use_without_cdp" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sudo -n -u fredrdp env             HOME=/home/fredrdp             DISPLAY=:98             CHATGPT_ACCOUNT_FORCE_PROFILE="$profile"             CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback             CHATGPT_ACCOUNT_DIAG_OUTPUT="$out"             node scripts/chatgpt-account-diagnostic.mjs
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          blocker="$(sudo -n -u fredrdp jq -r '.blocker // empty' "$out" 2>/dev/null)"
+          echo "blocker=$blocker" >> "$GITHUB_OUTPUT"
+          sudo -n -u fredrdp jq '{
+            schema,started_at,finished_at,auth_state,browser_route,
+            browser_worker_available,canonical_profile_exists,model_label,
+            attempts,request_failure_count,console_error_count,page_error_count,
+            blocker,ok
+          }' "$out"
+          exit 0
+
+      - name: Collect sanitized diagnostic artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${RUNNER_TEMP}/chatgpt-diag-safe"
+          for f in "${RUNNER_TEMP}"/chatgpt-account-*.json; do
+            test -f "$f" || continue
+            base="$(basename "$f")"
+            jq '{
+              schema,started_at,finished_at,auth_state,browser_route,
+              browser_worker_available,canonical_profile_exists,model_label,
+              attempts,
+              network:[(.network // [])[] | select(.kind=="response" and (.status // 0)>=400) | {at,kind,method,path,status,has_oai_request_id,has_turn_trace_id,has_cf_ray,has_response_date}],
+              request_failure_count,console_error_count,page_error_count,
+              blocker,ok
+            }' "$f" > "${RUNNER_TEMP}/chatgpt-diag-safe/$base"
+          done
+
+      - name: Upload sanitized diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-account-live-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/chatgpt-diag-safe/
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Enforce result
+        if: always()
+        shell: bash
+        env:
+          PRIMARY_RC: ${{ steps.primary.outputs.rc }}
+          VISUAL_RC: ${{ steps.visual.outputs.rc }}
+          PRIMARY_BLOCKER: ${{ steps.primary.outputs.blocker }}
+          VISUAL_BLOCKER: ${{ steps.visual.outputs.blocker }}
+        run: |
+          if [ "$PRIMARY_RC" = "0" ] || [ "$VISUAL_RC" = "0" ]; then
+            echo "CHATGPT_ACCOUNT_LIVE_DIAGNOSTIC=PASS"
+            exit 0
+          fi
+          echo "CHATGPT_ACCOUNT_LIVE_DIAGNOSTIC=BLOCKED primary=$PRIMARY_BLOCKER visual=$VISUAL_BLOCKER"
+          exit 2
