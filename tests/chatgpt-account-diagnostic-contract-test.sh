@@ -44,8 +44,14 @@ grep -Fq "'/usr/bin/chromium'" "$diag"
 grep -Fq "'/snap/bin/chromium'" "$diag"
 grep -Fq 'chromium.executablePath()' "$diag"
 grep -Fq '/opt/shopvivaliz-browser/chrome-linux/chrome' "$workflow"
-grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$workflow"
+grep -Fq "source='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome'" "$workflow"
+grep -Fq "src_dir='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux'" "$workflow"
+grep -Fq 'sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new' "$workflow"
 grep -Fq 'cp -a --reflink=auto' "$workflow"
+if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$workflow"; then
+  echo "diagnostic browser export must not derive a directory from a mutable symlink target" >&2
+  exit 1
+fi
 grep -Fq 'xvfb-run -a' "$workflow"
 grep -Fq 'CHATGPT_ACCOUNT_BROWSER_PATH=' "$workflow"
 
@@ -64,6 +70,12 @@ grep -Fq "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]" "$d
 grep -Fq "/chatgpt-account-diag-v1" "$direct_workflow"
 grep -Fq "sudo -n -u fredrdp" "$direct_workflow"
 grep -Fq "/opt/shopvivaliz-browser/chrome-linux/chrome" "$direct_workflow"
+grep -Fq "source='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome'" "$direct_workflow"
+grep -Fq "src_dir='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux'" "$direct_workflow"
+if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$direct_workflow"; then
+  echo "direct diagnostic must pin the canonical browser bundle" >&2
+  exit 1
+fi
 grep -Fq "actions/upload-artifact@" "$direct_workflow"
 grep -Fq "sanitized.har.json" "$direct_workflow"
 grep -Fq "console-errors.json" "$direct_workflow"
