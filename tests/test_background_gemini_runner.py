@@ -36,6 +36,29 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertEqual(source, "GOOGLE_API_KEY")
         self.assertEqual(value, "google-value")
 
+
+    def test_selects_all_distinct_gemini_credentials_in_precedence_order(self) -> None:
+        credentials = self.mod.select_gemini_credentials(
+            """
+            GEMINI_API_KEY=first
+            GOOGLE_API_KEY=first
+            GOOGLE_GEMINI_API_KEY=second
+            """
+        )
+        self.assertEqual(
+            credentials,
+            [("GEMINI_API_KEY", "first"), ("GOOGLE_GEMINI_API_KEY", "second")],
+        )
+
+    def test_model_candidates_keep_primary_then_unique_gemini_only_fallbacks(self) -> None:
+        self.assertEqual(
+            self.mod.build_model_candidates(
+                "gemini-2.5-flash",
+                ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+            ),
+            ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+        )
+
     def test_child_environment_is_trusted_and_contains_only_gemini_provider_secret(self) -> None:
         base = {
             "PATH": "/usr/bin",
@@ -307,6 +330,103 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
 
             self.assertEqual(rc, 1)
             self.assertIn("background_gemini_reason=approval_required", buf.getvalue())
+
+    def test_run_retries_flash_lite_after_primary_model_quota_exhaustion(self) -> None:
+        import contextlib
+        import io
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "argv=sys.argv[1:]\n"
+                "model=argv[argv.index('--model')+1]\n"
+                "if model == 'gemini-2.5-flash':\n"
+                "    print('429 RESOURCE_EXHAUSTED: quota exceeded for this project')\n"
+                "    raise SystemExit(1)\n"
+                "print('fallback success')\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = self.mod.run(
+                        model="gemini-2.5-flash",
+                        prompt_file=prompt_file,
+                        env_file=env_file,
+                        gemini_bin=str(gemini_bin),
+                        fallback_models=("gemini-2.5-flash-lite",),
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            output = buf.getvalue()
+            self.assertEqual(rc, 0)
+            self.assertIn("model:gemini-2.5-flash,exit_code:1,reason:quota_exhausted", output)
+            self.assertIn("background_gemini_model=gemini-2.5-flash-lite", output)
+            self.assertIn("background_gemini_exit_code=0", output)
+
+    def test_run_rotates_to_second_distinct_gemini_credential_after_auth_failure(self) -> None:
+        import contextlib
+        import io
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text(
+                "GEMINI_API_KEY=bad-secret\nGOOGLE_API_KEY=good-secret\n",
+                encoding="utf-8",
+            )
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os\n"
+                "if os.environ.get('GEMINI_API_KEY') == 'bad-secret':\n"
+                "    print('401 Unauthorized: invalid API key')\n"
+                "    raise SystemExit(1)\n"
+                "print('credential rotation success')\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = self.mod.run(
+                        model="gemini-2.5-flash",
+                        prompt_file=prompt_file,
+                        env_file=env_file,
+                        gemini_bin=str(gemini_bin),
+                        fallback_models=(),
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            output = buf.getvalue()
+            self.assertEqual(rc, 0)
+            self.assertIn("credential_source:GEMINI_API_KEY", output)
+            self.assertIn("reason:authentication_failed", output)
+            self.assertIn("background_gemini_credential_source=GOOGLE_API_KEY", output)
+            self.assertNotIn("bad-secret", output)
+            self.assertNotIn("good-secret", output)
 
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")

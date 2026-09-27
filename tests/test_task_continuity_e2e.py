@@ -70,6 +70,26 @@ class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
         self.assertNotIn('|| runtime_dir="$PWD', workflow)
 
 
+class ProbeReportOutputTests(unittest.TestCase):
+    def test_write_report_creates_single_valid_json_document(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "nested" / "report.json"
+            report = {
+                "task_id": "continuity-e2e-fixture",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "pass": True,
+            }
+            text = probe.write_report(report, str(path))
+            self.assertEqual(json.loads(text), report)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), report)
+
+    def test_probe_exposes_report_path_for_global_certification(self) -> None:
+        text = PROBE_PATH.read_text(encoding="utf-8")
+        self.assertIn("--report-path", text)
+        self.assertIn("write_report(report, args.report_path)", text)
+
+
 class ProbeEvaluationTests(unittest.TestCase):
     def _base_observation(self) -> dict:
         return {

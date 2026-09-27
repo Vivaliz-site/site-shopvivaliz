@@ -296,4 +296,23 @@ Contrato:
 
 A retomada continua sendo detached recovery. Ela não reabre a mesma conversa do
 aplicativo ChatGPT.
+
+
+### Resiliência de quota Gemini no background
+
+O recovery automático continua estritamente **Gemini-only**. Quando o modelo
+primário `gemini-2.5-flash` retorna `quota_exhausted` ou
+`model_unavailable`, o wrapper protegido pode tentar
+`gemini-2.5-flash-lite` e, se o runtime possuir mais de uma credencial Gemini
+distinta autorizada, rotacioná-las sem registrar o valor. Isso não autoriza
+Claude, Codex ou qualquer fallback pago/silencioso no daemon.
+
+Falhas de policy, trust ou tool registration não são mascaradas por troca de
+modelo: continuam fail-closed e exigem correção da causa raiz.
+
+O certificador global grava o relatório final do probe em arquivo JSON separado
+do stdout intermediário e acumula PASS/FAIL dos nove repositórios antes de
+encerrar. Uma falha individual não pode esconder o estado dos repositórios
+seguintes.
+
 <!-- /GLOBAL_TASK_CONTINUITY_V8 -->
