@@ -41,7 +41,7 @@ jobs:
           legacy="$root/legacy"
           legacy_profile="/home/fredrdp/.config/shopvivaliz-chromium"
           shared_browser="/opt/shopvivaliz-browser/chrome-linux/chrome"
-          rm -rf "$root"
+          sudo -n rm -rf "$root"
           install -d -m 0700 "$primary" "$legacy"
 
           diag_rc=0
@@ -96,6 +96,7 @@ jobs:
                   CHATGPT_ACCOUNT_DIAG_OUTPUT="$legacy/diagnostic.json" \
                   node "$GITHUB_WORKSPACE/scripts/chatgpt-account-diagnostic.mjs" || diag_rc=$?
               fi
+              sudo -n chown -R ubuntu:ubuntu "$legacy"
               selected="$legacy"
             fi
           fi
