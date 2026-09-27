@@ -26,16 +26,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Fetch workflow runs once
+      - name: Fetch complete workflow-run window
         id: fetch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          SINCE="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
-          gh api --paginate --slurp             "repos/${GITHUB_REPOSITORY}/actions/runs?created=>=${SINCE}&per_page=100"             > /tmp/ci-performance-runs.json
-          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+          python3 scripts/ci_performance_fetch.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --output /tmp/ci-performance-runs.json \
+            --window-hours 24 \
+            --slice-minutes 60
 
       - name: Analyze CI performance
         id: analyze
