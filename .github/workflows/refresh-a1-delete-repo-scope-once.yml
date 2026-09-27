@@ -48,8 +48,8 @@ jobs:
                 python3 scripts/agent_task_state.py progress --task "$TASK_ID" --next-action "Add delete_repo to the A1 native gh session through the authenticated backend browser, then rerun the reviewed deletion workflow." --evidence "A1 scope-refresh run $GITHUB_RUN_ID started." >/dev/null
                 ;;
               CONCLUIDO)
-                echo "TASK_ALREADY_CONCLUIDO=true"
-                exit 0
+                echo "ERROR task state is already CONCLUIDO before final-state verification" >&2
+                exit 4
                 ;;
               *)
                 echo "ERROR unsupported task state: $status" >&2
@@ -88,51 +88,59 @@ jobs:
           export GH_CONFIG_DIR=/home/ubuntu/.config/gh
           env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null
 
+          scope_already_present=false
           if env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
+            scope_already_present=true
             echo "A1_DELETE_REPO_SCOPE=ALREADY_PRESENT"
-            exit 0
           fi
 
-          LOG_FILE="$RUNNER_TEMP/a1-delete-scope/gh-refresh.log"
-          : > "$LOG_FILE"
-          chmod 600 "$LOG_FILE"
+          if [ "$scope_already_present" != true ]; then
+            LOG_FILE="$RUNNER_TEMP/a1-delete-scope/gh-refresh.log"
+            : > "$LOG_FILE"
+            chmod 600 "$LOG_FILE"
 
-          printf '\n\n\n' | BROWSER=true GH_CONFIG_DIR="$GH_CONFIG_DIR" env -u GH_TOKEN -u GITHUB_TOKEN \
-            script -qefc 'gh auth refresh -h github.com -s delete_repo' /dev/null >"$LOG_FILE" 2>&1 &
-          refresh_pid=$!
+            printf '\n\n\n' | BROWSER=true GH_CONFIG_DIR="$GH_CONFIG_DIR" env -u GH_TOKEN -u GITHUB_TOKEN \
+              script -qefc 'gh auth refresh -h github.com -s delete_repo' /dev/null >"$LOG_FILE" 2>&1 &
+            refresh_pid=$!
 
-          device_code=''
-          for _ in $(seq 1 90); do
-            device_code="$(grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' "$LOG_FILE" 2>/dev/null | tail -n 1 || true)"
-            if [ -n "$device_code" ]; then break; fi
-            if ! kill -0 "$refresh_pid" 2>/dev/null; then break; fi
-            sleep 1
-          done
-          test -n "$device_code" || { echo "ERROR device code was not emitted" >&2; exit 6; }
+            device_code=''
+            for _ in $(seq 1 90); do
+              match=''
+              if match="$(grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' "$LOG_FILE" 2>/dev/null | tail -n 1)"; then
+                device_code="$match"
+              else
+                device_code=''
+              fi
+              if [ -n "$device_code" ]; then break; fi
+              if ! kill -0 "$refresh_pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            test -n "$device_code" || { echo "ERROR device code was not emitted" >&2; exit 6; }
 
-          SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
-          SCP=(scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
+            SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
+            SCP=(scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=12 -i "$KEY_FILE")
 
-          "${SCP[@]}" scripts/github-device-auth-delete-repo.mjs "ubuntu@$BACKEND_HOST:$REMOTE_HELPER"
-          "${SSH[@]}" "ubuntu@$BACKEND_HOST" "chmod 600 '$REMOTE_HELPER'"
+            "${SCP[@]}" scripts/github-device-auth-delete-repo.mjs "ubuntu@$BACKEND_HOST:$REMOTE_HELPER"
+            "${SSH[@]}" "ubuntu@$BACKEND_HOST" "chmod 600 '$REMOTE_HELPER'"
 
-          browser_result="$(
-            printf '%s\n' "$device_code" |
-              "${SSH[@]}" "ubuntu@$BACKEND_HOST" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 node '$REMOTE_HELPER'"
-          )"
-          device_code=''
-          grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"
+            browser_result="$(
+              printf '%s\n' "$device_code" |
+                "${SSH[@]}" "ubuntu@$BACKEND_HOST" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 node '$REMOTE_HELPER'"
+            )"
+            device_code=''
+            grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"
+            wait "$refresh_pid"
 
-          scope_ok=false
-          for _ in $(seq 1 30); do
-            if env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
-              scope_ok=true
-              break
-            fi
-            sleep 1
-          done
-          test "$scope_ok" = true
-          wait "$refresh_pid" || true
+            scope_ok=false
+            for _ in $(seq 1 30); do
+              if env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'; then
+                scope_ok=true
+                break
+              fi
+              sleep 1
+            done
+            test "$scope_ok" = true
+          fi
           echo "A1_DELETE_REPO_SCOPE=PASS"
 
       - name: Record authorization progress
@@ -146,8 +154,13 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
+          set -Eeuo pipefail
+          cleanup_rc=0
           if [ -n "${KEY_FILE:-}" ] && [ -n "${HOSTS_FILE:-}" ]; then
-            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=8 -i "$KEY_FILE" "ubuntu@$BACKEND_HOST" "rm -f '$REMOTE_HELPER'" >/dev/null 2>&1
+            if ! ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOSTS_FILE" -o ConnectTimeout=8 -i "$KEY_FILE" "ubuntu@$BACKEND_HOST" "rm -f '$REMOTE_HELPER'" >/dev/null 2>&1; then
+              echo "ERROR failed to remove temporary backend helper" >&2
+              cleanup_rc=1
+            fi
           fi
           rm -rf "$RUNNER_TEMP/a1-delete-scope"
+          exit "$cleanup_rc"
