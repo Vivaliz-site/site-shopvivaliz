@@ -30,6 +30,10 @@ grep -Fq 'legacy_fredrdp_profile_fallback' "$workflow"
 grep -Fq '/home/fredrdp/.config/shopvivaliz-chromium' "$workflow"
 grep -Fq 'sudo -n -u fredrdp' "$workflow"
 grep -Fq 'legacy_profile_in_use_without_cdp' "$workflow"
+grep -Fq 'function resolveBrowserPath' "$diag"
+grep -Fq "'/usr/bin/chromium'" "$diag"
+grep -Fq "'/snap/bin/chromium'" "$diag"
+grep -Fq 'chromium.executablePath()' "$diag"
 
 if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
   echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2

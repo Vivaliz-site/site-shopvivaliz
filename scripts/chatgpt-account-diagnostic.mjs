@@ -58,6 +58,25 @@ async function loadChromium() {
   throw new Error('playwright_runtime_missing');
 }
 
+function resolveBrowserPath(chromium) {
+  const candidates = [
+    String(process.env.CHATGPT_ACCOUNT_BROWSER_PATH || '').trim(),
+    CANONICAL_BROWSER,
+    '/usr/bin/chromium',
+    '/snap/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    chromium.executablePath(),
+  ];
+  for (const candidate of candidates.filter(Boolean)) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    } catch {}
+  }
+  return '';
+}
+
 function classifyVisibleFlags(bodyText) {
   const text = String(bodyText || '').toLowerCase();
   if (text.includes('esgotou-se o tempo limite da solicitação') || text.includes('request timed out') || text.includes('request timeout')) {
@@ -186,6 +205,7 @@ let launchedFallback = false;
 try {
   const { chromium, candidate } = await loadChromium();
   result.playwright_module = candidate.replace(/^\/home\/[^/]+\//, '/home/:user/');
+  const browserPath = resolveBrowserPath(chromium);
   let browser;
   let context;
 
@@ -196,7 +216,7 @@ try {
       persist();
       throw new Error(result.blocker);
     }
-    if (!fs.existsSync(CANONICAL_BROWSER)) {
+    if (!browserPath) {
       result.blocker = 'canonical_browser_missing';
       persist();
       throw new Error(result.blocker);
@@ -204,7 +224,7 @@ try {
     const display = String(process.env.DISPLAY || '').trim() || ':98';
     try {
       fallbackContext = await chromium.launchPersistentContext(forcedProfile, {
-        executablePath: CANONICAL_BROWSER,
+        executablePath: browserPath,
         headless: false,
         viewport: { width: 1440, height: 900 },
         env: { ...process.env, DISPLAY: display, LIBGL_ALWAYS_SOFTWARE: '1' },
@@ -281,7 +301,7 @@ try {
       const display = String(workerHealth?.display || '').trim() || ':98';
       try {
         fallbackContext = await chromium.launchPersistentContext(CANONICAL_PROFILE, {
-          executablePath: CANONICAL_BROWSER,
+          executablePath: browserPath,
           headless: false,
           viewport: { width: 1440, height: 900 },
           env: { ...process.env, DISPLAY: display, LIBGL_ALWAYS_SOFTWARE: '1' },
