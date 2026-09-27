@@ -75,7 +75,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "git add",
             "git commit",
             "git push",
-            "gh pr ",
+            "gh pr",
             "bash tests/",
             "bash scripts/repository-governance-validate.sh",
         ):
