@@ -1,0 +1,89 @@
+name: Observe Global Continuity Runtime Once
+
+on:
+  push:
+    branches:
+      - ops/observe-global-continuity-runtime-20260927
+    paths:
+      - ".github/workflows/observe-global-continuity-runtime-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Read sanitized A1 continuity state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+          known=/home/ubuntu/.ssh/known_hosts
+          test -s "$key"
+          test -s "$known"
+          ssh -i "$key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known" \
+            -o ConnectTimeout=10 \
+            ubuntu@10.0.1.112 'python3 - <<'"'"'PY'"'"'
+import json
+from pathlib import Path
+
+root = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+cutoff = "2026-09-27T17:00:00Z"
+
+rows = []
+for path in sorted(root.glob("*.json")):
+    if path.name.startswith("_"):
+        continue
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    task_id = str(data.get("task_id", ""))
+    if not task_id.startswith("continuity-e2e-"):
+        continue
+    updated = str(data.get("updated_at", ""))
+    if updated and updated < cutoff:
+        continue
+    rows.append({
+        "task_id": task_id,
+        "repository": data.get("repository"),
+        "status": data.get("status"),
+        "verification": data.get("verification"),
+        "updated_at": updated,
+    })
+
+for row in sorted(rows, key=lambda x: (str(x.get("updated_at")), str(x.get("repository")))):
+    print("STATE " + json.dumps(row, sort_keys=True))
+
+ledger = root / "_resume-executions.jsonl"
+if ledger.is_file():
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        task_id = str(item.get("task_id", ""))
+        if not task_id.startswith("continuity-e2e-"):
+            continue
+        created = str(item.get("created_at", item.get("updated_at", "")))
+        if created and created < cutoff:
+            continue
+        diag = item.get("diagnostic") if isinstance(item.get("diagnostic"), dict) else {}
+        safe = {
+            "task_id": task_id,
+            "repository": item.get("repository"),
+            "result": item.get("result"),
+            "provider": diag.get("provider"),
+            "provider_status": diag.get("provider_status"),
+            "background_gemini_exit_code": diag.get("background_gemini_exit_code"),
+            "background_paid_fallback_forbidden": diag.get("background_paid_fallback_forbidden"),
+            "created_at": created,
+        }
+        print("EXEC " + json.dumps(safe, sort_keys=True))
+PY'
