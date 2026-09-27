@@ -1,0 +1,154 @@
+name: ChatGPT Live Turn Probe Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-discovery-20260927
+    paths:
+      - '.github/workflows/chatgpt-live-turn-probe-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 4
+    steps:
+      - name: Send one bounded simple turn on live authenticated VM browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const PROMPT='Responda apenas: TESTE-OK';
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const context=browser.contexts()[0];
+          if(!context) throw new Error('context_missing');
+          let page=context.pages().find(p=>p.url().startsWith('https://chatgpt.com/')) || context.pages()[0] || await context.newPage();
+          if(!page.url().startsWith('https://chatgpt.com/')){
+            await page.goto('https://chatgpt.com/',{waitUntil:'domcontentloaded',timeout:45000});
+            await page.waitForTimeout(4000);
+          }
+          page.setDefaultTimeout(10000);
+
+          const safePath=(raw)=>{
+            try{
+              const u=new URL(raw);u.search='';u.hash='';
+              u.pathname=u.pathname.replace(/\/c\/[^/]+/g,'/c/:id').replace(/\/g\/[^/]+\/c\/[^/]+/g,'/g/:project/c/:id');
+              return u.origin+u.pathname;
+            }catch{return 'invalid-url';}
+          };
+          const network=[];
+          const failures=[];
+          page.on('requestfailed',req=>{
+            try{
+              const host=new URL(req.url()).hostname;
+              if(!host.endsWith('chatgpt.com')&&!host.endsWith('openai.com')) return;
+              if(failures.length<50) failures.push({path:safePath(req.url()),error:String(req.failure()?.errorText||'').slice(0,120)});
+            }catch{}
+          });
+          page.on('response',async res=>{
+            try{
+              const host=new URL(res.url()).hostname;
+              if(!host.endsWith('chatgpt.com')&&!host.endsWith('openai.com')) return;
+              const path=safePath(res.url());
+              if(res.status()<400 && !/(backend-api|conversation|turn|message|api)/i.test(path)) return;
+              if(network.length>=100) return;
+              let h={};try{h=await res.allHeaders();}catch{}
+              network.push({
+                path,status:res.status(),
+                request_id:h['x-oai-request-id']||h['x-request-id']||'',
+                turn_trace_id:h['x-oai-turn-trace-id']||'',
+                cf_ray:h['cf-ray']||'',
+                date:h['date']||''
+              });
+            }catch{}
+          });
+
+          const snap=async()=>{
+            return await Promise.race([
+              page.evaluate(()=>{
+                const body=String(document.body?.innerText||'').toLowerCase();
+                const assistants=Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+                const last=assistants.at(-1);
+                const t=String(last?.textContent||'');
+                const buttons=Array.from(document.querySelectorAll('button'));
+                return {
+                  composer_count:document.querySelectorAll('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').length,
+                  assistant_count:assistants.length,
+                  assistant_has_expected:t.includes('TESTE-OK'),
+                  assistant_text_length:t.length,
+                  stop_visible:buttons.some(b=>/stop|parar/.test(((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase())&&b.offsetParent!==null),
+                  request_timeout:/request timed out|request timeout|esgotou-se o tempo limite da solicitação/.test(body),
+                  reflection_failed:/thinking failed|a reflexão falhou/.test(body),
+                  stream_interrupted:/stream interrupted|transmissão interrompida/.test(body),
+                  stopped_thinking:/stopped thinking|parou de pensar/.test(body),
+                  generic_error:/something went wrong|algo deu errado/.test(body),
+                  challenge:/verify you are human|checking your browser|verifique se você é humano|verificando seu navegador|additional checks|verificações adicionais/.test(body),
+                };
+              }),
+              new Promise((_,reject)=>setTimeout(()=>reject(new Error('renderer_eval_timeout')),3000))
+            ]);
+          };
+
+          const before=await snap();
+          if(before.composer_count<1) throw new Error('composer_missing_before_send');
+          const composer=page.locator('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').first();
+          try{await composer.fill(PROMPT);}catch{await composer.click();await page.keyboard.insertText(PROMPT);}
+          let sent=false;
+          for(const sel of ['button[data-testid="send-button"]','button[aria-label*="Send"]','button[aria-label*="Enviar"]']){
+            const b=page.locator(sel).first();
+            try{if(await b.isVisible({timeout:500})){await b.click();sent=true;break;}}catch{}
+          }
+          if(!sent) await composer.press('Enter');
+
+          const started=Date.now();
+          let first_response_ms=null;
+          let outcome='probe_timeout';
+          let final=null;
+          for(let elapsed=0;elapsed<90000;elapsed+=500){
+            await new Promise(r=>setTimeout(r,500));
+            try{
+              final=await snap();
+            }catch(e){
+              outcome=String(e?.message||e);
+              break;
+            }
+            if(first_response_ms===null && (final.assistant_count>before.assistant_count || final.assistant_text_length>0)){
+              first_response_ms=Date.now()-started;
+            }
+            if(final.request_timeout){outcome='request_timeout';break;}
+            if(final.reflection_failed){outcome='reflection_failed';break;}
+            if(final.stream_interrupted){outcome='stream_interrupted';break;}
+            if(final.stopped_thinking){outcome='stopped_thinking';break;}
+            if(final.generic_error){outcome='generic_error';break;}
+            if(final.challenge){outcome='challenge';break;}
+            if(final.assistant_has_expected && !final.stop_visible){outcome='expected_response_complete';break;}
+          }
+          console.log('CHATGPT_LIVE_TURN_PROBE='+JSON.stringify({
+            outcome,
+            elapsed_ms:Date.now()-started,
+            first_response_ms,
+            final,
+            request_failures:failures,
+            network_errors:network.filter(x=>x.status>=400),
+            safe_request_ids:network.filter(x=>x.request_id||x.turn_trace_id||x.cf_ray).slice(-20)
+          }));
+          if(outcome!=='expected_response_complete') process.exitCode=2;
+          NODE
