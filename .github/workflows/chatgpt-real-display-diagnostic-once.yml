@@ -84,9 +84,11 @@ jobs:
           }
           trap cleanup EXIT
 
-          test -d "$profile"
+          echo CHATGPT_REAL_DISPLAY_PRECHECK=begin
+          sudo -n -u fredrdp test -d "$profile"
           test -x "$browser"
-          test -f /home/fredconsole/.Xauthority
+          sudo -n -u fredconsole test -f /home/fredconsole/.Xauthority
+          echo CHATGPT_REAL_DISPLAY_PRECHECK=PASS
           if pgrep -u fredrdp -af 'chrom|chrome' | grep -Fq -- "$profile"; then
             echo CHATGPT_REAL_DISPLAY_BLOCKER=profile_already_in_use
             exit 31
