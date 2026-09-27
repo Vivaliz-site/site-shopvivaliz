@@ -1,0 +1,77 @@
+name: ChatGPT Fredrdp Shopvivaliz Profile Probe Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-profile-inventory-20260927
+    paths:
+      - '.github/workflows/chatgpt-fredrdp-shopvivaliz-probe-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Probe fredrdp ShopVivaliz ChatGPT profile
+        id: probe
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          profile=/home/fredrdp/.local/share/shopvivaliz-chatgpt/profile
+          browser=/opt/shopvivaliz-browser/chrome-linux/chrome
+          out="$RUNNER_TEMP/chatgpt-fredrdp-shopvivaliz-probe"
+          runner_uid="$(id -u)"
+          runner_gid="$(id -g)"
+          test -d "$profile"
+          sudo -n -u fredrdp test -x "$browser"
+          if (ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- "$profile"; then
+            echo "PROFILE_IN_USE=true"
+            exit 31
+          fi
+          sudo -n rm -rf "$out"
+          install -d -m 0700 "$out"
+          sudo -n chown -R fredrdp:fredrdp "$out"
+          set +e
+          sudo -n -u fredrdp env             HOME=/home/fredrdp             CHATGPT_ACCOUNT_BROWSER_PATH="$browser"             CHATGPT_ACCOUNT_FORCE_PROFILE="$profile"             CHATGPT_ACCOUNT_BROWSER_ROUTE=fredrdp_shopvivaliz_profile_probe             CHATGPT_ACCOUNT_DIAG_DIR="$out"             CHATGPT_ACCOUNT_DIAG_OUTPUT="$out/diagnostic.json"             xvfb-run -a -s '-screen 0 1440x900x24 -ac'             node "$GITHUB_WORKSPACE/scripts/chatgpt-account-diagnostic.mjs"
+          rc=$?
+          set -e
+          sudo -n chown -R "$runner_uid:$runner_gid" "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$out/diagnostic.json"
+          jq '{started_at,finished_at,auth_state,browser_route,model_label,attempts,request_failure_count,console_error_count,page_error_count,blocker,blocker_page,blocker_screenshot,ok}' "$out/diagnostic.json"
+
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-fredrdp-shopvivaliz-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/chatgpt-fredrdp-shopvivaliz-probe/diagnostic.json
+            ${{ runner.temp }}/chatgpt-fredrdp-shopvivaliz-probe/sanitized.har.json
+            ${{ runner.temp }}/chatgpt-fredrdp-shopvivaliz-probe/console-errors.json
+            ${{ runner.temp }}/chatgpt-fredrdp-shopvivaliz-probe/attempt-*.png
+            ${{ runner.temp }}/chatgpt-fredrdp-shopvivaliz-probe/blocker.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce probe result
+        if: always()
+        shell: bash
+        env:
+          RC: ${{ steps.probe.outputs.rc }}
+        run: |
+          test -n "$RC"
+          if [ "$RC" != 0 ]; then
+            echo "CHATGPT_FREDRDP_SHOPVIVALIZ_PROBE=REPRODUCED_OR_BLOCKED rc=$RC"
+            exit "$RC"
+          fi
+          echo "CHATGPT_FREDRDP_SHOPVIVALIZ_PROBE=PASS"
