@@ -25,6 +25,11 @@ grep -Fq "const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-brows
 grep -Fq 'browser_worker_profile_fallback' "$diag"
 grep -Fq 'canonical_profile_in_use_without_cdp' "$diag"
 grep -Fq 'launchPersistentContext(CANONICAL_PROFILE' "$diag"
+grep -Fq "const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();" "$diag"
+grep -Fq 'legacy_fredrdp_profile_fallback' "$workflow"
+grep -Fq '/home/fredrdp/.config/shopvivaliz-chromium' "$workflow"
+grep -Fq 'sudo -n -u fredrdp' "$workflow"
+grep -Fq 'legacy_profile_in_use_without_cdp' "$workflow"
 
 if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
   echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2
