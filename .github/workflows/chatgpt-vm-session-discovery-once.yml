@@ -61,22 +61,27 @@ jobs:
                   pass
           PY
 
-          echo "FREDRDP_SESSION_ENV_SAFE"
-          fred_uid="$(id -u fredrdp 2>/dev/null || true)"
-          if [ -n "$fred_uid" ]; then
-            leader=""
-            while read -r sid uid user seat tty; do
-              if [ "$user" = fredrdp ]; then
-                leader="$(loginctl show-session "$sid" -p Leader --value 2>/dev/null || true)"
-                [ -n "$leader" ] && break
-              fi
-            done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
-            if [ -n "$leader" ] && [ -r "/proc/$leader/environ" ]; then
-              sudo -n python3 - "$leader" <<'PY'
+          for session_user in fredrdp fredconsole; do
+            upper="$(printf '%s' "$session_user" | tr '[:lower:]' '[:upper:]')"
+            echo "${upper}_SESSION_ENV_SAFE"
+            session_uid="$(id -u "$session_user" 2>/dev/null || true)"
+            if [ -n "$session_uid" ]; then
+              leader=""
+              while read -r sid uid user seat tty; do
+                if [ "$user" = "$session_user" ]; then
+                  leader="$(loginctl show-session "$sid" -p Leader --value 2>/dev/null || true)"
+                  [ -n "$leader" ] && break
+                fi
+              done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
+              if [ -n "$leader" ]; then
+                sudo -n python3 - "$leader" <<'PY'
           import sys
           pid=sys.argv[1]
-          allow={'DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','XDG_SESSION_TYPE'}
-          raw=open(f'/proc/{pid}/environ','rb').read().split(b'\0')
+          allow={'DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','XDG_SESSION_TYPE','HOME'}
+          try:
+              raw=open(f'/proc/{pid}/environ','rb').read().split(b'\0')
+          except Exception:
+              raw=[]
           for entry in raw:
               if b'=' not in entry:
                   continue
@@ -85,9 +90,10 @@ jobs:
               if key in allow:
                   print(f'{key}={v.decode("utf-8","replace")}')
           PY
+              fi
+              test -S "/run/user/$session_uid/bus" && echo "${upper}_DBUS_SOCKET=present" || echo "${upper}_DBUS_SOCKET=absent"
             fi
-            test -S "/run/user/$fred_uid/bus" && echo "FREDRDP_DBUS_SOCKET=present" || echo "FREDRDP_DBUS_SOCKET=absent"
-          fi
+          done
 
           echo "PROFILE_METADATA"
           sudo -n python3 - <<'PY'
@@ -99,6 +105,9 @@ jobs:
             '/home/fredrdp/.config/shopvivaliz-chromium',
             '/home/fredrdp/.config/chromium',
             '/home/fredrdp/.config/google-chrome',
+            '/home/fredconsole/.config/shopvivaliz-chromium',
+            '/home/fredconsole/.config/chromium',
+            '/home/fredconsole/.config/google-chrome',
           ]
           for p in candidates:
               try:
