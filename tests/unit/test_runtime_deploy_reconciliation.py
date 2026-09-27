@@ -89,6 +89,25 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
         self.assertIn('17657/health', helper)
 
+    def test_safe_sync_skips_redundant_ai_squad_restart_when_runtime_is_unchanged(self) -> None:
+        text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        self.assertIn("ai_squad_runtime_changed_between_releases()", text)
+        self.assertIn("verify_ai_squad_bridges_health()", text)
+
+        activate = text.split('mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"', 1)[1]
+        activate = activate.split("if ! reconcile_abandoned_cart_recovery_units", 1)[0]
+        self.assertIn(
+            'if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$ACTIVE_RELEASE" "$NEW_RELEASE_PATH"; then',
+            activate,
+        )
+        self.assertIn('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"', activate)
+        self.assertIn("ai_squad_runtime_unchanged=true", activate)
+        self.assertIn("ai_squad_bridge_restart_skipped=true", activate)
+        self.assertIn("elif ! verify_ai_squad_bridges_health; then", activate)
+
+        rollback = text.split("rollback_to() {", 1)[1].split("restore_runner_bootstrap_if_needed()", 1)[0]
+        self.assertIn('reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"', rollback)
+
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
         reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_call:", reusable)
