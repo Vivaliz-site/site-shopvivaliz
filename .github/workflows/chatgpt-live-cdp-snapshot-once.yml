@@ -1,0 +1,75 @@
+name: ChatGPT Live CDP Snapshot Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-discovery-20260927
+    paths:
+      - '.github/workflows/chatgpt-live-cdp-snapshot-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 3
+    steps:
+      - name: Read live ChatGPT CDP state only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const contexts=browser.contexts();
+          const out=[];
+          for(let ci=0;ci<contexts.length;ci++){
+            const pages=contexts[ci].pages();
+            for(let pi=0;pi<pages.length;pi++){
+              const page=pages[pi];
+              const state=await page.evaluate(()=>{
+                const body=String(document.body?.innerText||'').toLowerCase();
+                const buttons=Array.from(document.querySelectorAll('button'));
+                return {
+                  composer_candidate_count: document.querySelectorAll('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').length,
+                  assistant_count: document.querySelectorAll('[data-message-author-role="assistant"]').length,
+                  stop_visible: buttons.some(b=>/stop|parar/.test(((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase()) && b.offsetParent!==null),
+                  login_prompt_present: Array.from(document.querySelectorAll('button,a')).some(n=>/^(log in|sign in|entrar|fazer login)$/i.test(String(n.textContent||'').trim())),
+                  challenge_present: /verify you are human|checking your browser|verifique se você é humano|verificando seu navegador|additional checks|verificações adicionais/.test(body),
+                  request_timeout_present: /request timed out|request timeout|esgotou-se o tempo limite da solicitação/.test(body),
+                  reflection_failed_present: /thinking failed|a reflexão falhou/.test(body),
+                  stream_interrupted_present: /stream interrupted|transmissão interrompida/.test(body),
+                  stopped_thinking_present: /stopped thinking|parou de pensar/.test(body),
+                  generic_error_present: /something went wrong|algo deu errado/.test(body),
+                  title_length: String(document.title||'').length,
+                };
+              });
+              let url='invalid';
+              try{
+                const u=new URL(page.url());
+                u.search='';u.hash='';
+                u.pathname=u.pathname.replace(/\/c\/[^/]+/g,'/c/:id');
+                url=u.origin+u.pathname;
+              }catch{}
+              out.push({context:ci,page:pi,url,...state});
+            }
+          }
+          console.log('CHATGPT_LIVE_CDP_SNAPSHOT='+JSON.stringify(out));
+          await browser.close();
+          NODE
