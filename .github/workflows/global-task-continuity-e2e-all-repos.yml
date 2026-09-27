@@ -1,5 +1,5 @@
 name: Global Task Continuity E2E All Repositories
-# certification-trigger: CHECKPOINT_FIRST_V9-20260927
+# certification-trigger: CHECKPOINT_FIRST_V9-FINAL-20260927
 
 on:
   push:
