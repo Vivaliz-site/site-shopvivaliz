@@ -24,6 +24,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,8 @@ except ImportError:  # direct CLI execution from repository root
     from task_continuation_watchdog import read_requests
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
-DEFAULT_BRIDGE_URL = "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php"
+DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
+DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 
 
@@ -89,21 +91,39 @@ def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _bridge_host_header(bridge_url: str) -> str:
+    configured = os.getenv("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", "").strip()
+    if configured:
+        return configured
+    host = (urllib.parse.urlparse(bridge_url).hostname or "").lower()
+    return DEFAULT_BRIDGE_HOST_HEADER if host in {"127.0.0.1", "localhost", "10.0.1.112"} else ""
+
+
 def enqueue_nudge_via_bridge(
-    *, bridge_url: str, token: str, task_id: str, repository: str, timeout_seconds: int = 15
+    *,
+    bridge_url: str,
+    token: str,
+    task_id: str,
+    repository: str,
+    timeout_seconds: int = 15,
+    bridge_host_header: str = "",
 ) -> dict[str, Any]:
     """Isolated so tests can monkeypatch it without a real network call."""
     body = json.dumps({"operation": "enqueue", "task_id": task_id, "repository": repository}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "shopvivaliz-chatgpt-continuity-dispatcher",
+    }
+    host_header = bridge_host_header.strip() or _bridge_host_header(bridge_url)
+    if host_header:
+        headers["Host"] = host_header
     request = urllib.request.Request(
         bridge_url,
         data=body,
         method="POST",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "shopvivaliz-chatgpt-continuity-dispatcher",
-        },
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
@@ -158,6 +178,7 @@ def run_once(
             token=resolved_token,
             task_id=task_id,
             repository=repository,
+            bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
         _append_ledger(
             root,
