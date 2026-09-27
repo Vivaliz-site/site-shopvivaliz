@@ -90,5 +90,17 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-continuity.service", rules)
 
 
+    def test_runtime_transport_bypasses_public_cloudflare_path(self) -> None:
+        installer = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text(encoding="utf-8")
+        dispatcher = (ROOT / "scripts" / "chatgpt_continuity_nudge_dispatcher.py").read_text(encoding="utf-8")
+        worker = (ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-continuity-bridge-worker.mjs").read_text(encoding="utf-8")
+        self.assertIn("http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php", installer)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", installer)
+        self.assertIn("http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php", dispatcher)
+        self.assertIn("Host", dispatcher)
+        self.assertIn("http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php", worker)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", worker)
+
+
 if __name__ == "__main__":
     unittest.main()
