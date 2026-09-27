@@ -23,6 +23,7 @@ python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
 python3 -m unittest tests.test_workflow_latency_budget -v
+python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
 python3 -m unittest tests.test_ci_performance_monitor -v
 python3 tests/test_ci_performance_monitor_workflow.py
 
