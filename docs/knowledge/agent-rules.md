@@ -34,6 +34,7 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 ## Navegador e pesquisa técnica
 
 - Para tarefas ShopVivaliz, navegador de agente deve executar na VM de navegação. Não usar Opera Connector nem navegador dos hosts Windows como caminho operacional.
+- Para retomada de conversa ChatGPT interrompida, a rota canônica é `always-free-arm-1787907847-26` + `shopvivaliz-chatgpt-continuity.service` + CDP `127.0.0.1:9555`; o instalador Windows é legado/fallback, nunca o padrão operacional.
 - Em programação, infraestrutura, APIs, bibliotecas, frameworks, cloud, segurança e integrações externas, consultar a web quando versão/comportamento atual puder alterar a solução.
 - Priorizar documentação oficial, especificações, release notes/changelogs e repositórios oficiais; complementar com issues/fóruns técnicos apenas quando necessário e deixando claro o nível de autoridade da fonte.
 - Não assumir flags CLI, endpoints, modelos, parâmetros, limites, deprecações ou comportamento de SDK/API sem verificar quando isso for material à implementação.
