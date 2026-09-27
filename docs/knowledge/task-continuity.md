@@ -193,4 +193,61 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   ciclo. A tarefa continua `RUNNING` até progresso real ou terminal válido.
 - Nenhuma saída de provider, prompt ou segredo é publicada no ledger; somente
   metadados de execução e resultado.
+- O diagnóstico persistido em `_resume-executions.jsonl` (chave `diagnostic`)
+  é estritamente alocado por allowlist (`provider`, `provider_status`,
+  `provider_attempt_exit_code`, `background_gemini_error`,
+  `background_gemini_exit_code`, `background_paid_fallback_forbidden`,
+  `provider_output_bytes`, `provider_output_sha256`) — nunca prompt bruto,
+  stdout/stderr bruto, tokens ou segredos.
+- ACK de fila (`agent-operations-worker.py` reconhecendo um pedido
+  `auto_resume` para o painel/timeline interno) **não é execução**. O evento
+  correspondente usa `kind=auto-resume-queued`/`auto-resume-ack` e a mensagem
+  deixa explícito que aquilo não comprova execução real. Só a cadeia real
+  (watchdog → dispatcher → `autonomous-provider-failover.sh` → Gemini →
+  mudança material do checkpoint) é evidência.
 <!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
+
+<!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
+## Prova de ponta a ponta da retomada desacoplada em produção
+
+Policy: `DETACHED_TASK_RECOVERY_E2E_V7`.
+
+A V6 garante que existe um executor real. A V7 garante que ninguém pode
+certificar continuidade a partir de gates estáticos/ACK: exige prova real,
+correlacionada, de que o daemon já em execução na produção detecta, enfileira,
+executa e conclui uma tarefa sintética por conta própria.
+
+- `scripts/task_continuity_e2e.py` cria exatamente uma tarefa sintética
+  `RUNNING` (`continuity-e2e-<uuid>`) via `agent_task_state.py` e, a partir
+  daí, **somente observa** arquivos de estado/ledger em disco. É proibido o
+  probe importar ou chamar `task_continuation_watchdog`/
+  `task_resume_dispatcher` ou invocar diretamente qualquer `run_once`; toda
+  detecção/execução deve vir do daemon `shopvivaliz-agent.service` já
+  rodando no host de produção, no ciclo dele.
+- `next_action` da tarefa sintética usa apenas comandos já permitidos na
+  política headless do executor (`agent_task_state.py ready`/`complete`),
+  para que o resultado do probe nunca dependa de uma política de aprovação
+  de ferramenta não relacionada.
+- PASS exige, tudo correlacionado pelo mesmo `task_id`/`fingerprint`:
+  pedido em `_resume-requests.jsonl`; linha correspondente em
+  `_resume-executions.jsonl` com `result` igual a `progress` ou `terminal`
+  (nunca `no_progress`); `diagnostic.background_paid_fallback_forbidden`
+  igual a `true`; checkpoint final com `status=CONCLUIDO` e
+  `verification=continuity_e2e_pass`.
+- `.github/workflows/task-continuity-production-e2e.yml` roda manualmente
+  (`workflow_dispatch`) no runner `shopvivaliz-a1-deploy`, único lugar onde
+  o daemon real está ativo; não substitui os testes unitários do probe, que
+  correm no `Task Continuity Fast Gate` de forma isolada (com estado
+  fabricado, sem depender de produção).
+- **Distinção obrigatória, sempre explícita:** retomada desacoplada
+  (watchdog + dispatcher + Gemini continuando estado persistido) **não é**
+  reabertura da mesma conversa do aplicativo ChatGPT. Essa reabertura
+  (`ChatGPT session re-entry`) permanece **não implementada/indisponível**
+  pela VM. Nenhuma documentação pode sugerir que ChatGPT comum/Work é
+  programaticamente despertado por este mecanismo.
+- Falha do E2E (qualquer motivo: nenhum pedido observado, dispatcher não
+  executou, `no_progress`, checkpoint não terminal, verificação ausente,
+  só ACK do worker, `task_id` não correlacionado, evidência antiga) nunca é
+  motivo para declarar `NÃO APTO` e parar: é `RUNNING`. Levantar causa raiz,
+  TDD (RED → GREEN), commit/PR/merge/deploy, e repetir o E2E.
+<!-- /DETACHED_TASK_RECOVERY_E2E_V7 -->

@@ -42,6 +42,11 @@ FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
 DISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"
 DISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"
 LOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
+E2E_PROBE = ROOT / "scripts" / "task_continuity_e2e.py"
+E2E_PROBE_TEST = ROOT / "tests" / "test_task_continuity_e2e.py"
+E2E_WORKFLOW = ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+E2E_MARKER = "DETACHED_TASK_RECOVERY_E2E_V7"
+E2E_VERIFICATION = "continuity_e2e_pass"
 
 errors: list[str] = []
 for path in NORMATIVE:
@@ -152,8 +157,42 @@ if not DISPATCHER_TEST.is_file():
     errors.append("missing tests/test_task_resume_dispatcher.py")
 
 continuity_docs = ROOT / "docs" / "knowledge" / "task-continuity.md"
-if not continuity_docs.is_file() or DETACHED_MARKER not in continuity_docs.read_text(encoding="utf-8", errors="replace"):
-    errors.append(f"docs/knowledge/task-continuity.md: missing {DETACHED_MARKER}")
+if not continuity_docs.is_file():
+    errors.append("missing docs/knowledge/task-continuity.md")
+else:
+    continuity_docs_text = continuity_docs.read_text(encoding="utf-8", errors="replace")
+    if DETACHED_MARKER not in continuity_docs_text:
+        errors.append(f"docs/knowledge/task-continuity.md: missing {DETACHED_MARKER}")
+    if E2E_MARKER not in continuity_docs_text:
+        errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_MARKER}")
+    if E2E_VERIFICATION not in continuity_docs_text:
+        errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_VERIFICATION}")
+
+if not E2E_PROBE.is_file():
+    errors.append("missing scripts/task_continuity_e2e.py")
+else:
+    probe_text = E2E_PROBE.read_text(encoding="utf-8", errors="replace")
+    for token in (E2E_MARKER, E2E_VERIFICATION):
+        if token not in probe_text:
+            errors.append(f"scripts/task_continuity_e2e.py: missing {token}")
+    for forbidden in ("task_continuation_watchdog", "task_resume_dispatcher", "run_once("):
+        if forbidden in probe_text:
+            errors.append(f"scripts/task_continuity_e2e.py: must not reference {forbidden}")
+
+if not E2E_PROBE_TEST.is_file():
+    errors.append("missing tests/test_task_continuity_e2e.py")
+
+if not E2E_WORKFLOW.is_file():
+    errors.append("missing .github/workflows/task-continuity-production-e2e.yml")
+else:
+    e2e_workflow_text = E2E_WORKFLOW.read_text(encoding="utf-8", errors="replace")
+    for token in ("scripts/task_continuity_e2e.py", "shopvivaliz-a1-deploy"):
+        if token not in e2e_workflow_text:
+            errors.append(f".github/workflows/task-continuity-production-e2e.yml: missing {token}")
+
+audit_policy = ROOT / "AUDIT_POLICY.md"
+if not audit_policy.is_file() or E2E_VERIFICATION not in audit_policy.read_text(encoding="utf-8", errors="replace"):
+    errors.append(f"AUDIT_POLICY.md: missing {E2E_VERIFICATION}")
 
 if not LOOP.is_file():
     errors.append("missing scripts/autonomous-agent-loop.sh")

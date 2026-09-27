@@ -161,8 +161,12 @@ def enqueue_continuation_requests(runtime_state: dict[str, Any]) -> int:
         push_step(
             runtime_state,
             agent_id,
-            f"Checkpoint estagnado detectado; retomada automatica acionada para {task_id}: {next_action}",
-            kind="auto-resume",
+            (
+                f"Checkpoint estagnado detectado; pedido de retomada colocado na fila para {task_id}: "
+                f"{next_action}. Pedido enfileirado nao comprova execucao real; evidencia so vem da "
+                "cadeia watchdog -> dispatcher -> Gemini real."
+            ),
+            kind="auto-resume-queued",
             extra={"task_id": task_id, "request_id": request_id},
         )
         enqueued += 1
@@ -524,17 +528,31 @@ def process_supervisor_interventions(queue: dict[str, Any], runtime_state: dict[
             continue
         auto_resume = str(row.get("kind", "")).lower() == "auto-resume"
         if auto_resume:
-            push_step(runtime_state, agent_id, "Retomada automatica recebida do watchdog de continuidade", kind="auto-resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
+            push_step(
+                runtime_state,
+                agent_id,
+                (
+                    "Pedido de retomada automatica reconhecido (ACK da fila); isso nao comprova "
+                    "execucao real. Evidencia real so vem do dispatcher/Gemini."
+                ),
+                kind="auto-resume-ack",
+                extra={"command_id": row.get("id"), "task_id": row.get("task_id")},
+            )
         else:
             push_step(runtime_state, agent_id, "Pausado por Intervenção do Supervisor", kind="pause", extra={"command_id": row.get("id")})
-        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="auto-resume" if auto_resume else "supervisor", extra={"command_id": row.get("id")})
+        push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="auto-resume-ack" if auto_resume else "supervisor", extra={"command_id": row.get("id")})
         reply = build_agent_reply(agent_id, row, queue, supervisor_mode=not auto_resume)
         append_jsonl(INTERVENTION_RESPONSES_FILE, reply)
         if reply.get("status") == "docs_preflight_required":
             push_step(runtime_state, agent_id, "Intervenção registrada; agente deve ler docs antes de retomar qualquer alteração", kind="docs-preflight-required", extra={"command_id": row.get("id")})
         else:
-            message = "Retomando o trabalho real a partir do checkpoint" if auto_resume else "Retomando o trabalho real após intervenção humana"
-            push_step(runtime_state, agent_id, message, kind="resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
+            message = (
+                "ACK registrado; execucao real (se houver) ocorre fora deste worker, via "
+                "dispatcher/Gemini"
+                if auto_resume
+                else "Retomando o trabalho real após intervenção humana"
+            )
+            push_step(runtime_state, agent_id, message, kind="resume-ack" if auto_resume else "resume", extra={"command_id": row.get("id"), "task_id": row.get("task_id")})
         processed += 1
     return processed
 
