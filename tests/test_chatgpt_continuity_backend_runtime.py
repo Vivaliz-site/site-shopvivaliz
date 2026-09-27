@@ -81,6 +81,14 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", bridge)
         self.assertIn("bridge.token", bridge)
 
+    def test_docs_pin_chatgpt_session_reentry_to_backend_vm(self) -> None:
+        docs = (ROOT / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
+        rules = (ROOT / "docs" / "knowledge" / "agent-rules.md").read_text(encoding="utf-8")
+        self.assertIn("CHATGPT_SESSION_REENTRY_V10", docs)
+        self.assertIn("127.0.0.1:9555", docs)
+        self.assertIn("always-free-arm-1787907847-26", rules)
+        self.assertIn("shopvivaliz-chatgpt-continuity.service", rules)
+
 
 if __name__ == "__main__":
     unittest.main()
