@@ -98,6 +98,8 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "scripts" / "task_resume_dispatcher.py").read_text()
         self.assertIn('"repo",\n            "clone"', source)
         self.assertIn('project_dir / "scripts" / "autonomous-provider-failover.sh"', source)
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_STATE_CLI', source)
+        self.assertIn('project_dir / "scripts" / "agent_task_state.py"', source)
         self.assertNotIn("DEFAULT_REPOSITORY_URL", source)
 
         failover = (Path(__file__).resolve().parents[1] / "scripts" / "autonomous-provider-failover.sh").read_text()

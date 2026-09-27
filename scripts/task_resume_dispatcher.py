@@ -316,6 +316,7 @@ def _execute(
 
         env = os.environ.copy()
         env["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = str(runtime_dir)
+        env["SHOPVIVALIZ_CONTINUITY_STATE_CLI"] = str(project_dir / "scripts" / "agent_task_state.py")
         env["SHOPVIVALIZ_TASK_ID"] = task_id
         env["SHOPVIVALIZ_TASK_REPOSITORY"] = repository
         env["SHOPVIVALIZ_RESUME_STAGE"] = "cli_last"
