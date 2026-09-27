@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && trim(github.event.comment.body) == '/chatgpt-account-diag-v1')
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && github.event.comment.body == '/chatgpt-account-diag-v1')
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 15
     steps:
@@ -49,7 +49,8 @@ jobs:
           CHATGPT_ACCOUNT_DIAG_OUTPUT="$primary/diagnostic.json" \
             node scripts/chatgpt-account-diagnostic.mjs || diag_rc=$?
 
-          primary_blocker="$(jq -r '.blocker // empty' "$primary/diagnostic.json" 2>/dev/null || true)"
+          test -s "$primary/diagnostic.json"
+          primary_blocker="$(jq -r '.blocker // ""' "$primary/diagnostic.json")"
           selected="$primary"
 
           if [ "$diag_rc" -ne 0 ] && [ "$primary_blocker" = "composer_unavailable" ]; then
@@ -121,5 +122,5 @@ jobs:
             \${{ runner.temp }}/chatgpt-account-diagnostic/**/sanitized.har.json
             \${{ runner.temp }}/chatgpt-account-diagnostic/**/console-errors.json
             \${{ runner.temp }}/chatgpt-account-diagnostic/**/attempt-*.png
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
