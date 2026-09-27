@@ -105,6 +105,7 @@ def build_gemini_command(*, executable: str, model: str, prompt: str) -> list[st
         prompt,
     ]
 
+
 _FAILURE_CLASSIFIERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "approval_required",
