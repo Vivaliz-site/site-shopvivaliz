@@ -1,0 +1,39 @@
+name: Cancel Exact Stuck Browser Audit Once
+
+on:
+  push:
+    branches:
+      - ops/cancel-stuck-browser-audit-20260927
+    paths:
+      - '.github/workflows/cancel-exact-stuck-browser-audit-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_RUN_ID: "36347150669"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel exact blocking run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          repo="Vivaliz-site/site-shopvivaliz"
+          state="$(gh api "repos/$repo/actions/runs/$TARGET_RUN_ID" --jq '.status')"
+          echo "TARGET_STATUS_BEFORE=$state"
+          if [ "$state" = "in_progress" ] || [ "$state" = "queued" ] || [ "$state" = "waiting" ]; then
+            gh api --method POST "repos/$repo/actions/runs/$TARGET_RUN_ID/cancel" >/dev/null
+          fi
+          for _ in $(seq 1 30); do
+            state="$(gh api "repos/$repo/actions/runs/$TARGET_RUN_ID" --jq '.status')"
+            conclusion="$(gh api "repos/$repo/actions/runs/$TARGET_RUN_ID" --jq '.conclusion // ""')"
+            echo "TARGET_STATUS=$state conclusion=$conclusion"
+            [ "$state" = "completed" ] && exit 0
+            sleep 2
+          done
+          exit 1
