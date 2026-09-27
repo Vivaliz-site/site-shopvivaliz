@@ -149,9 +149,11 @@ Rules:
 - Use the authenticated repository tooling already available on the host when
   GitHub mutations are needed; do not expose credentials.
 - Before this process exits, durable state MUST reflect real progress:
-  * if finished and freshly verified, run agent_task_state.py ready then complete;
-  * if more work remains, run agent_task_state.py progress with a concrete
-    next_action and objective evidence;
+  * if finished and freshly verified, run:
+      python3 scripts/agent_task_state.py ready --task "$SHOPVIVALIZ_TASK_ID" --evidence "<objective evidence>" --verification "<fresh verification>"
+      python3 scripts/agent_task_state.py complete --task "$SHOPVIVALIZ_TASK_ID"
+  * if more work remains, run:
+      python3 scripts/agent_task_state.py progress --task "$SHOPVIVALIZ_TASK_ID" --next-action "<concrete next action>" --evidence "<objective evidence>"
   * use block only for a genuine external blocker after distinct safe
     alternatives were actually exhausted.
 - Do not update state merely to claim progress. Persist only work actually done.
