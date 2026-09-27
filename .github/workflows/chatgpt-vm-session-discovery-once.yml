@@ -95,6 +95,9 @@ jobs:
             fi
           done
 
+          echo "FREDCONSOLE_BROWSER_PROFILE_DISCOVERY"
+          sudo -n find /home/fredconsole -xdev -maxdepth 7 -type f \( -name Cookies -o -name "Local State" -o -name Preferences \) -printf '%p size=%s mtime=%T@\n' 2>/dev/null | sort | head -n 120 || true
+
           echo "PROFILE_METADATA"
           sudo -n python3 - <<'PY'
           import os, pwd, time
