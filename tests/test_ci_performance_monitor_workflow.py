@@ -19,9 +19,10 @@ required = [
     "timeout-minutes: 10",
     "group: ci-performance-monitor",
     "cancel-in-progress: true",
-    "date -u -d '24 hours ago'",
-    "gh api --paginate --slurp",
-    "actions/runs?created=>=${SINCE}&per_page=100",
+    "scripts/ci_performance_fetch.py",
+    "--repository \"$GITHUB_REPOSITORY\"",
+    "--window-hours 24",
+    "--slice-minutes 60",
     "scripts/ci_performance_monitor.py",
     "--window-hours 24",
     "--min-samples 3",
@@ -43,15 +44,15 @@ missing = [fragment for fragment in required if fragment not in text]
 if missing:
     raise SystemExit("CI performance monitor workflow contract missing: " + ", ".join(missing))
 
-if text.count("gh api --paginate --slurp") != 1:
-    raise SystemExit("monitor must fetch workflow runs exactly once per execution")
+if "gh api " in text:
+    raise SystemExit("workflow YAML must delegate Actions fetching to the bounded fetch helper")
 if "self-hosted" in text or "shopvivaliz-a1-deploy" in text or "shopvivaliz-backend-browser" in text:
     raise SystemExit("CI performance monitor must never reserve a self-hosted runner")
 if "sleep " in text:
     raise SystemExit("CI performance monitor must not poll or sleep")
-fetch_step = text.split("- name: Fetch workflow runs once", 1)[1].split("- name: Analyze CI performance", 1)[0]
-if "/jobs?per_page=" in fetch_step or "actions/runs/${" in fetch_step:
-    raise SystemExit("CI performance monitor must not issue per-run API requests")
+fetch_step = text.split("- name: Fetch complete workflow-run window", 1)[1].split("- name: Analyze CI performance", 1)[0]
+if "/jobs?per_page=" in fetch_step or "actions/runs/" in fetch_step:
+    raise SystemExit("workflow YAML must not issue per-run API requests")
 if "retention-days: 30" in text or "retention-days: 90" in text:
     raise SystemExit("CI performance artifact retention must match the repository's 1-day policy")
 
