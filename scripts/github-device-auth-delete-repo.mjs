@@ -82,8 +82,20 @@ if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) {
     page.setDefaultTimeout(12000);
 
     const gotoDevice = async () => {
-      await page.goto('https://github.com/login/device', { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1000);
+      let lastError = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          await page.goto('https://github.com/login/device', { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(1000);
+          return;
+        } catch (error) {
+          lastError = error;
+          const message = String(error?.message || error);
+          if (!/net::ERR_ABORTED/i.test(message) || attempt === 3) throw error;
+          await page.waitForTimeout(1200 * attempt);
+        }
+      }
+      throw lastError || new Error('device_navigation_failed');
     };
 
     await gotoDevice();
