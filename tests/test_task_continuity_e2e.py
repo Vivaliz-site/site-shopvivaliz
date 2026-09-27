@@ -37,6 +37,39 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("continuity_e2e_pass", next_action)
 
 
+class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
+    """Regression for a real production escape: the workflow pointed the probe at
+    a runtime dir that does not exist, silently falling back to the ephemeral
+    Actions checkout instead of the real daemon's state directory, so the
+    watchdog never saw the synthetic checkpoint (observed_request stayed False
+    for the full timeout budget)."""
+
+    def test_workflow_uses_the_exact_production_runtime_dir(self) -> None:
+        import sys
+
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import importlib
+
+        agent_task_state = importlib.import_module("agent_task_state")
+        expected = agent_task_state.resolve_runtime_dir(
+            Path("/home/ubuntu/shopvivaliz-deploy/releases/20260101-000000-deadbeef"),
+            "",
+        )
+        self.assertEqual(str(expected), "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+
+        workflow = (
+            ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(str(expected), workflow)
+        self.assertNotIn("shared/storage/agent-task-state", workflow)
+
+    def test_workflow_fails_closed_instead_of_silently_falling_back(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('|| runtime_dir="$PWD', workflow)
+
+
 class ProbeEvaluationTests(unittest.TestCase):
     def _base_observation(self) -> dict:
         return {
