@@ -118,10 +118,40 @@ jobs:
           test "$(hostname)" = "always-free-arm-1787907847-26"
           curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
 
+          history_src=/home/fredrdp/.config/shopvivaliz-chromium/Default/History
+          history_tmp=/tmp/chatgpt-freeze-continuity-history.sqlite
+          target_url=""
+          if sudo -n -u fredrdp test -f "$history_src"; then
+            sudo -n -u fredrdp cp "$history_src" "$history_tmp"
+            target_url="$(python3 - "$history_tmp" <<'PY'
+          import sqlite3,sys
+          db=sqlite3.connect(sys.argv[1])
+          row=db.execute("""
+            SELECT url
+            FROM urls
+            WHERE url LIKE 'https://chatgpt.com/c/%'
+              AND lower(title) LIKE '%chatgpt freeze continuity%'
+            ORDER BY last_visit_time DESC
+            LIMIT 1
+          """).fetchone()
+          print(row[0] if row else "")
+          db.close()
+          PY
+            )"
+            rm -f "$history_tmp"
+          fi
+          if [ -n "$target_url" ]; then
+            echo FREEZE_CONTINUITY_HISTORY_MATCH=true
+          else
+            echo FREEZE_CONTINUITY_HISTORY_MATCH=false
+          fi
+          export FREEZE_CONTINUITY_TARGET_URL="$target_url"
+
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
 
           const TARGET='ChatGPT Freeze Continuity';
+          const TARGET_URL=String(process.env.FREEZE_CONTINUITY_TARGET_URL||'').trim();
           const RESUME='Continue exatamente de onde parou na tarefa ChatGPT Freeze Continuity. Nao recomece do zero. Prossiga ate concluir ou ate existir um bloqueio externo real e comprovado.';
 
           const candidates=[
@@ -158,6 +188,12 @@ jobs:
           page.setDefaultTimeout(10000);
 
           let targetLocated=(await titleOf(page)).toLowerCase().includes(TARGET.toLowerCase());
+          if(!targetLocated && TARGET_URL){
+            await page.goto(TARGET_URL,{waitUntil:'domcontentloaded',timeout:45000});
+            await page.waitForTimeout(3000);
+            targetLocated=page.url().startsWith('https://chatgpt.com/c/') || (await titleOf(page)).toLowerCase().includes(TARGET.toLowerCase());
+            console.log('FREEZE_CONTINUITY_NAVIGATED_FROM_HISTORY='+String(targetLocated));
+          }
           if(!targetLocated && page.url().startsWith('https://chatgpt.com/')){
             const links=page.locator('a[href*="/c/"]');
             const count=await links.count().catch(()=>0);
