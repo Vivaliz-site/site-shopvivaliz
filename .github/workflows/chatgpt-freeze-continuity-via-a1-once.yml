@@ -122,7 +122,9 @@ jobs:
           history_tmp=/tmp/chatgpt-freeze-continuity-history.sqlite
           target_url=""
           if sudo -n -u fredrdp test -f "$history_src"; then
-            sudo -n -u fredrdp cp "$history_src" "$history_tmp"
+            sudo -n cp "$history_src" "$history_tmp"
+            sudo -n chown ubuntu:ubuntu "$history_tmp"
+            chmod 600 "$history_tmp"
             target_url="$(python3 - "$history_tmp" <<'PY'
           import sqlite3,sys
           db=sqlite3.connect(sys.argv[1])
