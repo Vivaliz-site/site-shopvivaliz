@@ -22,10 +22,11 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
-  || 'https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php';
+  || 'http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php';
+const BRIDGE_HOST_HEADER = process.env.CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER || 'shopvivaliz.com.br';
 const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
-  || 'C:\\ShopVivaliz\\chatgpt-continuity-bridge\\bridge.token';
-const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9223';
+  || '/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token';
+const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
@@ -48,6 +49,7 @@ async function bridge(operation, payload = {}) {
       'content-type': 'application/json',
       accept: 'application/json',
       'user-agent': 'ShopVivaliz-ChatgptContinuityBridge/1.0',
+      ...(BRIDGE_HOST_HEADER ? { Host: BRIDGE_HOST_HEADER } : {}),
     },
     body: JSON.stringify({ operation, ...payload }),
     signal: AbortSignal.timeout(20000),
