@@ -27,7 +27,10 @@ jobs:
               .name=="ChatGPT CDP Diagnostic via A1 Once" or
               .name=="ChatGPT Account Diagnostic Direct" or
               .name=="ChatGPT Account Diagnostic Bastion Once" or
-              .name=="ChatGPT Live Turn Probe Once"
+              .name=="ChatGPT Live Turn Probe Once" or
+              .name=="ChatGPT Browser Session Quarantine Once" or
+              .name=="ChatGPT Browser Session Quarantine via A1 Once" or
+              .name=="ChatGPT Browser Session Quarantine via OCI Once"
             )) | [.id,.name,.status] | @tsv' |
           while IFS=$'\t' read -r id name status; do
             [ -n "$id" ] || continue
