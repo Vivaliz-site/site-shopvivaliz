@@ -157,6 +157,8 @@ jobs:
           php tests/nondeploy-release-wait-cost-guard-test.php
 
       - name: Enforce Absolute Audit V5 bridge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/repository-governance-validate.sh absolute-audit
 
       - name: Self-test extreme audit governance
