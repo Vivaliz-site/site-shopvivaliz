@@ -50,7 +50,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           raw="$RUNNER_TEMP/codex-continuity-v7.raw"
-          prompt="$RUNNER_TEMP/codex-continuity-v7.prompt"
+          state_dir="$HOME/.local/state/shopvivaliz-codex-goals"
+          prompt="$state_dir/continuity-v7-handoff.md"
+          install -d -m 700 "$state_dir"
           gh api "repos/$GITHUB_REPOSITORY/issues/comments/$PROMPT_COMMENT" --jq '.body' > "$raw"
           chmod 600 "$raw"
           first="$(sed -n '1p' "$raw")"
@@ -144,8 +146,9 @@ jobs:
           PY
 
           cat > "$goal_file" <<'EOF'
-          /goal Finalize the ShopVivaliz task-continuity V7 work on PR #1867 to CONCLUIDO/APTO with fresh production evidence: merge the valid implementation, deploy the exact resulting main SHA through the canonical immutable-release pipeline, and prove a new autonomous production E2E where the watchdog and dispatcher act without manual invocation, real background Gemini advances the same correlated checkpoint to CONCLUIDO with verification=continuity_e2e_pass, the matching execution ledger has no no_progress, background_paid_fallback_forbidden=true remains true, executor diagnostics are sanitized, worker ACK is never accepted as execution evidence, and all applicable continuity/Extreme Audit gates pass. Preserve existing branch/worktree work and valid concurrent commits; use TDD and fault injection for new defects; never edit current/ or an active release; never expose secrets. After every failed attempt, inspect the evidence, choose the next safe corrective action, implement/test/merge/deploy again, and continue while a valid path remains. Do not mark the Goal complete on unit tests, RC=0, ACKs, stale evidence, or partial deployment. If and only if an external blocker remains after exhausting safe alternatives, record BLOCKED_EXTERNAL with objective evidence and an exact resume condition. Before terminal exit, post a sanitized comment on issue #1586 beginning CODEX_GOAL_CONTINUITY_V7_TERMINAL= and include status, PR #1867 state, main SHA, deployed release SHA, production E2E task_id, verification, and gate result without secrets.
+          /goal Finalize the ShopVivaliz task-continuity V7 work on PR #1867 to CONCLUIDO/APTO with fresh production evidence: merge the valid implementation, deploy the exact resulting main SHA through the canonical immutable-release pipeline, and prove a new autonomous production E2E where the watchdog and dispatcher act without manual invocation, real background Gemini advances the same correlated checkpoint to CONCLUIDO with verification=continuity_e2e_pass, the matching execution ledger has no no_progress, background_paid_fallback_forbidden=true remains true, executor diagnostics are sanitized, worker ACK is never accepted as execution evidence, and all applicable continuity/Extreme Audit gates pass. Preserve existing branch/worktree work and valid concurrent commits; use TDD and fault injection for new defects; never edit current/ or an active release; never expose secrets. After every failed attempt, inspect the evidence, choose the next safe corrective action, implement/test/merge/deploy again, and continue while a valid path remains. Do not mark the Goal complete on unit tests, RC=0, ACKs, stale evidence, or partial deployment. If and only if an external blocker remains after exhausting safe alternatives, record BLOCKED_EXTERNAL with objective evidence and an exact resume condition. Before terminal exit, remove the local handoff file, then post a sanitized comment on issue #1586 beginning CODEX_GOAL_CONTINUITY_V7_TERMINAL= and include status, PR #1867 state, main SHA, deployed release SHA, production E2E task_id, verification, and gate result without secrets.
           EOF
+          truncate -s -1 "$goal_file"
           chmod 600 "$goal_file"
 
           if tmux has-session -t "$session" 2>/dev/null; then
@@ -162,8 +165,8 @@ jobs:
           tmux send-keys -t "$session:0.0" Enter
           sleep 3
 
-          tmux load-buffer -b codex_prompt "$PROMPT_FILE"
-          tmux paste-buffer -b codex_prompt -t "$session:0.0"
+          instruction="Read and execute the complete authoritative handoff at $PROMPT_FILE now. Do not summarize it first; continue the existing branch/PR work from its checkpoint and obey the active Goal until terminal evidence exists."
+          tmux send-keys -t "$session:0.0" -l "$instruction"
           tmux send-keys -t "$session:0.0" Enter
           sleep 5
           tmux has-session -t "$session"
@@ -205,4 +208,4 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          rm -f -- "${PROMPT_FILE:-}" "$RUNNER_TEMP/codex-continuity-v7.goal" "$RUNNER_TEMP/codex-continuity-v7.raw"
+          rm -f -- "$RUNNER_TEMP/codex-continuity-v7.goal" "$RUNNER_TEMP/codex-continuity-v7.raw"
