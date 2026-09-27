@@ -1,0 +1,37 @@
+name: Cancel ChatGPT Run 36346999876 Once
+
+on:
+  push:
+    branches:
+      - diag/cancel-chatgpt-run-36346999876
+    paths:
+      - '.github/workflows/cancel-chatgpt-run-36346999876-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Cancel exact legacy diagnostic rerun
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          run_id=36346999876
+          state="$(gh api "repos/$REPO/actions/runs/$run_id" --jq '.status')"
+          echo "TARGET_RUN_STATUS_BEFORE=$state"
+          case "$state" in
+            queued|in_progress|pending)
+              gh api -X POST "repos/$REPO/actions/runs/$run_id/cancel" >/dev/null
+              echo "TARGET_RUN_CANCEL_REQUESTED=true"
+              ;;
+            *)
+              echo "TARGET_RUN_CANCEL_REQUESTED=false"
+              ;;
+          esac
