@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 const ATTEMPTS = 3;
 const PROMPT = 'Responda apenas: TESTE-OK';
@@ -7,6 +8,10 @@ const BROWSER_WORKER_URL = 'http://127.0.0.1:17777';
 const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';
 const CANONICAL_BROWSER = '/home/ubuntu/.local/bin/shopvivaliz-browser-chromium';
 const OUTPUT = process.env.CHATGPT_ACCOUNT_DIAG_OUTPUT || '/tmp/chatgpt-account-diagnostic.json';
+const OUTPUT_DIR = process.env.CHATGPT_ACCOUNT_DIAG_DIR || path.dirname(OUTPUT);
+const HAR_OUTPUT = path.join(OUTPUT_DIR, 'sanitized.har.json');
+const CONSOLE_OUTPUT = path.join(OUTPUT_DIR, 'console-errors.json');
+fs.mkdirSync(OUTPUT_DIR, { recursive: true, mode: 0o700 });
 const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();
 const forcedRoute = String(process.env.CHATGPT_ACCOUNT_BROWSER_ROUTE || '').trim();
 const playwrightCandidates = [
@@ -37,6 +42,15 @@ function safePath(raw) {
   } catch {
     return 'invalid-url';
   }
+}
+
+function sanitizeConsoleText(raw) {
+  return String(raw || '')
+    .replace(/https?:\/\/[^\s"'<>]+/gi, value => safePath(value))
+    .replace(/[A-Za-z0-9_-]{48,}/g, '[REDACTED_LONG_TOKEN]')
+    .replace(/[A-Fa-f0-9]{40,}/g, '[REDACTED_HEX]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[REDACTED_EMAIL]')
+    .slice(0, 1000);
 }
 
 function allowedHost(raw) {
@@ -188,6 +202,8 @@ const result = {
   model_label: '',
   attempts: [],
   network: [],
+  websockets: [],
+  console_errors: [],
   console_error_count: 0,
   page_error_count: 0,
   request_failure_count: 0,
@@ -195,8 +211,55 @@ const result = {
   ok: false,
 };
 
+function persistSupportArtifacts() {
+  const harEntries = result.network
+    .filter(item => item.kind === 'response')
+    .map(item => ({
+      startedDateTime: item.at,
+      time: 0,
+      request: {
+        method: item.method,
+        url: item.path,
+        httpVersion: '',
+        headers: [],
+        queryString: [],
+        cookies: [],
+        headersSize: -1,
+        bodySize: -1,
+      },
+      response: {
+        status: item.status,
+        statusText: '',
+        httpVersion: '',
+        headers: [
+          ['x-oai-request-id', item.request_id],
+          ['x-oai-turn-trace-id', item.turn_trace_id],
+          ['cf-ray', item.cf_ray],
+          ['date', item.response_date],
+        ].filter(([, value]) => Boolean(value)).map(([name, value]) => ({ name, value })),
+        cookies: [],
+        content: { size: 0, mimeType: '' },
+        redirectURL: '',
+        headersSize: -1,
+        bodySize: -1,
+      },
+      cache: {},
+      timings: { send: 0, wait: 0, receive: 0 },
+    }));
+  fs.writeFileSync(HAR_OUTPUT, JSON.stringify({
+    log: {
+      version: '1.2',
+      creator: { name: 'shopvivaliz-chatgpt-account-diagnostic', version: '1' },
+      pages: [],
+      entries: harEntries,
+    },
+  }, null, 2) + '\n', { mode: 0o600 });
+  fs.writeFileSync(CONSOLE_OUTPUT, JSON.stringify(result.console_errors, null, 2) + '\n', { mode: 0o600 });
+}
+
 function persist() {
   fs.writeFileSync(OUTPUT, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
+  persistSupportArtifacts();
 }
 
 let page;
@@ -329,10 +392,24 @@ try {
   page.setDefaultTimeout(15000);
 
   page.on('console', message => {
-    if (message.type() === 'error') result.console_error_count += 1;
+    if (message.type() !== 'error') return;
+    result.console_error_count += 1;
+    if (result.console_errors.length < 100) {
+      result.console_errors.push({ at: nowIso(), kind: 'console', text: sanitizeConsoleText(message.text()) });
+    }
   });
-  page.on('pageerror', () => {
+  page.on('pageerror', error => {
     result.page_error_count += 1;
+    if (result.console_errors.length < 100) {
+      result.console_errors.push({ at: nowIso(), kind: 'pageerror', text: sanitizeConsoleText(error?.message || error) });
+    }
+  });
+  page.on('websocket', socket => {
+    if (!allowedHost(socket.url())) return;
+    const entry = { at: nowIso(), url: safePath(socket.url()), closed_at: '', error: '' };
+    result.websockets.push(entry);
+    socket.on('close', () => { entry.closed_at = nowIso(); });
+    socket.on('socketerror', error => { entry.error = sanitizeConsoleText(error); });
   });
   page.on('requestfailed', request => {
     if (!allowedHost(request.url())) return;
@@ -361,10 +438,10 @@ try {
       method: response.request().method(),
       path,
       status,
-      has_oai_request_id: Boolean(headers['x-oai-request-id'] || headers['x-request-id']),
-      has_turn_trace_id: Boolean(headers['x-oai-turn-trace-id']),
-      has_cf_ray: Boolean(headers['cf-ray']),
-      has_response_date: Boolean(headers['date']),
+      request_id: headers['x-oai-request-id'] || headers['x-request-id'] || '',
+      turn_trace_id: headers['x-oai-turn-trace-id'] || '',
+      cf_ray: headers['cf-ray'] || '',
+      response_date: headers['date'] || '',
     });
   });
 
@@ -429,6 +506,12 @@ try {
       }
     }
 
+    const screenshotFile = path.join(OUTPUT_DIR, `attempt-${attempt}.png`);
+    const mainSurface = page.locator('main').first();
+    if (await mainSurface.isVisible().catch(() => false)) {
+      await mainSurface.screenshot({ path: screenshotFile }).catch(() => {});
+    }
+
     result.attempts.push({
       attempt,
       started_at: startedAt,
@@ -441,6 +524,7 @@ try {
       console_errors: result.console_error_count - consoleStart,
       page_errors: result.page_error_count - pageErrorStart,
       request_failures: result.request_failure_count - requestFailureStart,
+      screenshot_file: fs.existsSync(screenshotFile) ? path.basename(screenshotFile) : '',
     });
   }
 
@@ -467,6 +551,18 @@ try {
     request_failure_count: result.request_failure_count,
     console_error_count: result.console_error_count,
     page_error_count: result.page_error_count,
+    websocket_count: result.websockets.length,
+    safe_request_ids: result.network
+      .filter(x => x.kind === 'response' && (x.request_id || x.turn_trace_id || x.cf_ray))
+      .slice(-20)
+      .map(x => ({
+        path: x.path,
+        status: x.status,
+        request_id: x.request_id,
+        turn_trace_id: x.turn_trace_id,
+        cf_ray: x.cf_ray,
+        response_date: x.response_date,
+      })),
     blocker: result.blocker,
     ok: result.ok,
   };
