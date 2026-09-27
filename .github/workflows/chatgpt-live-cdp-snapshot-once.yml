@@ -43,6 +43,13 @@ jobs:
             const pages=contexts[ci].pages();
             for(let pi=0;pi<pages.length;pi++){
               const page=pages[pi];
+              if (pi===0) {
+                try {
+                  await page.goto('https://chatgpt.com/', {waitUntil:'domcontentloaded', timeout:45000});
+                  await page.waitForTimeout(5000);
+                } catch {}
+              }
+              const cookieCount=(await contexts[ci].cookies('https://chatgpt.com')).length;
               const state=await page.evaluate(()=>{
                 const body=String(document.body?.innerText||'').toLowerCase();
                 const buttons=Array.from(document.querySelectorAll('button'));
@@ -67,7 +74,7 @@ jobs:
                 u.pathname=u.pathname.replace(/\/c\/[^/]+/g,'/c/:id');
                 url=u.origin+u.pathname;
               }catch{}
-              out.push({context:ci,page:pi,url,...state});
+              out.push({context:ci,page:pi,url,cookie_count:cookieCount,...state});
             }
           }
           console.log('CHATGPT_LIVE_CDP_SNAPSHOT='+JSON.stringify(out));
