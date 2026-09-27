@@ -1,0 +1,103 @@
+name: Runtime Continuity Probe Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/runtime-continuity-probe-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 5
+    steps:
+      - name: Probe sanitized continuity runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          systemctl is-active shopvivaliz-agent.service || true
+          readlink -f /home/ubuntu/shopvivaliz-deploy/current || true
+          pid="$(systemctl show -p MainPID --value shopvivaliz-agent.service 2>/dev/null || true)"
+          if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+            sudo -n python3 - "$pid" <<'PY'
+          import os,sys
+          pid=sys.argv[1]
+          try:
+              raw=open(f"/proc/{pid}/environ","rb").read().split(b"\0")
+              env={x.split(b"=",1)[0].decode("utf-8","replace") for x in raw if b"=" in x}
+          except Exception:
+              env=set()
+          print("AGENT_TOKEN_PRESENT=" + str("CHATGPT_CONTINUITY_BRIDGE_TOKEN" in env).lower())
+          print("AGENT_TASK_STATE_DIR_PRESENT=" + str("SHOPVIVALIZ_AGENT_TASK_STATE_DIR" in env).lower())
+          PY
+          else
+            echo "AGENT_TOKEN_PRESENT=false"
+            echo "AGENT_TASK_STATE_DIR_PRESENT=false"
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          roots=[
+              Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
+              Path("/home/ubuntu/shopvivaliz-deploy/current/storage/private/agent-task-state"),
+          ]
+          task_ids={"global-continuity-cleanup-20260927","chatgpt-freeze-root-cause-20260927"}
+          seen=set()
+          for root in roots:
+              if not root.is_dir():
+                  continue
+              print("RUNTIME_DIR="+str(root))
+              for task_id in sorted(task_ids):
+                  p=root/(task_id+".json")
+                  if not p.is_file():
+                      continue
+                  try:
+                      d=json.loads(p.read_text(encoding="utf-8"))
+                  except Exception:
+                      continue
+                  print("TASK "+json.dumps({
+                      "task_id":task_id,
+                      "status":d.get("status"),
+                      "updated_at":d.get("updated_at"),
+                      "repository":d.get("repository"),
+                      "next_action":str(d.get("next_action") or "")[:240],
+                  },ensure_ascii=False,sort_keys=True))
+                  seen.add(task_id)
+              ledger=root/"_chatgpt-continuity-nudges.jsonl"
+              if ledger.is_file():
+                  for line in ledger.read_text(encoding="utf-8",errors="replace").splitlines()[-80:]:
+                      try:
+                          d=json.loads(line)
+                      except Exception:
+                          continue
+                      if d.get("task_id") in task_ids:
+                          print("NUDGE "+json.dumps({
+                              "task_id":d.get("task_id"),
+                              "dispatched_at":d.get("dispatched_at"),
+                              "bridge_ok":d.get("bridge_ok"),
+                              "http_status":d.get("http_status"),
+                          },sort_keys=True))
+              req=root/"_resume-requests.jsonl"
+              if req.is_file():
+                  for line in req.read_text(encoding="utf-8",errors="replace").splitlines()[-120:]:
+                      try:
+                          d=json.loads(line)
+                      except Exception:
+                          continue
+                      if d.get("task_id") in task_ids:
+                          print("RESUME "+json.dumps({
+                              "task_id":d.get("task_id"),
+                              "status":d.get("status"),
+                              "preferred_executor":d.get("preferred_executor"),
+                              "requested_at":d.get("requested_at"),
+                          },sort_keys=True))
+          print("TASKS_FOUND="+",".join(sorted(seen)))
+          PY
+          journalctl -u shopvivaliz-agent.service --since '2026-09-27 20:00:00 UTC' --no-pager 2>/dev/null             | grep -E 'ChatGPT continuity nudge|task_continuation|resume dispatcher|WARN'             | tail -n 120 || true
