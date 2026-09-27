@@ -191,3 +191,27 @@ jobs:
           else
             echo "BLOCKING_AUDIT_CANCEL_REQUESTED=false"
           fi
+
+
+  cancel-obsolete-diagnostic-runs:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel only superseded diagnostics from this PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for run_id in 36359118113 36359387959 36359426478 36359513057 36359657675; do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id" --jq .status)"
+            echo "OBSOLETE_DIAG_RUN=$run_id STATUS=$status"
+            case "$status" in
+              queued|in_progress|waiting|requested|pending)
+                gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/force-cancel" >/dev/null 2>&1                   || gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/cancel" >/dev/null 2>&1                   || true
+                echo "OBSOLETE_DIAG_CANCEL_REQUESTED=$run_id"
+                ;;
+            esac
+          done
