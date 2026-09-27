@@ -164,6 +164,15 @@ jobs:
           bash -n scripts/install-amazon-returns-service.sh
           python3 tests/test_merge_runtime_credential_scope.py
           python3 tests/test_merge_runtime_credential_union.py
+      - name: Bridge de continuidade do ChatGPT
+        run: |
+          set -Eeuo pipefail
+          for test in tests/chatgpt-continuity-*.php; do php "$test"; done
+          node --check scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+          node tests/chatgpt-continuity-bridge-worker-test.mjs
+      - name: Sintaxe do instalador Windows do bridge do ChatGPT
+        shell: pwsh
+        run: $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw scripts/install-chatgpt-continuity-windows-bridge.ps1), [ref]$null)
       - name: Guarda do carrossel automatico de imagens
         run: php scripts/quality/validate-auto-image-carousel.php
       - name: Referencia oficial do site (rotas de navigation ao vivo)
