@@ -1,0 +1,116 @@
+name: ChatGPT VM Session Discovery Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-vm-session-discovery-20260927
+    paths:
+      - '.github/workflows/chatgpt-vm-session-discovery-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Discover safe browser session metadata
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          echo "DISK"
+          df -h /
+
+          echo "BROWSER_WORKER_HEALTH"
+          curl -fsS http://127.0.0.1:17777/health | jq '{ok,endpoint,browser_path_exists}'
+
+          echo "LOGIN_SESSIONS"
+          loginctl list-sessions --no-legend 2>/dev/null || true
+          while read -r sid _; do
+            [ -n "$sid" ] || continue
+            loginctl show-session "$sid" -p Id -p Name -p User -p Type -p Class -p State -p Remote -p Display -p Leader 2>/dev/null || true
+          done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
+
+          echo "BROWSER_PROCESSES_SAFE"
+          sudo -n python3 - <<'PY'
+          import os, pwd, re
+          for item in os.listdir('/proc'):
+              if not item.isdigit():
+                  continue
+              try:
+                  raw=open(f'/proc/{item}/cmdline','rb').read().split(b'\0')
+                  args=[x.decode('utf-8','replace') for x in raw if x]
+                  if not args:
+                      continue
+                  exe=os.path.basename(args[0]).lower()
+                  if 'chrom' not in exe and 'chrome' not in exe:
+                      continue
+                  st=os.stat(f'/proc/{item}')
+                  user=pwd.getpwuid(st.st_uid).pw_name
+                  def arg(prefix):
+                      for a in args:
+                          if a.startswith(prefix):
+                              return a.split('=',1)[1] if '=' in a else 'true'
+                      return ''
+                  print(f'pid={item} user={user} exe={exe} user_data_dir={arg("--user-data-dir=")} profile_directory={arg("--profile-directory=")} remote_debugging_port={arg("--remote-debugging-port=")}')
+              except Exception:
+                  pass
+          PY
+
+          echo "FREDRDP_SESSION_ENV_SAFE"
+          fred_uid="$(id -u fredrdp 2>/dev/null || true)"
+          if [ -n "$fred_uid" ]; then
+            leader=""
+            while read -r sid uid user seat tty; do
+              if [ "$user" = fredrdp ]; then
+                leader="$(loginctl show-session "$sid" -p Leader --value 2>/dev/null || true)"
+                [ -n "$leader" ] && break
+              fi
+            done < <(loginctl list-sessions --no-legend 2>/dev/null || true)
+            if [ -n "$leader" ] && [ -r "/proc/$leader/environ" ]; then
+              sudo -n python3 - "$leader" <<'PY'
+          import sys
+          pid=sys.argv[1]
+          allow={'DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','WAYLAND_DISPLAY','XDG_RUNTIME_DIR','XDG_SESSION_TYPE'}
+          raw=open(f'/proc/{pid}/environ','rb').read().split(b'\0')
+          for entry in raw:
+              if b'=' not in entry:
+                  continue
+              k,v=entry.split(b'=',1)
+              key=k.decode('utf-8','replace')
+              if key in allow:
+                  print(f'{key}={v.decode("utf-8","replace")}')
+          PY
+            fi
+            test -S "/run/user/$fred_uid/bus" && echo "FREDRDP_DBUS_SOCKET=present" || echo "FREDRDP_DBUS_SOCKET=absent"
+          fi
+
+          echo "PROFILE_METADATA"
+          sudo -n python3 - <<'PY'
+          import os, pwd, time
+          candidates=[
+            '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt',
+            '/home/ubuntu/.config/chromium',
+            '/home/ubuntu/.config/google-chrome',
+            '/home/fredrdp/.config/shopvivaliz-chromium',
+            '/home/fredrdp/.config/chromium',
+            '/home/fredrdp/.config/google-chrome',
+          ]
+          for p in candidates:
+              try:
+                  st=os.stat(p)
+              except FileNotFoundError:
+                  continue
+              owner=pwd.getpwuid(st.st_uid).pw_name
+              markers=[]
+              for rel in ['Local State','Default','Default/Cookies','Default/Network/Cookies','Default/Preferences']:
+                  q=os.path.join(p,rel)
+                  if os.path.exists(q):
+                      s=os.stat(q)
+                      markers.append(f'{rel}:mtime={int(s.st_mtime)}:size={s.st_size}')
+              print(f'profile={p} owner={owner} mtime={int(st.st_mtime)} markers={"|".join(markers)}')
+          PY
