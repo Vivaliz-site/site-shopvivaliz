@@ -8,7 +8,8 @@ config_root='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity'
 worker="$install_root/chatgpt-continuity-bridge-worker.mjs"
 token_file='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
 cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9555}"
-bridge_endpoint="${CHATGPT_CONTINUITY_BRIDGE_ENDPOINT:-https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php}"
+bridge_endpoint="${CHATGPT_CONTINUITY_BRIDGE_ENDPOINT:-http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php}"
+bridge_host_header="${CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER:-shopvivaliz.com.br}"
 poll_ms="${CHATGPT_CONTINUITY_POLL_MS:-15000}"
 
 fail() {
@@ -44,6 +45,7 @@ Type=simple
 WorkingDirectory=$install_root
 Environment=CHATGPT_CONTINUITY_BRIDGE_ENDPOINT=$bridge_endpoint
 Environment=CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=$token_file
+Environment=CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=$bridge_host_header
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
@@ -71,6 +73,7 @@ curl -fsS --connect-timeout 3 --max-time 5 "$cdp_url/json/version" >/dev/null   
 # same bridge secret without exposing the value in logs.
 heartbeat="$(curl -fsS --connect-timeout 5 --max-time 15 \
   -H "Authorization: Bearer $(cat "$token_file")" \
+  -H "Host: $bridge_host_header" \
   -H 'Content-Type: application/json' \
   --data '{"operation":"heartbeat"}' \
   "$bridge_endpoint")"
