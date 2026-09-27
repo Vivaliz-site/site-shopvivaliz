@@ -381,9 +381,9 @@ jobs:
                     "${SSH[@]}" "set -Eeuo pipefail
                       shared='$shared_browser'
                       if ! sudo -n -u fredrdp test -x \"\$shared\"; then
-                        source=$(readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium)
-                        test -x \"\$source\"
-                        src_dir=$(dirname \"\$source\")
+                        source='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome'
+                        test -x "$source"
+                        src_dir='/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux'
                         sudo -n install -d -m 0755 /opt/shopvivaliz-browser
                         sudo -n rm -rf /opt/shopvivaliz-browser/chrome-linux.new
                         sudo -n cp -a --reflink=auto \"\$src_dir\" /opt/shopvivaliz-browser/chrome-linux.new
