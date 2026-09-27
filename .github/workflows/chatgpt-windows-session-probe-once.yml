@@ -1,0 +1,92 @@
+name: ChatGPT Windows Session Probe Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/chatgpt-windows-session-probe-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-windows-session-probe-once
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"; test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Probe Fred-Win and KOCEPSV safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+          command_ps='powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='"'"'Stop'"'"'; $task=Get-ScheduledTask -TaskName '"'"'ShopVivaliz ChatGPT Continuity Bridge'"'"' -ErrorAction SilentlyContinue; $taskExists=[bool]$task; $taskState=if($task){[string]$task.State}else{'"'"'Absent'"'"'}; $listener=(Get-NetTCPConnection -State Listen -LocalPort 9223 -ErrorAction SilentlyContinue | Measure-Object).Count; $proc=(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -match '"'"'remote-debugging-port=9223|chatgpt-continuity-bridge-worker'"'"' } | Measure-Object).Count; Write-Output ('"'"'CHATGPT_CONTINUITY_TASK_EXISTS='"'"'+$taskExists); Write-Output ('"'"'CHATGPT_CONTINUITY_TASK_STATE='"'"'+$taskState); Write-Output ('"'"'CHATGPT_CDP_9223_LISTENERS='"'"'+$listener); Write-Output ('"'"'CHATGPT_CONTINUITY_PROCESSES='"'"'+$proc)"'
+          cmd_b64="$(printf '%s' "$command_ps" | base64 -w0)"
+
+          probe_one() {
+            local label="$1" port="$2" expected="$3"
+            echo "PROBE_HOST=$label"
+            "${SSH[@]}" "REMOTE_CMD_B64='$cmd_b64' REMOTE_PORT='$port' EXPECTED_ENV='$expected' python3 -" <<'PY'
+          import base64, json, os, urllib.request
+          port=os.environ["REMOTE_PORT"]
+          expected=os.environ["EXPECTED_ENV"]
+          with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=10) as r:
+              health=json.loads(r.read().decode("utf-8"))
+          print("RELAY_STATUS="+str(health.get("status","")))
+          print("RELAY_ENVIRONMENT="+str(health.get("environment","")))
+          if health.get("status")!="ok" or health.get("environment")!=expected:
+              raise SystemExit(2)
+          command=base64.b64decode(os.environ["REMOTE_CMD_B64"]).decode("utf-8")
+          req=urllib.request.Request(
+              f"http://127.0.0.1:{port}/mcp/tool/execute_command",
+              data=json.dumps({"params":{"command":command,"timeout":60}}).encode("utf-8"),
+              headers={"Content-Type":"application/json"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=70) as r:
+                  payload=json.loads(r.read().decode("utf-8"))
+          except Exception as exc:
+              print("EXEC_TRANSPORT_ERROR="+type(exc).__name__)
+              raise
+          result=payload.get("result") or {}
+          output=str(result.get("output") or "")
+          safe=[]
+          for line in output.splitlines():
+              if line.startswith(("CHATGPT_CONTINUITY_TASK_EXISTS=","CHATGPT_CONTINUITY_TASK_STATE=","CHATGPT_CDP_9223_LISTENERS=","CHATGPT_CONTINUITY_PROCESSES=")):
+                  safe.append(line)
+          for line in safe:
+              print(line)
+          print("EXEC_SUCCESS="+str(result.get("success")).lower())
+          print("EXEC_EXIT_CODE="+str(result.get("exit_code","")))
+          err=str(result.get("error") or payload.get("error") or "").replace("\n"," ")[:240]
+          if err:
+              print("EXEC_ERROR="+err)
+          PY
+          }
+
+          probe_one FRED 5557 fred-win
+          probe_one KOCEPSV 5558 desktop-kocepsv
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
