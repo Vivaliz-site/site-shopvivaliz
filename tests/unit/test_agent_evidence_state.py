@@ -44,6 +44,44 @@ class QueueEvidenceTests(unittest.TestCase):
             self.assertIn(root / ".github/workflows/agents-hourly-deep-audit.yml", paths)
             self.assertIn(root / ".github/workflows/repository-governance.yml", paths)
 
+    def test_accepts_canonical_verification_without_legacy_evidence(self):
+        task = {
+            "id": "V-2",
+            "status": "completed_verified",
+            "completed_at": "2026-09-27T00:36:33Z",
+            "last_result": {"success": True},
+            "verification": {
+                "run_id": "run-1",
+                "commit_sha": "1" * 40,
+                "pull_request": "#1861",
+                "artifact_digest": "sha256:abc",
+                "verified_at": "2026-09-27T00:36:33Z",
+                "tests_passed": True,
+                "read_back_verified": True,
+            },
+        }
+        errors, _ = HEALTH.validate_queue({"tasks": [task]})
+        self.assertEqual(errors, [])
+
+    def test_rejects_incomplete_canonical_verification_without_legacy_evidence(self):
+        task = {
+            "id": "V-3",
+            "status": "completed_verified",
+            "completed_at": "2026-09-27T00:36:33Z",
+            "last_result": {"success": True},
+            "verification": {
+                "run_id": "run-2",
+                "commit_sha": "2" * 40,
+                "pull_request": "#1862",
+                "artifact_digest": "sha256:def",
+                "verified_at": "2026-09-27T00:36:33Z",
+                "tests_passed": False,
+                "read_back_verified": True,
+            },
+        }
+        errors, _ = HEALTH.validate_queue({"tasks": [task]})
+        self.assertTrue(any("lacks evidence fields" in error for error in errors))
+
     def test_accepts_failed_and_blocked_without_completion(self):
         payload = {
             "tasks": [
