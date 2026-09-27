@@ -5,6 +5,7 @@ import {
   errorBannerPresent,
   attemptNudge,
   reinforcementCheckOnce,
+  selectChatgptTab,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -47,6 +48,27 @@ async function run() {
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
+
+  // A continuity worker must never guess when multiple conversations are
+  // available. A tab with an explicit interruption is authoritative; absent
+  // that signal, exactly one conversation tab is required.
+  {
+    const tabs = [
+      { id: 'a', type: 'page', url: 'https://chatgpt.com/c/a', title: 'A', text: 'normal reply' },
+      { id: 'b', type: 'page', url: 'https://chatgpt.com/c/b', title: 'B', text: 'Transmissão interrompida. Aguardando a mensagem completa...' },
+    ];
+    assert.equal(selectChatgptTab(tabs)?.id, 'b', 'explicit interruption must identify the target tab');
+    assert.equal(selectChatgptTab([{ id: 'only', type: 'page', url: 'https://chatgpt.com/c/only', title: 'Only', text: '' }])?.id, 'only');
+    assert.equal(
+      selectChatgptTab([
+        { id: 'a', type: 'page', url: 'https://chatgpt.com/c/a', title: 'A', text: 'normal' },
+        { id: 'b', type: 'page', url: 'https://chatgpt.com/c/b', title: 'B', text: 'normal' },
+      ]),
+      null,
+      'multiple clean conversations must be treated as ambiguous instead of choosing the first tab',
+    );
+  }
+  console.log('selectChatgptTab ambiguity guard: PASS');
 
   // attemptNudge branches, driven entirely through the injected connect().
   const generating = await attemptNudge('task-1', async () => fakeCdp({ generating: true }));
