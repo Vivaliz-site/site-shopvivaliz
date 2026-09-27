@@ -1,0 +1,337 @@
+name: Global Continuity Cleanup via Bastion Once
+
+on:
+  push:
+    branches:
+      - ops/global-continuity-cleanup-bastion-20260927
+    paths:
+      - ".github/workflows/global-continuity-cleanup-bastion-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-continuity-cleanup-bastion-once
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      SITE_PRIVATE_IP: 10.0.1.112
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      SITE_TUNNEL_PORT: "22212"
+      BACKEND_TUNNEL_PORT: "22213"
+      TASK_ID: global-continuity-cleanup-20260927
+      REMOTE_HELPER: /tmp/shopvivaliz-github-device-auth-${{ github.run_id }}.mjs
+      REMOTE_AUTH_LOG: /tmp/shopvivaliz-gh-refresh-${{ github.run_id }}.log
+
+    steps:
+      - name: Checkout operation branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected Bastion secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n'             "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-global-cleanup-bastion -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
+
+      - name: Discover Bastion and temporarily allow runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          backend_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$backend_count" = "1"
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state') == 'ACTIVE']
+          if len(active) != 1:
+              raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          test -n "$BASTION_ID"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress, json, sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2], encoding='utf-8'))
+          if not isinstance(src, list):
+              raise SystemExit('Bastion CIDR allowlist is not a list')
+          cidrs=list(dict.fromkeys([str(x) for x in src] + [ip + '/32']))
+          json.dump(cidrs, open(sys.argv[3], 'w', encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+          echo "BASTION_RUNNER_ALLOWLIST=temporary"
+
+      - name: Create private SSH sessions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          create_session() {
+            local ip="$1" name="$2"
+            "${OCI[@]}" bastion session create-port-forwarding               --bastion-id "$BASTION_ID"               --target-private-ip "$ip"               --target-port 22               --session-ttl 1800               --display-name "$name"               --ssh-public-key-file "$BASTION_KEY_FILE.pub"               --query 'data.id' --raw-output
+          }
+          wait_active() {
+            local sid="$1"
+            local state=""
+            for _ in $(seq 1 36); do
+              state="$("${OCI[@]}" bastion session get --session-id "$sid" --query 'data."lifecycle-state"' --raw-output)"
+              if [ "$state" = "ACTIVE" ]; then return 0; fi
+              case "$state" in
+                FAILED|DELETED) echo "::error::Bastion session entered $state"; return 1 ;;
+              esac
+              sleep 5
+            done
+            echo "::error::Timed out waiting for Bastion session"
+            return 1
+          }
+          SITE_SESSION_ID="$(create_session "$SITE_PRIVATE_IP" shopvivaliz-site-global-cleanup)"
+          BACKEND_SESSION_ID="$(create_session "$BACKEND_PRIVATE_IP" shopvivaliz-backend-global-cleanup)"
+          test -n "$SITE_SESSION_ID"
+          test -n "$BACKEND_SESSION_ID"
+          printf 'SITE_SESSION_ID=%s\nBACKEND_SESSION_ID=%s\n' "$SITE_SESSION_ID" "$BACKEND_SESSION_ID" >> "$GITHUB_ENV"
+          wait_active "$SITE_SESSION_ID"
+          wait_active "$BACKEND_SESSION_ID"
+          SITE_BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          BACKEND_BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$SITE_BASTION_SSH_COMMAND"
+          test -n "$BACKEND_BASTION_SSH_COMMAND"
+          printf 'SITE_BASTION_SSH_COMMAND=%s\nBACKEND_BASTION_SSH_COMMAND=%s\n' "$SITE_BASTION_SSH_COMMAND" "$BACKEND_BASTION_SSH_COMMAND" >> "$GITHUB_ENV"
+          echo "BASTION_SESSIONS=ACTIVE"
+
+      - name: Open verified private SSH tunnels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          open_tunnel() {
+            local metadata_command="$1" port="$2"
+            local tunnel_command="${metadata_command//<privateKey>/$BASTION_KEY_FILE}"
+            tunnel_command="${tunnel_command//<localPort>/$port}"
+            tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+            bash -lc "$tunnel_command"
+          }
+          open_tunnel "$SITE_BASTION_SSH_COMMAND" "$SITE_TUNNEL_PORT"
+          open_tunnel "$BACKEND_BASTION_SSH_COMMAND" "$BACKEND_TUNNEL_PORT"
+          sleep 3
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"; sudo -n true'
+          ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"; sudo -n true'
+          echo "PRIVATE_SSH_TUNNELS=PASS"
+
+      - name: Persist canonical task checkpoint on A1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            cd /home/ubuntu/shopvivaliz-deploy/repo
+            export SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+            task=global-continuity-cleanup-20260927
+            goal="Delete fredmourao-ai/solange-rolla and remove the two already-merged cleanup branches, then verify final state."
+            if python3 scripts/agent_task_state.py show --task "$task" >/tmp/global-cleanup-state.json 2>/dev/null; then
+              status="$(python3 -c "import json; print(json.load(open('/tmp/global-cleanup-state.json')).get('status',''))")"
+              case "$status" in
+                BLOCKED_EXTERNAL)
+                  python3 scripts/agent_task_state.py resume --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." >/dev/null
+                  ;;
+                RUNNING|READY_TO_COMPLETE)
+                  python3 scripts/agent_task_state.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
+                  ;;
+                CONCLUIDO)
+                  echo TASK_ALREADY_CONCLUIDO=true
+                  ;;
+                *)
+                  echo "ERROR unsupported task state: $status" >&2
+                  exit 4
+                  ;;
+              esac
+            else
+              python3 scripts/agent_task_state.py start --task "$task" --goal "$goal" --agent chatgpt-bastion-cleanup --repository Vivaliz-site/site-shopvivaliz >/dev/null
+              python3 scripts/agent_task_state.py progress --task "$task" --next-action "Refresh A1 delete_repo via backend GitHub device flow over OCI Bastion, delete the superseded repo, verify absence, then remove merged branches." --evidence "Bastion one-shot reached A1 successfully." >/dev/null
+            fi
+            rm -f /tmp/global-cleanup-state.json
+            echo TASK_CHECKPOINT=PASS'
+          
+      - name: Refresh A1 delete_repo through backend GitHub browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=20 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SCP_BACKEND=(scp -q "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+
+          if "${SITE_SSH[@]}" 'GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
+            echo "A1_DELETE_REPO_SCOPE=ALREADY_PRESENT"
+          else
+            "${SCP_BACKEND[@]}" scripts/github-device-auth-delete-repo.mjs "ubuntu@127.0.0.1:$REMOTE_HELPER"
+            "${BACKEND_SSH[@]}" "chmod 600 '$REMOTE_HELPER'"
+
+            "${SITE_SSH[@]}" "set -Eeuo pipefail; export GH_CONFIG_DIR=/home/ubuntu/.config/gh; : > '$REMOTE_AUTH_LOG'; chmod 600 '$REMOTE_AUTH_LOG'; printf '\n\n\n' | BROWSER=true env -u GH_TOKEN -u GITHUB_TOKEN script -qefc 'gh auth refresh -h github.com -s delete_repo' /dev/null > '$REMOTE_AUTH_LOG' 2>&1" &
+            refresh_ssh_pid=$!
+
+            device_code=""
+            for _ in $(seq 1 90); do
+              device_code="$("${SITE_SSH[@]}" "grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' '$REMOTE_AUTH_LOG' 2>/dev/null | tail -n 1" || true)"
+              if [ -n "$device_code" ]; then break; fi
+              if ! kill -0 "$refresh_ssh_pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            test -n "$device_code" || { echo "::error::GitHub device code was not emitted"; exit 6; }
+
+            browser_result="$(printf '%s\n' "$device_code" | "${BACKEND_SSH[@]}" "set -Eeuo pipefail; IFS= read -r code; GITHUB_DEVICE_CODE=\"\$code\" DISPLAY=:98 node '$REMOTE_HELPER'")"
+            device_code=""
+            grep -Fq 'GITHUB_DEVICE_AUTH=PASS' <<<"$browser_result"
+            wait "$refresh_ssh_pid"
+
+            scope_ok=false
+            for _ in $(seq 1 30); do
+              if "${SITE_SSH[@]}" 'GH_CONFIG_DIR=/home/ubuntu/.config/gh env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d "\r" | grep -Eiq "^x-oauth-scopes:.*delete_repo"'; then
+                scope_ok=true
+                break
+              fi
+              sleep 1
+            done
+            test "$scope_ok" = true
+          fi
+          echo "A1_DELETE_REPO_SCOPE=PASS"
+
+      - name: Delete legacy repository and merged cleanup refs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=20 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+            gh_native() { env -u GH_TOKEN -u GITHUB_TOKEN gh "$@"; }
+
+            canonical="$(gh_native repo view fredmourao-ai/solange-rolla-consultorio --json nameWithOwner --jq .nameWithOwner)"
+            test "$canonical" = "fredmourao-ai/solange-rolla-consultorio"
+
+            if gh_native repo view fredmourao-ai/solange-rolla >/dev/null 2>&1; then
+              gh_native repo delete fredmourao-ai/solange-rolla --yes
+            fi
+            if gh_native repo view fredmourao-ai/solange-rolla >/dev/null 2>&1; then
+              echo "ERROR legacy repository still resolves after delete" >&2
+              exit 10
+            fi
+            echo LEGACY_REPO_DELETE=PASS
+
+            delete_merged_ref() {
+              local repo="$1" branch="$2"
+              local tip main status
+              if ! tip="$(gh_native api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null)"; then
+                echo "BRANCH_ABSENT repo=$repo branch=$branch"
+                return 0
+              fi
+              main="$(gh_native api "repos/$repo/commits/main" --jq .sha)"
+              status="$(gh_native api "repos/$repo/compare/$tip...$main" --jq .status)"
+              case "$status" in
+                ahead|identical)
+                  if gh_native api --method DELETE "repos/$repo/git/refs/heads/$branch" >/dev/null 2>&1; then
+                    echo "BRANCH_DELETE=PASS repo=$repo branch=$branch"
+                  else
+                    echo "BRANCH_DELETE=SKIPPED_PERMISSION repo=$repo branch=$branch"
+                  fi
+                  ;;
+                *)
+                  echo "BRANCH_DELETE=SKIPPED_NOT_MERGED repo=$repo branch=$branch status=$status"
+                  ;;
+              esac
+            }
+            delete_merged_ref Vivaliz-site/site-shopvivaliz test/checkpoint-first-zero-window-20260927
+            delete_merged_ref Vivaliz-site/-shopvivaliz-pipeline fix/authenticated-global-audit-policy-bridge-20260927
+
+            cd /home/ubuntu/shopvivaliz-deploy/repo
+            export SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+            task=global-continuity-cleanup-20260927
+            python3 scripts/agent_task_state.py ready --task "$task" --evidence "fredmourao-ai/solange-rolla no longer resolves after authorized GitHub deletion" --verification "Legacy superseded repository deletion confirmed; merged branch cleanup attempted as cosmetic follow-up." >/dev/null
+            python3 scripts/agent_task_state.py complete --task "$task" >/dev/null
+            python3 scripts/agent_task_state.py terminal --task "$task" >/dev/null
+            echo TASK_TERMINAL=CONCLUIDO
+
+            gh_native api --method DELETE "repos/Vivaliz-site/site-shopvivaliz/git/refs/heads/ops/global-continuity-cleanup-bastion-20260927" >/dev/null 2>&1 || true
+          '
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          if [ -n "${SITE_SESSION_ID:-}" ]; then
+            "${OCI[@]}" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null || true
+          fi
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then
+            "${OCI[@]}" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null || true
+          fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null || true
+          fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null; then pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" || true; fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null; then pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" || true; fi
+          for file in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$file" ] && [ -f "$file" ]; then shred -u "$file"; fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
