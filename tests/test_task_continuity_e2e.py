@@ -178,6 +178,7 @@ class ProbeEvaluationTests(unittest.TestCase):
             observation = probe.poll_for_terminal_evidence(
                 runtime_dir=runtime,
                 task_id=task_id,
+                repository="Vivaliz-site/site-shopvivaliz",
                 timeout_seconds=1,
                 poll_interval_seconds=1,
                 sleep=lambda _seconds: None,
@@ -222,6 +223,7 @@ class ProbeEvaluationTests(unittest.TestCase):
             observation = probe.poll_for_terminal_evidence(
                 runtime_dir=runtime,
                 task_id=task_id,
+                repository="Vivaliz-site/site-shopvivaliz",
                 timeout_seconds=600,
                 poll_interval_seconds=5,
                 sleep=fake_sleep,
