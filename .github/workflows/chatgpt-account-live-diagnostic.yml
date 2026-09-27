@@ -45,6 +45,14 @@ jobs:
               find "$HOME" -maxdepth 5 -type f \( -name chromium -o -name chromium-browser -o -name google-chrome -o -name google-chrome-stable \) -perm /111 -print 2>/dev/null | sed -n "1,30p"
             '
             ps -eo user,pid,args | grep -E '[c]hromium|[c]hrome' | sed -E 's#(--user-data-dir=)[^ ]+#\1:profile#g; s#(--remote-debugging-port=)[0-9]+#\1:port#g' | sed -n '1,40p' || true
+            echo "CANONICAL_BROWSER_ACCESS"
+            namei -l /home/ubuntu/.local/bin/shopvivaliz-browser-chromium 2>/dev/null || true
+            readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium 2>/dev/null || true
+            stat -c '%A %U:%G %n' /home/ubuntu /home/ubuntu/.local /home/ubuntu/.local/bin /home/ubuntu/.local/bin/shopvivaliz-browser-chromium 2>/dev/null || true
+            echo "FREDRDP_ACCESS_TEST"
+            sudo -n -u fredrdp test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium && echo "FREDRDP_CAN_EXEC_WRAPPER=yes" || echo "FREDRDP_CAN_EXEC_WRAPPER=no"
+            echo "SYSTEM_BROWSER_CANDIDATES"
+            find /usr /usr/local /opt /snap -maxdepth 5 -type f \( -iname 'chromium' -o -iname 'chromium-browser' -o -iname 'google-chrome' -o -iname 'google-chrome-stable' -o -iname 'chrome' \) -perm /111 -print 2>/dev/null | sed -n '1,80p'
           else
             echo "FREDRDP_SUDO=UNAVAILABLE"
           fi
