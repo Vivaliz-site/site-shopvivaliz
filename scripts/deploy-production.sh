@@ -877,20 +877,19 @@ if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$ACTIVE_RELEASE" "$N
     write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao dos bridges AI Squad falhou"
     exit 1
   fi
+elif ! verify_ai_squad_bridges_health; then
+  log INFO "ai_squad_runtime_unchanged=true"
+  log WARN "AI Squad runtime inalterado, mas health exige reparo; reconciliando bridges"
+  if ! reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"; then
+    if ! rollback_to "$ACTIVE_RELEASE"; then
+      log ERROR "Rollback apos falha ao reparar bridges AI Squad tambem falhou"
+    fi
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "health/reparo dos bridges AI Squad falhou"
+    exit 1
+  fi
 else
   log INFO "ai_squad_runtime_unchanged=true"
-  if verify_ai_squad_bridges_health; then
-    log INFO "ai_squad_bridge_restart_skipped=true"
-  else
-    log WARN "AI Squad runtime inalterado, mas health exige reparo; reconciliando bridges"
-    if ! reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"; then
-      if ! rollback_to "$ACTIVE_RELEASE"; then
-        log ERROR "Rollback apos falha ao reparar bridges AI Squad tambem falhou"
-      fi
-      write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "health/reparo dos bridges AI Squad falhou"
-      exit 1
-    fi
-  fi
+  log INFO "ai_squad_bridge_restart_skipped=true"
 fi
 
 if ! reconcile_abandoned_cart_recovery_units "$NEW_RELEASE_PATH"; then
