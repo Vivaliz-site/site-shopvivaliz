@@ -593,3 +593,25 @@ Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
 Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+## Continuidade global multi-repositório
+O `site-shopvivaliz` é o controlador canônico de `GLOBAL_TASK_CONTINUITY_V8`.
+Todo estado persistido deve carregar `repository=owner/name`; o runtime canônico
+executa watchdog -> dispatcher -> Gemini e o background permanece Gemini-only.
+A presença de adapter não certifica continuidade: somente `continuity_e2e_pass`
+real para o mesmo repositório autoriza APTO global.
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
+
+<!-- CHECKPOINT_FIRST_V9 -->
+## Checkpoint antes da primeira etapa material
+Toda tarefa potencialmente longa ou mutável deve registrar `agent_task_state.py start`
+**antes** da primeira investigação extensa, chamada remota material, edição, mutação,
+execução longa, delegação ou espera de CI. O objetivo é eliminar a janela em que uma
+interrupção do ChatGPT ocorre antes de existir estado durável.
+
+Depois de cada avanço material, atualize `progress` com evidência e `next_action`.
+Não adie o primeiro checkpoint para depois do diagnóstico. Se o contexto atual não
+consegue alcançar o controlador canônico, falhe fechado para tarefas que dependem de
+retomada automática e use a rota operacional auditável que consiga registrar o estado.
+<!-- /CHECKPOINT_FIRST_V9 -->
+

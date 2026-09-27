@@ -48,9 +48,20 @@ E2E_WORKFLOW = ROOT / ".github" / "workflows" / "task-continuity-production-e2e.
 E2E_MARKER = "DETACHED_TASK_RECOVERY_E2E_V7"
 E2E_VERIFICATION = "continuity_e2e_pass"
 GLOBAL_MARKER = "GLOBAL_TASK_CONTINUITY_V8"
+CHECKPOINT_FIRST_MARKER = "CHECKPOINT_FIRST_V9"
 GLOBAL_TEST = ROOT / "tests" / "test_global_task_continuity_v8.py"
 
 errors: list[str] = []
+
+agents_path = ROOT / "AGENTS.md"
+if not agents_path.is_file():
+    errors.append("missing AGENTS.md")
+else:
+    agents_text = agents_path.read_text(encoding="utf-8", errors="replace")
+    for token in (GLOBAL_MARKER, CHECKPOINT_FIRST_MARKER, "agent_task_state.py start", "antes da primeira"):
+        if token not in agents_text:
+            errors.append(f"AGENTS.md: missing {token}")
+
 for path in NORMATIVE:
     if not path.is_file():
         errors.append(f"missing normative entrypoint: {path.relative_to(ROOT)}")
