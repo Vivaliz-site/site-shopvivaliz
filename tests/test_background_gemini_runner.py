@@ -50,13 +50,20 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             [("GEMINI_API_KEY", "first"), ("GOOGLE_GEMINI_API_KEY", "second")],
         )
 
+    def test_default_fallback_models_reject_discontinued_flash_lite(self) -> None:
+        self.assertNotIn("gemini-2.5-flash-lite", self.mod.DEFAULT_FALLBACK_MODELS)
+        self.assertTrue(
+            any(model.endswith("-latest") for model in self.mod.DEFAULT_FALLBACK_MODELS),
+            self.mod.DEFAULT_FALLBACK_MODELS,
+        )
+
     def test_model_candidates_keep_primary_then_unique_gemini_only_fallbacks(self) -> None:
         self.assertEqual(
             self.mod.build_model_candidates(
-                "gemini-2.5-flash",
-                ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+                "gemini-flash-latest",
+                ("gemini-flash-lite-latest", "gemini-flash-latest", "gemini-flash-lite-latest"),
             ),
-            ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+            ["gemini-flash-latest", "gemini-flash-lite-latest"],
         )
 
     def test_child_environment_is_trusted_and_contains_only_gemini_provider_secret(self) -> None:
@@ -348,7 +355,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
                 "import sys\n"
                 "argv=sys.argv[1:]\n"
                 "model=argv[argv.index('--model')+1]\n"
-                "if model == 'gemini-2.5-flash':\n"
+                "if model == 'gemini-flash-latest':\n"
                 "    print('429 RESOURCE_EXHAUSTED: quota exceeded for this project')\n"
                 "    raise SystemExit(1)\n"
                 "print('fallback success')\n"
@@ -363,19 +370,19 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
                     rc = self.mod.run(
-                        model="gemini-2.5-flash",
+                        model="gemini-flash-latest",
                         prompt_file=prompt_file,
                         env_file=env_file,
                         gemini_bin=str(gemini_bin),
-                        fallback_models=("gemini-2.5-flash-lite",),
+                        fallback_models=("gemini-flash-lite-latest",),
                     )
             finally:
                 os.chdir(previous_cwd)
 
             output = buf.getvalue()
             self.assertEqual(rc, 0)
-            self.assertIn("model:gemini-2.5-flash,exit_code:1,reason:quota_exhausted", output)
-            self.assertIn("background_gemini_model=gemini-2.5-flash-lite", output)
+            self.assertIn("model:gemini-flash-latest,exit_code:1,reason:quota_exhausted", output)
+            self.assertIn("background_gemini_model=gemini-flash-lite-latest", output)
             self.assertIn("background_gemini_exit_code=0", output)
 
     def test_run_rotates_to_second_distinct_gemini_credential_after_auth_failure(self) -> None:
@@ -436,6 +443,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertIn('--model "$GEMINI_MODEL"', failover)
         self.assertIn("BACKGROUND_ORDER=(gemini)", failover)
         self.assertIn("background_paid_fallback_forbidden=true", failover)
+        self.assertIn('GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"', failover)
 
 
 if __name__ == "__main__":

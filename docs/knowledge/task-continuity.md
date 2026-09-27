@@ -300,12 +300,15 @@ aplicativo ChatGPT.
 
 ### Resiliência de quota Gemini no background
 
-O recovery automático continua estritamente **Gemini-only**. Quando o modelo
-primário `gemini-2.5-flash` retorna `quota_exhausted` ou
+O recovery automático continua estritamente **Gemini-only**. O modelo padrão
+é o alias estável `gemini-flash-latest`; em `quota_exhausted` ou
 `model_unavailable`, o wrapper protegido pode tentar
-`gemini-2.5-flash-lite` e, se o runtime possuir mais de uma credencial Gemini
-distinta autorizada, rotacioná-las sem registrar o valor. Isso não autoriza
-Claude, Codex ou qualquer fallback pago/silencioso no daemon.
+`gemini-flash-lite-latest` e, se o runtime possuir mais de uma credencial
+Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
+2026-09-27 um probe funcional sanitizado no A1 confirmou
+`gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
+`*-latest`. Isso não autoriza Claude, Codex ou qualquer fallback
+pago/silencioso no daemon.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.

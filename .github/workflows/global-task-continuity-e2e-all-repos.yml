@@ -1,4 +1,5 @@
 name: Global Task Continuity E2E All Repositories
+# certification-trigger: CHECKPOINT_FIRST_V9-POST-GEMINI-FIX-20260927
 
 on:
   push:
