@@ -35,6 +35,29 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 
+function interruptionTextPresent(value) {
+  const haystack = String(value ?? '').toLowerCase();
+  return (
+    haystack.includes('something went wrong')
+    || haystack.includes('algo deu errado')
+    || haystack.includes('there was an error generating')
+    || haystack.includes('houve um erro ao gerar')
+    || haystack.includes('streaming interrupted')
+    || haystack.includes('transmissão interrompida')
+    || haystack.includes('transmissao interrompida')
+  );
+}
+
+function selectChatgptTab(tabs) {
+  const conversations = (Array.isArray(tabs) ? tabs : []).filter(
+    tab => tab?.type === 'page' && /^https:\/\/chatgpt\.com\/c\//.test(String(tab.url || '')),
+  );
+  const interrupted = conversations.filter(tab => interruptionTextPresent(tab.text));
+  if (interrupted.length === 1) return interrupted[0];
+  if (interrupted.length > 1) return null;
+  return conversations.length === 1 ? conversations[0] : null;
+}
+
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
   if (value.length < 32) throw new Error('bridge token missing or too short');
@@ -92,9 +115,47 @@ class Cdp {
       );
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
-    const page = tabs.find(tab => tab.type === 'page' && /^https:\/\/chatgpt\.com\//.test(tab.url || ''));
+    const conversationTabs = tabs.filter(
+      tab => tab.type === 'page' && /^https:\/\/chatgpt\.com\/c\//.test(String(tab.url || '')) && tab.webSocketDebuggerUrl,
+    );
+    if (conversationTabs.length === 0) {
+      throw new Error('no open ChatGPT conversation tab found in the attached browser');
+    }
+
+    if (conversationTabs.length === 1) {
+      const ws = new WebSocket(conversationTabs[0].webSocketDebuggerUrl);
+      await new Promise((resolve, reject) => {
+        ws.addEventListener('open', resolve, { once: true });
+        ws.addEventListener('error', reject, { once: true });
+      });
+      return new Cdp(ws);
+    }
+
+    // When multiple conversations are open, inspect each one and select only
+    // a unique tab carrying an explicit interruption. Never guess by tab
+    // order: sending "continue" into the wrong conversation is worse than a
+    // safe no-op.
+    const enriched = [];
+    for (const tab of conversationTabs) {
+      let probe;
+      try {
+        const ws = new WebSocket(tab.webSocketDebuggerUrl);
+        await new Promise((resolve, reject) => {
+          ws.addEventListener('open', resolve, { once: true });
+          ws.addEventListener('error', reject, { once: true });
+        });
+        probe = new Cdp(ws);
+        const state = await probe.pageState(6000);
+        enriched.push({ ...tab, text: state.text || '' });
+      } catch {
+        enriched.push({ ...tab, text: '' });
+      } finally {
+        probe?.close();
+      }
+    }
+    const page = selectChatgptTab(enriched);
     if (!page?.webSocketDebuggerUrl) {
-      throw new Error('no open chatgpt.com tab found in the attached browser');
+      throw new Error('multiple ChatGPT conversation tabs are open and no unique interrupted target was found');
     }
     const ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
@@ -147,19 +208,7 @@ async function errorBannerPresent(cdp) {
   // reply is actually incomplete. Anything short of that ambiguous case is
   // deliberately left to the checkpoint-driven trigger, not guessed here.
   const state = await cdp.pageState(6000);
-  const haystack = `${state.text || ''}`.toLowerCase();
-  return (
-    haystack.includes('something went wrong')
-    || haystack.includes('algo deu errado')
-    || haystack.includes('there was an error generating')
-    || haystack.includes('houve um erro ao gerar')
-    // Confirmed live on ChatGPT Free (mobile app), 2026-09-27: this is the
-    // actual banner text observed, not a guess -- "streaming interrupted,
-    // waiting for the complete message".
-    || haystack.includes('streaming interrupted')
-    || haystack.includes('transmissão interrompida')
-    || haystack.includes('transmissao interrompida')
-  );
+  return interruptionTextPresent(state.text);
 }
 
 async function sendContinueMessage(cdp) {
@@ -283,4 +332,5 @@ export {
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
+  selectChatgptTab,
 };
