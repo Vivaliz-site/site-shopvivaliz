@@ -135,6 +135,21 @@ jobs:
           print('BRIDGE_UNAUTH_BODY='+safe)
           PY
 
+      - name: Probe direct production origin without Cloudflare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          origin='http://137.131.149.55:8080/api/chatgpt-continuity/bridge.php'
+          code="$(curl -sS -o /tmp/origin-body -w '%{http_code}' --connect-timeout 5 --max-time 12 -H 'Host: shopvivaliz.com.br' -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' "$origin" || true)"
+          echo "BRIDGE_DIRECT_ORIGIN_HTTP=${code:-000}"
+          if [ -s /tmp/origin-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/origin-body').read_text(encoding='utf-8',errors='replace').split())[:300]
+          print('BRIDGE_DIRECT_ORIGIN_BODY='+body)
+          PY
+          fi
+
       - name: Verify configured bridge token without exposing it
         shell: bash
         run: |
