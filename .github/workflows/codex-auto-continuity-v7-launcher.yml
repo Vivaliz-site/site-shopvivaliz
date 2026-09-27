@@ -1,0 +1,197 @@
+name: Codex Auto Continuity V7 Launcher
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  launch:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      startsWith(github.event.comment.body, '/codex-auto-continuity-v7')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 360
+
+    steps:
+      - name: Extract prompt without logging its body
+        id: prompt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          prompt_file="$RUNNER_TEMP/codex-auto-continuity-v7.prompt"
+          python3 - "$GITHUB_EVENT_PATH" "$prompt_file" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          event_path, prompt_path = sys.argv[1:3]
+          event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+          body = str((event.get("comment") or {}).get("body") or "")
+          lines = body.splitlines()
+          marker = "/codex-auto-continuity-v7"
+          if not lines or lines[0].strip() != marker:
+              raise SystemExit("invalid codex-auto continuity marker")
+          prompt = "\n".join(lines[1:]).lstrip("\n")
+          if len(prompt) < 1000:
+              raise SystemExit("prompt payload is unexpectedly short")
+          target = Path(prompt_path)
+          target.write_text(prompt, encoding="utf-8")
+          os.chmod(target, 0o600)
+          print(f"PROMPT_BYTES={target.stat().st_size}")
+          PY
+          printf 'path=%s\n' "$prompt_file" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare isolated existing-branch worktree
+        id: worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          branch="fix/continuity-e2e-gate-v7-20260927"
+          src="$HOME/src/site-shopvivaliz-continuity-codex"
+          preferred="$HOME/worktrees/site-shopvivaliz/continuity-e2e-gate-v7"
+
+          mkdir -p "$HOME/src" "$HOME/worktrees/site-shopvivaliz"
+
+          if [ ! -d "$src/.git" ]; then
+            gh repo clone "$GITHUB_REPOSITORY" "$src"
+          fi
+
+          git -C "$src" fetch origin --prune
+
+          existing="$(
+            git -C "$src" worktree list --porcelain |
+            awk -v want="refs/heads/$branch" '
+              $1=="worktree" { path=$2 }
+              $1=="branch" && $2==want { print path; exit }
+            '
+          )"
+
+          if [ -n "$existing" ]; then
+            worktree="$existing"
+          elif [ -e "$preferred/.git" ]; then
+            worktree="$preferred"
+          else
+            if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
+              git -C "$src" worktree add "$preferred" "$branch"
+            else
+              git -C "$src" worktree add --track -b "$branch" "$preferred" "origin/$branch"
+            fi
+            worktree="$preferred"
+          fi
+
+          test -e "$worktree/.git"
+          test "$(git -C "$worktree" branch --show-current)" = "$branch"
+
+          printf 'path=%s\n' "$worktree" >> "$GITHUB_OUTPUT"
+          printf 'head=%s\n' "$(git -C "$worktree" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "CODEX_WORKTREE_READY=1"
+
+      - name: Announce Codex start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+          HEAD_SHA: ${{ steps.worktree.outputs.head }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_AUTO_CONTINUITY_V7=STARTED run_id=$GITHUB_RUN_ID branch=fix/continuity-e2e-gate-v7-20260927 head=$HEAD_SHA"
+
+      - name: Send prompt to codex-auto
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s "$PROMPT_FILE"
+          test -d "$WORKTREE"
+
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          "$launcher" --version
+          "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
+          "$launcher" exec --help 2>&1 | grep -Eq -- '(^|[[:space:]])(-m|--model)([=[:space:]]|$)'
+          "$launcher" exec --help 2>&1 | grep -Eq -- '(^|[[:space:]])(-c|--config)([=[:space:]]|$)'
+
+          cd "$WORKTREE"
+          output_file="$RUNNER_TEMP/codex-auto-continuity-v7.output"
+          rm -f -- "$output_file"
+
+          set +e
+          "$launcher" exec \
+            --approve-for-me \
+            --model gpt-5.6-terra \
+            --config 'model_reasoning_effort="medium"' \
+            - < "$PROMPT_FILE" >"$output_file" 2>&1
+          rc=$?
+          set -e
+
+          output_bytes="$(wc -c < "$output_file" | tr -d ' ')"
+          output_sha256="$(sha256sum "$output_file" | awk '{print $1}')"
+          echo "CODEX_MODEL=gpt-5.6-terra"
+          echo "CODEX_REASONING_EFFORT=medium"
+          echo "CODEX_AUTO_EXIT_CODE=$rc"
+          echo "CODEX_OUTPUT_BYTES=$output_bytes"
+          echo "CODEX_OUTPUT_SHA256=$output_sha256"
+
+          if [ "$rc" -ne 0 ]; then
+            python3 - "$output_file" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").lower()
+          classes = []
+          patterns = {
+              "auth": r"(not logged in|authentication|unauthorized|forbidden|401|403)",
+              "model": r"(unknown model|model metadata|not supported.*model|model.*unavailable)",
+              "rate_limit": r"(rate.?limit|too many requests|429|quota)",
+              "mcp": r"(mcp|failed to initialize|required mcp servers failed)",
+              "approval": r"(approval|approve-for-me|permission denied)",
+              "context": r"(context.*length|too many tokens|prompt.*too large)",
+              "network": r"(network|connection|timeout|timed out|dns|tls)",
+              "tool_runtime": r"(code-mode host|tool.*unavailable|no tools|sandbox)",
+          }
+          for name, pattern in patterns.items():
+              if re.search(pattern, text):
+                  classes.append(name)
+          print("CODEX_SAFE_ERROR_CLASSES=" + (",".join(classes) if classes else "unclassified"))
+          PY
+          fi
+
+          rm -f -- "$output_file"
+          exit "$rc"
+
+      - name: Announce terminal launcher result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          conclusion="${{ job.status }}"
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_AUTO_CONTINUITY_V7=WORKFLOW_TERMINAL run_id=$GITHUB_RUN_ID workflow_status=$conclusion worktree=$WORKTREE"
+
+      - name: Remove transient prompt file
+        if: always()
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${PROMPT_FILE:-}" ]; then
+            rm -f -- "$PROMPT_FILE"
+          fi
