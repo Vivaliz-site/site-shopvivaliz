@@ -116,5 +116,19 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         self.assertIn("--repository", workflow)
 
 
+    def test_global_e2e_collects_all_repository_results_before_failing(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (
+            root / ".github" / "workflows" / "global-task-continuity-e2e-all-repos.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('failed=0', workflow)
+        self.assertIn('summary.tsv', workflow)
+        self.assertIn('--report-path "$report"', workflow)
+        self.assertIn('probe_rc=0', workflow)
+        self.assertIn('validation_rc=0', workflow)
+        self.assertIn('exit "$failed"', workflow)
+        self.assertNotIn('| tee "continuity-e2e-reports/${slug}.json"', workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
