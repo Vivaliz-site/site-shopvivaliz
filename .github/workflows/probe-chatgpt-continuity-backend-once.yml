@@ -1,0 +1,55 @@
+name: Probe ChatGPT Continuity Backend Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-continuity-backend-20260927
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Probe canonical backend browser without sending ChatGPT turns
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          test -d /home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt
+          echo "CANONICAL_PROFILE=present"
+          health="$(curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:17777/health)"
+          python3 - "$health" <<'PY'
+          import json, sys
+          d=json.loads(sys.argv[1])
+          print("BROWSER_WORKER_OK=" + str(d.get("ok") is True).lower())
+          print("BROWSER_WORKER_ENDPOINT=" + str(d.get("endpoint") or ""))
+          print("BROWSER_PATH_EXISTS=" + str(d.get("browser_path_exists") is True).lower())
+          PY
+          sessions="$(curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:17777/sessions)"
+          python3 - "$sessions" <<'PY'
+          import json, sys
+          d=json.loads(sys.argv[1])
+          sessions=d.get("sessions") or []
+          canonical=[s for s in sessions if s.get("profile")=="ai-squad-chatgpt"]
+          print("CANONICAL_SESSION_COUNT=" + str(len(canonical)))
+          print("CANONICAL_SESSION_PERSISTENT=" + str(any(s.get("persistent") is True for s in canonical)).lower())
+          PY
+          if curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:9555/json/version >/tmp/cdp-version.json; then
+            echo "CDP_9555=reachable"
+            tabs="$(curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:9555/json)"
+            python3 - "$tabs" <<'PY'
+          import json, sys, urllib.parse
+          tabs=json.loads(sys.argv[1])
+          pages=[t for t in tabs if t.get("type")=="page"]
+          chat=[t for t in pages if urllib.parse.urlparse(str(t.get("url") or "")).hostname in {"chatgpt.com","www.chatgpt.com"}]
+          print("CDP_PAGE_COUNT=" + str(len(pages)))
+          print("CHATGPT_TAB_COUNT=" + str(len(chat)))
+          PY
+          else
+            echo "CDP_9555=unreachable"
+          fi
