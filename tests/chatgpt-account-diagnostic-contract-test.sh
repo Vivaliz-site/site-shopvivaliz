@@ -21,9 +21,13 @@ grep -Fq 'x-oai-turn-trace-id' "$diag"
 grep -Fq 'cf-ray' "$diag"
 grep -Fq 'url.search = ' "$diag"
 grep -Fq 'CHATGPT_ACCOUNT_DIAGNOSTIC=' "$diag"
+grep -Fq "const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';" "$diag"
+grep -Fq 'browser_worker_profile_fallback' "$diag"
+grep -Fq 'canonical_profile_in_use_without_cdp' "$diag"
+grep -Fq 'launchPersistentContext(CANONICAL_PROFILE' "$diag"
 
-if grep -Eq 'launchPersistentContext|chromium\.launch\(' "$diag"; then
-  echo "diagnostic must attach to the canonical existing ChatGPT browser, not launch another profile" >&2
+if grep -Eq 'mkdtemp|profile-[A-Za-z0-9]|chromium\.launch\(' "$diag"; then
+  echo "diagnostic must reuse only the canonical persistent ChatGPT profile" >&2
   exit 1
 fi
 if grep -Eiq 'authorization|set-cookie|document\.cookie|localStorage|sessionStorage' "$diag"; then
