@@ -133,12 +133,13 @@ jobs:
               BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
               test -n "$BASTION_SSH_COMMAND"
               echo "BASTION_SSH_COMMAND=$BASTION_SSH_COMMAND" >> "$GITHUB_ENV"
-              exit 0
+              break
             fi
             case "$state" in FAILED|DELETED) exit 1 ;; esac
             sleep 5
           done
-          exit 1
+          test -n "${BASTION_SSH_COMMAND:-}" || { echo "::error::Timed out waiting for active Bastion session"; exit 1; }
+          echo "BASTION_BACKEND_SESSION=ACTIVE"
 
       - name: Open verified backend SSH tunnel
         shell: bash
@@ -202,14 +203,29 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          cleanup_rc=0
           if [ -n "${BACKEND_SESSION_ID:-}" ]; then
-            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null || true
+            if ! oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null; then
+              echo "::error::Failed to delete temporary Bastion session"
+              cleanup_rc=1
+            fi
           fi
           if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
-            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null || true
+            if ! oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null; then
+              echo "::error::Failed to restore Bastion CIDR allowlist"
+              cleanup_rc=1
+            fi
           fi
-          if [ -n "${BACKEND_TUNNEL_PORT:-}" ]; then pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" || true; fi
+          if [ -n "${BACKEND_TUNNEL_PORT:-}" ] && pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null; then
+            if ! pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22"; then
+              echo "::error::Failed to terminate Bastion tunnel"
+              cleanup_rc=1
+            fi
+          fi
           for file in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
-            if [ -n "$file" ] && [ -f "$file" ]; then shred -u "$file"; fi
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              if ! shred -u "$file"; then cleanup_rc=1; fi
+            fi
           done
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json" "$RUNNER_TEMP/probe-auth.sh"
+          exit "$cleanup_rc"
