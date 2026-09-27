@@ -4,6 +4,20 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 <!-- /GEPETO_EVERY_TASK_V1 -->
 
 
+<!-- CHATGPT_WEB_AUTOMATION_RISK_GUARD_V1 -->
+## ChatGPT Web automation risk guard
+
+While OpenAI Support Case #15426555 / the linked ChatGPT support investigation still has an unresolved temporary usage restriction or account/workspace risk-state hypothesis, automated ChatGPT Web prompt submission is prohibited.
+
+- Do not submit prompts, retry turns, trigger login flows, or create automated ChatGPT Web conversations from agents, workflows, Playwright, CDP, Browser Worker, Remote Access, or relay paths.
+- Browser inspection may only be passive and must not create a ChatGPT turn.
+- Programmatic OpenAI work must use supported non-Web interfaces that are explicitly authorized for the task.
+- Manual human ChatGPT use remains allowed.
+- Codex remains an explicit last option.
+- This guard may only be relaxed after fresh support/account evidence shows the restriction/risk-state hypothesis is cleared and a dedicated reviewed change updates this policy.
+
+<!-- /CHATGPT_WEB_AUTOMATION_RISK_GUARD_V1 -->
+
 <!-- SHOPVIVALIZ_REMOTE_ACCESS_V1 -->
 ## Acesso remoto obrigatório para agentes
 
