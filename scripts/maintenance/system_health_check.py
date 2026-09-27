@@ -12,14 +12,33 @@ QUEUE_PATH = ROOT / "tasks-queue.json"
 ALLOWED_STATES = {"pending", "running", "blocked", "failed", "completed_verified"}
 REQUIRED_COMPLETION_EVIDENCE = {"run_id", "artifact", "commit_sha", "verification"}
 
-ACTIVE_REQUIRED = (
-    ROOT / ".github/workflows/agents-hourly-deep-audit.yml",
-    ROOT / ".github/workflows/repository-governance.yml",
-    ROOT / "scripts/audit-agents-real-work.py",
-    ROOT / "scripts/maintenance/audit_automation_changes.py",
-    ROOT / "scripts/maintenance/audit_active_workflows.py",
-    ROOT / "scripts/maintenance/system_health_check.py",
+REPOSITORY_ONLY_REQUIRED = (
+    Path(".github/workflows/agents-hourly-deep-audit.yml"),
+    Path(".github/workflows/repository-governance.yml"),
 )
+
+RUNTIME_REQUIRED = (
+    Path("scripts/audit-agents-real-work.py"),
+    Path("scripts/maintenance/audit_automation_changes.py"),
+    Path("scripts/maintenance/audit_active_workflows.py"),
+    Path("scripts/maintenance/system_health_check.py"),
+)
+
+
+def required_automation_paths(
+    root: Path = ROOT,
+    *,
+    repository_checkout: bool | None = None,
+) -> tuple[Path, ...]:
+    if repository_checkout is None:
+        repository_checkout = (root / ".git").exists() or (root / ".github").is_dir()
+    relative_paths = RUNTIME_REQUIRED
+    if repository_checkout:
+        relative_paths = REPOSITORY_ONLY_REQUIRED + relative_paths
+    return tuple(root / relative for relative in relative_paths)
+
+
+ACTIVE_REQUIRED = required_automation_paths()
 
 DEPRECATED_EXECUTORS: tuple[tuple[Path, Path | None], ...] = (
     (ROOT / "scripts/real-task-executor.py", None),
