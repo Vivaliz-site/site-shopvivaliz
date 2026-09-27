@@ -12,6 +12,7 @@ on:
       - 'scripts/*.js'
       - 'tests/*.php'
       - 'tests/*.js'
+      - 'tests/*.mjs'
       - 'blog/**'
       - '*.php'
       - '.github/workflows/shopvivaliz-qa.yml'
