@@ -13,7 +13,7 @@ on:
       timeout_seconds:
         description: "Probe timeout in seconds (must exceed at least one full daemon cycle)"
         required: false
-        default: "900"
+        default: "480"
 
 permissions:
   contents: read
@@ -43,12 +43,12 @@ jobs:
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
         run: |
           set -Eeuo pipefail
-          runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/agent-task-state"
-          test -d "$runtime_dir" || runtime_dir="$PWD/storage/agent-task-state"
+          runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+          test -d "$runtime_dir" || { echo "::error::production runtime dir not found: $runtime_dir"; exit 1; }
           python3 scripts/task_continuity_e2e.py \
             --runtime-dir "$runtime_dir" \
-            --timeout-seconds "${TIMEOUT_SECONDS:-900}" \
-            --poll-interval-seconds 15 \
+            --timeout-seconds "${TIMEOUT_SECONDS:-480}" \
+            --poll-interval-seconds 10 \
             | tee task-continuity-e2e-report.json
 
       - name: Upload sanitized E2E report
