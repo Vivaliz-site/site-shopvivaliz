@@ -108,6 +108,9 @@ jobs:
             '/home/fredconsole/.config/shopvivaliz-chromium',
             '/home/fredconsole/.config/chromium',
             '/home/fredconsole/.config/google-chrome',
+            '/home/fredconsole/.config/shopvivaliz-chromium',
+            '/home/fredconsole/.config/chromium',
+            '/home/fredconsole/.config/google-chrome',
           ]
           for p in candidates:
               try:
