@@ -34,6 +34,72 @@ jobs:
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/chatgpt-freeze.known_hosts"
           chmod 600 "$HOME/.ssh/chatgpt-freeze.key" "$HOME/.ssh/chatgpt-freeze.known_hosts"
 
+      - name: Ensure exact VM ChatGPT browser session is running
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o ConnectTimeout=15
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/chatgpt-freeze.known_hosts"
+            -i "$HOME/.ssh/chatgpt-freeze.key"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          profile=/home/fredrdp/.config/shopvivaliz-chromium
+          browser=/opt/shopvivaliz-browser/chrome-linux/chrome
+          browserlog=/tmp/chatgpt-freeze-continuity-browser.log
+          pidfile=/tmp/chatgpt-freeze-continuity-browser.pid
+          metafile=/tmp/chatgpt-freeze-continuity-browser.meta
+
+          sudo -n -u fredrdp test -d "$profile"
+          test -x "$browser"
+          sudo -n -u fredconsole test -f /home/fredconsole/.Xauthority
+
+          if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:9555/json/version >/dev/null 2>&1; then
+            echo FREEZE_CONTINUITY_BROWSER_ALREADY_RUNNING=true
+            exit 0
+          fi
+
+          if pgrep -u fredrdp -af 'chrom|chrome' | grep -Fq -- "$profile"; then
+            echo FREEZE_CONTINUITY_BROWSER_BLOCKER=profile_in_use_without_cdp
+            exit 31
+          fi
+
+          sudo -n -u fredconsole env HOME=/home/fredconsole DISPLAY=:0 XAUTHORITY=/home/fredconsole/.Xauthority xhost +SI:localuser:fredrdp >/dev/null
+          sudo -n -u fredrdp env HOME=/home/fredrdp DISPLAY=:0 \
+            nohup "$browser" \
+              --user-data-dir="$profile" \
+              --remote-debugging-address=127.0.0.1 \
+              --remote-debugging-port=9555 \
+              --no-sandbox \
+              --no-first-run \
+              --no-default-browser-check \
+              --disable-dev-shm-usage \
+              --disable-gpu \
+              https://chatgpt.com/ >"$browserlog" 2>&1 &
+          echo $! > "$pidfile"
+          printf 'task=ChatGPT Freeze Continuity\nprofile=%s\nstarted_utc=%s\nttl_hours=2\n' "$profile" "$(date -u +%FT%TZ)" > "$metafile"
+
+          ready=false
+          for _ in $(seq 1 60); do
+            if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:9555/json/version >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 0.5
+          done
+          if [ "$ready" != true ]; then
+            echo FREEZE_CONTINUITY_BROWSER_BLOCKER=cdp_not_ready
+            sed -E 's/[A-Za-z0-9_-]{48,}/[REDACTED_LONG_TOKEN]/g' "$browserlog" | tail -n 40
+            exit 32
+          fi
+          echo FREEZE_CONTINUITY_BROWSER_STARTED=true
+          REMOTE
+
       - name: Resume exact VM ChatGPT session and monitor
         shell: bash
         run: |
