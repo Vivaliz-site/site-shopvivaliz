@@ -50,6 +50,13 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             [("GEMINI_API_KEY", "first"), ("GOOGLE_GEMINI_API_KEY", "second")],
         )
 
+    def test_default_fallback_models_reject_discontinued_flash_lite(self) -> None:
+        self.assertNotIn("gemini-2.5-flash-lite", self.mod.DEFAULT_FALLBACK_MODELS)
+        self.assertTrue(
+            any(model.endswith("-latest") for model in self.mod.DEFAULT_FALLBACK_MODELS),
+            self.mod.DEFAULT_FALLBACK_MODELS,
+        )
+
     def test_model_candidates_keep_primary_then_unique_gemini_only_fallbacks(self) -> None:
         self.assertEqual(
             self.mod.build_model_candidates(
