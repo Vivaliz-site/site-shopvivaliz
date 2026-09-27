@@ -1,0 +1,131 @@
+name: ChatGPT Browser Quarantine Verify OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/chatgpt-browser-quarantine-verify-oci-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-browser-quarantine-verify-oci-once
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve exact backend and Run Command plugin
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo OCI_BACKEND_RUN_COMMAND=PASS
+
+      - name: Verify ChatGPT browser quarantine remained stable
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          script="$RUNNER_TEMP/verify-chatgpt-quarantine.sh"
+          cat > "$script" <<'REMOTE'
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          legacy_count="$(ps -eo user=,pid=,args= | awk '
+            $1=="fredrdp" &&
+            index($0,"--user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium") &&
+            index($0,"--remote-debugging-port=9555") {n++}
+            END{print n+0}
+          ')"
+          canonical_count="$(ps -eo user=,pid=,args= | awk '
+            index($0,"ai-squad-chatgpt") && ($0 ~ /chrom|chrome/) {n++}
+            END{print n+0}
+          ')"
+          port_count="$(ss -ltn 2>/dev/null | awk '$4 ~ /:9555$/ {n++} END{print n+0}')"
+          echo "LEGACY_CHATGPT_BROWSER_ROOTS=$legacy_count"
+          echo "CANONICAL_CHATGPT_BROWSER_PROCESSES=$canonical_count"
+          echo "CDP_9555_LISTENERS=$port_count"
+          test "$legacy_count" = 0
+          test "$canonical_count" = 0
+          test "$port_count" = 0
+          echo "CHATGPT_BROWSER_QUARANTINE_STABLE=PASS"
+          REMOTE
+
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$BACKEND_COMPARTMENT_ID"             --display-name "Verify ChatGPT browser quarantine"             --content "file://$content"             --target "file://$target"             --timeout-in-seconds 120             --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 36); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID" 2>/dev/null || true)"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS|'') sleep 4 ;;
+              *) break ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+          code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution" 2>/dev/null || true)"
+          printf '%s\n' "$output" | grep -E '^(HOST|UTC|LEGACY_CHATGPT_BROWSER_ROOTS|CANONICAL_CHATGPT_BROWSER_PROCESSES|CDP_9555_LISTENERS|CHATGPT_BROWSER_QUARANTINE_STABLE)=' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
