@@ -9,6 +9,8 @@ on:
       - 'scripts/task_continuity_e2e.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'scripts/chatgpt_continuity_nudge_dispatcher.py'
+      - 'scripts/install-chatgpt-continuity-backend-bridge.sh'
+      - 'scripts/install-chatgpt-continuity-backend-bridge.sh'
       - 'scripts/autonomous-agent-loop.sh'
       - 'tests/test_task_continuity_enforcement.py'
       - 'tests/test_task_resume_dispatcher.py'
