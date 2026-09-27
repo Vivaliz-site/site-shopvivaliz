@@ -31,15 +31,16 @@ from typing import Any
 
 try:
     from .agent_task_state import RUNTIME_DIR
-    from .task_continuation_watchdog import read_requests
+    from .task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import RUNTIME_DIR
-    from task_continuation_watchdog import read_requests
+    from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
+DEFAULT_BRIDGE_RETRY_SECONDS = 300
 
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
@@ -66,11 +67,24 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _read_ledger(runtime_dir: Path) -> set[str]:
+def _parse_time(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _read_ledger(runtime_dir: Path) -> dict[str, dict[str, Any]]:
     path = runtime_dir / LEDGER_FILE
     if not path.is_file():
-        return set()
-    seen: set[str] = set()
+        return {}
+    latest: dict[str, dict[str, Any]] = {}
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not line.strip():
             continue
@@ -78,11 +92,32 @@ def _read_ledger(runtime_dir: Path) -> set[str]:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(row, dict):
+            continue
         fingerprint = str(row.get("fingerprint", "")).strip()
         if fingerprint:
-            seen.add(fingerprint)
-    return seen
+            latest[fingerprint] = row
+    return latest
 
+
+def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, Any]) -> bool:
+    task_id = str(request.get("task_id", "")).strip()
+    if not task_id or "/" in task_id or "\\" in task_id:
+        return False
+    path = runtime_dir / f"{task_id}.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict) or str(payload.get("status", "")).strip() != "RUNNING":
+        return False
+    if not str(payload.get("next_action", "")).strip():
+        return False
+    request_repo = str(request.get("repository", "")).strip()
+    current_repo = str(payload.get("repository", "")).strip()
+    if request_repo != current_repo:
+        return False
+    return str(request.get("fingerprint", "")).strip() == checkpoint_fingerprint(payload)
 
 def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -150,8 +185,12 @@ def run_once(
     eligible = 0
     dispatched = 0
     skipped_no_token = 0
+    skipped_stale_checkpoint = 0
+    retry_attempted = 0
 
-    already = _read_ledger(root) or set()
+    ledger = _read_ledger(root)
+    retry_seconds = max(1, int(os.getenv("CHATGPT_CONTINUITY_BRIDGE_RETRY_SECONDS", DEFAULT_BRIDGE_RETRY_SECONDS)))
+    current = datetime.now(timezone.utc)
 
     for request in read_requests(root):
         scanned += 1
@@ -164,8 +203,18 @@ def run_once(
         repository = str(request.get("repository", "")).strip()
         if not fingerprint or not task_id or not repository:
             continue
-        if fingerprint in already:
+        if not _request_matches_current_checkpoint(root, request):
+            skipped_stale_checkpoint += 1
             continue
+
+        previous = ledger.get(fingerprint)
+        if previous:
+            if previous.get("bridge_ok") is True:
+                continue
+            attempted_at = _parse_time(previous.get("dispatched_at"))
+            if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
+                continue
+            retry_attempted += 1
 
         eligible += 1
 
@@ -180,18 +229,16 @@ def run_once(
             repository=repository,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
-        _append_ledger(
-            root,
-            {
-                "fingerprint": fingerprint,
-                "task_id": task_id,
-                "repository": repository,
-                "dispatched_at": utc_now(),
-                "bridge_ok": bool(result.get("ok")),
-                "http_status": result.get("http_status"),
-            },
-        )
-        already.add(fingerprint)
+        ledger_row = {
+            "fingerprint": fingerprint,
+            "task_id": task_id,
+            "repository": repository,
+            "dispatched_at": utc_now(),
+            "bridge_ok": bool(result.get("ok")),
+            "http_status": result.get("http_status"),
+        }
+        _append_ledger(root, ledger_row)
+        ledger[fingerprint] = ledger_row
         if result.get("ok"):
             dispatched += 1
 
@@ -202,6 +249,8 @@ def run_once(
         "eligible": eligible,
         "dispatched": dispatched,
         "skipped_no_token": skipped_no_token,
+        "skipped_stale_checkpoint": skipped_stale_checkpoint,
+        "retry_attempted": retry_attempted,
         "generated_at": utc_now(),
     }
 
