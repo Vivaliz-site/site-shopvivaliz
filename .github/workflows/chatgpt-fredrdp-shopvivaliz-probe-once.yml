@@ -31,7 +31,7 @@ jobs:
           out="$RUNNER_TEMP/chatgpt-fredrdp-shopvivaliz-probe"
           runner_uid="$(id -u)"
           runner_gid="$(id -g)"
-          test -d "$profile"
+          sudo -n -u fredrdp test -d "$profile"
           if ! sudo -n -u fredrdp test -x "$browser"; then
             source=/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome
             src_dir=/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux
