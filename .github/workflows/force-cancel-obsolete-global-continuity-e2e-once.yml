@@ -1,0 +1,45 @@
+name: Force Cancel Obsolete Global Continuity E2E Once
+
+on:
+  push:
+    branches:
+      - ops/force-cancel-obsolete-global-e2e-20260927
+    paths:
+      - ".github/workflows/force-cancel-obsolete-global-continuity-e2e-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: force-cancel-obsolete-global-continuity-e2e-once
+  cancel-in-progress: false
+
+jobs:
+  cancel:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Force-cancel only the proven obsolete quota-bound run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          run_id=36328155278
+          expected_name='Global Task Continuity E2E All Repos Once'
+          name="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .name)"
+          branch="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .head_branch)"
+          status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)"
+          test "$name" = "$expected_name"
+          test "$branch" = "main"
+          case "$status" in
+            queued|pending|in_progress|waiting|requested)
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null 2>&1                 || gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null
+              echo "OBSOLETE_GLOBAL_E2E_FORCE_CANCEL=REQUESTED run_id=$run_id prior_status=$status"
+              ;;
+            completed)
+              echo "OBSOLETE_GLOBAL_E2E_FORCE_CANCEL=ALREADY_TERMINAL run_id=$run_id"
+              ;;
+            *)
+              echo "ERROR unexpected workflow status: $status" >&2
+              exit 1
+              ;;
+          esac
