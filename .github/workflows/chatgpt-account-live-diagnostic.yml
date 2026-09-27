@@ -1,0 +1,88 @@
+name: ChatGPT Account Live Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-account-live-20260927
+    paths:
+      - '.github/workflows/chatgpt-account-live-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate backend browser runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "USER=$(whoami)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          curl -fsS http://127.0.0.1:17777/health | jq '{ok,endpoint,browser_path_exists}'
+          if curl -fsS --max-time 3 http://127.0.0.1:9555/json/version >/tmp/cdp-version.json; then
+            jq '{Browser,ProtocolVersion}' /tmp/cdp-version.json
+            echo "CDP_9555=READY"
+          else
+            echo "CDP_9555=UNAVAILABLE"
+          fi
+          rm -f /tmp/cdp-version.json
+
+      - name: Run controlled ChatGPT diagnostic
+        id: diag
+        shell: bash
+        env:
+          CHATGPT_ACCOUNT_DIAG_OUTPUT: ${{ runner.temp }}/chatgpt-account-diagnostic.json
+        run: |
+          set +e
+          node scripts/chatgpt-account-diagnostic.mjs
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$CHATGPT_ACCOUNT_DIAG_OUTPUT"
+          jq '{
+            schema,
+            started_at,
+            finished_at,
+            auth_state,
+            browser_route,
+            browser_worker_available,
+            canonical_profile_exists,
+            model_label,
+            attempts,
+            request_failure_count,
+            console_error_count,
+            page_error_count,
+            blocker,
+            ok
+          }' "$CHATGPT_ACCOUNT_DIAG_OUTPUT"
+          exit 0
+
+      - name: Upload sanitized diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-account-live-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/chatgpt-account-diagnostic.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce diagnostic result
+        if: always()
+        shell: bash
+        env:
+          RC: ${{ steps.diag.outputs.rc }}
+        run: |
+          test -n "$RC"
+          if [ "$RC" != "0" ]; then
+            echo "CHATGPT_ACCOUNT_LIVE_DIAGNOSTIC=REPRODUCED_OR_BLOCKED rc=$RC"
+            exit "$RC"
+          fi
+          echo "CHATGPT_ACCOUNT_LIVE_DIAGNOSTIC=PASS"
