@@ -20,6 +20,8 @@ from typing import Mapping
 DEFAULT_ENV_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/.env")
 DEFAULT_GEMINI_BIN = Path("/home/ubuntu/.local/bin/gemini")
 SUPPORTED_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GEMINI_API_KEY")
+DEFAULT_FALLBACK_MODELS = ("gemini-2.5-flash-lite",)
+RETRYABLE_GEMINI_REASONS = frozenset({"quota_exhausted", "model_unavailable", "authentication_failed"})
 SECRET_KEYS_TO_REMOVE = (
     "OPENAI_API_KEY",
     "CODEX_API_KEY",
@@ -36,7 +38,7 @@ def _unquote(value: str) -> str:
     return value
 
 
-def select_gemini_credential(text: str) -> tuple[str, str]:
+def select_gemini_credentials(text: str) -> list[tuple[str, str]]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
         line = raw.strip()
@@ -48,11 +50,37 @@ def select_gemini_credential(text: str) -> tuple[str, str]:
         key = key.strip()
         if key in SUPPORTED_KEYS:
             values[key] = _unquote(value)
+
+    credentials: list[tuple[str, str]] = []
+    seen_values: set[str] = set()
     for key in SUPPORTED_KEYS:
         value = values.get(key, "").strip()
-        if value:
-            return key, value
-    return "", ""
+        if value and value not in seen_values:
+            credentials.append((key, value))
+            seen_values.add(value)
+    return credentials
+
+
+def select_gemini_credential(text: str) -> tuple[str, str]:
+    credentials = select_gemini_credentials(text)
+    return credentials[0] if credentials else ("", "")
+
+
+def build_model_candidates(primary: str, fallbacks: tuple[str, ...]) -> list[str]:
+    candidates: list[str] = []
+    for value in (primary, *fallbacks):
+        model = str(value).strip()
+        if model and model not in candidates:
+            candidates.append(model)
+    return candidates
+
+
+def redact_credentials(output: str, credentials: list[tuple[str, str]]) -> str:
+    redacted = output
+    for _source, credential in credentials:
+        if credential:
+            redacted = redacted.replace(credential, "***")
+    return redacted
 
 
 def build_child_env(base: Mapping[str, str], credential: str) -> dict[str, str]:
@@ -224,6 +252,7 @@ def run(
     prompt_file: Path,
     env_file: Path,
     gemini_bin: str,
+    fallback_models: tuple[str, ...] = DEFAULT_FALLBACK_MODELS,
 ) -> int:
     if not prompt_file.is_file():
         print("background_gemini_error=prompt_file_missing", file=sys.stderr)
@@ -238,8 +267,8 @@ def run(
         print("background_gemini_error=runtime_env_unreadable", file=sys.stderr)
         return 78
 
-    source, credential = select_gemini_credential(env_text)
-    if not credential:
+    credentials = select_gemini_credentials(env_text)
+    if not credentials:
         print("background_gemini_error=credential_missing", file=sys.stderr)
         return 78
 
@@ -249,7 +278,7 @@ def run(
         return 127
 
     prompt = prompt_file.read_text(encoding="utf-8", errors="strict")
-    child = build_child_env(os.environ, credential)
+    models = build_model_candidates(model, fallback_models)
     gemini_dir = Path(".gemini")
     settings_path = gemini_dir / "settings.json"
     gemini_dir_created = not gemini_dir.exists()
@@ -272,20 +301,63 @@ def run(
             handle.write(build_headless_admin_policy_text(HEADLESS_SHELL_PREFIXES))
             handle.flush()
             policy_path = Path(handle.name)
-        command = build_gemini_command(
-            executable=executable,
-            model=model,
-            prompt=prompt,
-            admin_policy_path=policy_path,
-        )
-        completed = subprocess.run(
-            command,
-            env=child,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-        )
+        last_output = ""
+        last_returncode = 1
+        last_reason = "unknown_safe_error"
+        last_source = ""
+        last_model = ""
+        stop_all = False
+
+        for source, credential in credentials:
+            child = build_child_env(os.environ, credential)
+            for candidate_model in models:
+                command = build_gemini_command(
+                    executable=executable,
+                    model=candidate_model,
+                    prompt=prompt,
+                    admin_policy_path=policy_path,
+                )
+                completed = subprocess.run(
+                    command,
+                    env=child,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=False,
+                )
+                output = redact_credentials(completed.stdout or "", credentials)
+                reason = classify_gemini_failure(output, completed.returncode)
+                print(
+                    "background_gemini_attempt="
+                    f"credential_source:{source},model:{candidate_model},"
+                    f"exit_code:{completed.returncode},reason:{reason or 'success'}"
+                )
+
+                if completed.returncode == 0:
+                    if output:
+                        sys.stdout.write(output)
+                        if not output.endswith("\n"):
+                            sys.stdout.write("\n")
+                    print(f"background_gemini_credential_source={source}")
+                    print(f"background_gemini_model={candidate_model}")
+                    print("background_gemini_exit_code=0")
+                    return 0
+
+                last_output = output
+                last_returncode = int(completed.returncode)
+                last_reason = reason or "unknown_safe_error"
+                last_source = source
+                last_model = candidate_model
+
+                if last_reason == "authentication_failed":
+                    break
+                if last_reason in {"quota_exhausted", "model_unavailable"}:
+                    continue
+
+                stop_all = True
+                break
+            if stop_all:
+                break
     except OSError:
         print("background_gemini_error=exec_failed", file=sys.stderr)
         return 127
@@ -300,17 +372,15 @@ def run(
         if policy_path is not None:
             policy_path.unlink(missing_ok=True)
 
-    output = (completed.stdout or "").replace(credential, "***")
-    if output:
-        sys.stdout.write(output)
-        if not output.endswith("\n"):
+    if last_output:
+        sys.stdout.write(last_output)
+        if not last_output.endswith("\n"):
             sys.stdout.write("\n")
-    print(f"background_gemini_credential_source={source}")
-    print(f"background_gemini_exit_code={completed.returncode}")
-    reason = classify_gemini_failure(output, completed.returncode)
-    if reason is not None:
-        print(f"background_gemini_reason={reason}")
-    return int(completed.returncode)
+    print(f"background_gemini_credential_source={last_source}")
+    print(f"background_gemini_model={last_model}")
+    print(f"background_gemini_exit_code={last_returncode}")
+    print(f"background_gemini_reason={last_reason}")
+    return int(last_returncode)
 
 
 def main() -> int:
@@ -325,12 +395,25 @@ def main() -> int:
         "--gemini-bin",
         default=os.getenv("SHOPVIVALIZ_GEMINI_BIN", str(DEFAULT_GEMINI_BIN)),
     )
+    parser.add_argument(
+        "--fallback-model",
+        action="append",
+        default=None,
+        help="Gemini-only fallback model; may be repeated.",
+    )
     args = parser.parse_args()
+    configured_fallbacks = tuple(
+        value.strip()
+        for value in os.getenv("GEMINI_FALLBACK_MODELS", "").split(",")
+        if value.strip()
+    )
+    fallback_models = tuple(args.fallback_model or configured_fallbacks or DEFAULT_FALLBACK_MODELS)
     return run(
         model=args.model,
         prompt_file=Path(args.prompt_file).expanduser(),
         env_file=Path(args.env_file).expanduser(),
         gemini_bin=args.gemini_bin,
+        fallback_models=fallback_models,
     )
 
 
