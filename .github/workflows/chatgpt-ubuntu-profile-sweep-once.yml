@@ -1,0 +1,100 @@
+name: ChatGPT Ubuntu Profile Sweep Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-profile-inventory-20260927
+    paths:
+      - '.github/workflows/chatgpt-ubuntu-profile-sweep-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Probe remaining persistent Ubuntu profiles
+        id: sweep
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          browser=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+          root="$RUNNER_TEMP/chatgpt-ubuntu-profile-sweep"
+          test -x "$browser"
+          rm -rf "$root"
+          install -d -m 0700 "$root"
+
+          candidates=(
+            "ai-squad-google-direct|/home/ubuntu/.local/share/ai-squad-google-direct/profile"
+            "ai-squad-chatgpt-fallback|/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt-fallback"
+            "manual|/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/manual"
+            "anydesk-account|/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/anydesk-account"
+            "shopvivaliz-admin-test|/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/shopvivaliz-admin-test"
+          )
+
+          final_rc=2
+          selected=""
+          for entry in "${candidates[@]}"; do
+            label="${entry%%|*}"
+            profile="${entry#*|}"
+            [ -d "$profile" ] || continue
+            if (ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- "$profile"; then
+              echo "SKIP_IN_USE=$label"
+              continue
+            fi
+
+            out="$root/$label"
+            install -d -m 0700 "$out"
+            set +e
+            CHATGPT_ACCOUNT_BROWSER_PATH="$browser"             CHATGPT_ACCOUNT_FORCE_PROFILE="$profile"             CHATGPT_ACCOUNT_BROWSER_ROUTE="ubuntu_profile_sweep_$label"             CHATGPT_ACCOUNT_DIAG_DIR="$out"             CHATGPT_ACCOUNT_DIAG_OUTPUT="$out/diagnostic.json"             xvfb-run -a -s '-screen 0 1440x900x24 -ac'             node scripts/chatgpt-account-diagnostic.mjs
+            rc=$?
+            set -e
+            test -s "$out/diagnostic.json"
+            auth="$(jq -r '.auth_state // "unknown"' "$out/diagnostic.json")"
+            blocker="$(jq -r '.blocker // ""' "$out/diagnostic.json")"
+            printf 'PROFILE_RESULT label=%s auth=%s blocker=%s rc=%s\n' "$label" "$auth" "$blocker" "$rc"
+            jq '{started_at,finished_at,auth_state,browser_route,model_label,attempts,request_failure_count,console_error_count,page_error_count,blocker,blocker_page,blocker_screenshot,ok}' "$out/diagnostic.json"
+            if [ "$auth" = "authenticated_ui_ready" ]; then
+              selected="$label"
+              final_rc="$rc"
+              break
+            fi
+          done
+          echo "selected=$selected" >> "$GITHUB_OUTPUT"
+          echo "rc=$final_rc" >> "$GITHUB_OUTPUT"
+
+      - name: Upload sanitized sweep evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-ubuntu-profile-sweep-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/chatgpt-ubuntu-profile-sweep/**/diagnostic.json
+            ${{ runner.temp }}/chatgpt-ubuntu-profile-sweep/**/sanitized.har.json
+            ${{ runner.temp }}/chatgpt-ubuntu-profile-sweep/**/console-errors.json
+            ${{ runner.temp }}/chatgpt-ubuntu-profile-sweep/**/attempt-*.png
+            ${{ runner.temp }}/chatgpt-ubuntu-profile-sweep/**/blocker.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Report sweep terminal state
+        if: always()
+        shell: bash
+        env:
+          SELECTED: ${{ steps.sweep.outputs.selected }}
+          RC: ${{ steps.sweep.outputs.rc }}
+        run: |
+          if [ -z "$SELECTED" ]; then
+            echo "CHATGPT_UBUNTU_PROFILE_SWEEP=NO_AUTHENTICATED_PROFILE"
+            exit 2
+          fi
+          echo "CHATGPT_UBUNTU_PROFILE_SWEEP=AUTHENTICATED_PROFILE_SELECTED:$SELECTED"
+          if [ "$RC" != 0 ]; then exit "$RC"; fi
