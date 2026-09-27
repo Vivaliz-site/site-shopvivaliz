@@ -10,6 +10,7 @@ import { reportableResourceFailure } from './lib/public-page-health.mjs';
 const execFileAsync = promisify(execFile);
 const baseUrl = (process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const proxyServer = process.env.E2E_PROXY_SERVER || '';
+const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'artifacts', 'public-layout-audit');
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -46,6 +47,7 @@ console.log(`Public layout audit concurrency: ${Math.min(auditConcurrency, route
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
+  executablePath: configuredBrowserPath || undefined,
   proxy: proxyServer ? { server: proxyServer } : undefined,
 });
 const failures = [];
