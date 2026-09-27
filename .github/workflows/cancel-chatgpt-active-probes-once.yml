@@ -32,6 +32,10 @@ jobs:
           while IFS=$'\t' read -r id name status; do
             [ -n "$id" ] || continue
             echo "CANCELING id=$id name=$name status=$status"
-            gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null
+            if gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null 2>&1; then
+              echo "CANCEL_REQUESTED id=$id"
+            else
+              echo "CANCEL_SKIPPED_OR_RACED id=$id"
+            fi
           done
           echo CHATGPT_ACTIVE_TURN_PROBE_CANCEL=PASS
