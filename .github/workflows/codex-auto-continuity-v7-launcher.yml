@@ -114,9 +114,14 @@ jobs:
           test -s "$PROMPT_FILE"
           test -d "$WORKTREE"
 
-          launcher="$(command -v codex-auto || true)"
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
           test -n "$launcher"
+          test -x "$launcher"
           "$launcher" --version
+          "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
 
           cd "$WORKTREE"
           set +e
