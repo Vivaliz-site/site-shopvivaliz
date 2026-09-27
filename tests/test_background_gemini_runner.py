@@ -60,12 +60,15 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "/home/ubuntu/.local/bin/gemini",
         )
 
-    def test_headless_policy_allows_only_bounded_shell_prefixes(self) -> None:
-        policy = self.mod.build_headless_policy_text()
-        self.assertIn('toolName = "run_shell_command"', policy)
-        self.assertIn('decision = "allow"', policy)
-        self.assertIn('interactive = false', policy)
-        self.assertIn('modes = ["autoEdit"]', policy)
+    def test_headless_tools_core_allows_only_bounded_shell_prefixes(self) -> None:
+        # Regression: gemini-cli's --admin-policy TOML rules for
+        # run_shell_command are silently ignored in non-interactive
+        # --prompt + --approval-mode auto_edit mode (upstream issue
+        # google-gemini/gemini-cli#20469: the tool is not even registered,
+        # "Tool 'run_shell_command' not found"). tools.core in
+        # .gemini/settings.json gates tool *registration* itself, so it
+        # is not subject to that policy-engine bypass.
+        tools_core = self.mod.build_headless_tools_core()
         for prefix in (
             "python3 scripts/agent_task_state.py",
             "./scripts/agent_task_state.py",
@@ -79,7 +82,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "bash tests/",
             "bash scripts/repository-governance-validate.sh",
         ):
-            self.assertIn(prefix, policy)
+            self.assertIn(f"run_shell_command({prefix})", tools_core)
         for forbidden in (
             "sudo ",
             "systemctl ",
@@ -88,23 +91,67 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "python3 -c",
             "bash -c",
         ):
-            self.assertNotIn(forbidden, policy)
+            self.assertFalse(any(forbidden in entry for entry in tools_core))
 
-    def test_gemini_command_uses_ephemeral_admin_policy_without_yolo(self) -> None:
+    def test_settings_json_declares_only_the_bounded_tools_core(self) -> None:
+        tools_core = self.mod.build_headless_tools_core()
+        settings_text = self.mod.build_gemini_settings_json(tools_core)
+        import json
+
+        settings = json.loads(settings_text)
+        self.assertEqual(settings["tools"]["core"], tools_core)
+
+    def test_gemini_command_has_no_admin_policy_flag_and_no_yolo(self) -> None:
         command = self.mod.build_gemini_command(
             executable="/home/ubuntu/.local/bin/gemini",
             model="gemini-2.5-flash",
             prompt="continue task",
-            policy_path=Path("/tmp/continuity-policy.toml"),
         )
         self.assertIn("--approval-mode", command)
         self.assertEqual(command[command.index("--approval-mode") + 1], "auto_edit")
-        self.assertIn("--admin-policy", command)
-        self.assertEqual(
-            command[command.index("--admin-policy") + 1],
-            "/tmp/continuity-policy.toml",
-        )
+        self.assertNotIn("--admin-policy", command)
         self.assertNotIn("yolo", command)
+
+    def test_run_writes_workspace_settings_json_with_bounded_tools_core(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            env_file = workspace / ".env"
+            env_file.write_text("GEMINI_API_KEY=fixture-secret\n", encoding="utf-8")
+            prompt_file = workspace / "prompt.txt"
+            prompt_file.write_text("continue task", encoding="utf-8")
+            observed_path = workspace / "observed-settings.json"
+            gemini_bin = workspace / "gemini"
+            gemini_bin.write_text(
+                "#!/bin/sh\n"
+                f'cp ".gemini/settings.json" "{observed_path}"\n'
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            gemini_bin.chmod(0o755)
+
+            previous_cwd = Path.cwd()
+            os.chdir(workspace)
+            try:
+                rc = self.mod.run(
+                    model="gemini-2.5-flash",
+                    prompt_file=prompt_file,
+                    env_file=env_file,
+                    gemini_bin=str(gemini_bin),
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(rc, 0)
+            observed = json.loads(observed_path.read_text(encoding="utf-8"))
+            self.assertIn(
+                "run_shell_command(python3 scripts/agent_task_state.py)",
+                observed["tools"]["core"],
+            )
+            settings_path = workspace / ".gemini" / "settings.json"
+            self.assertFalse(settings_path.exists(), "workspace settings must be cleaned up")
 
     def test_failover_uses_protected_background_runner_only_in_background_mode(self) -> None:
         failover = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
