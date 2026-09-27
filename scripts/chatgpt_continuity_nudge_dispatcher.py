@@ -37,6 +37,27 @@ except ImportError:  # direct CLI execution from repository root
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 DEFAULT_BRIDGE_URL = "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php"
+DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
+
+
+def resolve_bridge_token(explicit_token: str = "") -> str:
+    direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
+    if direct:
+        return direct
+
+    configured = os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", "").strip()
+    candidates = [Path(configured).expanduser()] if configured else []
+    candidates.append(DEFAULT_TOKEN_FILE)
+    for token_path in candidates:
+        try:
+            if not token_path.is_file():
+                continue
+            value = token_path.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            continue
+        if value:
+            return value
+    return ""
 
 
 def utc_now() -> str:
@@ -103,7 +124,7 @@ def run_once(
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     resolved_bridge_url = bridge_url or os.getenv("CHATGPT_CONTINUITY_BRIDGE_URL", "") or DEFAULT_BRIDGE_URL
-    resolved_token = token or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "")
+    resolved_token = resolve_bridge_token(token)
 
     scanned = 0
     eligible = 0
