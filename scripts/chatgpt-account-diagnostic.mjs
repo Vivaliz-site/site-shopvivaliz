@@ -7,6 +7,8 @@ const BROWSER_WORKER_URL = 'http://127.0.0.1:17777';
 const CANONICAL_PROFILE = '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';
 const CANONICAL_BROWSER = '/home/ubuntu/.local/bin/shopvivaliz-browser-chromium';
 const OUTPUT = process.env.CHATGPT_ACCOUNT_DIAG_OUTPUT || '/tmp/chatgpt-account-diagnostic.json';
+const forcedProfile = String(process.env.CHATGPT_ACCOUNT_FORCE_PROFILE || '').trim();
+const forcedRoute = String(process.env.CHATGPT_ACCOUNT_BROWSER_ROUTE || '').trim();
 const playwrightCandidates = [
   String(process.env.CHATGPT_ACCOUNT_PLAYWRIGHT_MODULE || '').trim(),
   '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
@@ -187,49 +189,10 @@ try {
   let browser;
   let context;
 
-  try {
-    browser = await chromium.connectOverCDP('http://127.0.0.1:9555');
-    const contexts = browser.contexts();
-    if (!contexts.length) {
-      result.blocker = 'canonical_browser_context_missing';
-      persist();
-      throw new Error(result.blocker);
-    }
-    context = contexts[0];
-    result.browser_route = 'cdp';
-  } catch (cdpError) {
-    if (result.blocker === 'canonical_browser_context_missing') throw cdpError;
-
-    let workerHealth = null;
-    let workerSessions = null;
-    try {
-      const healthResponse = await fetch(BROWSER_WORKER_URL + '/health', { signal: AbortSignal.timeout(3000) });
-      if (!healthResponse.ok) throw new Error('health_http_' + healthResponse.status);
-      workerHealth = await healthResponse.json();
-      if (workerHealth?.ok !== true || workerHealth?.endpoint !== 'browser-worker') throw new Error('health_contract_invalid');
-      result.browser_worker_available = true;
-
-      const sessionsResponse = await fetch(BROWSER_WORKER_URL + '/sessions', { signal: AbortSignal.timeout(3000) });
-      if (!sessionsResponse.ok) throw new Error('sessions_http_' + sessionsResponse.status);
-      workerSessions = await sessionsResponse.json();
-    } catch {
-      result.blocker = 'browser_worker_unavailable';
-      persist();
-      throw new Error(result.blocker);
-    }
-
-    result.canonical_profile_exists = fs.existsSync(CANONICAL_PROFILE);
-    const activeCanonical = Array.isArray(workerSessions?.sessions)
-      ? workerSessions.sessions.some(session => session?.persistent === true && session?.profile === 'ai-squad-chatgpt')
-      : false;
-
-    if (activeCanonical) {
-      result.blocker = 'canonical_profile_in_use_without_cdp';
-      persist();
-      throw new Error(result.blocker);
-    }
+  if (forcedProfile) {
+    result.canonical_profile_exists = fs.existsSync(forcedProfile);
     if (!result.canonical_profile_exists) {
-      result.blocker = 'canonical_profile_missing';
+      result.blocker = 'forced_profile_missing';
       persist();
       throw new Error(result.blocker);
     }
@@ -238,10 +201,9 @@ try {
       persist();
       throw new Error(result.blocker);
     }
-
-    const display = String(workerHealth?.display || '').trim() || ':98';
+    const display = String(process.env.DISPLAY || '').trim() || ':98';
     try {
-      fallbackContext = await chromium.launchPersistentContext(CANONICAL_PROFILE, {
+      fallbackContext = await chromium.launchPersistentContext(forcedProfile, {
         executablePath: CANONICAL_BROWSER,
         headless: false,
         viewport: { width: 1440, height: 900 },
@@ -256,13 +218,91 @@ try {
         ],
       });
     } catch {
-      result.blocker = 'canonical_profile_locked_or_launch_failed';
+      result.blocker = 'forced_profile_locked_or_launch_failed';
       persist();
       throw new Error(result.blocker);
     }
     context = fallbackContext;
     launchedFallback = true;
-    result.browser_route = 'browser_worker_profile_fallback';
+    result.browser_route = forcedRoute || 'forced_profile_fallback';
+  } else {
+    try {
+      browser = await chromium.connectOverCDP('http://127.0.0.1:9555');
+      const contexts = browser.contexts();
+      if (!contexts.length) {
+        result.blocker = 'canonical_browser_context_missing';
+        persist();
+        throw new Error(result.blocker);
+      }
+      context = contexts[0];
+      result.browser_route = 'cdp';
+    } catch (cdpError) {
+      if (result.blocker === 'canonical_browser_context_missing') throw cdpError;
+
+      let workerHealth = null;
+      let workerSessions = null;
+      try {
+        const healthResponse = await fetch(BROWSER_WORKER_URL + '/health', { signal: AbortSignal.timeout(3000) });
+        if (!healthResponse.ok) throw new Error('health_http_' + healthResponse.status);
+        workerHealth = await healthResponse.json();
+        if (workerHealth?.ok !== true || workerHealth?.endpoint !== 'browser-worker') throw new Error('health_contract_invalid');
+        result.browser_worker_available = true;
+
+        const sessionsResponse = await fetch(BROWSER_WORKER_URL + '/sessions', { signal: AbortSignal.timeout(3000) });
+        if (!sessionsResponse.ok) throw new Error('sessions_http_' + sessionsResponse.status);
+        workerSessions = await sessionsResponse.json();
+      } catch {
+        result.blocker = 'browser_worker_unavailable';
+        persist();
+        throw new Error(result.blocker);
+      }
+
+      result.canonical_profile_exists = fs.existsSync(CANONICAL_PROFILE);
+      const activeCanonical = Array.isArray(workerSessions?.sessions)
+        ? workerSessions.sessions.some(session => session?.persistent === true && session?.profile === 'ai-squad-chatgpt')
+        : false;
+
+      if (activeCanonical) {
+        result.blocker = 'canonical_profile_in_use_without_cdp';
+        persist();
+        throw new Error(result.blocker);
+      }
+      if (!result.canonical_profile_exists) {
+        result.blocker = 'canonical_profile_missing';
+        persist();
+        throw new Error(result.blocker);
+      }
+      if (!fs.existsSync(CANONICAL_BROWSER)) {
+        result.blocker = 'canonical_browser_missing';
+        persist();
+        throw new Error(result.blocker);
+      }
+
+      const display = String(workerHealth?.display || '').trim() || ':98';
+      try {
+        fallbackContext = await chromium.launchPersistentContext(CANONICAL_PROFILE, {
+          executablePath: CANONICAL_BROWSER,
+          headless: false,
+          viewport: { width: 1440, height: 900 },
+          env: { ...process.env, DISPLAY: display, LIBGL_ALWAYS_SOFTWARE: '1' },
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-vulkan',
+            '--use-gl=swiftshader',
+            '--use-angle=swiftshader',
+          ],
+        });
+      } catch {
+        result.blocker = 'canonical_profile_locked_or_launch_failed';
+        persist();
+        throw new Error(result.blocker);
+      }
+      context = fallbackContext;
+      launchedFallback = true;
+      result.browser_route = 'browser_worker_profile_fallback';
+    }
   }
 
   page = await context.newPage();

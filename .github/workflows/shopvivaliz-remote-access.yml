@@ -363,10 +363,31 @@ jobs:
             chatgpt_account_diag)
               remote_script="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
               remote_json="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/chatgpt-account-diagnostic.mjs
+              legacy_json="/tmp/chatgpt-account-diagnostic-legacy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+              legacy_profile="/home/fredrdp/.config/shopvivaliz-chromium"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 755 '$remote_script'" < scripts/chatgpt-account-diagnostic.mjs
+
               diag_rc=0
               "${SSH[@]}" "CHATGPT_ACCOUNT_DIAG_OUTPUT='$remote_json' node '$remote_script'" || diag_rc=$?
-              "${SSH[@]}" "test -s '$remote_json'; rm -f '$remote_script' '$remote_json'"
+              primary_blocker="$("${SSH[@]}" "jq -r '.blocker // empty' '$remote_json'")"
+
+              if [ "$diag_rc" -ne 0 ] && [ "$primary_blocker" = "composer_unavailable" ]; then
+                if "${SSH[@]}" "id -u fredrdp >/dev/null 2>&1 && sudo -n -u fredrdp test -d '$legacy_profile'"; then
+                  if "${SSH[@]}" "(ps -C chromium -o args= 2>/dev/null; ps -C chrome -o args= 2>/dev/null) | grep -Fq -- '$legacy_profile'"; then
+                    echo 'CHATGPT_ACCOUNT_DIAGNOSTIC={"browser_route":"legacy_fredrdp_profile_fallback","blocker":"legacy_profile_in_use_without_cdp","ok":false}'
+                    diag_rc=2
+                  else
+                    diag_rc=0
+                    "${SSH[@]}" "sudo -n -u fredrdp env HOME=/home/fredrdp DISPLAY=:98 CHATGPT_ACCOUNT_FORCE_PROFILE='$legacy_profile' CHATGPT_ACCOUNT_BROWSER_ROUTE=legacy_fredrdp_profile_fallback CHATGPT_ACCOUNT_DIAG_OUTPUT='$legacy_json' node '$remote_script'" || diag_rc=$?
+                    "${SSH[@]}" "sudo -n -u fredrdp test -s '$legacy_json'; sudo -n -u fredrdp rm -f '$legacy_json'"
+                  fi
+                else
+                  echo 'CHATGPT_ACCOUNT_DIAGNOSTIC={"browser_route":"legacy_fredrdp_profile_fallback","blocker":"legacy_profile_missing_or_unreadable","ok":false}'
+                  diag_rc=2
+                fi
+              fi
+
+              "${SSH[@]}" "rm -f '$remote_script' '$remote_json'"
               if [ "$diag_rc" -ne 0 ]; then
                 exit "$diag_rc"
               fi
