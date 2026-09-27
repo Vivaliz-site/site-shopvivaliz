@@ -18,6 +18,7 @@ python3 -m unittest tests.test_task_continuity_enforcement -v
 python3 -m unittest tests.test_task_continuation_watchdog -v
 python3 -m unittest tests.test_task_resume_dispatcher -v
 python3 -m unittest tests.test_executor_fallback_order -v
+python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
