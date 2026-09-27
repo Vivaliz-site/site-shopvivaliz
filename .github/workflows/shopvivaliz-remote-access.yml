@@ -52,6 +52,7 @@ on:
           - agent_ssh_status
           - backend_browser_runner_install
           - backend_browser_runner_status
+          - chatgpt_account_diag
       reason:
         description: Audit reason
         required: true
@@ -104,7 +105,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "chatgpt_account_diag"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -125,6 +126,8 @@ jobs:
               raise SystemExit("Agent SSH actions are restricted to the two Linux VMs")
           if action.startswith("backend_browser_runner_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("Backend browser runner actions are restricted to the backend VM")
+          if action == "chatgpt_account_diag" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT account diagnostic is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -356,6 +359,18 @@ jobs:
                   --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
+              ;;
+            chatgpt_account_diag)
+              remote_script="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              remote_json="/tmp/chatgpt-account-diagnostic-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/chatgpt-account-diagnostic.mjs
+              diag_rc=0
+              "${SSH[@]}" "CHATGPT_ACCOUNT_DIAG_OUTPUT='$remote_json' node '$remote_script'" || diag_rc=$?
+              "${SSH[@]}" "test -s '$remote_json'; rm -f '$remote_script' '$remote_json'"
+              if [ "$diag_rc" -ne 0 ]; then
+                exit "$diag_rc"
+              fi
+              echo "CHATGPT_ACCOUNT_DIAG=PASS"
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in

@@ -21,9 +21,11 @@ on:
       - '.github/workflows/public-layout-audit.yml'
       - '.github/workflows/shopvivaliz-remote-access.yml'
       - 'scripts/public-layout-audit.mjs'
+      - 'scripts/chatgpt-account-diagnostic.mjs'
       - 'scripts/production-runtime-parity.mjs'
       - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
       - 'tests/public-layout-*.sh'
+      - 'tests/chatgpt-account-diagnostic-contract-test.sh'
   workflow_dispatch:
 
 permissions:
@@ -84,6 +86,7 @@ jobs:
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
           node --check scripts/public-layout-audit.mjs
+          node --check scripts/chatgpt-account-diagnostic.mjs
           node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js
@@ -109,6 +112,7 @@ jobs:
           bash tests/master-production-runtime-restart-regression.sh
           bash tests/catalog-single-mobile-nav-regression.sh
           bash tests/product-modal-image-regression.sh
+          bash tests/chatgpt-account-diagnostic-contract-test.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
