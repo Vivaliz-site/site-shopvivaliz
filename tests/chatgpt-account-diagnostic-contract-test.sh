@@ -21,6 +21,13 @@ grep -Fq 'x-oai-turn-trace-id' "$diag"
 grep -Fq 'cf-ray' "$diag"
 grep -Fq 'url.search = ' "$diag"
 grep -Fq 'CHATGPT_ACCOUNT_DIAGNOSTIC=' "$diag"
+grep -Fq 'sanitized.har.json' "$diag"
+grep -Fq 'attempt-' "$diag"
+grep -Fq "request_id: headers['x-oai-request-id']" "$diag"
+grep -Fq "turn_trace_id: headers['x-oai-turn-trace-id']" "$diag"
+grep -Fq "cf_ray: headers['cf-ray']" "$diag"
+grep -Fq "page.screenshot" "$diag"
+grep -Fq 'Upload ChatGPT account diagnostic evidence' "$workflow"
 
 if grep -Eq 'launchPersistentContext|chromium\.launch\(' "$diag"; then
   echo "diagnostic must attach to the canonical existing ChatGPT browser, not launch another profile" >&2
