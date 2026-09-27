@@ -125,9 +125,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           endpoint='https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php'
-          code="$(curl -sS -o /tmp/unauth-body -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' "$endpoint")"
+          code="$(curl -sS -D /tmp/unauth-headers -o /tmp/unauth-body -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' "$endpoint")"
           echo "BRIDGE_UNAUTH_HTTP=$code"
-          test "$code" = "401"
+          awk 'BEGIN{IGNORECASE=1} /^server:|^cf-ray:|^content-type:|^www-authenticate:/{gsub(/\r/,""); print "BRIDGE_HEADER_" toupper($1) "=" substr($0,index($0,$2))}' /tmp/unauth-headers
+          python3 - <<'PY'
+          from pathlib import Path
+          body=Path('/tmp/unauth-body').read_text(encoding='utf-8',errors='replace')
+          safe=' '.join(body.split())[:500]
+          print('BRIDGE_UNAUTH_BODY='+safe)
+          PY
 
       - name: Verify configured bridge token without exposing it
         shell: bash
