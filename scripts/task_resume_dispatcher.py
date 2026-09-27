@@ -200,6 +200,58 @@ def _prepare_workspace(task_id: str) -> Path:
     return workspace
 
 
+_SANITIZED_OUTPUT_MARKERS = (
+    "background_paid_fallback_forbidden",
+    "background_gemini_error",
+    "background_gemini_exit_code",
+)
+
+
+def _summarize_executor_artifacts(workspace: Path) -> dict[str, Any]:
+    """Build a sanitized, allowlisted diagnostic from an ephemeral executor workspace.
+
+    Only structured fields survive; raw prompt/stdout/stderr/secret material is
+    never read into the returned mapping.
+    """
+    diagnostic: dict[str, Any] = {"background_paid_fallback_forbidden": False}
+    logs_dir = Path(workspace) / "logs"
+
+    output_path = logs_dir / "autonomous-provider-output.txt"
+    if output_path.is_file():
+        raw = output_path.read_bytes()
+        diagnostic["provider_output_bytes"] = len(raw)
+        diagnostic["provider_output_sha256"] = hashlib.sha256(raw).hexdigest()
+        text = raw.decode("utf-8", errors="replace")
+        for line in text.splitlines():
+            entry = line.strip()
+            if entry == "background_paid_fallback_forbidden=true":
+                diagnostic["background_paid_fallback_forbidden"] = True
+                continue
+            if entry.startswith("background_gemini_error="):
+                diagnostic["background_gemini_error"] = entry.split("=", 1)[1].strip()
+                continue
+            if entry.startswith("background_gemini_exit_code="):
+                value = entry.split("=", 1)[1].strip()
+                if value.lstrip("-").isdigit():
+                    diagnostic["background_gemini_exit_code"] = int(value)
+
+    attempts_path = logs_dir / "autonomous-provider-attempts.jsonl"
+    attempts = _read_jsonl(attempts_path)
+    if attempts:
+        last = attempts[-1]
+        diagnostic["provider"] = str(last.get("provider", ""))
+        diagnostic["provider_status"] = str(last.get("status", ""))
+        exit_code = last.get("exit_code")
+        if isinstance(exit_code, bool):
+            pass
+        elif isinstance(exit_code, int):
+            diagnostic["provider_attempt_exit_code"] = exit_code
+        elif isinstance(exit_code, str) and exit_code.lstrip("-").isdigit():
+            diagnostic["provider_attempt_exit_code"] = int(exit_code)
+
+    return diagnostic
+
+
 def _execute(
     *,
     runtime_dir: Path,
@@ -208,7 +260,7 @@ def _execute(
     state: dict[str, Any],
     executor: Sequence[str] | None,
     timeout_seconds: int,
-) -> tuple[str, int | None, dict[str, Any]]:
+) -> tuple[str, int | None, dict[str, Any], dict[str, Any]]:
     task_id = str(state.get("task_id", "")).strip()
     before = _state_signature(state)
     prompt_path: Path | None = None
@@ -270,11 +322,14 @@ def _execute(
                 result = "progress"
         else:
             result = "no_progress"
-        return result, exit_code, after_state
+        diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
+        return result, exit_code, after_state, diagnostic
     except subprocess.TimeoutExpired:
-        return "timeout", None, _load_json(_state_path(runtime_dir, task_id))
+        diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
+        return "timeout", None, _load_json(_state_path(runtime_dir, task_id)), diagnostic
     except (OSError, subprocess.SubprocessError):
-        return "executor_error", exit_code, _load_json(_state_path(runtime_dir, task_id))
+        diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
+        return "executor_error", exit_code, _load_json(_state_path(runtime_dir, task_id)), diagnostic
     finally:
         if prompt_path is not None:
             prompt_path.unlink(missing_ok=True)
@@ -353,7 +408,7 @@ def run_once(
 
             summary["eligible"] += 1
             summary["executed"] += 1
-            result, exit_code, after_state = _execute(
+            result, exit_code, after_state, diagnostic = _execute(
                 runtime_dir=runtime,
                 project_dir=project,
                 request=request,
@@ -370,6 +425,7 @@ def run_once(
                 "executor_exit_code": exit_code,
                 "checkpoint_before": str(state.get("updated_at", "")).strip(),
                 "checkpoint_after": str(after_state.get("updated_at", "")).strip() if after_state else "",
+                "diagnostic": diagnostic or {},
                 "created_at": utc_now(),
             }
             _append_jsonl(ledger_path, row)

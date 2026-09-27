@@ -16,7 +16,7 @@
     "fredmourao-ai/solange-rolla"
   ],
   "required_blobs": {
-    "AUDIT_POLICY.md": "2a93133cbd8e24178638236721f5638497a3036a",
+    "AUDIT_POLICY.md": "a4a7282b9d9bce022c3e74156dd2ad53705933f7",
     "docs/quality/EXTREME_AUDIT_PROTOCOL.md": "b8a86b532f08a8494f06f1f058576ca6009c194c",
     "docs/quality/AUDIT_RUNTIME_PARITY_V1.md": "518ee124b471dd9c8405e38acece9fd3bc531186",
     "docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md": "f679f79818756a331fcdbae72e3552d32b94f370",
