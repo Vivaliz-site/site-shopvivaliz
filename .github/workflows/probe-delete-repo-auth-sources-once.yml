@@ -1,0 +1,116 @@
+name: Probe Delete Repo Auth Sources Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-delete-repo-auth-sources-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-delete-repo-auth-sources-once
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    env:
+      EXECUTION_ID: chatgpt-20260927-global-continuity-cleanup-auth-probe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record execution provenance
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf 'execution_id=%s\nactor=%s\nrepository=%s\nsha=%s\nrun_id=%s\n' \
+            "$EXECUTION_ID" "$GITHUB_ACTOR" "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_RUN_ID"
+
+      - name: Configure backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Probe sanitized gh OAuth scopes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
+
+          extract_local_scopes() {
+            local config="$1"
+            GH_CONFIG_DIR="$config" env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null \
+              | tr -d '\r' \
+              | awk -F': ' 'tolower($1)=="x-oauth-scopes"{print $2; exit}'
+          }
+
+          local_scopes=""
+          if [ -d /home/ubuntu/.config/gh ]; then
+            local_scopes="$(extract_local_scopes /home/ubuntu/.config/gh || true)"
+          fi
+          printf 'AUTH_SOURCE=A1_UBUNTU scopes=%s delete_repo=%s\n' \
+            "${local_scopes:-none}" "$(grep -Eq '(^|, ?| )delete_repo(,|$| )' <<<"$local_scopes" && echo true || echo false)"
+
+          remote_probe='set -Eeuo pipefail
+          probe_one() {
+            label="$1"; user="$2"; config="$3"
+            if ! id -u "$user" >/dev/null 2>&1 || [ ! -d "$config" ]; then
+              echo "AUTH_SOURCE=$label scopes=none delete_repo=false"
+              return
+            fi
+            scopes="$(sudo -n -u "$user" env HOME="$(getent passwd "$user" | cut -d: -f6)" GH_CONFIG_DIR="$config" bash -lc "env -u GH_TOKEN -u GITHUB_TOKEN gh api -i user 2>/dev/null | tr -d '\''\\r'\'' | awk -F'\'': '\'' '\''tolower(\$1)==\"x-oauth-scopes\"{print \$2; exit}'\''" || true)"
+            if grep -Eq "(^|, ?| )delete_repo(,|$| )" <<<"$scopes"; then flag=true; else flag=false; fi
+            echo "AUTH_SOURCE=$label scopes=${scopes:-none} delete_repo=$flag"
+          }
+          probe_one BACKEND_UBUNTU ubuntu /home/ubuntu/.config/gh
+          probe_one BACKEND_FREDRDP fredrdp /home/fredrdp/.config/gh
+          probe_one BACKEND_AGENT shopvivaliz-agent /home/shopvivaliz-agent/.config/gh'
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "$remote_probe"
+
+          probe_windows() {
+            local port="$1" label="$2"
+            local ps cmd_b64
+            ps='$ErrorActionPreference="Stop"; $gh=Get-Command gh -ErrorAction SilentlyContinue; if(-not $gh){Write-Output "GH_UNAVAILABLE"; exit 0}; $raw=(& gh api -i user 2>&1 | Out-String); $line=($raw -split "\r?\n" | Where-Object { $_ -match "^x-oauth-scopes:" } | Select-Object -First 1); if($line){Write-Output $line}else{Write-Output "x-oauth-scopes:"}'
+            cmd_b64="$(printf '%s' "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ps\"" | base64 -w0)"
+            output="$(ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "PORT='$port' CMD_B64='$cmd_b64' python3 - <<'PY'
+import base64,json,os,urllib.request
+port=os.environ['PORT']
+command=base64.b64decode(os.environ['CMD_B64']).decode()
+body=json.dumps({'params':{'command':command,'timeout':45}}).encode()
+req=urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+try:
+    with urllib.request.urlopen(req,timeout=55) as r:
+        payload=json.loads(r.read().decode())
+    result=payload.get('result') or {}
+    print(str(result.get('output') or '').strip())
+except Exception as exc:
+    print('RELAY_UNAVAILABLE')
+PY" 2>/dev/null || true)"
+            scopes="$(sed -n 's/^[Xx]-[Oo][Aa][Uu][Tt][Hh]-[Ss][Cc][Oo][Pp][Ee][Ss]:[[:space:]]*//p' <<<"$output" | head -n1)"
+            if grep -Eq '(^|, ?| )delete_repo(,|$| )' <<<"$scopes"; then flag=true; else flag=false; fi
+            printf 'AUTH_SOURCE=%s scopes=%s delete_repo=%s\n' "$label" "${scopes:-none}" "$flag"
+          }
+
+          probe_windows 5557 FREDWIN
+          probe_windows 5558 KOCEPSV
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
