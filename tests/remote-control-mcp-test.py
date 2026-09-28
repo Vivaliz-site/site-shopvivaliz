@@ -388,6 +388,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("console.log(bodyText", auth_text)
         self.assertNotIn("console.log(currentUrl", auth_text)
 
+        for marker in (
+            "OPENAI_PLATFORM_AUTH_STAGE=",
+            "OPENAI_PLATFORM_ACCOUNT_CHOOSER_PRESENT=",
+            "OPENAI_PLATFORM_AUTH_RETURNED_TO_PLATFORM=",
+        ):
+            self.assertIn(marker, auth_text)
+
         auth_flow = ROOT / ".github" / "workflows" / "secure-mcp-platform-auth.yml"
         self.assertTrue(auth_flow.exists(), "Secure MCP Platform auth workflow missing")
         auth_flow_text = auth_flow.read_text(encoding="utf-8")
