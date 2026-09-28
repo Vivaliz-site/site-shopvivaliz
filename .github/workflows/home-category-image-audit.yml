@@ -16,9 +16,8 @@ on:
       - 'tests/home-category-image-audit.mjs'
       - '.github/workflows/home-category-image-audit.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
+  schedule:
+    - cron: '51 6 * * *'
 
 permissions:
   contents: read

@@ -6,9 +6,8 @@ on:
       - 'tests/production-storefront-image-audit.mjs'
       - '.github/workflows/production-storefront-image-audit.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
+  schedule:
+    - cron: '21 6 * * *'
 
 permissions:
   contents: read

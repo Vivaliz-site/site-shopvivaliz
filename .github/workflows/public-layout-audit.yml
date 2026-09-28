@@ -3,10 +3,7 @@ name: Public Layout Audit
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 */6 * * *'
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
+    - cron: '59 7 * * *'
 
 concurrency:
   group: public-layout-audit
