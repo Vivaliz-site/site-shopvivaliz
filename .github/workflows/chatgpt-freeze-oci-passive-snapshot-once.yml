@@ -60,7 +60,7 @@ jobs:
           test "$count" = 1
           instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
           compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
-          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==\`Compute Instance Run Command\`].status | [0]' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
           test "$plugin" = RUNNING
           printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
           echo OCI_BACKEND_IDENTITY=PASS
