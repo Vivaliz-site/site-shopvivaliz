@@ -48,18 +48,48 @@ jobs:
               echo "${name}=UNSET"
             fi
           done
-          if timeout 20s "$CLAUDE_BIN" remote-control --help >"$RUNNER_TEMP/claude-rc-help.txt" 2>&1; then
-            rc=0
+
+          AUTH_JSON="$RUNNER_TEMP/claude-auth-status.json"
+          if "$CLAUDE_BIN" auth status >"$AUTH_JSON" 2>"$RUNNER_TEMP/claude-auth-status.err"; then
+            echo "claude_auth=logged_in"
+            python3 - "$AUTH_JSON" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+          print("auth_logged_in=" + str(bool(payload.get("loggedIn"))).lower())
+          method = payload.get("authMethod") or payload.get("auth_method") or ""
+          if method:
+              print("auth_method=" + str(method)[:40])
+          subscription = payload.get("subscriptionType") or payload.get("subscription_type") or ""
+          if subscription:
+              print("subscription_type=" + str(subscription)[:40])
+          PY
           else
-            rc=$?
+            echo "claude_auth=not_logged_in"
+            sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$RUNNER_TEMP/claude-auth-status.err" | tail -n 12
+            echo "REMOTE_CONTROL_LOGIN_REQUIRED"
+            exit 31
           fi
-          echo "remote_control_help_rc=$rc"
-          if [ "$rc" -eq 0 ]; then
-            echo "remote_control_eligible=true"
-            grep -E -- '--spawn|--capacity|--permission-mode|--no-create-session-in-dir|--continue' "$RUNNER_TEMP/claude-rc-help.txt" | head -n 20 || :
+
+          DOCTOR_OUT="$RUNNER_TEMP/claude-doctor.txt"
+          if timeout 30s "$CLAUDE_BIN" doctor >"$DOCTOR_OUT" 2>&1; then
+            doctor_rc=0
           else
-            echo "remote_control_eligible=false"
-            tail -n 20 "$RUNNER_TEMP/claude-rc-help.txt" | sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g'
-            exit "$rc"
+            doctor_rc=$?
           fi
+          echo "claude_doctor_rc=$doctor_rc"
+          grep -Ei 'remote control|remote-control|eligib|trusted device|feature.flag' "$DOCTOR_OUT" \
+            | sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' \
+            | head -n 30 || :
+          if grep -Eqi 'remote control.*(disabled|not enabled|ineligible|unavailable)|requires.*trusted device' "$DOCTOR_OUT"; then
+            echo "REMOTE_CONTROL_POLICY_REQUIRED"
+            exit 32
+          fi
+          if [ "$doctor_rc" -ne 0 ]; then
+            echo "REMOTE_CONTROL_DOCTOR_INCONCLUSIVE"
+            exit "$doctor_rc"
+          fi
+          echo "remote_control_eligible=true"
           echo "CLAUDE_REMOTE_CONTROL_PROBE_END"
