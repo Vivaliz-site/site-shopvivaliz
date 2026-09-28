@@ -202,12 +202,12 @@ def run_host_command(host: str, command: str, timeout: int = DEFAULT_TIMEOUT) ->
     timeout = validate_timeout(timeout)
     args = remote_invocation(host, command)
     started = time.monotonic()
-    cp = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    cp = subprocess.run(args, capture_output=True, timeout=timeout)
     return {
         "host": host,
         "exit_code": cp.returncode,
-        "stdout": redact_text(cp.stdout),
-        "stderr": redact_text(cp.stderr),
+        "stdout": redact_text(cp.stdout.decode("utf-8", errors="replace")),
+        "stderr": redact_text(cp.stderr.decode("utf-8", errors="replace")),
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
 
