@@ -124,13 +124,39 @@ accept_consent(){
     rc=$?
   fi
   if grep -Eqi 'requires a claude\.ai subscription|run.*/login|sign in|not logged in' "$out"; then
-    rm -f "$out"; die remote_control_login_required 44
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=auth"
+    return 44
   fi
   if grep -Eqi 'disabled by your organization|not enabled|ineligible|trusted device' "$out"; then
-    rm -f "$out"; die remote_control_policy_required 45
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=policy"
+    return 45
+  fi
+  if grep -Eqi 'not a git repository|requires? a git repository|git repository required|worktree.*repository|project directory' "$out"; then
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=repo"
+    return 46
+  fi
+  if grep -Eqi 'workspace trust|trusted directory|trust (this|the) (folder|directory|workspace|project)|accept.*trust' "$out"; then
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=trust"
+    return 47
+  fi
+  if grep -Eqi 'tty|terminal required|not a terminal|interactive input|stdin.*terminal' "$out"; then
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=tty"
+    return 48
+  fi
+  if grep -Eqi 'unknown (option|argument)|unrecognized (option|argument)|invalid.*permission.mode|unexpected argument' "$out"; then
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=flag"
+    return 49
   fi
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
-    rm -f "$out"; die remote_control_consent_failed 46
+    rm -f "$out"
+    echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=other"
+    return 50
   fi
   rm -f "$out"
   echo "CLAUDE_REMOTE_CONTROL_CONSENT=PASS"
