@@ -23,7 +23,8 @@ jobs:
           github.event.issue.body == 'action=bootstrap-remote-control-mcp' ||
           github.event.issue.body == 'action=e2e-remote-control-mcp' ||
           github.event.issue.body == 'action=runtime-proof-submit' ||
-          github.event.issue.body == 'action=runtime-proof-verify'
+          github.event.issue.body == 'action=runtime-proof-verify' ||
+          github.event.issue.body == 'action=secure-mcp-tunnel-probe'
         )
       }}
     runs-on: ubuntu-latest
@@ -446,6 +447,287 @@ jobs:
           print('DURABLE_AFTER_DISCONNECT=PASS')
           print('RUNTIME_GITHUB_DEPENDENCY=false')
           PY
+
+      - name: Probe Secure MCP Tunnel prerequisites
+        if: github.event.issue.body == 'action=secure-mcp-tunnel-probe'
+        env:
+          GH_OPENAI_ADMIN_KEY: ${{ secrets.OPENAI_ADMIN_KEY }}
+          GH_CONTROL_PLANE_API_KEY: ${{ secrets.CONTROL_PLANE_API_KEY }}
+          GH_CONTROL_PLANE_TUNNEL_ID: ${{ secrets.CONTROL_PLANE_TUNNEL_ID }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          gh_admin=false
+          gh_runtime=false
+          gh_tunnel=false
+          [ -n "${GH_OPENAI_ADMIN_KEY:-}" ] && gh_admin=true
+          [ -n "${GH_CONTROL_PLANE_API_KEY:-}" ] && gh_runtime=true
+          [ -n "${GH_CONTROL_PLANE_TUNNEL_ID:-}" ] && gh_tunnel=true
+
+          REMOTE_PROBE="$("${BACKEND_SSH[@]}" 'sudo -n bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          state=/var/lib/shopvivaliz-remote-control
+          config_candidates=(
+            "$state/secure-mcp-tunnel.env"
+            /etc/shopvivaliz/secure-mcp-tunnel.env
+            /etc/shopvivaliz-secure-mcp-tunnel.env
+          )
+
+          tunnel_client=false
+          command -v tunnel-client >/dev/null 2>&1 && tunnel_client=true
+
+          service_active=false
+          systemctl is-active --quiet shopvivaliz-secure-mcp-tunnel.service && service_active=true
+
+          tunnel_id=false
+          runtime_key=false
+          admin_key=false
+          for cfg in "${config_candidates[@]}"; do
+            [ -r "$cfg" ] || continue
+            grep -Eq '^CONTROL_PLANE_TUNNEL_ID=tunnel_[0-9a-f]{32}        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FRED_TUNNEL_PORT=32223
+          FRED_HOSTS_FILE="$RUNNER_TEMP/fredwin-hosts"
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          if "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/127.0.0.1/2222'"; then
+            FRED_SSH_SOURCE=reverse_2222
+            ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:127.0.0.1:2222" ubuntu@127.0.0.1
+          else
+            FRED_IP="$("${SSH_BACKEND[@]}" 'tailscale status --json' | python3 -c 'import json,sys; d=json.load(sys.stdin); ps=[p for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper()]; p=ps[0] if ps else {}; ips=p.get("TailscaleIPs") or []; print(next((x for x in ips if ":" not in x),""))')"
+            test -n "$FRED_IP" || { echo "::error::Fred-Win Tailscale peer not found"; exit 3; }
+            "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$FRED_IP/22'"
+            FRED_SSH_SOURCE=tailscale_direct
+            ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" -L "$FRED_TUNNEL_PORT:$FRED_IP:22" ubuntu@127.0.0.1
+          fi
+          echo "FRED_SSH_SOURCE=$FRED_SSH_SOURCE"
+          sleep 2
+          ssh-keyscan -T 5 -p "$FRED_TUNNEL_PORT" 127.0.0.1 2>/dev/null > "$FRED_HOSTS_FILE"
+          test -s "$FRED_HOSTS_FILE"
+          SSH_FRED=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$FRED_HOSTS_FILE" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$FRED_TUNNEL_PORT" FRED@127.0.0.1)
+          "${SSH_FRED[@]}" 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$env:COMPUTERNAME; whoami"'
+
+          SERVER_KEY="$("${SSH_BACKEND[@]}" 'sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub')"
+          test -n "$SERVER_KEY"
+          export SERVER_KEY_B64="$(printf '%s' "$SERVER_KEY" | base64 -w0)"
+          export SCRIPT_B64="$(base64 -w0 scripts/fredwin-rustdesk-validate.ps1)"
+          python3 - <<'PY' > "$RUNNER_TEMP/fredwin-bootstrap.b64"
+          import base64, os
+          ps = r'''$ErrorActionPreference='Stop'
+          $scriptPath='C:\Windows\Temp\shopvivaliz-rustdesk-validate.ps1'
+          $keyPath='C:\Windows\Temp\shopvivaliz-rustdesk-server-key.txt'
+          [IO.File]::WriteAllBytes($scriptPath,[Convert]::FromBase64String('__SCRIPT_B64__'))
+          [IO.File]::WriteAllText($keyPath,[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__SERVER_KEY_B64__')))
+          $task='ShopVivalizRustDeskValidation'
+          $user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+          $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\shopvivaliz-rustdesk-validate.ps1 -ServerKeyFile C:\Windows\Temp\shopvivaliz-rustdesk-server-key.txt'
+          $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+          Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+          Start-ScheduledTask -TaskName $task
+          $deadline=(Get-Date).AddSeconds(55)
+          do { Start-Sleep 2; $done=Test-Path 'C:\Windows\Temp\shopvivaliz-rustdesk-validation\result.txt' } while(-not $done -and (Get-Date) -lt $deadline)
+          if(-not $done){throw 'RustDesk validation timed out'}
+          Get-Content 'C:\Windows\Temp\shopvivaliz-rustdesk-validation\result.txt'
+          Unregister-ScheduledTask -TaskName $task -Confirm:$false
+          '''
+          ps=ps.replace('__SCRIPT_B64__',os.environ['SCRIPT_B64']).replace('__SERVER_KEY_B64__',os.environ['SERVER_KEY_B64'])
+          print(base64.b64encode(ps.encode('utf-16le')).decode())
+          PY
+          BOOTSTRAP_B64="$(cat "$RUNNER_TEMP/fredwin-bootstrap.b64")"
+          "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $BOOTSTRAP_B64" | tee "$RUNNER_TEMP/fredwin-rustdesk-result.txt"
+
+          mkdir -p artifacts/fredwin-rustdesk-validation
+          for name in backend site; do
+            "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\\Windows\\Temp\\shopvivaliz-rustdesk-validation\\$name.png'))\"" | tr -d '\r\n' | base64 -d > "artifacts/fredwin-rustdesk-validation/$name.png"
+            test -s "artifacts/fredwin-rustdesk-validation/$name.png"
+          done
+          cp "$RUNNER_TEMP/fredwin-rustdesk-result.txt" artifacts/fredwin-rustdesk-validation/result.txt
+          file artifacts/fredwin-rustdesk-validation/backend.png artifacts/fredwin-rustdesk-validation/site.png
+          "${SSH_FRED[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath 'C:\\Windows\\Temp\\shopvivaliz-rustdesk-validate.ps1','C:\\Windows\\Temp\\shopvivaliz-rustdesk-server-key.txt' -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath 'C:\\Windows\\Temp\\shopvivaliz-rustdesk-validation' -Recurse -Force -ErrorAction SilentlyContinue\"" >/dev/null
+          echo "FRED_RUSTDESK_VALIDATION=CAPTURED"
+
+      - name: Upload Fred-Win RustDesk validation evidence
+        if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fredwin-rustdesk-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/fredwin-rustdesk-validation/
+          if-no-files-found: error
+
+      - name: Install RustDesk server and clients on both VMs
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- server_install' < scripts/setup-rustdesk-remote.sh
+          SERVER_KEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub')"
+          test -n "$SERVER_KEY"
+
+          server_key_b64="$(printf '%s' "$SERVER_KEY" | base64 -w0)"
+          "${BACKEND_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -c 'set -Eeuo pipefail; key=\$(printf %s \"\$SERVER_KEY_B64\" | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install'" < scripts/setup-rustdesk-remote.sh
+          "${SITE_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -c 'set -Eeuo pipefail; key=\$(printf %s \"\$SERVER_KEY_B64\" | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$key\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install'" < scripts/setup-rustdesk-remote.sh
+          echo "RUSTDESK_BOOTSTRAP=BOTH_VMS_INSTALLED"
+
+      - name: Provision dedicated private SSH agent access on both VMs
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          AGENT_PUBKEY="$("${SITE_SSH[@]}" 'set -Eeuo pipefail; install -m 700 -d "$HOME/.ssh"; key="$HOME/.ssh/shopvivaliz_agent_ed25519"; if [ ! -s "$key" ]; then ssh-keygen -q -t ed25519 -N "" -C shopvivaliz-agent -f "$key"; chmod 600 "$key"; fi; ssh-keygen -y -f "$key"')"
+          test -n "$AGENT_PUBKEY"
+          pub_b64="$(printf '%s' "$AGENT_PUBKEY" | base64 -w0)"
+
+          "${BACKEND_SSH[@]}" "PUB_B64='$pub_b64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$pub\" bash -s -- install'" < scripts/setup-agent-ssh.sh
+          "${SITE_SSH[@]}" "PUB_B64='$pub_b64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$pub\" bash -s -- install'" < scripts/setup-agent-ssh.sh
+
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            kh="$HOME/.ssh/shopvivaliz-agent-known-hosts"
+            touch "$kh"; chmod 600 "$kh"
+            for ip in 10.0.1.112 10.0.1.38; do
+              if ! ssh-keygen -F "$ip" -f "$kh" >/dev/null 2>&1; then
+                ssh-keyscan -T 5 "$ip" >> "$kh" 2>/dev/null
+              fi
+            done
+            key="$HOME/.ssh/shopvivaliz_agent_ed25519"
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kh" -i "$key" shopvivaliz-agent@10.0.1.112 "sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status >/dev/null; test \"\$(whoami)\" = shopvivaliz-agent"
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kh" -i "$key" shopvivaliz-agent@10.0.1.38 "sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status >/dev/null; test \"\$(whoami)\" = shopvivaliz-agent"
+          '
+          echo "AGENT_SSH_SITE_PROBE=PASS"
+          echo "AGENT_SSH_BACKEND_PROBE=PASS"
+
+      - name: Restore production runner listener without reboot
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            service=shopvivaliz-actions-runner.service
+            if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
+            if [ "$workers" -gt 0 ]; then
+              echo "RUNNER_LISTENER_RESTART=skipped_worker_active"
+            else
+              uid="$(id -u)"
+              runtime="/run/user/$uid"
+              bus="unix:path=$runtime/bus"
+              test -S "$runtime/bus"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"
+              echo "RUNNER_LISTENER_RESTART=PASS"
+            fi
+          '
+
+      - name: Validate private access and RustDesk state
+        if: github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-rustdesk-remote.sh
+          "${SITE_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-rustdesk-remote.sh
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-agent-ssh.sh
+          "${SITE_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-agent-ssh.sh
+          echo "PRIVATE_ACCESS_BOOTSTRAP=PASS"
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null
+          fi
+          if [ -n "${SITE_SESSION_ID:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null
+          fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null
+          fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22"
+          fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+          fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+ "$cfg" && tunnel_id=true
+            grep -Eq '^CONTROL_PLANE_API_KEY=.+' "$cfg" && runtime_key=true
+            grep -Eq '^OPENAI_ADMIN_KEY=.+' "$cfg" && admin_key=true
+          done
+
+          local_auth=false
+          [ -s "$state/mcp-token" ] && local_auth=true
+
+          cdp=false
+          curl -sS --connect-timeout 3 --max-time 5 -o /dev/null http://127.0.0.1:9555/json/version && cdp=true
+
+          outbound=false
+          curl -sS --connect-timeout 8 --max-time 15 -o /dev/null https://api.openai.com/v1/models && outbound=true
+
+          printf 'REMOTE_TUNNEL_CLIENT_INSTALLED=%s\n' "$tunnel_client"
+          printf 'REMOTE_TUNNEL_SERVICE_ACTIVE=%s\n' "$service_active"
+          printf 'REMOTE_TUNNEL_ID_CONFIGURED=%s\n' "$tunnel_id"
+          printf 'REMOTE_TUNNEL_RUNTIME_KEY_AVAILABLE=%s\n' "$runtime_key"
+          printf 'REMOTE_TUNNEL_ADMIN_KEY_AVAILABLE=%s\n' "$admin_key"
+          printf 'REMOTE_TUNNEL_MCP_LOCAL_AUTH_AVAILABLE=%s\n' "$local_auth"
+          printf 'REMOTE_CHATGPT_CDP_AVAILABLE=%s\n' "$cdp"
+          printf 'REMOTE_TUNNEL_OUTBOUND_HTTPS=%s\n' "$outbound"
+          REMOTE
+          )"
+
+          remote_value() {
+            local key="$1"
+            printf '%s\n' "$REMOTE_PROBE" | sed -n "s/^$key=//p" | tail -n 1
+          }
+          bool_or() {
+            [ "$1" = true ] || [ "$2" = true ] && printf true || printf false
+          }
+
+          remote_client="$(remote_value REMOTE_TUNNEL_CLIENT_INSTALLED)"
+          remote_service="$(remote_value REMOTE_TUNNEL_SERVICE_ACTIVE)"
+          remote_tunnel="$(remote_value REMOTE_TUNNEL_ID_CONFIGURED)"
+          remote_runtime="$(remote_value REMOTE_TUNNEL_RUNTIME_KEY_AVAILABLE)"
+          remote_admin="$(remote_value REMOTE_TUNNEL_ADMIN_KEY_AVAILABLE)"
+          remote_auth="$(remote_value REMOTE_TUNNEL_MCP_LOCAL_AUTH_AVAILABLE)"
+          remote_cdp="$(remote_value REMOTE_CHATGPT_CDP_AVAILABLE)"
+          remote_outbound="$(remote_value REMOTE_TUNNEL_OUTBOUND_HTTPS)"
+
+          for value in "$remote_client" "$remote_service" "$remote_tunnel" "$remote_runtime" "$remote_admin" "$remote_auth" "$remote_cdp" "$remote_outbound"; do
+            case "$value" in true|false) ;; *) echo "::error::Invalid sanitized tunnel probe result"; exit 4 ;; esac
+          done
+
+          echo "TUNNEL_CLIENT_INSTALLED=$remote_client"
+          echo "TUNNEL_SERVICE_ACTIVE=$remote_service"
+          echo "TUNNEL_ID_CONFIGURED=$(bool_or "$gh_tunnel" "$remote_tunnel")"
+          echo "TUNNEL_RUNTIME_KEY_AVAILABLE=$(bool_or "$gh_runtime" "$remote_runtime")"
+          echo "TUNNEL_ADMIN_KEY_AVAILABLE=$(bool_or "$gh_admin" "$remote_admin")"
+          echo "TUNNEL_MCP_LOCAL_AUTH_AVAILABLE=$remote_auth"
+          echo "CHATGPT_CDP_AVAILABLE=$remote_cdp"
+          if [ "$remote_outbound" != true ]; then
+            echo "::error::Backend cannot reach OpenAI over outbound HTTPS"
+            exit 5
+          fi
+          echo "TUNNEL_OUTBOUND_HTTPS=PASS"
+          echo "SECURE_MCP_TUNNEL_PROBE=PASS"
 
       - name: Validate both VMs through RustDesk on Fred-Win
         if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'
