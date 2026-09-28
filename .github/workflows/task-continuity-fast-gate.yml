@@ -77,9 +77,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
       - name: Compile continuity runtime
-        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/task_continuity_e2e.py scripts/validate-task-continuity-enforcement.py scripts/chatgpt_continuity_nudge_dispatcher.py
+        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/task_continuity_e2e.py scripts/validate-task-continuity-enforcement.py scripts/chatgpt_continuity_nudge_dispatcher.py scripts/run_background_gemini.py scripts/safe_git_push.py
       - name: Run focused continuity regression
         run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_task_continuity_e2e tests.test_ci_latency_contract tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order tests.test_chatgpt_continuity_nudge_dispatcher tests.test_chatgpt_continuity_backend_runtime tests.test_checkpoint_first_zero_window -v
+      - name: Run background Gemini safety regression
+        run: python3 -m unittest tests.test_background_gemini_runner -v
       - name: Run ChatGPT continuity bridge worker regression
         run: node tests/chatgpt-continuity-bridge-worker-test.mjs
       - name: Validate continuity policy
