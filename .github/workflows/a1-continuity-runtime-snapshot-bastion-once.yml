@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/a1-continuity-runtime-snapshot-bastion-once.yml'
       - 'scripts/diag-a1-continuity-runtime-snapshot.py'
+      - 'scripts/diag-a1-continuity-runtime-snapshot.py'
 
 permissions:
   contents: read
