@@ -131,6 +131,23 @@ async function run() {
     assert.equal(cdp.calls.some(call => call.includes('location.assign')), false);
   }
 
+  {
+    const iso = new Date().toISOString();
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      assert.match(expression, /is_archived=false/);
+      assert.match(expression, /is_starred=false/);
+      assert.match(expression, /order=updated/);
+      assert.match(expression, /body\?\.conversations/);
+      assert.match(expression, /fallback_unfiltered/);
+      return { id: 'latest-thread-updated-at', updated_at: iso, http_status: 200, source: 'filtered' };
+    };
+    const latest = await latestConversationMeta(cdp);
+    assert.equal(latest.id, 'latest-thread-updated-at');
+    assert.ok(latest.update_time > 0, 'updated_at must normalize to unix seconds');
+  }
+
   console.log('cross-device latest-conversation alignment: PASS');
 
   // The explicitly authorized checkpoint-driven resume path must stay live.
