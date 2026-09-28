@@ -719,9 +719,18 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_CDP_REACHABLE=",
             "CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=",
             "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=",
+            "CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_ID_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_ID_VALID=",
+            "CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_UPDATE_VALID=",
+            "CHATGPT_CONTINUITY_LATEST_ITEM_KEYS=",
             "CHATGPT_CONTINUITY_MCP_DIAGNOSTIC=PASS",
         ):
             self.assertIn(needle, workflow)
+        self.assertIn("Object.keys(item)", workflow)
+        self.assertIn("replace(/[^A-Za-z0-9_]/g", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_LATEST_CONVERSATION_ID=", workflow)
         self.assertIn("admin_command_run", workflow)
         self.assertIn("always-free-arm-1787907847-26", workflow)
         self.assertIn("shopvivaliz-free-a1", workflow)
