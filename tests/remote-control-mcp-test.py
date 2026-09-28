@@ -515,6 +515,8 @@ class BootstrapContractTests(unittest.TestCase):
         unit_text = unit.read_text(encoding="utf-8")
         self.assertIn('"type":"stdio"', setup_text)
         self.assertIn('/usr/local/sbin/shopvivaliz-claude-mcp-stdio', setup_text)
+        self.assertIn('run_in_workspace_as_claude(){', setup_text)
+        self.assertIn('run_in_workspace_as_claude timeout 18s "$CLAUDE_BIN" remote-control', setup_text)
         self.assertIn('/var/lib/shopvivaliz-remote-control/mcp-token', bridge_text)
         self.assertIn('http://127.0.0.1:5580/mcp', bridge_text)
         self.assertNotIn('mcp-token', unit_text)

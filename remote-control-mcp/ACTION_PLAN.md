@@ -103,10 +103,16 @@ STATUS=PASS
 - Detalhe completo da investigação (2 rodadas de bug real + correção) em CHECKPOINT.md ACTION STAGE 6.
 
 ## Etapa 6 — Provar runtime sem GitHub
-STATUS=PENDING
+STATUS=PASS
+
+### Evidência
+- A execução de quatro hosts `36449123839` registrou `runtime_github_dependency=false` no artefato persistido, enquanto o controller foi chamado no backend por `127.0.0.1:5580`.
+- As issues #2045 e #2046 provaram uma tarefa submetida e verificada após a desconexão do cliente: `DURABLE_AFTER_DISCONNECT=PASS` e `RUNTIME_GITHUB_DEPENDENCY=false`.
+- GitHub Actions permanece somente como shell auditável de bootstrap/observação; não participa do transporte de comandos, fila, heartbeat, execução nem estado do runtime.
 
 ## Etapa 7 — Integrar MCP com ChatGPT e encerrar
-STATUS=PENDING
+STATUS=RUNNING
+- ChatGPT Secure MCP Tunnel e o caminho Claude Code cloud exigem validação ao vivo separada; não herdam o PASS da Etapa 6.
 
 ## Atualização — 2026-09-28 (sessão atual): SSH real + auth resolvidos nos dois Windows; novo bloqueio é do controller
 
