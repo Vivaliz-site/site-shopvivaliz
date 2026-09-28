@@ -78,3 +78,13 @@ STATUS=FAIL_CONFIRMED_CAUSE
 ### CHECKPOINT POLICY
 - Persist this file after every completed stage before advancing.
 - Do not mark CONCLUIDO until four-host privilege + durable-task E2E and non-GitHub runtime proof pass.
+
+
+### STAGE 4 — Windows route design
+STATUS=PASS
+- Execution mode changed to one stage at a time with a persisted checkpoint after every stage.
+- Fred-Win canonical reverse SSH remains backend `127.0.0.1:2222 -> 127.0.0.1:22`.
+- KOCEPSV will gain backend `127.0.0.1:2223 -> 127.0.0.1:22`; repository search found no canonical conflict for port 2223.
+- Existing MCP relays `5557/5558` remain bootstrap/recovery surfaces only.
+- Remote Control MCP Windows runtime will use loopback reverse SSH, not direct peer TCP/22 over Tailscale.
+- Detailed implementation sequence persisted in `remote-control-mcp/ACTION_PLAN.md`.
