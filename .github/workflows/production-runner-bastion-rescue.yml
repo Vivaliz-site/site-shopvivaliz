@@ -210,31 +210,30 @@ jobs:
           if [ -n "$active_id" ]; then
             echo "CANONICAL_DEPLOY=already_active"
             echo "CANONICAL_DEPLOY_RUN_ID=$active_id"
-            exit 0
-          fi
-
-          gh workflow run master-production-pipeline.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f confirmation=DEPLOY
-
-          run_id=''
-          for _ in $(seq 1 30); do
-            run_id="$(gh run list \
+          else
+            gh workflow run master-production-pipeline.yml \
               --repo "$GITHUB_REPOSITORY" \
-              --workflow master-production-pipeline.yml \
-              --event workflow_dispatch \
-              --branch main \
-              --limit 30 \
-              --json databaseId,headSha,status \
-              --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" \
-              | head -1)"
-            test -n "$run_id" && break
-            sleep 2
-          done
-          test -n "$run_id"
-          echo "CANONICAL_DEPLOY=dispatched"
-          echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
+              --ref main \
+              -f confirmation=DEPLOY
+
+            run_id=''
+            for _ in $(seq 1 30); do
+              run_id="$(gh run list \
+                --repo "$GITHUB_REPOSITORY" \
+                --workflow master-production-pipeline.yml \
+                --event workflow_dispatch \
+                --branch main \
+                --limit 30 \
+                --json databaseId,headSha,status \
+                --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" \
+                | head -1)"
+              test -n "$run_id" && break
+              sleep 2
+            done
+            test -n "$run_id"
+            echo "CANONICAL_DEPLOY=dispatched"
+            echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
+          fi
 
       - name: Cleanup temporary Bastion access and credentials
         if: always()
@@ -242,16 +241,32 @@ jobs:
         run: |
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          cleanup_status=0
           if [ -n "${SITE_SESSION_ID:-}" ]; then
-            "${OCI[@]}" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null 2>&1 || true
+            if ! "${OCI[@]}" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null 2>&1; then
+              echo "::error::Failed to delete temporary Bastion session"
+              cleanup_status=1
+            fi
           fi
           if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
-            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || true
+            if ! "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1; then
+              echo "::error::Failed to restore Bastion CIDR allowlist"
+              cleanup_status=1
+            fi
           fi
           if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
-            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" || true
+            if ! pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"; then
+              echo "::error::Failed to stop temporary Bastion tunnel"
+              cleanup_status=1
+            fi
           fi
           for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
-            if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
+            if [ -n "$f" ] && [ -f "$f" ]; then
+              if ! shred -u "$f"; then
+                echo "::error::Failed to shred temporary credential file"
+                cleanup_status=1
+              fi
+            fi
           done
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$cleanup_status"
