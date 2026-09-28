@@ -1,0 +1,214 @@
+name: Codex Remote Control MCP One-Shot
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  run:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      github.event.comment.body == '/codex-remote-control-mcp-run'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 360
+
+    steps:
+      - name: Prepare isolated remote-control worktree
+        id: worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          branch="fix/remote-control-kocepsv-bootstrap-stage4-20260927"
+          src="$HOME/src/site-shopvivaliz-remote-control-codex"
+          preferred="$HOME/worktrees/site-shopvivaliz/remote-control-mcp-codex"
+
+          mkdir -p "$HOME/src" "$HOME/worktrees/site-shopvivaliz"
+          if [ ! -d "$src/.git" ]; then
+            gh repo clone "$GITHUB_REPOSITORY" "$src"
+          fi
+          git -C "$src" fetch origin --prune
+
+          existing="$(
+            git -C "$src" worktree list --porcelain |
+            awk -v want="refs/heads/$branch" '
+              $1=="worktree" { path=$2 }
+              $1=="branch" && $2==want { print path; exit }
+            '
+          )"
+
+          if [ -n "$existing" ]; then
+            worktree="$existing"
+          elif [ -e "$preferred/.git" ]; then
+            worktree="$preferred"
+          else
+            if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
+              git -C "$src" worktree add "$preferred" "$branch"
+            else
+              git -C "$src" worktree add --track -b "$branch" "$preferred" "origin/$branch"
+            fi
+            worktree="$preferred"
+          fi
+
+          test -e "$worktree/.git"
+          test "$(git -C "$worktree" branch --show-current)" = "$branch"
+          git -C "$worktree" fetch origin --prune
+          printf 'path=%s\n' "$worktree" >> "$GITHUB_OUTPUT"
+          printf 'head=%s\n' "$(git -C "$worktree" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "CODEX_REMOTE_CONTROL_WORKTREE_READY=1"
+
+      - name: Build bounded authoritative prompt
+        id: prompt
+        env:
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          prompt="$RUNNER_TEMP/codex-remote-control-mcp.prompt"
+          cat > "$prompt" <<'EOF'
+          Continue the ShopVivaliz Private Remote Control MCP task from the existing authoritative checkpoint. Do not restart investigation from zero.
+
+          Repository: Vivaliz-site/site-shopvivaliz
+          Existing branch/worktree: fix/remote-control-kocepsv-bootstrap-stage4-20260927
+          Required authority:
+          - read docs/knowledge/host-access.md
+          - read docs/knowledge/README.md
+          - read docs/knowledge/agent-rules.md
+          - read AGENTS.md
+          - read remote-control-mcp/SPEC.md
+          - read remote-control-mcp/ACTION_PLAN.md
+          - read remote-control-mcp/CHECKPOINT.md
+
+          User has explicitly authorized Codex for this finite task and instructed execution of all remaining stages. Use @Superpowers methodology: systematic debugging, TDD for every new defect, implementation, contradictory review, verification-before-completion, merge/deploy validation. Preserve valid concurrent work; never force-push over another agent's work.
+
+          Goal: complete ACTION_PLAN stages 4, 5, 6 and 7 and reach CONCLUIDO only with fresh objective evidence.
+
+          Current proven state:
+          - Stages 1-3 are complete.
+          - PR #1974 merged the reverse-SSH design.
+          - Backend controller and production Linux identity installation already passed in live bootstrap.
+          - Fred-Win canonical reverse SSH is backend 127.0.0.1:2222.
+          - KOCEPSV must establish backend 127.0.0.1:2223 while keeping 5558 only as bootstrap/recovery.
+          - Bootstrap run 36371166432 failed because 2223 never appeared.
+          - Root cause: KOCEPSV legacy MCP acknowledged an async child that depended on git merge --ff-only origin/main; a divergent/dirty local checkout could terminate before relay creation.
+          - Current branch contains the TDD fix: synchronously stage the two canonical KOCEPSV relay scripts from origin/main, verify REMOTE_CONTROL_KOCEPSV_STAGE=PASS, then queue relay restart asynchronously.
+          - Remote Control MCP CI run 36371867937 was GREEN on the staged-bootstrap fix.
+          - Stage 5 E2E was separated behind workflow_dispatch input run_e2e=true so Stage 4 bootstrap can be proven independently.
+          - Desktop Commander remote-call quota is 0%; do not depend on it.
+          - GitHub may be used for bootstrap/recovery and source control, but final runtime command transport/queue/state must be independent of GitHub.
+          - Production active/current releases are immutable; never edit current/ or an active release directly.
+          - Never print or persist secrets, private keys, auth tokens, cookies, or credential material.
+
+          Required execution:
+          1. Re-read branch diff and checkpoint, run fresh tests/gates, and fix any remaining Stage 4 defect using RED->GREEN.
+          2. Open/update PR for the Stage 4 correction, pass required gates, merge safely.
+          3. Trigger/observe the Remote Control MCP Bootstrap from main with Stage 5 E2E disabled. Prove both Windows bootstrap paths succeed and controller host keys are pinned. Persist checkpoint for Stage 4.
+          4. Explicitly trigger Stage 5 with run_e2e=true. Require live MCP health on all four hosts, root on both Linux hosts, Administrator on both Windows hosts, durable task submit/status/result on all four, and REMOTE_CONTROL_FOUR_HOST_E2E=PASS. Fix root causes and repeat safely if needed. Persist checkpoint.
+          5. Stage 6: prove runtime independence from GitHub. After bootstrap workflow is terminal, use the installed controller/runtime itself (not GitHub Actions as command transport) to run fresh commands and a durable task, retrieve results after client disconnection/reconnection or an equivalent independently verified controller interaction, and document objective evidence. Persist checkpoint.
+          6. Stage 7: integrate/expose the MCP to ChatGPT using the repository's approved private/Secure MCP Tunnel architecture. Do not expose a public shell endpoint. Verify the MCP endpoint/tool contract from the supported client path. If product-side connector installation needs an external user action that cannot be performed from the environment, classify only that substep as BLOCKED_EXTERNAL and still finish every server-side action possible.
+          7. Keep remote-control-mcp/ACTION_PLAN.md and CHECKPOINT.md current after each stage. Merge valid changes. Do not mark CONCLUIDO on CI alone, ACKs, stale evidence, or partial bootstrap.
+          8. Before terminal exit, post a sanitized issue #1586 comment beginning:
+             CODEX_REMOTE_CONTROL_MCP_TERMINAL=
+             Include status, main SHA, Stage 4 bootstrap run/result, Stage 5 E2E run/result, four-host privilege result, durable-task result, Stage 6 GitHub-independence evidence, Stage 7 integration result, and exact blocker/resume condition if any. Do not include secrets.
+
+          Continue autonomously until CONCLUIDO validated or a real external blocker remains after exhausting safe alternatives.
+          EOF
+          chmod 600 "$prompt"
+          test "$(wc -c < "$prompt")" -gt 2500
+          printf 'path=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+          printf 'sha256=%s\n' "$(sha256sum "$prompt" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Announce Codex start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.worktree.outputs.head }}
+          PROMPT_SHA: ${{ steps.prompt.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=STARTED run_id=$GITHUB_RUN_ID branch=fix/remote-control-kocepsv-bootstrap-stage4-20260927 head=$HEAD_SHA prompt_sha256=$PROMPT_SHA"
+
+      - name: Execute finite Codex task
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          "$launcher" --version
+          "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
+
+          cd "$WORKTREE"
+          out="$RUNNER_TEMP/codex-remote-control-mcp.output"
+          rc=0
+          "$launcher" exec \
+            --approve-for-me \
+            --model gpt-5.6-terra \
+            --config 'model_reasoning_effort="medium"' \
+            - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
+
+          bytes="$(wc -c < "$out" | tr -d ' ')"
+          digest="$(sha256sum "$out" | awk '{print $1}')"
+          echo "CODEX_MODEL=gpt-5.6-terra"
+          echo "CODEX_REASONING_EFFORT=medium"
+          echo "CODEX_EXIT_CODE=$rc"
+          echo "CODEX_OUTPUT_BYTES=$bytes"
+          echo "CODEX_OUTPUT_SHA256=$digest"
+
+          if [ "$rc" -ne 0 ]; then
+            python3 - "$out" <<'PY'
+          import re, sys
+          from pathlib import Path
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").lower()
+          classes=[]
+          patterns={
+              "auth":r"(not logged in|authentication|unauthorized|forbidden|401|403)",
+              "rate_limit":r"(rate.?limit|too many requests|429|quota|usage limit)",
+              "model":r"(unknown model|model.*unavailable|not supported.*model)",
+              "network":r"(network|connection|timeout|timed out|dns|tls)",
+              "approval":r"(approval|approve-for-me|permission denied)",
+              "context":r"(context.*length|too many tokens|prompt.*too large)",
+              "tool_runtime":r"(tool.*unavailable|sandbox|required mcp servers failed)",
+          }
+          for name, pattern in patterns.items():
+              if re.search(pattern, text):
+                  classes.append(name)
+          print("CODEX_SAFE_ERROR_CLASSES="+(",".join(classes) if classes else "unclassified"))
+          PY
+          fi
+          rm -f -- "$out"
+          exit "$rc"
+
+      - name: Announce launcher terminal result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKTREE: ${{ steps.worktree.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=WORKFLOW_TERMINAL run_id=$GITHUB_RUN_ID workflow_status=${{ job.status }} worktree=$WORKTREE"
+
+      - name: Cleanup transient prompt
+        if: always()
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${PROMPT_FILE:-}" ]; then rm -f -- "$PROMPT_FILE"; fi
