@@ -81,8 +81,56 @@ jobs:
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
 
-          # Fred-Win already exposes SSH privately as backend loopback 127.0.0.1:2222.
+          # Recover Fred-Win through legacy loopback MCP 5557 when reverse SSH 2222 is absent.
+          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+            "${SSH_VM[@]}" 'python3 -' <<'PY'
+          import base64, json, urllib.request
+          endpoint = "http://127.0.0.1:5557/mcp/tool/execute_command"
+          def call(command, timeout):
+              body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode()
+              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+              with urllib.request.urlopen(req, timeout=timeout + 10) as response:
+                  payload = json.load(response)
+              result = payload.get("result") or {}
+              if not result.get("success"):
+                  raise RuntimeError(str(result.get("error") or result))
+              return str(result.get("output") or "")
+          stage = r"""$ErrorActionPreference='Stop'
+          Set-Location 'C:\site-shopvivaliz'
+          git fetch origin main | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
+          $files=@('scripts/ssh-tunnel-service-managed.ps1','scripts/fredwin-remote-bootstrap.ps1')
+          foreach ($rel in $files) {
+            $tmp=Join-Path $env:TEMP ([IO.Path]::GetRandomFileName())
+            git show ("origin/main:" + $rel) | Set-Content -LiteralPath $tmp -Encoding UTF8
+            if ($LASTEXITCODE -ne 0) { throw ("git show failed: " + $rel) }
+            $dest=Join-Path (Get-Location) ($rel -replace '/', '\')
+            Move-Item -LiteralPath $tmp -Destination $dest -Force
+          }
+          $tunnel=Get-Content -LiteralPath 'scripts\ssh-tunnel-service-managed.ps1' -Raw
+          if ($tunnel -notlike '*-R 2222:127.0.0.1:22*') { throw 'staged Fred tunnel missing 2222 forward' }
+          Write-Output 'REMOTE_CONTROL_FRED_STAGE=PASS'
+          """
+          out=call("powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "+base64.b64encode(stage.encode("utf-16le")).decode(),120)
+          if "REMOTE_CONTROL_FRED_STAGE=PASS" not in out: raise RuntimeError("Fred staging acknowledgement missing")
+          print("REMOTE_CONTROL_FRED_STAGE=PASS")
+          restart=r"""$ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 2
+          & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' -Mode Ensure
+          """
+          rb64=base64.b64encode(restart.encode("utf-16le")).decode()
+          outer="$p=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','"+rb64+"') -WindowStyle Hidden -PassThru; Write-Output ('REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS pid=' + $p.Id)"
+          q=call("powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "+base64.b64encode(outer.encode("utf-16le")).decode(),20)
+          if "REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS" not in q: raise RuntimeError("Fred relay queue acknowledgement missing")
+          print("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS")
+          PY
+            for _ in $(seq 1 30); do
+              if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+          fi
           "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
           # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
           # Stage the two relay scripts synchronously from origin/main first, so a
