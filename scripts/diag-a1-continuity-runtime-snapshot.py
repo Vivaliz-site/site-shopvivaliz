@@ -158,6 +158,7 @@ def process_snapshot() -> None:
 def service_snapshot() -> None:
     emit("A1_SNAPSHOT_HOST", run_text(["hostname"]))
     emit("A1_SNAPSHOT_UTC", run_text(["date", "-u", "+%FT%TZ"]))
+    emit("ACTIVE_RELEASE", os.path.realpath("/home/ubuntu/shopvivaliz-deploy/current"))
     emit("AGENT_SERVICE_ACTIVE", run_text(["systemctl", "is-active", "shopvivaliz-agent.service"]))
     emit("AGENT_SERVICE_ENABLED", run_text(["systemctl", "is-enabled", "shopvivaliz-agent.service"]))
     show = run_text([
@@ -220,6 +221,12 @@ def task_snapshot() -> None:
                 "verification": state.get("verification"),
                 "has_blocker": bool(state.get("blocker")),
                 "next_action_present": bool(str(state.get("next_action") or "").strip()),
+                "evidence_count": len(state.get("evidence") or []),
+                "history_tail": [
+                    {"at": row.get("at"), "event": row.get("event")}
+                    for row in (state.get("history") or [])[-12:]
+                    if isinstance(row, dict)
+                ],
             },
         )
     except Exception as exc:
