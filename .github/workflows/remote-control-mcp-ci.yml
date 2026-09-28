@@ -6,15 +6,19 @@ on:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-windows.ps1'
+      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
   push:
-    branches: [main]
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-windows.ps1'
+      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
 
@@ -32,5 +36,7 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
           python3 tests/remote-control-mcp-test.py
+      - name: KOCEPSV reverse relay contract
+        run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax
         run: bash -n scripts/setup-remote-control-access.sh
