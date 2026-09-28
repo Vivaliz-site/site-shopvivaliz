@@ -563,3 +563,5 @@ jobs:
           rm -f /tmp/FRED.scp.err /tmp/DESKTOP.scp.err
           rm -f /tmp/FRED.install.err /tmp/DESKTOP.install.err
           rm -f /tmp/FRED.cleanup.err /tmp/DESKTOP.cleanup.err
+          rm -f /tmp/FRED.controller-auth.out /tmp/DESKTOP.controller-auth.out
+          rm -f /tmp/FRED.controller-auth.err /tmp/DESKTOP.controller-auth.err
