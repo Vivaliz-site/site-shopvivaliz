@@ -389,11 +389,12 @@ async function reinforcementCheckOnce(
   connect = () => Cdp.connectToChatgptTab(),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
   confirmProgress = confirmAssistantProgress,
+  alignLatest = alignToLatestConversation,
 ) {
   let cdp;
   try {
     cdp = await connect();
-    const alignment = await alignToLatestConversation(cdp);
+    const alignment = await alignLatest(cdp);
     if (alignment.action === 'latest_unavailable' || alignment.action === 'stale_latest' || alignment.action === 'navigation_failed') {
       return alignment;
     }
