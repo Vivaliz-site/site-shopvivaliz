@@ -288,6 +288,21 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 1)
         self.assertEqual(result["progressed"], 1)
 
+    def test_detached_prompt_requires_safe_git_push_wrapper(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        request = {
+            "id": "resume-safe-push",
+            "task_id": state["task_id"],
+            "repository": state["repository"],
+            "next_action": state["next_action"],
+            "checkpoint_updated_at": state["updated_at"],
+            "fingerprint": "fingerprint-safe-push",
+        }
+        prompt = dispatcher._build_prompt(request, state)
+        self.assertIn("python3 scripts/safe_git_push.py", prompt)
+        self.assertIn("Never run git push directly", prompt)
+
     def test_detached_prompt_names_the_headless_approved_task_state_command(self) -> None:
         dispatcher = (SCRIPTS / "task_resume_dispatcher.py").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
