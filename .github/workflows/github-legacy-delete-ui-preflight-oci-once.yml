@@ -190,8 +190,22 @@ jobs:
             const profileSettings='https://github.com/settings/profile';
 
             const loginWithGoogleIfNeeded=async()=>{
-              await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000});
+              try{
+                await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000});
+              }catch(err){
+                if(!/\/sessions\/two-factor\//.test(page.url())) throw err;
+              }
               await page.waitForTimeout(1200);
+              if(/\/sessions\/two-factor\//.test(page.url())){
+                const methods=(await page.locator('a,button').allTextContents())
+                  .map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean)
+                  .filter(v=>/authenticator|passkey|security key|github mobile|sms|text message|recovery|two-factor|2fa/i.test(v))
+                  .slice(0,40);
+                console.log('GITHUB_TWO_FACTOR_REQUIRED=true');
+                console.log('GITHUB_TWO_FACTOR_PATH='+new URL(page.url()).pathname);
+                console.log('GITHUB_TWO_FACTOR_METHODS='+JSON.stringify(methods));
+                throw new Error('github_two_factor_required');
+              }
               const needsLogin=/github\.com\/login(?:\?|$)/.test(page.url()) || (await page.locator('input[name="login"]').count())>0;
               if(needsLogin){
                 const google=page.locator('button,a').filter({hasText:/Google/i}).first();
@@ -266,3 +280,5 @@ jobs:
           for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do [ -n "$f" ] && [ -f "$f" ] && shred -u "$f" || true; done
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json" "$RUNNER_TEMP/preflight.mjs"
           exit "$cleanup_rc"
+
+# preflight-rerun-marker: 2026-09-28T01:08Z two-factor-method-probe
