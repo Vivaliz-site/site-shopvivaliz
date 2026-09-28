@@ -48,15 +48,12 @@ jobs:
           if [ -n "$existing" ]; then
             worktree="$existing"
             git -C "$worktree" fetch origin --prune
-            git -C "$worktree" merge --ff-only origin/main
           elif [ -e "$preferred/.git" ]; then
             worktree="$preferred"
             git -C "$worktree" fetch origin --prune
-            git -C "$worktree" merge --ff-only origin/main
           else
             if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
               git -C "$src" worktree add "$preferred" "$branch"
-              git -C "$preferred" merge --ff-only origin/main
             else
               git -C "$src" worktree add -b "$branch" "$preferred" origin/main
             fi
@@ -66,6 +63,9 @@ jobs:
           test -e "$worktree/.git"
           test "$(git -C "$worktree" branch --show-current)" = "$branch"
           git -C "$worktree" fetch origin --prune
+          if ! git -C "$worktree" merge --ff-only origin/main; then
+            git -C "$worktree" merge --no-edit origin/main
+          fi
           printf 'path=%s\n' "$worktree" >> "$GITHUB_OUTPUT"
           printf 'head=%s\n' "$(git -C "$worktree" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "CODEX_REMOTE_CONTROL_WORKTREE_READY=1"
