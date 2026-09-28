@@ -14,6 +14,7 @@ ACTIVE_ACCESS_DOCS = (
     ROOT / "GEMINI.md",
     ROOT / "docs" / "knowledge" / "README.md",
     ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
+    ROOT / "docs" / "AGENT-MCP-REMOTE.md",
 )
 
 LEGACY_CLAUDE_ACCESS_DOCS = (
