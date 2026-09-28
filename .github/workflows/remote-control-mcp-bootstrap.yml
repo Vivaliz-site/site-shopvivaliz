@@ -135,7 +135,17 @@ jobs:
           # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
           # Stage the two relay scripts synchronously from origin/main first, so a
           # divergent/dirty local branch cannot make the async restart fail silently.
-          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          echo "::group::KOCEPSV 2223 diagnostic: local listener state before precheck"
+          ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=no local listener on 2222/2223/5557/5558 yet"
+          echo "::endgroup::"
+
+          kocepsv_precheck_open=0
+          if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            kocepsv_precheck_open=1
+          fi
+          echo "REMOTE_CONTROL_KOCEPSV_PRECHECK_2223=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+
+          if [ "$kocepsv_precheck_open" -ne 1 ]; then
             "${SSH_VM[@]}" 'python3 -' <<'PY'
           import base64
           import json
@@ -206,14 +216,33 @@ jobs:
           print("REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS")
           PY
 
-            for _ in $(seq 1 30); do
+            kocepsv_wait_opened=0
+            for attempt in $(seq 1 30); do
               if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+                kocepsv_wait_opened=1
+                echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=opened on attempt $attempt"
                 break
               fi
               sleep 2
             done
+            if [ "$kocepsv_wait_opened" -ne 1 ]; then
+              echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=timed out after 30 attempts (60s), port never opened"
+            fi
           fi
-          "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+
+          echo "::group::KOCEPSV 2223 diagnostic: local listener state before final check"
+          ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=still no local listener on 2222/2223/5557/5558"
+          echo "::endgroup::"
+
+          if ! "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            echo "::group::KOCEPSV 2223 diagnostic: final failure state"
+            ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=no local listener at time of final failure"
+            sudo -n ss -tlnp 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=sudo ss -tlnp unavailable or no owning process visible"
+            echo "::endgroup::"
+            echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=FAIL precheck=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+            exit 1
+          fi
+          echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
           for spec in 'FRED 2222 FRED' 'DESKTOP 2223 user'; do
             set -- $spec
