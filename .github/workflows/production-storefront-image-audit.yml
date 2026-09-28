@@ -5,9 +5,17 @@ on:
     paths:
       - 'tests/production-storefront-image-audit.mjs'
       - '.github/workflows/production-storefront-image-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'catalogo.php'
+      - 'includes/catalog-runtime.php'
+      - 'includes/catalog-image-enrich.php'
+      - 'api/catalog/products.php'
+      - 'api/catalog/category-images.php'
+      - 'tests/production-storefront-image-audit.mjs'
+      - '.github/workflows/production-storefront-image-audit.yml'
   workflow_dispatch:
-  schedule:
-    - cron: '21 6 * * *'
 
 permissions:
   contents: read

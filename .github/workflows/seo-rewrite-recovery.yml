@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - '.htaccess'
       - '.github/workflows/seo-rewrite-recovery.yml'
-  schedule:
-    - cron: '9 7 * * *'
   workflow_dispatch:
 
 permissions:

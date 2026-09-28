@@ -6,7 +6,7 @@ script=scripts/public-layout-audit.mjs
 grep -Fq 'group: public-layout-audit' "$workflow"
 grep -Fq 'cancel-in-progress: true' "$workflow"
 grep -Fq 'timeout-minutes: 35' "$workflow"
-grep -Fq "cron: '59 7 * * *'" "$workflow"
+grep -Fq "paths:" "$workflow"
 grep -Fq 'retention-days: 1' "$workflow"
 grep -Fq 'compression-level: 0' "$workflow"
 grep -Fq "import { mapWithConcurrency, resolveAuditConcurrency } from './lib/audit-concurrency.mjs';" "$script"

@@ -1,9 +1,25 @@
 name: Public Layout Audit
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.php'
+      - 'catalogo.php'
+      - 'carrinho.php'
+      - 'contato/**'
+      - 'faq/**'
+      - 'politica-privacidade.php'
+      - 'politica-devolucoes.php'
+      - 'politica-entrega.php'
+      - 'termos.php'
+      - 'sobre/**'
+      - 'blog/**'
+      - 'avaliacoes.php'
+      - 'includes/**'
+      - 'scripts/public-layout-audit.mjs'
+      - '.github/workflows/public-layout-audit.yml'
   workflow_dispatch:
-  schedule:
-    - cron: '59 7 * * *'
 
 concurrency:
   group: public-layout-audit
