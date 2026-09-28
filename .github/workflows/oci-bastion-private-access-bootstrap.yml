@@ -187,7 +187,16 @@ jobs:
             local tunnel_command="${metadata_command//<privateKey>/$BASTION_KEY_FILE}"
             tunnel_command="${tunnel_command//<localPort>/$port}"
             tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
-            bash -lc "$tunnel_command"
+            for attempt in $(seq 1 8); do
+              if bash -lc "$tunnel_command"; then
+                echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+                return 0
+              fi
+              echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
+              sleep 5
+            done
+            echo "::error::Bastion tunnel authentication did not become ready after 8 attempts"
+            return 1
           }
           open_tunnel "$BACKEND_BASTION_SSH_COMMAND" "$BACKEND_TUNNEL_PORT"
           open_tunnel "$SITE_BASTION_SSH_COMMAND" "$SITE_TUNNEL_PORT"
