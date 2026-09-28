@@ -710,6 +710,24 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("Object.keys(item)", worker)
         self.assertIn("replace(/[^A-Za-z0-9_]/g", worker)
 
+    def test_oci_bastion_can_repair_chatgpt_continuity_when_a1_runner_is_unavailable(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for needle in (
+            "action=chatgpt-continuity-repair",
+            "ChatGPT continuity repair through OCI Bastion",
+            "scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token",
+            "CHATGPT_CONTINUITY_BASTION_REPAIR=PASS",
+            "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS",
+            "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        repair = workflow.split("ChatGPT continuity repair through OCI Bastion", 1)[1].split("ChatGPT continuity diagnostic through Remote Control MCP", 1)[0]
+        self.assertNotIn("echo $token", repair)
+        self.assertNotIn("cat $token_file", repair)
+        self.assertIn("dd if=\"$token_file\" status=none", repair)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
