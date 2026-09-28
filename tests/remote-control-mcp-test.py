@@ -55,6 +55,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("projectsecret123456", redacted)
         self.assertIn("REDACTED", redacted)
 
+    def test_mcp_authorization_is_fail_closed_and_constant_time(self):
+        self.assertTrue(m.is_authorized("Bearer test-token", "test-token"))
+        self.assertFalse(m.is_authorized("", "test-token"))
+        self.assertFalse(m.is_authorized("Bearer wrong-token", "test-token"))
+        self.assertFalse(m.is_authorized("Bearer test-token", ""))
+
+    def test_controller_bootstrap_generates_root_only_mcp_token(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
+        self.assertIn("openssl rand -hex 32", setup)
+        self.assertIn("mcp-token", setup)
+        self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", setup)
+        self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", unit)
+
     def test_sensitive_file_paths_are_denied(self):
         for path in ["/home/ubuntu/.ssh/id_ed25519", "C:\\Users\\FRED\\.ssh\\id_rsa", "/app/.env"]:
             with self.assertRaises(PermissionError):
