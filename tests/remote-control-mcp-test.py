@@ -185,6 +185,14 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
         self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
 
+    def test_fred_bootstrap_recovers_missing_2222_via_legacy_relay(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("http://127.0.0.1:5557/mcp/tool/execute_command", text)
+        self.assertIn("'scripts/ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
+        self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
+
     def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("git fetch origin main", text)
