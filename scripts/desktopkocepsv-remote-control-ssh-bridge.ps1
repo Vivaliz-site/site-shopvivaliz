@@ -33,18 +33,28 @@ function Start-RemoteControlTunnel {
     }
     $exe = [string]$legacy[0].ExecutablePath
     $line = [string]$legacy[0].CommandLine
-    if ([string]::IsNullOrWhiteSpace($exe) -or [string]::IsNullOrWhiteSpace($line)) {
-        Log 'Legacy tunnel process metadata incomplete'
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        Log 'Legacy tunnel command line unavailable'
+        return $false
+    }
+    if ([string]::IsNullOrWhiteSpace($exe) -or -not (Test-Path -LiteralPath $exe)) {
+        $candidates = @(
+            'C:\Program Files\Git\usr\bin\ssh.exe',
+            'C:\Windows\System32\OpenSSH\ssh.exe'
+        )
+        $exe = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    }
+    if ([string]::IsNullOrWhiteSpace($exe)) {
+        Log 'No usable ssh.exe found for sidecar'
         return $false
     }
 
-    $args = $line
-    if ($args.StartsWith('"')) {
-        $end = $args.IndexOf('"', 1)
-        if ($end -ge 1) { $args = $args.Substring($end + 1).TrimStart() }
-    } elseif ($args.StartsWith($exe, [System.StringComparison]::OrdinalIgnoreCase)) {
-        $args = $args.Substring($exe.Length).TrimStart()
-    }
+    $args = [regex]::Replace(
+        $line,
+        '^\s*(?:"[^"]*\\ssh\.exe"|[^\s"]*\\ssh\.exe|ssh\.exe)\s*',
+        '',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    ).Trim()
 
     $oldForwardPattern = '(?i)-R\s*5558:127\.0\.0\.1:5557'
     if ($args -notmatch $oldForwardPattern) {
