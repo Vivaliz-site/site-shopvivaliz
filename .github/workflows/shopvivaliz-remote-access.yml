@@ -582,7 +582,42 @@ jobs:
 
               latest_conversation_discoverable=false
               latest_probe_output="$("${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationProbe,normalizeLatestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await latestConversationProbe(c); const m=normalizeLatestConversationMeta(p); const status=Number.isFinite(Number(p?.http_status)) ? Number(p.http_status) : 0; const source=["filtered","fallback_unfiltered"].includes(String(p?.source||"")) ? String(p.source) : "none"; console.log("CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS="+status); console.log("CHATGPT_CONTINUITY_LATEST_LIST_SOURCE="+source); process.exit(m ? 0 : 3); } finally { c.close(); }'"'"'' 2>/dev/null || true)"
-              if printf '%s\n' "$latest_probe_output" | grep -Eq '^CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=[0-9]{1,3}
+              if printf '%s\n' "$latest_probe_output" | grep -Eq '^CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=[0-9]{1,3}'; then
+                printf '%s\n' "$latest_probe_output" | grep -E '^CHATGPT_CONTINUITY_LATEST_LIST_(HTTP_STATUS|SOURCE)='
+              fi
+              if printf '%s\n' "$latest_probe_output" | grep -Fq 'CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=200'; then
+                latest_source="$(printf '%s\n' "$latest_probe_output" | sed -n 's/^CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=//p' | tail -n1)"
+                if [ "$latest_source" = "filtered" ] || [ "$latest_source" = "fallback_unfiltered" ]; then
+                  if "${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { process.exit((await latestConversationMeta(c)) ? 0 : 3); } finally { c.close(); }'"'"''; then
+                    latest_conversation_discoverable=true
+                  fi
+                fi
+              fi
+
+              bridge_heartbeat=false
+              if "${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                test -s "$token_file"
+                token="$(dd if="$token_file" status=none)"
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
+                  heartbeat_tmp="$(mktemp)"
+                  if curl -fsS --connect-timeout 4 --max-time 10 \
+                    -H "Host: shopvivaliz.com.br" \
+                    -H "Authorization: Bearer $token" \
+                    -H "Content-Type: application/json" \
+                    --data "{\"operation\":\"heartbeat\"}" \
+                    "$candidate" > "$heartbeat_tmp" &&
+                    jq -e ".status == \"OK\"" "$heartbeat_tmp" >/dev/null 2>&1; then
+                    rm -f "$heartbeat_tmp"
+                    unset token
+                    exit 0
+                  fi
+                  rm -f "$heartbeat_tmp"
+                done
+                unset token
+                exit 41'; then
+                bridge_heartbeat=true
+              fi
               echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
               echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
               echo "CHATGPT_CONTINUITY_PENDING_REQUESTS=$pending_requests"
