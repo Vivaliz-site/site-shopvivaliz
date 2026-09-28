@@ -190,12 +190,8 @@ jobs:
             const profileSettings='https://github.com/settings/profile';
 
             const loginWithGoogleIfNeeded=async()=>{
-              try{
-                await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000});
-              }catch(err){
-                if(!/\/sessions\/two-factor\//.test(page.url())) throw err;
-              }
-              await page.waitForTimeout(1200);
+              await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000}).catch(()=>null);
+              await page.waitForTimeout(1800);
               if(/\/sessions\/two-factor\//.test(page.url())){
                 const methods=(await page.locator('a,button').allTextContents())
                   .map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean)
@@ -222,8 +218,8 @@ jobs:
                   throw new Error('google_interactive_challenge_required');
                 }
                 await page.waitForURL(/github\.com/,{timeout:30000}).catch(()=>{});
-                await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000});
-                await page.waitForTimeout(1200);
+                await page.goto(profileSettings,{waitUntil:'domcontentloaded',timeout:45000}).catch(()=>null);
+                await page.waitForTimeout(1800);
               }
               const profileTitle=await page.title();
               if(/Page not found|Sign in to GitHub/i.test(profileTitle) || /github\.com\/login/.test(page.url())){
@@ -281,4 +277,5 @@ jobs:
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json" "$RUNNER_TEMP/preflight.mjs"
           exit "$cleanup_rc"
 
-# preflight-rerun-marker: 2026-09-28T01:08Z two-factor-method-probe
+
+# preflight-rerun-marker: 2026-09-28T01:12Z robust-two-factor-probe
