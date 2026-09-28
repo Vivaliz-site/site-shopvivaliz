@@ -536,6 +536,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('run_as_claude python3 - "$tmp"', setup)
         self.assertIn('python3 - "$tmp"', setup)
 
+    def test_claude_bridge_verification_classifies_failures_safely(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        for marker in (
+            "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=adapter",
+            "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=json",
+            "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=tools",
+            "CLAUDE_PRIVATE_MCP_BRIDGE=PASS",
+        ):
+            self.assertIn(marker, setup)
+        self.assertIn("bridge_rc=", setup)
+        self.assertNotIn("echo \"$out\"", setup)
+        self.assertNotIn("printf '%s\\n' \"$out\"", setup)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
