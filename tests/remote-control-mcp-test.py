@@ -55,6 +55,14 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("projectsecret123456", redacted)
         self.assertIn("REDACTED", redacted)
 
+    def test_run_host_command_tolerates_non_utf8_output(self):
+        result = m.run_host_command(
+            "always-free-arm-1787907847-26", "printf 'before\\xa2after'"
+        )
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("before", result["stdout"])
+        self.assertIn("after", result["stdout"])
+
     def test_mcp_authorization_is_fail_closed_and_constant_time(self):
         self.assertTrue(m.is_authorized("Bearer test-token", "test-token"))
         self.assertFalse(m.is_authorized("", "test-token"))
