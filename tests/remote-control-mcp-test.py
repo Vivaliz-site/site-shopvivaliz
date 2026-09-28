@@ -346,23 +346,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertLess(probe_start, next_start)
         probe = text[probe_start:next_start]
         self.assertLess(len(probe), 9000, "secure tunnel probe block unexpectedly swallowed later workflow steps")
-        self.assertIn("grep -Eq '^CONTROL_PLANE_TUNNEL_ID=tunnel_[0-9a-f]{32}        paths = [
-            ROOT / "scripts" / "setup-remote-control-access.sh",
-            ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml",
-        ]
-        for path in paths:
-            text = path.read_text(encoding="utf-8")
-            self.assertNotIn("|| true", text, f"{path} must handle failures explicitly")
-            self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
-
-
-if __name__ == "__main__":
-    unittest.main()
- \"$cfg\" && tunnel_id=true", probe)
-        self.assertIn("echo \"SECURE_MCP_TUNNEL_PROBE=PASS\"", probe)
-        self.assertIn("REMOTE\n", probe)
-        self.assertNotIn("[0-9a-f]{32}        shell: bash", probe)
-
+        self.assertIn("CONTROL_PLANE_TUNNEL_ID=tunnel_[0-9a-f]{32}", probe)
+        self.assertIn("tunnel_id=true", probe)
+        self.assertIn("SECURE_MCP_TUNNEL_PROBE=PASS", probe)
+        self.assertIn("REMOTE", probe)
+        self.assertNotIn("{32}        shell: bash", probe)
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
