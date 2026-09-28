@@ -33,7 +33,14 @@ $adminLines = @(Get-Content -LiteralPath $adminAuth -ErrorAction SilentlyContinu
 & icacls.exe $adminAuth /grant:r '*S-1-5-32-544:F' '*S-1-5-18:F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'administrators_authorized_keys_acl_failed' }
 
-$svc = Get-Service -Name sshd -ErrorAction Stop
+$svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
+if (-not $svc) {
+  $cap = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' } | Select-Object -First 1
+  if (-not $cap -or $cap.State -ne 'Installed') {
+    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+  }
+  $svc = Get-Service -Name sshd -ErrorAction Stop
+}
 if ($svc.StartType -ne 'Automatic') { Set-Service -Name sshd -StartupType Automatic }
 if ($svc.Status -ne 'Running') { Start-Service -Name sshd }
 
