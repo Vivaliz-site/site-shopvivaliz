@@ -98,6 +98,8 @@ try {
   console.log('OPENAI_PLATFORM_AUTHENTICATED=' + String(authenticated));
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=' + String(manage));
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=' + String(challenge));
+  console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
+  console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
 
   if (!authenticated) {
     console.log('OPENAI_PLATFORM_AUTH_RESULT=BLOCKED');
@@ -109,6 +111,8 @@ try {
   console.log('OPENAI_PLATFORM_AUTHENTICATED=false');
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false');
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=false');
+  console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
+  console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
   console.log('OPENAI_PLATFORM_AUTH_RESULT=FAIL blocker=' + safeTag(error?.message));
   process.exitCode = 2;
 } finally {
