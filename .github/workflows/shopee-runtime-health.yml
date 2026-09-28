@@ -2,11 +2,8 @@ name: Shopee Runtime Health
 
 on:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '41 7 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
 
 permissions:
   contents: read
