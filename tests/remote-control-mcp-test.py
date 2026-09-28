@@ -185,6 +185,25 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
         self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
 
+    def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("git fetch origin main", text)
+        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertIn('git show ("origin/main:" + $rel)', text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
+        self.assertNotIn("git merge --ff-only origin/main", text)
+
+    def test_four_host_e2e_requires_explicit_stage5_dispatch(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("run_e2e:", text)
+        self.assertIn("default: false", text)
+        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true", text)
+
+    def test_remote_control_ci_push_covers_workflow_changes(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        self.assertEqual(text.count("'.github/workflows/remote-control-mcp-*.yml'"), 2)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",

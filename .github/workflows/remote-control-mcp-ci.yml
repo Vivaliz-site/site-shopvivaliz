@@ -21,6 +21,8 @@ on:
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
+      - '.github/workflows/remote-control-mcp-*.yml'
 
 permissions:
   contents: read
