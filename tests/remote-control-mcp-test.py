@@ -179,8 +179,8 @@ class BootstrapContractTests(unittest.TestCase):
 
     def test_bootstrap_uses_reverse_ssh_for_windows(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("127.0.0.1/2222", text)
-        self.assertIn("127.0.0.1/2223", text)
+        self.assertIn("ssh_protocol_alive 2222", text)
+        self.assertIn("ssh_protocol_alive 2223", text)
         self.assertNotIn("32222:127.0.0.1:2222", text)
         self.assertNotIn("32223:127.0.0.1:2223", text)
         self.assertIn("http://127.0.0.1:5558/mcp/tool/execute_command", text)
@@ -197,11 +197,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
         self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
         self.assertIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
-        self.assertIn("REMOTE_CONTROL_FRED_SSHD_RECOVERY=PASS", text)
-        self.assertIn("REMOTE_CONTROL_KOCEPSV_SSHD_RECOVERY=PASS", text)
+        self.assertIn('print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=PASS")', text)
+        self.assertIn('peers = (("FRED", 5557), ("KOCEPSV", 5558))', text)
         self.assertIn("ssh_protocol_alive() {", text)
         self.assertIn("ssh-keyscan -T 5 -p", text)
-        self.assertNotIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS\"\n\n          # KOCEPSV", text)
+        self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL protocol_handshake_unavailable", text)
 
     def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
