@@ -224,7 +224,7 @@ jobs:
             listener_connected=false
             listener_failure=none
             for _ in $(seq 1 30); do
-              latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
+              latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)"
               if [ -n "$latest_log" ]; then
                 if grep -Fq 'Listening for Jobs' "$latest_log"; then
                   listener_connected=true
