@@ -1,0 +1,286 @@
+name: A1 Continuity Runtime Snapshot OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/a1-continuity-runtime-snapshot-oci-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      OCI_PROFILE: AGENTS
+      A1_INSTANCE_NAME: shopvivaliz-free-a1
+    steps:
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve production A1 and Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$A1_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+          printf 'A1_INSTANCE_ID=%s\nA1_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo A1_RUN_COMMAND=PASS
+
+      - name: Capture sanitized runtime snapshot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > "$RUNNER_TEMP/snapshot.sh" <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          echo "A1_SNAPSHOT_HOST=$(hostname)"
+          echo "A1_SNAPSHOT_UTC=$(date -u +%FT%TZ)"
+
+          active="$(systemctl is-active shopvivaliz-agent.service 2>/dev/null || true)"
+          enabled="$(systemctl is-enabled shopvivaliz-agent.service 2>/dev/null || true)"
+          echo "AGENT_SERVICE_ACTIVE=$active"
+          echo "AGENT_SERVICE_ENABLED=$enabled"
+          systemctl show shopvivaliz-agent.service -p MainPID -p ActiveState -p SubState -p FragmentPath --no-pager 2>/dev/null |
+            sed 's/^/AGENT_SERVICE_/' || true
+
+          python3 - <<'PY'
+          import json
+          import os
+          import pwd
+          import time
+          from pathlib import Path
+
+          hz = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
+          uptime = float(Path('/proc/uptime').read_text().split()[0])
+
+          def read_args(pid):
+              try:
+                  raw = (Path('/proc') / str(pid) / 'cmdline').read_bytes()
+              except OSError:
+                  return []
+              return [x.decode('utf-8', 'replace') for x in raw.split(b'\0') if x]
+
+          def ppid_of(pid):
+              try:
+                  fields = (Path('/proc') / str(pid) / 'stat').read_text().split()
+                  return int(fields[3])
+              except Exception:
+                  return 0
+
+          def age_of(pid):
+              try:
+                  fields = (Path('/proc') / str(pid) / 'stat').read_text().split()
+                  return max(0, int(uptime - (int(fields[21]) / hz)))
+              except Exception:
+                  return -1
+
+          def user_of(pid):
+              try:
+                  return pwd.getpwuid((Path('/proc') / str(pid)).stat().st_uid).pw_name
+              except Exception:
+                  return 'unknown'
+
+          def classify(args):
+              joined = ' '.join(args).lower()
+              first = os.path.basename(args[0]) if args else ''
+              if 'codex-native-profile-failover.py' in joined:
+                  return 'codex_profile_failover'
+              if first.startswith('codex') or '/codex' in joined:
+                  return 'codex'
+              if 'autonomous-agent-loop.sh' in joined:
+                  return 'autonomous_agent_loop'
+              if 'task_resume_dispatcher.py' in joined:
+                  return 'task_resume_dispatcher'
+              if 'run_background_gemini.py' in joined:
+                  return 'background_gemini_wrapper'
+              if first == 'gemini' or '/gemini' in joined:
+                  return 'gemini'
+              if first == 'tmux' or 'tmux:' in joined:
+                  return 'tmux'
+              return ''
+
+          rows = []
+          all_args = {}
+          for entry in Path('/proc').iterdir():
+              if not entry.name.isdigit():
+                  continue
+              pid = int(entry.name)
+              args = read_args(pid)
+              all_args[pid] = args
+              kind = classify(args)
+              if not kind:
+                  continue
+              joined = ' '.join(args)
+              rows.append({
+                  'pid': pid,
+                  'ppid': ppid_of(pid),
+                  'age_seconds': age_of(pid),
+                  'user': user_of(pid),
+                  'kind': kind,
+                  'dangerous_bypass_flag': '--dangerously-bypass-approvals-and-sandbox' in args,
+                  'has_exec_subcommand': 'exec' in args,
+                  'has_review_subcommand': 'review' in args,
+                  'argv_count': len(args),
+              })
+
+          rows.sort(key=lambda x: x['pid'])
+          for row in rows:
+              print('PROC=' + json.dumps(row, sort_keys=True, separators=(',', ':')))
+
+          for row in rows:
+              if row['kind'] not in {'codex', 'codex_profile_failover'}:
+                  continue
+              chain = []
+              seen = set()
+              cur = row['pid']
+              for _ in range(12):
+                  if cur <= 1 or cur in seen:
+                      break
+                  seen.add(cur)
+                  args = all_args.get(cur)
+                  if args is None:
+                      args = read_args(cur)
+                  chain.append({'pid': cur, 'kind': classify(args) or 'other'})
+                  cur = ppid_of(cur)
+              if cur == 1:
+                  chain.append({'pid': 1, 'kind': 'init'})
+              print('CODEX_ANCESTRY=' + json.dumps({'pid': row['pid'], 'chain': chain}, sort_keys=True, separators=(',', ':')))
+
+              cgroup = ''
+              try:
+                  lines = (Path('/proc') / str(row['pid']) / 'cgroup').read_text().splitlines()
+                  paths = [line.split(':', 2)[-1] for line in lines if ':' in line]
+                  safe = []
+                  for path in paths:
+                      parts = [p for p in path.split('/') if p]
+                      keep = [p for p in parts if p.endswith(('.service', '.scope', '.slice')) or p.startswith('session-')]
+                      if keep:
+                          safe.append('/'.join(keep[-3:]))
+                  cgroup = ';'.join(sorted(set(safe)))[:500]
+              except Exception:
+                  pass
+              print('CODEX_CGROUP=' + json.dumps({'pid': row['pid'], 'cgroup': cgroup}, sort_keys=True, separators=(',', ':')))
+          PY
+
+          if command -v tmux >/dev/null 2>&1; then
+            tmux list-sessions -F 'TMUX_SESSION name=#{session_name} attached=#{session_attached} windows=#{session_windows}' 2>/dev/null || true
+            tmux list-panes -a -F 'TMUX_PANE session=#{session_name} pid=#{pane_pid} command=#{pane_current_command}' 2>/dev/null || true
+          fi
+
+          STATE=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+          TASK=global-continuity-cleanup-v2-20260927
+          ROOT=/home/ubuntu/shopvivaliz-deploy/current
+          if [ -d "$STATE" ] && [ -f "$ROOT/scripts/agent_task_state.py" ]; then
+            sudo -u ubuntu env SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$STATE" python3 "$ROOT/scripts/agent_task_state.py" show --task "$TASK" 2>/dev/null |
+              python3 -c 'import json,sys; d=json.load(sys.stdin); print("TASK_STATE="+json.dumps({"task_id":d.get("task_id"),"status":d.get("status"),"updated_at":d.get("updated_at"),"verification":d.get("verification"),"has_blocker":bool(d.get("blocker"))},sort_keys=True,separators=(",",":")))' || true
+          fi
+
+          python3 - <<'PY'
+          import collections
+          import json
+          from pathlib import Path
+
+          path = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_resume-executions.jsonl')
+          task = 'global-continuity-cleanup-v2-20260927'
+          rows = []
+          if path.is_file():
+              for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
+                  try:
+                      item = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if item.get('task_id') == task:
+                      rows.append(item)
+          counts = collections.Counter(str(x.get('result') or '') for x in rows)
+          print('LEDGER_SUMMARY=' + json.dumps({'task_id':task,'count':len(rows),'results':dict(sorted(counts.items()))},sort_keys=True,separators=(',',':')))
+          allowed_diag = {
+              'provider','provider_status','provider_attempt_exit_code',
+              'background_gemini_error','background_gemini_exit_code',
+              'background_paid_fallback_forbidden','provider_output_bytes',
+              'provider_output_sha256'
+          }
+          for item in rows[-10:]:
+              diag = item.get('diagnostic') if isinstance(item.get('diagnostic'), dict) else {}
+              safe_diag = {k: diag.get(k) for k in allowed_diag if k in diag}
+              out = {
+                  'task_id': item.get('task_id'),
+                  'request_id': item.get('request_id'),
+                  'fingerprint': item.get('fingerprint'),
+                  'result': item.get('result'),
+                  'executor_exit_code': item.get('executor_exit_code'),
+                  'timestamp': item.get('timestamp') or item.get('executed_at') or item.get('created_at'),
+                  'diagnostic': safe_diag,
+              }
+              print('LEDGER_ROW=' + json.dumps(out,sort_keys=True,separators=(',',':')))
+          PY
+          REMOTE
+
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$RUNNER_TEMP/snapshot.sh" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$A1_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$A1_COMPARTMENT_ID"             --display-name "A1 continuity runtime snapshot"             --content "file://$content"             --target "file://$target"             --timeout-in-seconds 120             --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 40); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$A1_INSTANCE_ID" 2>/dev/null || true)"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS|'') sleep 4 ;;
+              *) break ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+          code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution" 2>/dev/null || true)"
+          printf '%s\n' "$output" | grep -E '^(A1_SNAPSHOT_|AGENT_SERVICE_|PROC=|CODEX_ANCESTRY=|CODEX_CGROUP=|TMUX_SESSION |TMUX_PANE |TASK_STATE=|LEDGER_SUMMARY=|LEDGER_ROW=)' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+          echo A1_CONTINUITY_RUNTIME_SNAPSHOT=PASS
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
