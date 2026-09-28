@@ -641,7 +641,12 @@ class BootstrapContractTests(unittest.TestCase):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
         diagnostic = workflow.split("chatgpt_continuity_diagnostic)", 1)[1].split("secure_mcp_platform_ui_probe)", 1)[0]
         self.assertIn("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", diagnostic)
-        self.assertIn("for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php", diagnostic)
+        for route in (
+            "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
+            "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
+            "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
+        ):
+            self.assertIn(route, diagnostic)
         self.assertNotIn("http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php", diagnostic)
 
     def test_chatgpt_continuity_diagnostic_surfaces_safe_latest_probe(self):
