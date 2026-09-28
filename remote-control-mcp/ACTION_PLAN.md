@@ -43,7 +43,19 @@ STATUS=PASS
    - garantir persistência dos dois forwards do KOCEPSV.
 
 ## Etapa 2 — Implementar e testar a rota
-STATUS=PENDING
+STATUS=PASS
+
+### Evidência
+- Fred-Win configurado no controller em `127.0.0.1:2222`.
+- KOCEPSV configurado no controller em `127.0.0.1:2223`.
+- Túnel gerenciado do KOCEPSV persiste simultaneamente `-R 2223:127.0.0.1:22` e `-R 5558:127.0.0.1:5557`.
+- Bootstrap do KOCEPSV exige ambos os forwards; túnel legado incompleto é reiniciado.
+- Workflow deixa de depender de descoberta Tailscale/TCP 22 direto para Windows e usa os reverse SSH privados.
+- Relay MCP legado `5558` fica restrito ao bootstrap/recovery inicial para abrir `2223`.
+- Host keys são pinadas para `[127.0.0.1]:2222` e `[127.0.0.1]:2223`.
+- Cleanup dos forwards temporários do runner foi deduplicado e coberto por regressão.
+- CI da branch: Remote Control MCP CI run `36370863304` = SUCCESS no commit `8756e28d88dbbd0b2ff8a9de6e2e833c6839d3c8`.
+- O clone local de validação não foi usado como evidência porque o runtime local não resolveu `github.com`; o CI remoto forneceu a execução canônica dos testes.
 
 ## Etapa 3 — Validar e mesclar PR
 STATUS=PENDING
