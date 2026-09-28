@@ -78,6 +78,14 @@ STATUS=RUNNING
 - Tentativa de diagnóstico direto no host via Remote Desktop Commander nesta sessão: os quatro dispositivos canônicos estão `online`, mas a chamada foi bloqueada pela cota mensal de tool-calls do RDC esgotada (bloqueio externo transitório de ferramenta, não falha de conexão/pareamento). Diagnóstico ao vivo direto em `DESKTOP-KOCEPSV`/backend fica pendente até a cota renovar ou outro canal ao vivo estar disponível.
 - Não repetir o padrão de PR-corretivo-sem-verificação-ao-vivo dos três PRs acima; a próxima ação autorizada é obter estado ao vivo real do host KOCEPSV antes de qualquer novo patch.
 
+### Instrumentação (PR #2014/#2015) e achado real
+- PR #2014 e #2015 (diagnóstico apenas, sem tentativa de fix) instrumentaram o bloco do KOCEPSV e o loop compartilhado de instalação da chave admin (FRED + DESKTOP) com marcadores explícitos e dumps `ss -tln`/`ss -tlnp` direto no runner self-hosted (que É o próprio host backend) — contornando a cota esgotada do RDC.
+- Run `36410163131`: provou que o túnel do KOCEPSV está de fato de pé na camada TCP (`ss -tln` mostra `LISTEN 127.0.0.1:2223` real, `REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS`). O job falhou 2s depois, no loop ainda não instrumentado.
+- Run `36410984419`: com o loop já instrumentado, a falha real apareceu na **primeira iteração, FRED (porta 2222)**, não no KOCEPSV — `ssh-keyscan` falha com `Connection closed by remote host` (×5), mesmo com a porta TCP aberta.
+- **Hipótese de trabalho (bem fundamentada, ainda não confirmada diretamente no host):** túnel SSH reverso "zumbi" — o socket local do `-R` continua vinculado no backend mesmo depois que a conexão SSH master real para o Windows morreu; uma conexão nova é aceita e fechada na hora, sem handshake, porque não há mais túnel vivo para repassar. Isso bate exatamente com o padrão observado (TCP cru sempre "abre", SSH de verdade sempre fecha na hora) e explicaria por que tanto FRED quanto KOCEPSV parecem comprovados no nível errado de checagem.
+- Isso reenquadra a investigação: o problema provavelmente nunca foi específico dos scripts PowerShell do KOCEPSV (alvo dos PRs #2001/#2003/#2004/#2007) — é um problema de vivacidade/reconexão do túnel reverso compartilhado por ambos os hosts Windows.
+- **Nada foi implementado além do diagnóstico** — confirmar a hipótese e corrigi-la exige acesso ao vivo aos hosts (RDC quando a cota renovar, ou outro canal) e/ou uma mudança de workflow que valide conexão SSH real (não só TCP cru) antes de confiar no `PASS`. Ambas mexem em bootstrap SSH ao vivo de hosts Windows de produção — sinalizado ao usuário em vez de implementado sem aprovação.
+
 ## Etapa 5 — E2E quatro hosts
 STATUS=PENDING
 
