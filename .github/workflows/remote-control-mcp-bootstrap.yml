@@ -8,6 +8,8 @@ on:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-windows.ps1'
+      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
+      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
