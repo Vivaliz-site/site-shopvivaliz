@@ -101,15 +101,11 @@ class RemoteControlMcpTests(unittest.TestCase):
             m.validate_host("legacy-host")
 
     def test_linux_target_uses_privileged_sudo(self):
-        original = m.tailscale_peer_ip
-        try:
-            m.SSH_KEY.write_text("x")
-            m.KNOWN_HOSTS.write_text("x")
-            inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
-            self.assertIn("sudo -n bash", inv[-1])
-            self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
-        finally:
-            m.tailscale_peer_ip = original
+        m.SSH_KEY.write_text("x")
+        m.KNOWN_HOSTS.write_text("x")
+        inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
+        self.assertIn("sudo -n bash", inv[-1])
+        self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
 
     def test_windows_uses_reverse_ssh_ports_not_tailscale(self):
         m.SSH_KEY.write_text("x")
