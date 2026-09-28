@@ -32,5 +32,9 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
           python3 tests/remote-control-mcp-test.py
+      - name: Validate remote-control workflows with actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color -shellcheck= .github/workflows/remote-control-mcp-bootstrap.yml .github/workflows/remote-control-mcp-ci.yml
       - name: Shell syntax
         run: bash -n scripts/setup-remote-control-access.sh
