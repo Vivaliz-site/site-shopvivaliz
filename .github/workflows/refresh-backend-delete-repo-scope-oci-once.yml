@@ -1,0 +1,171 @@
+name: Refresh Backend Delete Repo Scope OCI Once
+
+on:
+  push:
+    branches:
+      - ops/github-delete-scope-oci-v2-20260927
+    paths:
+      - '.github/workflows/refresh-backend-delete-repo-scope-oci-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-oci-bastion-mutation
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      BACKEND_TUNNEL_PORT: "22216"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-github-delete-scope -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI and open verified backend tunnel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state')=='ACTIVE']
+          if len(active)!=1: raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress,json,sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2],encoding='utf-8'))
+          if not isinstance(src,list): raise SystemExit('Bastion CIDR allowlist is not a list')
+          json.dump(list(dict.fromkeys([str(x) for x in src]+[ip+'/32'])),open(sys.argv[3],'w',encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+          BACKEND_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" --target-private-ip "$BACKEND_PRIVATE_IP" --target-port 22 \
+            --session-ttl 1800 --display-name shopvivaliz-github-delete-scope \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" --query 'data.id' --raw-output)"
+          echo "BACKEND_SESSION_ID=$BACKEND_SESSION_ID" >> "$GITHUB_ENV"
+          metadata=''
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then metadata="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"; break; fi
+            case "$state" in FAILED|DELETED) exit 2 ;; esac
+            sleep 5
+          done
+          test -n "$metadata"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel="${tunnel//<localPort>/$BACKEND_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          tunnel_ok=false
+          for attempt in $(seq 1 5); do
+            if bash -lc "$tunnel"; then tunnel_ok=true; break; fi
+            echo "BASTION_TUNNEL_RETRY=$attempt"
+            sleep 5
+          done
+          test "$tunnel_ok" = true
+          sleep 2
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+          echo PRIVATE_BACKEND_SSH=PASS
+
+      - name: Refresh and verify delete_repo scope
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_OPTS=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-github-scope-${GITHUB_RUN_ID}"
+          ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "install -d -m 700 '$remote_dir/scripts'"
+          scp -q -P "$BACKEND_TUNNEL_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -i "$VM_KEY_FILE" \
+            scripts/refresh-backend-delete-repo-scope.sh \
+            scripts/refresh-backend-delete-repo-scope.mjs \
+            scripts/github-device-auth-delete-repo.mjs \
+            "ubuntu@127.0.0.1:$remote_dir/scripts/"
+          ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "GITHUB_WORKSPACE='$remote_dir' DISPLAY=:98 bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          unset GH_TOKEN GITHUB_TOKEN
+          cd "$GITHUB_WORKSPACE"
+          gh auth status --hostname github.com >/dev/null
+          node scripts/refresh-backend-delete-repo-scope.mjs
+          gh api -i user 2>/dev/null | tr -d '\r' | grep -Eiq '^x-oauth-scopes:.*delete_repo'
+          echo DELETE_REPO_SCOPE=PASS
+          REMOTE
+          ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "rm -rf '$remote_dir'"
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          cleanup_rc=0
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then "${OCI[@]}" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null 2>&1 || cleanup_rc=1; fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || cleanup_rc=1; fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null 2>&1; then pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" || cleanup_rc=1; fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do [ -n "$f" ] && [ -f "$f" ] && shred -u "$f" || true; done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$cleanup_rc"
