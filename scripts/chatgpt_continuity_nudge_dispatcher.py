@@ -273,14 +273,19 @@ def run_once(
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
                             observed["worker_status_observed_at"] = utc_now()
+                            has_send_counter = "send_attempt_count" in previous
                             prior_send_attempts = int(previous.get("send_attempt_count") or 0)
-                            if (
-                                "send_attempt_count" not in previous
-                                and worker_status in {"SENT", "SENT_UNCONFIRMED"}
-                            ):
+                            if not has_send_counter and worker_status in {"SENT", "SENT_UNCONFIRMED"}:
                                 prior_send_attempts = int(previous.get("attempt_count") or 1)
                             if observed_status in {"SENT", "SENT_UNCONFIRMED", "PROGRESS_CONFIRMED"}:
-                                observed["send_attempt_count"] = prior_send_attempts + 1
+                                if has_send_counter:
+                                    observed["send_attempt_count"] = prior_send_attempts + 1
+                                else:
+                                    # Legacy ledger rows predate the dedicated
+                                    # send counter. Their attempt_count included
+                                    # the currently observed worker attempt, so
+                                    # use it directly rather than double-counting.
+                                    observed["send_attempt_count"] = int(previous.get("attempt_count") or 1)
                             else:
                                 observed["send_attempt_count"] = prior_send_attempts
                             _append_ledger(root, observed)
