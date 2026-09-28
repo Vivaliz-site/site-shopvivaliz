@@ -29,6 +29,8 @@ jobs:
       SITE_INSTANCE_NAME: shopvivaliz-free-a1
       SITE_PRIVATE_IP: 10.0.1.112
       SITE_TUNNEL_PORT: "22212"
+      BASTION_TUNNEL_MAX_ATTEMPTS: "6"
+      BASTION_TUNNEL_RETRY_SECONDS: "5"
 
     steps:
       - name: Configure protected OCI and VM credentials
@@ -151,7 +153,18 @@ jobs:
           tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
           tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
           tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
-          bash -lc "$tunnel"
+          tunnel_opened=false
+          for attempt in $(seq 1 "$BASTION_TUNNEL_MAX_ATTEMPTS"); do
+            if bash -lc "$tunnel"; then
+              tunnel_opened=true
+              break
+            fi
+            echo "BASTION_TUNNEL_AUTH_RETRY=$attempt"
+            if [ "$attempt" -lt "$BASTION_TUNNEL_MAX_ATTEMPTS" ]; then
+              sleep "$BASTION_TUNNEL_RETRY_SECONDS"
+            fi
+          done
+          test "$tunnel_opened" = true
           sleep 2
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
