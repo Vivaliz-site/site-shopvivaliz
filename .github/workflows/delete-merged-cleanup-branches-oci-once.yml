@@ -195,3 +195,5 @@ jobs:
           for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do [ -n "$f" ] && [ -f "$f" ] && shred -u "$f" || true; done
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
           exit "$cleanup_rc"
+
+# rerun-marker: 2026-09-28T01:05Z exact-squash-head-proof
