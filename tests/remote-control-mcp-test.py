@@ -428,6 +428,20 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "secure_mcp_platform_ui_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
+    def test_remote_access_can_auth_platform_on_backend(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for needle in (
+            "secure_mcp_platform_auth",
+            "scripts/openai-secure-mcp-platform-auth.mjs",
+            "ubuntu@10.0.1.38",
+            "timeout 120s node",
+            "OPENAI_PLATFORM_AUTH_RESULT=PASS",
+            "SECURE_MCP_PLATFORM_REMOTE_AUTH=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertIn('action == "secure_mcp_platform_auth"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
