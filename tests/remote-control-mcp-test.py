@@ -174,6 +174,43 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_WINDOWS_SSHD=PASS", text)
         self.assertIn("openssh_binary_missing_after_capability", text)
 
+    def test_windows_watchdogs_self_heal_openssh(self):
+        repair = (ROOT / "scripts" / "windows-openssh-recovery.ps1").read_text(encoding="utf-8")
+        self.assertIn("OpenSSH.Server~~~~0.0.1.0", repair)
+        self.assertIn("New-Service -Name sshd", repair)
+        self.assertIn("Start-Service -Name sshd", repair)
+        for rel in (
+            "scripts/fredwin-remote-bootstrap.ps1",
+            "scripts/desktopkocepsv-remote-control-ssh-bridge.ps1",
+        ):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("windows-openssh-recovery.ps1", text)
+            self.assertIn("& $OpenSshRecoveryScript", text)
+
+    def test_oci_bastion_remote_control_uses_real_ssh_liveness_and_short_repair(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        start = text.index("- name: Bootstrap Remote Control MCP through OCI Bastion")
+        end = text.index("- name: Remote Control MCP four-host E2E through OCI Bastion", start)
+        block = text[start:end]
+        self.assertIn("scripts/windows-openssh-recovery.ps1", block)
+        self.assertIn("'write_file'", block)
+        self.assertIn("backend_ssh_protocol_alive() {", block)
+        self.assertIn("ssh-keyscan -T 5 -p", block)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS", block)
+        self.assertNotIn("</dev/tcp/127.0.0.1/2222", block)
+        self.assertNotIn("</dev/tcp/127.0.0.1/2223", block)
+        self.assertNotIn("WINDOWS_BOOT_B64", block)
+
+    def test_remote_control_workflows_watch_persistent_windows_recovery(self):
+        for rel in (
+            ".github/workflows/remote-control-mcp-bootstrap.yml",
+            ".github/workflows/remote-control-mcp-ci.yml",
+        ):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("'scripts/windows-openssh-recovery.ps1'", text)
+            self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
+            self.assertIn("'scripts/ssh-tunnel-service-managed.ps1'", text)
+
     def test_bootstrap_workflow_is_single_complete_sequence(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertEqual(text.count("- name: Four-host live MCP health validation"), 1)
