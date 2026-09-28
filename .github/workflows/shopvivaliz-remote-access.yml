@@ -143,8 +143,10 @@ jobs:
               raise SystemExit("Secure MCP Cloudflare UI probe is restricted to the backend VM")
           if action == "claude_remote_control_probe" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Claude Remote Control probe is restricted to the backend VM")
-          if action in {"claude_remote_control_install", "claude_remote_control_status"} and target != "always-free-arm-1787907847-26":
-              raise SystemExit("Claude Remote Control service actions are restricted to the backend VM")
+          if action == "claude_remote_control_install" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control install is restricted to the backend VM")
+          if action == "claude_remote_control_status" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control status is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
