@@ -151,7 +151,20 @@ jobs:
           tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
           tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
           tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
-          bash -lc "$tunnel"
+          tunnel_ready=false
+          for attempt in $(seq 1 8); do
+            if bash -lc "$tunnel"; then
+              echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+              tunnel_ready=true
+              break
+            fi
+            echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
+            sleep 5
+          done
+          if [ "$tunnel_ready" != true ]; then
+            echo "::error::Bastion tunnel authentication did not become ready after 8 attempts"
+            exit 1
+          fi
           sleep 2
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
