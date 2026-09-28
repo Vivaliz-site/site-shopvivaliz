@@ -505,7 +505,7 @@ git commit -m "fix: sincronizar secrets desincronizados (SOURCE: GitHub)"
 | **Validação Geral** | Este arquivo (REGRAS-AGENTES-CENTRALIZADAS.md) | ✅ FONTE ÚNICA |
 | **Princípios Gerais** | `docs/knowledge/agent-rules.md` | Fundamentos de diagnóstico |
 | **Política de Imagens** | `docs/knowledge/image-policy.md` | Validação de imagens produtos |
-| **Remote Control MCP** | `docs/HOST-ACCESS.md` + `docs/knowledge/host-access.md` | Rota operacional primaria para hosts/servicos/diagnostico; endpoint privado, tarefas duraveis e auditoria sem secrets |
+| **Remote MCP** | `docs/AGENT-MCP-REMOTE.md` | Uso seguro de MCP remoto por agentes, sem publicar device code, device ID, e-mail completo ou tokens |
 
 ### Arquivos Deprecados
 
