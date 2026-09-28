@@ -5,6 +5,9 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
@@ -40,9 +43,11 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py
           python3 tests/remote-control-mcp-test.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax
-        run: bash -n scripts/setup-remote-control-access.sh
+        run: |
+          bash -n scripts/setup-remote-control-access.sh
+          bash -n scripts/setup-claude-remote-control.sh
