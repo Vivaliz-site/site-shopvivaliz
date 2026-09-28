@@ -40,7 +40,7 @@ jobs:
           fi
           test -x "$CLAUDE_BIN"
           echo "claude_present=true"
-          "$CLAUDE_BIN" --version | tr -cd '[:alnum:]. _+()-\n'
+          "$CLAUDE_BIN" --version | head -n 1 | sed -E 's/[^A-Za-z0-9._+() -]/?/g'
           for name in ANTHROPIC_BASE_URL CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC DISABLE_GROWTHBOOK; do
             if [ -n "${!name:-}" ]; then
               echo "${name}=SET"
@@ -55,7 +55,7 @@ jobs:
           echo "remote_control_help_rc=$rc"
           if [ "$rc" -eq 0 ]; then
             echo "remote_control_eligible=true"
-            grep -E -- '--spawn|--capacity|--permission-mode|--no-create-session-in-dir|--continue' "$RUNNER_TEMP/claude-rc-help.txt" || true
+            grep -E -- '--spawn|--capacity|--permission-mode|--no-create-session-in-dir|--continue' "$RUNNER_TEMP/claude-rc-help.txt" | head -n 20 || :
           else
             echo "remote_control_eligible=false"
             tail -n 20 "$RUNNER_TEMP/claude-rc-help.txt" | sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g'
