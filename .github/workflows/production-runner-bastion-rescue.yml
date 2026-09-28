@@ -203,6 +203,10 @@ jobs:
             bus="unix:path=$runtime/bus"
             test -S "$runtime/bus"
             env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
+            diag_dir=/home/ubuntu/actions-runner-shopvivaliz/_diag
+            marker="$(mktemp)"
+            trap 'rm -f "$marker"' EXIT
+            touch "$marker"
             env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
             active=false
             for _ in $(seq 1 12); do
@@ -216,6 +220,28 @@ jobs:
             mainpid="$(env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user show -p MainPID --value "$service")"
             [[ "$mainpid" =~ ^[0-9]+$ ]]
             test "$mainpid" -gt 1
+
+            listener_connected=false
+            listener_failure=none
+            for _ in $(seq 1 30); do
+              latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)"
+              if [ -n "$latest_log" ]; then
+                if grep -Fq 'Listening for Jobs' "$latest_log"; then
+                  listener_connected=true
+                  listener_failure=none
+                  break
+                fi
+                if grep -Fq 'A session for this runner already exists' "$latest_log"; then
+                  listener_failure=session_conflict
+                elif grep -Fq 'Runner connect error' "$latest_log"; then
+                  listener_failure=connect_error
+                fi
+              fi
+              sleep 2
+            done
+            echo "RUNNER_LISTENER_CONNECTED=$listener_connected"
+            echo "RUNNER_LISTENER_FAILURE_CLASS=$listener_failure"
+            test "$listener_connected" = true
             echo RUNNER_BASTION_RESCUE=listener_restarted
             echo RUNNER_SERVICE_ACTIVE=true
           '
