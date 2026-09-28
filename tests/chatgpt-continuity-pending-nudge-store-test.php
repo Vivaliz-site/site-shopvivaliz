@@ -29,14 +29,18 @@ cgnSame(null, $store->pullOldest(), 'A second pull with no other pending/abandon
 
 cgnAssert(!$store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:05:00Z'), 'Enqueue while CLAIMED must still be rejected as duplicate.');
 
-cgnAssert($store->recordResult('task-1', 'SENT', 'typed continue and clicked send'), 'Recording a result for an existing task_id must succeed.');
-cgnAssert(!$store->recordResult('task-does-not-exist', 'SENT', null), 'Recording a result for an unknown task_id must fail.');
+cgnAssert($store->recordResult('task-1', 'SENT_UNCONFIRMED', 'typed continue; no assistant progress observed'), 'Unconfirmed send must be a valid retryable result.');
+$statusUnconfirmed = $store->status('task-1');
+cgnSame('SENT_UNCONFIRMED', $statusUnconfirmed['status'], 'A click without assistant progress must not be terminal success.');
+
+cgnAssert($store->recordResult('task-1', 'PROGRESS_CONFIRMED', 'assistant output advanced'), 'Confirmed assistant progress must be a valid result.');
+cgnAssert(!$store->recordResult('task-does-not-exist', 'PROGRESS_CONFIRMED', null), 'Recording a result for an unknown task_id must fail.');
 
 $status = $store->status('task-1');
-cgnSame('SENT', $status['status'], 'Status after recordResult must reflect SENT.');
+cgnSame('PROGRESS_CONFIRMED', $status['status'], 'Status after confirmed progress must reflect PROGRESS_CONFIRMED.');
 cgnAssert($status['resolved_at'] !== null, 'resolved_at must be set after recordResult.');
 
-cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:10:00Z'), 'A fresh enqueue after resolution (SENT is terminal) must be allowed again for a later interruption of the same task.');
+cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:10:00Z'), 'A fresh enqueue after PROGRESS_CONFIRMED must be allowed again for a later interruption of the same task.');
 
 $statusAfterReenqueue = $store->status('task-1');
 cgnSame('PENDING', $statusAfterReenqueue['status'], 'Re-enqueue must reset the SAME row back to PENDING, not leave the old SENT row as the first match.');
