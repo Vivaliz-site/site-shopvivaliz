@@ -2,7 +2,7 @@
 """ShopVivaliz private remote-control MCP.
 
 Stateless MCP-over-HTTP endpoint bound to backend loopback. It controls four
-canonical hosts through local execution or private SSH/Tailscale and persists
+canonical hosts through local execution, private SSH, or backend loopback relays and persists
 durable tasks/audit state in SQLite. No GitHub API is used at runtime.
 """
 from __future__ import annotations
@@ -19,6 +19,7 @@ import subprocess
 import threading
 import time
 import uuid
+import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -46,12 +47,12 @@ HOSTS = {
         "user": "shopvivaliz-remote", "role": "production web/deploy"
     },
     "Fred-Win": {
-        "platform": "windows", "transport": "tailscale", "peer": "LAPTOP-NIG4IFUU",
-        "user": "FRED", "role": "support workstation"
+        "platform": "windows", "transport": "relay",
+        "url": "http://127.0.0.1:5557", "role": "support workstation"
     },
     "KOCEPSV": {
-        "platform": "windows", "transport": "tailscale", "peer": "DESKTOP-KOCEPSV",
-        "user": "user", "role": "support workstation"
+        "platform": "windows", "transport": "relay",
+        "url": "http://127.0.0.1:5558", "role": "support workstation"
     },
 }
 
@@ -172,25 +173,6 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
     return aid
 
 
-def tailscale_peer_ip(peer_name: str) -> str:
-    cp = subprocess.run(
-        ["tailscale", "status", "--json"], capture_output=True, text=True, timeout=8
-    )
-    if cp.returncode != 0:
-        raise RuntimeError("tailscale_status_failed")
-    data = json.loads(cp.stdout)
-    for peer in (data.get("Peer") or {}).values():
-        name = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
-        if peer_name.upper() in name and peer.get("Online"):
-            ips = peer.get("TailscaleIPs") or []
-            for ip in ips:
-                if ":" not in str(ip):
-                    return str(ip)
-            if ips:
-                return str(ips[0])
-    raise RuntimeError("tailscale_peer_offline_or_missing")
-
-
 def ssh_base(address: str, user: str) -> list[str]:
     if not SSH_KEY.exists() or not KNOWN_HOSTS.exists():
         raise RuntimeError("controller_ssh_identity_not_ready")
@@ -203,21 +185,43 @@ def ssh_base(address: str, user: str) -> list[str]:
 
 def remote_invocation(host: str, command: str) -> list[str]:
     cfg = validate_host(host)
-    platform = cfg["platform"]
     if cfg["transport"] == "local":
         return ["bash", "-lc", command]
-    address = str(cfg.get("address") or tailscale_peer_ip(str(cfg["peer"])))
-    base = ssh_base(address, str(cfg["user"]))
-    if platform == "linux":
-        payload = base64.b64encode(command.encode()).decode()
-        remote = f"printf %s {payload} | base64 -d | sudo -n bash"
-        return base + [remote]
-    encoded = base64.b64encode(command.encode("utf-16le")).decode()
-    return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
+    if cfg["transport"] != "ssh":
+        raise RuntimeError("subprocess_transport_not_supported")
+    base = ssh_base(str(cfg["address"]), str(cfg["user"]))
+    payload = base64.b64encode(command.encode()).decode()
+    remote = f"printf %s {payload} | base64 -d | sudo -n bash"
+    return base + [remote]
+
+
+def relay_call(host: str, url: str, command: str, timeout: int) -> dict[str, Any]:
+    body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode("utf-8")
+    request = urllib.request.Request(
+        url + "/mcp/tool/execute_command",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=timeout + 10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    result = payload.get("result") or {}
+    success = result.get("success") is True
+    return {
+        "host": host,
+        "exit_code": 0 if success else int(result.get("exit_code") or 1),
+        "stdout": redact_text(str(result.get("output") or "")),
+        "stderr": redact_text(str(result.get("error") or "")),
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
 
 
 def run_host_command(host: str, command: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
+    cfg = validate_host(host)
+    if cfg["transport"] == "relay":
+        return relay_call(host, str(cfg["url"]), command, timeout)
     args = remote_invocation(host, command)
     started = time.monotonic()
     cp = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -425,6 +429,24 @@ def task_worker() -> None:
             if not changed:
                 continue
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
+            cfg = validate_host(host)
+
+            if cfg["transport"] == "relay":
+                result = run_host_command(host, command, timeout)
+                with db_conn() as db:
+                    current = db.execute("SELECT state FROM tasks WHERE id=?", (tid,)).fetchone()
+                    cancelled = bool(current and current["state"] == "cancelled")
+                    state = "cancelled" if cancelled else ("succeeded" if result["exit_code"] == 0 else "failed")
+                    db.execute(
+                        "UPDATE tasks SET state=?,finished_at=?,heartbeat_at=?,exit_code=?,stdout=?,stderr=? WHERE id=?",
+                        (
+                            state, now(), now(), 143 if cancelled else result["exit_code"],
+                            result["stdout"], result["stderr"], tid,
+                        ),
+                    )
+                audit("task_worker", host, {"task_id": tid}, state == "succeeded", f"task {state}")
+                continue
+
             proc = subprocess.Popen(
                 remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, start_new_session=True
