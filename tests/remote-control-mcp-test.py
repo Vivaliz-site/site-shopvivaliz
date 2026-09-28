@@ -646,5 +646,14 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
 
 
+    def test_codex_remote_control_one_shot_disables_required_project_bridge(self):
+        workflow = (ROOT / ".github" / "workflows" / "codex-remote-control-mcp-one-shot.yml").read_text(encoding="utf-8")
+        execute = workflow.split("      - name: Execute finite Codex task", 1)[1].split("      - name: Announce launcher terminal result", 1)[0]
+        self.assertIn("--config 'mcp_servers.codex_bridge.enabled=false'", execute)
+        self.assertIn("--config 'mcp_servers.codex_bridge.required=false'", execute)
+        self.assertNotIn("mcp_servers.codex-mesh-bridge", execute)
+        self.assertNotIn("mcp_servers.google-ads-readonly", execute)
+
+
 if __name__ == "__main__":
     unittest.main()
