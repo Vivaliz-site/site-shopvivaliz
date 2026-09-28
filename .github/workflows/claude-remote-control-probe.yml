@@ -1,0 +1,61 @@
+name: Claude Remote Control Probe
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/claude-remote-control-probe.yml'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'tests/test_claude_remote_control_setup.py'
+      - 'docs/knowledge/claude-vm-bootstrap.md'
+      - 'CLAUDE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Probe Claude Code Remote Control eligibility
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "CLAUDE_REMOTE_CONTROL_PROBE_BEGIN"
+          echo "runner_user=$(id -un)"
+          echo "runner_uid=$(id -u)"
+          echo "runner_home=$HOME"
+          if command -v claude >/dev/null 2>&1; then
+            echo "claude_present=true"
+            claude --version | tr -cd '[:alnum:]. _+()-\n'
+          else
+            echo "claude_present=false"
+            exit 21
+          fi
+          for name in ANTHROPIC_BASE_URL CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC DISABLE_GROWTHBOOK; do
+            if [ -n "${!name:-}" ]; then
+              echo "${name}=SET"
+            else
+              echo "${name}=UNSET"
+            fi
+          done
+          set +e
+          timeout 20s claude remote-control --help >"$RUNNER_TEMP/claude-rc-help.txt" 2>&1
+          rc=$?
+          set -e
+          echo "remote_control_help_rc=$rc"
+          if [ "$rc" -eq 0 ]; then
+            echo "remote_control_eligible=true"
+            grep -E -- '--spawn|--capacity|--permission-mode|--no-create-session-in-dir|--continue' "$RUNNER_TEMP/claude-rc-help.txt" || true
+          else
+            echo "remote_control_eligible=false"
+            tail -n 20 "$RUNNER_TEMP/claude-rc-help.txt" | sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g'
+            exit "$rc"
+          fi
+          echo "CLAUDE_REMOTE_CONTROL_PROBE_END"
