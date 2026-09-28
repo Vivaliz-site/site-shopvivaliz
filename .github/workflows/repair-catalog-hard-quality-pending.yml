@@ -1,8 +1,9 @@
 name: Repair catalog hard quality pending
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
