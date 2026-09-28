@@ -1,0 +1,113 @@
+name: GitHub Two Factor Methods Probe Backend Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/github-two-factor-methods-probe-backend-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 6
+    steps:
+      - name: Inspect GitHub 2FA challenge without authentication action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          cat > /tmp/github-2fa-probe.mjs <<'NODE'
+          import fs from 'node:fs';
+
+          const profile='/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';
+          const pwCandidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+
+          let chromium=null;
+          for(const p of pwCandidates){
+            if(!fs.existsSync(p)) continue;
+            const mod=await import('file://'+p);
+            chromium=mod.chromium||mod.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          let browser=null, context=null, page=null, launched=false;
+          try{
+            try{
+              browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+              context=browser.contexts()[0]||null;
+            }catch{}
+
+            if(!context){
+              if(!fs.existsSync(profile)) throw new Error('canonical_profile_missing');
+              const worker=await fetch('http://127.0.0.1:17777/sessions',{signal:AbortSignal.timeout(3000)})
+                .then(r=>r.ok?r.json():null).catch(()=>null);
+              const locked=Array.isArray(worker?.sessions)&&worker.sessions.some(
+                s=>s?.persistent===true&&s?.profile==='ai-squad-chatgpt'
+              );
+              if(locked) throw new Error('canonical_profile_locked_without_cdp');
+
+              const executablePath=['/home/ubuntu/.local/bin/shopvivaliz-browser-chromium','/usr/bin/chromium']
+                .find(p=>fs.existsSync(p))||chromium.executablePath();
+              context=await chromium.launchPersistentContext(profile,{
+                executablePath,
+                headless:false,
+                viewport:{width:1440,height:900},
+                env:{...process.env,DISPLAY:process.env.DISPLAY||':98',LIBGL_ALWAYS_SOFTWARE:'1'},
+                args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-vulkan','--use-gl=swiftshader'],
+              });
+              launched=true;
+            }
+
+            page=await context.newPage();
+            page.setDefaultTimeout(12000);
+            await page.goto('https://github.com/settings/profile',{waitUntil:'commit',timeout:30000}).catch(()=>null);
+            await page.waitForTimeout(2500);
+
+            const url=page.url();
+            const pathName=new URL(url).pathname;
+            const body=((await page.locator('body').innerText().catch(()=>''))||'').replace(/\s+/g,' ');
+
+            console.log('GITHUB_CURRENT_PATH='+pathName);
+            const twoFactor=/\/sessions\/two-factor\//.test(pathName);
+            console.log('GITHUB_TWO_FACTOR_REQUIRED='+String(twoFactor));
+
+            const checks=[
+              ['PASSKEY',/passkey/i],
+              ['SECURITY_KEY',/security key/i],
+              ['AUTHENTICATOR_APP',/authenticator app|authentication app|one-time password|verification code/i],
+              ['GITHUB_MOBILE',/github mobile/i],
+              ['SMS',/sms|text message/i],
+              ['RECOVERY_CODE',/recovery code/i],
+            ];
+            for(const [name,re] of checks){
+              console.log('GITHUB_2FA_METHOD_'+name+'='+String(re.test(body)));
+            }
+
+            if(twoFactor){
+              console.log('GITHUB_2FA_PASSIVE_PROBE=PASS');
+              process.exitCode=2;
+            }else{
+              const title=(await page.title().catch(()=>''))||'';
+              console.log('GITHUB_PROFILE_SETTINGS_REACHED='+String(pathName==='/settings/profile' && !/Sign in|Page not found/i.test(title)));
+              console.log('GITHUB_2FA_PASSIVE_PROBE=NO_CHALLENGE');
+            }
+          } finally {
+            if(page) await page.close().catch(()=>{});
+            if(launched && context) await context.close().catch(()=>{});
+            if(browser) await browser.close().catch(()=>{});
+          }
+          NODE
+          DISPLAY=:98 node /tmp/github-2fa-probe.mjs
+      - name: Cleanup probe
+        if: always()
+        shell: bash
+        run: rm -f /tmp/github-2fa-probe.mjs
