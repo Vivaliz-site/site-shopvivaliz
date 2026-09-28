@@ -53,26 +53,30 @@ probe_eligibility() {
   run_as_claude "$bin" --version | tr -cd '[:alnum:]. _+()-\n'
 
   out="$(mktemp)"
-  trap 'rm -f "$out"' RETURN
   set +e
-  run_as_claude timeout 20s "$bin" remote-control --help >"$out" 2>&1
+  run_as_claude bash -lc 'timeout 20s claude remote-control --help' >"$out" 2>&1
   rc=$?
   set -e
   if [ "$rc" -eq 0 ]; then
+    rm -f "$out"
     echo "REMOTE_CONTROL_ELIGIBLE=PASS"
     return 0
   fi
 
   if grep -Eqi 'requires a claude\.ai subscription|full-scope login token|run.*/login|sign in' "$out"; then
+    rm -f "$out"
+    rm -f "$out"
     echo "REMOTE_CONTROL_LOGIN_REQUIRED"
     return 31
   fi
   if grep -Eqi 'isn.t enabled|disabled by your organization|trusted device|feature-flag|eligibility' "$out"; then
+    rm -f "$out"
     echo "REMOTE_CONTROL_POLICY_REQUIRED"
     return 32
   fi
   echo "REMOTE_CONTROL_ELIGIBILITY_FAIL rc=$rc"
   sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$out" | tail -n 12
+  rm -f "$out"
   return "$rc"
 }
 
@@ -191,7 +195,6 @@ accept_remote_control_once() {
   local bin out rc
   bin="$(claude_bin)"
   out="$(mktemp)"
-  trap 'rm -f "$out"' RETURN
   set +e
   printf 'y\n' | run_as_claude timeout 12s "$bin" remote-control \
     --name "ShopVivaliz Bootstrap" \
@@ -203,18 +206,22 @@ accept_remote_control_once() {
   set -e
 
   if grep -Eqi 'requires a claude\.ai subscription|full-scope login token|run.*/login|sign in' "$out"; then
+    rm -f "$out"
     echo "REMOTE_CONTROL_LOGIN_REQUIRED"
     return 31
   fi
   if grep -Eqi 'isn.t enabled|disabled by your organization|trusted device|feature-flag|eligibility' "$out"; then
+    rm -f "$out"
     echo "REMOTE_CONTROL_POLICY_REQUIRED"
     return 32
   fi
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
     echo "REMOTE_CONTROL_CONSENT=FAIL rc=$rc"
     sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$out" | tail -n 12
+    rm -f "$out"
     return "$rc"
   fi
+  rm -f "$out"
   echo "REMOTE_CONTROL_CONSENT=PASS"
 }
 
