@@ -76,17 +76,21 @@ async function run() {
     streamStatus: 'COMPLETE',
     staleStopClearSucceeds: true,
     sendSucceeds: true,
-  }));
-  assert.equal(staleComplete.result_status, 'SENT', 'stale COMPLETE stream must be recoverable');
+  }), async () => true);
+  assert.equal(staleComplete.result_status, 'PROGRESS_CONFIRMED', 'stale COMPLETE recovery is success only after assistant progress');
   assert.match(staleComplete.detail, /stale COMPLETE/i);
 
   const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
 
-  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }));
-  assert.equal(sentOk.result_status, 'SENT');
+  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }), async () => true);
+  assert.equal(sentOk.result_status, 'PROGRESS_CONFIRMED');
 
-  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }));
+  const sentButNoProgress = await attemptNudge('task-no-progress', async () => fakeCdp({ sendSucceeds: true }), async () => false);
+  assert.equal(sentButNoProgress.result_status, 'SENT_UNCONFIRMED');
+  assert.match(sentButNoProgress.detail, /no assistant progress/i);
+
+  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }), async () => true);
   assert.equal(sendFailed.result_status, 'ERROR');
 
   const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); });
@@ -117,9 +121,27 @@ async function run() {
 
   // Banner still present on the confirm re-check -> must send.
   {
-    const result = await reinforcementCheckOnce(async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }), 1);
-    assert.equal(result.action, 'confirmed');
+    const result = await reinforcementCheckOnce(
+      async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
+      1,
+      async () => true,
+    );
+    assert.equal(result.action, 'confirmed_progress');
     assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, true);
+  }
+
+  // A click alone is NOT recovery. If no assistant output appears, keep the
+  // episode retryable rather than treating it as success.
+  {
+    const result = await reinforcementCheckOnce(
+      async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
+      1,
+      async () => false,
+    );
+    assert.equal(result.action, 'sent_unconfirmed');
+    assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, false);
   }
 
   console.log('reinforcementCheckOnce branches: PASS');
