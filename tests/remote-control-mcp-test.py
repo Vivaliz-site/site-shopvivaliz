@@ -475,6 +475,28 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "secure_mcp_cloudflare_ui_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
+    def test_remote_access_can_probe_claude_cloud_remote_control(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        script = ROOT / "scripts" / "claude-remote-control-probe.sh"
+        self.assertTrue(script.exists(), "Claude Remote Control probe script missing")
+        script_text = script.read_text(encoding="utf-8")
+        for marker in (
+            "CLAUDE_REMOTE_CONTROL_PROBE=PASS",
+            "CLAUDE_PRESENT=",
+            "CLAUDE_AUTH_LOGGED_IN=",
+            "CLAUDE_REMOTE_CONTROL_COMMAND_AVAILABLE=",
+            "CLAUDE_REMOTE_CONTROL_ENV_COMPATIBLE=",
+        ):
+            self.assertIn(marker, script_text)
+        for needle in (
+            "claude_remote_control_probe",
+            "scripts/claude-remote-control-probe.sh",
+            "SECURE_CLAUDE_REMOTE_CONTROL_PROBE=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertIn('action == "claude_remote_control_probe"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",

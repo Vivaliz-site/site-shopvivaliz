@@ -56,6 +56,7 @@ on:
           - secure_mcp_platform_auth
           - secure_mcp_cloudflare_access_probe
           - secure_mcp_cloudflare_ui_probe
+          - claude_remote_control_probe
           - chatgpt_freeze_task_state
       reason:
         description: Audit reason
@@ -109,7 +110,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "chatgpt_freeze_task_state"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "chatgpt_freeze_task_state"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -138,6 +139,8 @@ jobs:
               raise SystemExit("Secure MCP Cloudflare Access probe is restricted to the backend VM")
           if action == "secure_mcp_cloudflare_ui_probe" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Secure MCP Cloudflare UI probe is restricted to the backend VM")
+          if action == "claude_remote_control_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control probe is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -528,6 +531,25 @@ jobs:
               fi
               printf '%s\n' "$safe_output" | grep -Fq 'CLOUDFLARE_UI_PROBE=PASS'
               echo "SECURE_MCP_CLOUDFLARE_UI_REMOTE_PROBE=PASS"
+              ;;
+            claude_remote_control_probe)
+              remote_script="/tmp/claude-remote-control-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/claude-remote-control-probe.sh
+              probe_output=''
+              probe_rc=0
+              if probe_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 60s '$remote_script'" 2>&1)"; then
+                probe_rc=0
+              else
+                probe_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$probe_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$probe_rc" -ne 0 ]; then
+                echo "::error::Remote Claude Remote Control probe failed rc=$probe_rc"
+                exit "$probe_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_PROBE=PASS'
+              echo "SECURE_CLAUDE_REMOTE_CONTROL_PROBE=PASS"
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
