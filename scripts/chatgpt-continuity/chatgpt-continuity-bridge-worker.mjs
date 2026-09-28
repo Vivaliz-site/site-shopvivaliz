@@ -31,6 +31,12 @@ const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 
+// Fail closed while OpenAI Support is still investigating the account/workspace
+// restriction/risk-state hypothesis. Re-enabling Web turn submission requires a
+// dedicated reviewed code change; there is intentionally no env override.
+const CHATGPT_WEB_TURN_AUTOMATION_ALLOWED = false;
+const CHATGPT_WEB_TURN_AUTOMATION_POLICY = 'CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2';
+
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
@@ -211,7 +217,17 @@ async function sendContinueMessage(cdp) {
   return cdp.evaluate(`(()=>{const b=document.querySelector('[data-testid="send-button"]');if(!b||b.disabled)return false;b.click();return true})()`);
 }
 
-async function attemptNudge(taskId, connect = () => Cdp.connectToChatgptTab()) {
+async function attemptNudge(
+  taskId,
+  connect = () => Cdp.connectToChatgptTab(),
+  allowWebTurn = CHATGPT_WEB_TURN_AUTOMATION_ALLOWED,
+) {
+  if (!allowWebTurn) {
+    return {
+      result_status: 'BLOCKED_POLICY',
+      detail: `${CHATGPT_WEB_TURN_AUTOMATION_POLICY}: automated ChatGPT Web turns disabled while account/workspace investigation is open`,
+    };
+  }
   let cdp;
   try {
     cdp = await connect();
@@ -252,6 +268,7 @@ async function attemptNudge(taskId, connect = () => Cdp.connectToChatgptTab()) {
 }
 
 async function pollBridgeOnce() {
+  if (!CHATGPT_WEB_TURN_AUTOMATION_ALLOWED) return;
   const response = await bridge('pull');
   if (response.status !== 'JOB') return;
   const taskId = response.nudge?.task_id;
@@ -273,7 +290,9 @@ const REINFORCEMENT_CONFIRM_DELAY_MS = Math.max(3000, Number(process.env.CHATGPT
 async function reinforcementCheckOnce(
   connect = () => Cdp.connectToChatgptTab(),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
+  allowWebTurn = CHATGPT_WEB_TURN_AUTOMATION_ALLOWED,
 ) {
+  if (!allowWebTurn) return { action: 'blocked_policy', sent: false };
   let cdp;
   try {
     cdp = await connect();
