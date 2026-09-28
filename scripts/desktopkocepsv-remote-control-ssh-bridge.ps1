@@ -1,6 +1,7 @@
 param([ValidateSet('Ensure','InstallTask')][string]$Mode = 'Ensure')
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
+$OpenSshRecoveryScript = Join-Path $Repo 'scripts\windows-openssh-recovery.ps1'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Remote Control SSH 24h'
 $LogDir = Join-Path $Repo 'logs'
 $LogFile = Join-Path $LogDir 'desktopkocepsv-remote-control-ssh.log'
@@ -74,6 +75,8 @@ function Start-RemoteControlTunnel {
 }
 
 function Ensure-Bridge {
+    if (!(Test-Path -LiteralPath $OpenSshRecoveryScript)) { throw 'OpenSSH recovery script missing' }
+    & $OpenSshRecoveryScript | ForEach-Object { Log ([string]$_) }
     if ((Get-RemoteControlTunnel).Count -ge 1) {
         Log 'Remote-control 2223 sidecar already healthy'
         return
