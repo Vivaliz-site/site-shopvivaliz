@@ -145,6 +145,20 @@ jobs:
             fi
           done
 
+          code="$(curl -sS -o /tmp/a1-continuity-bridge-body -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+            -H 'Host: shopvivaliz.com.br' \
+            -H 'Content-Type: application/json' \
+            --data '{"operation":"heartbeat"}' \
+            http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php || true)"
+          echo "BACKEND_TO_A1_BRIDGE_UNAUTH_HTTP=${code:-000}"
+          if [ -s /tmp/a1-continuity-bridge-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/a1-continuity-bridge-body').read_text(encoding='utf-8',errors='replace').split())[:200]
+          print('BACKEND_TO_A1_BRIDGE_BODY='+body)
+          PY
+          fi
+
           if ss -ltn 2>/dev/null | grep -q ':9555 '; then
             echo BACKEND_CDP_9555_LISTENING=true
           else
