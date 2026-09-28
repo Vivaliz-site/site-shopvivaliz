@@ -588,6 +588,24 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(marker, setup)
         self.assertNotIn('cat "$out"', setup)
 
+    def test_remote_access_can_repair_chatgpt_continuity_runtime(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for needle in (
+            "chatgpt_continuity_repair",
+            "scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS",
+            "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS",
+            "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS",
+            "CHATGPT_CONTINUITY_REPAIR=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertIn('action == "chatgpt_continuity_repair"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+        repair_block = workflow.split("            chatgpt_continuity_repair)", 1)[1].split("              ;;", 1)[0]
+        self.assertNotIn('cat "$token_file"', repair_block)
+        self.assertIn('dd if="$token_file" status=none', repair_block)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
