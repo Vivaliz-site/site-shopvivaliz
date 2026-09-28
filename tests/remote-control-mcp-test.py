@@ -101,28 +101,23 @@ class RemoteControlMcpTests(unittest.TestCase):
             m.validate_host("legacy-host")
 
     def test_linux_target_uses_privileged_sudo(self):
-        original = m.tailscale_peer_ip
-        try:
-            m.SSH_KEY.write_text("x")
-            m.KNOWN_HOSTS.write_text("x")
-            inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
-            self.assertIn("sudo -n bash", inv[-1])
-            self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
-        finally:
-            m.tailscale_peer_ip = original
-
-    def test_windows_uses_encoded_powershell(self):
         m.SSH_KEY.write_text("x")
         m.KNOWN_HOSTS.write_text("x")
-        original = m.tailscale_peer_ip
-        m.tailscale_peer_ip = lambda _: "100.64.0.10"
-        try:
-            inv = m.remote_invocation("Fred-Win", "Get-Date")
-            self.assertIn("powershell.exe", inv)
-            self.assertIn("-EncodedCommand", inv)
-            self.assertIn("FRED@100.64.0.10", inv)
-        finally:
-            m.tailscale_peer_ip = original
+        inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
+        self.assertIn("sudo -n bash", inv[-1])
+        self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
+
+    def test_windows_use_existing_private_backend_relays(self):
+        self.assertEqual(m.HOSTS["Fred-Win"]["transport"], "relay")
+        self.assertEqual(m.HOSTS["Fred-Win"]["url"], "http://127.0.0.1:5557")
+        self.assertEqual(m.HOSTS["KOCEPSV"]["transport"], "relay")
+        self.assertEqual(m.HOSTS["KOCEPSV"]["url"], "http://127.0.0.1:5558")
+
+    def test_windows_relay_wraps_commands_in_encoded_powershell(self):
+        wrapped = m.relay_shell_command("windows", "Get-Date")
+        self.assertIn("powershell.exe", wrapped)
+        self.assertIn("-EncodedCommand", wrapped)
+        self.assertNotIn("Get-Date", wrapped)
 
 
 class BranchCoherenceTests(unittest.TestCase):
