@@ -53,6 +53,8 @@ on:
           - backend_browser_runner_install
           - backend_browser_runner_status
           - secure_mcp_platform_ui_probe
+          - secure_mcp_platform_auth
+          - secure_mcp_cloudflare_access_probe
           - chatgpt_freeze_task_state
       reason:
         description: Audit reason
@@ -106,7 +108,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "chatgpt_freeze_task_state"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "chatgpt_freeze_task_state"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -129,6 +131,10 @@ jobs:
               raise SystemExit("Backend browser runner actions are restricted to the backend VM")
           if action == "secure_mcp_platform_ui_probe" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Secure MCP Platform UI probe is restricted to the backend VM")
+          if action == "secure_mcp_platform_auth" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Platform auth is restricted to the backend VM")
+          if action == "secure_mcp_cloudflare_access_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Cloudflare Access probe is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -351,6 +357,8 @@ jobs:
         env:
           ACTION: ${{ steps.req.outputs.action }}
           SHOPVIVALIZ_AGENT_SSH_PUBKEY: ${{ secrets.SHOPVIVALIZ_AGENT_SSH_PUBKEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -437,6 +445,65 @@ jobs:
               fi
               printf '%s\n' "$safe_output" | grep -Fq 'OPENAI_TUNNEL_UI_PROBE=PASS'
               echo "SECURE_MCP_PLATFORM_REMOTE_PROBE=PASS"
+              ;;
+            secure_mcp_platform_auth)
+              remote_script="/tmp/openai-secure-mcp-platform-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 600 '$remote_script'" < scripts/openai-secure-mcp-platform-auth.mjs
+              auth_output=''
+              auth_rc=0
+              if auth_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 120s node '$remote_script'" 2>&1)"; then
+                auth_rc=0
+              else
+                auth_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$auth_output" | awk '/^(OPENAI_PLATFORM_[A-Z_]+|CLOUD_CLIENT_COMPATIBILITY_REQUIRED|CLAUDE_CLOUD_ACCESS_REQUIRED)=/{print}')"
+              if [ -n "$safe_output" ]; then
+                printf '%s\n' "$safe_output"
+              fi
+              if [ "$auth_rc" -ne 0 ]; then
+                echo "::error::Remote Platform auth failed rc=$auth_rc"
+                exit "$auth_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'OPENAI_PLATFORM_AUTH_RESULT=PASS'
+              echo "SECURE_MCP_PLATFORM_REMOTE_AUTH=PASS"
+              ;;
+            secure_mcp_cloudflare_access_probe)
+              test -n "${CLOUDFLARE_API_TOKEN:-}"
+              test -n "${CLOUDFLARE_DNS_EDIT_TOKEN:-}"
+              zone_tmp="$(mktemp)"
+              apps_tmp="$(mktemp)"
+              tokens_tmp="$(mktemp)"
+              cleanup_cf_probe() { rm -f "$zone_tmp" "$apps_tmp" "$tokens_tmp"; }
+              trap cleanup_cf_probe RETURN
+
+              zone_code="$(curl -sS -o "$zone_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_DNS_EDIT_TOKEN" \
+                "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br&status=active&per_page=1")"
+              test "$zone_code" = 200
+              account_id="$(jq -r '.result[0].account.id // empty' "$zone_tmp")"
+              test -n "$account_id"
+
+              apps_code="$(curl -sS -o "$apps_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$account_id/access/apps?per_page=1")"
+              tokens_code="$(curl -sS -o "$tokens_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$account_id/access/service_tokens?per_page=1")"
+
+              apps_read=false
+              service_tokens_read=false
+              managed_oauth=false
+              if [ "$apps_code" = 200 ] && jq -e '.success == true' "$apps_tmp" >/dev/null; then
+                apps_read=true
+                managed_oauth=true
+              fi
+              if [ "$tokens_code" = 200 ] && jq -e '.success == true' "$tokens_tmp" >/dev/null; then
+                service_tokens_read=true
+              fi
+              echo "CLOUDFLARE_ACCESS_APPS_READ=$apps_read"
+              echo "CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=$service_tokens_read"
+              echo "CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=$managed_oauth"
+              echo "CLOUDFLARE_ACCESS_PROBE=PASS"
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
