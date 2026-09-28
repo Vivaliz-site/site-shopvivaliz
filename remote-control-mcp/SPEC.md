@@ -53,8 +53,8 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - No hardcoded credentials, tokens, cookies or private keys.
 - Named host allowlist; never route by user-supplied arbitrary address.
 - Read operations and write/execute operations are distinct tools.
-- Shell execution is policy-controlled, bounded by timeout/output limits and executed as the dedicated restricted account or existing allowlisted wrappers.
-- Destructive or privilege-escalating operations are denied unless a dedicated explicit tool exists.
+- Shell execution is policy-controlled and bounded by timeout/output limits. The daemon may execute with root/LocalSystem privilege when the requested administrative capability requires it; ordinary operations should use the least privilege that still completes the task.
+- High-impact destructive operations require a dedicated explicit tool or policy rule; elevation itself is not treated as an error because administrative recovery is a core capability.
 - Every request creates an append-only audit record with redacted arguments and outcome.
 - Secrets are never returned in tool output.
 - File access is restricted to configured roots per host.
@@ -85,7 +85,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 
 ## Non-Goals for V1
 - Public Internet exposure of Windows or Linux control endpoints.
-- Unrestricted root shell.
+- Credential/secret extraction, audit disabling, authentication bypass, or direct mutation of immutable production releases.
 - Browser execution on Fred-Win or KOCEPSV.
 - Replacing RustDesk for graphical human sessions.
 - Depending on GitHub Actions for normal runtime.
