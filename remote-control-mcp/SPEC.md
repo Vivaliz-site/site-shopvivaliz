@@ -33,7 +33,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Canonical controller host: `always-free-arm-1787907847-26` (private `10.0.1.38`).
 - Production web host: `shopvivaliz-free-a1` (private `10.0.1.112`).
 - Support hosts: `Fred-Win` and `KOCEPSV`.
-- Private transport: backend-local execution, VCN/OpenSSH to production, and the existing loopback-only reverse relays on backend ports `5557` (Fred-Win) and `5558` (KOCEPSV).
+- Private transport: VCN/Tailscale/OpenSSH using the dedicated `shopvivaliz-agent` identity and existing restricted wrappers/relays.
 - GUI fallback: self-hosted RustDesk.
 - ChatGPT connects to the private MCP endpoint through Secure MCP Tunnel; the MCP service itself is not publicly exposed.
 - GitHub may store source code and may be used for one-time bootstrap/recovery, but it is not part of normal command transport, task queue, heartbeat, execution or state.
