@@ -237,7 +237,11 @@ async function latestConversationProbe(cdp) {
           last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0};
           if(!response.ok||items.length===0) continue;
           const item=items[0]||{};
-          return {...last,id:String(item.id||item.conversation_id||''),update_time:item.update_time??item.updateTime??null,updated_at:item.updated_at??item.updatedAt??null};
+          const item_keys=Object.keys(item)
+            .map(key=>String(key).replace(/[^A-Za-z0-9_]/g,'').slice(0,64))
+            .filter(Boolean)
+            .slice(0,32);
+          return {...last,item_keys,id:String(item.id||item.conversation_id||''),update_time:item.update_time??item.updateTime??null,updated_at:item.updated_at??item.updatedAt??null};
         }catch{last={http_status:0,source:candidate.source,item_present:false};}
       }
       return last;
