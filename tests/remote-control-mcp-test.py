@@ -449,6 +449,32 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(needle, workflow)
         self.assertGreaterEqual(workflow.count('target != "always-free-arm-1787907847-26"'), 3)
 
+
+    def test_remote_access_can_probe_cloudflare_access_ui_on_backend(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        script = ROOT / "scripts" / "cloudflare-access-ui-probe.mjs"
+        self.assertTrue(script.exists(), "Cloudflare Access UI probe script missing")
+        script_text = script.read_text(encoding="utf-8")
+        for marker in (
+            "CLOUDFLARE_UI_AUTHENTICATED=",
+            "CLOUDFLARE_ZERO_TRUST_AVAILABLE=",
+            "CLOUDFLARE_ACCESS_MANAGE_AVAILABLE=",
+            "CLOUDFLARE_UI_AUTH_CHALLENGE_REQUIRED=",
+            "CLOUDFLARE_UI_PROBE=PASS",
+        ):
+            self.assertIn(marker, script_text)
+        self.assertIn("https://dash.cloudflare.com/", script_text)
+        self.assertIn("https://one.dash.cloudflare.com/", script_text)
+        for needle in (
+            "secure_mcp_cloudflare_ui_probe",
+            "scripts/cloudflare-access-ui-probe.mjs",
+            "CLOUDFLARE_UI_PROBE=PASS",
+            "SECURE_MCP_CLOUDFLARE_UI_REMOTE_PROBE=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertIn('action == "secure_mcp_cloudflare_ui_probe"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
