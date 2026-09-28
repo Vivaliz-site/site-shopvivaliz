@@ -531,6 +531,11 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(needle, workflow)
 
+    def test_claude_remote_control_auth_json_is_not_read_as_unprivileged_user(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        self.assertNotIn('run_as_claude python3 - "$tmp"', setup)
+        self.assertIn('python3 - "$tmp"', setup)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
