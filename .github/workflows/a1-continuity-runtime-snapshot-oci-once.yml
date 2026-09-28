@@ -99,7 +99,7 @@ jobs:
           state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
           code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
           output="$(jq -r '.data.content.text // ""' <<<"$execution" 2>/dev/null || true)"
-          printf '%s\n' "$output" | grep -E '^(A1_SNAPSHOT_|AGENT_SERVICE_|PROC=|CODEX_ANCESTRY=|CODEX_CGROUP=|TMUX_SESSION=|TMUX_PANE=|TASK_STATE=|TASK_STATE_ERROR=|LEDGER_SUMMARY=|LEDGER_ROW=|A1_CONTINUITY_RUNTIME_SNAPSHOT=)' || true
+          printf '%s\n' "$output" | grep -E '^(A1_SNAPSHOT_|ACTIVE_RELEASE=|AGENT_SERVICE_|PROC=|CODEX_ANCESTRY=|CODEX_ANCESTOR_META=|CODEX_CGROUP=|CODEX_ENV_META=|TMUX_SESSION=|TMUX_PANE=|WORKTREE_META=|TASK_STATE=|TASK_STATE_ERROR=|LEDGER_SUMMARY=|LEDGER_ROW=|A1_CONTINUITY_RUNTIME_SNAPSHOT=)' || true
           test "$state" = SUCCEEDED
           test "$code" = 0
           grep -Fq 'A1_CONTINUITY_RUNTIME_SNAPSHOT=PASS' <<<"$output"
