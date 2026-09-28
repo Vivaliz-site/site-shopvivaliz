@@ -162,6 +162,15 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("administrators_authorized_keys", text)
         self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", text)
 
+    def test_bootstrap_workflow_is_single_complete_sequence(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertEqual(text.count("- name: Four-host live MCP health validation"), 1)
+        self.assertEqual(text.count("- name: Persist sanitized bootstrap evidence"), 1)
+        self.assertEqual(text.count("- name: Cleanup bootstrap material"), 1)
+        self.assertIn("test \"$(grep -cv '^#' \"$tmp\")\" -ge 3", text)
+        self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
+        self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
