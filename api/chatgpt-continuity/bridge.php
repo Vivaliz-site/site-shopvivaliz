@@ -121,7 +121,7 @@ if ($operation === 'result') {
     $taskId = sv_cgn_safe_task_id($input['task_id'] ?? '');
     $resultStatus = strtoupper(trim((string)($input['result_status'] ?? '')));
     $detail = isset($input['detail']) ? (string)$input['detail'] : null;
-    $allowed = ['SENT', 'STALLED_NOT_CONFIRMED', 'CONVERSATION_NOT_FOUND', 'ERROR'];
+    $allowed = ['SENT', 'SENT_UNCONFIRMED', 'PROGRESS_CONFIRMED', 'STALLED_NOT_CONFIRMED', 'CONVERSATION_NOT_FOUND', 'ERROR'];
     if ($taskId === '' || !in_array($resultStatus, $allowed, true)) {
         sv_cgn_bridge_reply(['status' => 'INVALID_REQUEST'], 400);
     }

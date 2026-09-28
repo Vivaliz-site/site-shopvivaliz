@@ -82,6 +82,100 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1, "the bridge must be called exactly once for the same fingerprint")
 
+    def test_confirmed_progress_is_the_only_terminal_success_for_same_fingerprint(self) -> None:
+        self._stale_checkpoint_and_request()
+        self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        status_calls: list[dict] = []
+        def confirmed_status(**kwargs):
+            status_calls.append(kwargs)
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "PROGRESS_CONFIRMED"}},
+            }
+
+        second = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=confirmed_status,
+        )
+        self.assertEqual(second["dispatched"], 0)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(status_calls), 1)
+
+    def test_sent_unconfirmed_becomes_retryable_after_cooldown(self) -> None:
+        self._stale_checkpoint_and_request()
+        self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+        def unconfirmed_status(**kwargs):
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "SENT_UNCONFIRMED"}},
+            }
+
+        retried = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=unconfirmed_status,
+        )
+        self.assertEqual(retried["retry_attempted"], 1)
+        self.assertEqual(retried["dispatched"], 1)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_unconfirmed_resume_stops_after_bounded_attempt_limit(self) -> None:
+        self._stale_checkpoint_and_request()
+        self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        rows[-1]["attempt_count"] = 2
+        ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+        def unconfirmed_status(**kwargs):
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "SENT_UNCONFIRMED"}},
+            }
+
+        stopped = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=unconfirmed_status,
+        )
+        self.assertEqual(stopped["dispatched"], 0)
+        self.assertEqual(stopped["skipped_attempt_limit"], 1)
+        self.assertEqual(len(self.calls), 1)
+
     def test_missing_token_skips_without_crashing_and_never_marks_the_ledger(self) -> None:
         self._stale_checkpoint_and_request()
         result = self.dispatcher.run_once(

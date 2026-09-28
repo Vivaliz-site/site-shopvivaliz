@@ -219,6 +219,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
                     "dispatched_at": now,
                     "bridge_ok": True,
                     "http_status": 200,
+                    "worker_status": "PROGRESS_CONFIRMED",
                 }
             )
             + "\n",
@@ -236,6 +237,44 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 0)
         self.assertEqual(result.get("deferred_chatgpt"), 1)
         self.assertFalse(self.capture.exists(), "detached executor must not run while ChatGPT gets first recovery window")
+
+    def test_recent_unconfirmed_chatgpt_send_releases_detached_fallback(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": dispatcher.utc_now(),
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "SENT_UNCONFIRMED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
 
     def test_old_or_failed_chatgpt_nudge_does_not_block_detached_fallback_forever(self) -> None:
         dispatcher = load_dispatcher()

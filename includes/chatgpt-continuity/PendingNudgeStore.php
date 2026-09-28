@@ -17,6 +17,8 @@ final class SvChatgptContinuityPendingNudgeStore
         'PENDING',
         'CLAIMED',
         'SENT',
+        'SENT_UNCONFIRMED',
+        'PROGRESS_CONFIRMED',
         'STALLED_NOT_CONFIRMED',
         'CONVERSATION_NOT_FOUND',
         'ERROR',

@@ -97,6 +97,39 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
+## Confirmação real da retomada do ChatGPT
+
+Policy: `CHATGPT_PROGRESS_CONFIRMATION_V11`.
+
+Para a reentrada da conversa ChatGPT, **enviar/clicar em `continue` não é
+sucesso**. O worker deve distinguir:
+
+- `PROGRESS_CONFIRMED`: surgiu progresso observável do assistente após o
+  envio; este é o único resultado de sucesso da camada ChatGPT para o mesmo
+  fingerprint;
+- `SENT_UNCONFIRMED`: o envio foi aceito pela UI, mas não surgiu progresso
+  observável dentro da janela de confirmação; continua retryable;
+- `STALLED_NOT_CONFIRMED`, `CONVERSATION_NOT_FOUND` e `ERROR`: falhas
+  retryable conforme cooldown.
+
+Regras obrigatórias:
+
+1. o dispatcher consulta o resultado real do worker antes de tratar um
+   `bridge_ok=true` como sucesso;
+2. `SENT` legado é ambíguo e nunca deve ser tratado como progresso
+   confirmado;
+3. no máximo duas tentativas Web são permitidas para o mesmo fingerprint
+   inalterado; depois disso a conversa não recebe spam automático;
+4. um envio sem progresso libera o executor desacoplado, em vez de bloquear a
+   tarefa como se o ChatGPT tivesse retomado;
+5. `PENDING`/`CLAIMED` preservam a primeira chance do ChatGPT enquanto a
+   tentativa está realmente em voo;
+6. mudança real no checkpoint gera novo fingerprint e reinicia legitimamente
+   o ciclo de recuperação.
+
+Objetivo: impedir falso-verde e garantir que uma falha do stream/conversa não
+abandone a tarefa nem gere uma tempestade de mensagens de retomada.
+
 ## Retomada automática de checkpoint
 
 Policy: `TASK_CONTINUITY_AUTO_RESUME_V4`.
