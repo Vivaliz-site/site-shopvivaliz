@@ -1,0 +1,44 @@
+name: Persist Global Continuity Cleanup Blocker Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/persist-global-continuity-cleanup-blocker-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  persist:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    env:
+      SHOPVIVALIZ_AGENT_TASK_STATE_DIR: /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+      TASK_ID: global-continuity-cleanup-v2-20260927
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Persist exact terminal blocker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! python3 scripts/agent_task_state.py show --task "$TASK_ID" >/dev/null 2>&1; then
+            python3 scripts/agent_task_state.py start               --task "$TASK_ID"               --goal "Concluir as pendencias finais do GLOBAL_TASK_CONTINUITY_V8: excluir fredmourao-ai/solange-rolla e remover as duas branches mergeadas, com validacao fresca."               --agent chatgpt               --repository Vivaliz-site/site-shopvivaliz >/dev/null
+          fi
+
+          status="$(python3 scripts/agent_task_state.py show --task "$TASK_ID" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+          if [ "$status" = "BLOCKED_EXTERNAL" ]; then
+            python3 scripts/agent_task_state.py resume               --task "$TASK_ID"               --next-action "Persist the refreshed external GitHub authorization blocker after branch cleanup validation." >/dev/null
+          elif [ "$status" = "CONCLUIDO" ]; then
+            echo "ERROR v2 task must not already be CONCLUIDO while legacy repository still resolves" >&2
+            exit 4
+          fi
+
+          python3 scripts/agent_task_state.py block             --task "$TASK_ID"             --description "GitHub repository deletion requires an external authorization step not available to automation: native gh has admin visibility but lacks delete_repo, configured token alternatives did not provide that scope, and the authenticated GitHub Web route is redirected to /sessions/two-factor/webauthn before repository Settings."             --evidence "Fresh API validation: fredmourao-ai/solange-rolla still resolves and canonical fredmourao-ai/solange-rolla-consultorio resolves."             --evidence "Delete workflow failed with: This API operation needs the delete_repo scope."             --evidence "Authenticated backend GitHub UI navigation is redirected to /sessions/two-factor/webauthn before repository Settings."             --evidence "Branch cleanup workflow 36364649127 deleted both named merged refs and fresh branch search returned both absent."             --alternative "Tried native gh/API deletion on A1/backend; authorization lacks delete_repo."             --alternative "Tried GH_REPO_TOKEN/GH_PAT one-shot routes; no usable delete_repo authorization was available."             --alternative "Tried authenticated GitHub Web Settings route on backend browser; GitHub requires WebAuthn/2FA."             --resume-condition "A human must complete GitHub 2FA/WebAuthn and delete fredmourao-ai/solange-rolla through the authenticated Settings UI, or authorize gh with delete_repo via gh auth refresh -h github.com -s delete_repo, or provision GH_REPO_TOKEN with delete_repo; then rerun live validation until gh repo view returns not found." >/dev/null
+
+          python3 scripts/agent_task_state.py terminal --task "$TASK_ID"             | python3 -c 'import json,sys; d=json.load(sys.stdin); print("TASK_TERMINAL="+d["status"]); print("RESUME_CONDITION_PRESENT="+str(bool((d.get("blocker") or {}).get("resume_condition"))).lower())'
