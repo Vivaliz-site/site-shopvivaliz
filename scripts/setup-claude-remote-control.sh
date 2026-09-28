@@ -47,8 +47,11 @@ claude_bin() {
 probe_eligibility() {
   require_backend
   local bin rc out
-  bin="$(claude_bin 2>/dev/null || true)"
-  [ -n "$bin" ] || die claude_not_installed 30
+  set +e
+  bin="$(claude_bin 2>/dev/null)"
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] && [ -n "$bin" ] || die claude_not_installed 30
   echo "CLAUDE_PRESENT=PASS"
   run_as_claude "$bin" --version | tr -cd '[:alnum:]. _+()-\n'
 
@@ -64,7 +67,6 @@ probe_eligibility() {
   fi
 
   if grep -Eqi 'requires a claude\.ai subscription|full-scope login token|run.*/login|sign in' "$out"; then
-    rm -f "$out"
     rm -f "$out"
     echo "REMOTE_CONTROL_LOGIN_REQUIRED"
     return 31
