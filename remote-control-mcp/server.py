@@ -409,7 +409,7 @@ def task_worker() -> None:
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
             proc = subprocess.Popen(
                 remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, start_new_session=True
+                start_new_session=True
             )
             with ACTIVE_LOCK:
                 ACTIVE_PROCS[tid] = proc
@@ -428,7 +428,9 @@ def task_worker() -> None:
                     state = "expired"
                     break
                 time.sleep(2)
-            stdout, stderr = proc.communicate(timeout=10)
+            stdout_bytes, stderr_bytes = proc.communicate(timeout=10)
+            stdout = stdout_bytes.decode("utf-8", errors="replace")
+            stderr = stderr_bytes.decode("utf-8", errors="replace")
             rc = proc.returncode
             if state == "running":
                 state = "succeeded" if rc == 0 else "failed"

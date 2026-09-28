@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -103,6 +104,35 @@ class RemoteControlMcpTests(unittest.TestCase):
             row = db.execute("SELECT state,command_sha256 FROM tasks WHERE id=?", (result["task_id"],)).fetchone()
         self.assertEqual(row["state"], "queued")
         self.assertTrue(row["command_sha256"])
+
+    def test_task_worker_tolerates_non_utf8_output(self):
+        import threading
+
+        result = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "printf 'before\\xa2after'",
+            "timeout": 30,
+        })
+        tid = result["task_id"]
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        try:
+            deadline = time.monotonic() + 10
+            row = None
+            while time.monotonic() < deadline:
+                with m.db_conn() as db:
+                    row = db.execute("SELECT state,stdout FROM tasks WHERE id=?", (tid,)).fetchone()
+                if row and row["state"] in {"succeeded", "failed", "cancelled", "expired"}:
+                    break
+                time.sleep(0.2)
+        finally:
+            m.STOP_EVENT.set()
+            worker.join(timeout=5)
+            m.STOP_EVENT.clear()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["state"], "succeeded")
+        self.assertIn("before", row["stdout"])
+        self.assertIn("after", row["stdout"])
 
     def test_invalid_host_is_rejected(self):
         with self.assertRaises(ValueError):
