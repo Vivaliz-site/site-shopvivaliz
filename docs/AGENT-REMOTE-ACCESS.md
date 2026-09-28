@@ -10,11 +10,10 @@ Este arquivo é leitura obrigatória antes de qualquer tarefa que envolva VM, ru
 
 ## Ordem de acesso
 
-1. **Shell de agentes:** usar SSH privado com o usuário dedicado `shopvivaliz-agent`, somente por VCN/Tailscale. SSH público direto, login root e autenticação por senha continuam proibidos.
-2. **Agente cloud sem rota VCN/Tailscale:** não inventar acesso SSH. Usar o control plane auditável do repositório `Vivaliz-site/site-shopvivaliz` e, quando necessário, OCI Bastion. O bootstrap/recuperação canônico vive nesse repositório.
-3. **GUI/validação visual:** usar RustDesk self-hosted. O servidor ID/relay está na backend; clientes humanos via Tailscale usam `100.66.174.74`. O campo API pode ficar vazio no servidor OSS. Nunca copiar a chave privada do RustDesk.
-4. **Desktop Commander:** contingência apenas. Não é o canal principal e não deve ser usado para tarefas rotineiras.
-5. **GitHub Actions/OCI Bastion:** fallback auditável para bootstrap, recuperação e operações quando o agente não possui rota privada direta.
+1. **Remote Control MCP:** rota operacional primária para hosts, serviços, diagnóstico, arquivos e tarefas duráveis quando a capacidade necessária estiver allowlisted. O controller canônico fica em `always-free-arm-1787907847-26` e o endpoint de controle permanece privado/loopback.
+2. **SSH privado/Tailscale:** usar o usuário dedicado `shopvivaliz-agent` somente quando a operação não estiver disponível pelo Remote Control MCP ou quando o control plane estiver comprovadamente indisponível. SSH público direto, login root público e autenticação por senha continuam proibidos.
+3. **GitHub Actions/OCI Bastion:** fallback auditável para bootstrap, recuperação e reparo do próprio Remote Control MCP quando não houver rota privada utilizável.
+4. **GUI/validação visual:** usar RustDesk self-hosted. Navegador, Playwright/Selenium/CDP, MFA, CAPTCHA, consentimento ou validação visual continuam na backend `always-free-arm-1787907847-26`, nunca nos hosts Windows.
 
 ## Navegador
 
