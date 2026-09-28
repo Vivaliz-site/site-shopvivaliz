@@ -157,6 +157,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("administrators_authorized_keys", text)
         self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", text)
 
+    def test_controller_restart_waits_for_mcp_readiness(self):
+        workflow = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("REMOTE_CONTROL_READINESS=PASS", workflow)
+        self.assertIn("seq 1 20", workflow)
+        self.assertIn("sleep 0.5", workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",

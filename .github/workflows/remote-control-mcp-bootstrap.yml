@@ -83,7 +83,29 @@ jobs:
           SCP_VM=(scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key")
           remote_hosts="/tmp/shopvivaliz-remote-control-site-${GITHUB_RUN_ID}.known_hosts"
           "${SCP_VM[@]}" /tmp/shopvivaliz-remote-control-site.known_hosts "ubuntu@10.0.1.38:$remote_hosts"
-          "${SSH_VM[@]}" "set -Eeuo pipefail; sudo -n install -m 600 -o root -g root '$remote_hosts' /var/lib/shopvivaliz-remote-control/known_hosts; rm -f '$remote_hosts'; sudo -n systemctl restart shopvivaliz-remote-control-mcp.service; sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service; curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null"
+          "${SSH_VM[@]}" "sudo -n bash -s -- '$remote_hosts'" <<'REMOTE'
+          set -Eeuo pipefail
+          remote_hosts="$1"
+          install -m 600 -o root -g root "$remote_hosts" /var/lib/shopvivaliz-remote-control/known_hosts
+          rm -f "$remote_hosts"
+          systemctl restart shopvivaliz-remote-control-mcp.service
+          systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
+
+          ready=0
+          for attempt in $(seq 1 20); do
+            if curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 0.5
+          done
+          if [ "$ready" -ne 1 ]; then
+            systemctl status shopvivaliz-remote-control-mcp.service --no-pager -l
+            journalctl -u shopvivaliz-remote-control-mcp.service -n 80 --no-pager
+            exit 1
+          fi
+          echo "REMOTE_CONTROL_READINESS=PASS"
+          REMOTE
           echo "REMOTE_CONTROL_CONTROLLER=ACTIVE"
 
       - name: Verify canonical Windows private relays
