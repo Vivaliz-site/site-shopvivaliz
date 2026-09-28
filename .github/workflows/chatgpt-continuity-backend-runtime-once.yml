@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
-      REQUIRED_SHA: fedff66a0b014508480a41d69a4d84db3707cca8
+      REQUIRED_SHA: 54982a70f0896489e8d612debd86af7e127c84f3
     steps:
       - uses: actions/checkout@v7
         with:
@@ -68,7 +68,7 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
-      REQUIRED_SHA: fedff66a0b014508480a41d69a4d84db3707cca8
+      REQUIRED_SHA: 54982a70f0896489e8d612debd86af7e127c84f3
       BACKEND_IP: 10.0.1.38
       BRIDGE_ENDPOINT_BACKEND: http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php
       BRIDGE_ENDPOINT_A1: http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php
@@ -265,3 +265,5 @@ jobs:
         shell: bash
         run: |
           rm -rf "$RUNNER_TEMP/chatgpt-continuity-ssh"
+
+# retrigger: 2026-09-28T00:18Z stale-complete-runtime
