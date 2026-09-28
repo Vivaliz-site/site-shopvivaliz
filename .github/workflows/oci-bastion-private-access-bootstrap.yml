@@ -670,7 +670,7 @@ jobs:
           curl -sS --connect-timeout 3 --max-time 5 -o /dev/null http://127.0.0.1:9555/json/version && cdp=true
 
           outbound=false
-          curl -sS --connect-timeout 8 --max-time 15 -o /dev/null https://api.openai.com/v1/models && outbound=true
+          curl -sS --connect-timeout 8 --max-time 15 -o /dev/null https://openai.com/ && outbound=true
 
           printf 'REMOTE_TUNNEL_CLIENT_INSTALLED=%s\n' "$tunnel_client"
           printf 'REMOTE_TUNNEL_SERVICE_ACTIVE=%s\n' "$service_active"
