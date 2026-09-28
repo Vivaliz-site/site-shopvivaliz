@@ -63,4 +63,5 @@ try {
   process.exitCode = 2;
 } finally {
   if (page) await page.close().catch(() => {});
+  process.exit(process.exitCode || 0);
 }
