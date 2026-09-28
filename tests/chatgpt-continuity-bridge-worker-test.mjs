@@ -81,6 +81,23 @@ async function run() {
   }
 
   {
+    const iso = new Date().toISOString();
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      if (expression.includes('/backend-api/conversations?')) {
+        assert.match(expression, /is_archived=false/);
+        assert.match(expression, /is_starred=false/);
+        return { id: 'latest-thread-iso', update_time: iso };
+      }
+      return null;
+    };
+    const latest = await latestConversationMeta(cdp);
+    assert.equal(latest.id, 'latest-thread-iso');
+    assert.ok(latest.update_time > 0, 'ISO update_time must normalize to unix seconds');
+  }
+
+  {
     let navigatedTo = '';
     const now = Date.now();
     const cdp = fakeCdp();
