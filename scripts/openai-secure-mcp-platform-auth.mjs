@@ -102,15 +102,21 @@ try {
   console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
 
   if (!authenticated) {
+    console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
+    console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
     console.log('OPENAI_PLATFORM_AUTH_RESULT=BLOCKED');
     process.exitCode = 2;
   } else {
+    console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
+    console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
     console.log('OPENAI_PLATFORM_AUTH_RESULT=PASS');
   }
 } catch (error) {
   console.log('OPENAI_PLATFORM_AUTHENTICATED=false');
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false');
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=false');
+  console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
+  console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
   console.log('CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true');
   console.log('CLAUDE_CLOUD_ACCESS_REQUIRED=true');
   console.log('OPENAI_PLATFORM_AUTH_RESULT=FAIL blocker=' + safeTag(error?.message));
