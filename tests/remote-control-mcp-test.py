@@ -193,6 +193,7 @@ class BootstrapContractTests(unittest.TestCase):
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("|| true", text, f"{path} must handle failures explicitly")
+            self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
 
 
 if __name__ == "__main__":
