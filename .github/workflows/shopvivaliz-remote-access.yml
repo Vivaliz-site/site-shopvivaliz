@@ -57,6 +57,8 @@ on:
           - secure_mcp_cloudflare_access_probe
           - secure_mcp_cloudflare_ui_probe
           - claude_remote_control_probe
+          - claude_remote_control_install
+          - claude_remote_control_status
           - chatgpt_freeze_task_state
       reason:
         description: Audit reason
@@ -110,7 +112,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "chatgpt_freeze_task_state"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_freeze_task_state"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -141,6 +143,8 @@ jobs:
               raise SystemExit("Secure MCP Cloudflare UI probe is restricted to the backend VM")
           if action == "claude_remote_control_probe" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Claude Remote Control probe is restricted to the backend VM")
+          if action in {"claude_remote_control_install", "claude_remote_control_status"} and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control service actions are restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -550,6 +554,43 @@ jobs:
               fi
               printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_PROBE=PASS'
               echo "SECURE_CLAUDE_REMOTE_CONTROL_PROBE=PASS"
+              ;;
+            claude_remote_control_install)
+              remote_dir="/tmp/shopvivaliz-claude-remote-control-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              "${SSH[@]}" "install -d -m 700 '$remote_dir'"
+              "${SSH[@]}" "cat > '$remote_dir/setup.sh' && chmod 700 '$remote_dir/setup.sh'" < scripts/setup-claude-remote-control.sh
+              "${SSH[@]}" "cat > '$remote_dir/bridge.py' && chmod 600 '$remote_dir/bridge.py'" < scripts/claude-remote-control-mcp-stdio.py
+              "${SSH[@]}" "cat > '$remote_dir/service.unit' && chmod 600 '$remote_dir/service.unit'" < deploy/systemd/shopvivaliz-claude-remote-control.service
+              install_output=''
+              install_rc=0
+              if install_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -rf '$remote_dir'' EXIT; sudo -n bash '$remote_dir/setup.sh' install '$remote_dir/bridge.py' '$remote_dir/service.unit'" 2>&1)"; then
+                install_rc=0
+              else
+                install_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$install_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$install_rc" -ne 0 ]; then
+                echo "::error::Claude Remote Control install failed rc=$install_rc"
+                exit "$install_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_INSTALL=PASS'
+              ;;
+            claude_remote_control_status)
+              status_output=''
+              status_rc=0
+              if status_output="$("${SSH[@]}" "sudo -n /usr/local/sbin/shopvivaliz-setup-claude-remote-control status" 2>&1)"; then
+                status_rc=0
+              else
+                status_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$status_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$status_rc" -ne 0 ]; then
+                echo "::error::Claude Remote Control status failed rc=$status_rc"
+                exit "$status_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_STATUS=PASS'
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
