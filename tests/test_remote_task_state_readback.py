@@ -27,6 +27,15 @@ class RemoteTaskStateReadbackTest(unittest.TestCase):
             self.workflow,
         )
 
+    def test_remote_control_does_not_publish_raw_task_state(self) -> None:
+        self.assertIn(
+            '> "$RUNNER_TEMP/task-state.json"',
+            self.workflow,
+        )
+        self.assertIn('"evidence_count"', self.workflow)
+        self.assertIn('"verification_present"', self.workflow)
+        self.assertNotIn('cat "$RUNNER_TEMP/task-state.json"', self.workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
