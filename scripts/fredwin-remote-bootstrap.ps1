@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $McpScript = Join-Path $Repo 'scripts\mcp-server.py'
 $TunnelScript = Join-Path $Repo 'scripts\ssh-tunnel-service-managed.ps1'
+$OpenSshRecoveryScript = Join-Path $Repo 'scripts\windows-openssh-recovery.ps1'
 $TaskName = 'ShopVivaliz Fred-Win Relay 24h'
 $LogDir = Join-Path $Repo 'logs'
 $LogFile = Join-Path $LogDir 'fredwin-remote-bootstrap.log'
@@ -51,6 +52,8 @@ function Stop-ManagedTunnel {
     Start-Sleep -Seconds 2
 }
 function Ensure-Relay {
+    if (!(Test-Path -LiteralPath $OpenSshRecoveryScript)) { throw 'OpenSSH recovery script missing' }
+    & $OpenSshRecoveryScript | ForEach-Object { Log ([string]$_) }
     if (!(Test-Path -LiteralPath $McpScript)) { throw 'MCP script missing' }
     if (!(Test-Path -LiteralPath $TunnelScript)) { throw 'Tunnel script missing' }
     if (-not (Test-McpHealth)) { Stop-FredWinMcp; Start-FredWinMcp }
