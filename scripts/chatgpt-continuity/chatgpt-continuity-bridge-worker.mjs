@@ -221,7 +221,7 @@ async function latestConversationMeta(cdp) {
   try {
     const result = await cdp.evaluate(`(async()=>{
       try {
-        const response = await fetch('/backend-api/conversations?offset=0&limit=1&order=updated', {credentials:'same-origin'});
+        const response = await fetch('/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false', {credentials:'same-origin'});
         if (!response.ok) return null;
         const body = await response.json();
         const item = Array.isArray(body?.items) ? body.items[0] : null;
@@ -235,7 +235,12 @@ async function latestConversationMeta(cdp) {
     })()`);
     if (!result || typeof result !== 'object') return null;
     const id = text(result.id);
-    const updateTime = Number(result.update_time || 0);
+    const rawUpdateTime = result.update_time;
+    let updateTime = Number(rawUpdateTime || 0);
+    if (!Number.isFinite(updateTime) || updateTime <= 0) {
+      const parsedMs = Date.parse(String(rawUpdateTime || ''));
+      updateTime = Number.isFinite(parsedMs) ? parsedMs / 1000 : 0;
+    }
     if (!/^[A-Za-z0-9_-]{8,160}$/.test(id) || !Number.isFinite(updateTime) || updateTime <= 0) return null;
     return { id, update_time: updateTime };
   } catch {
