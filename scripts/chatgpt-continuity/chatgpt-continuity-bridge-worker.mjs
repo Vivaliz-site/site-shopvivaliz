@@ -228,13 +228,13 @@ async function latestConversationProbe(cdp) {
         {source:'filtered',url:'/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false'},
         {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=1&order=updated'},
       ];
-      let last={http_status:0,source:'none',item_present:false};
+      let last={http_status:0,source:'none',item_present:false,item_keys:[]};
       for(const candidate of candidates){
         try{
           const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store'});
           let body=null; try{body=await response.json();}catch{}
           const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
-          last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0};
+          last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0,item_keys:[]};
           if(!response.ok||items.length===0) continue;
           const item=items[0]||{};
           const item_keys=Object.keys(item)
@@ -242,15 +242,15 @@ async function latestConversationProbe(cdp) {
             .filter(Boolean)
             .slice(0,32);
           return {...last,item_keys,id:String(item.id||item.conversation_id||''),update_time:item.update_time??item.updateTime??null,updated_at:item.updated_at??item.updatedAt??null};
-        }catch{last={http_status:0,source:candidate.source,item_present:false};}
+        }catch{last={http_status:0,source:candidate.source,item_present:false,item_keys:[]};}
       }
       return last;
     })()`);
     return result && typeof result === 'object'
       ? result
-      : {http_status:0,source:'probe_failed',item_present:false};
+      : {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
   } catch {
-    return {http_status:0,source:'probe_failed',item_present:false};
+    return {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
   }
 }
 
