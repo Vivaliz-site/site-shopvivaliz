@@ -121,3 +121,22 @@ STATUS=PASS
   - Shell syntax: PASS.
 - No merge, live Windows bootstrap, or four-host E2E was executed in this stage.
 - Next authorized stage: ACTION STAGE 3 — validate and merge PR.
+
+
+### ACTION STAGE 3 — PR validation and merge
+STATUS=PASS
+- PR #1974 was reviewed on the exact head `1d7425a96702ec8c974230a86db0268f68391496`.
+- Initial Repository Governance failure was traced to `set +e` in bootstrap cleanup; no false-green accepted.
+- Regression now rejects `set +e`; cleanup preserves `set -Eeuo pipefail` and tolerates only idempotent `pkill` misses with `|| :`.
+- Final head gates all passed:
+  - Remote Control MCP CI run `36371067442`: SUCCESS.
+  - Mandatory Validation Gate run `36371067439`: SUCCESS.
+  - Repository Governance run `36371067445`: SUCCESS.
+  - ShopVivaliz QA run `36371067452`: SUCCESS.
+  - Desktop Commander 24h Health run `36371067484`: SUCCESS.
+- Current main-only concurrent changes were limited to ChatGPT continuity files and did not overlap the Remote Control MCP patch.
+- PR #1974 was marked ready and squash-merged.
+- Merge SHA: `ac97956ac7cb2e51fcd7beddf5d5964bcee74373`.
+- Verification after merge confirmed `main` pointed exactly to `ac97956ac7cb2e51fcd7beddf5d5964bcee74373`.
+- No manual Windows bootstrap or four-host live E2E was performed in this stage.
+- Next authorized stage: ACTION STAGE 4 — Bootstrap Windows.
