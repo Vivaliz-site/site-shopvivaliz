@@ -1,0 +1,223 @@
+name: Arm ChatGPT Continuity Backend Once
+
+on:
+  push:
+    branches:
+      - ops/chatgpt-continuity-backend-runtime-20260927
+    paths:
+      - '.github/workflows/chatgpt-continuity-backend-runtime-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arm-chatgpt-continuity-backend-once
+  cancel-in-progress: false
+
+jobs:
+  arm:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 20
+    env:
+      REQUIRED_SHA: fedff66a0b014508480a41d69a4d84db3707cca8
+      BACKEND_IP: 10.0.1.38
+      BRIDGE_ENDPOINT_BACKEND: http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php
+      BRIDGE_ENDPOINT_A1: http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php
+      BRIDGE_HOST: shopvivaliz.com.br
+      TOKEN_FILE_A1: /home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
+      TOKEN_FILE_BACKEND: /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Wait for required production release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          repo=/home/ubuntu/shopvivaliz-deploy/repo
+          release_file=/home/ubuntu/shopvivaliz-deploy/current/.release-sha
+          for _ in $(seq 1 60); do
+            release_sha="$(cat "$release_file" 2>/dev/null || true)"
+            if [ -n "$release_sha" ]; then
+              git -C "$repo" fetch -q origin main || true
+              if git -C "$repo" cat-file -e "$release_sha^{commit}" 2>/dev/null                 && git -C "$repo" merge-base --is-ancestor "$REQUIRED_SHA" "$release_sha"                 && grep -q 'DEFAULT_BRIDGE_RETRY_SECONDS' /home/ubuntu/shopvivaliz-deploy/current/scripts/chatgpt_continuity_nudge_dispatcher.py                 && test -x /home/ubuntu/shopvivaliz-deploy/current/scripts/install-chatgpt-continuity-backend-bridge.sh; then
+                echo "CHATGPT_CONTINUITY_RELEASE_READY=true"
+                echo "RELEASE_SHA=$release_sha"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::Required ChatGPT continuity release did not become active in time"
+          exit 1
+
+      - name: Fail closed on pre-existing active bridge jobs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          queue=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json
+          python3 - "$queue" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          if not p.is_file():
+              print("BRIDGE_ACTIVE_QUEUE_COUNT=0")
+              raise SystemExit(0)
+          try:
+              payload=json.loads(p.read_text(encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"bridge queue is unreadable: {type(exc).__name__}")
+          rows=payload.get("nudges") if isinstance(payload,dict) else []
+          if not isinstance(rows,list):
+              raise SystemExit("bridge queue schema invalid")
+          active=[r for r in rows if isinstance(r,dict) and str(r.get("status","")).upper() in {"PENDING","CLAIMED"}]
+          print(f"BRIDGE_ACTIVE_QUEUE_COUNT={len(active)}")
+          if active:
+              raise SystemExit("pre-existing active ChatGPT bridge jobs require reconciliation before arming worker")
+          PY
+
+      - name: Provision protected bridge token on A1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          token_dir="$(dirname "$TOKEN_FILE_A1")"
+          install -d -m 700 "$token_dir"
+          tmp="$(mktemp "$token_dir/.bridge-token.XXXXXX")"
+          trap 'rm -f "$tmp"' EXIT
+          chmod 600 "$tmp"
+
+          if php -r '
+            require "/home/ubuntu/shopvivaliz-deploy/current/config/bootstrap-env.php";
+            $v=getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN");
+            if (!is_string($v) || trim($v)==="") { exit(3); }
+            if (file_put_contents($argv[1], trim($v)."\n") === false) { exit(4); }
+          ' "$tmp"; then
+            echo "BRIDGE_TOKEN_SOURCE=existing_production_env"
+          elif [ -s "$TOKEN_FILE_A1" ]; then
+            cp "$TOKEN_FILE_A1" "$tmp"
+            echo "BRIDGE_TOKEN_SOURCE=existing_protected_file"
+          else
+            openssl rand -hex 32 > "$tmp"
+            echo "BRIDGE_TOKEN_SOURCE=new_protected_file"
+          fi
+
+          test "$(wc -c < "$tmp")" -ge 33
+          install -m 600 "$tmp" "$TOKEN_FILE_A1"
+          test "$(stat -c '%a' "$TOKEN_FILE_A1")" = "600"
+          echo "BRIDGE_TOKEN_A1=READY"
+
+      - name: Validate A1 bridge and dispatcher without enqueue
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$TOKEN_FILE_A1" "$BRIDGE_ENDPOINT_A1" "$BRIDGE_HOST" <<'PY'
+          import json, pathlib, sys, urllib.request
+          token=pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          req=urllib.request.Request(
+              sys.argv[2],
+              data=b'{"operation":"heartbeat"}',
+              method="POST",
+              headers={
+                  "Authorization": "Bearer "+token,
+                  "Content-Type": "application/json",
+                  "Host": sys.argv[3],
+              },
+          )
+          with urllib.request.urlopen(req, timeout=10) as res:
+              body=json.loads(res.read().decode("utf-8"))
+          if body.get("status")!="OK":
+              raise SystemExit("bridge heartbeat failed")
+          print("A1_BRIDGE_HEARTBEAT=PASS")
+          PY
+          env -u CHATGPT_CONTINUITY_BRIDGE_TOKEN             CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE="$TOKEN_FILE_A1"             python3 - <<'PY'
+          import importlib.util
+          p="/home/ubuntu/shopvivaliz-deploy/current/scripts/chatgpt_continuity_nudge_dispatcher.py"
+          spec=importlib.util.spec_from_file_location("dispatcher_runtime_probe",p)
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          value=mod.resolve_bridge_token("")
+          if len(value)<32:
+              raise SystemExit("dispatcher protected token resolution failed")
+          print("A1_DISPATCHER_TOKEN_RESOLUTION=PASS")
+          PY
+
+      - name: Configure backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$RUNNER_TEMP/chatgpt-continuity-ssh"
+          printf '%s\n' "$VM_KEY" > "$RUNNER_TEMP/chatgpt-continuity-ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$RUNNER_TEMP/chatgpt-continuity-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/chatgpt-continuity-ssh/vmkey" "$RUNNER_TEMP/chatgpt-continuity-ssh/known_hosts"
+
+      - name: Install backend continuity worker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/chatgpt-continuity-ssh/known_hosts"
+            -o ConnectTimeout=10
+            -i "$RUNNER_TEMP/chatgpt-continuity-ssh/vmkey"
+          )
+          ssh "${ssh_opts[@]}" "ubuntu@$BACKEND_IP" 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+
+          token_tmp="/tmp/chatgpt-continuity-token-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          worker_tmp="/tmp/chatgpt-continuity-worker-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.mjs"
+          installer_tmp="/tmp/chatgpt-continuity-installer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.sh"
+
+          scp "${ssh_opts[@]}" "$TOKEN_FILE_A1" "ubuntu@$BACKEND_IP:$token_tmp"
+          scp "${ssh_opts[@]}" /home/ubuntu/shopvivaliz-deploy/current/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@$BACKEND_IP:$worker_tmp"
+          scp "${ssh_opts[@]}" /home/ubuntu/shopvivaliz-deploy/current/scripts/install-chatgpt-continuity-backend-bridge.sh "ubuntu@$BACKEND_IP:$installer_tmp"
+
+          ssh "${ssh_opts[@]}" "ubuntu@$BACKEND_IP" "set -Eeuo pipefail
+            install -d -m 700 /home/ubuntu/.config/shopvivaliz-chatgpt-continuity
+            install -m 600 '$token_tmp' '$TOKEN_FILE_BACKEND'
+            chmod 700 '$installer_tmp' '$worker_tmp'
+            CHATGPT_CONTINUITY_WORKER_SOURCE='$worker_tmp' \
+            CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$BRIDGE_ENDPOINT_BACKEND' \
+            CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='$BRIDGE_HOST' \
+            CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' \
+            bash '$installer_tmp'
+            rm -f '$token_tmp' '$worker_tmp' '$installer_tmp'
+            runtime=/run/user/\$(id -u)
+            export XDG_RUNTIME_DIR=\$runtime
+            export DBUS_SESSION_BUS_ADDRESS=unix:path=\$runtime/bus
+            systemctl --user is-enabled --quiet shopvivaliz-chatgpt-continuity.service
+            systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service
+            curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+            echo BACKEND_CHATGPT_CONTINUITY_RUNTIME=PASS"
+
+      - name: Verify no job was synthesized by arming
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          queue=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json
+          python3 - "$queue" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          if not p.is_file():
+              print("BRIDGE_ACTIVE_QUEUE_AFTER_ARM=0")
+              raise SystemExit(0)
+          payload=json.loads(p.read_text(encoding="utf-8"))
+          rows=payload.get("nudges") or []
+          active=[r for r in rows if isinstance(r,dict) and str(r.get("status","")).upper() in {"PENDING","CLAIMED"}]
+          print(f"BRIDGE_ACTIVE_QUEUE_AFTER_ARM={len(active)}")
+          if active:
+              raise SystemExit("arming unexpectedly left an active bridge job")
+          PY
+          echo "CHATGPT_CONTINUITY_BACKEND_ARM=PASS"
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/chatgpt-continuity-ssh"
