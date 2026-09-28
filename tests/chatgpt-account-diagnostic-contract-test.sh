@@ -28,6 +28,9 @@ fi
 grep -Fq 'chatgpt_freeze_task_state' "$remote"
 grep -Fq '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state' "$remote"
 grep -Fq 'TASK_STATE_STATUS=' "$remote"
+grep -Fq 'agent_task_state.py terminal --task chatgpt-freeze-root-cause-20260927' "$remote"
+grep -Fq 'TASK_TERMINAL_GATE=PASS' "$remote"
+grep -Fq 'TASK_TERMINAL_GATE=NONTERMINAL' "$remote"
 if grep -Fq 'cat "$state_file"' "$remote"; then
   echo "task-state readback must not print the raw durable checkpoint" >&2
   exit 1
