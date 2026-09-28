@@ -1,0 +1,50 @@
+name: Unblock ChatGPT Guard Deploy Once
+
+on:
+  push:
+    branches:
+      - ops/unblock-chatgpt-guard-deploy-20260928
+    paths:
+      - '.github/workflows/unblock-chatgpt-guard-deploy-once.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-obsolete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Cancel only exact obsolete blockers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cancel_exact() {
+            local id="$1" expected="$2"
+            local data name status
+            data="$(gh api "repos/$REPO/actions/runs/$id")"
+            name="$(jq -r '.name' <<<"$data")"
+            status="$(jq -r '.status' <<<"$data")"
+            test "$name" = "$expected"
+            case "$status" in
+              completed)
+                echo "ALREADY_TERMINAL id=$id name=$name"
+                ;;
+              queued|pending|in_progress|waiting|requested)
+                echo "CANCEL id=$id name=$name status=$status"
+                gh api -X POST "repos/$REPO/actions/runs/$id/force-cancel" >/dev/null
+                ;;
+              *)
+                echo "UNEXPECTED_STATE id=$id name=$name status=$status" >&2
+                exit 2
+                ;;
+            esac
+          }
+          cancel_exact 36363564798 "Master Production Pipeline 24/7"
+          cancel_exact 36363502941 "Refresh A1 Delete Repo Scope Once"
+          cancel_exact 36363687276 "Refresh A1 Delete Repo Scope Once"
+          echo UNBLOCK_CHATGPT_GUARD_DEPLOY=PASS
