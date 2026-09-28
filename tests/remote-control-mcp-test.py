@@ -197,6 +197,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
         self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
         self.assertIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FRED_SSHD_RECOVERY=PASS", text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_SSHD_RECOVERY=PASS", text)
+        self.assertIn("ssh_protocol_alive() {", text)
+        self.assertIn("ssh-keyscan -T 5 -p", text)
+        self.assertNotIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS\"\n\n          # KOCEPSV", text)
 
     def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
