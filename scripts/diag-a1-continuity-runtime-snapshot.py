@@ -201,6 +201,29 @@ def process_snapshot() -> None:
                 safe.append("/".join(keep[-3:]))
         emit("CODEX_CGROUP", {"pid": row["pid"], "cgroup": ";".join(sorted(set(safe)))[:500]})
 
+        try:
+            raw_env = (proc / str(row["pid"]) / "environ").read_bytes().split(b"\0")
+            env = {}
+            allowed = {
+                "CHAT_CLI_SESSION_ID",
+                "SHOPVIVALIZ_TASK_ID",
+                "SHOPVIVALIZ_RESUME_BACKGROUND",
+                "SHOPVIVALIZ_RESUME_SOURCE",
+                "GITHUB_ACTIONS",
+                "GITHUB_WORKFLOW",
+                "CI",
+            }
+            for item in raw_env:
+                if b"=" not in item:
+                    continue
+                key, value = item.split(b"=", 1)
+                k = key.decode("utf-8", "replace")
+                if k in allowed:
+                    env[k] = value.decode("utf-8", "replace")[:200]
+            emit("CODEX_ENV_META", {"pid": row["pid"], "env": env})
+        except OSError:
+            pass
+
 
 def service_snapshot() -> None:
     emit("A1_SNAPSHOT_HOST", run_text(["hostname"]))
@@ -225,6 +248,22 @@ def service_snapshot() -> None:
     for line in show.splitlines():
         if line:
             emit("AGENT_SERVICE_META", line)
+
+
+def worktree_snapshot() -> None:
+    path = Path("/home/ubuntu/site-deploy-unblock")
+    if not path.exists():
+        emit("WORKTREE_META", {"exists": False})
+        return
+    def git(*args):
+        return run_text(["git", "-C", str(path), *args])
+    emit("WORKTREE_META", {
+        "exists": True,
+        "branch": git("branch", "--show-current"),
+        "head": git("rev-parse", "HEAD"),
+        "top": git("rev-parse", "--show-toplevel"),
+        "dirty_count": len([x for x in git("status", "--porcelain").splitlines() if x]),
+    })
 
 
 def tmux_snapshot() -> None:
@@ -328,6 +367,7 @@ def task_snapshot() -> None:
 def main() -> int:
     service_snapshot()
     process_snapshot()
+    worktree_snapshot()
     tmux_snapshot()
     task_snapshot()
     emit("A1_CONTINUITY_RUNTIME_SNAPSHOT", "PASS")
