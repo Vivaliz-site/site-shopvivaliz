@@ -32,6 +32,10 @@ const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
+const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
+);
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -213,6 +217,58 @@ async function confirmAssistantProgress(
   return false;
 }
 
+async function latestConversationMeta(cdp) {
+  try {
+    const result = await cdp.evaluate(`(async()=>{
+      try {
+        const response = await fetch('/backend-api/conversations?offset=0&limit=1&order=updated', {credentials:'same-origin'});
+        if (!response.ok) return null;
+        const body = await response.json();
+        const item = Array.isArray(body?.items) ? body.items[0] : null;
+        if (!item) return null;
+        const id = String(item.id || '');
+        const update_time = Number(item.update_time || 0);
+        return {id, update_time};
+      } catch {
+        return null;
+      }
+    })()`);
+    if (!result || typeof result !== 'object') return null;
+    const id = text(result.id);
+    const updateTime = Number(result.update_time || 0);
+    if (!/^[A-Za-z0-9_-]{8,160}$/.test(id) || !Number.isFinite(updateTime) || updateTime <= 0) return null;
+    return { id, update_time: updateTime };
+  } catch {
+    return null;
+  }
+}
+
+async function alignToLatestConversation(
+  cdp,
+  discoverLatest = latestConversationMeta,
+  nowMs = Date.now(),
+  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+) {
+  const latest = await discoverLatest(cdp);
+  if (!latest) return { action: 'latest_unavailable' };
+
+  const updatedAtMs = Number(latest.update_time) * 1000;
+  const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
+  if (!Number.isFinite(ageMs) || ageMs > Math.max(60_000, Number(maxAgeMs || RECENT_CONVERSATION_MAX_AGE_MS))) {
+    return { action: 'stale_latest' };
+  }
+
+  const currentPath = await cdp.evaluate('location.pathname');
+  const currentMatch = String(currentPath || '').match(/^\/c\/([^/?#]+)/);
+  if (currentMatch && currentMatch[1] === latest.id) return { action: 'already_latest' };
+
+  const target = '/c/' + latest.id;
+  const navigated = await cdp.evaluate(`(()=>{location.assign(${JSON.stringify(target)});return true})()`);
+  if (!navigated) return { action: 'navigation_failed' };
+  await sleep(1500);
+  return { action: 'navigated' };
+}
+
 async function errorBannerPresent(cdp) {
   // ChatGPT surfaces an explicit banner on a genuine stream failure -- this
   // is the one unambiguous, well-known DOM signal available to a script
@@ -333,10 +389,15 @@ async function reinforcementCheckOnce(
   connect = () => Cdp.connectToChatgptTab(),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
   confirmProgress = confirmAssistantProgress,
+  alignLatest = alignToLatestConversation,
 ) {
   let cdp;
   try {
     cdp = await connect();
+    const alignment = await alignLatest(cdp);
+    if (alignment.action === 'latest_unavailable' || alignment.action === 'stale_latest' || alignment.action === 'navigation_failed') {
+      return alignment;
+    }
     if (!(await errorBannerPresent(cdp))) return { action: 'no_banner' };
     await sleep(confirmDelayMs);
     cdp.close();
@@ -391,6 +452,8 @@ export {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  latestConversationMeta,
+  alignToLatestConversation,
   assistantSnapshot,
   assistantProgressed,
   confirmAssistantProgress,

@@ -3,6 +3,8 @@ import {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  latestConversationMeta,
+  alignToLatestConversation,
   attemptNudge,
   reinforcementCheckOnce,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
@@ -61,6 +63,59 @@ async function run() {
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
+  // Cross-device continuity: a mobile/iOS interruption may belong to a
+  // different thread than the backend browser currently has open. Discovery
+  // must use only conversation id/update metadata, never title/content.
+  {
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      if (expression.includes('/backend-api/conversations?')) {
+        return { id: 'latest-thread', update_time: Math.floor(Date.now() / 1000) };
+      }
+      return null;
+    };
+    const latest = await latestConversationMeta(cdp);
+    assert.equal(latest.id, 'latest-thread');
+    assert.ok(latest.update_time > 0);
+  }
+
+  {
+    let navigatedTo = '';
+    const now = Date.now();
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      if (expression.includes('location.pathname')) return '/c/older-thread';
+      if (expression.includes('location.assign')) {
+        navigatedTo = expression;
+        return true;
+      }
+      return null;
+    };
+    const result = await alignToLatestConversation(
+      cdp,
+      async () => ({ id: 'latest-thread', update_time: Math.floor(now / 1000) }),
+      now,
+    );
+    assert.equal(result.action, 'navigated');
+    assert.match(navigatedTo, /latest-thread/);
+  }
+
+  {
+    const now = Date.now();
+    const cdp = fakeCdp();
+    const result = await alignToLatestConversation(
+      cdp,
+      async () => ({ id: 'stale-thread', update_time: Math.floor((now - 20 * 60 * 1000) / 1000) }),
+      now,
+    );
+    assert.equal(result.action, 'stale_latest');
+    assert.equal(cdp.calls.some(call => call.includes('location.assign')), false);
+  }
+
+  console.log('cross-device latest-conversation alignment: PASS');
+
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
   // disabling Web turn submission.
@@ -99,10 +154,30 @@ async function run() {
 
   console.log('attemptNudge branches: PASS');
 
+  // The reinforcement path must align to the latest cross-device thread
+  // before inspecting the banner.
+  {
+    const events = [];
+    const cdp = fakeCdp({ pageText: 'normal reply' });
+    const result = await reinforcementCheckOnce(
+      async () => { events.push('connect'); return cdp; },
+      1,
+      async () => true,
+      async () => { events.push('align'); return { action: 'already_latest' }; },
+    );
+    assert.equal(result.action, 'no_banner');
+    assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
+  }
+
   // reinforcementCheckOnce: no banner at all -> no-op, no second connect.
   {
     let connectCalls = 0;
-    const result = await reinforcementCheckOnce(async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); }, 1);
+    const result = await reinforcementCheckOnce(
+      async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); },
+      1,
+      async () => true,
+      async () => ({ action: 'already_latest' }),
+    );
     assert.equal(result.action, 'no_banner');
     assert.equal(connectCalls, 1, 'a clean page must not trigger the confirm re-check');
   }
@@ -114,7 +189,7 @@ async function run() {
     const result = await reinforcementCheckOnce(async () => {
       connectCalls += 1;
       return fakeCdp({ pageText: connectCalls === 1 ? 'Streaming interrupted. Waiting for the complete message...' : 'Here is the finished answer.' });
-    }, 1);
+    }, 1, async () => true, async () => ({ action: 'already_latest' }));
     assert.equal(result.action, 'self_resolved');
     assert.equal(connectCalls, 2, 'must re-check exactly once after the confirm delay');
   }
@@ -125,6 +200,7 @@ async function run() {
       async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
       1,
       async () => true,
+      async () => ({ action: 'already_latest' }),
     );
     assert.equal(result.action, 'confirmed_progress');
     assert.equal(result.sent, true);
@@ -138,6 +214,7 @@ async function run() {
       async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
       1,
       async () => false,
+      async () => ({ action: 'already_latest' }),
     );
     assert.equal(result.action, 'sent_unconfirmed');
     assert.equal(result.sent, true);
