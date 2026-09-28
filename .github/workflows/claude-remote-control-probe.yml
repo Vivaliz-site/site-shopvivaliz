@@ -48,10 +48,11 @@ jobs:
               echo "${name}=UNSET"
             fi
           done
-          set +e
-          timeout 20s "$CLAUDE_BIN" remote-control --help >"$RUNNER_TEMP/claude-rc-help.txt" 2>&1
-          rc=$?
-          set -e
+          if timeout 20s "$CLAUDE_BIN" remote-control --help >"$RUNNER_TEMP/claude-rc-help.txt" 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
           echo "remote_control_help_rc=$rc"
           if [ "$rc" -eq 0 ]; then
             echo "remote_control_eligible=true"
