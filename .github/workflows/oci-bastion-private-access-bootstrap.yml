@@ -25,7 +25,8 @@ jobs:
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
-          github.event.issue.body == 'action=secure-mcp-platform-ui-probe'
+          github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
+          github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
         )
       }}
     runs-on: ubuntu-latest
@@ -447,6 +448,150 @@ jobs:
           if 'RUNTIME_NO_GITHUB=PASS' not in str(r.get('stdout') or ''): raise RuntimeError('MCP could not retrieve runtime proof')
           print('DURABLE_AFTER_DISCONNECT=PASS')
           print('RUNTIME_GITHUB_DEPENDENCY=false')
+          PY
+
+      - name: ChatGPT continuity diagnostic through Remote Control MCP
+        if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json
+          import re
+          import urllib.request
+          from pathlib import Path
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+
+          def call(name, args):
+              body = json.dumps({
+                  'jsonrpc': '2.0',
+                  'id': 1,
+                  'method': 'tools/call',
+                  'params': {'name': name, 'arguments': args},
+              }).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+                  method='POST',
+              )
+              with urllib.request.urlopen(req, timeout=70) as response:
+                  payload = json.load(response)
+              result = (payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+                  raise RuntimeError(name + ' failed')
+              return result
+
+          site_command = r"""set -Eeuo pipefail
+          runtime=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+          agent_active=false
+          systemctl is-active --quiet shopvivaliz-agent.service && agent_active=true
+          python3 - "$runtime" "$agent_active" <<'INNER'
+          import json, pathlib, sys
+          root=pathlib.Path(sys.argv[1]); agent=sys.argv[2]
+          running=0
+          if root.is_dir():
+              for p in root.glob('*.json'):
+                  if p.name.startswith('_') or not p.is_file(): continue
+                  try: row=json.loads(p.read_text(encoding='utf-8'))
+                  except Exception: continue
+                  if isinstance(row,dict) and str(row.get('status','')).strip()=='RUNNING': running+=1
+          pending=0
+          req=root/'_resume-requests.jsonl'
+          if req.is_file():
+              for line in req.read_text(encoding='utf-8',errors='replace').splitlines():
+                  try: row=json.loads(line)
+                  except Exception: continue
+                  if isinstance(row,dict) and str(row.get('status','')).strip()=='queued': pending+=1
+          latest='NONE'
+          allowed={'','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}
+          ledger=root/'_chatgpt-continuity-nudges.jsonl'
+          if ledger.is_file():
+              for line in ledger.read_text(encoding='utf-8',errors='replace').splitlines():
+                  try: row=json.loads(line)
+                  except Exception: continue
+                  if not isinstance(row,dict): continue
+                  value=str(row.get('worker_status','')).strip().upper()
+                  if value in allowed: latest=value or 'EMPTY'
+          print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
+          print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
+          print('CHATGPT_CONTINUITY_PENDING_REQUESTS='+str(pending))
+          print('CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS='+latest)
+          INNER
+          heartbeat=false
+          token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
+          if [ -s "$token_file" ]; then
+            body="$(curl -fsS --connect-timeout 5 --max-time 10 -H 'Host: shopvivaliz.com.br' -H "Authorization: Bearer $(cat "$token_file")" -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php 2>/dev/null || true)"
+            [ "$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null)" = OK ] && heartbeat=true
+          fi
+          echo CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=$heartbeat"""
+
+          backend_command = r"""set -Eeuo pipefail
+          uid="$(id -u ubuntu)"
+          runtime="/run/user/$uid"
+          worker=false
+          if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service; then worker=true; fi
+          cdp=false
+          curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null && cdp=true
+          latest=false
+          if sudo -u ubuntu node --input-type=module -e 'import {Cdp,latestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const m=await latestConversationMeta(c); process.exit(m ? 0 : 3); } finally { c.close(); }'; then latest=true; fi
+          echo CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$worker
+          echo CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp
+          echo CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=$latest"""
+
+          outputs = []
+          outputs.append(str(call('admin_command_run', {
+              'host': 'shopvivaliz-free-a1',
+              'command': site_command,
+              'timeout': 45,
+          }).get('stdout') or ''))
+          outputs.append(str(call('admin_command_run', {
+              'host': 'always-free-arm-1787907847-26',
+              'command': backend_command,
+              'timeout': 45,
+          }).get('stdout') or ''))
+
+          allowed_keys = {
+              'CHATGPT_CONTINUITY_AGENT_ACTIVE',
+              'CHATGPT_CONTINUITY_RUNNING_TASKS',
+              'CHATGPT_CONTINUITY_PENDING_REQUESTS',
+              'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS',
+              'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE',
+              'CHATGPT_CONTINUITY_CDP_REACHABLE',
+              'CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE',
+              'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT',
+          }
+          seen = {}
+          for output in outputs:
+              for line in output.splitlines():
+                  if '=' not in line:
+                      continue
+                  key, value = line.strip().split('=', 1)
+                  if key not in allowed_keys:
+                      continue
+                  if key in {
+                      'CHATGPT_CONTINUITY_RUNNING_TASKS',
+                      'CHATGPT_CONTINUITY_PENDING_REQUESTS',
+                  }:
+                      if not re.fullmatch(r'\d+', value):
+                          raise RuntimeError('invalid diagnostic count')
+                  elif key == 'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS':
+                      if value not in {'NONE','EMPTY','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}:
+                          raise RuntimeError('invalid nudge status')
+                  elif value not in {'true','false'}:
+                      raise RuntimeError('invalid diagnostic boolean')
+                  seen[key] = value
+
+          missing = allowed_keys.difference(seen)
+          if missing:
+              raise RuntimeError('missing sanitized diagnostic markers')
+          for key in sorted(seen):
+              print(key + '=' + seen[key])
+          print('CHATGPT_CONTINUITY_MCP_DIAGNOSTIC=PASS')
           PY
 
       - name: Probe Secure MCP Tunnel prerequisites
