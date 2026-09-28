@@ -505,12 +505,16 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "claude_remote_control_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
-    def test_codex_remote_control_worktree_preserves_diverged_local_progress(self):
+    def test_codex_remote_control_uses_fresh_run_scoped_worktree(self):
         workflow = (ROOT / ".github" / "workflows" / "codex-remote-control-mcp-one-shot.yml").read_text(encoding="utf-8")
-        self.assertIn('if ! git -C "$worktree" merge --ff-only origin/main; then', workflow)
-        self.assertIn('git -C "$worktree" merge --no-edit origin/main', workflow)
-        self.assertNotIn('git -C "$worktree" reset --hard origin/main', workflow)
-        self.assertNotIn('git -C "$worktree" rebase origin/main', workflow)
+        self.assertIn('branch="codex/remote-control-stage7-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"', workflow)
+        self.assertIn('worktree="$HOME/worktrees/site-shopvivaliz/remote-control-stage7-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"', workflow)
+        self.assertIn('git -C "$src" worktree add -b "$branch" "$worktree" origin/main', workflow)
+        self.assertNotIn('branch="feat/remote-control-cloud-clients-20260928"', workflow)
+        self.assertNotIn('merge --ff-only origin/main', workflow)
+        self.assertNotIn('merge --no-edit origin/main', workflow)
+        self.assertNotIn('reset --hard origin/main', workflow)
+        self.assertNotIn('rebase origin/main', workflow)
 
     def test_claude_workspace_trust_bootstrap_is_tty_bounded_and_allowlisted(self):
         helper = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
