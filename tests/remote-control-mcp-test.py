@@ -693,6 +693,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=", diagnostic)
         self.assertNotIn("CHATGPT_CONTINUITY_LATEST_CONVERSATION_ID=", diagnostic)
 
+        for marker in (
+            "CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_ID_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_ID_VALID=",
+            "CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_UPDATE_VALID=",
+            "CHATGPT_CONTINUITY_LATEST_ITEM_KEYS=",
+        ):
+            self.assertIn(marker, diagnostic)
+        worker = (ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-continuity-bridge-worker.mjs").read_text(encoding="utf-8")
+        self.assertIn("Object.keys(item)", worker)
+        self.assertIn("replace(/[^A-Za-z0-9_]/g", worker)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (

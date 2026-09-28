@@ -3,6 +3,7 @@ import {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  latestConversationProbe,
   latestConversationMeta,
   alignToLatestConversation,
   attemptNudge,
@@ -150,6 +151,24 @@ async function run() {
     const latest = await latestConversationMeta(cdp);
     assert.equal(latest.id, 'latest-thread-updated-at');
     assert.ok(latest.update_time > 0, 'updated_at must normalize to unix seconds');
+  }
+
+  {
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      assert.match(expression, /Object\.keys\(item\)/);
+      return {
+        http_status: 200,
+        source: 'filtered',
+        item_present: true,
+        item_keys: ['id', 'update_time'],
+        id: 'latest-thread-schema',
+        update_time: new Date().toISOString(),
+      };
+    };
+    const probe = await latestConversationProbe(cdp);
+    assert.deepEqual(probe.item_keys, ['id', 'update_time']);
   }
 
   console.log('cross-device latest-conversation alignment: PASS');
