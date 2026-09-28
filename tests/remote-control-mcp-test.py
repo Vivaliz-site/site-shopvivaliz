@@ -811,6 +811,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("chatgpt-freeze-root-cause-20260928-g2.json", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_JSON=", workflow)
 
+    def test_oci_continuity_diagnostic_surfaces_g2_terminal_history_safely(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for marker in (
+            "CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT=",
+            "CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT=",
+            "CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT=",
+            "CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION_PRESENT=",
+            "CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS=",
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION=", workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
