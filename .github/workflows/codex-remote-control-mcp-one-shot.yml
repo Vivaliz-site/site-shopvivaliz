@@ -27,9 +27,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          branch="fix/remote-control-kocepsv-bootstrap-stage4-20260927"
+          branch="feat/remote-control-cloud-clients-20260928"
           src="$HOME/src/site-shopvivaliz-remote-control-codex"
-          preferred="$HOME/worktrees/site-shopvivaliz/remote-control-mcp-codex"
+          preferred="$HOME/worktrees/site-shopvivaliz/remote-control-cloud-clients-codex"
 
           mkdir -p "$HOME/src" "$HOME/worktrees/site-shopvivaliz"
           if [ ! -d "$src/.git" ]; then
@@ -47,13 +47,18 @@ jobs:
 
           if [ -n "$existing" ]; then
             worktree="$existing"
+            git -C "$worktree" fetch origin --prune
+            git -C "$worktree" merge --ff-only origin/main
           elif [ -e "$preferred/.git" ]; then
             worktree="$preferred"
+            git -C "$worktree" fetch origin --prune
+            git -C "$worktree" merge --ff-only origin/main
           else
             if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
               git -C "$src" worktree add "$preferred" "$branch"
+              git -C "$preferred" merge --ff-only origin/main
             else
-              git -C "$src" worktree add --track -b "$branch" "$preferred" "origin/$branch"
+              git -C "$src" worktree add -b "$branch" "$preferred" origin/main
             fi
             worktree="$preferred"
           fi
@@ -74,52 +79,70 @@ jobs:
           set -Eeuo pipefail
           prompt="$RUNNER_TEMP/codex-remote-control-mcp.prompt"
           cat > "$prompt" <<'EOF'
-          Continue the ShopVivaliz Private Remote Control MCP task from the existing authoritative checkpoint. Do not restart investigation from zero.
+          Continue the ShopVivaliz Private Remote Control MCP task from the CURRENT canonical main and live evidence. Do not restart completed stages.
 
           Repository: Vivaliz-site/site-shopvivaliz
-          Existing branch/worktree: fix/remote-control-kocepsv-bootstrap-stage4-20260927
-          Required authority:
-          - read docs/knowledge/host-access.md
-          - read docs/knowledge/README.md
-          - read docs/knowledge/agent-rules.md
-          - read AGENTS.md
-          - read remote-control-mcp/SPEC.md
-          - read remote-control-mcp/ACTION_PLAN.md
-          - read remote-control-mcp/CHECKPOINT.md
+          Working branch/worktree: feat/remote-control-cloud-clients-20260928
+          Read first:
+          - docs/knowledge/host-access.md
+          - docs/knowledge/README.md
+          - docs/knowledge/agent-rules.md
+          - AGENTS.md
+          - remote-control-mcp/SPEC.md
+          - remote-control-mcp/ACTION_PLAN.md
+          - remote-control-mcp/CHECKPOINT.md
 
-          User has explicitly authorized Codex for this finite task and instructed execution of all remaining stages. Use @Superpowers methodology: systematic debugging, TDD for every new defect, implementation, contradictory review, verification-before-completion, merge/deploy validation. Preserve valid concurrent work; never force-push over another agent's work.
+          User explicitly authorized this finite Codex fallback. Use systematic debugging, RED->GREEN TDD for defects/new behavior, adversarial review, verification-before-completion, safe PR/merge flow, and live validation. Preserve concurrent valid work. Never use Remote Desktop Commander. Never expose/log/copy secrets, private keys, cookies, bearer tokens, tunnel credentials, or Cloudflare/OpenAI credential values.
 
-          Goal: complete ACTION_PLAN stages 4, 5, 6 and 7 and reach CONCLUIDO only with fresh objective evidence.
+          Goal: finish the remaining cloud-client integration for BOTH ChatGPT and Claude Code cloud, then reconcile Stage 6/7 documentation. Do not mark CONCLUIDO unless objective live evidence supports it.
 
-          Current proven state:
-          - Stages 1-3 are complete.
-          - PR #1974 merged the reverse-SSH design.
-          - Backend controller and production Linux identity installation already passed in live bootstrap.
-          - Fred-Win canonical reverse SSH is backend 127.0.0.1:2222.
-          - KOCEPSV must establish backend 127.0.0.1:2223 while keeping 5558 only as bootstrap/recovery.
-          - Bootstrap run 36371166432 failed because 2223 never appeared.
-          - Root cause: KOCEPSV legacy MCP acknowledged an async child that depended on git merge --ff-only origin/main; a divergent/dirty local checkout could terminate before relay creation.
-          - Current branch contains the TDD fix: synchronously stage the two canonical KOCEPSV relay scripts from origin/main, verify REMOTE_CONTROL_KOCEPSV_STAGE=PASS, then queue relay restart asynchronously.
-          - Remote Control MCP CI run 36371867937 was GREEN on the staged-bootstrap fix.
-          - Stage 5 E2E was separated behind workflow_dispatch input run_e2e=true so Stage 4 bootstrap can be proven independently.
-          - Desktop Commander remote-call quota is 0%; do not depend on it.
-          - GitHub may be used for bootstrap/recovery and source control, but final runtime command transport/queue/state must be independent of GitHub.
-          - Production active/current releases are immutable; never edit current/ or an active release directly.
-          - Never print or persist secrets, private keys, auth tokens, cookies, or credential material.
+          Already proven — DO NOT redo:
+          - Four-host live E2E PASS: run 36449123839 with health on all 4, root on both Linux, Administrator on both Windows, durable task PASS all 4, REMOTE_CONTROL_FOUR_HOST_E2E=PASS.
+          - Runtime independence PASS: disconnected task submit/verify runs from issues #2045/#2046 prove DURABLE_AFTER_DISCONNECT=PASS and RUNTIME_GITHUB_DEPENDENCY=false.
+          - Controller remains loopback-only 127.0.0.1:5580 and POST /mcp requires its root-only bearer.
+          - PRs #2041/#2042 fixed Windows non-UTF8 output paths.
+          - PR #2057 documents Stage 5 PASS.
+          - PR #2056 added backend-only Platform UI probe through A1 private VCN SSH.
+          - PR #2058 added sanitized Platform auth helper.
+          - PR #2060 added backend-only actions secure_mcp_platform_auth and secure_mcp_cloudflare_access_probe.
 
-          Required execution:
-          1. Re-read branch diff and checkpoint, run fresh tests/gates, and fix any remaining Stage 4 defect using RED->GREEN.
-          2. Open/update PR for the Stage 4 correction, pass required gates, merge safely.
-          3. Trigger/observe the Remote Control MCP Bootstrap from main with Stage 5 E2E disabled. Prove both Windows bootstrap paths succeed and controller host keys are pinned. Persist checkpoint for Stage 4.
-          4. Explicitly trigger Stage 5 with run_e2e=true. Require live MCP health on all four hosts, root on both Linux hosts, Administrator on both Windows hosts, durable task submit/status/result on all four, and REMOTE_CONTROL_FOUR_HOST_E2E=PASS. Fix root causes and repeat safely if needed. Persist checkpoint.
-          5. Stage 6: prove runtime independence from GitHub. After bootstrap workflow is terminal, use the installed controller/runtime itself (not GitHub Actions as command transport) to run fresh commands and a durable task, retrieve results after client disconnection/reconnection or an equivalent independently verified controller interaction, and document objective evidence. Persist checkpoint.
-          6. Stage 7: integrate/expose the MCP to ChatGPT using the repository's approved private/Secure MCP Tunnel architecture. Do not expose a public shell endpoint. Verify the MCP endpoint/tool contract from the supported client path. If product-side connector installation needs an external user action that cannot be performed from the environment, classify only that substep as BLOCKED_EXTERNAL and still finish every server-side action possible.
-          7. Keep remote-control-mcp/ACTION_PLAN.md and CHECKPOINT.md current after each stage. Merge valid changes. Do not mark CONCLUIDO on CI alone, ACKs, stale evidence, or partial bootstrap.
-          8. Before terminal exit, post a sanitized issue #1586 comment beginning:
-             CODEX_REMOTE_CONTROL_MCP_TERMINAL=
-             Include status, main SHA, Stage 4 bootstrap run/result, Stage 5 E2E run/result, four-host privilege result, durable-task result, Stage 6 GitHub-independence evidence, Stage 7 integration result, and exact blocker/resume condition if any. Do not include secrets.
+          Fresh measured Stage 7 evidence:
+          - OpenAI Platform auth run 36472954776:
+            OPENAI_PLATFORM_AUTHENTICATED=true
+            OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false
+            OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=false
+            OPENAI_PLATFORM_AUTH_RESULT=PASS
+            CLOUD_CLIENT_COMPATIBILITY_REQUIRED=true
+            CLAUDE_CLOUD_ACCESS_REQUIRED=true
+          - Secure MCP prerequisite run 36452378446:
+            TUNNEL_CLIENT_INSTALLED=false
+            TUNNEL_SERVICE_ACTIVE=false
+            TUNNEL_ID_CONFIGURED=false
+            TUNNEL_RUNTIME_KEY_AVAILABLE=false
+            TUNNEL_ADMIN_KEY_AVAILABLE=false
+            TUNNEL_MCP_LOCAL_AUTH_AVAILABLE=true
+            CHATGPT_CDP_AVAILABLE=true
+            TUNNEL_OUTBOUND_HTTPS=PASS
+          - Cloudflare capability probe run 36473749120:
+            CLOUDFLARE_ACCESS_APPS_READ=false
+            CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=false
+            CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=false
+          This means the currently provisioned Cloudflare API token does not have Access Apps/Service Tokens read permission. Do not print response bodies containing sensitive data.
+          - Existing repo has working named Cloudflare Tunnel patterns in scripts/provision-returns-private-tunnel.sh and scripts/provision-solange-stable-tunnel.sh using CLOUDFLARE_API_TOKEN and CLOUDFLARE_DNS_EDIT_TOKEN.
+          - ADMIN_EMAIL exists as a protected GitHub secret and may be used only as a protected runtime value; never log it.
 
-          Continue autonomously until CONCLUIDO validated or a real external blocker remains after exhausting safe alternatives.
+          Required outcomes:
+          A) ChatGPT: exhaust safe, supported OpenAI Secure MCP Tunnel options. Platform is authenticated but the tunnels page currently exposes no create/manage control. Check current official OpenAI docs/product behavior and the authenticated UI/API without leaking secrets. If a supported server-side route exists, provision tunnel-client on backend outbound-only, keep controller bearer only on backend (use local-header injection if supported), install persistent service, and verify MCP initialize/tools through the ChatGPT-supported path. If the account/feature itself is unavailable, prove that precisely.
+          B) Claude Code cloud: it has no route to private 10.0.1.38. Build a cloud-reachable path only if it can remain strongly authenticated and does NOT expose a shell or controller bearer. Preferred design to evaluate: Cloudflare named Tunnel outbound from backend + Cloudflare Access Managed OAuth for cloud MCP clients + a root-owned local relay/unix socket that injects the internal controller bearer and forwards only MCP/health. Keep the real controller loopback-only. Use the existing Cloudflare tunnel pattern. If current API token cannot manage Access, exhaust safe alternatives available in the authenticated backend browser/dashboard or existing protected credentials before calling it externally blocked. Do not weaken security by publishing bearer-only MCP.
+          C) Claude client config: when a secure public MCP endpoint exists, add only non-secret configuration suitable for Claude Code cloud (for example project .mcp.json remote HTTP URL using OAuth). Do not commit static service-token credentials. Verify from an actual cloud-compatible client path if possible.
+          D) If an external account permission or human auth challenge is truly unavoidable after exhausting safe alternatives, finish all server-side work possible and record exact BLOCKED_EXTERNAL substep + resume condition. Do not mislabel an implementation task as external.
+          E) Update ACTION_PLAN.md and CHECKPOINT.md so Stage 6 is PASS using the already-proven disconnected-runtime evidence. Stage 7 is PASS only if both required cloud-client paths are validated; otherwise remain RUNNING/BLOCKED_EXTERNAL with precise evidence.
+
+          Before terminal exit, post a sanitized issue #1586 comment beginning:
+          CODEX_REMOTE_CONTROL_MCP_TERMINAL=
+          Include status, main SHA, Stage 6 evidence, ChatGPT integration status, Claude cloud integration status, PRs/runs created, and exact blocker/resume condition if any. Never include secrets.
+
+          Continue autonomously until CONCLUIDO validated or only a real external blocker remains after exhausting safe alternatives.
           EOF
           chmod 600 "$prompt"
           test "$(wc -c < "$prompt")" -gt 2500
@@ -134,7 +157,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=STARTED run_id=$GITHUB_RUN_ID branch=fix/remote-control-kocepsv-bootstrap-stage4-20260927 head=$HEAD_SHA prompt_sha256=$PROMPT_SHA"
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=STARTED run_id=$GITHUB_RUN_ID branch=feat/remote-control-cloud-clients-20260928 head=$HEAD_SHA prompt_sha256=$PROMPT_SHA"
 
       - name: Execute finite Codex task
         env:
