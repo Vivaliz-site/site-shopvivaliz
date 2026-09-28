@@ -125,6 +125,16 @@ class RemoteControlMcpTests(unittest.TestCase):
             m.tailscale_peer_ip = original
 
 
+class BranchCoherenceTests(unittest.TestCase):
+    def test_single_canonical_remote_control_runtime(self):
+        for rel in (
+            "remote-control-mcp/controller.py",
+            "remote-control-mcp/install.sh",
+            "remote-control-mcp/e2e.py",
+        ):
+            self.assertFalse((ROOT / rel).exists(), f"duplicate runtime must not exist: {rel}")
+
+
 class BootstrapContractTests(unittest.TestCase):
     def test_linux_bootstrap_grants_privilege_only_to_dedicated_user(self):
         text = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
