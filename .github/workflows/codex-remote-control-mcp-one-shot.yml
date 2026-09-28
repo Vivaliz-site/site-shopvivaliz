@@ -16,7 +16,7 @@ jobs:
       github.event.issue.number == 1586 &&
       github.event.comment.user.login == 'fredmourao-ai' &&
       github.event.comment.body == '/codex-remote-control-mcp-run'
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 360
 
     steps:
