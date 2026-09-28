@@ -188,8 +188,9 @@ class BootstrapContractTests(unittest.TestCase):
     def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("git fetch origin main", text)
-        self.assertIn("git show origin/main:scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1", text)
-        self.assertIn("git show origin/main:scripts/desktopkocepsv-remote-bootstrap.ps1", text)
+        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertIn('git show ("origin/main:" + $rel)', text)
         self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
         self.assertNotIn("git merge --ff-only origin/main", text)
 
