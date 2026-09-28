@@ -212,6 +212,20 @@ class BootstrapContractTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
         self.assertEqual(text.count("'.github/workflows/remote-control-mcp-*.yml'"), 2)
 
+    def test_oci_bastion_workflow_supports_remote_control_stages(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for action in (
+            "action=bootstrap-remote-control-mcp",
+            "action=e2e-remote-control-mcp",
+            "action=runtime-proof-submit",
+            "action=runtime-proof-verify",
+        ):
+            self.assertIn(action, text)
+        self.assertIn("REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
+        self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
+        self.assertIn("RUNTIME_GITHUB_DEPENDENCY=false", text)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
