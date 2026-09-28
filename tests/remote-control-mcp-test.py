@@ -162,6 +162,8 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", text)
         self.assertIn("OpenSSH.Server~~~~0.0.1.0", text)
         self.assertIn("Add-WindowsCapability", text)
+        self.assertIn("New-Service -Name sshd", text)
+        self.assertIn("openssh_binary_missing_after_capability", text)
 
     def test_bootstrap_workflow_is_single_complete_sequence(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
@@ -202,6 +204,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=PASS")', text)
         self.assertIn('peers = (("FRED", 5557), ("KOCEPSV", 5558))', text)
         self.assertIn("REMOTE_CONTROL_WINDOWS_OPENSSH_INSTALL=PASS", text)
+        self.assertIn("REMOTE_CONTROL_WINDOWS_OPENSSH_SERVICE_REGISTER=PASS", text)
         self.assertIn("OpenSSH.Server~~~~0.0.1.0", text)
         self.assertIn("ssh_protocol_alive() {", text)
         self.assertIn("ssh-keyscan -T 5 -p", text)
