@@ -1,0 +1,142 @@
+name: GitHub Refresh Live Snapshot Once
+
+on:
+  push:
+    branches:
+      - diag/github-refresh-live-snapshot-20260927
+    paths:
+      - '.github/workflows/github-refresh-live-snapshot-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}"
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+
+      - name: Snapshot GitHub refresh state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          script="$RUNNER_TEMP/github-refresh-snapshot.sh"
+          cat > "$script" <<'REMOTE'
+          set -u
+          echo GHREF_HOST="$(hostname)"
+          echo GHREF_UTC="$(date -u +%FT%TZ)"
+          echo GHREF_GH_VERSION="$(gh --version 2>/dev/null | head -1 | tr ' ' '_' || true)"
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          unset GH_TOKEN GITHUB_TOKEN
+          echo GHREF_CLIPBOARD="$(gh config get clipboard 2>/dev/null || echo unknown)"
+          scopes="$(gh api -i user 2>/dev/null | tr -d '\r' | awk 'BEGIN{IGNORECASE=1} /^x-oauth-scopes:/{sub(/^x-oauth-scopes:[[:space:]]*/,""); print; exit}')"
+          if printf '%s' "$scopes" | grep -Eq '(^|,[[:space:]]*)delete_repo(,|$)'; then
+            echo GHREF_DELETE_REPO_SCOPE=true
+          else
+            echo GHREF_DELETE_REPO_SCOPE=false
+          fi
+          echo GHREF_PROCESSES_BEGIN
+          ps -eo pid,ppid,etimes,stat,cmd | grep -E '[g]h auth refresh|[r]efresh-backend-delete-repo-scope|[g]ithub-device-auth-delete-repo|[s]cript -qefc' | head -40
+          echo GHREF_PROCESSES_END
+          if curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/list > /tmp/ghref-cdp.json; then
+            echo GHREF_CDP=reachable
+            python3 - <<'PY'
+          import json, urllib.parse
+          items=json.load(open('/tmp/ghref-cdp.json',encoding='utf-8'))
+          pages=[x for x in items if x.get('type')=='page']
+          selected=[]
+          for p in pages:
+              raw=str(p.get('url',''))
+              try:
+                  u=urllib.parse.urlsplit(raw)
+              except Exception:
+                  continue
+              if u.hostname in {'github.com','accounts.google.com'}:
+                  selected.append((u.hostname,u.path,str(p.get('title','')).replace('\n',' ')[:120]))
+          print('GHREF_AUTH_PAGES='+str(len(selected)))
+          for i,(host,path,title) in enumerate(selected[:12],1):
+              print(f'GHREF_PAGE_{i}_HOST={host}')
+              print(f'GHREF_PAGE_{i}_PATH={path}')
+              print(f'GHREF_PAGE_{i}_TITLE={title}')
+          PY
+          else
+            echo GHREF_CDP=unreachable
+          fi
+          rm -f /tmp/ghref-cdp.json
+          REMOTE
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$BACKEND_COMPARTMENT_ID" --display-name "GitHub refresh passive snapshot" --content "file://$content" --target "file://$target" --timeout-in-seconds 90 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 30); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS) sleep 3 ;;
+              *) exit 30 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output" | grep '^GHREF_' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
