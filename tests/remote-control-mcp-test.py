@@ -567,6 +567,7 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=",
             "CHATGPT_CONTINUITY_CDP_REACHABLE=",
             "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=",
+            "CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=",
             "CHATGPT_CONTINUITY_DIAGNOSTIC=PASS",
         ):
             self.assertIn(needle, workflow)
