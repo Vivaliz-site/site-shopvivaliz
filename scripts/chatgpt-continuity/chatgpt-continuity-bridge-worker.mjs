@@ -328,6 +328,8 @@ async function errorBannerPresent(cdp) {
     || haystack.includes('streaming interrupted')
     || haystack.includes('transmissão interrompida')
     || haystack.includes('transmissao interrompida')
+    || haystack.includes('stopped thinking')
+    || haystack.includes('parou de pensar')
   );
 }
 
