@@ -250,7 +250,14 @@ def run_once(
             attempted_at = _parse_time(previous.get("dispatched_at"))
             worker_status = str(previous.get("worker_status", "")).strip().upper()
 
-            if previous.get("bridge_ok") is True and not worker_status and resolved_token:
+            # Empty/PENDING/CLAIMED are observations of an active attempt,
+            # not terminal outcomes. Re-poll them every dispatcher cycle so a
+            # later worker result cannot be cached as "in flight" forever.
+            if (
+                previous.get("bridge_ok") is True
+                and worker_status in {"", "PENDING", "CLAIMED"}
+                and resolved_token
+            ):
                 status_result = query_status(
                     bridge_url=resolved_bridge_url,
                     token=resolved_token,
@@ -260,14 +267,16 @@ def run_once(
                 if status_result.get("ok"):
                     status_body = status_result.get("body") if isinstance(status_result.get("body"), dict) else {}
                     nudge = status_body.get("nudge") if isinstance(status_body.get("nudge"), dict) else {}
-                    worker_status = str(nudge.get("status", "")).strip().upper()
-                    if worker_status:
-                        observed = dict(previous)
-                        observed["worker_status"] = worker_status
-                        observed["worker_status_observed_at"] = utc_now()
-                        _append_ledger(root, observed)
-                        ledger[fingerprint] = observed
-                        previous = observed
+                    observed_status = str(nudge.get("status", "")).strip().upper()
+                    if observed_status:
+                        if observed_status != worker_status:
+                            observed = dict(previous)
+                            observed["worker_status"] = observed_status
+                            observed["worker_status_observed_at"] = utc_now()
+                            _append_ledger(root, observed)
+                            ledger[fingerprint] = observed
+                            previous = observed
+                        worker_status = observed_status
 
             if worker_status == "PROGRESS_CONFIRMED":
                 continue
