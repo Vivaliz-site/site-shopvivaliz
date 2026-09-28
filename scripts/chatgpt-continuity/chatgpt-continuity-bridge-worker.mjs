@@ -32,6 +32,10 @@ const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
+const PASSIVE_REATTACH_CONFIRM_MS = Math.max(
+  3000,
+  Number(process.env.CHATGPT_CONTINUITY_PASSIVE_REATTACH_CONFIRM_MS || 15000),
+);
 const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
@@ -331,9 +335,30 @@ async function attemptNudge(
     if (await conversationIsGenerating(cdp)) {
       const stream = await conversationStreamStatus(cdp);
       if (stream?.http_status !== 200 || stream?.status !== 'COMPLETE') {
-        // A real stream is still in flight, or the backend state cannot be
-        // proven. Never interleave an unwanted continuation in that case.
-        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'conversation is actively generating, deferred' };
+        // A real stream may still be in flight, but live failures also show
+        // the client stuck on Stop/Thinking while stream bookkeeping remains
+        // non-terminal. First try one read-only reattach of the same
+        // conversation. This can recover lost client/server reconciliation
+        // without creating a duplicate ChatGPT turn.
+        const baseline = await assistantSnapshot(cdp);
+        await cdp.evaluate(`(()=>{location.reload();return true})()`);
+        await sleep(1200);
+        const progressed = await confirmProgress(
+          cdp,
+          baseline,
+          PASSIVE_REATTACH_CONFIRM_MS,
+          PROGRESS_POLL_MS,
+        );
+        if (progressed) {
+          return {
+            result_status: 'PROGRESS_CONFIRMED',
+            detail: 'passive reattach restored assistant progress without sending continuation',
+          };
+        }
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+        };
       }
       // Live evidence showed ChatGPT can leave the Stop button visible after
       // its backend has already finalized the stream as COMPLETE. That stale

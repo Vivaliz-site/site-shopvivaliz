@@ -140,8 +140,34 @@ async function run() {
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
   // disabling Web turn submission.
-  const generating = await attemptNudge('task-1', async () => fakeCdp({ generating: true }));
-  assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never nudge mid-stream');
+  const activeCdp = fakeCdp({ generating: true });
+  const generating = await attemptNudge('task-1', async () => activeCdp, async () => false);
+  assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never inject a continuation into an unconfirmed active stream');
+  assert.equal(
+    activeCdp.calls.some(call => call.includes('location.reload')),
+    true,
+    'stale checkpoint plus apparent active stream must attempt one passive reattach before deferring',
+  );
+  assert.equal(
+    activeCdp.calls.some(call => call.includes('b.click()')),
+    false,
+    'passive reattach must not inject a duplicate continue message',
+  );
+  assert.match(generating.detail, /passive reattach/i);
+
+  const recoveredCdp = fakeCdp({ generating: true });
+  const recoveredByReattach = await attemptNudge(
+    'task-passive-reattach',
+    async () => recoveredCdp,
+    async () => true,
+  );
+  assert.equal(recoveredByReattach.result_status, 'PROGRESS_CONFIRMED');
+  assert.match(recoveredByReattach.detail, /passive reattach/i);
+  assert.equal(
+    recoveredCdp.calls.some(call => call.includes('b.click()')),
+    false,
+    'reattach recovery that restores assistant progress must not send continue',
+  );
 
   // Live failure reproduced 2026-09-28: the DOM can keep a stale Stop button
   // even when the conversation backend already reports stream_status=COMPLETE.

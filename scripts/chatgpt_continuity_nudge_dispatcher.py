@@ -273,6 +273,21 @@ def run_once(
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
                             observed["worker_status_observed_at"] = utc_now()
+                            has_send_counter = "send_attempt_count" in previous
+                            prior_send_attempts = int(previous.get("send_attempt_count") or 0)
+                            if not has_send_counter and worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+                                prior_send_attempts = int(previous.get("attempt_count") or 1)
+                            if observed_status in {"SENT", "SENT_UNCONFIRMED", "PROGRESS_CONFIRMED"}:
+                                if has_send_counter:
+                                    observed["send_attempt_count"] = prior_send_attempts + 1
+                                else:
+                                    # Legacy ledger rows predate the dedicated
+                                    # send counter. Their attempt_count included
+                                    # the currently observed worker attempt, so
+                                    # use it directly rather than double-counting.
+                                    observed["send_attempt_count"] = int(previous.get("attempt_count") or 1)
+                            else:
+                                observed["send_attempt_count"] = prior_send_attempts
                             _append_ledger(root, observed)
                             ledger[fingerprint] = observed
                             previous = observed
@@ -293,7 +308,23 @@ def run_once(
             if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
                 continue
             previous_attempts = int(previous.get("attempt_count") or 1)
-            if previous_attempts >= max_web_attempts:
+            previous_send_attempts = int(previous.get("send_attempt_count") or 0)
+            if (
+                "send_attempt_count" not in previous
+                and worker_status in {"SENT", "SENT_UNCONFIRMED"}
+            ):
+                previous_send_attempts = previous_attempts
+
+            if worker_status == "STALLED_NOT_CONFIRMED":
+                # This status proves no continuation message was injected.
+                # Keep the cooldown, but never spend the budget reserved for
+                # real Web turn submissions merely by observing a silent stall.
+                pass
+            elif worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+                if previous_send_attempts >= max_web_attempts:
+                    skipped_attempt_limit += 1
+                    continue
+            elif previous_attempts >= max_web_attempts:
                 skipped_attempt_limit += 1
                 continue
             retry_attempted += 1
@@ -311,7 +342,14 @@ def run_once(
             repository=repository,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
-        previous_attempt_count = int((ledger.get(fingerprint) or {}).get("attempt_count") or 0)
+        previous_row = ledger.get(fingerprint) or {}
+        previous_attempt_count = int(previous_row.get("attempt_count") or 0)
+        previous_send_attempt_count = int(previous_row.get("send_attempt_count") or 0)
+        if (
+            "send_attempt_count" not in previous_row
+            and str(previous_row.get("worker_status", "")).strip().upper() in {"SENT", "SENT_UNCONFIRMED"}
+        ):
+            previous_send_attempt_count = previous_attempt_count
         ledger_row = {
             "fingerprint": fingerprint,
             "task_id": task_id,
@@ -322,6 +360,7 @@ def run_once(
             "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
             "worker_status": "",
             "attempt_count": previous_attempt_count + 1,
+            "send_attempt_count": previous_send_attempt_count,
         }
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
