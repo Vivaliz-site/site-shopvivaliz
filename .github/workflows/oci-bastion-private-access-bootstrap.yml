@@ -24,7 +24,8 @@ jobs:
           github.event.issue.body == 'action=e2e-remote-control-mcp' ||
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
-          github.event.issue.body == 'action=secure-mcp-tunnel-probe'
+          github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
+          github.event.issue.body == 'action=secure-mcp-platform-ui-probe'
         )
       }}
     runs-on: ubuntu-latest
@@ -502,6 +503,18 @@ jobs:
           echo 'TUNNEL_OUTBOUND_HTTPS=PASS'
           echo 'SECURE_MCP_TUNNEL_PROBE=PASS'
           REMOTE
+
+      - name: Probe OpenAI Platform tunnel settings through canonical backend browser
+        if: github.event.issue.body == 'action=secure-mcp-platform-ui-probe'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          probe=/tmp/openai-secure-mcp-platform-probe.mjs
+          "${BACKEND_SCP[@]}" scripts/openai-secure-mcp-platform-probe.mjs ubuntu@127.0.0.1:"$probe"
+          "${BACKEND_SSH[@]}" "set -Eeuo pipefail; trap 'rm -f $probe' EXIT; node $probe"
 
       - name: Validate both VMs through RustDesk on Fred-Win
         if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'
