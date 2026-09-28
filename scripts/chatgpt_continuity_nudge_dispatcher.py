@@ -41,6 +41,7 @@ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
+DEFAULT_MAX_WEB_ATTEMPTS = 2
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
@@ -222,9 +223,11 @@ def run_once(
     skipped_no_token = 0
     skipped_stale_checkpoint = 0
     retry_attempted = 0
+    skipped_attempt_limit = 0
 
     ledger = _read_ledger(root)
     retry_seconds = max(1, int(os.getenv("CHATGPT_CONTINUITY_BRIDGE_RETRY_SECONDS", DEFAULT_BRIDGE_RETRY_SECONDS)))
+    max_web_attempts = max(1, int(os.getenv("CHATGPT_CONTINUITY_MAX_WEB_ATTEMPTS", DEFAULT_MAX_WEB_ATTEMPTS)))
     current = datetime.now(timezone.utc)
 
     for request in read_requests(root):
@@ -276,8 +279,13 @@ def run_once(
 
             # SENT is a legacy ambiguous result and SENT_UNCONFIRMED explicitly
             # means the click did not produce observable assistant progress.
-            # Both remain retryable after the bounded cooldown.
+            # Both remain retryable after the bounded cooldown, but never
+            # indefinitely for the same unchanged checkpoint.
             if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
+                continue
+            previous_attempts = int(previous.get("attempt_count") or 1)
+            if previous_attempts >= max_web_attempts:
+                skipped_attempt_limit += 1
                 continue
             retry_attempted += 1
 
@@ -294,6 +302,7 @@ def run_once(
             repository=repository,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
+        previous_attempt_count = int((ledger.get(fingerprint) or {}).get("attempt_count") or 0)
         ledger_row = {
             "fingerprint": fingerprint,
             "task_id": task_id,
@@ -303,6 +312,7 @@ def run_once(
             "http_status": result.get("http_status"),
             "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
             "worker_status": "",
+            "attempt_count": previous_attempt_count + 1,
         }
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
@@ -318,6 +328,7 @@ def run_once(
         "skipped_no_token": skipped_no_token,
         "skipped_stale_checkpoint": skipped_stale_checkpoint,
         "retry_attempted": retry_attempted,
+        "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
     }
 
