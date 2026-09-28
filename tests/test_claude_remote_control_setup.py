@@ -33,6 +33,12 @@ class ClaudeRemoteControlSetupContract(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_ELIGIBLE=PASS", text)
         self.assertIn("REMOTE_CONTROL_LOGIN_REQUIRED", text)
 
+    def test_setup_installs_official_native_claude_when_missing(self) -> None:
+        text = SETUP.read_text(encoding="utf-8")
+        self.assertIn("https://claude.ai/install.sh", text)
+        self.assertIn(".local/bin/claude", text)
+        self.assertIn("CLAUDE_NATIVE_INSTALL=PASS", text)
+
     def test_docs_define_claude_web_to_backend_remote_control_path(self) -> None:
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Claude Code Remote Control", text)
