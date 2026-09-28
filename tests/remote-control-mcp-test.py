@@ -180,6 +180,10 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("tailscale status --json", text)
         self.assertNotIn("</dev/tcp/$fred_ip/22", text)
         self.assertNotIn("</dev/tcp/$desk_ip/22", text)
+        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
+        self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
