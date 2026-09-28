@@ -242,7 +242,7 @@ jobs:
 
           if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
-            "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
+            if ! "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
           side = os.environ['SIDE_B64']
           ps = r'''$ErrorActionPreference='Stop'
@@ -269,6 +269,10 @@ jobs:
               print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=ack_missing')
               raise SystemExit('KOCEPSV sidecar did not confirm 2223')
           PY"
+            then
+              echo 'REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=controller_invocation'
+              exit 1
+            fi
           fi
           for _ in $(seq 1 30); do
             if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then break; fi
