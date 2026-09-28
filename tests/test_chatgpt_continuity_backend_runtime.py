@@ -30,7 +30,6 @@ def load_dispatcher():
 class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
     def test_dispatcher_reads_protected_token_file_when_env_value_is_absent(self) -> None:
         dispatcher = load_dispatcher()
-        dispatcher.CHATGPT_WEB_TURN_AUTOMATION_BLOCKED = False
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             token_file = root / "bridge.token"
