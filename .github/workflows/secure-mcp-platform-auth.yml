@@ -33,7 +33,7 @@ jobs:
           else
             rc=$?
           fi
-          safe="$(printf '%s\n' "$output" | grep -E '^OPENAI_PLATFORM_[A-Z_]+=' || printf '')"
+          safe="$(printf '%s\n' "$output" | grep -E '^(OPENAI_PLATFORM_[A-Z_]+|CLOUD_CLIENT_COMPATIBILITY_REQUIRED|CLAUDE_CLOUD_ACCESS_REQUIRED)=' || printf '')"
           [ -z "$safe" ] || printf '%s\n' "$safe"
           if [ "$rc" -ne 0 ]; then
             echo "::error::OpenAI Platform authentication did not complete"
