@@ -1,0 +1,168 @@
+name: ChatGPT Freeze Passive Readback Direct Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-freeze-continuity-live-20260927
+    paths:
+      - '.github/workflows/chatgpt-freeze-passive-readback-direct-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  readback:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Passive reload/readback on exact live ChatGPT VM browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+          out="$RUNNER_TEMP/chatgpt-freeze-readback.json"
+          shot="$RUNNER_TEMP/chatgpt-freeze-readback-main.png"
+          OUT="$out" SHOT="$shot" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const TARGET='ChatGPT Freeze Continuity';
+          const out=process.env.OUT;
+          const shot=process.env.SHOT;
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const context=browser.contexts()[0];
+          if(!context) throw new Error('cdp_context_missing');
+          const pages=context.pages();
+          async function titleOf(p){try{return await p.title();}catch{return '';}}
+          let page=null;
+          for(const p of pages){
+            const title=await titleOf(p);
+            if(p.url().startsWith('https://chatgpt.com/')&&title.toLowerCase().includes(TARGET.toLowerCase())){page=p;break;}
+          }
+          page=page||pages.find(p=>p.url().startsWith('https://chatgpt.com/'));
+          if(!page) throw new Error('chatgpt_page_missing');
+          await page.bringToFront().catch(()=>{});
+          page.setDefaultTimeout(10000);
+
+          if(!(await titleOf(page)).toLowerCase().includes(TARGET.toLowerCase())){
+            const links=page.locator('a[href*="/c/"]');
+            const count=await links.count().catch(()=>0);
+            let clicked=false;
+            for(let i=0;i<count;i++){
+              const link=links.nth(i); let txt='';
+              try{txt=(await link.innerText()).trim();}catch{}
+              if(txt.toLowerCase()===TARGET.toLowerCase()){
+                await link.click(); await page.waitForTimeout(2500); clicked=true; break;
+              }
+            }
+            if(!clicked) throw new Error('target_conversation_not_located');
+          }
+
+          const safePath=(raw)=>{
+            try{
+              const u=new URL(raw);u.search='';u.hash='';
+              u.pathname=u.pathname.replace(/\/c\/[^/]+/g,'/c/:id').replace(/\/conversation\/[^/?]+/g,'/conversation/:id');
+              return u.origin+u.pathname;
+            }catch{return 'invalid-url';}
+          };
+          const allowed=(raw)=>{
+            try{const h=new URL(raw).hostname;return h==='chatgpt.com'||h.endsWith('.chatgpt.com')||h==='openai.com'||h.endsWith('.openai.com');}catch{return false;}
+          };
+          const network=[]; const websockets=[];
+          page.on('response',async res=>{
+            if(!allowed(res.url())) return;
+            const p=safePath(res.url());
+            if(res.status()<400&&!/(backend-api|conversation|turn|message|api)/i.test(p)) return;
+            if(network.length>=200) return;
+            let h={};try{h=await res.allHeaders();}catch{}
+            network.push({
+              at:new Date().toISOString(),path:p,method:res.request().method(),status:res.status(),
+              request_id:h['x-oai-request-id']||h['x-request-id']||'',
+              turn_trace_id:h['x-oai-turn-trace-id']||'',
+              cf_ray:h['cf-ray']||'',response_date:h['date']||''
+            });
+          });
+          page.on('requestfailed',req=>{
+            if(!allowed(req.url())||network.length>=200) return;
+            network.push({at:new Date().toISOString(),path:safePath(req.url()),method:req.method(),status:0,error:String(req.failure()?.errorText||'').slice(0,120)});
+          });
+          page.on('websocket',ws=>{
+            if(!allowed(ws.url())) return;
+            const e={at:new Date().toISOString(),url:safePath(ws.url()),closed_at:'',error:''};
+            websockets.push(e);ws.on('close',()=>{e.closed_at=new Date().toISOString();});ws.on('socketerror',err=>{e.error=String(err||'').slice(0,120);});
+          });
+
+          const state=async()=>await Promise.race([
+            page.evaluate(()=>{
+              const body=String(document.body?.innerText||'').toLowerCase();
+              const buttons=Array.from(document.querySelectorAll('button'));
+              const stopVisible=buttons.some(b=>{
+                const label=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase();
+                return /stop|parar/.test(label)&&b.offsetParent!==null;
+              });
+              return {
+                title:String(document.title||'').slice(0,160),
+                url_path:location.origin+location.pathname.replace(/\/c\/[^/]+/g,'/c/:id'),
+                data_role_turns:document.querySelectorAll('[data-message-author-role]').length,
+                conversation_turn_nodes:document.querySelectorAll('[data-testid*="conversation-turn"]').length,
+                article_nodes:document.querySelectorAll('article').length,
+                composer_count:document.querySelectorAll('#prompt-textarea,textarea[data-testid*="prompt"],textarea,div[contenteditable="true"]').length,
+                stop_visible:stopVisible,
+                stream_interrupted:/transmissão interrompida|stream interrupted/.test(body),
+                reflection_failed:/a reflexão falhou|thinking failed/.test(body),
+                request_timeout:/esgotou-se o tempo limite da solicitação|request timed out|request timeout/.test(body),
+                stopped_thinking:/parou de pensar|stopped thinking/.test(body),
+                additional_checks:/verificações adicionais|additional checks/.test(body),
+                body_text_length:String(document.body?.innerText||'').length
+              };
+            }),
+            new Promise((_,reject)=>setTimeout(()=>reject(new Error('state_eval_timeout')),8000))
+          ]);
+
+          const before=await state();
+          const started=new Date().toISOString();
+          let reloadError='';
+          try{await page.reload({waitUntil:'domcontentloaded',timeout:45000});await page.waitForTimeout(10000);}catch(e){reloadError=String(e?.message||e).slice(0,240);}
+          let after=null;try{after=await state();}catch(e){after={state_error:String(e?.message||e).slice(0,160)};}
+
+          try{
+            const main=page.locator('main').first();
+            if(await main.isVisible({timeout:1500})){
+              await main.screenshot({path:shot,mask:[main.locator('input'),main.locator('[data-testid*="profile"]'),main.locator('[data-testid*="account"]')]});
+            }
+          }catch{}
+
+          const result={schema:1,started_at:started,finished_at:new Date().toISOString(),target:TARGET,before,reload_error:reloadError,after,network,websockets,screenshot:fs.existsSync(shot)?'main.png':''};
+          fs.writeFileSync(out,JSON.stringify(result,null,2)+'\n',{mode:0o600});
+          console.log('FREEZE_READBACK='+JSON.stringify({
+            before,reload_error:reloadError,after,
+            network_error_count:network.filter(x=>x.status===0||x.status>=400).length,
+            request_id_count:network.filter(x=>x.request_id||x.turn_trace_id||x.cf_ray).length,
+            websocket_count:websockets.length,screenshot:result.screenshot
+          }));
+          process.exit(0);
+          NODE
+          jq '{started_at,finished_at,before,reload_error,after,network_errors:[.network[]|select(.status==0 or .status>=400)],request_ids:[.network[]|select(.request_id!="" or .turn_trace_id!="" or .cf_ray!="")|{at,path,status,request_id,turn_trace_id,cf_ray,response_date}],websockets,screenshot}' "$out"
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-freeze-passive-readback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/chatgpt-freeze-readback.json
+            ${{ runner.temp }}/chatgpt-freeze-readback-main.png
+          if-no-files-found: error
+          retention-days: 7
