@@ -76,12 +76,36 @@ def process_snapshot() -> None:
         except Exception:
             return "unknown"
 
+    def safe_identity(pid: int) -> dict[str, object]:
+        args = args_for(pid)
+        first = os.path.basename(args[0]) if args else ""
+        second = ""
+        if len(args) > 1 and first in {"python", "python3", "node", "nodejs", "bash", "sh"}:
+            candidate = args[1]
+            if not candidate.startswith("-") and (
+                "/" in candidate or candidate.endswith((".py", ".mjs", ".js", ".sh"))
+            ):
+                second = os.path.basename(candidate)
+        try:
+            exe = os.path.basename(os.readlink(proc / str(pid) / "exe"))
+        except OSError:
+            exe = ""
+        return {
+            "pid": pid,
+            "argv0_basename": first,
+            "script_basename": second,
+            "exe_basename": exe,
+        }
+
     def kind(args: list[str]) -> str:
         text = " ".join(args).lower()
         first = os.path.basename(args[0]) if args else ""
+        second = os.path.basename(args[1]) if len(args) > 1 else ""
         if "codex-native-profile-failover.py" in text:
             return "codex_profile_failover"
-        if first.startswith("codex") or "/codex" in text:
+        if second == "codex-bridge.mjs":
+            return "codex_bridge_service"
+        if first in {"codex", "codex.js"} or second == "codex.js":
             return "codex"
         if "autonomous-agent-loop.sh" in text:
             return "autonomous_agent_loop"
@@ -89,9 +113,9 @@ def process_snapshot() -> None:
             return "task_resume_dispatcher"
         if "run_background_gemini.py" in text:
             return "background_gemini_wrapper"
-        if first == "gemini" or "/gemini" in text:
+        if first == "gemini":
             return "gemini"
-        if first == "tmux" or "tmux:" in text:
+        if first == "tmux" or first.startswith("tmux:"):
             return "tmux"
         return ""
 
@@ -118,7 +142,9 @@ def process_snapshot() -> None:
 
     for row in sorted(rows, key=lambda x: x["pid"]):
         emit("PROC", row)
+        emit("PROC_IDENTITY", safe_identity(row["pid"]))
 
+    emitted_ancestors = set()
     for row in rows:
         if row["kind"] not in {"codex", "codex_profile_failover"}:
             continue
@@ -130,6 +156,9 @@ def process_snapshot() -> None:
                 break
             seen.add(current)
             chain.append({"pid": current, "kind": kind(args_for(current)) or "other"})
+            if current not in emitted_ancestors:
+                emit("ANCESTOR_IDENTITY", safe_identity(current))
+                emitted_ancestors.add(current)
             current = ppid(current)
         if current == 1:
             chain.append({"pid": 1, "kind": "init"})
