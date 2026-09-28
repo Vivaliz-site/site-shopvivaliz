@@ -313,6 +313,7 @@ class BootstrapContractTests(unittest.TestCase):
             "action=runtime-proof-submit",
             "action=runtime-proof-verify",
             "action=secure-mcp-tunnel-probe",
+            "action=secure-mcp-platform-ui-probe",
         ):
             self.assertIn(action, text)
         for marker in (
@@ -351,6 +352,23 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("SECURE_MCP_TUNNEL_PROBE=PASS", probe)
         self.assertIn("REMOTE", probe)
         self.assertNotIn("{32}        shell: bash", probe)
+    def test_secure_mcp_platform_ui_probe_contract(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        script = ROOT / "scripts" / "openai-secure-mcp-platform-probe.mjs"
+        self.assertIn("action=secure-mcp-platform-ui-probe", workflow)
+        self.assertIn("scripts/openai-secure-mcp-platform-probe.mjs", workflow)
+        self.assertTrue(script.exists(), "Secure MCP Platform UI probe script missing")
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("https://platform.openai.com/settings/organization/tunnels", text)
+        for marker in (
+            "OPENAI_TUNNEL_UI_PROBE=PASS",
+            "OPENAI_TUNNEL_UI_AUTHENTICATED=",
+            "OPENAI_TUNNEL_UI_MANAGE_AVAILABLE=",
+            "OPENAI_TUNNEL_UI_ACCESS_REQUIRED=",
+            "OPENAI_TUNNEL_UI_EXISTING_COUNT=",
+        ):
+            self.assertIn(marker, text)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
