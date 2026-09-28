@@ -6,6 +6,7 @@ $TunnelScript = Join-Path $Repo 'scripts\desktopkocepsv-ssh-tunnel-service-manag
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Relay 24h'
 $LogDir = Join-Path $Repo 'logs'
 $LogFile = Join-Path $LogDir 'desktopkocepsv-remote-bootstrap.log'
+$RelayConfigFile = Join-Path $LogDir 'desktopkocepsv-relay-runtime.json'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -34,6 +35,48 @@ function Start-DesktopMcp {
     } else { throw 'Python not found' }
     Start-Sleep -Seconds 3
 }
+function Capture-WorkingTunnelConfig {
+    $legacy = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq 'ssh.exe' -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*')
+    } | Select-Object -First 1)
+    if ($legacy.Count -ne 1) { return $false }
+    $line = [string]$legacy[0].CommandLine
+    $key = $null
+    $known = $null
+    $port = '22'
+    $user = $null
+    $host = $null
+    if ($line -match '(?i)(?:^|\s)-i\s+"([^"]+)"') { $key = $Matches[1] }
+    elseif ($line -match "(?i)(?:^|\s)-i\s+'([^']+)'") { $key = $Matches[1] }
+    elseif ($line -match '(?i)(?:^|\s)-i\s+([^\s]+)') { $key = $Matches[1] }
+    if ($line -match '(?i)UserKnownHostsFile="([^"]+)"') { $known = $Matches[1] }
+    elseif ($line -match "(?i)UserKnownHostsFile='([^']+)'") { $known = $Matches[1] }
+    elseif ($line -match '(?i)UserKnownHostsFile=([^\s]+)') { $known = $Matches[1] }
+    if ($line -match '(?i)(?:^|\s)-p\s+(\d+)') { $port = $Matches[1] }
+    $targets = [regex]::Matches($line, '(?i)([A-Za-z0-9_.-]+)@([A-Za-z0-9_.:-]+)')
+    if ($targets.Count -gt 0) {
+        $user = $targets[$targets.Count - 1].Groups[1].Value
+        $host = $targets[$targets.Count - 1].Groups[2].Value
+    }
+    if (-not $key -or -not $known -or -not $user -or -not $host) {
+        Log 'Working legacy tunnel found but connection parameters could not be captured'
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath $key) -or -not (Test-Path -LiteralPath $known)) {
+        Log 'Captured working tunnel paths no longer exist'
+        return $false
+    }
+    @{
+        key_path = $key
+        known_hosts_path = $known
+        backend_host = $host
+        backend_port = [int]$port
+        backend_user = $user
+        captured_at = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json -Compress | Set-Content -LiteralPath $RelayConfigFile -Encoding UTF8
+    Log 'Captured working legacy tunnel connection metadata for reverse-SSH upgrade'
+    return $true
+}
 function Stop-ManagedTunnel {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         (($_.Name -eq 'ssh.exe') -and (
@@ -54,6 +97,7 @@ function Ensure-Relay {
         ([string]$_.CommandLine -like '*-R*2223:127.0.0.1:22*')
     })
     if ($ssh.Count -ne 1) {
+        [void](Capture-WorkingTunnelConfig)
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
         Start-Sleep -Seconds 5

@@ -25,7 +25,13 @@ foreach ([
     'Install-Task',
     'Enable-ScheduledTask -TaskName $TaskName',
     'Ensure-Task',
-    '*-R*2223:127.0.0.1:22*'
+    '*-R*2223:127.0.0.1:22*',
+    'function Capture-WorkingTunnelConfig',
+    'desktopkocepsv-relay-runtime.json',
+    'Loaded persisted connection metadata captured from working legacy tunnel',
+    'backend_host',
+    'known_hosts_path',
+    'key_path'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
 }
