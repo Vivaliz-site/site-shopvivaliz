@@ -549,6 +549,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("echo \"$out\"", setup)
         self.assertNotIn("printf '%s\\n' \"$out\"", setup)
 
+    def test_claude_bridge_requires_only_real_controller_tools(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        self.assertNotIn('"task_result"', setup)
+        for tool in ("hosts_list", "host_health", "task_submit", "task_status"):
+            self.assertIn(f'"{tool}"', setup)
+            self.assertIn(tool, {item["name"] for item in m.tool_specs()})
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
