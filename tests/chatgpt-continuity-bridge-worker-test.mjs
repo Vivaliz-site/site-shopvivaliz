@@ -60,6 +60,10 @@ async function run() {
     true,
   );
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
+  // Confirmed live on ChatGPT iOS, 2026-09-28: the app can stop a turn
+  // with an explicit "Parou de pensar" state instead of the stream banner.
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), true);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
