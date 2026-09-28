@@ -11,6 +11,42 @@ function Log([string]$Message) {
     "$stamp - $Message" | Out-File -FilePath $LogFile -Append -Encoding utf8
 }
 
+function Ensure-OpenSshServer {
+    $svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
+    $cap = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' } | Select-Object -First 1
+    $capState = if ($cap) { [string]$cap.State } else { 'Unavailable' }
+    Log ('OpenSSH capability state=' + $capState)
+
+    if (-not $svc -and (-not $cap -or $cap.State -ne 'Installed')) {
+        $install = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+        Log ('OpenSSH capability install completed restartNeeded=' + [string]$install.RestartNeeded)
+        $cap = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' } | Select-Object -First 1
+        if (-not $cap -or $cap.State -ne 'Installed') { throw 'OpenSSH Server capability did not reach Installed state' }
+        $svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
+    }
+
+    if (-not $svc) {
+        $openSshDir = Join-Path $env:SystemRoot 'System32\OpenSSH'
+        $sshdExe = Join-Path $openSshDir 'sshd.exe'
+        $keygenExe = Join-Path $openSshDir 'ssh-keygen.exe'
+        if (-not (Test-Path -LiteralPath $sshdExe)) { throw 'OpenSSH capability present but sshd.exe is missing' }
+        if (Test-Path -LiteralPath $keygenExe) {
+            & $keygenExe -A | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'ssh-keygen host-key initialization failed' }
+        }
+        New-Service -Name sshd -BinaryPathName ('"' + $sshdExe + '"') -DisplayName 'OpenSSH SSH Server' -StartupType Automatic | Out-Null
+        $svc = Get-Service -Name sshd -ErrorAction Stop
+        Log 'OpenSSH sshd service re-registered from installed binaries'
+    }
+
+    if ($svc.StartType -ne 'Automatic') { Set-Service -Name sshd -StartupType Automatic }
+    if ($svc.Status -ne 'Running') { Start-Service -Name sshd }
+    $svc = Get-Service -Name sshd -ErrorAction Stop
+    if ($svc.Status -ne 'Running') { throw 'sshd_not_running_after_recovery' }
+    Log 'OpenSSH sshd service healthy'
+}
+
+
 function Get-LegacyTunnel {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -eq 'ssh.exe' -and
@@ -74,6 +110,7 @@ function Start-RemoteControlTunnel {
 }
 
 function Ensure-Bridge {
+    Ensure-OpenSshServer
     if ((Get-RemoteControlTunnel).Count -ge 1) {
         Log 'Remote-control 2223 sidecar already healthy'
         return
