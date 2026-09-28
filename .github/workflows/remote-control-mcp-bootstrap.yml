@@ -2,6 +2,12 @@ name: Remote Control MCP Bootstrap
 
 on:
   workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: Run Stage 5 four-host MCP health and durable-task validation
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -10,6 +16,7 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
@@ -19,7 +26,7 @@ permissions:
 
 jobs:
   bootstrap:
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -51,14 +58,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          SCP_VM=(scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key")
-          server="/tmp/shopvivaliz-remote-control-server-${GITHUB_RUN_ID}.py"
-          setup="/tmp/shopvivaliz-remote-control-setup-${GITHUB_RUN_ID}.sh"
-          "${SCP_VM[@]}" remote-control-mcp/server.py "ubuntu@10.0.1.38:$server"
-          "${SCP_VM[@]}" scripts/setup-remote-control-access.sh "ubuntu@10.0.1.38:$setup"
-          "${SSH_VM[@]}" "chmod 700 '$setup'; sudo -n bash '$setup' install-controller '$server'; rm -f '$server' '$setup'"
-          "${SSH_VM[@]}" "sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub" > /tmp/shopvivaliz-remote-control.pub
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py
+          sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub > /tmp/shopvivaliz-remote-control.pub
           test -s /tmp/shopvivaliz-remote-control.pub
           chmod 600 /tmp/shopvivaliz-remote-control.pub
 
@@ -66,59 +67,143 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          SSH_PROD=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.112)
+          SCP_PROD=(scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key")
+          setup="/tmp/shopvivaliz-remote-control-target-${GITHUB_RUN_ID}.sh"
+          "${SCP_PROD[@]}" scripts/setup-remote-control-access.sh "ubuntu@10.0.1.112:$setup"
           PUBKEY="$(cat /tmp/shopvivaliz-remote-control.pub)"
-          sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY="$PUBKEY" bash scripts/setup-remote-control-access.sh install-target
+          PUBKEY_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
+          "${SSH_PROD[@]}" "chmod 700 '$setup'; export SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\$(printf '%s' '$PUBKEY_B64' | base64 -d); sudo -n -E bash '$setup' install-target; rm -f '$setup'"
 
       - name: Bootstrap Windows reverse SSH relays
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
+          SSH_VM=(bash -lc)
 
-          # Fred-Win already exposes SSH privately as backend loopback 127.0.0.1:2222.
+          # Recover Fred-Win through legacy loopback MCP 5557 when reverse SSH 2222 is absent.
+          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+            "${SSH_VM[@]}" 'python3 -' <<'PY'
+          import base64, json, urllib.request
+          endpoint = "http://127.0.0.1:5557/mcp/tool/execute_command"
+          def call(command, timeout):
+              body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode()
+              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+              with urllib.request.urlopen(req, timeout=timeout + 10) as response:
+                  payload = json.load(response)
+              result = payload.get("result") or {}
+              if not result.get("success"):
+                  raise RuntimeError(str(result.get("error") or result))
+              return str(result.get("output") or "")
+          stage = r"""$ErrorActionPreference='Stop'
+          Set-Location 'C:\site-shopvivaliz'
+          git fetch origin main | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
+          $files=@('scripts/ssh-tunnel-service-managed.ps1','scripts/fredwin-remote-bootstrap.ps1')
+          foreach ($rel in $files) {
+            $tmp=Join-Path $env:TEMP ([IO.Path]::GetRandomFileName())
+            git show ("origin/main:" + $rel) | Set-Content -LiteralPath $tmp -Encoding UTF8
+            if ($LASTEXITCODE -ne 0) { throw ("git show failed: " + $rel) }
+            $dest=Join-Path (Get-Location) ($rel -replace '/', '\')
+            Move-Item -LiteralPath $tmp -Destination $dest -Force
+          }
+          $tunnel=Get-Content -LiteralPath 'scripts\ssh-tunnel-service-managed.ps1' -Raw
+          if ($tunnel -notlike '*-R 2222:127.0.0.1:22*') { throw 'staged Fred tunnel missing 2222 forward' }
+          Write-Output 'REMOTE_CONTROL_FRED_STAGE=PASS'
+          """
+          out=call("powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "+base64.b64encode(stage.encode("utf-16le")).decode(),120)
+          if "REMOTE_CONTROL_FRED_STAGE=PASS" not in out: raise RuntimeError("Fred staging acknowledgement missing")
+          print("REMOTE_CONTROL_FRED_STAGE=PASS")
+          restart=r"""$ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 2
+          & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' -Mode Ensure
+          """
+          rb64=base64.b64encode(restart.encode("utf-16le")).decode()
+          outer="$p=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','"+rb64+"') -WindowStyle Hidden -PassThru; Write-Output ('REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS pid=' + $p.Id)"
+          q=call("powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "+base64.b64encode(outer.encode("utf-16le")).decode(),20)
+          if "REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS" not in q: raise RuntimeError("Fred relay queue acknowledgement missing")
+          print("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS")
+          PY
+            for _ in $(seq 1 30); do
+              if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+          fi
           "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
           # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
-          # Use that bootstrap/recovery surface once to sync main and restart its
-          # managed tunnel with the new persistent SSH reverse forward on 2223.
+          # Stage the two relay scripts synchronously from origin/main first, so a
+          # divergent/dirty local branch cannot make the async restart fail silently.
           if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
             "${SSH_VM[@]}" 'python3 -' <<'PY'
           import base64
           import json
           import urllib.request
 
-          inner = r"""$ErrorActionPreference='Stop'
-          Start-Sleep -Seconds 2
+          endpoint = "http://127.0.0.1:5558/mcp/tool/execute_command"
+
+          def call(command, timeout):
+              body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=timeout + 10) as response:
+                  payload = json.load(response)
+              result = payload.get("result") or {}
+              if not result.get("success"):
+                  raise RuntimeError(str(result.get("error") or result))
+              return str(result.get("output") or "")
+
+          stage = r"""$ErrorActionPreference='Stop'
           Set-Location 'C:\site-shopvivaliz'
           git fetch origin main | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
-          git merge --ff-only origin/main | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'sync failed' }
-          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode Ensure
+          $files = @(
+            'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1',
+            'scripts/desktopkocepsv-remote-bootstrap.ps1',
+            'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
+          )
+          foreach ($rel in $files) {
+            $tmp = Join-Path $env:TEMP ([IO.Path]::GetRandomFileName())
+            git show ("origin/main:" + $rel) | Set-Content -LiteralPath $tmp -Encoding UTF8
+            if ($LASTEXITCODE -ne 0) { throw ("git show failed: " + $rel) }
+            if ((Get-Item -LiteralPath $tmp).Length -eq 0) { throw ("empty staged file: " + $rel) }
+            $dest = Join-Path (Get-Location) ($rel -replace '/', '\')
+            Move-Item -LiteralPath $tmp -Destination $dest -Force
+          }
+          $bridge = Get-Content -LiteralPath 'scripts\desktopkocepsv-remote-control-ssh-bridge.ps1' -Raw
+          if ($bridge -notlike '*-R 2223:127.0.0.1:22*') { throw 'staged bridge missing 2223 forward' }
+          if ($bridge -notlike '*5558:127.0.0.1:5557*') { throw 'staged bridge missing legacy tunnel matcher' }
+          Write-Output 'REMOTE_CONTROL_KOCEPSV_STAGE=PASS'
           """
-          inner_b64 = base64.b64encode(inner.encode('utf-16le')).decode()
+          stage_b64 = base64.b64encode(stage.encode("utf-16le")).decode()
+          stage_command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + stage_b64
+          stage_output = call(stage_command, 120)
+          if "REMOTE_CONTROL_KOCEPSV_STAGE=PASS" not in stage_output:
+              raise RuntimeError("KOCEPSV relay script staging acknowledgement missing")
+          print("REMOTE_CONTROL_KOCEPSV_STAGE=PASS")
+
+          restart = r"""$ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 2
+          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1' -Mode InstallTask
+          """
+          restart_b64 = base64.b64encode(restart.encode("utf-16le")).decode()
           outer = (
               "$p=Start-Process -FilePath 'powershell.exe' -ArgumentList "
               "@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',"
-              "'-EncodedCommand','" + inner_b64 + "') -WindowStyle Hidden -PassThru; "
+              "'-EncodedCommand','" + restart_b64 + "') -WindowStyle Hidden -PassThru; "
               "Write-Output ('REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS pid=' + $p.Id)"
           )
-          outer_b64 = base64.b64encode(outer.encode('utf-16le')).decode()
-          command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + outer_b64
-          body = json.dumps({"params": {"command": command, "timeout": 20}}).encode()
-          req = urllib.request.Request(
-              "http://127.0.0.1:5558/mcp/tool/execute_command",
-              data=body,
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req, timeout=25) as response:
-              payload = json.load(response)
-          result = payload.get("result") or {}
-          if not result.get("success"):
-              raise RuntimeError("KOCEPSV relay upgrade queue failed: " + str(result.get("error") or result))
-          if "REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS" not in str(result.get("output") or ""):
+          outer_b64 = base64.b64encode(outer.encode("utf-16le")).decode()
+          queue_command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + outer_b64
+          queue_output = call(queue_command, 20)
+          if "REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS" not in queue_output:
               raise RuntimeError("KOCEPSV relay upgrade queue acknowledgement missing")
+          print("REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS")
           PY
 
             for _ in $(seq 1 30); do
@@ -130,11 +215,7 @@ jobs:
           fi
           "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
 
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32222:127.0.0.1:2222" ubuntu@10.0.1.38
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32223:127.0.0.1:2223" ubuntu@10.0.1.38
-          sleep 2
-
-          for spec in 'FRED 32222 FRED' 'DESKTOP 32223 user'; do
+          for spec in 'FRED 2222 FRED' 'DESKTOP 2223 user'; do
             set -- $spec
             label="$1"; port="$2"; user="$3"
             ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>/dev/null > "/tmp/$label.remote-control.hosts"
@@ -150,7 +231,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
+          SSH_VM=(bash -lc)
           "${SSH_VM[@]}" 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           tmp=$(mktemp)
@@ -166,10 +247,11 @@ jobs:
           REMOTE
 
       - name: Four-host live MCP health validation
+        if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
+          SSH_VM=(bash -lc)
           "${SSH_VM[@]}" 'sudo -n python3 -' <<'PY'
           import json, time, urllib.request
           from pathlib import Path
@@ -251,8 +333,6 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          pkill -f '32222:127.0.0.1:2222' >/dev/null 2>&1 || :
-          pkill -f '32223:127.0.0.1:2223' >/dev/null 2>&1 || :
           rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
           rm -f /tmp/shopvivaliz-remote-control.pub
           rm -f /tmp/FRED.remote-control.hosts /tmp/DESKTOP.remote-control.hosts

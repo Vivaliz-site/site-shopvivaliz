@@ -8,6 +8,7 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
@@ -19,8 +20,11 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
+      - '.github/workflows/remote-control-mcp-*.yml'
 
 permissions:
   contents: read

@@ -170,20 +170,84 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
+    def test_bootstrap_runs_on_controller_backend(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", text)
+        self.assertIn("sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py", text)
+        self.assertNotIn("ubuntu@10.0.1.38)", text)
+        self.assertIn("ubuntu@10.0.1.112", text)
+
     def test_bootstrap_uses_reverse_ssh_for_windows(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("127.0.0.1/2222", text)
         self.assertIn("127.0.0.1/2223", text)
-        self.assertIn("32222:127.0.0.1:2222", text)
-        self.assertIn("32223:127.0.0.1:2223", text)
+        self.assertNotIn("32222:127.0.0.1:2222", text)
+        self.assertNotIn("32223:127.0.0.1:2223", text)
         self.assertIn("http://127.0.0.1:5558/mcp/tool/execute_command", text)
         self.assertNotIn("tailscale status --json", text)
         self.assertNotIn("</dev/tcp/$fred_ip/22", text)
         self.assertNotIn("</dev/tcp/$desk_ip/22", text)
         self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
         self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
-        self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
-        self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
+
+    def test_fred_bootstrap_recovers_missing_2222_via_legacy_relay(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("http://127.0.0.1:5557/mcp/tool/execute_command", text)
+        self.assertIn("'scripts/ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
+        self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS", text)
+
+    def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("git fetch origin main", text)
+        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertIn('git show ("origin/main:" + $rel)', text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
+        self.assertNotIn("git merge --ff-only origin/main", text)
+
+    def test_four_host_e2e_requires_explicit_stage5_dispatch(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("run_e2e:", text)
+        self.assertIn("default: false", text)
+        self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true", text)
+
+    def test_remote_control_ci_push_covers_workflow_changes(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        self.assertEqual(text.count("'.github/workflows/remote-control-mcp-*.yml'"), 2)
+
+    def test_oci_bastion_workflow_recovers_fred_reverse_ssh(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("http://127.0.0.1:5557/mcp/tool/execute_command", text)
+        self.assertIn("scripts/fredwin-remote-bootstrap.ps1", text)
+        self.assertIn("scripts/ssh-tunnel-service-managed.ps1", text)
+        self.assertIn("REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS", text)
+
+    def test_oci_bastion_elevates_kocepsv_sidecar_after_admin_ssh(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("& $path -Mode Ensure", text)
+        self.assertIn("desktopkocepsv-remote-control-ssh-bridge.ps1 -Mode InstallTask", text)
+        self.assertIn('if [ "$label" = "DESKTOP" ]; then', text)
+
+    def test_oci_bastion_workflow_supports_remote_control_stages(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for action in (
+            "action=bootstrap-remote-control-mcp",
+            "action=e2e-remote-control-mcp",
+            "action=runtime-proof-submit",
+            "action=runtime-proof-verify",
+        ):
+            self.assertIn(action, text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=", text)
+        sidecar_block = text[text.index('SIDE_B64='):text.index('REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS')]
+        self.assertIn("import base64, json, os, urllib.error, urllib.request", sidecar_block)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=controller_invocation", sidecar_block)
+        self.assertIn("REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
+        self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
+        self.assertIn("RUNTIME_GITHUB_DEPENDENCY=false", text)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
