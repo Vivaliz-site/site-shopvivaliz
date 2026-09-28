@@ -11,13 +11,26 @@ import {
 // report) be tested without a real browser or WebSocket -- exactly the
 // branches attemptNudge() takes, driven purely by what evaluate()/pageState()
 // return.
-function fakeCdp({ generating = false, composerUsable = true, pageText = '', sendSucceeds = true } = {}) {
+function fakeCdp({
+  generating = false,
+  composerUsable = true,
+  pageText = '',
+  sendSucceeds = true,
+  streamStatus = 'IN_PROGRESS',
+  staleStopClearSucceeds = true,
+} = {}) {
   const calls = [];
+  let currentGenerating = generating;
   return {
     calls,
     async evaluate(expression) {
       calls.push(expression);
-      if (expression.includes('stop-button')) return generating;
+      if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('stale-complete-stop-clear')) {
+        if (staleStopClearSucceeds) currentGenerating = false;
+        return staleStopClearSucceeds;
+      }
+      if (expression.includes('stop-button')) return currentGenerating;
       if (expression.includes('send-button') && expression.includes('!b.disabled')) return composerUsable;
       if (expression.includes('insertText') || expression.includes('proto.value')) return true;
       if (expression.includes('b.click()')) return sendSucceeds;
@@ -51,6 +64,19 @@ async function run() {
   // attemptNudge branches, driven entirely through the injected connect().
   const generating = await attemptNudge('task-1', async () => fakeCdp({ generating: true }));
   assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never nudge mid-stream');
+
+  // Live failure reproduced 2026-09-28: the DOM can keep a stale Stop button
+  // even when the conversation backend already reports stream_status=COMPLETE.
+  // That state is not a real in-flight stream and must be repaired before
+  // sending the single continuation message.
+  const staleComplete = await attemptNudge('task-stale-complete', async () => fakeCdp({
+    generating: true,
+    streamStatus: 'COMPLETE',
+    staleStopClearSucceeds: true,
+    sendSucceeds: true,
+  }));
+  assert.equal(staleComplete.result_status, 'SENT', 'stale COMPLETE stream must be recoverable');
+  assert.match(staleComplete.detail, /stale COMPLETE/i);
 
   const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');

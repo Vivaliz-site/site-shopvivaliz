@@ -136,6 +136,34 @@ async function conversationIsGenerating(cdp) {
   return cdp.evaluate(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);
 }
 
+async function conversationStreamStatus(cdp) {
+  return cdp.evaluate(`(async()=>{
+    const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+    if(!match) return {http_status:0,status:'NO_CONVERSATION'};
+    try{
+      const response=await fetch('/backend-api/conversation/'+encodeURIComponent(match[1])+'/stream_status',{credentials:'same-origin'});
+      let body=null;
+      try{body=await response.json();}catch{}
+      return {http_status:response.status,status:String(body?.status||'')};
+    }catch{
+      return {http_status:0,status:'FETCH_FAILED'};
+    }
+  })()`);
+}
+
+async function clearStaleCompleteGeneration(cdp) {
+  const clicked = await cdp.evaluate(`(()=>{
+    /* stale-complete-stop-clear */
+    const button=document.querySelector('[data-testid="stop-button"]');
+    if(!button) return true;
+    button.click();
+    return true;
+  })()`);
+  if (!clicked) return false;
+  await sleep(1200);
+  return !(await conversationIsGenerating(cdp));
+}
+
 async function composerIsUsable(cdp) {
   return cdp.evaluate(`(()=>{const b=document.querySelector('[data-testid="send-button"]');return Boolean(b)&&!b.disabled})()`);
 }
@@ -187,18 +215,34 @@ async function attemptNudge(taskId, connect = () => Cdp.connectToChatgptTab()) {
   let cdp;
   try {
     cdp = await connect();
+    let recoveredStaleComplete = false;
     if (await conversationIsGenerating(cdp)) {
-      // A real stream is already in flight; nudging now would interleave
-      // an unwanted "continue" mid-answer. Report as not-yet-confirmed
-      // rather than forcing it -- the caller may retry on the next tick.
-      return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'conversation is actively generating, deferred' };
+      const stream = await conversationStreamStatus(cdp);
+      if (stream?.http_status !== 200 || stream?.status !== 'COMPLETE') {
+        // A real stream is still in flight, or the backend state cannot be
+        // proven. Never interleave an unwanted continuation in that case.
+        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'conversation is actively generating, deferred' };
+      }
+      // Live evidence showed ChatGPT can leave the Stop button visible after
+      // its backend has already finalized the stream as COMPLETE. That stale
+      // client state blocks all future continuations unless the stale Stop is
+      // cleared first.
+      if (!(await clearStaleCompleteGeneration(cdp))) {
+        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
+      }
+      recoveredStaleComplete = true;
     }
     if (!(await composerIsUsable(cdp))) {
       return { result_status: 'CONVERSATION_NOT_FOUND', detail: 'composer/send-button selector not found (possible UI drift)' };
     }
     const sent = await sendContinueMessage(cdp);
     return sent
-      ? { result_status: 'SENT', detail: `typed "${CONTINUE_MESSAGE}" and clicked send` }
+      ? {
+          result_status: 'SENT',
+          detail: recoveredStaleComplete
+            ? `recovered stale COMPLETE stream; typed "${CONTINUE_MESSAGE}" and clicked send`
+            : `typed "${CONTINUE_MESSAGE}" and clicked send`,
+        }
       : { result_status: 'ERROR', detail: 'composer found but send failed' };
   } catch (error) {
     return { result_status: 'ERROR', detail: text(error?.message).slice(0, 400) };

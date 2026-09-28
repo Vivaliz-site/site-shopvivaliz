@@ -9,6 +9,7 @@ on:
       - 'scripts/task_continuity_e2e.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'scripts/chatgpt_continuity_nudge_dispatcher.py'
+      - 'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'
       - 'scripts/install-chatgpt-continuity-backend-bridge.sh'
       - 'scripts/autonomous-agent-loop.sh'
       - 'tests/test_task_continuity_enforcement.py'
@@ -18,6 +19,7 @@ on:
       - 'tests/test_pr_gate_scope.py'
       - 'tests/test_executor_fallback_order.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
+      - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
       - 'tests/test_checkpoint_first_zero_window.py'
       - 'docs/knowledge/task-continuity.md'
@@ -38,12 +40,14 @@ on:
       - 'scripts/task_continuity_e2e.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'scripts/chatgpt_continuity_nudge_dispatcher.py'
+      - 'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'
       - 'scripts/install-chatgpt-continuity-backend-bridge.sh'
       - 'scripts/autonomous-agent-loop.sh'
       - 'tests/test_task_continuity_enforcement.py'
       - 'tests/test_task_resume_dispatcher.py'
       - 'tests/test_task_continuity_e2e.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
+      - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
       - 'tests/test_checkpoint_first_zero_window.py'
       - 'docs/knowledge/task-continuity.md'
@@ -76,5 +80,7 @@ jobs:
         run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/task_continuity_e2e.py scripts/validate-task-continuity-enforcement.py scripts/chatgpt_continuity_nudge_dispatcher.py
       - name: Run focused continuity regression
         run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_task_continuity_e2e tests.test_ci_latency_contract tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order tests.test_chatgpt_continuity_nudge_dispatcher tests.test_chatgpt_continuity_backend_runtime tests.test_checkpoint_first_zero_window -v
+      - name: Run ChatGPT continuity bridge worker regression
+        run: node tests/chatgpt-continuity-bridge-worker-test.mjs
       - name: Validate continuity policy
         run: python3 scripts/validate-task-continuity-enforcement.py
