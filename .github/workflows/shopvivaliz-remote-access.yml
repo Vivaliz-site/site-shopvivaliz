@@ -580,6 +580,11 @@ jobs:
               cdp_reachable=false
               if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null'; then cdp_reachable=true; fi
 
+              latest_conversation_discoverable=false
+              if "${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const m=await latestConversationMeta(c); process.exit(m ? 0 : 3); } finally { c.close(); }'"'"''; then
+                latest_conversation_discoverable=true
+              fi
+
               bridge_heartbeat=false
               token_file="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token"
               if [ -s "$token_file" ]; then
@@ -608,6 +613,7 @@ jobs:
               echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
               echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"
               echo "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=$bridge_heartbeat"
+              echo "CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=$latest_conversation_discoverable"
               echo "CHATGPT_CONTINUITY_DIAGNOSTIC=PASS"
               ;;
             secure_mcp_platform_ui_probe)
