@@ -149,7 +149,25 @@ def _recent_successful_chatgpt_nudge(
         if dispatched_at is None:
             continue
         age_seconds = (now - dispatched_at).total_seconds()
-        return 0 <= age_seconds <= grace
+        if age_seconds < 0 or age_seconds > grace:
+            return False
+
+        worker_status = str(row.get("worker_status", "")).strip().upper()
+        if worker_status in {
+            "SENT",
+            "SENT_UNCONFIRMED",
+            "STALLED_NOT_CONFIRMED",
+            "CONVERSATION_NOT_FOUND",
+            "ERROR",
+        }:
+            # A bridge enqueue/click without observed assistant progress is
+            # not enough to block the detached recovery tier.
+            return False
+
+        # While the worker is still pending/claimed we preserve ChatGPT's
+        # bounded first chance. Once progress is explicitly confirmed, the
+        # same grace window continues to avoid parallel executors.
+        return worker_status in {"", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"}
     return False
 
 
