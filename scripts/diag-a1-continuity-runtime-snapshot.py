@@ -163,6 +163,24 @@ def process_snapshot() -> None:
         if current == 1:
             chain.append({"pid": 1, "kind": "init"})
         emit("CODEX_ANCESTRY", {"pid": row["pid"], "chain": chain})
+        meta = []
+        for item in chain:
+            pid = int(item.get("pid") or 0)
+            a = args_for(pid)
+            shaped = []
+            for idx, token in enumerate(a[:8]):
+                if idx == 0 or "/" in token or "\\" in token:
+                    shaped.append(os.path.basename(token.replace("\\", "/")))
+                elif token.startswith("-"):
+                    shaped.append(token.split("=", 1)[0])
+                else:
+                    shaped.append("<arg>")
+            try:
+                cwd = os.readlink(proc / str(pid) / "cwd")
+            except OSError:
+                cwd = ""
+            meta.append({"pid": pid, "argv_shape": shaped, "cwd": cwd})
+        emit("CODEX_ANCESTOR_META", {"pid": row["pid"], "meta": meta})
         try:
             paths = [
                 line.split(":", 2)[-1]
@@ -227,14 +245,14 @@ def tmux_snapshot() -> None:
         "list-panes",
         "-a",
         "-F",
-        "#{session_name}|#{pane_pid}|#{pane_current_command}",
+        "#{session_name}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}",
     ])
     if panes.startswith("error:"):
         return
     for line in panes.splitlines():
         if line:
-            session, pid, command = (line.split("|", 2) + ["", ""])[:3]
-            emit("TMUX_PANE", {"session": session, "pid": pid, "command": command})
+            session, pid, command, current_path = (line.split("|", 3) + ["", "", ""])[:4]
+            emit("TMUX_PANE", {"session": session, "pid": pid, "command": command, "path": current_path})
 
 
 def task_snapshot() -> None:
