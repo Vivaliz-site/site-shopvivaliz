@@ -618,7 +618,7 @@ class BootstrapContractTests(unittest.TestCase):
         repair = workflow.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
         self.assertIn("bridge_endpoint=''", repair)
         self.assertIn("for candidate in", repair)
-        self.assertIn('CHATGPT_CONTINUITY_BRIDGE_ENDPOINT="$bridge_endpoint"', repair)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint'", repair)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
