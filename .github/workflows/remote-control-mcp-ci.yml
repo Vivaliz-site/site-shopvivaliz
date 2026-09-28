@@ -1,0 +1,36 @@
+name: Remote Control MCP CI
+
+on:
+  pull_request:
+    paths:
+      - 'remote-control-mcp/**'
+      - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-remote-control-windows.ps1'
+      - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/remote-control-mcp-test.py'
+      - '.github/workflows/remote-control-mcp-*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'remote-control-mcp/**'
+      - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-remote-control-windows.ps1'
+      - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/remote-control-mcp-test.py'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and unit tests
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
+          python3 tests/remote-control-mcp-test.py
+      - name: Shell syntax
+        run: bash -n scripts/setup-remote-control-access.sh
