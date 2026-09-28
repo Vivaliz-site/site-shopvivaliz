@@ -9,11 +9,14 @@ DOC = ROOT / "docs" / "knowledge" / "claude-vm-bootstrap.md"
 
 
 class ClaudeRemoteControlSetupContract(unittest.TestCase):
-    def test_setup_keeps_remote_mcp_private_and_uses_headers_helper(self) -> None:
+    def test_setup_keeps_remote_mcp_private_and_uses_unix_stdio_bridge(self) -> None:
         text = SETUP.read_text(encoding="utf-8")
-        self.assertIn("http://127.0.0.1:5580/mcp", text)
-        self.assertIn("headersHelper", text)
-        self.assertIn("/var/lib/shopvivaliz-remote-control/mcp-token", text)
+        self.assertIn("/run/shopvivaliz-remote-control/mcp.sock", text)
+        self.assertIn("shopvivaliz-mcp-clients", text)
+        self.assertIn("claude-remote-control-mcp-stdio.py", text)
+        self.assertIn('"type":"stdio"', text)
+        self.assertNotIn("headersHelper", text)
+        self.assertNotIn("mcp-token", text)
         self.assertNotIn("0.0.0.0:5580", text)
         self.assertNotIn("cloudflared", text)
         self.assertNotIn("ngrok", text)
@@ -25,6 +28,7 @@ class ClaudeRemoteControlSetupContract(unittest.TestCase):
         self.assertIn("--spawn worktree", text)
         self.assertIn("--no-create-session-in-dir", text)
         self.assertIn("Restart=always", text)
+        self.assertIn("NoNewPrivileges=true", text)
         self.assertNotIn("ANTHROPIC_API_KEY", text)
 
     def test_setup_requires_eligible_claude_ai_login_before_service_start(self) -> None:
@@ -40,6 +44,13 @@ class ClaudeRemoteControlSetupContract(unittest.TestCase):
         self.assertIn("https://claude.ai/install.sh", text)
         self.assertIn(".local/bin/claude", text)
         self.assertIn("CLAUDE_NATIVE_INSTALL=PASS", text)
+
+
+    def test_stdio_bridge_contains_no_reusable_mcp_secret(self) -> None:
+        bridge = (ROOT / "scripts" / "claude-remote-control-mcp-stdio.py").read_text(encoding="utf-8")
+        self.assertIn("/run/shopvivaliz-remote-control/mcp.sock", bridge)
+        self.assertNotIn("Bearer", bridge)
+        self.assertNotIn("mcp-token", bridge)
 
     def test_docs_define_claude_web_to_backend_remote_control_path(self) -> None:
         text = DOC.read_text(encoding="utf-8")
