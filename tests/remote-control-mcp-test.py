@@ -248,6 +248,10 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("scripts/ssh-tunnel-service-managed.ps1", text)
         self.assertIn("REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS", text)
         self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS", text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS", text)
+        self.assertIn("REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS", text)
+        self.assertIn("backend_ssh_protocol_alive() {", text)
+        self.assertIn("ssh-keyscan -T 5 -p", text)
 
     def test_oci_bastion_elevates_kocepsv_sidecar_after_admin_ssh(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
