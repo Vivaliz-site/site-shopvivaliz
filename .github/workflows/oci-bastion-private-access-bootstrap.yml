@@ -26,6 +26,7 @@ jobs:
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
+          github.event.issue.body == 'action=chatgpt-continuity-repair' ||
           github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
         )
       }}
@@ -458,6 +459,85 @@ jobs:
           print('DURABLE_AFTER_DISCONNECT=PASS')
           print('RUNTIME_GITHUB_DEPENDENCY=false')
           PY
+
+      - name: ChatGPT continuity repair through OCI Bastion
+        if: github.event.issue.body == 'action=chatgpt-continuity-repair'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          cleanup_continuity_repair() {
+            "${BACKEND_SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
+          }
+          trap cleanup_continuity_repair EXIT
+
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+          "${BACKEND_SCP[@]}"             scripts/install-chatgpt-continuity-backend-bridge.sh             scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs             "ubuntu@127.0.0.1:$remote_dir/"
+
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
+            sudo -n test -s "$token_file"
+            sudo -n dd if="$token_file" status=none
+          ' | "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            install -d -m 700 /home/ubuntu/.config/shopvivaliz-chatgpt-continuity
+            tmp="$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX)"
+            trap '"'"'rm -f "$tmp"'"'"' EXIT
+            umask 077
+            dd of="$tmp" status=none
+            chmod 600 "$tmp"
+            mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+            trap - EXIT
+          '
+
+          bridge_endpoint="$("${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+            token="$(dd if="$token_file" status=none)"
+            trap '"'"'unset token'"'"' EXIT
+            for candidate in               http://10.0.1.112/api/chatgpt-continuity/bridge.php               http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php               https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php
+            do
+              tmp="$(mktemp)"
+              if curl -fsS --connect-timeout 4 --max-time 10                 -H "Host: shopvivaliz.com.br"                 -H "Authorization: Bearer $token"                 -H "Content-Type: application/json"                 --data '"'"'{"operation":"heartbeat"}'"'"'                 "$candidate" > "$tmp" &&
+                jq -e '"'"'.status == "OK"'"'"' "$tmp" >/dev/null 2>&1
+              then
+                rm -f "$tmp"
+                printf "%s\n" "$candidate"
+                exit 0
+              fi
+              rm -f "$tmp"
+            done
+            exit 41
+          ')"
+          test -n "$bridge_endpoint"
+
+          "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
+          install_output=''
+          install_rc=0
+          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
+          then
+            install_rc=0
+          else
+            install_rc=$?
+          fi
+
+          safe_output="$(printf '%s\n' "$install_output" | awk '/^CHATGPT_CONTINUITY_(BRIDGE_HEARTBEAT|BACKEND_SERVICE)=PASS$/{print}')"
+          if [ -n "$safe_output" ]; then
+            printf '%s\n' "$safe_output"
+          fi
+          if [ "$install_rc" -ne 0 ]; then
+            echo "::error::ChatGPT continuity Bastion repair failed rc=$install_rc"
+            exit "$install_rc"
+          fi
+          printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
+          printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+          echo "CHATGPT_CONTINUITY_BASTION_REPAIR=PASS"
+
+          cleanup_continuity_repair
+          trap - EXIT
 
       - name: ChatGPT continuity diagnostic through Remote Control MCP
         if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
