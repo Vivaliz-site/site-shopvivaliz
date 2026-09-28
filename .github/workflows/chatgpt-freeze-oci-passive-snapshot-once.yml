@@ -1,0 +1,159 @@
+name: ChatGPT Freeze OCI Passive Snapshot Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-freeze-live-passive-20260927
+    paths:
+      - '.github/workflows/chatgpt-freeze-oci-passive-snapshot-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}"
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==\`Compute Instance Run Command\`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo OCI_BACKEND_IDENTITY=PASS
+
+      - name: Snapshot live ChatGPT CDP state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          script="$RUNNER_TEMP/chatgpt-freeze-snapshot.sh"
+          cat > "$script" <<'REMOTE'
+          set -u
+          echo FREEZE_OCI_HOST="$(hostname)"
+          echo FREEZE_OCI_UTC="$(date -u +%FT%TZ)"
+          if ! curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/list > /tmp/chatgpt-freeze-cdp-list.json; then
+            echo FREEZE_OCI_CDP=unreachable
+            exit 20
+          fi
+          echo FREEZE_OCI_CDP=reachable
+          python3 - <<'PY'
+          import json
+          items=json.load(open('/tmp/chatgpt-freeze-cdp-list.json',encoding='utf-8'))
+          pages=[x for x in items if x.get('type')=='page' and str(x.get('url','')).startswith('https://chatgpt.com/')]
+          print('FREEZE_OCI_CHATGPT_PAGES='+str(len(pages)))
+          for i,p in enumerate(pages[:8],1):
+              url=str(p.get('url',''))
+              title=str(p.get('title','')).replace('\n',' ')[:160]
+              print(f'FREEZE_OCI_PAGE_{i}_TITLE={title}')
+              print(f'FREEZE_OCI_PAGE_{i}_URL={url}')
+          PY
+
+          if ! command -v node >/dev/null 2>&1; then
+            echo FREEZE_OCI_NODE=missing
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          const targets=await fetch('http://127.0.0.1:9555/json/list').then(r=>r.json());
+          const pages=targets.filter(t=>t.type==='page' && String(t.url||'').startsWith('https://chatgpt.com/'));
+          const target=pages.find(t=>String(t.url||'').includes('/c/')) || pages[0];
+          if(!target){console.log('FREEZE_OCI_DOM=no_chatgpt_page');process.exit(0);}
+          if(typeof WebSocket!=='function'){console.log('FREEZE_OCI_WEBSOCKET=unavailable');process.exit(0);}
+          const ws=new WebSocket(target.webSocketDebuggerUrl);
+          let seq=1;
+          const pending=new Map();
+          ws.onmessage=(ev)=>{
+            const msg=JSON.parse(String(ev.data));
+            if(msg.id && pending.has(msg.id)){pending.get(msg.id)(msg);pending.delete(msg.id);}
+          };
+          await new Promise((resolve,reject)=>{
+            const t=setTimeout(()=>reject(new Error('ws_open_timeout')),5000);
+            ws.onopen=()=>{clearTimeout(t);resolve();};
+            ws.onerror=()=>{clearTimeout(t);reject(new Error('ws_open_error'));};
+          });
+          const call=(method,params={})=>new Promise((resolve,reject)=>{
+            const id=seq++;
+            const t=setTimeout(()=>{pending.delete(id);reject(new Error(method+'_timeout'));},5000);
+            pending.set(id,(msg)=>{clearTimeout(t);resolve(msg);});
+            ws.send(JSON.stringify({id,method,params}));
+          });
+          await call('Runtime.enable');
+          const expression=`JSON.stringify((()=>{const msgs=Array.from(document.querySelectorAll('[data-message-author-role]'));const as=msgs.filter(x=>x.getAttribute('data-message-author-role')==='assistant');const us=msgs.filter(x=>x.getAttribute('data-message-author-role')==='user');const buttons=Array.from(document.querySelectorAll('button'));const stop=buttons.some(b=>{const l=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase();return /stop|parar/.test(l)&&b.offsetParent!==null;});const body=String(document.body?.innerText||'').toLowerCase();return{title:document.title,url:location.href,assistantCount:as.length,userCount:us.length,lastAssistantLength:String(as.at(-1)?.textContent||'').length,stopVisible:stop,streamInterrupted:/transmissão interrompida|stream interrupted/.test(body),reflectionFailed:/a reflexão falhou|thinking failed/.test(body),requestTimeout:/esgotou-se o tempo limite da solicitação|request timed out|request timeout/.test(body),stoppedThinking:/parou de pensar|stopped thinking/.test(body),additionalChecks:/verificações adicionais|additional checks/.test(body),retryVisible:buttons.some(b=>/retry|repetir|tentar novamente/.test(((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase())&&b.offsetParent!==null)}})())`;
+          const res=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+          const raw=res?.result?.result?.value;
+          console.log('FREEZE_OCI_STATE='+String(raw||''));
+          ws.close();
+          NODE
+          rm -f /tmp/chatgpt-freeze-cdp-list.json
+          REMOTE
+
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$BACKEND_COMPARTMENT_ID" --display-name "ChatGPT Freeze passive snapshot" --content "file://$content" --target "file://$target" --timeout-in-seconds 90 --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 30); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS) sleep 3 ;;
+              *) exit 30 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output" | grep '^FREEZE_OCI_' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
