@@ -165,6 +165,37 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("New-Service -Name sshd", text)
         self.assertIn("openssh_binary_missing_after_capability", text)
 
+    def test_windows_watchdogs_self_heal_openssh(self):
+        repair = (ROOT / "scripts" / "ensure-windows-openssh-server.ps1").read_text(encoding="utf-8")
+        self.assertIn("OpenSSH.Server~~~~0.0.1.0", repair)
+        self.assertIn("New-Service -Name sshd", repair)
+        self.assertIn("Start-Service -Name sshd", repair)
+        self.assertIn("REMOTE_CONTROL_WINDOWS_SSHD=PASS", repair)
+        for rel in (
+            "scripts/fredwin-remote-bootstrap.ps1",
+            "scripts/desktopkocepsv-remote-control-ssh-bridge.ps1",
+        ):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("ensure-windows-openssh-server.ps1", text)
+            self.assertIn("& $OpenSshRecoveryScript", text)
+
+    def test_bootstrap_stages_openssh_repair_without_nested_encoded_command(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn('/mcp/tool/{tool}', text)
+        self.assertIn('"write_file"', text)
+        self.assertIn("ensure-windows-openssh-server.ps1", text)
+        self.assertNotIn("inner_b64 =", text)
+
+    def test_remote_control_workflows_watch_shared_windows_recovery_files(self):
+        for rel in (
+            ".github/workflows/remote-control-mcp-bootstrap.yml",
+            ".github/workflows/remote-control-mcp-ci.yml",
+        ):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("'scripts/ensure-windows-openssh-server.ps1'", text)
+            self.assertIn("'scripts/fredwin-remote-bootstrap.ps1'", text)
+            self.assertIn("'scripts/ssh-tunnel-service-managed.ps1'", text)
+
     def test_bootstrap_workflow_is_single_complete_sequence(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertEqual(text.count("- name: Four-host live MCP health validation"), 1)
