@@ -136,7 +136,7 @@ jobs:
           test -s scripts/diag-a1-continuity-runtime-snapshot.py
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           output="$("${SSH_SITE[@]}" 'python3 -' < scripts/diag-a1-continuity-runtime-snapshot.py)"
-          printf '%s\n' "$output" | grep -E '^(A1_SNAPSHOT_|ACTIVE_RELEASE=|AGENT_SERVICE_|PROC=|PROC_IDENTITY=|ANCESTOR_IDENTITY=|CODEX_ANCESTRY=|CODEX_CGROUP=|TMUX_SESSION=|TMUX_PANE=|TASK_STATE=|TASK_STATE_ERROR=|LEDGER_SUMMARY=|LEDGER_ROW=|A1_CONTINUITY_RUNTIME_SNAPSHOT=)' || true
+          printf '%s\n' "$output" | grep -E '^(A1_SNAPSHOT_|ACTIVE_RELEASE=|AGENT_SERVICE_|PROC=|PROC_IDENTITY=|ANCESTOR_IDENTITY=|CODEX_ANCESTRY=|CODEX_ANCESTOR_META=|CODEX_CGROUP=|CODEX_ENV_META=|TMUX_SESSION=|TMUX_PANE=|WORKTREE_META=|TASK_STATE=|TASK_STATE_ERROR=|LEDGER_SUMMARY=|LEDGER_ROW=|A1_CONTINUITY_RUNTIME_SNAPSHOT=)' || true
           grep -Fq 'A1_CONTINUITY_RUNTIME_SNAPSHOT=PASS' <<<"$output"
           echo A1_BASTION_RUNTIME_SNAPSHOT_WORKFLOW=PASS
 
