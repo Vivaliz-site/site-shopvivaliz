@@ -1,0 +1,52 @@
+name: Cancel Obsolete Production Deploy Once
+
+on:
+  push:
+    branches:
+      - ops/chatgpt-continuity-backend-runtime-20260927
+    paths:
+      - '.github/workflows/cancel-obsolete-production-deploy-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Cancel only obsolete 784a15c deploy run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OBSOLETE_RUN: '36360255629'
+          LATEST_RUN: '36360484319'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          old="$(gh api "repos/$REPO/actions/runs/$OBSOLETE_RUN" --jq '.status + "/" + (.conclusion // "") + " " + .head_sha')"
+          latest="$(gh api "repos/$REPO/actions/runs/$LATEST_RUN" --jq '.status + "/" + (.conclusion // "") + " " + .head_sha')"
+          echo "OBSOLETE_BEFORE=$old"
+          echo "LATEST_BEFORE=$latest"
+          case "$old" in
+            completed/*) echo OBSOLETE_ALREADY_TERMINAL=true; exit 0 ;;
+          esac
+          case "$old" in
+            *" 784a15c80c71724dee63852bc203a6eb249f664b") ;;
+            *) echo "::error::refusing to cancel unexpected run identity"; exit 2 ;;
+          esac
+          case "$latest" in
+            *" fedff66a0b014508480a41d69a4d84db3707cca8") ;;
+            *) echo "::error::latest deploy run identity mismatch"; exit 3 ;;
+          esac
+          gh api -X POST "repos/$REPO/actions/runs/$OBSOLETE_RUN/cancel" >/dev/null || true
+          for _ in $(seq 1 30); do
+            state="$(gh api "repos/$REPO/actions/runs/$OBSOLETE_RUN" --jq '.status + "/" + (.conclusion // "")')"
+            case "$state" in
+              completed/*) echo "OBSOLETE_AFTER=$state"; exit 0 ;;
+            esac
+            sleep 2
+          done
+          echo "::error::obsolete deploy did not become terminal"
+          exit 1
