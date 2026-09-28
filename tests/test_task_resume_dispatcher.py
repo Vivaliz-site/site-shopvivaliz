@@ -294,7 +294,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         request = {
             "id": "resume-safe-push",
             "task_id": state["task_id"],
-            "repository": state["repository"],
+            "repository": state.get("repository", "Vivaliz-site/site-shopvivaliz"),
             "next_action": state["next_action"],
             "checkpoint_updated_at": state["updated_at"],
             "fingerprint": "fingerprint-safe-push",
