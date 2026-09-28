@@ -221,35 +221,50 @@ async function confirmAssistantProgress(
   return false;
 }
 
-async function latestConversationMeta(cdp) {
+async function latestConversationProbe(cdp) {
   try {
     const result = await cdp.evaluate(`(async()=>{
-      try {
-        const response = await fetch('/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false', {credentials:'same-origin'});
-        if (!response.ok) return null;
-        const body = await response.json();
-        const item = Array.isArray(body?.items) ? body.items[0] : null;
-        if (!item) return null;
-        const id = String(item.id || '');
-        const update_time = Number(item.update_time || 0);
-        return {id, update_time};
-      } catch {
-        return null;
+      const candidates = [
+        {source:'filtered',url:'/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false'},
+        {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=1&order=updated'},
+      ];
+      let last={http_status:0,source:'none',item_present:false};
+      for(const candidate of candidates){
+        try{
+          const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store'});
+          let body=null; try{body=await response.json();}catch{}
+          const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
+          last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0};
+          if(!response.ok||items.length===0) continue;
+          const item=items[0]||{};
+          return {...last,id:String(item.id||item.conversation_id||''),update_time:item.update_time??item.updateTime??null,updated_at:item.updated_at??item.updatedAt??null};
+        }catch{last={http_status:0,source:candidate.source,item_present:false};}
       }
+      return last;
     })()`);
-    if (!result || typeof result !== 'object') return null;
-    const id = text(result.id);
-    const rawUpdateTime = result.update_time;
-    let updateTime = Number(rawUpdateTime || 0);
-    if (!Number.isFinite(updateTime) || updateTime <= 0) {
-      const parsedMs = Date.parse(String(rawUpdateTime || ''));
-      updateTime = Number.isFinite(parsedMs) ? parsedMs / 1000 : 0;
-    }
-    if (!/^[A-Za-z0-9_-]{8,160}$/.test(id) || !Number.isFinite(updateTime) || updateTime <= 0) return null;
-    return { id, update_time: updateTime };
+    return result && typeof result === 'object'
+      ? result
+      : {http_status:0,source:'probe_failed',item_present:false};
   } catch {
-    return null;
+    return {http_status:0,source:'probe_failed',item_present:false};
   }
+}
+
+function normalizeLatestConversationMeta(result) {
+  if (!result || typeof result !== 'object') return null;
+  const id = text(result.id);
+  const rawUpdateTime = result.update_time ?? result.updated_at;
+  let updateTime = Number(rawUpdateTime || 0);
+  if (!Number.isFinite(updateTime) || updateTime <= 0) {
+    const parsedMs = Date.parse(String(rawUpdateTime || ''));
+    updateTime = Number.isFinite(parsedMs) ? parsedMs / 1000 : 0;
+  }
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(id) || !Number.isFinite(updateTime) || updateTime <= 0) return null;
+  return {id, update_time:updateTime};
+}
+
+async function latestConversationMeta(cdp) {
+  return normalizeLatestConversationMeta(await latestConversationProbe(cdp));
 }
 
 async function alignToLatestConversation(
@@ -484,6 +499,8 @@ export {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  latestConversationProbe,
+  normalizeLatestConversationMeta,
   latestConversationMeta,
   alignToLatestConversation,
   assistantSnapshot,
