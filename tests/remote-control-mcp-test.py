@@ -222,6 +222,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("ssh-keyscan -T 5 -p", text)
         self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL protocol_handshake_unavailable", text)
 
+    def test_windows_controller_key_bootstraps_over_recovery_relays(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        start = text.index("# Bootstrap the controller public key")
+        end = text.index("- name: Pin private host keys for controller", start)
+        block = text[start:end]
+        self.assertIn('"write_file"', block)
+        self.assertIn("setup-remote-control-windows.ps1", block)
+        self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", block)
+        self.assertIn("/var/lib/shopvivaliz-remote-control/id_ed25519", block)
+        self.assertIn("REMOTE_CONTROL_CONTROLLER_KEY_AUTH=PASS", block)
+        self.assertNotIn('remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1', block)
+        self.assertNotIn(" scp -P \"$port\"", block)
+
     def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("git fetch origin main", text)
