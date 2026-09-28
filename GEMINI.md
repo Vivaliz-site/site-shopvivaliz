@@ -1,3 +1,19 @@
+<!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
+## Acesso canônico aos hosts ShopVivaliz
+
+Antes de qualquer operação em host, VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia `docs/HOST-ACCESS.md`. No repositório principal, a fonte central detalhada permanece `Vivaliz-site/site-shopvivaliz:docs/knowledge/host-access.md`.
+
+Regras obrigatórias:
+- produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
+- backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
+- navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
+- shell Linux: preferir SSH privado/Tailscale com identidade dedicada; SSH público, senha interativa e root público são proibidos;
+- sem rota privada: OCI Bastion/control plane auditável é bootstrap/recovery; RustDesk self-hosted é GUI; Desktop Commander é apenas contingência;
+- Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
+- evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
+- nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.
+<!-- /SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
+
 <!-- GEMINI_READ_AGENTS_FIRST_V1 -->
 > **BOOTSTRAP OBRIGATÓRIO DO GEMINI:** antes de analisar, planejar, editar, executar comandos, usar navegador, abrir PR, fazer merge, deploy ou validar qualquer tarefa, leia integralmente o `AGENTS.md` da raiz deste repositório e siga suas regras. Releia em retomadas ou quando o arquivo mudar. Em conflito, `AGENTS.md` prevalece.
 
