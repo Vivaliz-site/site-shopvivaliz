@@ -245,9 +245,34 @@ jobs:
               ;;
             task_state_show)
               test -n "$TASK_ID"
-              echo "REMOTE_TASK_STATE_BEGIN"
+              state_file="$RUNNER_TEMP/task-state.json"
               SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
-                python3 scripts/agent_task_state.py show --task "$TASK_ID"
+                python3 scripts/agent_task_state.py show --task "$TASK_ID" > "$RUNNER_TEMP/task-state.json"
+              echo "REMOTE_TASK_STATE_BEGIN"
+              python3 - "$state_file" <<'PY'
+              import json
+              import sys
+
+              with open(sys.argv[1], encoding="utf-8") as handle:
+                  state = json.load(handle)
+
+              evidence = state.get("evidence")
+              blocker = state.get("blocker")
+              safe = {
+                  "task_id": state.get("task_id"),
+                  "repository": state.get("repository"),
+                  "status": state.get("status"),
+                  "next_action": state.get("next_action"),
+                  "updated_at": state.get("updated_at"),
+                  "evidence_count": len(evidence) if isinstance(evidence, list) else 0,
+                  "verification_present": bool(state.get("verification")),
+                  "blocker_external": blocker.get("external") is True if isinstance(blocker, dict) else False,
+                  "blocker_description": blocker.get("description") if isinstance(blocker, dict) else None,
+                  "resume_condition": blocker.get("resume_condition") if isinstance(blocker, dict) else None,
+              }
+              print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
+              PY
+              rm -f "$state_file"
               echo "REMOTE_TASK_STATE_END"
               ;;
             amazon_support_readback)
