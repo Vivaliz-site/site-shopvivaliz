@@ -87,7 +87,20 @@ STATUS=RUNNING
 - **Nada foi implementado além do diagnóstico** — confirmar a hipótese e corrigi-la exige acesso ao vivo aos hosts (RDC quando a cota renovar, ou outro canal) e/ou uma mudança de workflow que valide conexão SSH real (não só TCP cru) antes de confiar no `PASS`. Ambas mexem em bootstrap SSH ao vivo de hosts Windows de produção — sinalizado ao usuário em vez de implementado sem aprovação.
 
 ## Etapa 5 — E2E quatro hosts
-STATUS=PENDING
+STATUS=PASS
+
+### Evidência
+- Run `36449123839` (run_attempt 2, concluído 2026-09-28T17:18:02Z), disparado com `run_e2e=true` no main já contendo os fixes de decode UTF-8 (PR #2041 para `run_host_command`, PR #2042 para `task_worker`):
+  ```
+  HOST_HEALTH_PASS=always-free-arm-1787907847-26 exit=0   (uid=0 confirmado)
+  HOST_HEALTH_PASS=shopvivaliz-free-a1 exit=0               (uid=0 confirmado)
+  HOST_HEALTH_PASS=Fred-Win exit=0                           (administrator:true confirmado)
+  HOST_HEALTH_PASS=KOCEPSV exit=0                            (administrator:true confirmado)
+  DURABLE_TASK_PASS nos 4 hosts
+  REMOTE_CONTROL_FOUR_HOST_E2E=PASS
+  ```
+- Os 5 itens do gate de conclusão em `CHECKPOINT.md` estão comprovados: saúde ao vivo, root nos 2 Linux, Administrator nos 2 Windows, tarefa durável nos 4 hosts, `REMOTE_CONTROL_FOUR_HOST_E2E=PASS`.
+- Detalhe completo da investigação (2 rodadas de bug real + correção) em CHECKPOINT.md ACTION STAGE 6.
 
 ## Etapa 6 — Provar runtime sem GitHub
 STATUS=PENDING
@@ -112,3 +125,9 @@ REMOTE_CONTROL_ADMIN_KEY_STEP=DESKTOP controller-key auth OK
 **Novo bloqueio (corrigido e mesclado nesta sessão):** o passo "Pin private host keys for controller" reinicia `shopvivaliz-remote-control-mcp.service` e testa `curl` no health-check imediatamente, sem espera — `systemctl is-active` só prova que o processo nasceu (`Type=simple`), não que já fez bind na porta 5580. Corrigido com um retry de 10×1s + dump de `systemctl status`/`journalctl` em caso de esgotamento (sem `|| true`/`set +e`, para respeitar `tests/remote-control-mcp-test.py::test_bootstrap_surfaces_do_not_discard_failures`). **PR #2038 mesclado ao main como `2538517acf91963ca79e4694556d8db3c771335c`, com os 6 checks de CI verdes.**
 
 Próxima ação autorizada: rodar o bootstrap ao vivo de novo no main atual (já contendo o PR #2038) e confirmar, com evidência fresca, que o health-check do controller passa de forma confiável — merge sozinho não é prova de comportamento ao vivo, conforme a regra permanente desta tarefa. Se passar, o workflow deve alcançar "Four-host live MCP health validation" (hoje `skipped` porque exige `workflow_dispatch` com `run_e2e: true` explícito) — essa etapa deve ser tentada em seguida, assim que o fix do controller for confirmado ao vivo.
+
+## Atualização — 2026-09-28 (mesma sessão): Etapa 5 concluída — REMOTE_CONTROL_FOUR_HOST_E2E=PASS ao vivo pela primeira vez
+
+O health-check do controller (PR #2038) foi confirmado ao vivo — passou de forma confiável. A validação E2E de quatro hosts (`run_e2e=true`) foi tentada pela primeira vez de verdade e revelou dois bugs reais em sequência, ambos já corrigidos e mesclados: decode UTF-8 estrito quebrando em saída não-UTF8 do Windows, primeiro em `run_host_command` (PR #2041), depois no mesmo padrão em `task_worker` (PR #2042, mesclado por outra sessão concorrente antes do meu PR equivalente #2043, que fechei como duplicado). Com os dois fixes no main, o run `36449123839` completou com `REMOTE_CONTROL_FOUR_HOST_E2E=PASS` — detalhe completo em `CHECKPOINT.md` ACTION STAGE 6.
+
+**Restam apenas Etapa 6 (provar runtime sem GitHub — a arquitetura já não usa GitHub como transporte, falta decidir/documentar prova formal) e Etapa 7 (integrar com ChatGPT — bloqueada nesta sessão por recusa de plataforma ao expor o controller publicamente; requer decisão/ação do usuário).**
