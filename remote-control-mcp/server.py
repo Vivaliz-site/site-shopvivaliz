@@ -400,6 +400,7 @@ def tool_specs() -> list[dict[str, Any]]:
 
 def task_worker() -> None:
     while not STOP_EVENT.wait(1):
+        tid = None
         try:
             with db_conn() as db:
                 row = db.execute(
@@ -448,7 +449,7 @@ def task_worker() -> None:
         except Exception as exc:
             time.sleep(1)
             try:
-                if 'tid' in locals():
+                if tid:
                     with db_conn() as db:
                         db.execute(
                             "UPDATE tasks SET state='failed',finished_at=?,stderr=? WHERE id=?",
@@ -457,7 +458,7 @@ def task_worker() -> None:
             except Exception:
                 pass
         finally:
-            if 'tid' in locals():
+            if tid:
                 with ACTIVE_LOCK:
                     ACTIVE_PROCS.pop(tid, None)
 
