@@ -42,6 +42,13 @@ DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 
+# Fail closed while OpenAI Support is still investigating the account/workspace
+# restriction/risk-state hypothesis. Re-enable only by a dedicated reviewed
+# code change; there is intentionally no environment override.
+CHATGPT_WEB_TURN_AUTOMATION_BLOCKED = True
+CHATGPT_WEB_TURN_AUTOMATION_POLICY = "CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2"
+
+
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
     if direct:
@@ -177,6 +184,21 @@ def run_once(
     enqueue: Any = enqueue_nudge_via_bridge,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
+    if CHATGPT_WEB_TURN_AUTOMATION_BLOCKED:
+        return {
+            "ok": True,
+            "blocked_policy": True,
+            "policy": CHATGPT_WEB_TURN_AUTOMATION_POLICY,
+            "runtime_dir": str(root),
+            "scanned": 0,
+            "eligible": 0,
+            "dispatched": 0,
+            "skipped_no_token": 0,
+            "skipped_stale_checkpoint": 0,
+            "retry_attempted": 0,
+            "generated_at": utc_now(),
+        }
+
     resolved_bridge_url = bridge_url or os.getenv("CHATGPT_CONTINUITY_BRIDGE_URL", "") or DEFAULT_BRIDGE_URL
     resolved_token = resolve_bridge_token(token)
 

@@ -189,16 +189,25 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
 
 class ChatgptContinuityPolicyGuardTests(unittest.TestCase):
-    def test_authorized_checkpoint_resume_is_not_disabled_by_support_investigation(self) -> None:
+    def test_default_policy_blocks_without_touching_bridge(self) -> None:
         dispatcher = load_dispatcher()
-        self.assertFalse(
-            getattr(dispatcher, "CHATGPT_WEB_TURN_AUTOMATION_BLOCKED", False),
-            "support investigation must not disable the explicitly authorized checkpoint-driven resume path",
+        calls: list[dict] = []
+
+        def enqueue(**kwargs):
+            calls.append(kwargs)
+            return {"ok": True, "http_status": 200}
+
+        result = dispatcher.run_once(
+            runtime_dir=Path(tempfile.mkdtemp()),
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=enqueue,
         )
-        self.assertNotEqual(
-            getattr(dispatcher, "CHATGPT_WEB_TURN_AUTOMATION_POLICY", ""),
-            "CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2",
-        )
+
+        self.assertTrue(result["blocked_policy"])
+        self.assertEqual(result["policy"], "CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2")
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(calls, [], "fail-closed policy must prevent any bridge enqueue")
 
 
 class ChatgptContinuityDispatcherWiringTests(unittest.TestCase):

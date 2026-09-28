@@ -300,16 +300,6 @@ A certificação global V8 continua medindo **detached recovery**. A reentrada d
 mesma conversa ChatGPT é uma camada adicional e independente, definida abaixo,
 e não pode ser usada para falsificar PASS do E2E V8.
 
-<!-- CHATGPT_AUTO_RESUME_AUTHORIZED_V11 -->
-## Retomada automática autorizada permanece ativa
-
-A retomada da mesma conversa após interrupção foi explicitamente solicitada pelo usuário e não deve ser globalmente desativada apenas porque existe investigação de suporte em andamento. A segurança dessa rota é feita por controles concretos: checkpoint RUNNING atual, fingerprint correspondente, deduplicação, cooldown de falha de transporte, não envio durante stream realmente ativo e uso exclusivo do navegador canônico já autenticado.
-
-Probes sintéticos, login automatizado, criação de chats de diagnóstico e testes repetitivos de turno continuam fora desta autorização e devem permanecer separados.
-
-Codex não é fallback automático desta rota.
-<!-- /CHATGPT_AUTO_RESUME_AUTHORIZED_V11 -->
-
 <!-- CHATGPT_SESSION_REENTRY_V10 -->
 ## Reentrada da conversa ChatGPT após interrupção
 
