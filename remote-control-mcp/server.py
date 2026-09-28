@@ -198,16 +198,24 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
+def decode_process_output(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
 def run_host_command(host: str, command: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
     args = remote_invocation(host, command)
     started = time.monotonic()
-    cp = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    cp = subprocess.run(args, capture_output=True, timeout=timeout)
     return {
         "host": host,
         "exit_code": cp.returncode,
-        "stdout": redact_text(cp.stdout),
-        "stderr": redact_text(cp.stderr),
+        "stdout": redact_text(decode_process_output(cp.stdout)),
+        "stderr": redact_text(decode_process_output(cp.stderr)),
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
 
@@ -409,7 +417,7 @@ def task_worker() -> None:
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
             proc = subprocess.Popen(
                 remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, start_new_session=True
+                start_new_session=True
             )
             with ACTIVE_LOCK:
                 ACTIVE_PROCS[tid] = proc
@@ -435,7 +443,15 @@ def task_worker() -> None:
             with db_conn() as db:
                 db.execute(
                     "UPDATE tasks SET state=?,finished_at=?,heartbeat_at=?,exit_code=?,stdout=?,stderr=? WHERE id=?",
-                    (state, now(), now(), rc, redact_text(stdout), redact_text(stderr), tid),
+                    (
+                        state,
+                        now(),
+                        now(),
+                        rc,
+                        redact_text(decode_process_output(stdout)),
+                        redact_text(decode_process_output(stderr)),
+                        tid,
+                    ),
                 )
             audit("task_worker", host, {"task_id": tid}, state == "succeeded", f"task {state} rc={rc}")
         except Exception as exc:
