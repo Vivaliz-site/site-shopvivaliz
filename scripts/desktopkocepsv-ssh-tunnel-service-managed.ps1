@@ -72,9 +72,10 @@ Log 'Managed reverse tunnel service started'
 $attempt = 0
 while ($true) {
     $attempt++
-    Log ("Connecting attempt=$attempt forward=5558->127.0.0.1:5557")
+    Log ("Connecting attempt=$attempt forwards=2223->127.0.0.1:22,5558->127.0.0.1:5557")
     try {
         & $SshExe -i $KeyPath -p $VMPort `
+            -R 2223:127.0.0.1:22 `
             -R 5558:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
             -o 'ServerAliveInterval=30' `
