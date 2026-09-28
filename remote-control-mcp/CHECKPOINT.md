@@ -3,7 +3,7 @@
 TASK_ID=private-remote-control-mcp-4hosts-20260927
 STATUS=RUNNING
 REPOSITORY=Vivaliz-site/site-shopvivaliz
-BRANCH=feat/private-remote-control-mcp-20260927
+BRANCH=fix/remote-control-bootstrap-integrity-20260927
 
 ## Goal
 Ativar o ShopVivaliz Remote Control MCP independente de GitHub em runtime nos quatro hosts canônicos.
@@ -40,3 +40,10 @@ Do not mark CONCLUIDO until the merged bootstrap proves, through the new MCP:
 3. Administrator on both Windows hosts;
 4. durable task execution and retrieval on all four hosts;
 5. `REMOTE_CONTROL_FOUR_HOST_E2E=PASS`.
+
+
+## Current continuation
+- PR #1969 merged to main at `82e9a10aff512cfaa40a0bafc7155947e6a128f0`.
+- Post-merge review found the bootstrap workflow structurally corrupted before execution; no four-host bootstrap run was registered for that merge.
+- Current branch repairs the host-key pinning heredoc, removes duplicated E2E/evidence/cleanup blocks, and adds a regression test for workflow integrity.
+- STATUS remains RUNNING until live bootstrap plus non-GitHub runtime proof pass.

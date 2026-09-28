@@ -116,3 +116,9 @@ Tools: `task_submit`, `task_status`, `task_cancel`.
 Tool: `audit_recent`.
 
 No custom UI is required in V1; these are tool-only conversational flows.
+
+
+## Bootstrap Integrity
+- The bootstrap workflow must contain exactly one four-host live validation sequence.
+- Host-key pinning must complete before any live MCP validation begins.
+- CI must regression-test the bootstrap structure so a malformed heredoc or duplicated E2E block cannot merge as a false green.
