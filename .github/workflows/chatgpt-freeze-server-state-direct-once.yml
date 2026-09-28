@@ -1,0 +1,141 @@
+name: ChatGPT Freeze Server State Direct Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-freeze-continuity-live-20260927
+    paths:
+      - '.github/workflows/chatgpt-freeze-server-state-direct-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 4
+    steps:
+      - name: Inspect sanitized server-side conversation state through live browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const TARGET='ChatGPT Freeze Continuity';
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const context=browser.contexts()[0];
+          if(!context) throw new Error('cdp_context_missing');
+          const pages=context.pages();
+          async function titleOf(p){try{return await p.title();}catch{return '';}}
+          let page=null;
+          for(const p of pages){
+            if(p.url().startsWith('https://chatgpt.com/')&&(await titleOf(p)).toLowerCase().includes(TARGET.toLowerCase())){page=p;break;}
+          }
+          if(!page) throw new Error('target_page_missing');
+
+          const result=await page.evaluate(async()=>{
+            const match=location.pathname.match(/\/c\/([^/?#]+)/);
+            if(!match) return {error:'conversation_id_missing'};
+            const id=match[1];
+
+            const safeScalar=(value)=>{
+              if(value===null||typeof value==='boolean'||typeof value==='number') return value;
+              if(typeof value==='string'&&value.length<=80) return value;
+              return undefined;
+            };
+            const safeStatusFields=(obj,prefix='',depth=0,out={})=>{
+              if(!obj||typeof obj!=='object'||depth>5) return out;
+              const allow=/^(status|state|type|done|complete|completed|finished|active|is_active|is_done|is_complete|is_completed|end_turn|recipient|role|error|error_type|finish_reason|stop_reason)$/i;
+              const deny=/(content|text|parts|message|title|id|uuid|token|cookie|authorization|prompt)/i;
+              for(const [k,v] of Object.entries(obj)){
+                if(deny.test(k)) continue;
+                const path=prefix?prefix+'.'+k:k;
+                if(allow.test(k)){
+                  const s=safeScalar(v);
+                  if(s!==undefined) out[path]=s;
+                }
+                if(v&&typeof v==='object'&&!Array.isArray(v)) safeStatusFields(v,path,depth+1,out);
+              }
+              return out;
+            };
+
+            const streamRes=await fetch('/backend-api/conversation/'+encodeURIComponent(id)+'/stream_status',{credentials:'same-origin'});
+            let streamJson=null,streamParseError='';
+            try{streamJson=await streamRes.json();}catch(e){streamParseError=String(e?.message||e).slice(0,120);}
+            const stream={
+              http_status:streamRes.status,
+              top_keys:streamJson&&typeof streamJson==='object'?Object.keys(streamJson).filter(k=>!/(id|content|text|message|token)/i.test(k)).slice(0,50):[],
+              safe_fields:safeStatusFields(streamJson),
+              parse_error:streamParseError,
+            };
+
+            const convRes=await fetch('/backend-api/conversation/'+encodeURIComponent(id),{credentials:'same-origin'});
+            let conv=null,convParseError='';
+            try{conv=await convRes.json();}catch(e){convParseError=String(e?.message||e).slice(0,120);}
+            const mapping=conv&&conv.mapping&&typeof conv.mapping==='object'?Object.values(conv.mapping):[];
+            const msgs=mapping.map(n=>n&&n.message).filter(Boolean);
+            const roleOf=m=>String(m?.author?.role||'unknown');
+            const statusOf=m=>String(m?.status||'');
+            const timeOf=m=>{
+              const t=Number(m?.create_time);
+              if(!Number.isFinite(t)||t<=0) return '';
+              try{return new Date(t*1000).toISOString();}catch{return '';}
+            };
+            const chronological=[...msgs].sort((a,b)=>(Number(a?.create_time)||0)-(Number(b?.create_time)||0));
+            const last=chronological.slice(-8).map(m=>({
+              role:roleOf(m),
+              status:statusOf(m),
+              create_time:timeOf(m),
+              end_turn:typeof m?.end_turn==='boolean'?m.end_turn:null,
+              content_type:String(m?.content?.content_type||''),
+              parts_count:Array.isArray(m?.content?.parts)?m.content.parts.length:null,
+              has_metadata:Boolean(m?.metadata&&Object.keys(m.metadata).length),
+            }));
+            const roleCounts={};
+            const statusCounts={};
+            for(const m of msgs){
+              const r=roleOf(m);roleCounts[r]=(roleCounts[r]||0)+1;
+              const s=statusOf(m)||'(empty)';statusCounts[s]=(statusCounts[s]||0)+1;
+            }
+            const conversation={
+              http_status:convRes.status,
+              parse_error:convParseError,
+              top_keys:conv&&typeof conv==='object'?Object.keys(conv).filter(k=>!/(id|title|content|text|token)/i.test(k)).slice(0,60):[],
+              mapping_count:mapping.length,
+              message_count:msgs.length,
+              role_counts:roleCounts,
+              status_counts:statusCounts,
+              current_node_present:Boolean(conv?.current_node),
+              last_messages_structural:last,
+            };
+            const ui={
+              title:String(document.title||'').slice(0,160),
+              stop_visible:Array.from(document.querySelectorAll('button')).some(b=>{
+                const label=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase();
+                return /stop|parar/.test(label)&&b.offsetParent!==null;
+              }),
+              turn_nodes:document.querySelectorAll('[data-message-author-role],[data-testid*="conversation-turn"],article').length,
+            };
+            return {stream,conversation,ui};
+          });
+
+          console.log('FREEZE_SERVER_STATE='+JSON.stringify(result));
+          process.exit(0);
+          NODE
