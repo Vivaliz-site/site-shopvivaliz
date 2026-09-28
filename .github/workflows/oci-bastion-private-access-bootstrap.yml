@@ -211,7 +211,47 @@ jobs:
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
           "${SITE_SSH[@]}" "PUB_B64='$PUB_B64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\"\$pub\" bash -s -- install-target'" < scripts/setup-remote-control-access.sh
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+          # Repair Windows OpenSSH through the independent legacy MCP relays without
+          # keeping the relay HTTP request open for the potentially long capability install.
+          WINDOWS_BOOT_B64="$(base64 -w0 scripts/setup-remote-control-windows.ps1)"
+          "${BACKEND_SSH[@]}" "WINDOWS_BOOT_B64='$WINDOWS_BOOT_B64' PUB_B64='$PUB_B64' python3 - <<'PY'
+          import base64, json, os, time, urllib.request
+          boot = os.environ['WINDOWS_BOOT_B64']
+          pub = os.environ['PUB_B64']
+          peers = (('FRED', 5557), ('KOCEPSV', 5558))
+          for label, port in peers:
+              ps = r'''$ErrorActionPreference='Stop'
+          $path='C:\\Windows\\Temp\\shopvivaliz-remote-control-recovery.ps1'
+          [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String('__BOOT__'))
+          $p=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$path,'-PublicKeyBase64','__PUB__') -WindowStyle Hidden -PassThru
+          Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS pid=' + $p.Id)
+          '''.replace('__BOOT__', boot).replace('__PUB__', pub)
+              encoded=base64.b64encode(ps.encode('utf-16le')).decode()
+              command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded
+              queued=False; last=None
+              for attempt in range(1,6):
+                  body=json.dumps({'params':{'command':command,'timeout':15}}).encode()
+                  req=urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+                  try:
+                      with urllib.request.urlopen(req,timeout=25) as response: payload=json.load(response)
+                      result=payload.get('result') or {}; out=str(result.get('output') or '')
+                      if result.get('success') is True and 'REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS' in out:
+                          print(f'REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS attempt={attempt}')
+                          queued=True; break
+                      last=RuntimeError(str(result.get('error') or out or result))
+                  except Exception as exc:
+                      last=exc
+                  time.sleep(3)
+              if not queued:
+                  raise last or RuntimeError(label+' sshd recovery was not queued')
+          PY"
+
+          backend_ssh_protocol_alive() {
+            local port="$1"
+            "${BACKEND_SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; timeout 8 ssh-keyscan -T 5 -p '$port' 127.0.0.1 >\"\$tmp\" 2>/dev/null; test -s \"\$tmp\""
+          }
+
+          if ! backend_ssh_protocol_alive 2222; then
             FRED_BOOT_B64="$(base64 -w0 scripts/fredwin-remote-bootstrap.ps1)"
             FRED_TUNNEL_B64="$(base64 -w0 scripts/ssh-tunnel-service-managed.ps1)"
             "${BACKEND_SSH[@]}" "FRED_BOOT_B64='$FRED_BOOT_B64' FRED_TUNNEL_B64='$FRED_TUNNEL_B64' python3 - <<'PY'
@@ -233,14 +273,14 @@ jobs:
               raise SystemExit('Fred-Win recovery queue failed')
           PY"
             for _ in $(seq 1 30); do
-              if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              if backend_ssh_protocol_alive 2222; then break; fi
               sleep 2
             done
           fi
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          backend_ssh_protocol_alive 2222
           echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          if ! backend_ssh_protocol_alive 2223; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
             if ! "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
@@ -275,10 +315,11 @@ jobs:
             fi
           fi
           for _ in $(seq 1 30); do
-            if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then break; fi
+            if backend_ssh_protocol_alive 2223; then break; fi
             sleep 2
           done
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+          backend_ssh_protocol_alive 2223
+          echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32222:127.0.0.1:2222 ubuntu@127.0.0.1
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32223:127.0.0.1:2223 ubuntu@127.0.0.1
