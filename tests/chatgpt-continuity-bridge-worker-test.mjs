@@ -3,6 +3,8 @@ import {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  latestConversationMeta,
+  alignToLatestConversation,
   attemptNudge,
   reinforcementCheckOnce,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
@@ -60,6 +62,59 @@ async function run() {
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
+
+  // Cross-device continuity: a mobile/iOS interruption may belong to a
+  // different thread than the backend browser currently has open. Discovery
+  // must use only conversation id/update metadata, never title/content.
+  {
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      if (expression.includes('/backend-api/conversations?')) {
+        return { id: 'latest-thread', update_time: Math.floor(Date.now() / 1000) };
+      }
+      return null;
+    };
+    const latest = await latestConversationMeta(cdp);
+    assert.equal(latest.id, 'latest-thread');
+    assert.ok(latest.update_time > 0);
+  }
+
+  {
+    let navigatedTo = '';
+    const now = Date.now();
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      if (expression.includes('location.pathname')) return '/c/older-thread';
+      if (expression.includes('location.assign')) {
+        navigatedTo = expression;
+        return true;
+      }
+      return null;
+    };
+    const result = await alignToLatestConversation(
+      cdp,
+      async () => ({ id: 'latest-thread', update_time: Math.floor(now / 1000) }),
+      now,
+    );
+    assert.equal(result.action, 'navigated');
+    assert.match(navigatedTo, /latest-thread/);
+  }
+
+  {
+    const now = Date.now();
+    const cdp = fakeCdp();
+    const result = await alignToLatestConversation(
+      cdp,
+      async () => ({ id: 'stale-thread', update_time: Math.floor((now - 20 * 60 * 1000) / 1000) }),
+      now,
+    );
+    assert.equal(result.action, 'stale_latest');
+    assert.equal(cdp.calls.some(call => call.includes('location.assign')), false);
+  }
+
+  console.log('cross-device latest-conversation alignment: PASS');
 
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
