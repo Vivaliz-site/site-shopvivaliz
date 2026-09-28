@@ -32,6 +32,19 @@ install_controller() {
   touch "$STATE_DIR/known_hosts"
   chmod 600 "$STATE_DIR/known_hosts"
 
+  token_file="$STATE_DIR/mcp-token"
+  env_file="$STATE_DIR/service.env"
+  if [ ! -s "$token_file" ]; then
+    umask 077
+    openssl rand -hex 32 > "$token_file"
+  fi
+  chmod 600 "$token_file"
+  {
+    printf 'SHOPVIVALIZ_REMOTE_MCP_TOKEN='
+    cat "$token_file"
+  } > "$env_file"
+  chmod 600 "$env_file"
+
   cat >"/etc/systemd/system/$SERVICE" <<'UNIT'
 [Unit]
 Description=ShopVivaliz Private Remote Control MCP
@@ -47,6 +60,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
 Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
 ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
 Restart=always
 RestartSec=3
