@@ -199,6 +199,10 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("default: false", text)
         self.assertIn("if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true", text)
 
+    def test_remote_control_ci_push_covers_workflow_changes(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        self.assertEqual(text.count("'.github/workflows/remote-control-mcp-*.yml'"), 2)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
