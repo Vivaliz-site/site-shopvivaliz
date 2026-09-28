@@ -69,7 +69,7 @@ claude_bin() {
 
 probe_eligibility() {
   require_backend
-  local bin rc out
+  local bin rc auth_json auth_err doctor_out
   if bin="$(claude_bin 2>/dev/null)"; then
     rc=0
   else
@@ -79,32 +79,54 @@ probe_eligibility() {
   echo "CLAUDE_PRESENT=PASS"
   run_as_claude "$bin" --version | head -n 1 | sed -E 's/[^A-Za-z0-9._+() -]/?/g'
 
-  out="$(mktemp)"
-  if run_as_claude bash -lc 'timeout 20s claude remote-control --help' >"$out" 2>&1; then
+  auth_json="$(mktemp)"
+  auth_err="$(mktemp)"
+  if run_as_claude "$bin" auth status >"$auth_json" 2>"$auth_err"; then
     rc=0
   else
     rc=$?
   fi
-  if [ "$rc" -eq 0 ]; then
-    rm -f "$out"
-    echo "REMOTE_CONTROL_ELIGIBLE=PASS"
-    return 0
-  fi
-
-  if grep -Eqi 'requires a claude\.ai subscription|full-scope login token|run.*/login|sign in' "$out"; then
-    rm -f "$out"
+  if [ "$rc" -ne 0 ]; then
+    sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$auth_err" | tail -n 12
+    rm -f "$auth_json" "$auth_err"
     echo "REMOTE_CONTROL_LOGIN_REQUIRED"
     return 31
   fi
-  if grep -Eqi 'isn.t enabled|disabled by your organization|trusted device|feature-flag|eligibility' "$out"; then
-    rm -f "$out"
+  if ! run_as_claude python3 - "$auth_json" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+if payload.get("loggedIn") is not True:
+    raise SystemExit(1)
+PY
+  then
+    rm -f "$auth_json" "$auth_err"
+    echo "REMOTE_CONTROL_LOGIN_REQUIRED"
+    return 31
+  fi
+  rm -f "$auth_json" "$auth_err"
+
+  doctor_out="$(mktemp)"
+  if run_as_claude timeout 30s "$bin" doctor >"$doctor_out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if grep -Eqi 'remote control.*(disabled|not enabled|ineligible|unavailable)|requires.*trusted device|feature.flag.*(disabled|unavailable)' "$doctor_out"; then
+    sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$doctor_out" | grep -Ei 'remote control|trusted device|feature.flag' | head -n 20 || :
+    rm -f "$doctor_out"
     echo "REMOTE_CONTROL_POLICY_REQUIRED"
     return 32
   fi
-  echo "REMOTE_CONTROL_ELIGIBILITY_FAIL rc=$rc"
-  sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$out" | tail -n 12
-  rm -f "$out"
-  return "$rc"
+  if [ "$rc" -ne 0 ]; then
+    sed -E 's/[A-Za-z0-9_=-]{24,}/[REDACTED]/g' "$doctor_out" | tail -n 12
+    rm -f "$doctor_out"
+    echo "REMOTE_CONTROL_DOCTOR_INCONCLUSIVE"
+    return "$rc"
+  fi
+  rm -f "$doctor_out"
+  echo "REMOTE_CONTROL_ELIGIBLE=PASS"
 }
 
 install_auth_helper() {
