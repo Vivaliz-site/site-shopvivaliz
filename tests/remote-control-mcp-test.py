@@ -556,6 +556,21 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'"{tool}"', setup)
             self.assertIn(tool, {item["name"] for item in m.tool_specs()})
 
+    def test_claude_remote_control_consent_failures_are_classified(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        for marker in (
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=repo",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=trust",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=tty",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=flag",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=auth",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=policy",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=other",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=PASS",
+        ):
+            self.assertIn(marker, setup)
+        self.assertNotIn('cat "$out"', setup)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
