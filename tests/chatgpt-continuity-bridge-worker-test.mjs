@@ -20,13 +20,17 @@ function fakeCdp({
   staleStopClearSucceeds = true,
 } = {}) {
   const calls = [];
+  let currentGenerating = generating;
   return {
     calls,
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
-      if (expression.includes('stale-complete-stop-clear')) return staleStopClearSucceeds;
-      if (expression.includes('stop-button')) return generating;
+      if (expression.includes('stale-complete-stop-clear')) {
+        if (staleStopClearSucceeds) currentGenerating = false;
+        return staleStopClearSucceeds;
+      }
+      if (expression.includes('stop-button')) return currentGenerating;
       if (expression.includes('send-button') && expression.includes('!b.disabled')) return composerUsable;
       if (expression.includes('insertText') || expression.includes('proto.value')) return true;
       if (expression.includes('b.click()')) return sendSucceeds;
