@@ -1,0 +1,68 @@
+name: Inspect A1 Runner via Backend Once
+
+on:
+  push:
+    branches:
+      - diag/a1-runner-via-backend-20260927
+    paths:
+      - '.github/workflows/inspect-a1-runner-via-backend-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Configure private SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$RUNNER_TEMP/a1-runner-inspect"
+          printf '%s\n' "$VM_KEY" > "$RUNNER_TEMP/a1-runner-inspect/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$RUNNER_TEMP/a1-runner-inspect/known_hosts"
+          chmod 600 "$RUNNER_TEMP/a1-runner-inspect/"*
+
+      - name: Inspect A1 listener and worker state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/a1-runner-inspect/known_hosts"
+            -o ConnectTimeout=10
+            -i "$RUNNER_TEMP/a1-runner-inspect/vmkey"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.112 'set -Eeuo pipefail
+            test "$(hostname)" = "shopvivaliz-free-a1"
+            echo A1_PRIVATE_SSH=PASS
+            uid="$(id -u)"
+            runtime="/run/user/$uid"
+            export XDG_RUNTIME_DIR="$runtime"
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+            echo USER_BUS_SOCKET="$(test -S "$runtime/bus" && echo present || echo missing)"
+            echo RUNNER_SERVICE_ENABLED="$(systemctl --user is-enabled shopvivaliz-actions-runner.service 2>/dev/null || true)"
+            echo RUNNER_SERVICE_ACTIVE="$(systemctl --user is-active shopvivaliz-actions-runner.service 2>/dev/null || true)"
+            echo RUNNER_SERVICE_MAINPID="$(systemctl --user show -p MainPID --value shopvivaliz-actions-runner.service 2>/dev/null || true)"
+            echo RUNNER_LISTENERS="$(pgrep -fc "Runner.Listener" || true)"
+            echo RUNNER_WORKERS="$(pgrep -fc "Runner.Worker" || true)"
+            echo RUNNER_PROCESSES_BEGIN
+            ps -eo pid=,ppid=,etimes=,stat=,cmd= | grep -E "Runner\.(Listener|Worker)|run\.sh" | grep -v grep | sed -E "s/[[:space:]]+/ /g" || true
+            echo RUNNER_PROCESSES_END
+            echo DISK
+            df -h /
+            echo MEMORY
+            free -m | sed -n "1,3p"
+          '
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/a1-runner-inspect"
