@@ -505,6 +505,33 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "claude_remote_control_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
+    def test_claude_workspace_trust_bootstrap_is_tty_bounded_and_allowlisted(self):
+        helper = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
+        self.assertTrue(helper.exists(), "Claude workspace trust PTY helper missing")
+
+        spec = importlib.util.spec_from_file_location("claude_workspace_trust_bootstrap", helper)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+
+        self.assertTrue(
+            module.trust_prompt_visible(
+                "Quick safety check: Is this a project you created or one you trust?\n"
+                "1. Yes, I trust this folder\n2. No, exit"
+            )
+        )
+        self.assertFalse(module.trust_prompt_visible("Enable Remote Control? (y/n)"))
+        self.assertFalse(module.trust_prompt_visible("Do you want to allow this tool?"))
+
+        helper_text = helper.read_text(encoding="utf-8")
+        setup_text = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        self.assertIn("pty.openpty()", helper_text)
+        self.assertIn('os.write(master_fd, b"1\\r")', helper_text)
+        self.assertIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", helper_text)
+        self.assertNotIn("hasTrustDialogAccepted", helper_text)
+        self.assertNotIn("hasTrustDialogAccepted", setup_text)
+        self.assertIn("claude_workspace_trust_bootstrap.py", setup_text)
+
     def test_claude_remote_control_service_keeps_mcp_bearer_off_claude_config(self):
         setup = ROOT / "scripts" / "setup-claude-remote-control.sh"
         bridge = ROOT / "scripts" / "claude-remote-control-mcp-stdio.py"
@@ -535,6 +562,7 @@ class BootstrapContractTests(unittest.TestCase):
         for needle in (
             "scripts/setup-claude-remote-control.sh",
             "scripts/claude-remote-control-mcp-stdio.py",
+            "scripts/claude_workspace_trust_bootstrap.py",
             "deploy/systemd/shopvivaliz-claude-remote-control.service",
             "CLAUDE_REMOTE_CONTROL_INSTALL=PASS",
             "CLAUDE_REMOTE_CONTROL_STATUS=PASS",

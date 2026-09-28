@@ -812,10 +812,11 @@ jobs:
               "${SSH[@]}" "install -d -m 700 '$remote_dir'"
               "${SSH[@]}" "cat > '$remote_dir/setup.sh' && chmod 700 '$remote_dir/setup.sh'" < scripts/setup-claude-remote-control.sh
               "${SSH[@]}" "cat > '$remote_dir/bridge.py' && chmod 600 '$remote_dir/bridge.py'" < scripts/claude-remote-control-mcp-stdio.py
+              "${SSH[@]}" "cat > '$remote_dir/trust.py' && chmod 600 '$remote_dir/trust.py'" < scripts/claude_workspace_trust_bootstrap.py
               "${SSH[@]}" "cat > '$remote_dir/service.unit' && chmod 600 '$remote_dir/service.unit'" < deploy/systemd/shopvivaliz-claude-remote-control.service
               install_output=''
               install_rc=0
-              if install_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -rf '$remote_dir'' EXIT; sudo -n bash '$remote_dir/setup.sh' install '$remote_dir/bridge.py' '$remote_dir/service.unit'" 2>&1)"; then
+              if install_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -rf '$remote_dir'' EXIT; sudo -n bash '$remote_dir/setup.sh' install '$remote_dir/bridge.py' '$remote_dir/service.unit' '$remote_dir/trust.py'" 2>&1)"; then
                 install_rc=0
               else
                 install_rc=$?

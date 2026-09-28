@@ -4,6 +4,7 @@ set -Eeuo pipefail
 MODE="${1:-status}"
 BRIDGE_SOURCE="${2:-scripts/claude-remote-control-mcp-stdio.py}"
 UNIT_SOURCE="${3:-deploy/systemd/shopvivaliz-claude-remote-control.service}"
+TRUST_HELPER_SOURCE="${4:-scripts/claude_workspace_trust_bootstrap.py}"
 BACKEND_HOST="always-free-arm-1787907847-26"
 CLAUDE_USER="ubuntu"
 CLAUDE_HOME="/home/ubuntu"
@@ -115,14 +116,54 @@ PY
   esac
 }
 
+run_consent_attempt(){
+  local out="$1"
+  if printf 'y\n' | run_in_workspace_as_claude timeout 18s "$CLAUDE_BIN" remote-control --name ShopVivaliz-Bootstrap --spawn worktree --capacity 1 --no-create-session-in-dir --permission-mode default >"$out" 2>&1; then
+    return 0
+  fi
+  return $?
+}
+
+bootstrap_workspace_trust(){
+  local trust_out trust_rc
+  test -f "$TRUST_HELPER_SOURCE" || die trust_helper_missing 57
+  trust_out="$(mktemp)"
+  trust_rc=0
+  if run_in_workspace_as_claude timeout 25s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN" >"$trust_out" 2>&1; then
+    trust_rc=0
+  else
+    trust_rc=$?
+  fi
+  awk '/^CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=/{print}' "$trust_out"
+  if [ "$trust_rc" -ne 0 ] || ! grep -Fqx 'CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS' "$trust_out"; then
+    rm -f "$trust_out"
+    return 1
+  fi
+  rm -f "$trust_out"
+}
+
 accept_consent(){
   local out rc
   out="$(mktemp)"
   rc=0
-  if printf 'y\n' | run_in_workspace_as_claude timeout 18s "$CLAUDE_BIN" remote-control --name ShopVivaliz-Bootstrap --spawn worktree --capacity 1 --no-create-session-in-dir --permission-mode default >"$out" 2>&1; then
+  if run_consent_attempt "$out"; then
     rc=0
   else
     rc=$?
+  fi
+  if grep -Eqi 'workspace trust|trusted directory|trust (this|the) (folder|directory|workspace|project)|accept.*trust' "$out"; then
+    rm -f "$out"
+    if ! bootstrap_workspace_trust; then
+      echo "CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=trust"
+      return 47
+    fi
+    out="$(mktemp)"
+    rc=0
+    if run_consent_attempt "$out"; then
+      rc=0
+    else
+      rc=$?
+    fi
   fi
   if grep -Eqi 'requires a claude\.ai subscription|run.*/login|sign in|not logged in' "$out"; then
     rm -f "$out"
