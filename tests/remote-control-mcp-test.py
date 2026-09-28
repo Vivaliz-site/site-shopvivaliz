@@ -497,6 +497,40 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "claude_remote_control_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
+    def test_claude_remote_control_service_keeps_mcp_bearer_off_claude_config(self):
+        setup = ROOT / "scripts" / "setup-claude-remote-control.sh"
+        bridge = ROOT / "scripts" / "claude-remote-control-mcp-stdio.py"
+        unit = ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service"
+        for path in (setup, bridge, unit):
+            self.assertTrue(path.exists(), f"missing Claude Remote Control file: {path}")
+        setup_text = setup.read_text(encoding="utf-8")
+        bridge_text = bridge.read_text(encoding="utf-8")
+        unit_text = unit.read_text(encoding="utf-8")
+        self.assertIn('"type":"stdio"', setup_text)
+        self.assertIn('/usr/local/sbin/shopvivaliz-claude-mcp-stdio', setup_text)
+        self.assertIn('/var/lib/shopvivaliz-remote-control/mcp-token', bridge_text)
+        self.assertIn('http://127.0.0.1:5580/mcp', bridge_text)
+        self.assertNotIn('mcp-token', unit_text)
+        self.assertNotIn('ANTHROPIC_API_KEY', unit_text)
+        self.assertIn('claude remote-control', unit_text)
+        self.assertIn('--spawn worktree', unit_text)
+        self.assertIn('--no-create-session-in-dir', unit_text)
+        self.assertIn('StandardOutput=null', unit_text)
+
+    def test_remote_access_can_install_and_verify_claude_remote_control(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for action in ("claude_remote_control_install", "claude_remote_control_status"):
+            self.assertIn(action, workflow)
+            self.assertIn(f'action == "{action}"', workflow)
+        for needle in (
+            "scripts/setup-claude-remote-control.sh",
+            "scripts/claude-remote-control-mcp-stdio.py",
+            "deploy/systemd/shopvivaliz-claude-remote-control.service",
+            "CLAUDE_REMOTE_CONTROL_INSTALL=PASS",
+            "CLAUDE_REMOTE_CONTROL_STATUS=PASS",
+        ):
+            self.assertIn(needle, workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
