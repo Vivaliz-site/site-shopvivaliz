@@ -53,12 +53,18 @@ def process_snapshot() -> None:
             return []
 
     def ppid(pid: int) -> int:
-        fields = stat_fields(pid)
-        return int(fields[3]) if len(fields) > 3 else 0
+        try:
+            fields = stat_fields(pid)
+            return int(fields[3]) if len(fields) > 3 else 0
+        except (ValueError, IndexError):
+            return 0
 
     def age(pid: int) -> int:
-        fields = stat_fields(pid)
-        return max(0, int(uptime - int(fields[21]) / hz)) if len(fields) > 21 else -1
+        try:
+            fields = stat_fields(pid)
+            return max(0, int(uptime - int(fields[21]) / hz)) if len(fields) > 21 else -1
+        except (ValueError, IndexError):
+            return -1
 
     def user(pid: int) -> str:
         try:
