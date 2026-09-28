@@ -20,6 +20,7 @@ $required = [
     'SITE_INSTANCE_NAME: shopvivaliz-free-a1',
     'SITE_PRIVATE_IP: 10.0.1.112',
     'bastion session create-port-forwarding',
+    '--session-ttl 1800',
     'Runner.Worker',
     'RUNNER_BASTION_RESCUE=refused_worker_active',
     'shopvivaliz-actions-runner.service',
@@ -49,6 +50,7 @@ $forbidden = [
     'pkill -9',
     '|| true',
     'exit 0',
+    '--session-ttl 900',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
