@@ -170,6 +170,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
+    def test_bootstrap_runs_on_controller_backend(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", text)
+        self.assertIn("sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py", text)
+        self.assertNotIn("ubuntu@10.0.1.38)", text)
+        self.assertIn("ubuntu@10.0.1.112", text)
+
     def test_bootstrap_uses_reverse_ssh_for_windows(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("127.0.0.1/2222", text)
