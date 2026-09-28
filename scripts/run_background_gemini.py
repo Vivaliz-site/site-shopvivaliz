@@ -101,7 +101,7 @@ HEADLESS_SHELL_PREFIXES: tuple[str, ...] = (
     "git diff",
     "git add",
     "git commit",
-    "git push",
+    "python3 scripts/safe_git_push.py",
     "gh pr",
     "bash tests/",
     "bash scripts/repository-governance-validate.sh",

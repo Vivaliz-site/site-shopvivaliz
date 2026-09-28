@@ -212,6 +212,11 @@ Rules:
 - Continue the original task autonomously through safe reversible actions.
 - Use the authenticated repository tooling already available on the host when
   GitHub mutations are needed; do not expose credentials.
+- If commits must be published, run only:
+    python3 scripts/safe_git_push.py
+  Never run git push directly. The wrapper publishes only the current
+  non-protected branch and rejects arguments, deletion, force, and protected
+  branch pushes.
 - Before this process exits, durable state MUST reflect real progress:
   * if finished and freshly verified, run:
       python3 scripts/agent_task_state.py ready --task "$SHOPVIVALIZ_TASK_ID" --evidence "<objective evidence>" --verification "<fresh verification>"

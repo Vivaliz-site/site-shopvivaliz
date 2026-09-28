@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -106,7 +108,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "git diff",
             "git add",
             "git commit",
-            "git push",
+            "python3 scripts/safe_git_push.py",
             "gh pr",
             "bash tests/",
             "bash scripts/repository-governance-validate.sh",
@@ -119,8 +121,101 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             "rm -rf",
             "python3 -c",
             "bash -c",
+            "git push",
         ):
             self.assertFalse(any(forbidden in entry for entry in tools_core))
+
+    def _git(self, cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=check,
+        )
+
+    def _init_push_fixture(self, root: Path, branch: str) -> tuple[Path, Path]:
+        remote = root / "remote.git"
+        work = root / "work"
+        self._git(root, "init", "--bare", str(remote))
+        self._git(root, "init", "-b", branch, str(work))
+        self._git(work, "config", "user.email", "test@example.com")
+        self._git(work, "config", "user.name", "Test")
+        (work / "README.md").write_text("fixture\n", encoding="utf-8")
+        self._git(work, "add", "README.md")
+        self._git(work, "commit", "-m", "test: fixture")
+        self._git(work, "remote", "add", "origin", str(remote))
+        return work, remote
+
+    def test_safe_git_push_publishes_only_current_feature_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            work, remote = self._init_push_fixture(Path(tmp), "fix/safe-push")
+            completed = subprocess.run(
+                ["python3", str(ROOT / "scripts" / "safe_git_push.py")],
+                cwd=work,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            local = self._git(work, "rev-parse", "HEAD").stdout.strip()
+            remote_sha = self._git(
+                work,
+                "--git-dir",
+                str(remote),
+                "rev-parse",
+                "refs/heads/fix/safe-push",
+            ).stdout.strip()
+            self.assertEqual(remote_sha, local)
+
+    def test_safe_git_push_rejects_protected_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            work, remote = self._init_push_fixture(Path(tmp), "main")
+            completed = subprocess.run(
+                ["python3", str(ROOT / "scripts" / "safe_git_push.py")],
+                cwd=work,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            published = self._git(
+                work,
+                "--git-dir",
+                str(remote),
+                "show-ref",
+                "--verify",
+                "refs/heads/main",
+                check=False,
+            )
+            self.assertNotEqual(published.returncode, 0)
+
+    def test_safe_git_push_rejects_all_arguments_including_delete_and_force(self) -> None:
+        for forbidden in ("--delete", "--force", "--force-with-lease", "origin", ":branch"):
+            with self.subTest(forbidden=forbidden), tempfile.TemporaryDirectory() as tmp:
+                work, remote = self._init_push_fixture(Path(tmp), "fix/no-args")
+                completed = subprocess.run(
+                    ["python3", str(ROOT / "scripts" / "safe_git_push.py"), forbidden],
+                    cwd=work,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                published = self._git(
+                    work,
+                    "--git-dir",
+                    str(remote),
+                    "show-ref",
+                    "--verify",
+                    "refs/heads/fix/no-args",
+                    check=False,
+                )
+                self.assertNotEqual(published.returncode, 0)
 
     def test_settings_json_declares_only_the_bounded_tools_core(self) -> None:
         tools_core = self.mod.build_headless_tools_core()
