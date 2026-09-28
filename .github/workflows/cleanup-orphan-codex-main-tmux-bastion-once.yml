@@ -1,0 +1,238 @@
+name: Cleanup Orphan Codex Main Tmux Bastion Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/cleanup-orphan-codex-main-tmux-bastion-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-orphan-codex-main-tmux-bastion
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      SITE_PRIVATE_IP: 10.0.1.112
+      SITE_TUNNEL_PORT: "22221"
+    steps:
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n'             "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-orphan-codex-cleanup -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Open verified Bastion tunnel to A1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          test "$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)" = RUNNING
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json,sys
+          xs=json.load(open(sys.argv[1],encoding='utf-8')).get('data') or []
+          a=[x for x in xs if x.get('lifecycle-state')=='ACTIVE']
+          if len(a)!=1: raise SystemExit(f'expected one ACTIVE bastion, found {len(a)}')
+          print(a[0]['id'])
+          PY
+          )"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress,json,sys
+          ip=str(ipaddress.ip_address(sys.argv[1])); src=json.load(open(sys.argv[2],encoding='utf-8'))
+          if not isinstance(src,list): raise SystemExit('CIDR allowlist is not a list')
+          json.dump(list(dict.fromkeys([str(x) for x in src]+[ip+'/32'])),open(sys.argv[3],'w',encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+          SITE_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID" --target-private-ip "$SITE_PRIVATE_IP" --target-port 22             --session-ttl 1800 --display-name orphan-codex-cleanup             --ssh-public-key-file "$BASTION_KEY_FILE.pub" --query 'data.id' --raw-output)"
+          echo "SITE_SESSION_ID=$SITE_SESSION_ID" >> "$GITHUB_ENV"
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            [ "$state" = ACTIVE ] && break
+            case "$state" in FAILED|DELETED) exit 2 ;; esac
+            sleep 5
+          done
+          test "$state" = ACTIVE
+          metadata="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"; tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          ready=false
+          for attempt in $(seq 1 5); do
+            bash -lc "$tunnel" || true
+            for _ in $(seq 1 15); do
+              if (exec 3<>"/dev/tcp/127.0.0.1/$SITE_TUNNEL_PORT") 2>/dev/null; then exec 3>&- 3<&-; ready=true; break; fi
+              sleep 1
+            done
+            [ "$ready" = true ] && break
+            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1 || true
+            sleep 2
+          done
+          test "$ready" = true
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
+          echo PRIVATE_SITE_TUNNEL=PASS
+
+      - name: Preflight exact orphan session and preserve worktree fingerprint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          output="$("${SSH_SITE[@]}" 'python3 -' <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          import subprocess
+          def sh(args):
+              return subprocess.run(args,text=True,capture_output=True,check=True).stdout.strip()
+          assert sh(['hostname'])=='shopvivaliz-free-a1'
+          assert subprocess.run(['tmux','has-session','-t','main'],check=False).returncode==0
+          attached=sh(['tmux','display-message','-p','-t','main:0.0','#{session_attached}'])
+          path=sh(['tmux','display-message','-p','-t','main:0.0','#{pane_current_path}'])
+          command=sh(['tmux','display-message','-p','-t','main:0.0','#{pane_current_command}'])
+          assert attached=='0'
+          assert path=='/home/ubuntu/site-deploy-unblock'
+          assert command=='python3'
+          root=Path(path)
+          assert sh(['git','-C',path,'branch','--show-current'])=='main'
+          assert sh(['git','-C',path,'rev-parse','HEAD'])=='baf71e1d43054fe162b1475ac5d89cf912bbc832'
+          status=subprocess.run(['git','-C',path,'status','--porcelain=v1','-z'],capture_output=True,check=True).stdout
+          fingerprint=hashlib.sha256(status).hexdigest()
+          pids=[]
+          for e in Path('/proc').iterdir():
+              if not e.name.isdigit(): continue
+              try:a=[x.decode('utf8','replace') for x in (e/'cmdline').read_bytes().split(b'\0') if x]
+              except OSError: continue
+              if '--dangerously-bypass-approvals-and-sandbox' not in a: continue
+              try: cwd=os.readlink(e/'cwd')
+              except OSError: continue
+              if cwd!=path: continue
+              env={}
+              try:
+                  for item in (e/'environ').read_bytes().split(b'\0'):
+                      if b'=' in item:
+                          k,v=item.split(b'=',1); env[k.decode('utf8','replace')]=v.decode('utf8','replace')
+              except OSError: pass
+              assert not env.get('SHOPVIVALIZ_TASK_ID')
+              assert not env.get('GITHUB_ACTIONS')
+              pids.append(int(e.name))
+          assert pids
+          print('ORPHAN_PREFLIGHT=PASS')
+          print('ORPHAN_PID_COUNT='+str(len(pids)))
+          print('WORKTREE_DIRTY_COUNT='+str(len([x for x in status.split(b'\0') if x])))
+          print('WORKTREE_STATUS_SHA256='+fingerprint)
+          PY
+          )"
+          printf '%s\n' "$output" | grep -E '^(ORPHAN_PREFLIGHT|ORPHAN_PID_COUNT|WORKTREE_DIRTY_COUNT|WORKTREE_STATUS_SHA256)='
+          printf '%s\n' "$output" | grep '^WORKTREE_STATUS_SHA256=' | cut -d= -f2 > "$RUNNER_TEMP/worktree-status.sha256"
+
+      - name: Terminate only orphan tmux main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'tmux kill-session -t main'
+          echo ORPHAN_TMUX_MAIN_TERMINATE=PASS
+
+      - name: Verify worktree preserved and operational services intact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          before="$(cat "$RUNNER_TEMP/worktree-status.sha256")"
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          output="$("${SSH_SITE[@]}" 'python3 -' <<'PY'
+          import hashlib,subprocess,time
+          path='/home/ubuntu/site-deploy-unblock'
+          time.sleep(2)
+          assert subprocess.run(['tmux','has-session','-t','main'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0
+          assert subprocess.run(['tmux','has-session','-t','codex-continuity-v7-goal'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
+          assert subprocess.run(['systemctl','is-active','--quiet','shopvivaliz-agent.service']).returncode==0
+          status=subprocess.run(['git','-C',path,'status','--porcelain=v1','-z'],capture_output=True,check=True).stdout
+          print('WORKTREE_STATUS_SHA256='+hashlib.sha256(status).hexdigest())
+          print('WORKTREE_DIRTY_COUNT='+str(len([x for x in status.split(b'\0') if x])))
+          # Long-lived bypass chain in the old checkout must be gone.
+          found=0
+          from pathlib import Path
+          import os
+          for e in Path('/proc').iterdir():
+              if not e.name.isdigit(): continue
+              try:
+                  args=[x.decode('utf8','replace') for x in (e/'cmdline').read_bytes().split(b'\0') if x]
+                  cwd=os.readlink(e/'cwd')
+              except OSError: continue
+              if cwd==path and '--dangerously-bypass-approvals-and-sandbox' in args: found+=1
+          assert found==0
+          print('ORPHAN_CODEX_CHAIN_ABSENT=true')
+          print('AGENT_SERVICE_STILL_ACTIVE=true')
+          print('CODEX_V7_SESSION_PRESERVED=true')
+          PY
+          )"
+          printf '%s\n' "$output" | grep -E '^(WORKTREE_STATUS_SHA256|WORKTREE_DIRTY_COUNT|ORPHAN_CODEX_CHAIN_ABSENT|AGENT_SERVICE_STILL_ACTIVE|CODEX_V7_SESSION_PRESERVED)='
+          after="$(printf '%s\n' "$output" | awk -F= '$1=="WORKTREE_STATUS_SHA256"{print $2}')"
+          test "$before" = "$after"
+          echo ORPHAN_CLEANUP_POSTVERIFY=PASS
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          if [ -n "${SITE_SESSION_ID:-}" ]; then "${OCI[@]}" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null 2>&1 || rc=1; fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1; fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" || rc=1; fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do [ -n "$f" ] && [ -f "$f" ] && shred -u "$f" || true; done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json" "$RUNNER_TEMP/worktree-status.sha256"
+          exit "$rc"
