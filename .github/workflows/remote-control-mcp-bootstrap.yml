@@ -210,8 +210,12 @@ jobs:
         if: always()
         shell: bash
         run: |
-          pkill -f '32223:' || true
-          pkill -f '32224:' || true
+          if pgrep -f '32223:' >/dev/null 2>&1; then
+            pkill -f '32223:'
+          fi
+          if pgrep -f '32224:' >/dev/null 2>&1; then
+            pkill -f '32224:'
+          fi
           rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
           rm -f /tmp/shopvivaliz-remote-control.pub /tmp/shopvivaliz-fred-ip /tmp/shopvivaliz-kocepsv-ip
           rm -f /tmp/FRED.remote-control.hosts /tmp/DESKTOP.remote-control.hosts
