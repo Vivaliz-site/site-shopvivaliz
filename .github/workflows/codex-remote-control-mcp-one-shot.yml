@@ -138,6 +138,27 @@ jobs:
           D) If an external account permission or human auth challenge is truly unavoidable after exhausting safe alternatives, finish all server-side work possible and record exact BLOCKED_EXTERNAL substep + resume condition. Do not mislabel an implementation task as external.
           E) Update ACTION_PLAN.md and CHECKPOINT.md so Stage 6 is PASS using the already-proven disconnected-runtime evidence. Stage 7 is PASS only if both required cloud-client paths are validated; otherwise remain RUNNING/BLOCKED_EXTERNAL with precise evidence.
 
+          POST-TERMINAL AUTHORITATIVE UPDATE — supersedes any earlier conflicting Stage 7 assumptions above:
+          - Previous Codex run 36491915514 completed, but its BLOCKED_EXTERNAL classification for Claude is no longer acceptable as terminal evidence because a supported implementation path remains.
+          - PR #2092 merged and Stage 6 is formally PASS. It also fixed the first Claude install defect by running remote-control from the prepared git WORKSPACE.
+          - Live post-fix Claude install run 36493202277 proved:
+            CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS
+            CLAUDE_MCP_BRIDGE_INSTALL=PASS
+            CLAUDE_WORKSPACE=PASS
+            CLAUDE_MCP_CONFIG=PASS
+            CLAUDE_PRIVATE_MCP_BRIDGE=PASS
+            then CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=trust.
+          - Current official Claude Remote Control docs state workspace trust is a normal prerequisite: run plain `claude` in the project directory at least once and accept the workspace trust dialog before `claude remote-control`; server mode then has a separate one-time `Enable Remote Control? (y/n)` confirmation.
+          - Public anthropics/claude-code issue #77716 reproduces the same product asymmetry: `claude remote-control` can fail Workspace not trusted while `claude --remote-control` presents the trust dialog and works after acceptance.
+          - User explicitly authorized completing Stage 7 with Codex. Therefore workspace trust for the canonical prepared ShopVivaliz repository is authorized. This is not authorization to bypass permissions, organization policy, or trust for arbitrary paths.
+          - Do NOT edit ~/.claude.json or other Claude trust-state files directly. Do NOT use undocumented trust bypass flags.
+          - Implement with RED->GREEN TDD a bounded supported trust bootstrap in WORKSPACE. Use a PTY/interactive path only as needed, recognize and accept ONLY the expected workspace-trust prompt (and the documented one-time Remote Control confirmation if reached), abort on unknown prompts/timeouts, preserve auth/policy failure classification, and avoid logging prompt contents that could include secrets.
+          - After the trust bootstrap fix merges, trigger/observe live `claude_remote_control_install`; require INSTALL=PASS. Then run `claude_remote_control_status`; require STATUS=PASS. Finally validate a real Remote Control cloud session or equivalent supported product-level connection evidence, not merely service active.
+          - Native Claude Remote Control is the preferred Claude cloud path: it is outbound HTTPS and preserves the local filesystem/MCP environment. A public Cloudflare MCP endpoint is NOT required if native Remote Control is validated.
+          - PR #2096 merged documentation marking all of Stage 7 BLOCKED_EXTERNAL before this trust path was exhausted. Correct that documentation after fresh evidence; do not treat the merged label as ground truth.
+          - ChatGPT remains a separate subpath. Current official OpenAI Secure MCP Tunnel docs say a private MCP needs a tunnel_id from Platform tunnel settings; creating/editing needs Tunnels Read+Manage and running/selecting needs Tunnels Read+Use. Fresh backend evidence: run 36492847851 found no authenticated tunnel UI and zero existing tunnels; auth recovery run 36493051152 returned OPENAI_PLATFORM_AUTH_RESULT=BLOCKED with returned_to_platform=true but authenticated=false. Exhaust supported account/session/RBAC routes without leaking credentials. If and only if creation of a tunnel_id truly requires a human/admin Platform action that Codex cannot perform, classify ONLY the ChatGPT substep BLOCKED_EXTERNAL with the exact required permission/action.
+          - Never publish the controller or its bearer directly. The controller must remain loopback-only.
+
           Before terminal exit, post a sanitized issue #1586 comment beginning:
           CODEX_REMOTE_CONTROL_MCP_TERMINAL=
           Include status, main SHA, Stage 6 evidence, ChatGPT integration status, Claude cloud integration status, PRs/runs created, and exact blocker/resume condition if any. Never include secrets.
