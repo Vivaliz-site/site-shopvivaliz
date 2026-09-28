@@ -36,7 +36,10 @@ function Start-DesktopMcp {
 }
 function Stop-ManagedTunnel {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        (($_.Name -eq 'ssh.exe') -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*')) -or
+        (($_.Name -eq 'ssh.exe') -and (
+            ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') -or
+            ([string]$_.CommandLine -like '*-R*2223:127.0.0.1:22*')
+        )) -or
         ((($_.Name -eq 'powershell.exe') -or ($_.Name -eq 'pwsh.exe')) -and ([string]$_.CommandLine -like '*desktopkocepsv-ssh-tunnel-service-managed.ps1*'))
     } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch { } }
 }
@@ -45,12 +48,20 @@ function Ensure-Relay {
     if (!(Test-Path -LiteralPath $TunnelScript)) { throw 'Tunnel script missing' }
     if (-not (Test-McpHealth)) { Stop-DesktopMcp; Start-DesktopMcp }
     if (-not (Test-McpHealth)) { throw 'MCP health failed on 127.0.0.1:5557' }
-    $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'ssh.exe' -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') })
+    $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq 'ssh.exe' -and
+        ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') -and
+        ([string]$_.CommandLine -like '*-R*2223:127.0.0.1:22*')
+    })
     if ($ssh.Count -ne 1) {
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
         Start-Sleep -Seconds 5
-        $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'ssh.exe' -and ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') })
+        $ssh = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq 'ssh.exe' -and
+        ([string]$_.CommandLine -like '*-R*5558:127.0.0.1:5557*') -and
+        ([string]$_.CommandLine -like '*-R*2223:127.0.0.1:22*')
+    })
     }
     if ($ssh.Count -ne 1) { throw 'Managed DESKTOP-KOCEPSV reverse tunnel failed to stay running' }
     Log 'DESKTOP-KOCEPSV relay ensure completed'
