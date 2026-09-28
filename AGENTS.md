@@ -462,16 +462,18 @@ Regras:
 
 7. O service roda em loop e observa a `inbox` a cada 30 segundos.
 
-### Remote MCP para agentes
+### Remote Control MCP para agentes
 
-O PDF `C:\Users\FRED\Downloads\mcp.pdf` foi inspecionado em 2026-08-11 e registra um fluxo de autenticacao bem-sucedido com Remote MCP server por device authorization.
+O **Remote Control MCP privado do ShopVivaliz** é a rota operacional prioritária para controle de hosts. Consulte primeiro `docs/HOST-ACCESS.md`, `docs/knowledge/host-access.md` e `remote-control-mcp/SPEC.md`.
 
 Regras:
 
-1. Consulte [`docs/AGENT-MCP-REMOTE.md`](docs/AGENT-MCP-REMOTE.md) antes de usar MCP remoto em tarefas de agente.
-2. Nunca commitar codigo de device, device ID completo, e-mail completo, token, cookie ou screenshot sem mascara.
-3. Validar estado atual do MCP antes de declarar disponibilidade; se nao houver ferramenta/evidencia atual, reportar `INCONCLUSIVO`.
-4. MCP remoto nao amplia permissoes: continuam proibidos force-push, bypass de protecoes, exposicao de secrets e alteracoes de preco/estoque/pedido fora do escopo aprovado.
+1. Controller canônico: `always-free-arm-1787907847-26`; endpoint MCP privado/loopback, nunca público.
+2. Use ações allowlisted e tarefas duráveis do MCP antes de recorrer a shell direto.
+3. Se a capacidade necessária não existir no MCP ou o control plane estiver comprovadamente indisponível, use SSH privado/Tailscale; para bootstrap/recovery, GitHub Actions/OCI Bastion.
+4. Nunca publicar token, cookie, chave, OTP/TOTP, conteúdo de secret ou credencial de sessão.
+5. Validar `hostname`, identidade, alvo e resultado real antes de declarar acesso funcional.
+6. Browser de agentes permanece na backend; Windows não é fallback de navegação.
 
 ### Se Tiver Que Acessar a VM
 
