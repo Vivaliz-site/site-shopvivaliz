@@ -381,6 +381,8 @@ class BootstrapContractTests(unittest.TestCase):
             "OPENAI_PLATFORM_AUTHENTICATED=",
             "OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=",
             "OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=",
+            "CLOUD_CLIENT_COMPATIBILITY_REQUIRED=",
+            "CLAUDE_CLOUD_ACCESS_REQUIRED=",
         ):
             self.assertIn(needle, auth_text)
         self.assertNotIn("console.log(bodyText", auth_text)
