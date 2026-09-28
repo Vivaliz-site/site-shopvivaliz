@@ -50,3 +50,5 @@ jobs:
           for id in chatgpt-freeze-root-cause-20260927 global-continuity-cleanup-v2-20260927; do
             python3 scripts/agent_task_state.py show --task "$id" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("TASK_REGISTERED", d["task_id"], d["status"], d["updated_at"], d["next_action"][:180])'
           done
+
+# retrigger: 2026-09-28T00:00Z
