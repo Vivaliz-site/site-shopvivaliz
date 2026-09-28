@@ -130,6 +130,15 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("administrators_authorized_keys", text)
         self.assertIn("REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS", text)
 
+    def test_bootstrap_surfaces_do_not_discard_failures(self):
+        paths = [
+            ROOT / "scripts" / "setup-remote-control-access.sh",
+            ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml",
+        ]
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("|| true", text, f"{path} must handle failures explicitly")
+
 
 if __name__ == "__main__":
     unittest.main()
