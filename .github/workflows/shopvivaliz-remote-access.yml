@@ -111,9 +111,9 @@ jobs:
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
           task_id = ""
+          if action == "task_state_show" and target != "shopvivaliz-free-a1":
+              raise SystemExit("Task state readback is restricted to the site production host")
           if action == "task_state_show":
-              if target != "shopvivaliz-free-a1":
-                  raise SystemExit("Task state readback is restricted to the site production host")
               task_match = re.fullmatch(r"task=([A-Za-z0-9._-]{1,160})", reason)
               if not task_match:
                   raise SystemExit("task_state_show reason must be exactly task=<safe-id>")
