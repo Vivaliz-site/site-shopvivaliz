@@ -12,9 +12,6 @@ on:
       - 'assets/**'
       - '*.php'
       - '.github/workflows/ecommerce-excellence-audit.yml'
-  push:
-    branches:
-      - main
   workflow_run:
     workflows:
       - Master Production Pipeline 24/7

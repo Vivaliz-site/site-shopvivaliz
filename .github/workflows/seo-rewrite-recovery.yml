@@ -5,17 +5,16 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/seo-rewrite-recovery.yml'
-  workflow_run:
-    workflows:
-      - 'Master Production Pipeline 24/7'
-    types: [completed]
+  schedule:
+    - cron: '9 7 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   recover:
-    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     environment: production
