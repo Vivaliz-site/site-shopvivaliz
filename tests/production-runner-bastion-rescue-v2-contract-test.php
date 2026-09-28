@@ -47,6 +47,8 @@ $forbidden = [
     'shutdown ',
     'kill -9',
     'pkill -9',
+    '|| true',
+    'exit 0',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
