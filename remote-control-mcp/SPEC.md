@@ -131,3 +131,12 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - Existing loopback MCP relays remain recovery/bootstrap only: Fred-Win `5557`, KOCEPSV `5558`.
 - KOCEPSV's managed tunnel must persist both `-R 2223:127.0.0.1:22` and `-R 5558:127.0.0.1:5557`.
 - Host keys for both reverse SSH ports are pinned in the controller known_hosts before live MCP validation.
+
+
+## Staged Bootstrap Execution
+- Stage 4 Windows bootstrap must be able to recover KOCEPSV even when its local repository branch is divergent or dirty.
+- The legacy KOCEPSV MCP relay on backend loopback `5558` may stage only the two canonical relay scripts directly from `origin/main`; it must not require a full local branch merge.
+- Script staging is synchronous and must emit `REMOTE_CONTROL_KOCEPSV_STAGE=PASS` before the relay restart is queued.
+- The relay restart may be asynchronous because restarting the tunnel intentionally drops the legacy `5558` request path.
+- A normal `push` bootstrap performs installation, Windows bootstrap and controller host-key pinning only.
+- Stage 5 four-host health/durable-task E2E runs only from an explicit `workflow_dispatch` with `run_e2e=true`.
