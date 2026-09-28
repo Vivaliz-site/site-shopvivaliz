@@ -2,7 +2,7 @@
 """ShopVivaliz private remote-control MCP.
 
 Stateless MCP-over-HTTP endpoint bound to backend loopback. It controls four
-canonical hosts through local execution or private SSH/Tailscale and persists
+canonical hosts through local execution or private/reverse SSH and persists
 durable tasks/audit state in SQLite. No GitHub API is used at runtime.
 """
 from __future__ import annotations
@@ -46,12 +46,12 @@ HOSTS = {
         "user": "shopvivaliz-remote", "role": "production web/deploy"
     },
     "Fred-Win": {
-        "platform": "windows", "transport": "tailscale", "peer": "LAPTOP-NIG4IFUU",
-        "user": "FRED", "role": "support workstation"
+        "platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1",
+        "port": 2222, "user": "FRED", "role": "support workstation"
     },
     "KOCEPSV": {
-        "platform": "windows", "transport": "tailscale", "peer": "DESKTOP-KOCEPSV",
-        "user": "user", "role": "support workstation"
+        "platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1",
+        "port": 2223, "user": "user", "role": "support workstation"
     },
 }
 
@@ -172,32 +172,13 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
     return aid
 
 
-def tailscale_peer_ip(peer_name: str) -> str:
-    cp = subprocess.run(
-        ["tailscale", "status", "--json"], capture_output=True, text=True, timeout=8
-    )
-    if cp.returncode != 0:
-        raise RuntimeError("tailscale_status_failed")
-    data = json.loads(cp.stdout)
-    for peer in (data.get("Peer") or {}).values():
-        name = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
-        if peer_name.upper() in name and peer.get("Online"):
-            ips = peer.get("TailscaleIPs") or []
-            for ip in ips:
-                if ":" not in str(ip):
-                    return str(ip)
-            if ips:
-                return str(ips[0])
-    raise RuntimeError("tailscale_peer_offline_or_missing")
-
-
-def ssh_base(address: str, user: str) -> list[str]:
+def ssh_base(address: str, user: str, port: int = 22) -> list[str]:
     if not SSH_KEY.exists() or not KNOWN_HOSTS.exists():
         raise RuntimeError("controller_ssh_identity_not_ready")
     return [
         "ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
         "-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={KNOWN_HOSTS}",
-        "-o", "ConnectTimeout=8", "-i", str(SSH_KEY), f"{user}@{address}",
+        "-o", "ConnectTimeout=8", "-p", str(port), "-i", str(SSH_KEY), f"{user}@{address}",
     ]
 
 
@@ -206,8 +187,9 @@ def remote_invocation(host: str, command: str) -> list[str]:
     platform = cfg["platform"]
     if cfg["transport"] == "local":
         return ["bash", "-lc", command]
-    address = str(cfg.get("address") or tailscale_peer_ip(str(cfg["peer"])))
-    base = ssh_base(address, str(cfg["user"]))
+    address = str(cfg["address"])
+    port = int(cfg.get("port", 22))
+    base = ssh_base(address, str(cfg["user"]), port)
     if platform == "linux":
         payload = base64.b64encode(command.encode()).decode()
         remote = f"printf %s {payload} | base64 -d | sudo -n bash"

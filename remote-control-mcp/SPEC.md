@@ -122,3 +122,12 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - The bootstrap workflow must contain exactly one four-host live validation sequence.
 - Host-key pinning must complete before any live MCP validation begins.
 - CI must regression-test the bootstrap structure so a malformed heredoc or duplicated E2E block cannot merge as a false green.
+
+
+## Windows Reverse SSH Transport
+- Fred-Win runtime transport is backend loopback SSH `127.0.0.1:2222 -> Fred-Win 127.0.0.1:22`.
+- KOCEPSV runtime transport is backend loopback SSH `127.0.0.1:2223 -> KOCEPSV 127.0.0.1:22`.
+- Direct controller-to-Windows TCP/22 over Tailscale is not part of the Remote Control MCP runtime.
+- Existing loopback MCP relays remain recovery/bootstrap only: Fred-Win `5557`, KOCEPSV `5558`.
+- KOCEPSV's managed tunnel must persist both `-R 2223:127.0.0.1:22` and `-R 5558:127.0.0.1:5557`.
+- Host keys for both reverse SSH ports are pinned in the controller known_hosts before live MCP validation.

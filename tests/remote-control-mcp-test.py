@@ -101,28 +101,27 @@ class RemoteControlMcpTests(unittest.TestCase):
             m.validate_host("legacy-host")
 
     def test_linux_target_uses_privileged_sudo(self):
-        original = m.tailscale_peer_ip
-        try:
-            m.SSH_KEY.write_text("x")
-            m.KNOWN_HOSTS.write_text("x")
-            inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
-            self.assertIn("sudo -n bash", inv[-1])
-            self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
-        finally:
-            m.tailscale_peer_ip = original
-
-    def test_windows_uses_encoded_powershell(self):
         m.SSH_KEY.write_text("x")
         m.KNOWN_HOSTS.write_text("x")
-        original = m.tailscale_peer_ip
-        m.tailscale_peer_ip = lambda _: "100.64.0.10"
-        try:
-            inv = m.remote_invocation("Fred-Win", "Get-Date")
+        inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
+        self.assertIn("sudo -n bash", inv[-1])
+        self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
+
+    def test_windows_uses_reverse_ssh_ports_not_tailscale(self):
+        m.SSH_KEY.write_text("x")
+        m.KNOWN_HOSTS.write_text("x")
+        fred = m.remote_invocation("Fred-Win", "Get-Date")
+        desk = m.remote_invocation("KOCEPSV", "Get-Date")
+        for inv in (fred, desk):
             self.assertIn("powershell.exe", inv)
             self.assertIn("-EncodedCommand", inv)
-            self.assertIn("FRED@100.64.0.10", inv)
-        finally:
-            m.tailscale_peer_ip = original
+            self.assertNotIn("tailscale", " ".join(inv).lower())
+        self.assertIn("FRED@127.0.0.1", fred)
+        self.assertIn("-p", fred)
+        self.assertEqual(fred[fred.index("-p") + 1], "2222")
+        self.assertIn("user@127.0.0.1", desk)
+        self.assertIn("-p", desk)
+        self.assertEqual(desk[desk.index("-p") + 1], "2223")
 
 
 class BranchCoherenceTests(unittest.TestCase):
@@ -171,6 +170,21 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
+    def test_bootstrap_uses_reverse_ssh_for_windows(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("127.0.0.1/2222", text)
+        self.assertIn("127.0.0.1/2223", text)
+        self.assertIn("32222:127.0.0.1:2222", text)
+        self.assertIn("32223:127.0.0.1:2223", text)
+        self.assertIn("http://127.0.0.1:5558/mcp/tool/execute_command", text)
+        self.assertNotIn("tailscale status --json", text)
+        self.assertNotIn("</dev/tcp/$fred_ip/22", text)
+        self.assertNotIn("</dev/tcp/$desk_ip/22", text)
+        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
+        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
+        self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
+        self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
@@ -179,6 +193,7 @@ class BootstrapContractTests(unittest.TestCase):
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("|| true", text, f"{path} must handle failures explicitly")
+            self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
 
 
 if __name__ == "__main__":
