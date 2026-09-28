@@ -351,10 +351,76 @@ jobs:
           fi
           echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
+          # Bootstrap the controller public key over the already-proven legacy
+          # recovery relays. Do not assume the Linux/VM bootstrap key is authorized
+          # by a freshly repaired Windows OpenSSH server.
+          python3 - <<'PY'
+          import base64
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          setup = Path("scripts/setup-remote-control-windows.ps1").read_text(encoding="utf-8-sig")
+          public_key_b64 = base64.b64encode(
+              Path("/tmp/shopvivaliz-remote-control.pub").read_bytes()
+          ).decode()
+
+          def call(port, tool, params, timeout):
+              endpoint = f"http://127.0.0.1:{port}/mcp/tool/{tool}"
+              body = json.dumps({"params": params}).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=timeout) as response:
+                  payload = json.load(response)
+              result = payload.get("result") or {}
+              if result.get("success") is not True:
+                  raise RuntimeError(str(result.get("error") or result))
+              return str(result.get("output") or "")
+
+          remote_rel = "scripts/shopvivaliz-remote-control-bootstrap.ps1"
+          remote_abs = r"C:\site-shopvivaliz\scripts\shopvivaliz-remote-control-bootstrap.ps1"
+          for label, relay_port in (("FRED", 5557), ("DESKTOP", 5558)):
+              call(relay_port, "write_file", {"path": remote_rel, "content": setup}, 20)
+              command = (
+                  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass "
+                  f"-File {remote_abs} -PublicKeyBase64 {public_key_b64}"
+              )
+              output = call(
+                  relay_port,
+                  "execute_command",
+                  {"command": command, "timeout": 60},
+                  75,
+              )
+              if "REMOTE_CONTROL_WINDOWS_KEY_INSTALL=PASS" not in output:
+                  raise RuntimeError(label + " controller key install acknowledgement missing")
+              print(f"REMOTE_CONTROL_ADMIN_KEY_STEP={label} relay bootstrap install OK")
+              try:
+                  call(
+                      relay_port,
+                      "execute_command",
+                      {
+                          "command": (
+                              "powershell.exe -NoLogo -NoProfile -NonInteractive -Command "
+                              "Remove-Item -LiteralPath "
+                              "'C:\\site-shopvivaliz\\scripts\\shopvivaliz-remote-control-bootstrap.ps1' "
+                              "-Force -ErrorAction SilentlyContinue"
+                          ),
+                          "timeout": 15,
+                      },
+                      25,
+                  )
+              except Exception as exc:
+                  print(f"REMOTE_CONTROL_ADMIN_KEY_STEP={label} cleanup WARN type={type(exc).__name__}")
+          PY
+
           for spec in 'FRED 2222 FRED' 'DESKTOP 2223 user'; do
             set -- $spec
             label="$1"; port="$2"; user="$3"
-            echo "::group::Admin key install diagnostic: $label (port $port)"
+            echo "::group::Controller-key SSH verification: $label (port $port)"
 
             ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>"/tmp/$label.keyscan.err" > "/tmp/$label.remote-control.hosts" && keyscan_rc=0 || keyscan_rc=$?
             if [ "$keyscan_rc" -ne 0 ] || [ ! -s "/tmp/$label.remote-control.hosts" ]; then
@@ -362,32 +428,25 @@ jobs:
               echo "::endgroup::"
               exit 1
             fi
-            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label ssh-keyscan OK ($(wc -l < "/tmp/$label.remote-control.hosts") host key line(s))"
             chmod 600 "/tmp/$label.remote-control.hosts"
+            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label ssh-keyscan OK ($(wc -l < "/tmp/$label.remote-control.hosts") host key line(s))"
 
-            scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1" 2>"/tmp/$label.scp.err" && scp_rc=0 || scp_rc=$?
-            if [ "$scp_rc" -ne 0 ]; then
-              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at scp rc=$scp_rc stderr=$(tail -c 500 "/tmp/$label.scp.err" 2>/dev/null)"
+            sudo -n ssh -p "$port" \
+              -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" \
+              -o ConnectTimeout=10 \
+              -i /var/lib/shopvivaliz-remote-control/id_ed25519 \
+              "$user@127.0.0.1" \
+              'powershell.exe -NoLogo -NoProfile -NonInteractive -Command "Write-Output REMOTE_CONTROL_CONTROLLER_KEY_AUTH=PASS"' \
+              >"/tmp/$label.controller-auth.out" 2>"/tmp/$label.controller-auth.err" && auth_rc=0 || auth_rc=$?
+            if [ "$auth_rc" -ne 0 ] || ! grep -Fq 'REMOTE_CONTROL_CONTROLLER_KEY_AUTH=PASS' "/tmp/$label.controller-auth.out"; then
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at controller-key auth rc=$auth_rc stderr=$(tail -c 500 "/tmp/$label.controller-auth.err" 2>/dev/null)"
               echo "::endgroup::"
               exit 1
             fi
-            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label scp OK"
-
-            pub_b64="$(base64 -w0 /tmp/shopvivaliz-remote-control.pub)"
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $pub_b64" 2>"/tmp/$label.install.err" && install_rc=0 || install_rc=$?
-            if [ "$install_rc" -ne 0 ]; then
-              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at bootstrap install rc=$install_rc stderr=$(tail -c 500 "/tmp/$label.install.err" 2>/dev/null)"
-              echo "::endgroup::"
-              exit 1
-            fi
-            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label bootstrap install OK"
-
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue" 2>"/tmp/$label.cleanup.err" && cleanup_rc=0 || cleanup_rc=$?
-            if [ "$cleanup_rc" -ne 0 ]; then
-              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label WARN cleanup rc=$cleanup_rc stderr=$(tail -c 300 "/tmp/$label.cleanup.err" 2>/dev/null) (non-fatal)"
-            else
-              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label cleanup OK"
-            fi
+            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label controller-key auth OK"
             echo "::endgroup::"
           done
 
