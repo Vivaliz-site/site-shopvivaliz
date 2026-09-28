@@ -9,13 +9,62 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: arm-chatgpt-continuity-backend-once
   cancel-in-progress: false
 
 jobs:
+  wait-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUIRED_SHA: fedff66a0b014508480a41d69a4d84db3707cca8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Wait outside A1 until deployment evidence contains required SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for _ in $(seq 1 90); do
+            tmp="$(mktemp)"
+            if gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/$GITHUB_REPOSITORY/contents/deployment/latest.json?ref=deployment-evidence" \
+              > "$tmp" 2>/dev/null; then
+              deployed="$(python3 - "$tmp" <<'PY'
+          import json, re, sys
+          try:
+              data=json.load(open(sys.argv[1],encoding='utf-8'))
+          except Exception:
+              print('')
+              raise SystemExit(0)
+          sha=str(data.get('sha') or '').strip().lower()
+          print(sha if re.fullmatch(r'[0-9a-f]{40}',sha) else '')
+          PY
+              )"
+              rm -f "$tmp"
+              if [ -n "$deployed" ] && git cat-file -e "$deployed^{commit}" 2>/dev/null \
+                && git merge-base --is-ancestor "$REQUIRED_SHA" "$deployed"; then
+                echo "DEPLOYMENT_EVIDENCE_READY=true"
+                echo "DEPLOYED_SHA=$deployed"
+                exit 0
+              fi
+            else
+              rm -f "$tmp"
+            fi
+            sleep 10
+          done
+          echo "::error::deployment evidence did not reach required SHA"
+          exit 1
+
   arm:
+    needs: wait-deploy
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
@@ -33,26 +82,21 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Wait for required production release
+      - name: Verify required production release
         shell: bash
         run: |
           set -Eeuo pipefail
           repo=/home/ubuntu/shopvivaliz-deploy/repo
           release_file=/home/ubuntu/shopvivaliz-deploy/current/.release-sha
-          for _ in $(seq 1 60); do
-            release_sha="$(cat "$release_file" 2>/dev/null || true)"
-            if [ -n "$release_sha" ]; then
-              git -C "$repo" fetch -q origin main || true
-              if git -C "$repo" cat-file -e "$release_sha^{commit}" 2>/dev/null                 && git -C "$repo" merge-base --is-ancestor "$REQUIRED_SHA" "$release_sha"                 && grep -q 'DEFAULT_BRIDGE_RETRY_SECONDS' /home/ubuntu/shopvivaliz-deploy/current/scripts/chatgpt_continuity_nudge_dispatcher.py                 && test -x /home/ubuntu/shopvivaliz-deploy/current/scripts/install-chatgpt-continuity-backend-bridge.sh; then
-                echo "CHATGPT_CONTINUITY_RELEASE_READY=true"
-                echo "RELEASE_SHA=$release_sha"
-                exit 0
-              fi
-            fi
-            sleep 10
-          done
-          echo "::error::Required ChatGPT continuity release did not become active in time"
-          exit 1
+          release_sha="$(cat "$release_file" 2>/dev/null || true)"
+          test -n "$release_sha"
+          git -C "$repo" fetch -q origin main || true
+          git -C "$repo" cat-file -e "$release_sha^{commit}"
+          git -C "$repo" merge-base --is-ancestor "$REQUIRED_SHA" "$release_sha"
+          grep -q 'DEFAULT_BRIDGE_RETRY_SECONDS' /home/ubuntu/shopvivaliz-deploy/current/scripts/chatgpt_continuity_nudge_dispatcher.py
+          test -x /home/ubuntu/shopvivaliz-deploy/current/scripts/install-chatgpt-continuity-backend-bridge.sh
+          echo "CHATGPT_CONTINUITY_RELEASE_READY=true"
+          echo "RELEASE_SHA=$release_sha"
 
       - name: Fail closed on pre-existing active bridge jobs
         shell: bash
