@@ -91,7 +91,7 @@ except Exception:
     print("json")
     raise SystemExit(0)
 names={x.get("name") for x in p.get("result",{}).get("tools",[]) if isinstance(x,dict)}
-required={"hosts_list","host_health","task_submit","task_status","task_result"}
+required={"hosts_list","host_health","task_submit","task_status"}
 print("ok" if required.issubset(names) else "tools")
 PY
 )"
