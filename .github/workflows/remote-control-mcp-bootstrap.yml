@@ -465,8 +465,21 @@ jobs:
           test "$(grep -cv '^#' "$tmp")" -ge 3
           sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts
           sudo -n systemctl restart shopvivaliz-remote-control-mcp.service
-          sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
-          curl -fsS http://127.0.0.1:5580/health >/dev/null
+          controller_ready=0
+          for attempt in $(seq 1 30); do
+            if sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service && \
+               curl -fsS --connect-timeout 1 --max-time 3 http://127.0.0.1:5580/health >/dev/null 2>&1; then
+              controller_ready=1
+              echo "REMOTE_CONTROL_CONTROLLER_READY=PASS attempt=$attempt"
+              break
+            fi
+            sleep 1
+          done
+          if [ "$controller_ready" -ne 1 ]; then
+            echo "REMOTE_CONTROL_CONTROLLER_READY=FAIL"
+            sudo -n systemctl is-active shopvivaliz-remote-control-mcp.service || true
+            exit 1
+          fi
           REMOTE
 
       - name: Four-host live MCP health validation
