@@ -13,7 +13,6 @@ ACTIVE_ACCESS_DOCS = (
     ROOT / "docs" / "knowledge" / "claude-vm-bootstrap.md",
     ROOT / "GEMINI.md",
     ROOT / "docs" / "knowledge" / "README.md",
-    ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
     ROOT / "docs" / "AGENT-MCP-REMOTE.md",
 )
 
