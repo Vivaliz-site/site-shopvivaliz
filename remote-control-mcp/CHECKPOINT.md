@@ -3,7 +3,7 @@
 TASK_ID=private-remote-control-mcp-4hosts-20260927
 STATUS=RUNNING
 REPOSITORY=Vivaliz-site/site-shopvivaliz
-BRANCH=fix/remote-control-windows-reverse-ssh-20260927
+BRANCH=main (PR #1974 merged; follow-up fixes #2003/#2004/#2007 merged directly to main; KOCEPSV still unproven — see ACTION STAGE 3 below)
 
 ## Goal
 Ativar o ShopVivaliz Remote Control MCP independente de GitHub em runtime nos quatro hosts canônicos.
@@ -121,3 +121,16 @@ STATUS=PASS
   - Shell syntax: PASS.
 - No merge, live Windows bootstrap, or four-host E2E was executed in this stage.
 - Next authorized stage: ACTION STAGE 3 — validate and merge PR.
+
+### ACTION STAGE 3 — PR #1974 merged; live Windows bootstrap still failing on KOCEPSV
+STATUS=RUNNING
+- PR #1974 merged to main at `1d7425a96702ec8c974230a86db0268f68391496` (2026-09-28T02:47:22Z). All 5 required checks (Remote Control MCP CI, Mandatory Validation Gate, Repository Governance, ShopVivaliz QA, Desktop Commander 24h Health) were SUCCESS on the merge head.
+- Post-merge live bootstrap runs (workflow `remote-control-mcp-bootstrap.yml`) repeatedly failed on KOCEPSV only. Three follow-up diagnostic/fix PRs landed same-day, none of which updated this checkpoint file when merged (gap now closed by this entry):
+  - PR #2003 `fix(remote-control): tolerate hidden KOCEPSV ssh executable path` — merged `6020d5d9...`.
+  - PR #2004 `fix(remote-control): classify KOCEPSV sidecar bootstrap failures` — merged `4de07874c...`.
+  - PR #2007 `fix(remote-control): classify KOCEPSV controller invocation failure` — merged `fda0aba3d...`.
+- **Live re-verification performed this session (2026-09-28, after all three fixes above were already on main):** bootstrap workflow run #56 (`36374487789`, head `fda0aba3d...`, the fix from #2007 itself) — job log shows `REMOTE_CONTROL_FRED_REVERSE_SSH=PASS` printed, then the job exits with code 1 with **no** `REMOTE_CONTROL_KOCEPSV_*` marker of any kind ever printed (not `_STAGE=PASS`, not `_RELAY_UPGRADE_QUEUED=PASS`, not a Python traceback) before the failure. This means the added diagnostic classification from #2004/#2007 is still not being reached/surfaced in the log, and KOCEPSV port `2223` is confirmed, via this live run, still not reachable from the backend loopback as of this run.
+- Cross-checked against `docs/knowledge/host-access.md` (updated same-day by PR #2010/#2012): explicitly documents "Fred-Win `2222` PASS recente" vs "KOCEPSV `2223` **ainda não comprovado**" — consistent with the live log finding above. No contradiction between docs and live evidence at this point.
+- Attempted direct live host diagnosis via Remote Desktop Commander (all four canonical devices confirmed online: `shopvivaliz-free-a1`, `LAPTOP-NIG4IFUU`, `always-free-arm-1787907847-26`, `DESKTOP-KOCEPSV`) to check `ss -ltnp` for port 2223 on the backend directly — **blocked by RDC's monthly tool-call quota being exhausted for this account** (explicit quota-paused response, not a connectivity/auth failure; device pairing itself is intact). This is a transient external tool-quota block, not a proof that the route is broken beyond what the GitHub Actions log already shows, and not a reason to consider the task BLOCKED_EXTERNAL — only this session's ability to do additional live host-level diagnosis via RDC is currently blocked.
+- Static read of `scripts/desktopkocepsv-remote-control-ssh-bridge.ps1` (current main) did not surface an obvious additional bug beyond what #2003 already fixed (ExecutablePath fallback, CommandLine-only requirement, regex-based forward substitution) — root-causing further requires live state on `DESKTOP-KOCEPSV` (is the legacy 5558 tunnel actually running right now? does the regex substitution actually produce a working ssh.exe invocation? does the new 2223 process survive past 3 seconds?), which is not obtainable this session.
+- STATUS remains RUNNING. Next authorized stage: ACTION STAGE 4 — obtain live KOCEPSV host state (via Remote Desktop Commander once quota resets, or another live channel) to root-cause why `2223` still does not come up, before attempting another blind fix PR. Do not repeat the PR-without-live-verification pattern from #2003/#2004/#2007.
