@@ -211,7 +211,35 @@ jobs:
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
           "${SITE_SSH[@]}" "PUB_B64='$PUB_B64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\"\$pub\" bash -s -- install-target'" < scripts/setup-remote-control-access.sh
 
+          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+            FRED_BOOT_B64="$(base64 -w0 scripts/fredwin-remote-bootstrap.ps1)"
+            FRED_TUNNEL_B64="$(base64 -w0 scripts/ssh-tunnel-service-managed.ps1)"
+            "${BACKEND_SSH[@]}" "FRED_BOOT_B64='$FRED_BOOT_B64' FRED_TUNNEL_B64='$FRED_TUNNEL_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          boot=os.environ['FRED_BOOT_B64']; tunnel=os.environ['FRED_TUNNEL_B64']
+          ps=r'''$ErrorActionPreference='Stop'
+          [IO.File]::WriteAllBytes('C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1',[Convert]::FromBase64String('__BOOT__'))
+          [IO.File]::WriteAllBytes('C:\site-shopvivaliz\scripts\ssh-tunnel-service-managed.ps1',[Convert]::FromBase64String('__TUNNEL__'))
+          $p=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1','-Mode','Ensure') -WindowStyle Hidden -PassThru
+          Write-Output ('REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS pid=' + $p.Id)
+          '''.replace('__BOOT__',boot).replace('__TUNNEL__',tunnel)
+          encoded=base64.b64encode(ps.encode('utf-16le')).decode()
+          body=json.dumps({'params':{'command':'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded,'timeout':30}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=40) as response: payload=json.load(response)
+          result=payload.get('result') or {}; out=str(result.get('output') or '')
+          if out: print(out)
+          if result.get('success') is not True or 'REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS' not in out:
+              raise SystemExit('Fred-Win recovery queue failed')
+          PY"
+            for _ in $(seq 1 30); do
+              if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+          fi
           "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
+
           if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
             "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
