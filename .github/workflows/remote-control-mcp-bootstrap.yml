@@ -16,6 +16,7 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
@@ -116,7 +117,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
           $files = @(
             'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1',
-            'scripts/desktopkocepsv-remote-bootstrap.ps1'
+            'scripts/desktopkocepsv-remote-bootstrap.ps1',
+            'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
           )
           foreach ($rel in $files) {
             $tmp = Join-Path $env:TEMP ([IO.Path]::GetRandomFileName())
@@ -126,10 +128,9 @@ jobs:
             $dest = Join-Path (Get-Location) ($rel -replace '/', '\')
             Move-Item -LiteralPath $tmp -Destination $dest -Force
           }
-          $tunnel = Get-Content -LiteralPath 'scripts\desktopkocepsv-ssh-tunnel-service-managed.ps1' -Raw
-          $bootstrap = Get-Content -LiteralPath 'scripts\desktopkocepsv-remote-bootstrap.ps1' -Raw
-          if ($tunnel -notlike '*-R 2223:127.0.0.1:22*') { throw 'staged tunnel missing 2223 forward' }
-          if ($bootstrap -notlike '*-R*2223:127.0.0.1:22*') { throw 'staged bootstrap missing 2223 matcher' }
+          $bridge = Get-Content -LiteralPath 'scripts\desktopkocepsv-remote-control-ssh-bridge.ps1' -Raw
+          if ($bridge -notlike '*-R 2223:127.0.0.1:22*') { throw 'staged bridge missing 2223 forward' }
+          if ($bridge -notlike '*5558:127.0.0.1:5557*') { throw 'staged bridge missing legacy tunnel matcher' }
           Write-Output 'REMOTE_CONTROL_KOCEPSV_STAGE=PASS'
           """
           stage_b64 = base64.b64encode(stage.encode("utf-16le")).decode()
@@ -141,7 +142,7 @@ jobs:
 
           restart = r"""$ErrorActionPreference='Stop'
           Start-Sleep -Seconds 2
-          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode Ensure
+          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1' -Mode InstallTask
           """
           restart_b64 = base64.b64encode(restart.encode("utf-16le")).decode()
           outer = (
