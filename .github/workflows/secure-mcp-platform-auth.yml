@@ -1,0 +1,43 @@
+name: Secure MCP Platform Auth
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  auth:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[secure-mcp-platform-auth]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=auth'
+      }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Authenticate canonical browser to OpenAI Platform
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          output=''
+          rc=0
+          if output="$(timeout 120s node scripts/openai-secure-mcp-platform-auth.mjs 2>&1)"; then
+            rc=0
+          else
+            rc=$?
+          fi
+          safe="$(printf '%s\n' "$output" | grep -E '^OPENAI_PLATFORM_[A-Z_]+=' || printf '')"
+          [ -z "$safe" ] || printf '%s\n' "$safe"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::OpenAI Platform authentication did not complete"
+            exit "$rc"
+          fi
+          printf '%s\n' "$safe" | grep -Fq 'OPENAI_PLATFORM_AUTH_RESULT=PASS'
+          echo "SECURE_MCP_PLATFORM_AUTH=PASS"
