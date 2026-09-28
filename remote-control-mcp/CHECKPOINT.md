@@ -6,28 +6,37 @@ REPOSITORY=Vivaliz-site/site-shopvivaliz
 BRANCH=feat/private-remote-control-mcp-20260927
 
 ## Goal
-Ativar a solução ShopVivaliz Remote Control/MCP, independente de GitHub em runtime, nos quatro hosts: always-free-arm-1787907847-26, shopvivaliz-free-a1, Fred-Win/LAPTOP-NIG4IFUU e DESKTOP-KOCEPSV.
+Ativar o ShopVivaliz Remote Control MCP independente de GitHub em runtime nos quatro hosts canônicos.
 
-## Evidence already completed
-- Canonical bootstrap docs and agent rules read.
-- Four Remote Desktop Commander devices observed online before quota exhaustion.
-- Remote Desktop Commander monthly remote-call quota observed at 0% remaining.
-- Existing private relays confirmed in code: Fred-Win via backend loopback 5557; KOCEPSV via backend loopback 5558.
-- Canonical private transport confirmed: VCN/Tailscale/OpenSSH; RustDesk is GUI fallback.
-- SPEC created and privilege model upgraded for administrative capabilities.
-- Controller source created at remote-control-mcp/controller.py.
-- systemd installer created at remote-control-mcp/install.sh.
-- four-host/durable-task E2E created at remote-control-mcp/e2e.py.
+## Canonical implementation
+- Controller/MCP: `remote-control-mcp/server.py`
+- Controller endpoint: backend loopback `127.0.0.1:5580`
+- Controller service: `shopvivaliz-remote-control-mcp.service`
+- Linux bootstrap: `scripts/setup-remote-control-access.sh`
+- Windows bootstrap: `scripts/setup-remote-control-windows.ps1`
+- Four-host bootstrap/E2E: `.github/workflows/remote-control-mcp-bootstrap.yml`
+- Tests: `tests/remote-control-mcp-test.py`
 
-## Security constraints retained
-- No public shell/control endpoint.
-- Never expose secrets/credentials.
-- Production current/active release remains immutable.
-- Browser automation remains on backend VM, not Windows hosts.
-- Administrative/root/LocalSystem privilege is allowed where needed, with audit.
+## Runtime architecture
+- `always-free-arm-1787907847-26`: controller executes locally as root.
+- `shopvivaliz-free-a1`: private VCN SSH using the dedicated `shopvivaliz-remote` identity with administrative sudo.
+- Fred-Win/LAPTOP-NIG4IFUU: private Tailscale/OpenSSH path, Administrator context.
+- KOCEPSV/DESKTOP-KOCEPSV: private Tailscale/OpenSSH path, Administrator context.
+- GitHub is bootstrap/recovery only; it is not command transport, queue, heartbeat, execution or state at runtime.
 
-## Next action
-Bootstrap the controller on always-free-arm-1787907847-26 using the existing auditable path, establish/install persistent host-side runtime on all four hosts, then run E2E from the new GitHub-independent control plane: health/identity/admin privilege on all four plus detached durable task persistence and restart recovery.
+## Security
+- MCP binds only to backend loopback.
+- Privileged MCP calls require a root-only bearer token generated on the backend; token contents never enter Git.
+- Controller SSH identity is generated and kept on the backend.
+- Host keys are pinned.
+- Audit stores command hashes rather than raw commands.
+- Secret-bearing file paths are denied.
+- Production active releases remain immutable.
 
 ## Completion gate
-Do not mark CONCLUIDO until all four hosts return live evidence through the new control plane without GitHub being the command transport, and the durable task survives client disconnection/retrieval.
+Do not mark CONCLUIDO until the merged bootstrap proves, through the new MCP:
+1. live health on all four hosts;
+2. root on both Linux hosts;
+3. Administrator on both Windows hosts;
+4. durable task execution and retrieval on all four hosts;
+5. `REMOTE_CONTROL_FOUR_HOST_E2E=PASS`.
