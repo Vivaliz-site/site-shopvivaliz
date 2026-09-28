@@ -26,8 +26,10 @@ jobs:
       BACKEND_TUNNEL_PORT: "22215"
       SITE_REPO: Vivaliz-site/site-shopvivaliz
       SITE_BRANCH: test/checkpoint-first-zero-window-20260927
+      SITE_MERGED_HEAD: e2aeea7e92ebc243cbd048b8c46379c8c07f6176
       PIPELINE_REPO: Vivaliz-site/-shopvivaliz-pipeline
       PIPELINE_BRANCH: fix/authenticated-global-audit-policy-bridge-20260927
+      PIPELINE_MERGED_HEAD: 810cfd31ff3b99a859e9cd92934bc8b35afd513c
       CHAT_CLI_SESSION_ID: chatgpt-20260927-2145-global-cleanup
 
     steps:
@@ -137,14 +139,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
-          "${SSH_BACKEND[@]}" "SITE_REPO='$SITE_REPO' SITE_BRANCH='$SITE_BRANCH' PIPELINE_REPO='$PIPELINE_REPO' PIPELINE_BRANCH='$PIPELINE_BRANCH' bash -s" <<'REMOTE'
+          "${SSH_BACKEND[@]}" "SITE_REPO='$SITE_REPO' SITE_BRANCH='$SITE_BRANCH' SITE_MERGED_HEAD='$SITE_MERGED_HEAD' PIPELINE_REPO='$PIPELINE_REPO' PIPELINE_BRANCH='$PIPELINE_BRANCH' PIPELINE_MERGED_HEAD='$PIPELINE_MERGED_HEAD' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           export GH_CONFIG_DIR=/home/ubuntu/.config/gh
           unset GH_TOKEN GITHUB_TOKEN
           gh auth status --hostname github.com >/dev/null
 
           cleanup_ref() {
-            local repo="$1" branch="$2"
+            local repo="$1" branch="$2" merged_head="$3"
             local tip main_sha status
             if ! tip="$(gh api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null)"; then
               echo "BRANCH_ALREADY_ABSENT repo=$repo branch=$branch"
@@ -152,8 +154,21 @@ jobs:
             fi
             main_sha="$(gh api "repos/$repo/commits/main" --jq .sha)"
             status="$(gh api "repos/$repo/compare/$tip...$main_sha" --jq .status)"
-            echo "BRANCH_MERGE_PROOF repo=$repo branch=$branch status=$status"
-            case "$status" in ahead|identical) ;; *) echo "ERROR branch is not fully merged" >&2; return 20 ;; esac
+            echo "BRANCH_MERGE_PROOF repo=$repo branch=$branch status=$status tip=$tip"
+            case "$status" in
+              ahead|identical) ;;
+              diverged)
+                if [ "$tip" != "$merged_head" ]; then
+                  echo "ERROR diverged branch tip differs from the exact merged PR head" >&2
+                  return 20
+                fi
+                echo "BRANCH_SQUASH_PROOF=PASS repo=$repo branch=$branch tip_matches_merged_pr_head=true"
+                ;;
+              *)
+                echo "ERROR branch is not safely deletable" >&2
+                return 20
+                ;;
+            esac
             gh api --method DELETE "repos/$repo/git/refs/heads/$branch"
             if gh api "repos/$repo/git/ref/heads/$branch" >/dev/null 2>&1; then
               echo "ERROR branch still resolves repo=$repo branch=$branch" >&2
@@ -162,8 +177,8 @@ jobs:
             echo "BRANCH_DELETE=PASS repo=$repo branch=$branch"
           }
 
-          cleanup_ref "$SITE_REPO" "$SITE_BRANCH"
-          cleanup_ref "$PIPELINE_REPO" "$PIPELINE_BRANCH"
+          cleanup_ref "$SITE_REPO" "$SITE_BRANCH" "$SITE_MERGED_HEAD"
+          cleanup_ref "$PIPELINE_REPO" "$PIPELINE_BRANCH" "$PIPELINE_MERGED_HEAD"
           echo MERGED_BRANCH_CLEANUP=PASS
           REMOTE
 
