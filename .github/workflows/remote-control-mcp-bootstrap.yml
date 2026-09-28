@@ -150,7 +150,6 @@ jobs:
                   print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUE=FAIL type={type(last_error).__name__}")
                   raise last_error
           PY
-          PY
 
           ssh_protocol_alive() {
             local port="$1"

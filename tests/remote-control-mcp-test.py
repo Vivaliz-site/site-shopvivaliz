@@ -169,6 +169,7 @@ class BootstrapContractTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertEqual(text.count("- name: Four-host live MCP health validation"), 1)
         self.assertEqual(text.count("- name: Persist sanitized bootstrap evidence"), 1)
+        self.assertNotIn("          PY\\n          PY\\n", text)
         self.assertEqual(text.count("- name: Cleanup bootstrap material"), 1)
         self.assertIn("test \"$(grep -cv '^#' \"$tmp\")\" -ge 3", text)
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
