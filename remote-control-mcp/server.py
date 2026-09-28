@@ -8,6 +8,7 @@ durable tasks/audit state in SQLite. No GitHub API is used at runtime.
 from __future__ import annotations
 
 import base64
+import grp
 import hashlib
 import hmac
 import json
@@ -16,6 +17,7 @@ import re
 import signal
 import sqlite3
 import subprocess
+import socketserver
 import threading
 import time
 import uuid
@@ -24,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
 LISTEN_HOST = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "5580"))
@@ -34,6 +36,11 @@ SSH_KEY = STATE_DIR / "id_ed25519"
 KNOWN_HOSTS = STATE_DIR / "known_hosts"
 MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536)))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
+UNIX_SOCKET = Path(os.environ.get(
+    "SHOPVIVALIZ_REMOTE_MCP_UNIX_SOCKET",
+    "/run/shopvivaliz-remote-control/mcp.sock",
+))
+UNIX_GROUP = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_UNIX_GROUP", "shopvivaliz-mcp-clients")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
 
@@ -66,7 +73,7 @@ SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----", re.S),
 )
-ACTIVE_PROCS: dict[str, subprocess.Popen[str]] = {}
+ACTIVE_PROCS: dict[str, subprocess.Popen[bytes]] = {}
 ACTIVE_LOCK = threading.Lock()
 STOP_EVENT = threading.Event()
 
@@ -81,6 +88,20 @@ def is_authorized(authorization: str, token: str | None = None) -> bool:
         return False
     supplied = authorization[7:]
     return bool(supplied) and hmac.compare_digest(supplied, expected)
+
+
+def request_is_authorized(
+    client_ip: str,
+    authorization: str,
+    *,
+    unix_transport: bool = False,
+    token: str | None = None,
+) -> bool:
+    if unix_transport:
+        return True
+    if client_ip not in {"127.0.0.1", "::1"}:
+        return False
+    return is_authorized(authorization, token)
 
 
 def redact_text(value: str) -> str:
@@ -471,6 +492,12 @@ def task_worker() -> None:
                     ACTIVE_PROCS.pop(tid, None)
 
 
+class ThreadingUnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+    allow_reuse_address = True
+    unix_transport = True
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ShopVivalizRemoteControlMCP/" + VERSION
 
@@ -500,10 +527,16 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/mcp":
             self._json(404, {"error": "not_found"})
             return
-        if self.client_address[0] not in {"127.0.0.1", "::1"}:
+        unix_transport = bool(getattr(self.server, "unix_transport", False))
+        client_ip = "" if unix_transport else str(self.client_address[0])
+        if not unix_transport and client_ip not in {"127.0.0.1", "::1"}:
             self._json(403, {"error": "loopback_only"})
             return
-        if not is_authorized(self.headers.get("Authorization", "")):
+        if not request_is_authorized(
+            client_ip,
+            self.headers.get("Authorization", ""),
+            unix_transport=unix_transport,
+        ):
             self._json(401, {"error": "unauthorized"})
             return
         try:
@@ -557,17 +590,54 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": redact_text(str(exc))}})
 
 
+def create_unix_server() -> ThreadingUnixHTTPServer:
+    try:
+        group = grp.getgrnam(UNIX_GROUP)
+    except KeyError as exc:
+        raise RuntimeError(f"unix_group_missing:{UNIX_GROUP}") from exc
+
+    parent = UNIX_SOCKET.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    os.chown(parent, 0, group.gr_gid)
+    os.chmod(parent, 0o750)
+    try:
+        UNIX_SOCKET.unlink()
+    except FileNotFoundError:
+        pass
+
+    server = ThreadingUnixHTTPServer(str(UNIX_SOCKET), Handler)
+    os.chown(UNIX_SOCKET, 0, group.gr_gid)
+    os.chmod(UNIX_SOCKET, 0o660)
+    return server
+
+
 def main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
     worker = threading.Thread(target=task_worker, name="task-worker", daemon=True)
     worker.start()
+    unix_server = create_unix_server()
+    unix_thread = threading.Thread(
+        target=unix_server.serve_forever,
+        kwargs={"poll_interval": 0.5},
+        name="unix-mcp-server",
+        daemon=True,
+    )
+    unix_thread.start()
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
+    setattr(server, "unix_transport", False)
     try:
         server.serve_forever(poll_interval=0.5)
     finally:
         STOP_EVENT.set()
+        server.shutdown()
         server.server_close()
+        unix_server.shutdown()
+        unix_server.server_close()
+        try:
+            UNIX_SOCKET.unlink()
+        except FileNotFoundError:
+            pass
 
 
 if __name__ == "__main__":
