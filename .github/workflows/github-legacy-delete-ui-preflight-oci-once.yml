@@ -208,8 +208,19 @@ jobs:
 
             if(!page.url().includes('/fredmourao-ai/solange-rolla/settings')) throw new Error('settings_page_not_reached');
             const body=(await page.locator('body').innerText()).replace(/\s+/g,' ');
+            const title=(await page.title()).replace(/\s+/g,' ').slice(0,160);
+            const pathName=new URL(page.url()).pathname;
+            const headings=(await page.locator('h1,h2,h3').allTextContents())
+              .map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean).slice(0,40);
+            const buttons=(await page.locator('button').allTextContents())
+              .map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean)
+              .filter(v=>/delete|danger|archive|transfer|repository|settings/i.test(v)).slice(0,40);
+            console.log('GITHUB_SETTINGS_PATH='+pathName);
+            console.log('GITHUB_SETTINGS_TITLE='+title);
+            console.log('GITHUB_SETTINGS_HEADINGS='+JSON.stringify(headings));
+            console.log('GITHUB_SETTINGS_RELEVANT_BUTTONS='+JSON.stringify(buttons));
             const danger=/Danger Zone/i.test(body);
-            const button=page.getByRole('button',{name:/Delete this repository/i}).first();
+            const button=page.getByRole('button',{name:/Delete(?: this)? repository/i}).first();
             const buttonPresent=(await button.count())>0;
             console.log('GITHUB_UI_AUTH=true');
             console.log('GITHUB_DANGER_ZONE_PRESENT='+String(danger));
