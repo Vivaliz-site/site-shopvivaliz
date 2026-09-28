@@ -312,8 +312,20 @@ class BootstrapContractTests(unittest.TestCase):
             "action=e2e-remote-control-mcp",
             "action=runtime-proof-submit",
             "action=runtime-proof-verify",
+            "action=secure-mcp-tunnel-probe",
         ):
             self.assertIn(action, text)
+        for marker in (
+            "SECURE_MCP_TUNNEL_PROBE=PASS",
+            "TUNNEL_CLIENT_INSTALLED=",
+            "TUNNEL_SERVICE_ACTIVE=",
+            "TUNNEL_ID_CONFIGURED=",
+            "TUNNEL_RUNTIME_KEY_AVAILABLE=",
+            "TUNNEL_ADMIN_KEY_AVAILABLE=",
+            "TUNNEL_MCP_LOCAL_AUTH_AVAILABLE=",
+            "TUNNEL_OUTBOUND_HTTPS=PASS",
+        ):
+            self.assertIn(marker, text)
         self.assertIn("REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=", text)
         sidecar_block = text[text.index('SIDE_B64='):text.index('REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS')]
         self.assertIn("import base64, json, os, urllib.error, urllib.request", sidecar_block)
