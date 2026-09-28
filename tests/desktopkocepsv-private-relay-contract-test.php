@@ -9,6 +9,7 @@ $all = file_get_contents($bootstrap) . "\n" . file_get_contents($tunnel);
 foreach ([
     '127.0.0.1:5557',
     '-R 5558:127.0.0.1:5557',
+    '-R 2223:127.0.0.1:22',
     'StrictHostKeyChecking=yes',
     'UserKnownHostsFile=',
     'ExitOnForwardFailure=yes',
@@ -23,11 +24,12 @@ foreach ([
     'if (-not $task) {',
     'Install-Task',
     'Enable-ScheduledTask -TaskName $TaskName',
-    'Ensure-Task'
+    'Ensure-Task',
+    '*-R*2223:127.0.0.1:22*'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
 }
-foreach (['StrictHostKeyChecking=no','StrictHostKeyChecking=accept-new','0.0.0.0:5557','-R 0.0.0.0:5558'] as $needle) {
+foreach (['StrictHostKeyChecking=no','StrictHostKeyChecking=accept-new','0.0.0.0:5557','-R 0.0.0.0:5558','-R 0.0.0.0:2223'] as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: relay inseguro {$needle}\n"); exit(1); }
 }
 echo "desktopkocepsv-private-relay-contract: ok\n";
