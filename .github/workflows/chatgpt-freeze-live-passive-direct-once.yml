@@ -1,0 +1,97 @@
+name: ChatGPT Freeze Live Passive Direct Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-freeze-live-passive-20260927
+    paths:
+      - '.github/workflows/chatgpt-freeze-live-passive-direct-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 11
+    steps:
+      - name: Passively monitor live ChatGPT turn directly on VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const candidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          let chromium=null;
+          for(const p of candidates){
+            if(!fs.existsSync(p)) continue;
+            const m=await import('file://'+p);
+            chromium=m.chromium||m.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+          const browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+          const context=browser.contexts()[0];
+          if(!context) throw new Error('cdp_context_missing');
+          const pages=context.pages();
+          let page=pages.find(p=>p.url().startsWith('https://chatgpt.com/')) || pages[0];
+          if(!page) throw new Error('chatgpt_page_missing');
+          await page.bringToFront().catch(()=>{});
+          page.setDefaultTimeout(8000);
+
+          const safeUrl=(raw)=>{
+            try{
+              const u=new URL(raw);
+              if(u.hostname!=='chatgpt.com') return u.origin;
+              const m=u.pathname.match(/^\/c\/([^/?#]+)/);
+              return m ? 'https://chatgpt.com/c/'+m[1] : u.origin+u.pathname;
+            }catch{return 'invalid-url';}
+          };
+          const snap=async()=>await page.evaluate(()=>{
+            const msgs=Array.from(document.querySelectorAll('[data-message-author-role]'));
+            const as=msgs.filter(x=>x.getAttribute('data-message-author-role')==='assistant');
+            const us=msgs.filter(x=>x.getAttribute('data-message-author-role')==='user');
+            const buttons=Array.from(document.querySelectorAll('button'));
+            const stop=buttons.some(b=>{
+              const label=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase();
+              return /stop|parar/.test(label)&&b.offsetParent!==null;
+            });
+            const body=String(document.body?.innerText||'').toLowerCase();
+            return {
+              assistantCount:as.length,
+              userCount:us.length,
+              lastAssistantLength:String(as.at(-1)?.textContent||'').length,
+              stopVisible:stop,
+              streamInterrupted:/transmissão interrompida|stream interrupted/.test(body),
+              reflectionFailed:/a reflexão falhou|thinking failed/.test(body),
+              requestTimeout:/esgotou-se o tempo limite da solicitação|request timed out|request timeout/.test(body),
+              stoppedThinking:/parou de pensar|stopped thinking/.test(body),
+              additionalChecks:/verificações adicionais|additional checks/.test(body),
+              retryVisible:buttons.some(b=>/retry|repetir|tentar novamente/.test(((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).toLowerCase())&&b.offsetParent!==null),
+            };
+          });
+          console.log('FREEZE_DIRECT_TITLE='+JSON.stringify((await page.title()).slice(0,160)));
+          console.log('FREEZE_DIRECT_URL='+safeUrl(page.url()));
+          const started=Date.now();
+          let s=await snap();
+          console.log('FREEZE_DIRECT_START='+JSON.stringify(s));
+          let outcome='still_active';
+          while(Date.now()-started<540000){
+            await page.waitForTimeout(15000);
+            s=await snap();
+            const elapsed=Date.now()-started;
+            console.log('FREEZE_DIRECT_MONITOR='+JSON.stringify({elapsed_ms:elapsed,...s}));
+            if(s.streamInterrupted||s.reflectionFailed||s.requestTimeout||s.stoppedThinking){outcome='visible_error';break;}
+            if(!s.stopVisible&&s.assistantCount>0){outcome='assistant_completed';break;}
+            if(!s.stopVisible&&s.retryVisible){outcome='retry_available';break;}
+            if(!s.stopVisible&&s.assistantCount===0){outcome='turn_stopped_without_response';break;}
+          }
+          console.log('FREEZE_DIRECT_OUTCOME='+outcome);
+          console.log('FREEZE_DIRECT_FINAL='+JSON.stringify(s));
+          NODE
