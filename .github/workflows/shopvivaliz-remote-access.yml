@@ -581,31 +581,41 @@ jobs:
               if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null'; then cdp_reachable=true; fi
 
               latest_conversation_discoverable=false
-              if "${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const m=await latestConversationMeta(c); process.exit(m ? 0 : 3); } finally { c.close(); }'"'"''; then
-                latest_conversation_discoverable=true
+              latest_probe_output=''
+              if latest_probe_output="$("${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationProbe,normalizeLatestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; let status=0,source="none",valid=false,c; try { c=await Cdp.connectToChatgptTab(); const p=await latestConversationProbe(c); status=Number.isFinite(Number(p?.http_status))?Number(p.http_status):0; source=["filtered","fallback_unfiltered"].includes(String(p?.source||""))?String(p.source):"none"; valid=Boolean(normalizeLatestConversationMeta(p)); } catch {} finally { c?.close(); } console.log("CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS="+status); console.log("CHATGPT_CONTINUITY_LATEST_LIST_SOURCE="+source); console.log("CHATGPT_CONTINUITY_LATEST_META_VALID="+(valid?"true":"false"));'"'"'' 2>/dev/null)"; then
+                :
+              else
+                latest_probe_output="$(printf '%s\n%s\n%s\n' 'CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=0' 'CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=none' 'CHATGPT_CONTINUITY_LATEST_META_VALID=false')"
               fi
+              latest_http="$(printf '%s\n' "$latest_probe_output" | sed -n 's/^CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=//p' | tail -n1)"
+              latest_source="$(printf '%s\n' "$latest_probe_output" | sed -n 's/^CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=//p' | tail -n1)"
+              latest_valid="$(printf '%s\n' "$latest_probe_output" | sed -n 's/^CHATGPT_CONTINUITY_LATEST_META_VALID=//p' | tail -n1)"
+              case "$latest_http" in ''|*[!0-9]*) latest_http=0 ;; esac
+              case "$latest_source" in filtered|fallback_unfiltered) ;; *) latest_source=none ;; esac
+              echo "CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=$latest_http"
+              echo "CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=$latest_source"
+              if [ "$latest_valid" = "true" ]; then latest_conversation_discoverable=true; fi
 
               bridge_heartbeat=false
-              token_file="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token"
-              if [ -s "$token_file" ]; then
-                heartbeat_tmp="$(mktemp)"
-                trap 'rm -f "$heartbeat_tmp"' RETURN
-                token="$(cat "$token_file")"
-                if curl -fsS --connect-timeout 5 --max-time 10 \
-                  -H 'Host: shopvivaliz.com.br' \
-                  -H "Authorization: Bearer $token" \
-                  -H 'Content-Type: application/json' \
-                  --data '{"operation":"heartbeat"}' \
-                  http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
-                  if jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null 2>&1; then
-                    bridge_heartbeat=true
+              if "${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                test -s "$token_file"
+                token="$(dd if="$token_file" status=none)"
+                trap "unset token" EXIT
+                matched=false
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
+                  heartbeat_tmp="$(mktemp)"
+                  if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data "{\"operation\":\"heartbeat\"}" "$candidate" > "$heartbeat_tmp" &&
+                    jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null 2>&1; then
+                    matched=true
+                    rm -f "$heartbeat_tmp"
+                    break
                   fi
-                fi
-                unset token
-                rm -f "$heartbeat_tmp"
-                trap - RETURN
+                  rm -f "$heartbeat_tmp"
+                done
+                test "$matched" = true'; then
+                bridge_heartbeat=true
               fi
-
               echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
               echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
               echo "CHATGPT_CONTINUITY_PENDING_REQUESTS=$pending_requests"
