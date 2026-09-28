@@ -28,7 +28,7 @@ probe_auth_and_command(){
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
-  run_as_claude python3 - "$tmp" <<'PY'
+  python3 - "$tmp" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as h:
     data=json.load(h)
