@@ -134,15 +134,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          "${SSH_VM[@]}" 'python3 -' <<'PY'
+          "${SSH_VM[@]}" 'sudo -n python3 -' <<'PY'
           import json, time, urllib.request
+          from pathlib import Path
 
           endpoint = "http://127.0.0.1:5580/mcp"
+          token = Path("/var/lib/shopvivaliz-remote-control/mcp-token").read_text(encoding="utf-8").strip()
+          if not token:
+              raise RuntimeError("controller MCP token is empty")
           hosts = ["always-free-arm-1787907847-26","shopvivaliz-free-a1","Fred-Win","KOCEPSV"]
 
           def call(name, arguments):
               body=json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}}).encode()
-              req=urllib.request.Request(endpoint,data=body,headers={"Content-Type":"application/json"},method="POST")
+              req=urllib.request.Request(endpoint,data=body,headers={"Content-Type":"application/json","Authorization":"Bearer "+token},method="POST")
               with urllib.request.urlopen(req,timeout=60) as r:
                   payload=json.load(r)
               result=(payload.get("result") or {}).get("structuredContent") or {}
