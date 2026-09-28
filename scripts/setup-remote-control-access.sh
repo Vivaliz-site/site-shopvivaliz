@@ -10,6 +10,7 @@ STATE_DIR="/var/lib/shopvivaliz-remote-control"
 INSTALL_DIR="/opt/shopvivaliz-remote-control"
 SERVICE="shopvivaliz-remote-control-mcp.service"
 REMOTE_USER="shopvivaliz-remote"
+MCP_CLIENT_GROUP="shopvivaliz-mcp-clients"
 PUBKEY="${SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY:-}"
 
 die() { echo "REMOTE_CONTROL_SETUP_ERROR=$1" >&2; exit "${2:-1}"; }
@@ -22,6 +23,9 @@ install_controller() {
 
   install -d -m 700 -o root -g root "$STATE_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR"
+  if ! getent group "$MCP_CLIENT_GROUP" >/dev/null; then
+    groupadd --system "$MCP_CLIENT_GROUP"
+  fi
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
 
   if [ ! -s "$STATE_DIR/id_ed25519" ]; then
@@ -60,6 +64,8 @@ Environment=PYTHONUNBUFFERED=1
 Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
 Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+Environment=SHOPVIVALIZ_REMOTE_MCP_UNIX_SOCKET=/run/shopvivaliz-remote-control/mcp.sock
+Environment=SHOPVIVALIZ_REMOTE_MCP_UNIX_GROUP=shopvivaliz-mcp-clients
 EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
 ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
 Restart=always
