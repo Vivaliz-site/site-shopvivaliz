@@ -32,6 +32,28 @@ if grep -Fq 'cat "$state_file"' "$remote"; then
   echo "task-state readback must not print the raw durable checkpoint" >&2
   exit 1
 fi
+python3 - "$remote" <<'PY'
+from pathlib import Path
+import sys
+
+lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+needle = 'python3 - "$state_file" <<\'PY\''
+start = next((i for i, line in enumerate(lines) if needle in line), None)
+if start is None:
+    raise SystemExit("task-state sanitizer heredoc command missing")
+command_indent = len(lines[start]) - len(lines[start].lstrip())
+first_body = next((i for i in range(start + 1, len(lines)) if lines[i].strip()), None)
+end = next((i for i in range(start + 1, len(lines)) if lines[i].strip() == "PY"), None)
+if first_body is None or end is None:
+    raise SystemExit("task-state sanitizer heredoc body/terminator missing")
+body_indent = len(lines[first_body]) - len(lines[first_body].lstrip())
+end_indent = len(lines[end]) - len(lines[end].lstrip())
+if not (body_indent < command_indent and end_indent == body_indent):
+    raise SystemExit(
+        f"task-state sanitizer heredoc must dedent body/terminator below shell command: "
+        f"command={command_indent} body={body_indent} terminator={end_indent}"
+    )
+PY
 if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$remote"; then
   echo "diagnostic browser export must not derive a directory from a mutable symlink target" >&2
   exit 1
