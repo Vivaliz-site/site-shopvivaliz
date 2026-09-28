@@ -490,10 +490,38 @@ jobs:
               sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
               echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
 
+              bridge_endpoint=''
+              bridge_endpoint="$("${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                token=$(cat "$token_file")
+                trap "unset token" EXIT
+                for candidate in                   http://10.0.1.112/api/chatgpt-continuity/bridge.php                   http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php                   https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php
+                do
+                  tmp=$(mktemp)
+                  code=0
+                  if curl -fsS --connect-timeout 4 --max-time 10                     -H "Host: shopvivaliz.com.br"                     -H "Authorization: Bearer $token"                     -H "Content-Type: application/json"                     --data "{"operation":"heartbeat"}"                     "$candidate" > "$tmp"; then
+                    if python3 - "$tmp" <<'"'"'PY'"'"'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+raise SystemExit(0 if payload.get("status") == "OK" else 1)
+PY
+                    then
+                      rm -f "$tmp"
+                      printf "%s\n" "$candidate"
+                      exit 0
+                    fi
+                  fi
+                  rm -f "$tmp"
+                done
+                exit 41')"
+              test -n "$bridge_endpoint"
+              echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=$bridge_endpoint"
+
               "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
               install_output=''
               install_rc=0
-              if install_output="$("${SSH[@]}" "CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
+              if install_output="$("${SSH[@]}" "CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT="$bridge_endpoint" CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
                 install_rc=0
               else
                 install_rc=$?
