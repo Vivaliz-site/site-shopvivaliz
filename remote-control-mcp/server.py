@@ -409,7 +409,7 @@ def task_worker() -> None:
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
             proc = subprocess.Popen(
                 remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, start_new_session=True
+                text=True, errors="replace", start_new_session=True
             )
             with ACTIVE_LOCK:
                 ACTIVE_PROCS[tid] = proc
