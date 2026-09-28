@@ -368,6 +368,21 @@ class BootstrapContractTests(unittest.TestCase):
             "OPENAI_TUNNEL_UI_EXISTING_COUNT=",
         ):
             self.assertIn(marker, text)
+        self.assertIn("process.exit(process.exitCode || 0)", text)
+        self.assertNotIn("browser.close(", text)
+
+        direct = ROOT / ".github" / "workflows" / "secure-mcp-platform-ui-probe.yml"
+        self.assertTrue(direct.exists(), "direct backend Platform UI probe workflow missing")
+        direct_text = direct.read_text(encoding="utf-8")
+        for needle in (
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]",
+            "github.event.issue.title == '[secure-mcp-platform-ui-probe]'",
+            "github.event.issue.user.login == 'fredmourao-ai'",
+            "github.event.issue.body == 'action=probe'",
+            "timeout 90s node scripts/openai-secure-mcp-platform-probe.mjs",
+            "OPENAI_TUNNEL_UI_PROBE=PASS",
+        ):
+            self.assertIn(needle, direct_text)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
