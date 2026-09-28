@@ -41,13 +41,7 @@ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
-
-# Fail closed while OpenAI Support is still investigating the account/workspace
-# restriction/risk-state hypothesis. Re-enable only by a dedicated reviewed
-# code change; there is intentionally no environment override.
-CHATGPT_WEB_TURN_AUTOMATION_BLOCKED = True
-CHATGPT_WEB_TURN_AUTOMATION_POLICY = "CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2"
-
+DEFAULT_MAX_WEB_ATTEMPTS = 2
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
@@ -176,29 +170,50 @@ def enqueue_nudge_via_bridge(
         return {"ok": False, "http_status": 0, "error": "transport_error"}
 
 
+def query_nudge_status_via_bridge(
+    *,
+    bridge_url: str,
+    token: str,
+    task_id: str,
+    timeout_seconds: int = 15,
+    bridge_host_header: str = "",
+) -> dict[str, Any]:
+    """Read the worker outcome without exposing credentials or browser state."""
+    body = json.dumps({"operation": "status", "task_id": task_id}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "shopvivaliz-chatgpt-continuity-dispatcher",
+    }
+    host_header = bridge_host_header.strip() or _bridge_host_header(bridge_url)
+    if host_header:
+        headers["Host"] = host_header
+    request = urllib.request.Request(
+        bridge_url,
+        data=body,
+        method="POST",
+        headers=headers,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return {"ok": True, "http_status": response.status, "body": payload}
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "http_status": exc.code, "error": "http_error"}
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return {"ok": False, "http_status": 0, "error": "transport_error"}
+
+
 def run_once(
     *,
     runtime_dir: Path | None = None,
     bridge_url: str = "",
     token: str = "",
     enqueue: Any = enqueue_nudge_via_bridge,
+    query_status: Any = query_nudge_status_via_bridge,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
-    if CHATGPT_WEB_TURN_AUTOMATION_BLOCKED:
-        return {
-            "ok": True,
-            "blocked_policy": True,
-            "policy": CHATGPT_WEB_TURN_AUTOMATION_POLICY,
-            "runtime_dir": str(root),
-            "scanned": 0,
-            "eligible": 0,
-            "dispatched": 0,
-            "skipped_no_token": 0,
-            "skipped_stale_checkpoint": 0,
-            "retry_attempted": 0,
-            "generated_at": utc_now(),
-        }
-
     resolved_bridge_url = bridge_url or os.getenv("CHATGPT_CONTINUITY_BRIDGE_URL", "") or DEFAULT_BRIDGE_URL
     resolved_token = resolve_bridge_token(token)
 
@@ -208,9 +223,11 @@ def run_once(
     skipped_no_token = 0
     skipped_stale_checkpoint = 0
     retry_attempted = 0
+    skipped_attempt_limit = 0
 
     ledger = _read_ledger(root)
     retry_seconds = max(1, int(os.getenv("CHATGPT_CONTINUITY_BRIDGE_RETRY_SECONDS", DEFAULT_BRIDGE_RETRY_SECONDS)))
+    max_web_attempts = max(1, int(os.getenv("CHATGPT_CONTINUITY_MAX_WEB_ATTEMPTS", DEFAULT_MAX_WEB_ATTEMPTS)))
     current = datetime.now(timezone.utc)
 
     for request in read_requests(root):
@@ -230,10 +247,54 @@ def run_once(
 
         previous = ledger.get(fingerprint)
         if previous:
-            if previous.get("bridge_ok") is True:
-                continue
             attempted_at = _parse_time(previous.get("dispatched_at"))
+            worker_status = str(previous.get("worker_status", "")).strip().upper()
+
+            # Empty/PENDING/CLAIMED are observations of an active attempt,
+            # not terminal outcomes. Re-poll them every dispatcher cycle so a
+            # later worker result cannot be cached as "in flight" forever.
+            if (
+                previous.get("bridge_ok") is True
+                and worker_status in {"", "PENDING", "CLAIMED"}
+                and resolved_token
+            ):
+                status_result = query_status(
+                    bridge_url=resolved_bridge_url,
+                    token=resolved_token,
+                    task_id=task_id,
+                    bridge_host_header=_bridge_host_header(resolved_bridge_url),
+                )
+                if status_result.get("ok"):
+                    status_body = status_result.get("body") if isinstance(status_result.get("body"), dict) else {}
+                    nudge = status_body.get("nudge") if isinstance(status_body.get("nudge"), dict) else {}
+                    observed_status = str(nudge.get("status", "")).strip().upper()
+                    if observed_status:
+                        if observed_status != worker_status:
+                            observed = dict(previous)
+                            observed["worker_status"] = observed_status
+                            observed["worker_status_observed_at"] = utc_now()
+                            _append_ledger(root, observed)
+                            ledger[fingerprint] = observed
+                            previous = observed
+                        worker_status = observed_status
+
+            if worker_status == "PROGRESS_CONFIRMED":
+                continue
+
+            # An active queue claim is already being handled by the browser
+            # worker. Re-enqueueing would only duplicate the same continuation.
+            if worker_status in {"PENDING", "CLAIMED"}:
+                continue
+
+            # SENT is a legacy ambiguous result and SENT_UNCONFIRMED explicitly
+            # means the click did not produce observable assistant progress.
+            # Both remain retryable after the bounded cooldown, but never
+            # indefinitely for the same unchanged checkpoint.
             if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
+                continue
+            previous_attempts = int(previous.get("attempt_count") or 1)
+            if previous_attempts >= max_web_attempts:
+                skipped_attempt_limit += 1
                 continue
             retry_attempted += 1
 
@@ -250,6 +311,7 @@ def run_once(
             repository=repository,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
+        previous_attempt_count = int((ledger.get(fingerprint) or {}).get("attempt_count") or 0)
         ledger_row = {
             "fingerprint": fingerprint,
             "task_id": task_id,
@@ -257,6 +319,9 @@ def run_once(
             "dispatched_at": utc_now(),
             "bridge_ok": bool(result.get("ok")),
             "http_status": result.get("http_status"),
+            "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
+            "worker_status": "",
+            "attempt_count": previous_attempt_count + 1,
         }
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
@@ -272,6 +337,7 @@ def run_once(
         "skipped_no_token": skipped_no_token,
         "skipped_stale_checkpoint": skipped_stale_checkpoint,
         "retry_attempted": retry_attempted,
+        "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
     }
 

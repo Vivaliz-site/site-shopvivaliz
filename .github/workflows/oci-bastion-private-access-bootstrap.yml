@@ -17,7 +17,14 @@ jobs:
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.title == '[private-access-bootstrap]' &&
         github.event.issue.user.login == 'fredmourao-ai' &&
-        (github.event.issue.body == 'action=install-rustdesk-and-agent-ssh' || github.event.issue.body == 'action=validate-rustdesk-via-fredwin')
+        (
+          github.event.issue.body == 'action=install-rustdesk-and-agent-ssh' ||
+          github.event.issue.body == 'action=validate-rustdesk-via-fredwin' ||
+          github.event.issue.body == 'action=bootstrap-remote-control-mcp' ||
+          github.event.issue.body == 'action=e2e-remote-control-mcp' ||
+          github.event.issue.body == 'action=runtime-proof-submit' ||
+          github.event.issue.body == 'action=runtime-proof-verify'
+        )
       }}
     runs-on: ubuntu-latest
     environment: Production
@@ -187,6 +194,217 @@ jobs:
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"'
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo "PRIVATE_SSH_TUNNELS=PASS"
+
+      - name: Bootstrap Remote Control MCP through OCI Bastion
+        if: github.event.issue.body == 'action=bootstrap-remote-control-mcp'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh'
+          PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
+          test -n "$PUBKEY"
+          PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
+          "${SITE_SSH[@]}" "PUB_B64='$PUB_B64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\"\$pub\" bash -s -- install-target'" < scripts/setup-remote-control-access.sh
+
+          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+            FRED_BOOT_B64="$(base64 -w0 scripts/fredwin-remote-bootstrap.ps1)"
+            FRED_TUNNEL_B64="$(base64 -w0 scripts/ssh-tunnel-service-managed.ps1)"
+            "${BACKEND_SSH[@]}" "FRED_BOOT_B64='$FRED_BOOT_B64' FRED_TUNNEL_B64='$FRED_TUNNEL_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          boot=os.environ['FRED_BOOT_B64']; tunnel=os.environ['FRED_TUNNEL_B64']
+          ps=r'''$ErrorActionPreference='Stop'
+          [IO.File]::WriteAllBytes('C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1',[Convert]::FromBase64String('__BOOT__'))
+          [IO.File]::WriteAllBytes('C:\site-shopvivaliz\scripts\ssh-tunnel-service-managed.ps1',[Convert]::FromBase64String('__TUNNEL__'))
+          $p=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1','-Mode','Ensure') -WindowStyle Hidden -PassThru
+          Write-Output ('REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS pid=' + $p.Id)
+          '''.replace('__BOOT__',boot).replace('__TUNNEL__',tunnel)
+          encoded=base64.b64encode(ps.encode('utf-16le')).decode()
+          body=json.dumps({'params':{'command':'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded,'timeout':30}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=40) as response: payload=json.load(response)
+          result=payload.get('result') or {}; out=str(result.get('output') or '')
+          if out: print(out)
+          if result.get('success') is not True or 'REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS' not in out:
+              raise SystemExit('Fred-Win recovery queue failed')
+          PY"
+            for _ in $(seq 1 30); do
+              if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+          fi
+          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
+
+          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
+            if ! "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
+          import base64, json, os, urllib.error, urllib.request
+          side = os.environ['SIDE_B64']
+          ps = r'''$ErrorActionPreference='Stop'
+          $path='C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1'
+          [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String('__SIDE__'))
+          & $path -Mode Ensure
+          '''.replace('__SIDE__', side)
+          encoded=base64.b64encode(ps.encode('utf-16le')).decode()
+          command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded
+          body=json.dumps({'params':{'command':command,'timeout':60}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5558/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          try:
+              with urllib.request.urlopen(req,timeout=70) as response:
+                  payload=json.load(response)
+          except (TimeoutError, urllib.error.URLError):
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=transport')
+              raise SystemExit('KOCEPSV sidecar transport failed')
+          result=payload.get('result') or {}
+          output=str(result.get('output') or '')
+          if result.get('success') is not True:
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=rejected')
+              raise SystemExit('KOCEPSV sidecar bootstrap failed')
+          if 'REMOTE_CONTROL_KOCEPSV_SIDECAR=PASS' not in output:
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=ack_missing')
+              raise SystemExit('KOCEPSV sidecar did not confirm 2223')
+          PY"
+            then
+              echo 'REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=controller_invocation'
+              exit 1
+            fi
+          fi
+          for _ in $(seq 1 30); do
+            if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+
+          ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32222:127.0.0.1:2222 ubuntu@127.0.0.1
+          ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32223:127.0.0.1:2223 ubuntu@127.0.0.1
+          sleep 2
+          for spec in 'FRED 32222 FRED' 'DESKTOP 32223 user'; do
+            set -- $spec
+            label="$1"; port="$2"; user="$3"
+            hosts="$RUNNER_TEMP/$label.remote-control.hosts"
+            ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>/dev/null > "$hosts"
+            test -s "$hosts"
+            scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1"
+            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $PUB_B64"
+            if [ "$label" = "DESKTOP" ]; then
+              ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1 -Mode InstallTask"
+            fi
+            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue"
+          done
+
+          "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            tmp=$(mktemp)
+            trap '\''rm -f "$tmp"'\'' EXIT
+            ssh-keyscan -T 5 10.0.1.112 > "$tmp" 2>/dev/null
+            ssh-keyscan -T 5 -p 2222 127.0.0.1 >> "$tmp" 2>/dev/null
+            ssh-keyscan -T 5 -p 2223 127.0.0.1 >> "$tmp" 2>/dev/null
+            test "$(grep -cv "^#" "$tmp")" -ge 3
+            sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts
+            sudo -n systemctl restart shopvivaliz-remote-control-mcp.service
+            sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
+            curl -fsS http://127.0.0.1:5580/health >/dev/null
+          '
+          echo "REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS"
+
+      - name: Remote Control MCP four-host E2E through OCI Bastion
+        if: github.event.issue.body == 'action=e2e-remote-control-mcp'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json, time, urllib.request
+          from pathlib import Path
+          endpoint='http://127.0.0.1:5580/mcp'
+          token=Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+          hosts=['always-free-arm-1787907847-26','shopvivaliz-free-a1','Fred-Win','KOCEPSV']
+          def call(name,args):
+              body=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':name,'arguments':args}}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Content-Type':'application/json','Authorization':'Bearer '+token},method='POST')
+              with urllib.request.urlopen(req,timeout=70) as r: payload=json.load(r)
+              result=(payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+                  raise RuntimeError(f'{name} failed {args}: {result}')
+              return result
+          for host in hosts:
+              r=call('host_health',{'host':host,'timeout':45})
+              out=str(r.get('stdout') or '')
+              if host in {'Fred-Win','KOCEPSV'} and '"administrator":true' not in out.lower():
+                  raise RuntimeError(host+' did not prove Administrator')
+              if host in {'always-free-arm-1787907847-26','shopvivaliz-free-a1'} and 'uid=0' not in out:
+                  raise RuntimeError(host+' did not prove root')
+              print('HOST_HEALTH_PASS='+host)
+          ids={h:call('task_submit',{'host':h,'command':'echo REMOTE_CONTROL_E2E=PASS','timeout':60})['task_id'] for h in hosts}
+          pending=set(hosts); deadline=time.time()+150
+          while pending and time.time()<deadline:
+              for h in list(pending):
+                  s=call('task_status',{'task_id':ids[h]})
+                  if s.get('state')=='succeeded':
+                      if 'REMOTE_CONTROL_E2E=PASS' not in str(s.get('stdout') or ''): raise RuntimeError(h+' missing task output')
+                      print('DURABLE_TASK_PASS='+h); pending.remove(h)
+                  elif s.get('state') in {'failed','cancelled','expired'}: raise RuntimeError(h+' task '+str(s.get('state')))
+              time.sleep(2)
+          if pending: raise RuntimeError('durable timeout '+','.join(sorted(pending)))
+          print('REMOTE_CONTROL_FOUR_HOST_E2E=PASS')
+          PY
+
+      - name: Submit disconnected runtime proof
+        if: github.event.issue.body == 'action=runtime-proof-submit'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          endpoint='http://127.0.0.1:5580/mcp'
+          token=Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+          body=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'task_submit','arguments':{'host':'always-free-arm-1787907847-26','command':"sleep 45; printf 'RUNTIME_NO_GITHUB=PASS\\n' > /var/lib/shopvivaliz-remote-control/runtime-proof.txt",'timeout':120}}}).encode()
+          req=urllib.request.Request(endpoint,data=body,headers={'Content-Type':'application/json','Authorization':'Bearer '+token},method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r: payload=json.load(r)
+          result=(payload.get('result') or {}).get('structuredContent') or {}
+          tid=result.get('task_id')
+          if not tid: raise RuntimeError('task id missing')
+          Path('/var/lib/shopvivaliz-remote-control/runtime-proof-task-id').write_text(tid)
+          print('RUNTIME_PROOF_SUBMITTED=PASS')
+          PY
+
+      - name: Verify disconnected runtime proof
+        if: github.event.issue.body == 'action=runtime-proof-verify'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          endpoint='http://127.0.0.1:5580/mcp'
+          token=Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+          tid=Path('/var/lib/shopvivaliz-remote-control/runtime-proof-task-id').read_text().strip()
+          def call(name,args):
+              body=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':name,'arguments':args}}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Content-Type':'application/json','Authorization':'Bearer '+token},method='POST')
+              with urllib.request.urlopen(req,timeout=40) as r: payload=json.load(r)
+              result=(payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('error'): raise RuntimeError(str(result))
+              return result
+          s=call('task_status',{'task_id':tid})
+          if s.get('state')!='succeeded' or 'RUNTIME_NO_GITHUB=PASS' not in str(s.get('stdout') or ''):
+              marker=Path('/var/lib/shopvivaliz-remote-control/runtime-proof.txt').read_text() if Path('/var/lib/shopvivaliz-remote-control/runtime-proof.txt').exists() else ''
+              if 'RUNTIME_NO_GITHUB=PASS' not in marker: raise RuntimeError('runtime proof did not finish after client disconnect')
+          r=call('admin_command_run',{'host':'always-free-arm-1787907847-26','command':'cat /var/lib/shopvivaliz-remote-control/runtime-proof.txt','timeout':30})
+          if 'RUNTIME_NO_GITHUB=PASS' not in str(r.get('stdout') or ''): raise RuntimeError('MCP could not retrieve runtime proof')
+          print('DURABLE_AFTER_DISCONNECT=PASS')
+          print('RUNTIME_GITHUB_DEPENDENCY=false')
+          PY
 
       - name: Validate both VMs through RustDesk on Fred-Win
         if: github.event.issue.body == 'action=validate-rustdesk-via-fredwin'

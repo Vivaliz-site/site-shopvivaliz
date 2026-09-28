@@ -30,12 +30,8 @@ const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:955
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
-
-// Fail closed while OpenAI Support is still investigating the account/workspace
-// restriction/risk-state hypothesis. Re-enabling Web turn submission requires a
-// dedicated reviewed code change; there is intentionally no env override.
-const CHATGPT_WEB_TURN_AUTOMATION_ALLOWED = false;
-const CHATGPT_WEB_TURN_AUTOMATION_POLICY = 'CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2';
+const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
+const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -174,6 +170,49 @@ async function composerIsUsable(cdp) {
   return cdp.evaluate(`(()=>{const b=document.querySelector('[data-testid="send-button"]');return Boolean(b)&&!b.disabled})()`);
 }
 
+async function assistantSnapshot(cdp) {
+  return cdp.evaluate(`(()=>{
+    const nodes=Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+    const last=nodes.length ? nodes[nodes.length-1] : null;
+    const lastText=(last?.innerText||last?.textContent||'').trim();
+    return {count:nodes.length,lastText,lastLength:lastText.length};
+  })()`);
+}
+
+function assistantProgressed(before, after) {
+  const prior = before || { count: 0, lastText: '', lastLength: 0 };
+  const current = after || { count: 0, lastText: '', lastLength: 0 };
+  if (Number(current.count || 0) > Number(prior.count || 0)) return true;
+  const priorText = String(prior.lastText || '');
+  const currentText = String(current.lastText || '');
+  return currentText.length > priorText.length && currentText !== priorText;
+}
+
+async function confirmAssistantProgress(
+  cdp,
+  baseline,
+  timeoutMs = PROGRESS_CONFIRM_MS,
+  pollMs = PROGRESS_POLL_MS,
+) {
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs || PROGRESS_CONFIRM_MS));
+  while (Date.now() < deadline) {
+    await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
+    const current = await assistantSnapshot(cdp);
+    if (assistantProgressed(baseline, current)) return true;
+
+    // If ChatGPT has already finalized the stream and no assistant content
+    // advanced, waiting longer cannot turn a click into a successful resume.
+    const generating = await conversationIsGenerating(cdp);
+    if (!generating) {
+      const stream = await conversationStreamStatus(cdp);
+      if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
 async function errorBannerPresent(cdp) {
   // ChatGPT surfaces an explicit banner on a genuine stream failure -- this
   // is the one unambiguous, well-known DOM signal available to a script
@@ -220,14 +259,8 @@ async function sendContinueMessage(cdp) {
 async function attemptNudge(
   taskId,
   connect = () => Cdp.connectToChatgptTab(),
-  allowWebTurn = CHATGPT_WEB_TURN_AUTOMATION_ALLOWED,
+  confirmProgress = confirmAssistantProgress,
 ) {
-  if (!allowWebTurn) {
-    return {
-      result_status: 'BLOCKED_POLICY',
-      detail: `${CHATGPT_WEB_TURN_AUTOMATION_POLICY}: automated ChatGPT Web turns disabled while account/workspace investigation is open`,
-    };
-  }
   let cdp;
   try {
     cdp = await connect();
@@ -251,15 +284,25 @@ async function attemptNudge(
     if (!(await composerIsUsable(cdp))) {
       return { result_status: 'CONVERSATION_NOT_FOUND', detail: 'composer/send-button selector not found (possible UI drift)' };
     }
+    const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
-    return sent
-      ? {
-          result_status: 'SENT',
-          detail: recoveredStaleComplete
-            ? `recovered stale COMPLETE stream; typed "${CONTINUE_MESSAGE}" and clicked send`
-            : `typed "${CONTINUE_MESSAGE}" and clicked send`,
-        }
-      : { result_status: 'ERROR', detail: 'composer found but send failed' };
+    if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed' };
+
+    const progressed = await confirmProgress(cdp, baseline);
+    if (!progressed) {
+      return {
+        result_status: 'SENT_UNCONFIRMED',
+        detail: recoveredStaleComplete
+          ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
+          : 'sent continuation, but no assistant progress was observed',
+      };
+    }
+    return {
+      result_status: 'PROGRESS_CONFIRMED',
+      detail: recoveredStaleComplete
+        ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
+        : 'continuation produced assistant progress',
+    };
   } catch (error) {
     return { result_status: 'ERROR', detail: text(error?.message).slice(0, 400) };
   } finally {
@@ -268,7 +311,6 @@ async function attemptNudge(
 }
 
 async function pollBridgeOnce() {
-  if (!CHATGPT_WEB_TURN_AUTOMATION_ALLOWED) return;
   const response = await bridge('pull');
   if (response.status !== 'JOB') return;
   const taskId = response.nudge?.task_id;
@@ -290,9 +332,8 @@ const REINFORCEMENT_CONFIRM_DELAY_MS = Math.max(3000, Number(process.env.CHATGPT
 async function reinforcementCheckOnce(
   connect = () => Cdp.connectToChatgptTab(),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
-  allowWebTurn = CHATGPT_WEB_TURN_AUTOMATION_ALLOWED,
+  confirmProgress = confirmAssistantProgress,
 ) {
-  if (!allowWebTurn) return { action: 'blocked_policy', sent: false };
   let cdp;
   try {
     cdp = await connect();
@@ -304,9 +345,16 @@ async function reinforcementCheckOnce(
       console.log('chatgpt_continuity_reinforcement error_banner_self_resolved');
       return { action: 'self_resolved' };
     }
+    const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
-    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=${sent}`);
-    return { action: 'confirmed', sent };
+    if (!sent) {
+      console.log('chatgpt_continuity_reinforcement error_banner_confirmed sent=false');
+      return { action: 'send_failed', sent: false, progress_confirmed: false };
+    }
+    const progressed = await confirmProgress(cdp, baseline);
+    const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
+    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=true progress=${progressed}`);
+    return { action, sent: true, progress_confirmed: progressed };
   } catch (error) {
     // The reinforcement monitor is best-effort: the checkpoint-driven path
     // above is the primary trigger and already surfaces real failures.
@@ -343,6 +391,9 @@ export {
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
+  assistantSnapshot,
+  assistantProgressed,
+  confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,

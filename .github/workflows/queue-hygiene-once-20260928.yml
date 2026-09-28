@@ -1,0 +1,107 @@
+name: Queue Hygiene Once 2026-09-28
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/queue-hygiene-once-20260928.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRESERVE_CODEX_RUN: "36373228736"
+    steps:
+      - name: Cancel only proven stale or duplicate runs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          echo "CURRENT_MAIN=$current_main"
+
+          candidates=(
+            36373360898
+            36373293532
+            36373245325
+            36373229526
+            36373205963
+            36373127602
+            36372978174
+            35298991332
+            35298991333
+            35298991352
+            35298991379
+            35298991358
+            35298991423
+            35298991432
+            35298991393
+            35298991425
+            35298991413
+            35298991446
+            35298991468
+            35298991563
+            32217847583
+          )
+
+          cancelled=0
+          already_terminal=0
+          preserved=0
+          for run_id in "${candidates[@]}"; do
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            sha="$(jq -r '.head_sha' <<<"$run_json")"
+            name="$(jq -r '.name' <<<"$run_json")"
+
+            if [ "$run_id" = "$PRESERVE_CODEX_RUN" ]; then
+              echo "PRESERVE run=$run_id name=$name reason=primary_codex"
+              preserved=$((preserved+1))
+              continue
+            fi
+            if [ "$sha" = "$current_main" ]; then
+              echo "PRESERVE run=$run_id name=$name reason=current_main"
+              preserved=$((preserved+1))
+              continue
+            fi
+
+            case "$status" in
+              queued|pending|in_progress|waiting|requested)
+                gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null 2>&1 \
+                  || gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null
+                echo "CANCEL_REQUESTED run=$run_id name=$name sha=$sha old_status=$status"
+                cancelled=$((cancelled+1))
+                ;;
+              completed)
+                echo "NO_ACTION run=$run_id name=$name status=completed"
+                already_terminal=$((already_terminal+1))
+                ;;
+              *)
+                echo "ERROR unexpected status run=$run_id status=$status" >&2
+                exit 2
+                ;;
+            esac
+          done
+
+          sleep 5
+          for run_id in "${candidates[@]}"; do
+            test "$run_id" = "$PRESERVE_CODEX_RUN" && continue
+            current="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            sha="$(jq -r '.head_sha' <<<"$current")"
+            status="$(jq -r '.status' <<<"$current")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$current")"
+            if [ "$sha" = "$current_main" ]; then
+              continue
+            fi
+            if [[ "$status" =~ ^(queued|pending|in_progress|waiting|requested)$ ]]; then
+              echo "ERROR stale run still active run=$run_id status=$status" >&2
+              exit 3
+            fi
+            echo "STALE_RUN_TERMINAL run=$run_id conclusion=$conclusion"
+          done
+
+          echo "QUEUE_HYGIENE=PASS cancelled=$cancelled already_terminal=$already_terminal preserved=$preserved"
