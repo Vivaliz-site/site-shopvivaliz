@@ -55,6 +55,58 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(completed["status"], "CONCLUIDO")
         self.assertTrue(state.is_terminal(completed))
 
+    def test_completed_task_starts_explicit_successor_without_mutating_predecessor(self) -> None:
+        state.start_task("task-v1", "Investigar falha original", "gpt")
+        state.mark_ready(
+            "task-v1",
+            evidence=["evidencia original"],
+            verification="estado original verificado",
+        )
+        completed = state.complete_task("task-v1")
+        predecessor_updated_at = completed["updated_at"]
+
+        successor = state.start_successor_task(
+            "task-v2",
+            predecessor_task_id="task-v1",
+            goal="Continuar investigacao apos nova evidencia",
+            agent_id="gpt",
+        )
+
+        self.assertEqual(successor["status"], "RUNNING")
+        self.assertEqual(successor["predecessor_task_id"], "task-v1")
+        self.assertEqual(successor["predecessor_status"], "CONCLUIDO")
+        self.assertTrue(successor["next_action"])
+        self.assertEqual(successor["history"][0]["event"], "started_successor")
+
+        predecessor = state.load_task("task-v1")
+        self.assertEqual(predecessor["status"], "CONCLUIDO")
+        self.assertEqual(predecessor["updated_at"], predecessor_updated_at)
+
+    def test_successor_rejects_noncompleted_predecessor_and_existing_target(self) -> None:
+        state.start_task("task-running", "Ainda executando", "gpt")
+        with self.assertRaises(state.TaskStateError):
+            state.start_successor_task(
+                "task-next",
+                predecessor_task_id="task-running",
+                goal="Nao deve iniciar",
+                agent_id="gpt",
+            )
+
+        state.mark_ready(
+            "task-running",
+            evidence=["done"],
+            verification="verified",
+        )
+        state.complete_task("task-running")
+        state.start_task("task-next", "Destino ja existe", "gpt")
+        with self.assertRaises(state.TaskStateError):
+            state.start_successor_task(
+                "task-next",
+                predecessor_task_id="task-running",
+                goal="Nao sobrescrever",
+                agent_id="gpt",
+            )
+
     def test_block_requires_external_impediment_and_exhausted_alternatives(self) -> None:
         state.start_task("task-block", "Resolver ate bloqueio real", "gpt")
 

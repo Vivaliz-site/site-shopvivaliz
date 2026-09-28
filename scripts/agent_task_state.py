@@ -140,6 +140,59 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
     return payload
 
 
+def start_successor_task(
+    task_id: str,
+    *,
+    predecessor_task_id: str,
+    goal: str,
+    agent_id: str = "",
+    repository: str = "",
+) -> dict[str, Any]:
+    task = _safe_id(task_id, "task_id")
+    predecessor = _load(predecessor_task_id)
+    if predecessor.get("status") != "CONCLUIDO":
+        raise TaskStateError("successor requires a CONCLUIDO predecessor; BLOCKED_EXTERNAL must use explicit resume")
+    if task == predecessor.get("task_id"):
+        raise TaskStateError("successor task_id must differ from predecessor")
+    path = _path(task)
+    if path.exists():
+        raise TaskStateError(f"successor task state already exists: {task}")
+
+    goal_text = str(goal).strip()
+    if not goal_text:
+        raise TaskStateError("goal is required")
+    repository_name = _safe_repository(
+        repository
+        or str(predecessor.get("repository", "")).strip()
+        or DEFAULT_REPOSITORY
+    )
+    now = utc_now()
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "task_id": task,
+        "agent_id": str(agent_id).strip(),
+        "repository": repository_name,
+        "goal": goal_text,
+        "status": "RUNNING",
+        "next_action": "determine and execute the next safe action required by the successor goal",
+        "evidence": [],
+        "verification": None,
+        "blocker": None,
+        "predecessor_task_id": str(predecessor.get("task_id", "")).strip(),
+        "predecessor_status": "CONCLUIDO",
+        "predecessor_completed_at": str(predecessor.get("completed_at", "")).strip(),
+        "created_at": now,
+        "updated_at": now,
+        "history": [{
+            "at": now,
+            "event": "started_successor",
+            "predecessor_task_id": str(predecessor.get("task_id", "")).strip(),
+        }],
+    }
+    _atomic_write(path, payload)
+    return payload
+
+
 def record_progress(task_id: str, *, next_action: str, evidence: str | None = None) -> dict[str, Any]:
     payload = _load(task_id)
     if is_terminal(payload):
@@ -266,6 +319,13 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--agent", default="")
     start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
 
+    successor = sub.add_parser("successor")
+    successor.add_argument("--task", required=True)
+    successor.add_argument("--predecessor", required=True)
+    successor.add_argument("--goal", required=True)
+    successor.add_argument("--agent", default="")
+    successor.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
+
     progress = sub.add_parser("progress")
     progress.add_argument("--task", required=True)
     progress.add_argument("--next-action", required=True)
@@ -303,6 +363,14 @@ def main() -> int:
     try:
         if args.command == "start":
             payload = start_task(args.task, args.goal, args.agent, args.repository)
+        elif args.command == "successor":
+            payload = start_successor_task(
+                args.task,
+                predecessor_task_id=args.predecessor,
+                goal=args.goal,
+                agent_id=args.agent,
+                repository=args.repository,
+            )
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":
