@@ -769,6 +769,22 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT=",
             "CHATGPT_CONTINUITY_LATEST_UPDATE_VALID=",
             "CHATGPT_CONTINUITY_LATEST_ITEM_KEYS=",
+            "CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS=",
+            "CHATGPT_CONTINUITY_FILTERED_BODY_KIND=",
+            "CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT=",
+            "CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT=",
+            "CHATGPT_CONTINUITY_FILTERED_DATA_KIND=",
+            "CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT=",
+            "CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT=",
+            "CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS=",
+            "CHATGPT_CONTINUITY_FALLBACK_BODY_KIND=",
+            "CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT=",
+            "CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT=",
+            "CHATGPT_CONTINUITY_FALLBACK_DATA_KIND=",
+            "CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT=",
+            "CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT=",
+            "CHATGPT_CONTINUITY_CURRENT_PATH_KIND=",
+            "CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS=",
             "CHATGPT_CONTINUITY_MCP_DIAGNOSTIC=PASS",
         ):
             self.assertIn(needle, workflow)
@@ -788,6 +804,12 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN=",
         ):
             self.assertIn(marker, workflow)
+
+    def test_oci_continuity_diagnostic_surfaces_canonical_g2_status(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS=", workflow)
+        self.assertIn("chatgpt-freeze-root-cause-20260928-g2.json", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_JSON=", workflow)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
