@@ -593,8 +593,7 @@ jobs:
                 test -s "$token_file"
                 token="$(dd if="$token_file" status=none)"
                 trap "unset token" EXIT
-                for candidate in                   http://10.0.1.112/api/chatgpt-continuity/bridge.php                   http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php                   https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php
-                do
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
                   heartbeat_tmp="$(mktemp)"
                   if curl -fsS --connect-timeout 4 --max-time 10                     -H "Host: shopvivaliz.com.br"                     -H "Authorization: Bearer $token"                     -H "Content-Type: application/json"                     --data '"'"'{"operation":"heartbeat"}'"'"'                     "$candidate" > "$heartbeat_tmp" &&
                     jq -e '"'"'.status == "OK"'"'"' "$heartbeat_tmp" >/dev/null 2>&1
