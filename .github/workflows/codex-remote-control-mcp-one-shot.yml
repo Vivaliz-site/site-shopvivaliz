@@ -27,9 +27,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          branch="feat/remote-control-cloud-clients-20260928"
+          branch="codex/remote-control-stage7-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           src="$HOME/src/site-shopvivaliz-remote-control-codex"
-          preferred="$HOME/worktrees/site-shopvivaliz/remote-control-cloud-clients-codex"
+          worktree="$HOME/worktrees/site-shopvivaliz/remote-control-stage7-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           mkdir -p "$HOME/src" "$HOME/worktrees/site-shopvivaliz"
           if [ ! -d "$src/.git" ]; then
@@ -37,36 +37,20 @@ jobs:
           fi
           git -C "$src" fetch origin --prune
 
-          existing="$(
-            git -C "$src" worktree list --porcelain |
-            awk -v want="refs/heads/$branch" '
-              $1=="worktree" { path=$2 }
-              $1=="branch" && $2==want { print path; exit }
-            '
-          )"
-
-          if [ -n "$existing" ]; then
-            worktree="$existing"
-            git -C "$worktree" fetch origin --prune
-          elif [ -e "$preferred/.git" ]; then
-            worktree="$preferred"
-            git -C "$worktree" fetch origin --prune
+          if [ -e "$worktree/.git" ]; then
+            test "$(git -C "$worktree" branch --show-current)" = "$branch"
+            test -z "$(git -C "$worktree" status --porcelain)"
+          elif git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
+            git -C "$src" worktree add "$worktree" "$branch"
+            test -z "$(git -C "$worktree" status --porcelain)"
           else
-            if git -C "$src" show-ref --verify --quiet "refs/heads/$branch"; then
-              git -C "$src" worktree add "$preferred" "$branch"
-            else
-              git -C "$src" worktree add -b "$branch" "$preferred" origin/main
-            fi
-            worktree="$preferred"
+            git -C "$src" worktree add -b "$branch" "$worktree" origin/main
           fi
 
           test -e "$worktree/.git"
           test "$(git -C "$worktree" branch --show-current)" = "$branch"
-          git -C "$worktree" fetch origin --prune
-          if ! git -C "$worktree" merge --ff-only origin/main; then
-            git -C "$worktree" merge --no-edit origin/main
-          fi
           printf 'path=%s\n' "$worktree" >> "$GITHUB_OUTPUT"
+          printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
           printf 'head=%s\n' "$(git -C "$worktree" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "CODEX_REMOTE_CONTROL_WORKTREE_READY=1"
 
@@ -82,7 +66,7 @@ jobs:
           Continue the ShopVivaliz Private Remote Control MCP task from the CURRENT canonical main and live evidence. Do not restart completed stages.
 
           Repository: Vivaliz-site/site-shopvivaliz
-          Working branch/worktree: feat/remote-control-cloud-clients-20260928
+          Working branch/worktree: use the fresh run-scoped branch already checked out by this workflow; verify it with `git branch --show-current` and preserve any unrelated concurrent work.
           Read first:
           - docs/knowledge/host-access.md
           - docs/knowledge/README.md
@@ -174,11 +158,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.worktree.outputs.head }}
+          WORK_BRANCH: ${{ steps.worktree.outputs.branch }}
           PROMPT_SHA: ${{ steps.prompt.outputs.sha256 }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=STARTED run_id=$GITHUB_RUN_ID branch=feat/remote-control-cloud-clients-20260928 head=$HEAD_SHA prompt_sha256=$PROMPT_SHA"
+          gh issue comment 1586 --repo "$GITHUB_REPOSITORY" --body "CODEX_REMOTE_CONTROL_MCP=STARTED run_id=$GITHUB_RUN_ID branch=$WORK_BRANCH head=$HEAD_SHA prompt_sha256=$PROMPT_SHA"
 
       - name: Execute finite Codex task
         env:
