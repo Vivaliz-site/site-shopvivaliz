@@ -248,7 +248,7 @@ jobs:
           ps = r'''$ErrorActionPreference='Stop'
           $path='C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1'
           [IO.File]::WriteAllBytes($path,[Convert]::FromBase64String('__SIDE__'))
-          & $path -Mode InstallTask
+          & $path -Mode Ensure
           '''.replace('__SIDE__', side)
           encoded=base64.b64encode(ps.encode('utf-16le')).decode()
           command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded
@@ -283,6 +283,9 @@ jobs:
             test -s "$hosts"
             scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1"
             ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $PUB_B64"
+            if [ "$label" = "DESKTOP" ]; then
+              ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1 -Mode InstallTask"
+            fi
             ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -i "$VM_KEY_FILE" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue"
           done
 

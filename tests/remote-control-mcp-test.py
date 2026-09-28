@@ -225,6 +225,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS", text)
         self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS", text)
 
+    def test_oci_bastion_elevates_kocepsv_sidecar_after_admin_ssh(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("& $path -Mode Ensure", text)
+        self.assertIn("desktopkocepsv-remote-control-ssh-bridge.ps1 -Mode InstallTask", text)
+        self.assertIn('if [ "$label" = "DESKTOP" ]; then', text)
+
     def test_oci_bastion_workflow_supports_remote_control_stages(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for action in (
