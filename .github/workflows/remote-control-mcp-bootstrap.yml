@@ -7,7 +7,6 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
-      - 'scripts/setup-remote-control-windows.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
@@ -19,6 +18,10 @@ jobs:
   bootstrap:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
+    concurrency:
+      group: shopvivaliz-remote-control-bootstrap
+      cancel-in-progress: false
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +34,7 @@ jobs:
           python3 tests/remote-control-mcp-test.py
           bash -n scripts/setup-remote-control-access.sh
 
-      - name: Configure verified bootstrap SSH
+      - name: Configure verified backend SSH
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
@@ -60,128 +63,113 @@ jobs:
           test -s /tmp/shopvivaliz-remote-control.pub
           chmod 600 /tmp/shopvivaliz-remote-control.pub
 
-      - name: Install privileged target identity on production
+      - name: Install privileged production identity
         shell: bash
         run: |
           set -Eeuo pipefail
           PUBKEY="$(cat /tmp/shopvivaliz-remote-control.pub)"
+          test -n "$PUBKEY"
           sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY="$PUBKEY" bash scripts/setup-remote-control-access.sh install-target
+          SITE_HOST_KEY="$(sudo -n cat /etc/ssh/ssh_host_ed25519_key.pub)"
+          test -n "$SITE_HOST_KEY"
+          printf '10.0.1.112 %s\n' "$SITE_HOST_KEY" > /tmp/shopvivaliz-remote-control-site.known_hosts
+          chmod 600 /tmp/shopvivaliz-remote-control-site.known_hosts
 
-      - name: Discover and bootstrap Windows peers
+      - name: Pin production host key on controller
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          peer_info="$("${SSH_VM[@]}" 'tailscale status --json' | python3 -c '
-          import json,sys
-          d=json.load(sys.stdin); peers=d.get("Peer") or {}
-          wanted={"LAPTOP-NIG4IFUU":"","DESKTOP-KOCEPSV":""}
-          for p in peers.values():
-              name=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".").upper()
-              if not p.get("Online"):
-                  continue
-              for target in list(wanted):
-                  if target in name:
-                      ips=p.get("TailscaleIPs") or []
-                      wanted[target]=next((str(x) for x in ips if ":" not in str(x)),"")
-          [print(k+"="+v) for k,v in wanted.items()]
-          ')"
-          fred_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="LAPTOP-NIG4IFUU"{print $2}')"
-          desk_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="DESKTOP-KOCEPSV"{print $2}')"
-          test -n "$fred_ip"
-          test -n "$desk_ip"
-          "${SSH_VM[@]}" "timeout 5 bash -c '</dev/tcp/$fred_ip/22'"
-          "${SSH_VM[@]}" "timeout 5 bash -c '</dev/tcp/$desk_ip/22'"
+          SCP_VM=(scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key")
+          remote_hosts="/tmp/shopvivaliz-remote-control-site-${GITHUB_RUN_ID}.known_hosts"
+          "${SCP_VM[@]}" /tmp/shopvivaliz-remote-control-site.known_hosts "ubuntu@10.0.1.38:$remote_hosts"
+          "${SSH_VM[@]}" "set -Eeuo pipefail; sudo -n install -m 600 -o root -g root '$remote_hosts' /var/lib/shopvivaliz-remote-control/known_hosts; rm -f '$remote_hosts'; sudo -n systemctl restart shopvivaliz-remote-control-mcp.service; sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service; curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null"
+          echo "REMOTE_CONTROL_CONTROLLER=ACTIVE"
 
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32223:$fred_ip:22" ubuntu@10.0.1.38
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32224:$desk_ip:22" ubuntu@10.0.1.38
-          sleep 2
-
-          for spec in 'FRED 32223 FRED' 'DESKTOP 32224 user'; do
+      - name: Verify canonical Windows private relays
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
+          for spec in '5557 fred-win' '5558 desktop-kocepsv'; do
             set -- $spec
-            label="$1"; port="$2"; user="$3"
-            ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>/dev/null > "/tmp/$label.remote-control.hosts"
-            test -s "/tmp/$label.remote-control.hosts"
-            chmod 600 "/tmp/$label.remote-control.hosts"
-            scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1"
-            pub_b64="$(base64 -w0 /tmp/shopvivaliz-remote-control.pub)"
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $pub_b64"
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue"
+            port="$1"
+            expected="$2"
+            body="$("${SSH_VM[@]}" "curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:$port/health")"
+            python3 -c 'import json,sys; expected=sys.argv[1]; data=json.loads(sys.argv[2]); assert data.get("status")=="ok", data; assert data.get("environment")==expected, data; print("WINDOWS_RELAY_PASS="+expected)' "$expected" "$body"
           done
 
-          printf '%s\n' "$fred_ip" > /tmp/shopvivaliz-fred-ip
-          printf '%s\n' "$desk_ip" > /tmp/shopvivaliz-kocepsv-ip
-
-      - name: Pin private host keys for controller
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          fred_ip="$(cat /tmp/shopvivaliz-fred-ip)"
-          desk_ip="$(cat /tmp/shopvivaliz-kocepsv-ip)"
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          printf -v fred_q '%q' "$fred_ip"
-          printf -v desk_q '%q' "$desk_ip"
-          "${SSH_VM[@]}" "FRED_IP=$fred_q DESK_IP=$desk_q bash -s" <<'REMOTE'
-          set -Eeuo pipefail
-          tmp=$(mktemp)
-          trap 'rm -f "$tmp"' EXIT
-          ssh-keyscan -T 5 10.0.1.112 "$FRED_IP" "$DESK_IP" > "$tmp" 2>/dev/null
-          test "$(grep -cv '^
-
-      - name: Four-host live MCP health validation
+      - name: Four-host live MCP validation
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
           "${SSH_VM[@]}" 'sudo -n python3 -' <<'PY'
-          import json, time, urllib.request
+          import json
+          import time
+          import urllib.request
           from pathlib import Path
 
           endpoint = "http://127.0.0.1:5580/mcp"
           token = Path("/var/lib/shopvivaliz-remote-control/mcp-token").read_text(encoding="utf-8").strip()
           if not token:
               raise RuntimeError("controller MCP token is empty")
-          hosts = ["always-free-arm-1787907847-26","shopvivaliz-free-a1","Fred-Win","KOCEPSV"]
+          hosts = ["always-free-arm-1787907847-26", "shopvivaliz-free-a1", "Fred-Win", "KOCEPSV"]
 
           def call(name, arguments):
-              body=json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}}).encode()
-              req=urllib.request.Request(endpoint,data=body,headers={"Content-Type":"application/json","Authorization":"Bearer "+token},method="POST")
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  payload=json.load(r)
-              result=(payload.get("result") or {}).get("structuredContent") or {}
+              body = json.dumps({
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "tools/call",
+                  "params": {"name": name, "arguments": arguments},
+              }).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=75) as response:
+                  payload = json.load(response)
+              result = (payload.get("result") or {}).get("structuredContent") or {}
               if (payload.get("result") or {}).get("isError") or result.get("ok") is False or result.get("error"):
                   raise RuntimeError(f"{name} failed for {arguments}: {result}")
               return result
 
           for host in hosts:
-              result=call("host_health",{"host":host,"timeout":45})
-              print("HOST_HEALTH_PASS="+host+" exit="+str(result.get("exit_code")))
-              out=str(result.get("stdout") or "")
-              if host in {"Fred-Win","KOCEPSV"} and '"administrator":true' not in out.lower():
-                  raise RuntimeError(host+" did not prove Administrator privilege")
-              if host in {"always-free-arm-1787907847-26","shopvivaliz-free-a1"}:
-                  if "uid=0" not in out:
-                      raise RuntimeError(host+" did not prove root execution")
+              result = call("host_health", {"host": host, "timeout": 45})
+              output = str(result.get("stdout") or "")
+              print("HOST_HEALTH_PASS=" + host + " exit=" + str(result.get("exit_code")))
+              if host in {"Fred-Win", "KOCEPSV"} and '"administrator":true' not in output.lower():
+                  raise RuntimeError(host + " did not prove Administrator privilege")
+              if host in {"always-free-arm-1787907847-26", "shopvivaliz-free-a1"} and "uid=0" not in output:
+                  raise RuntimeError(host + " did not prove root execution")
 
-          ids={}
+          task_ids = {}
           for host in hosts:
-              ids[host]=call("task_submit",{"host":host,"command":"echo REMOTE_CONTROL_E2E=PASS","timeout":60})["task_id"]
-          deadline=time.time()+120
-          pending=set(hosts)
-          while pending and time.time()<deadline:
+              task_ids[host] = call(
+                  "task_submit",
+                  {"host": host, "command": "echo REMOTE_CONTROL_E2E=PASS", "timeout": 60},
+              )["task_id"]
+
+          deadline = time.time() + 150
+          pending = set(hosts)
+          while pending and time.time() < deadline:
               for host in list(pending):
-                  status=call("task_status",{"task_id":ids[host]})
-                  state=status.get("state")
-                  if state=="succeeded":
+                  status = call("task_status", {"task_id": task_ids[host]})
+                  state = status.get("state")
+                  if state == "succeeded":
                       if "REMOTE_CONTROL_E2E=PASS" not in str(status.get("stdout") or ""):
-                          raise RuntimeError(host+" durable task missing expected output")
-                      print("DURABLE_TASK_PASS="+host)
+                          raise RuntimeError(host + " durable task missing expected output")
+                      print("DURABLE_TASK_PASS=" + host)
                       pending.remove(host)
-                  elif state in {"failed","cancelled","expired"}:
-                      raise RuntimeError(host+" durable task ended "+str(state))
+                  elif state in {"failed", "cancelled", "expired"}:
+                      raise RuntimeError(host + " durable task ended " + str(state))
               time.sleep(2)
+
           if pending:
-              raise RuntimeError("durable task timeout: "+",".join(sorted(pending)))
+              raise RuntimeError("durable task timeout: " + ",".join(sorted(pending)))
+
           print("REMOTE_CONTROL_FOUR_HOST_E2E=PASS")
           PY
 
@@ -196,6 +184,7 @@ jobs:
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
             echo "controller_host=always-free-arm-1787907847-26"
             echo "controller_endpoint=127.0.0.1:5580"
+            echo "windows_transport=private_loopback_relays_5557_5558"
             echo "runtime_github_dependency=false"
             echo "expected_hosts=4"
           } > artifacts/remote-control-mcp/bootstrap.txt
@@ -213,113 +202,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          if pgrep -f '32223:' >/dev/null 2>&1; then
-            pkill -f '32223:'
-          fi
-          if pgrep -f '32224:' >/dev/null 2>&1; then
-            pkill -f '32224:'
-          fi
           rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
-          rm -f /tmp/shopvivaliz-remote-control.pub /tmp/shopvivaliz-fred-ip /tmp/shopvivaliz-kocepsv-ip
-          rm -f /tmp/FRED.remote-control.hosts /tmp/DESKTOP.remote-control.hosts
- "$tmp")" -ge 3
-          sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts
-          sudo -n systemctl restart shopvivaliz-remote-control-mcp.service
-          sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
-          curl -fsS http://127.0.0.1:5580/health >/dev/null
-          REMOTE
-
-      - name: Four-host live MCP health validation
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          "${SSH_VM[@]}" 'sudo -n python3 -' <<'PY'
-          import json, time, urllib.request
-          from pathlib import Path
-
-          endpoint = "http://127.0.0.1:5580/mcp"
-          token = Path("/var/lib/shopvivaliz-remote-control/mcp-token").read_text(encoding="utf-8").strip()
-          if not token:
-              raise RuntimeError("controller MCP token is empty")
-          hosts = ["always-free-arm-1787907847-26","shopvivaliz-free-a1","Fred-Win","KOCEPSV"]
-
-          def call(name, arguments):
-              body=json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":arguments}}).encode()
-              req=urllib.request.Request(endpoint,data=body,headers={"Content-Type":"application/json","Authorization":"Bearer "+token},method="POST")
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  payload=json.load(r)
-              result=(payload.get("result") or {}).get("structuredContent") or {}
-              if (payload.get("result") or {}).get("isError") or result.get("ok") is False or result.get("error"):
-                  raise RuntimeError(f"{name} failed for {arguments}: {result}")
-              return result
-
-          for host in hosts:
-              result=call("host_health",{"host":host,"timeout":45})
-              print("HOST_HEALTH_PASS="+host+" exit="+str(result.get("exit_code")))
-              out=str(result.get("stdout") or "")
-              if host in {"Fred-Win","KOCEPSV"} and '"administrator":true' not in out.lower():
-                  raise RuntimeError(host+" did not prove Administrator privilege")
-              if host in {"always-free-arm-1787907847-26","shopvivaliz-free-a1"}:
-                  if "uid=0" not in out:
-                      raise RuntimeError(host+" did not prove root execution")
-
-          ids={}
-          for host in hosts:
-              ids[host]=call("task_submit",{"host":host,"command":"echo REMOTE_CONTROL_E2E=PASS","timeout":60})["task_id"]
-          deadline=time.time()+120
-          pending=set(hosts)
-          while pending and time.time()<deadline:
-              for host in list(pending):
-                  status=call("task_status",{"task_id":ids[host]})
-                  state=status.get("state")
-                  if state=="succeeded":
-                      if "REMOTE_CONTROL_E2E=PASS" not in str(status.get("stdout") or ""):
-                          raise RuntimeError(host+" durable task missing expected output")
-                      print("DURABLE_TASK_PASS="+host)
-                      pending.remove(host)
-                  elif state in {"failed","cancelled","expired"}:
-                      raise RuntimeError(host+" durable task ended "+str(state))
-              time.sleep(2)
-          if pending:
-              raise RuntimeError("durable task timeout: "+",".join(sorted(pending)))
-          print("REMOTE_CONTROL_FOUR_HOST_E2E=PASS")
-          PY
-
-      - name: Persist sanitized bootstrap evidence
-        if: always()
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p artifacts/remote-control-mcp
-          {
-            echo "run_id=$GITHUB_RUN_ID"
-            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
-            echo "controller_host=always-free-arm-1787907847-26"
-            echo "controller_endpoint=127.0.0.1:5580"
-            echo "runtime_github_dependency=false"
-            echo "expected_hosts=4"
-          } > artifacts/remote-control-mcp/bootstrap.txt
-
-      - name: Upload bootstrap evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: remote-control-mcp-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/remote-control-mcp/
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Cleanup bootstrap material
-        if: always()
-        shell: bash
-        run: |
-          if pgrep -f '32223:' >/dev/null 2>&1; then
-            pkill -f '32223:'
-          fi
-          if pgrep -f '32224:' >/dev/null 2>&1; then
-            pkill -f '32224:'
-          fi
-          rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
-          rm -f /tmp/shopvivaliz-remote-control.pub /tmp/shopvivaliz-fred-ip /tmp/shopvivaliz-kocepsv-ip
-          rm -f /tmp/FRED.remote-control.hosts /tmp/DESKTOP.remote-control.hosts
+          rm -f /tmp/shopvivaliz-remote-control.pub /tmp/shopvivaliz-remote-control-site.known_hosts
