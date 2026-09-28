@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -32,6 +33,7 @@ DB_PATH = STATE_DIR / "state.db"
 SSH_KEY = STATE_DIR / "id_ed25519"
 KNOWN_HOSTS = STATE_DIR / "known_hosts"
 MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536)))
+AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
 
@@ -71,6 +73,14 @@ STOP_EVENT = threading.Event()
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def is_authorized(authorization: str, token: str | None = None) -> bool:
+    expected = AUTH_TOKEN if token is None else token
+    if not expected or not authorization.startswith("Bearer "):
+        return False
+    supplied = authorization[7:]
+    return bool(supplied) and hmac.compare_digest(supplied, expected)
 
 
 def redact_text(value: str) -> str:
@@ -494,6 +504,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.client_address[0] not in {"127.0.0.1", "::1"}:
             self._json(403, {"error": "loopback_only"})
+            return
+        if not is_authorized(self.headers.get("Authorization", "")):
+            self._json(401, {"error": "unauthorized"})
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
