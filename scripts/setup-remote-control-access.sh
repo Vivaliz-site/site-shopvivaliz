@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ACTION="${1:-status}"
+SERVER_SOURCE="${2:-}"
+HOST="$(hostname)"
+BACKEND_HOST="always-free-arm-1787907847-26"
+SITE_HOST="shopvivaliz-free-a1"
+STATE_DIR="/var/lib/shopvivaliz-remote-control"
+INSTALL_DIR="/opt/shopvivaliz-remote-control"
+SERVICE="shopvivaliz-remote-control-mcp.service"
+REMOTE_USER="shopvivaliz-remote"
+PUBKEY="${SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY:-}"
+
+die() { echo "REMOTE_CONTROL_SETUP_ERROR=$1" >&2; exit "${2:-1}"; }
+require_root() { [ "$(id -u)" -eq 0 ] || die root_required 20; }
+
+install_controller() {
+  require_root
+  [ "$HOST" = "$BACKEND_HOST" ] || die controller_host_mismatch 21
+  [ -n "$SERVER_SOURCE" ] && [ -f "$SERVER_SOURCE" ] || die server_source_required 22
+
+  install -d -m 700 -o root -g root "$STATE_DIR"
+  install -d -m 755 -o root -g root "$INSTALL_DIR"
+  install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+
+  if [ ! -s "$STATE_DIR/id_ed25519" ]; then
+    ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-remote-control -f "$STATE_DIR/id_ed25519"
+  fi
+  chmod 600 "$STATE_DIR/id_ed25519"
+  chmod 644 "$STATE_DIR/id_ed25519.pub"
+  touch "$STATE_DIR/known_hosts"
+  chmod 600 "$STATE_DIR/known_hosts"
+
+  cat >"/etc/systemd/system/$SERVICE" <<'UNIT'
+[Unit]
+Description=ShopVivaliz Private Remote Control MCP
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/shopvivaliz-remote-control
+Environment=PYTHONUNBUFFERED=1
+Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
+Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
+Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/shopvivaliz-remote-control
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  systemctl daemon-reload
+  systemctl enable --now "$SERVICE"
+  sleep 2
+  systemctl is-active --quiet "$SERVICE"
+  curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
+  echo "REMOTE_CONTROL_CONTROLLER_INSTALL=PASS"
+  echo "REMOTE_CONTROL_PUBLIC_KEY_FILE=$STATE_DIR/id_ed25519.pub"
+}
+
+install_target() {
+  require_root
+  [ "$HOST" = "$SITE_HOST" ] || die target_host_mismatch 31
+  [ -n "$PUBKEY" ] || die public_key_required 32
+  printf '%s' "$PUBKEY" | grep -Eq '^ssh-(ed25519|rsa) ' || die invalid_public_key 33
+
+  if ! id "$REMOTE_USER" >/dev/null 2>&1; then
+    useradd --create-home --shell /bin/bash "$REMOTE_USER"
+  fi
+  passwd -l "$REMOTE_USER" >/dev/null 2>&1 || true
+  home="/home/$REMOTE_USER"
+  install -d -m 700 -o "$REMOTE_USER" -g "$REMOTE_USER" "$home/.ssh"
+  {
+    printf 'from="10.0.0.0/8,100.64.0.0/10",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc '
+    printf '%s\n' "$PUBKEY"
+  } >"$home/.ssh/authorized_keys"
+  chown "$REMOTE_USER:$REMOTE_USER" "$home/.ssh/authorized_keys"
+  chmod 600 "$home/.ssh/authorized_keys"
+
+  cat >"/etc/ssh/sshd_config.d/71-shopvivaliz-remote-control.conf" <<EOF
+Match User $REMOTE_USER
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthenticationMethods publickey
+    PubkeyAuthentication yes
+    PermitTTY no
+    X11Forwarding no
+    AllowTcpForwarding no
+    PermitTunnel no
+    GatewayPorts no
+    PermitUserRC no
+EOF
+
+  cat >"/etc/sudoers.d/shopvivaliz-remote-control" <<EOF
+$REMOTE_USER ALL=(ALL) NOPASSWD: ALL
+Defaults:$REMOTE_USER !authenticate,use_pty,log_output
+EOF
+  chmod 440 /etc/sudoers.d/shopvivaliz-remote-control
+  visudo -cf /etc/sudoers.d/shopvivaliz-remote-control >/dev/null
+  sshd -t
+  systemctl reload ssh.service 2>/dev/null || systemctl reload sshd.service
+  echo "REMOTE_CONTROL_TARGET_INSTALL=PASS"
+}
+
+status() {
+  echo "REMOTE_CONTROL_HOST=$HOST"
+  if [ "$HOST" = "$BACKEND_HOST" ]; then
+    systemctl is-enabled "$SERVICE" 2>/dev/null || true
+    systemctl is-active "$SERVICE" 2>/dev/null || true
+    curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health || true
+  elif [ "$HOST" = "$SITE_HOST" ]; then
+    id "$REMOTE_USER" >/dev/null 2>&1 && echo "REMOTE_CONTROL_USER_PRESENT=true" || echo "REMOTE_CONTROL_USER_PRESENT=false"
+    [ -s "/home/$REMOTE_USER/.ssh/authorized_keys" ] && echo "REMOTE_CONTROL_KEY_PRESENT=true" || echo "REMOTE_CONTROL_KEY_PRESENT=false"
+    visudo -cf /etc/sudoers.d/shopvivaliz-remote-control >/dev/null 2>&1 && echo "REMOTE_CONTROL_SUDO_VALID=true" || echo "REMOTE_CONTROL_SUDO_VALID=false"
+  else
+    die unsupported_host 40
+  fi
+}
+
+case "$ACTION" in
+  install-controller) install_controller ;;
+  install-target) install_target ;;
+  status) status ;;
+  *) die unsupported_action 64 ;;
+esac
