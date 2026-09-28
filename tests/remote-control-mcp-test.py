@@ -3,6 +3,8 @@ import importlib.util
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -62,6 +64,29 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertIn("before", result["stdout"])
         self.assertIn("after", result["stdout"])
+
+    def test_task_worker_tolerates_non_utf8_output(self):
+        submitted = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "printf 'before\\xa2after'",
+            "timeout": 30,
+        })
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        deadline = time.monotonic() + 10
+        status = None
+        while time.monotonic() < deadline:
+            status = m.execute_tool("task_status", {"task_id": submitted["task_id"]})
+            if status["state"] in {"succeeded", "failed", "cancelled", "expired"}:
+                break
+            time.sleep(0.1)
+        m.STOP_EVENT.set()
+        worker.join(timeout=5)
+        self.assertIsNotNone(status)
+        self.assertEqual(status["state"], "succeeded", status.get("stderr"))
+        self.assertIn("before", status["stdout"])
+        self.assertIn("after", status["stdout"])
 
     def test_mcp_authorization_is_fail_closed_and_constant_time(self):
         self.assertTrue(m.is_authorized("Bearer test-token", "test-token"))
