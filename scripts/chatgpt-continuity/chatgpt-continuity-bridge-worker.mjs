@@ -161,6 +161,7 @@ async function conversationStreamStatus(cdp) {
   })()`);
 }
 
+async function clearStaleCompleteGeneration(cdp) {
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
     const button=document.querySelector('[data-testid="stop-button"]');
