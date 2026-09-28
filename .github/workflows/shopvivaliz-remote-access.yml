@@ -319,6 +319,18 @@ jobs:
           }
           print("TASK_STATE_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
           PY
+              if SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+                python3 scripts/agent_task_state.py terminal --task chatgpt-freeze-root-cause-20260927 >/dev/null
+              then
+                echo "TASK_TERMINAL_GATE=PASS"
+              else
+                terminal_rc=$?
+                if [ "$terminal_rc" -eq 3 ]; then
+                  echo "TASK_TERMINAL_GATE=NONTERMINAL"
+                else
+                  exit "$terminal_rc"
+                fi
+              fi
               ;;
             repo_status)
               echo "REMOTE_REPO_STATUS_BEGIN"
