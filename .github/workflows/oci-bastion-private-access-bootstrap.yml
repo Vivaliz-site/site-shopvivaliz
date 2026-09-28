@@ -211,7 +211,101 @@ jobs:
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
           "${SITE_SSH[@]}" "PUB_B64='$PUB_B64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\"\$pub\" bash -s -- install-target'" < scripts/setup-remote-control-access.sh
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+          # Repair the Windows-side OpenSSH target through the independent legacy
+          # relays before trusting reverse-forward listeners. The helper is staged
+          # from canonical origin/main and launched detached so relay HTTP lifetime
+          # is not coupled to Windows capability installation time.
+          "${BACKEND_SSH[@]}" 'python3 -' <<'PY'
+          import base64, json, time, urllib.request
+
+          peers = (("FRED", 5557), ("KOCEPSV", 5558))
+
+          def invoke(endpoint, command, timeout):
+              body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=timeout + 10) as response:
+                  payload = json.load(response)
+              result = payload.get("result") or {}
+              if result.get("success") is not True:
+                  raise RuntimeError(str(result.get("error") or result))
+              return str(result.get("output") or "")
+
+          stage = r"""$ErrorActionPreference='Stop'
+          Set-Location 'C:\site-shopvivaliz'
+          git fetch origin main | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
+          $tmp = Join-Path $env:TEMP ([IO.Path]::GetRandomFileName())
+          git show 'origin/main:scripts/windows-openssh-recovery.ps1' | Set-Content -LiteralPath $tmp -Encoding UTF8
+          if ($LASTEXITCODE -ne 0) { throw 'git show windows-openssh-recovery failed' }
+          if ((Get-Item -LiteralPath $tmp).Length -eq 0) { throw 'empty windows-openssh-recovery helper' }
+          Move-Item -LiteralPath $tmp -Destination 'C:\site-shopvivaliz\scripts\windows-openssh-recovery.ps1' -Force
+          Write-Output 'REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_STAGE=PASS'
+          """
+          stage_command = (
+              "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "
+              + base64.b64encode(stage.encode("utf-16le")).decode()
+          )
+
+          launch = r"""$ErrorActionPreference='Stop'
+          $path='C:\site-shopvivaliz\scripts\windows-openssh-recovery.ps1'
+          if (-not (Test-Path -LiteralPath $path)) { throw 'openssh recovery helper missing' }
+          $p=Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+            '-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$path
+          ) -WindowStyle Hidden -PassThru
+          Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS pid=' + $p.Id)
+          """
+          launch_command = (
+              "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "
+              + base64.b64encode(launch.encode("utf-16le")).decode()
+          )
+
+          for label, port in peers:
+              endpoint = f"http://127.0.0.1:{port}/mcp/tool/execute_command"
+              last_error = None
+              staged = False
+              for attempt in range(1, 4):
+                  try:
+                      output = invoke(endpoint, stage_command, 120)
+                      if "REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_STAGE=PASS" in output:
+                          print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_STAGE=PASS attempt={attempt}")
+                          staged = True
+                          break
+                      last_error = RuntimeError("staging acknowledgement missing")
+                  except Exception as exc:
+                      last_error = exc
+                  time.sleep(3)
+              if not staged:
+                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_STAGE=FAIL type={type(last_error).__name__}")
+                  raise last_error
+
+              queued = False
+              for attempt in range(1, 6):
+                  try:
+                      output = invoke(endpoint, launch_command, 15)
+                      if "REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS" in output:
+                          print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS attempt={attempt}")
+                          queued = True
+                          break
+                      last_error = RuntimeError("queue acknowledgement missing")
+                  except Exception as exc:
+                      last_error = exc
+                  time.sleep(3)
+              if not queued:
+                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUE=FAIL type={type(last_error).__name__}")
+                  raise last_error
+          PY
+
+          backend_ssh_protocol_alive() {
+            local port="$1"
+            "${BACKEND_SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; timeout 8 ssh-keyscan -T 5 -p '$port' 127.0.0.1 >\"\$tmp\" 2>/dev/null && test -s \"\$tmp\""
+          }
+
+          if ! backend_ssh_protocol_alive 2222; then
             FRED_BOOT_B64="$(base64 -w0 scripts/fredwin-remote-bootstrap.ps1)"
             FRED_TUNNEL_B64="$(base64 -w0 scripts/ssh-tunnel-service-managed.ps1)"
             "${BACKEND_SSH[@]}" "FRED_BOOT_B64='$FRED_BOOT_B64' FRED_TUNNEL_B64='$FRED_TUNNEL_B64' python3 - <<'PY'
@@ -233,14 +327,14 @@ jobs:
               raise SystemExit('Fred-Win recovery queue failed')
           PY"
             for _ in $(seq 1 30); do
-              if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              if backend_ssh_protocol_alive 2222; then break; fi
               sleep 2
             done
           fi
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          backend_ssh_protocol_alive 2222
           echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          if ! backend_ssh_protocol_alive 2223; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
             if ! "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
@@ -275,10 +369,11 @@ jobs:
             fi
           fi
           for _ in $(seq 1 30); do
-            if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then break; fi
+            if backend_ssh_protocol_alive 2223; then break; fi
             sleep 2
           done
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+          backend_ssh_protocol_alive 2223
+          echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32222:127.0.0.1:2222 ubuntu@127.0.0.1
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32223:127.0.0.1:2223 ubuntu@127.0.0.1
