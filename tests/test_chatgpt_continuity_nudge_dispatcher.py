@@ -143,6 +143,42 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(retried["dispatched"], 1)
         self.assertEqual(len(self.calls), 2)
 
+    def test_stalled_not_confirmed_does_not_consume_real_send_budget(self) -> None:
+        self._stale_checkpoint_and_request()
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(
+            json.dumps(
+                {
+                    "fingerprint": fingerprint,
+                    "task_id": "task-1",
+                    "repository": state.DEFAULT_REPOSITORY,
+                    "dispatched_at": "2020-01-01T00:00:00Z",
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "STALLED_NOT_CONFIRMED",
+                    "attempt_count": 99,
+                    "send_attempt_count": 0,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        retried = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(retried["retry_attempted"], 1)
+        self.assertEqual(retried["dispatched"], 1)
+        self.assertEqual(retried["skipped_attempt_limit"], 0)
+        self.assertEqual(len(self.calls), 1)
+
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(rows[-1]["send_attempt_count"], 0)
+
     def test_unconfirmed_resume_stops_after_bounded_attempt_limit(self) -> None:
         self._stale_checkpoint_and_request()
         self.dispatcher.run_once(
