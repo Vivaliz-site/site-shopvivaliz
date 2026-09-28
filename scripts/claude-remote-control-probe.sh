@@ -10,9 +10,14 @@ present=false
 auth=false
 remote=false
 env_ok=true
+version="unknown"
 
 if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
   present=true
+  if version_output="$(timeout 10s "$CLAUDE_BIN" --version 2>/dev/null)"; then
+    version="$(printf '%s\n' "$version_output" | head -n1 | awk '{print $1}' | tr -cd 'A-Za-z0-9._+-')"
+    [ -n "$version" ] || version="unknown"
+  fi
   auth_tmp="$(mktemp)"
   err_tmp="$(mktemp)"
   cleanup() { rm -f "$auth_tmp" "$err_tmp"; }
@@ -45,4 +50,5 @@ echo "CLAUDE_PRESENT=$present"
 echo "CLAUDE_AUTH_LOGGED_IN=$auth"
 echo "CLAUDE_REMOTE_CONTROL_COMMAND_AVAILABLE=$remote"
 echo "CLAUDE_REMOTE_CONTROL_ENV_COMPATIBLE=$env_ok"
+echo "CLAUDE_VERSION=$version"
 echo "CLAUDE_REMOTE_CONTROL_PROBE=PASS"
