@@ -1,3 +1,5 @@
+> **SUPERSEDED — NÃO USAR COMO RUNBOOK OPERACIONAL.** Este documento descreve uma configuração histórica de acesso Claude. A rota atual é o **Remote Control MCP** privado. Leia `docs/knowledge/host-access.md`, `docs/HOST-ACCESS.md` e `docs/knowledge/claude-vm-bootstrap.md` antes de qualquer operação. SSH público direto e instruções históricas abaixo não são autoritativas.
+
 # 🔧 Claude Remote Access Configuration
 
 ## Generated: 2026-07-16

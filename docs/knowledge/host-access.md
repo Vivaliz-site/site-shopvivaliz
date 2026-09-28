@@ -10,15 +10,15 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir SSH privado/Tailscale para operacao de agentes; usar RustDesk para GUI; Desktop Commander fica somente como fallback.
+5. usar o **Remote Control MCP** como rota operacional primaria; recorrer a SSH privado/Tailscale apenas quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; RustDesk fica para GUI.
 
 ## Hosts operacionais atuais
 
-| Host | IP | Papel | Desktop Commander |
-|---|---:|---|---|
-| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção | dispositivo `shopvivaliz-free-a1` |
-| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, MEI, M365 e relay Fred-Win | dispositivo `always-free-arm-1787907847-26` |
-| `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** | pode aparecer offline/legado |
+| Host | IP | Papel |
+|---|---:|---|
+| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção |
+| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, controller do Remote Control MCP, navegador, MEI, M365 e relay Windows |
+| `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** |
 
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
 
@@ -43,7 +43,7 @@ Nunca editar diretamente `current/` nem `releases/<ativa>/`.
 
 ## SSH
 
-SSH publico direto continua desabilitado. Agentes devem usar o usuario dedicado `shopvivaliz-agent` por rede privada/Tailscale; GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site por `127.0.0.1` e backend por `10.0.1.38`. RustDesk self-hosted e o canal grafico principal; OCI Bastion/GitHub Remote Access/Desktop Commander sao contingencia.
+SSH publico direto continua desabilitado. O **Remote Control MCP** e a rota operacional primaria. Quando for necessario shell direto fora das capacidades do MCP, agentes usam `shopvivaliz-agent` por rede privada/Tailscale. GitHub Actions administrativos usam runners privados autorizados; OCI Bastion/GitHub Remote Access ficam restritos a bootstrap/recovery. RustDesk self-hosted e o canal grafico principal.
 
 Usuário administrativo legado das VMs Oracle:
 
@@ -77,28 +77,14 @@ ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38  # somente dentro da VCN
 ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
 ```
 
-No Windows:
+## Prioridade operacional
 
-```powershell
-Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitado.
-```
+1. **Remote Control MCP** — primeira escolha para controle, observacao e tarefas duraveis.
+2. **SSH privado/Tailscale** — somente para shell direto que o MCP nao exponha ou indisponibilidade comprovada do control plane.
+3. **GitHub Actions/OCI Bastion** — bootstrap, recovery e reparo.
+4. **RustDesk** — GUI/validacao visual; navegador de agente permanece na backend.
 
-## Desktop Commander
-
-Desktop Commander nao e canal operacional principal. Use somente como fallback quando SSH privado/RustDesk/GitHub Remote Access nao atenderem. Quando houver necessidade de usa-lo, prefira o dispositivo por nome:
-
-```text
-shopvivaliz-free-a1
-always-free-arm-1787907847-26
-```
-
-Antes de operar, execute ping/listagem do dispositivo e depois valide:
-
-```bash
-hostname
-whoami
-pwd
-```
+Antes de operar qualquer host, valide `hostname`, identidade e contexto do repositorio sem expor credenciais.
 
 ## Repositório principal
 
@@ -147,6 +133,8 @@ Este arquivo é público no repositório. Por isso contém somente endereços, p
 
 <!-- REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
 ## Remote Control MCP — rotas atuais e estado comprovado
+
+Esta e a rota operacional prioritaria para agentes. O uso de rotas alternativas exige necessidade tecnica concreta ou indisponibilidade comprovada do MCP.
 
 Controller canônico:
 

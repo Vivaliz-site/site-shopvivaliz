@@ -7,8 +7,9 @@ Regras obrigatórias:
 - produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
 - backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
 - navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
-- shell Linux: preferir SSH privado/Tailscale com identidade dedicada; SSH público, senha interativa e root público são proibidos;
-- sem rota privada: OCI Bastion/control plane auditável é bootstrap/recovery; RustDesk self-hosted é GUI; Desktop Commander é apenas contingência;
+- rota operacional primaria para hosts/servicos/diagnostico: **Remote Control MCP** privado e auditavel;
+- shell Linux direto: usar SSH privado/Tailscale com identidade dedicada somente quando o MCP nao expuser a capacidade necessaria ou estiver comprovadamente indisponivel; SSH público, senha interativa e root público são proibidos;
+- OCI Bastion/GitHub control plane ficam para bootstrap/recovery; RustDesk self-hosted permanece para GUI;
 - Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
 - evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
 - nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.

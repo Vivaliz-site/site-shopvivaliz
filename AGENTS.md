@@ -7,8 +7,9 @@ Regras obrigatórias:
 - produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
 - backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
 - navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
-- shell Linux: preferir SSH privado/Tailscale com identidade dedicada; SSH público, senha interativa e root público são proibidos;
-- sem rota privada: OCI Bastion/control plane auditável é bootstrap/recovery; RustDesk self-hosted é GUI; Desktop Commander é apenas contingência;
+- rota operacional primaria para hosts/servicos/diagnostico: **Remote Control MCP** privado e auditavel;
+- shell Linux direto: usar SSH privado/Tailscale com identidade dedicada somente quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; SSH público, senha interativa e root público são proibidos;
+- sem rota privada ou para reparar/bootstrap do MCP: usar OCI Bastion/GitHub control plane auditável; RustDesk self-hosted permanece para GUI;
 - Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
 - evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
 - nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.
@@ -22,13 +23,13 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 <!-- SHOPVIVALIZ_REMOTE_ACCESS_V1 -->
 ## Acesso remoto obrigatório para agentes
 
-Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia **`docs/AGENT-REMOTE-ACCESS.md`**. O padrão vigente é SSH privado/Tailscale com `shopvivaliz-agent` para shell, RustDesk self-hosted para GUI, OCI Bastion/control plane auditável quando o ambiente não possui rota privada, e Desktop Commander somente como contingência. Navegador ShopVivaliz deve rodar na VM backend, nunca nos hosts Windows.
+Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia **`docs/AGENT-REMOTE-ACCESS.md`**. O padrão vigente é **Remote Control MCP primeiro**; SSH privado/Tailscale com `shopvivaliz-agent` apenas para shell direto não exposto pelo MCP; OCI Bastion/GitHub control plane para bootstrap/recovery; RustDesk para GUI. Navegador ShopVivaliz deve rodar na VM backend, nunca nos hosts Windows.
 
 # 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
 > 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md). O GPT `@dev` e qualquer agente adicional usado como programador/revisor também devem ler [`docs/knowledge/dev-agent-briefing.md`](docs/knowledge/dev-agent-briefing.md), inclusive a política de pesquisa técnica atualizada na web.
-> Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Prefira Remote Desktop Commander por nome do dispositivo; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
+> Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay/controller = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Use **Remote Control MCP como primeira rota operacional**; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
 
 <!-- SUPERPOWERS_EVERY_STAGE_V1 -->
 > 🧭 **@Superpowers CONTÍNUO E OBRIGATÓRIO:** toda conversa, sessão, agente e retomada de tarefa ShopVivaliz deve usar @Superpowers **em cada etapa material**, não apenas no início. Reaplique a disciplina adequada ao passar por planejamento, investigação, implementação, debugging, TDD/testes, revisão, correção, PR/merge, deploy, pós-deploy e auditoria. Em `retome/continue/prossiga`, continue do último checkpoint comprovado sob @Superpowers. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`.
@@ -461,24 +462,26 @@ Regras:
 
 7. O service roda em loop e observa a `inbox` a cada 30 segundos.
 
-### Remote MCP para agentes
+### Remote Control MCP para agentes
 
-O PDF `C:\Users\FRED\Downloads\mcp.pdf` foi inspecionado em 2026-08-11 e registra um fluxo de autenticacao bem-sucedido com Remote MCP server por device authorization.
+O **Remote Control MCP privado do ShopVivaliz** é a rota operacional prioritária para controle de hosts. Consulte primeiro `docs/HOST-ACCESS.md`, `docs/knowledge/host-access.md` e `remote-control-mcp/SPEC.md`.
 
 Regras:
 
-1. Consulte [`docs/AGENT-MCP-REMOTE.md`](docs/AGENT-MCP-REMOTE.md) antes de usar MCP remoto em tarefas de agente.
-2. Nunca commitar codigo de device, device ID completo, e-mail completo, token, cookie ou screenshot sem mascara.
-3. Validar estado atual do MCP antes de declarar disponibilidade; se nao houver ferramenta/evidencia atual, reportar `INCONCLUSIVO`.
-4. MCP remoto nao amplia permissoes: continuam proibidos force-push, bypass de protecoes, exposicao de secrets e alteracoes de preco/estoque/pedido fora do escopo aprovado.
+1. Controller canônico: `always-free-arm-1787907847-26`; endpoint MCP privado/loopback, nunca público.
+2. Use ações allowlisted e tarefas duráveis do MCP antes de recorrer a shell direto.
+3. Se a capacidade necessária não existir no MCP ou o control plane estiver comprovadamente indisponível, use SSH privado/Tailscale; para bootstrap/recovery, GitHub Actions/OCI Bastion.
+4. Nunca publicar token, cookie, chave, OTP/TOTP, conteúdo de secret ou credencial de sessão.
+5. Validar `hostname`, identidade, alvo e resultado real antes de declarar acesso funcional.
+6. Browser de agentes permanece na backend; Windows não é fallback de navegação.
 
 ### Se Tiver Que Acessar a VM
 
 ```bash
-# SSH publico direto esta desabilitado.
-# Prefira Remote Desktop Commander; no runner self-hosted da VM do site:
+# Remote Control MCP e a primeira rota operacional.
+# SSH publico direto esta desabilitado. Se precisar de shell direto no runner self-hosted:
 ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1
-# Fora da VCN, use uma sessao OCI Bastion.
+# Fora da VCN ou para bootstrap/recovery, use OCI Bastion/control plane auditavel.
 
 # Monitorar deploy (a cada 2 min, cron roda)
 tail -f /var/log/shopvivaliz-deploy.log
@@ -585,7 +588,7 @@ Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate
 ## Codex como última opção de execução
 
 - Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
-- Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
+- Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois SSH privado/Tailscale e somente para bootstrap/recovery GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Não consumir Codex para esse trabalho por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
 - Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.

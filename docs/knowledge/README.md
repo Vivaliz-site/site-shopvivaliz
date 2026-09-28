@@ -4,7 +4,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
-- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
+- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts e acesso; Remote Control MCP é a rota operacional primária, com SSH privado/Tailscale e OCI Bastion/GitHub apenas nas condições documentadas.**
 - [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`buscador.md`](buscador.md) — motor multi-IA de pesquisa, debate contraditório e consenso (OpenAI + Claude + Gemini).
@@ -46,7 +46,7 @@ Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta
 
 > **Regra contínua de execução:** toda sessão/agente deve usar **@Superpowers em cada etapa material** (planejamento, investigação, implementação, debugging, testes, revisão, correção, PR/merge, deploy, pós-deploy, auditoria e retomadas). Uma única invocação no início não é suficiente. A regra completa está em `agent-rules.md` e `../../REGRAS-AGENTES-CENTRALIZADAS.md`.
 
-Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado, chave local protegida ou Desktop Commander conectado.
+Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado e material protegido já provisionado; o Remote Control MCP não autoriza exibir ou copiar secrets.
 
 ## Ordem recomendada para diagnóstico
 
