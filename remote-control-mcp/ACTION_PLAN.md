@@ -94,3 +94,21 @@ STATUS=PENDING
 
 ## Etapa 7 — Integrar MCP com ChatGPT e encerrar
 STATUS=PENDING
+
+## Atualização — 2026-09-28 (sessão atual): SSH real + auth resolvidos nos dois Windows; novo bloqueio é do controller
+
+Entre a última entrada desta sessão e agora, outra sessão/agente avançou 9 commits reagindo a falhas ao vivo (nenhum atualizou este arquivo — mesma lacuna recorrente). Resumo reconstruído via `git log` + evidência ao vivo:
+- Causa raiz real do lado Windows: o serviço OpenSSH Server nem sempre estava instalado/registrado como serviço. Corrigido via `scripts/windows-openssh-recovery.ps1` (instala `OpenSSH.Server`, registra `New-Service -Name sshd`), acionado pelos relays legados 5557/5558 quando uma checagem de handshake SSH real (`ssh_protocol_alive()`, não mais TCP cru) falha.
+- Problema seguinte: bootstrap tentava autenticar com a chave da VM, nunca autorizada num sshd recém-recuperado (dependência circular). Corrigido instalando a chave pública do próprio controller via os relays já autenticados, depois validando com a chave privada do controller via SSH real 2222/2223 (PR #2035, mesclado como `0c9572cc0`).
+
+**Reverificação ao vivo nesta sessão** (2 runs consecutivos, `36436982503` e `36441085607`, disparado manualmente por mim no tip atual do main): ambos mostram, de forma reproduzível:
+```
+REMOTE_CONTROL_KOCEPSV_PRECHECK_2223=SSH_OK
+REMOTE_CONTROL_ADMIN_KEY_STEP=FRED controller-key auth OK
+REMOTE_CONTROL_ADMIN_KEY_STEP=DESKTOP controller-key auth OK
+```
+**Os dois hosts Windows (Fred-Win e KOCEPSV) agora comprovam SSH real + autenticação com a chave do controller.** O bloqueio de túnel zumbi que motivou o ACTION STAGE 4/5 do CHECKPOINT.md está resolvido.
+
+**Novo bloqueio (corrigido e mesclado nesta sessão):** o passo "Pin private host keys for controller" reinicia `shopvivaliz-remote-control-mcp.service` e testa `curl` no health-check imediatamente, sem espera — `systemctl is-active` só prova que o processo nasceu (`Type=simple`), não que já fez bind na porta 5580. Corrigido com um retry de 10×1s + dump de `systemctl status`/`journalctl` em caso de esgotamento (sem `|| true`/`set +e`, para respeitar `tests/remote-control-mcp-test.py::test_bootstrap_surfaces_do_not_discard_failures`). **PR #2038 mesclado ao main como `2538517acf91963ca79e4694556d8db3c771335c`, com os 6 checks de CI verdes.**
+
+Próxima ação autorizada: rodar o bootstrap ao vivo de novo no main atual (já contendo o PR #2038) e confirmar, com evidência fresca, que o health-check do controller passa de forma confiável — merge sozinho não é prova de comportamento ao vivo, conforme a regra permanente desta tarefa. Se passar, o workflow deve alcançar "Four-host live MCP health validation" (hoje `skipped` porque exige `workflow_dispatch` com `run_e2e: true` explícito) — essa etapa deve ser tentada em seguida, assim que o fix do controller for confirmado ao vivo.
