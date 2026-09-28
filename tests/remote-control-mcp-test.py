@@ -602,7 +602,9 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(needle, workflow)
         self.assertIn('action == "chatgpt_continuity_repair"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
-        self.assertNotIn('cat "$token_file"', workflow)
+        repair_block = workflow.split("            chatgpt_continuity_repair)", 1)[1].split("              ;;", 1)[0]
+        self.assertNotIn('cat "$token_file"', repair_block)
+        self.assertIn('dd if="$token_file" status=none', repair_block)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
