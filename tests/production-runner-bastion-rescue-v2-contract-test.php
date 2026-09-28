@@ -34,6 +34,12 @@ $required = [
     'systemctl --user restart',
     'RUNNER_BASTION_RESCUE=listener_restarted',
     'RUNNER_SERVICE_ACTIVE=true',
+    'Runner_*.log',
+    'Listening for Jobs',
+    'A session for this runner already exists',
+    'Runner connect error',
+    'RUNNER_LISTENER_CONNECTED=',
+    'RUNNER_LISTENER_FAILURE_CLASS=',
     'gh workflow run master-production-pipeline.yml',
     '-f confirmation=DEPLOY',
     'bastion session delete',
@@ -58,6 +64,7 @@ $forbidden = [
     '|| true',
     'exit 0',
     '--session-ttl 900',
+    'cat "$latest_log"',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
