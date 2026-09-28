@@ -195,10 +195,6 @@ jobs:
             --approve-for-me \
             --model gpt-5.6-terra \
             --config 'model_reasoning_effort="medium"' \
-            --config 'mcp_servers.codex_bridge.command="python3"' \
-            --config 'mcp_servers.codex_bridge.required=false' \
-            --config 'mcp_servers.codex-mesh-bridge.enabled=false' \
-            --config 'mcp_servers.google-ads-readonly.enabled=false' \
             - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
 
           bytes="$(wc -c < "$out" | tr -d ' ')"
