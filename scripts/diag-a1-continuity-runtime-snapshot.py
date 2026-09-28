@@ -46,24 +46,28 @@ def process_snapshot() -> None:
         by_pid[pid] = args
         return args
 
-    def stat_fields(pid: int) -> list[str]:
+    def stat_after_comm(pid: int) -> list[str]:
         try:
-            return (proc / str(pid) / "stat").read_text().split()
+            raw = (proc / str(pid) / "stat").read_text()
         except OSError:
             return []
+        close = raw.rfind(")")
+        if close < 0:
+            return []
+        return raw[close + 2 :].split()
 
     def ppid(pid: int) -> int:
+        fields = stat_after_comm(pid)
         try:
-            fields = stat_fields(pid)
-            return int(fields[3]) if len(fields) > 3 else 0
-        except (ValueError, IndexError):
+            return int(fields[1]) if len(fields) > 1 else 0
+        except (TypeError, ValueError):
             return 0
 
     def age(pid: int) -> int:
+        fields = stat_after_comm(pid)
         try:
-            fields = stat_fields(pid)
-            return max(0, int(uptime - int(fields[21]) / hz)) if len(fields) > 21 else -1
-        except (ValueError, IndexError):
+            return max(0, int(uptime - int(fields[19]) / hz)) if len(fields) > 19 else -1
+        except (TypeError, ValueError):
             return -1
 
     def user(pid: int) -> str:
