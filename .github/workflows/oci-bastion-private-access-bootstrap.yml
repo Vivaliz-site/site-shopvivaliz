@@ -525,8 +525,10 @@ jobs:
           heartbeat=false
           token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
           if [ -s "$token_file" ]; then
-            body="$(curl -fsS --connect-timeout 5 --max-time 10 -H 'Host: shopvivaliz.com.br' -H "Authorization: Bearer $(cat "$token_file")" -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php 2>/dev/null || true)"
-            [ "$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null)" = OK ] && heartbeat=true
+            body=''
+            if body="$(curl -fsS --connect-timeout 5 --max-time 10 -H 'Host: shopvivaliz.com.br' -H "Authorization: Bearer $(cat "$token_file")" -H 'Content-Type: application/json' --data '{"operation":"heartbeat"}' http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php 2>/dev/null)"; then
+              [ "$(printf '%s' "$body" | jq -r '.status // empty' 2>/dev/null)" = OK ] && heartbeat=true
+            fi
           fi
           echo CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=$heartbeat"""
 
