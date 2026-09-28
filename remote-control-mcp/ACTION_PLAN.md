@@ -58,10 +58,33 @@ STATUS=PASS
 - O clone local de validação não foi usado como evidência porque o runtime local não resolveu `github.com`; o CI remoto forneceu a execução canônica dos testes.
 
 ## Etapa 3 — Validar e mesclar PR
-STATUS=PENDING
+STATUS=PASS
+
+### Evidência
+- PR #1974 mesclado ao main em `1d7425a96702ec8c974230a86db0268f68391496` (2026-09-28T02:47:22Z).
+- Todos os 5 checks obrigatórios no head do merge foram SUCCESS: Remote Control MCP CI, Mandatory Validation Gate, Repository Governance, ShopVivaliz QA, Desktop Commander 24h Health.
 
 ## Etapa 4 — Bootstrap Windows
-STATUS=PENDING
+STATUS=RUNNING
+
+### Evidência
+- Fred-Win (`2222`): comprovado ao vivo — bootstrap run `36374487789` (2026-09-28T03:42Z, o mais recente até o momento) imprime `REMOTE_CONTROL_FRED_REVERSE_SSH=PASS`.
+- KOCEPSV (`2223`): **ainda não comprovado**, apesar de três PRs de correção mesclados diretamente ao main no mesmo dia após o merge da Etapa 3:
+  - #2003 `tolerate hidden KOCEPSV ssh executable path`
+  - #2004 `classify KOCEPSV sidecar bootstrap failures`
+  - #2007 `classify KOCEPSV controller invocation failure`
+- Reverificação ao vivo nesta sessão (2026-09-28), no run mais recente disponível (`36374487789`, head já contendo o fix do #2007): nenhum marcador `REMOTE_CONTROL_KOCEPSV_*` aparece no log antes do job falhar com exit code 1 — ou seja, mesmo a nova classificação de diagnóstico ainda não é alcançada/impressa, e a porta `2223` continua inacessível a partir do backend nessa execução.
+- `docs/knowledge/host-access.md` (atualizado no mesmo dia pelos PRs #2010/#2012) já documenta essa mesma conclusão: "KOCEPSV `2223` ainda não comprovado" — sem divergência entre documentação e evidência ao vivo neste ponto.
+- Tentativa de diagnóstico direto no host via Remote Desktop Commander nesta sessão: os quatro dispositivos canônicos estão `online`, mas a chamada foi bloqueada pela cota mensal de tool-calls do RDC esgotada (bloqueio externo transitório de ferramenta, não falha de conexão/pareamento). Diagnóstico ao vivo direto em `DESKTOP-KOCEPSV`/backend fica pendente até a cota renovar ou outro canal ao vivo estar disponível.
+- Não repetir o padrão de PR-corretivo-sem-verificação-ao-vivo dos três PRs acima; a próxima ação autorizada é obter estado ao vivo real do host KOCEPSV antes de qualquer novo patch.
+
+### Instrumentação (PR #2014/#2015) e achado real
+- PR #2014 e #2015 (diagnóstico apenas, sem tentativa de fix) instrumentaram o bloco do KOCEPSV e o loop compartilhado de instalação da chave admin (FRED + DESKTOP) com marcadores explícitos e dumps `ss -tln`/`ss -tlnp` direto no runner self-hosted (que É o próprio host backend) — contornando a cota esgotada do RDC.
+- Run `36410163131`: provou que o túnel do KOCEPSV está de fato de pé na camada TCP (`ss -tln` mostra `LISTEN 127.0.0.1:2223` real, `REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS`). O job falhou 2s depois, no loop ainda não instrumentado.
+- Run `36410984419`: com o loop já instrumentado, a falha real apareceu na **primeira iteração, FRED (porta 2222)**, não no KOCEPSV — `ssh-keyscan` falha com `Connection closed by remote host` (×5), mesmo com a porta TCP aberta.
+- **Hipótese de trabalho (bem fundamentada, ainda não confirmada diretamente no host):** túnel SSH reverso "zumbi" — o socket local do `-R` continua vinculado no backend mesmo depois que a conexão SSH master real para o Windows morreu; uma conexão nova é aceita e fechada na hora, sem handshake, porque não há mais túnel vivo para repassar. Isso bate exatamente com o padrão observado (TCP cru sempre "abre", SSH de verdade sempre fecha na hora) e explicaria por que tanto FRED quanto KOCEPSV parecem comprovados no nível errado de checagem.
+- Isso reenquadra a investigação: o problema provavelmente nunca foi específico dos scripts PowerShell do KOCEPSV (alvo dos PRs #2001/#2003/#2004/#2007) — é um problema de vivacidade/reconexão do túnel reverso compartilhado por ambos os hosts Windows.
+- **Nada foi implementado além do diagnóstico** — confirmar a hipótese e corrigi-la exige acesso ao vivo aos hosts (RDC quando a cota renovar, ou outro canal) e/ou uma mudança de workflow que valide conexão SSH real (não só TCP cru) antes de confiar no `PASS`. Ambas mexem em bootstrap SSH ao vivo de hosts Windows de produção — sinalizado ao usuário em vez de implementado sem aprovação.
 
 ## Etapa 5 — E2E quatro hosts
 STATUS=PENDING

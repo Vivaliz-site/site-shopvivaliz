@@ -2,7 +2,7 @@ name: Runtime Token Security Audit
 
 on:
   schedule:
-    - cron: '23 * * * *'
+    - cron: '47 8 * * *'
   workflow_dispatch:
   workflow_run:
     workflows:
