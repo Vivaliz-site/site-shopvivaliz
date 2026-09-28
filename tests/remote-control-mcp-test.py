@@ -124,6 +124,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1", text)
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_PORT=5580", text)
 
+    def test_controller_admin_runtime_is_not_filesystem_sandboxed(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
+        for text in (unit, setup):
+            self.assertNotIn("ProtectSystem=full", text)
+            self.assertNotIn("ProtectHome=read-only", text)
+
     def test_windows_bootstrap_requires_administrator(self):
         text = (ROOT / "scripts" / "setup-remote-control-windows.ps1").read_text(encoding="utf-8")
         self.assertIn("administrator_required", text)
