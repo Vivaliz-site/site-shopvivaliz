@@ -60,6 +60,7 @@ on:
           - claude_remote_control_install
           - claude_remote_control_status
           - chatgpt_continuity_diagnostic
+          - chatgpt_continuity_repair
           - chatgpt_freeze_task_state
       reason:
         description: Audit reason
@@ -113,7 +114,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_freeze_task_state"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -150,6 +151,8 @@ jobs:
               raise SystemExit("Claude Remote Control status is restricted to the backend VM")
           if action == "chatgpt_continuity_diagnostic" and target != "always-free-arm-1787907847-26":
               raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
+          if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -439,6 +442,71 @@ jobs:
                   --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
+              ;;
+            chatgpt_continuity_repair)
+              token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
+              token_file="$token_dir/bridge.token"
+              local_tmp="$(mktemp)"
+              remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_continuity_repair() {
+                rm -f "$local_tmp"
+                "${SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
+              }
+              trap cleanup_continuity_repair RETURN
+
+              if ! sudo -n test -s "$token_file"; then
+                umask 077
+                python3 -c 'import secrets; print(secrets.token_hex(32))' > "$local_tmp"
+                sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
+                sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
+              fi
+              sudo -n python3 - "$token_file" <<'PY'
+          import pathlib, sys
+          value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          if len(value) < 32:
+              raise SystemExit("continuity bridge token is missing or too short")
+          PY
+
+              heartbeat_tmp="$(mktemp)"
+              token="$(sudo -n dd if="$token_file" status=none)"
+              if ! curl -fsS --connect-timeout 5 --max-time 15 \
+                -H 'Host: shopvivaliz.com.br' \
+                -H "Authorization: Bearer $token" \
+                -H 'Content-Type: application/json' \
+                --data '{"operation":"heartbeat"}' \
+                http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
+                unset token
+                rm -f "$heartbeat_tmp"
+                echo "::error::Production continuity bridge heartbeat failed before backend repair"
+                exit 31
+              fi
+              unset token
+              jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null
+              rm -f "$heartbeat_tmp"
+
+              "${SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+              "${SSH[@]}" "dd of='$remote_dir/install.sh' status=none && chmod 700 '$remote_dir/install.sh'" < scripts/install-chatgpt-continuity-backend-bridge.sh
+              "${SSH[@]}" "dd of='$remote_dir/worker.mjs' status=none && chmod 700 '$remote_dir/worker.mjs'" < scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+              sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
+              echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
+
+              "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
+              install_output=''
+              install_rc=0
+              if install_output="$("${SSH[@]}" "CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
+                install_rc=0
+              else
+                install_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$install_output" | awk '/^CHATGPT_CONTINUITY_(BRIDGE_HEARTBEAT|BACKEND_SERVICE)=PASS$/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$install_rc" -ne 0 ]; then
+                echo "::error::ChatGPT continuity backend installer failed rc=$install_rc"
+                exit "$install_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
+              printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+              echo "CHATGPT_CONTINUITY_REPAIR=PASS"
               ;;
             chatgpt_continuity_diagnostic)
               runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
