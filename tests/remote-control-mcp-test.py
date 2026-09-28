@@ -62,6 +62,11 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(m.is_authorized("Bearer wrong-token", "test-token"))
         self.assertFalse(m.is_authorized("Bearer test-token", ""))
 
+    def test_unix_socket_transport_uses_os_permissions_instead_of_bearer(self):
+        self.assertTrue(m.request_is_authorized("", "", unix_transport=True))
+        self.assertFalse(m.request_is_authorized("127.0.0.1", "", unix_transport=False))
+        self.assertTrue(m.request_is_authorized("127.0.0.1", "Bearer test-token", unix_transport=False, token="test-token"))
+
     def test_controller_bootstrap_generates_root_only_mcp_token(self):
         setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
