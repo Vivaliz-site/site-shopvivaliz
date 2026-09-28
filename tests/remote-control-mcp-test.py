@@ -493,6 +493,7 @@ class BootstrapContractTests(unittest.TestCase):
             "CLAUDE_AUTH_LOGGED_IN=",
             "CLAUDE_REMOTE_CONTROL_COMMAND_AVAILABLE=",
             "CLAUDE_REMOTE_CONTROL_ENV_COMPATIBLE=",
+            "CLAUDE_VERSION=",
         ):
             self.assertIn(marker, script_text)
         for needle in (
