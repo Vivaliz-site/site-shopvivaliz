@@ -26,7 +26,9 @@ jobs:
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
-          github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
+          github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
+          github.event.issue.body == 'action=chatgpt-continuity-repair' ||
+          github.event.issue.body == 'action=chatgpt-continuity-successor'
         )
       }}
     runs-on: ubuntu-latest
@@ -458,6 +460,82 @@ jobs:
           print('DURABLE_AFTER_DISCONNECT=PASS')
           print('RUNTIME_GITHUB_DEPENDENCY=false')
           PY
+
+      - name: Repair ChatGPT continuity worker through OCI Bastion
+        if: github.event.issue.body == 'action=chatgpt-continuity-repair'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir'"
+          trap '"${BACKEND_SSH[@]}" "rm -rf '\''$remote_dir'\''" >/dev/null 2>&1 || :' RETURN
+          "${BACKEND_SCP[@]}" scripts/install-chatgpt-continuity-backend-bridge.sh ubuntu@127.0.0.1:"$remote_dir/install.sh"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs ubuntu@127.0.0.1:"$remote_dir/worker.mjs"
+          "${BACKEND_SSH[@]}" "chmod 700 '$remote_dir/install.sh' '$remote_dir/worker.mjs'"
+
+          bridge_endpoint="$("${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+            test -s "$token_file"
+            token="$(cat "$token_file")"
+            trap "unset token" EXIT
+            for candidate in               http://10.0.1.112/api/chatgpt-continuity/bridge.php               http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php               https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php
+            do
+              tmp="$(mktemp)"
+              if curl -fsS --connect-timeout 4 --max-time 10                 -H "Host: shopvivaliz.com.br"                 -H "Authorization: Bearer $token"                 -H "Content-Type: application/json"                 --data "{"operation":"heartbeat"}" "$candidate" > "$tmp"                 && jq -e ".status == "OK"" "$tmp" >/dev/null 2>&1
+              then
+                rm -f "$tmp"
+                printf "%s\n" "$candidate"
+                exit 0
+              fi
+              rm -f "$tmp"
+            done
+            exit 41')"
+          test -n "$bridge_endpoint"
+          "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
+          install_output=''
+          install_rc=0
+          if install_output="$("${BACKEND_SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
+            install_rc=0
+          else
+            install_rc=$?
+          fi
+          safe_output="$(printf '%s\n' "$install_output" | awk '/^CHATGPT_CONTINUITY_(BRIDGE_HEARTBEAT|BACKEND_SERVICE)=PASS$/{print}')"
+          [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+          [ "$install_rc" -eq 0 ] || { echo "::error::OCI continuity repair failed rc=$install_rc"; exit "$install_rc"; }
+          printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
+          printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+          echo "CHATGPT_CONTINUITY_OCI_REPAIR=PASS"
+
+      - name: Ensure ChatGPT freeze successor through OCI Bastion
+        if: github.event.issue.body == 'action=chatgpt-continuity-successor'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -P "$SITE_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-continuity-successor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "${SITE_SSH[@]}" "install -d -m 700 '$remote_dir'"
+          trap '"${SITE_SSH[@]}" "rm -rf '\''$remote_dir'\''" >/dev/null 2>&1 || :' RETURN
+          "${SITE_SCP[@]}" scripts/agent_task_state.py scripts/ensure-chatgpt-freeze-successor.py ubuntu@127.0.0.1:"$remote_dir/"
+          "${SITE_SSH[@]}" "chmod 700 '$remote_dir/agent_task_state.py' '$remote_dir/ensure-chatgpt-freeze-successor.py'"
+          successor_json="$("${SITE_SSH[@]}" "python3 '$remote_dir/ensure-chatgpt-freeze-successor.py'             --state-dir /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state             --predecessor chatgpt-freeze-root-cause-20260927             --base-id chatgpt-freeze-root-cause-20260928             --goal 'Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption'             --next-action 'Validate live continuity runtime, preserve automatic checkpoint resume, and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker'             --evidence 'Fresh natural ChatGPT freeze requires a durable resumable generation'             --agent gpt-5.6-sol")"
+          python3 - "$successor_json" <<'PY'
+          import json, re, sys
+          payload=json.loads(sys.argv[1])
+          task_id=str(payload.get("task_id","")).strip()
+          status=str(payload.get("status","")).strip()
+          if not re.fullmatch(r"chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*",task_id):
+              raise SystemExit("invalid successor id")
+          if status not in {"RUNNING","READY_TO_COMPLETE"}:
+              raise SystemExit("successor not resumable")
+          print("CHATGPT_CONTINUITY_SUCCESSOR_TASK="+task_id)
+          print("CHATGPT_CONTINUITY_SUCCESSOR_STATUS="+status)
+          PY
+          echo "CHATGPT_CONTINUITY_SUCCESSOR=PASS"
 
       - name: ChatGPT continuity diagnostic through Remote Control MCP
         if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
