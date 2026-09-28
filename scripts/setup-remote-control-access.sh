@@ -78,7 +78,9 @@ install_target() {
   if ! id "$REMOTE_USER" >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash "$REMOTE_USER"
   fi
-  passwd -l "$REMOTE_USER" >/dev/null 2>&1 || true
+  if ! passwd -l "$REMOTE_USER" >/dev/null 2>&1; then
+    die password_lock_failed 34
+  fi
   home="/home/$REMOTE_USER"
   install -d -m 700 -o "$REMOTE_USER" -g "$REMOTE_USER" "$home/.ssh"
   {
@@ -116,9 +118,9 @@ EOF
 status() {
   echo "REMOTE_CONTROL_HOST=$HOST"
   if [ "$HOST" = "$BACKEND_HOST" ]; then
-    systemctl is-enabled "$SERVICE" 2>/dev/null || true
-    systemctl is-active "$SERVICE" 2>/dev/null || true
-    curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health || true
+    systemctl is-enabled "$SERVICE"
+    systemctl is-active "$SERVICE"
+    curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health
   elif [ "$HOST" = "$SITE_HOST" ]; then
     id "$REMOTE_USER" >/dev/null 2>&1 && echo "REMOTE_CONTROL_USER_PRESENT=true" || echo "REMOTE_CONTROL_USER_PRESENT=false"
     [ -s "/home/$REMOTE_USER/.ssh/authorized_keys" ] && echo "REMOTE_CONTROL_KEY_PRESENT=true" || echo "REMOTE_CONTROL_KEY_PRESENT=false"
