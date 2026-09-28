@@ -169,12 +169,48 @@ def enqueue_nudge_via_bridge(
         return {"ok": False, "http_status": 0, "error": "transport_error"}
 
 
+def query_nudge_status_via_bridge(
+    *,
+    bridge_url: str,
+    token: str,
+    task_id: str,
+    timeout_seconds: int = 15,
+    bridge_host_header: str = "",
+) -> dict[str, Any]:
+    """Read the worker outcome without exposing credentials or browser state."""
+    body = json.dumps({"operation": "status", "task_id": task_id}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "shopvivaliz-chatgpt-continuity-dispatcher",
+    }
+    host_header = bridge_host_header.strip() or _bridge_host_header(bridge_url)
+    if host_header:
+        headers["Host"] = host_header
+    request = urllib.request.Request(
+        bridge_url,
+        data=body,
+        method="POST",
+        headers=headers,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return {"ok": True, "http_status": response.status, "body": payload}
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "http_status": exc.code, "error": "http_error"}
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return {"ok": False, "http_status": 0, "error": "transport_error"}
+
+
 def run_once(
     *,
     runtime_dir: Path | None = None,
     bridge_url: str = "",
     token: str = "",
     enqueue: Any = enqueue_nudge_via_bridge,
+    query_status: Any = query_nudge_status_via_bridge,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     resolved_bridge_url = bridge_url or os.getenv("CHATGPT_CONTINUITY_BRIDGE_URL", "") or DEFAULT_BRIDGE_URL
@@ -208,9 +244,39 @@ def run_once(
 
         previous = ledger.get(fingerprint)
         if previous:
-            if previous.get("bridge_ok") is True:
-                continue
             attempted_at = _parse_time(previous.get("dispatched_at"))
+            worker_status = str(previous.get("worker_status", "")).strip().upper()
+
+            if previous.get("bridge_ok") is True and not worker_status and resolved_token:
+                status_result = query_status(
+                    bridge_url=resolved_bridge_url,
+                    token=resolved_token,
+                    task_id=task_id,
+                    bridge_host_header=_bridge_host_header(resolved_bridge_url),
+                )
+                if status_result.get("ok"):
+                    status_body = status_result.get("body") if isinstance(status_result.get("body"), dict) else {}
+                    nudge = status_body.get("nudge") if isinstance(status_body.get("nudge"), dict) else {}
+                    worker_status = str(nudge.get("status", "")).strip().upper()
+                    if worker_status:
+                        observed = dict(previous)
+                        observed["worker_status"] = worker_status
+                        observed["worker_status_observed_at"] = utc_now()
+                        _append_ledger(root, observed)
+                        ledger[fingerprint] = observed
+                        previous = observed
+
+            if worker_status == "PROGRESS_CONFIRMED":
+                continue
+
+            # An active queue claim is already being handled by the browser
+            # worker. Re-enqueueing would only duplicate the same continuation.
+            if worker_status in {"PENDING", "CLAIMED"}:
+                continue
+
+            # SENT is a legacy ambiguous result and SENT_UNCONFIRMED explicitly
+            # means the click did not produce observable assistant progress.
+            # Both remain retryable after the bounded cooldown.
             if attempted_at is not None and (current - attempted_at).total_seconds() < retry_seconds:
                 continue
             retry_attempted += 1
@@ -235,6 +301,8 @@ def run_once(
             "dispatched_at": utc_now(),
             "bridge_ok": bool(result.get("ok")),
             "http_status": result.get("http_status"),
+            "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
+            "worker_status": "",
         }
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
