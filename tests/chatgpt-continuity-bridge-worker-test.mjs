@@ -60,6 +60,8 @@ async function run() {
     true,
   );
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), true);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
