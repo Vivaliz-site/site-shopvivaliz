@@ -12,6 +12,9 @@ on:
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/test_claude_remote_control_setup.py'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
   push:
@@ -40,8 +43,9 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/test_claude_remote_control_setup.py
           python3 tests/remote-control-mcp-test.py
+          python3 tests/test_claude_remote_control_setup.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax
