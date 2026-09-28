@@ -33,6 +33,9 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         state.RUNTIME_DIR = self.runtime
         watchdog.RUNTIME_DIR = self.runtime
         self.dispatcher = load_dispatcher()
+        # Existing behavioral tests exercise the implementation behind the
+        # production fail-closed guard. Production keeps this True.
+        self.dispatcher.CHATGPT_WEB_TURN_AUTOMATION_BLOCKED = False
         self.calls: list[dict] = []
 
     def tearDown(self) -> None:
@@ -183,6 +186,28 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         )
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(len(self.calls), 0)
+
+
+class ChatgptContinuityPolicyGuardTests(unittest.TestCase):
+    def test_default_policy_blocks_without_touching_bridge(self) -> None:
+        dispatcher = load_dispatcher()
+        calls: list[dict] = []
+
+        def enqueue(**kwargs):
+            calls.append(kwargs)
+            return {"ok": True, "http_status": 200}
+
+        result = dispatcher.run_once(
+            runtime_dir=Path(tempfile.mkdtemp()),
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=enqueue,
+        )
+
+        self.assertTrue(result["blocked_policy"])
+        self.assertEqual(result["policy"], "CHATGPT_WEB_AUTOMATION_RISK_GUARD_V2")
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(calls, [], "fail-closed policy must prevent any bridge enqueue")
 
 
 class ChatgptContinuityDispatcherWiringTests(unittest.TestCase):
