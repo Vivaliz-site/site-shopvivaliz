@@ -52,9 +52,9 @@ Restart=always
 RestartSec=3
 NoNewPrivileges=false
 PrivateTmp=true
-ProtectSystem=full
+ProtectSystem=false
 ReadWritePaths=/var/lib/shopvivaliz-remote-control
-ProtectHome=read-only
+ProtectHome=false
 
 [Install]
 WantedBy=multi-user.target
