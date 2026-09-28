@@ -58,7 +58,23 @@ STATUS=PASS
 - O clone local de validação não foi usado como evidência porque o runtime local não resolveu `github.com`; o CI remoto forneceu a execução canônica dos testes.
 
 ## Etapa 3 — Validar e mesclar PR
-STATUS=PENDING
+STATUS=PASS
+
+### Evidência
+- PR #1974 revisado e promovido de draft para ready.
+- Falha real de governança identificada: `set +e` no cleanup do bootstrap.
+- Regressão adicionada para proibir `set +e`; cleanup corrigido para manter `set -Eeuo pipefail`.
+- Head validado: `1d7425a96702ec8c974230a86db0268f68391496`.
+- Gates no head validado:
+  - Remote Control MCP CI `36371067442`: SUCCESS.
+  - Mandatory Validation Gate `36371067439`: SUCCESS.
+  - Repository Governance `36371067445`: SUCCESS.
+  - ShopVivaliz QA `36371067452`: SUCCESS.
+  - Desktop Commander 24h Health `36371067484`: SUCCESS.
+- Revisão de diff confirmou que os commits recentes da `main` alteravam somente superfícies de continuidade do ChatGPT, sem sobreposição com os 10 arquivos do Remote Control MCP.
+- PR #1974 mesclado por squash.
+- Merge SHA em `main`: `ac97956ac7cb2e51fcd7beddf5d5964bcee74373`.
+- A Etapa 4 continua separada: nenhum bootstrap Windows manual foi executado nesta etapa.
 
 ## Etapa 4 — Bootstrap Windows
 STATUS=PENDING
