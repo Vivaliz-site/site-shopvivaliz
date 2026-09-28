@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-status}"
+BRIDGE_SOURCE="${2:-scripts/claude-remote-control-mcp-stdio.py}"
+UNIT_SOURCE="${3:-deploy/systemd/shopvivaliz-claude-remote-control.service}"
+BACKEND_HOST="always-free-arm-1787907847-26"
+CLAUDE_USER="ubuntu"
+CLAUDE_HOME="/home/ubuntu"
+CLAUDE_BIN="$CLAUDE_HOME/.local/bin/claude"
+WORKSPACE="$CLAUDE_HOME/shopvivaliz-claude-workspace/site-shopvivaliz"
+BRIDGE_TARGET="/usr/local/sbin/shopvivaliz-claude-mcp-stdio"
+SETUP_TARGET="/usr/local/sbin/shopvivaliz-setup-claude-remote-control"
+SUDOERS_FILE="/etc/sudoers.d/shopvivaliz-claude-mcp"
+UNIT_TARGET="/etc/systemd/system/shopvivaliz-claude-remote-control.service"
+SERVICE="shopvivaliz-claude-remote-control.service"
+
+die(){ echo "CLAUDE_REMOTE_CONTROL_SETUP=FAIL reason=$1" >&2; exit "${2:-1}"; }
+require_backend(){ [ "$(hostname)" = "$BACKEND_HOST" ] || die backend_host_mismatch 21; }
+require_root(){ [ "$(id -u)" -eq 0 ] || die root_required 22; }
+run_as_claude(){ sudo -u "$CLAUDE_USER" -H env -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME="$CLAUDE_HOME" "$@"; }
+
+probe_auth_and_command(){
+  test -x "$CLAUDE_BIN" || die claude_missing 30
+  local tmp
+  tmp="$(mktemp)"
+  trap 'rm -f "$tmp"' RETURN
+  if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
+    die claude_auth_status_failed 31
+  fi
+  run_as_claude python3 - "$tmp" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as h:
+    data=json.load(h)
+raise SystemExit(0 if data.get("loggedIn") is True else 1)
+PY
+  run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
+}
+
+install_bridge(){
+  test -f "$BRIDGE_SOURCE" || die bridge_source_missing 40
+  test -f /var/lib/shopvivaliz-remote-control/mcp-token || die mcp_token_missing 41
+  install -m 0755 -o root -g root "$BRIDGE_SOURCE" "$BRIDGE_TARGET"
+  printf '%s ALL=(root) NOPASSWD: %s\n' "$CLAUDE_USER" "$BRIDGE_TARGET" >"$SUDOERS_FILE"
+  chmod 0440 "$SUDOERS_FILE"
+  visudo -cf "$SUDOERS_FILE" >/dev/null
+  install -m 0755 -o root -g root "$0" "$SETUP_TARGET"
+  echo "CLAUDE_MCP_BRIDGE_INSTALL=PASS"
+}
+
+prepare_workspace(){
+  install -d -m 0755 -o "$CLAUDE_USER" -g "$CLAUDE_USER" "$(dirname "$WORKSPACE")"
+  if [ ! -d "$WORKSPACE/.git" ]; then
+    run_as_claude git clone --origin origin https://github.com/Vivaliz-site/site-shopvivaliz.git "$WORKSPACE" >/dev/null
+  else
+    test "$(run_as_claude git -C "$WORKSPACE" remote get-url origin)" = "https://github.com/Vivaliz-site/site-shopvivaliz.git" || die workspace_origin_mismatch 42
+    run_as_claude git -C "$WORKSPACE" fetch origin main --quiet
+  fi
+  echo "CLAUDE_WORKSPACE=PASS"
+}
+
+configure_mcp(){
+  local config
+  config='{"type":"stdio","command":"sudo","args":["-n","/usr/local/sbin/shopvivaliz-claude-mcp-stdio"]}'
+  if run_as_claude "$CLAUDE_BIN" mcp get shopvivaliz-remote-control >/dev/null 2>&1; then
+    run_as_claude "$CLAUDE_BIN" mcp remove shopvivaliz-remote-control --scope user >/dev/null
+  fi
+  run_as_claude "$CLAUDE_BIN" mcp add-json shopvivaliz-remote-control "$config" --scope user >/dev/null
+  echo "CLAUDE_MCP_CONFIG=PASS"
+}
+
+verify_bridge(){
+  systemctl is-active --quiet shopvivaliz-remote-control-mcp.service || die controller_inactive 43
+  local out
+  out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | run_as_claude sudo -n "$BRIDGE_TARGET")"
+  python3 - "$out" <<'PY'
+import json,sys
+p=json.loads(sys.argv[1])
+names={x.get("name") for x in p.get("result",{}).get("tools",[])}
+required={"hosts_list","host_health","task_submit","task_status","task_result"}
+missing=sorted(required-names)
+if missing:
+    raise SystemExit("missing_tools:"+",".join(missing))
+PY
+  echo "CLAUDE_PRIVATE_MCP_BRIDGE=PASS"
+}
+
+accept_consent(){
+  local out rc
+  out="$(mktemp)"
+  rc=0
+  if printf 'y\n' | run_as_claude timeout 18s "$CLAUDE_BIN" remote-control --name ShopVivaliz-Bootstrap --spawn worktree --capacity 1 --no-create-session-in-dir --permission-mode default >"$out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if grep -Eqi 'requires a claude\.ai subscription|run.*/login|sign in|not logged in' "$out"; then
+    rm -f "$out"; die remote_control_login_required 44
+  fi
+  if grep -Eqi 'disabled by your organization|not enabled|ineligible|trusted device' "$out"; then
+    rm -f "$out"; die remote_control_policy_required 45
+  fi
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+    rm -f "$out"; die remote_control_consent_failed 46
+  fi
+  rm -f "$out"
+  echo "CLAUDE_REMOTE_CONTROL_CONSENT=PASS"
+}
+
+install_service(){
+  test -f "$UNIT_SOURCE" || die unit_source_missing 47
+  install -m 0644 -o root -g root "$UNIT_SOURCE" "$UNIT_TARGET"
+  systemctl daemon-reload
+  systemctl enable "$SERVICE" >/dev/null
+  systemctl restart "$SERVICE"
+  for _ in $(seq 1 15); do
+    if systemctl is-active --quiet "$SERVICE"; then
+      sleep 2
+      if systemctl is-active --quiet "$SERVICE"; then
+        echo "CLAUDE_REMOTE_CONTROL_SERVICE=PASS"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  die service_failed_to_stay_active 48
+}
+
+status(){
+  require_backend
+  require_root
+  probe_auth_and_command
+  test -x "$BRIDGE_TARGET" || die bridge_missing 50
+  visudo -cf "$SUDOERS_FILE" >/dev/null || die sudoers_invalid 51
+  verify_bridge
+  systemctl is-enabled --quiet "$SERVICE" || die service_not_enabled 52
+  systemctl is-active --quiet "$SERVICE" || die service_not_active 53
+  echo "CLAUDE_REMOTE_CONTROL_STATUS=PASS"
+}
+
+case "$MODE" in
+  install)
+    require_backend; require_root
+    probe_auth_and_command
+    install_bridge
+    prepare_workspace
+    configure_mcp
+    verify_bridge
+    accept_consent
+    install_service
+    echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
+    ;;
+  status)
+    status
+    ;;
+  *)
+    die unknown_mode 64
+    ;;
+esac
