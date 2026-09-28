@@ -243,7 +243,7 @@ jobs:
           if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
             "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
-          import base64, json, os, urllib.request
+          import base64, json, os, urllib.error, urllib.request
           side = os.environ['SIDE_B64']
           ps = r'''$ErrorActionPreference='Stop'
           $path='C:\site-shopvivaliz\scripts\desktopkocepsv-remote-control-ssh-bridge.ps1'
@@ -254,15 +254,19 @@ jobs:
           command='powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '+encoded
           body=json.dumps({'params':{'command':command,'timeout':60}}).encode()
           req=urllib.request.Request('http://127.0.0.1:5558/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=70) as response:
-              payload=json.load(response)
+          try:
+              with urllib.request.urlopen(req,timeout=70) as response:
+                  payload=json.load(response)
+          except (TimeoutError, urllib.error.URLError):
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=transport')
+              raise SystemExit('KOCEPSV sidecar transport failed')
           result=payload.get('result') or {}
           output=str(result.get('output') or '')
-          if output:
-              print(output)
           if result.get('success') is not True:
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=rejected')
               raise SystemExit('KOCEPSV sidecar bootstrap failed')
           if 'REMOTE_CONTROL_KOCEPSV_SIDECAR=PASS' not in output:
+              print('REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=ack_missing')
               raise SystemExit('KOCEPSV sidecar did not confirm 2223')
           PY"
           fi

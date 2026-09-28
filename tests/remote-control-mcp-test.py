@@ -240,6 +240,9 @@ class BootstrapContractTests(unittest.TestCase):
             "action=runtime-proof-verify",
         ):
             self.assertIn(action, text)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_SIDECAR=FAIL class=", text)
+        sidecar_block = text[text.index('SIDE_B64='):text.index('REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS')]
+        self.assertIn("import base64, json, os, urllib.error, urllib.request", sidecar_block)
         self.assertIn("REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS", text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
         self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
