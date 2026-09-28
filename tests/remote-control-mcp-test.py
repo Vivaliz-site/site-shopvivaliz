@@ -428,6 +428,27 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('action == "secure_mcp_platform_ui_probe"', workflow)
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
 
+
+    def test_remote_access_supports_remaining_cloud_mcp_gates(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for action in (
+            "secure_mcp_platform_auth",
+            "secure_mcp_cloudflare_access_probe",
+        ):
+            self.assertIn(action, workflow)
+            self.assertIn(f'action == "{action}"', workflow)
+        for needle in (
+            "scripts/openai-secure-mcp-platform-auth.mjs",
+            "OPENAI_PLATFORM_AUTH_RESULT=PASS",
+            "SECURE_MCP_PLATFORM_REMOTE_AUTH=PASS",
+            "CLOUDFLARE_ACCESS_APPS_READ=",
+            "CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=",
+            "CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=",
+            "CLOUDFLARE_ACCESS_PROBE=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertGreaterEqual(workflow.count('target != "always-free-arm-1787907847-26"'), 3)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
