@@ -2,10 +2,11 @@
 $root = dirname(__DIR__);
 $bootstrap = $root . '/scripts/desktopkocepsv-remote-bootstrap.ps1';
 $tunnel = $root . '/scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1';
-foreach ([$bootstrap,$tunnel] as $p) {
+$bridge = $root . '/scripts/desktopkocepsv-remote-control-ssh-bridge.ps1';
+foreach ([$bootstrap,$tunnel,$bridge] as $p) {
     if (!is_file($p)) { fwrite(STDERR, "FALHOU: ausente {$p}\n"); exit(1); }
 }
-$all = file_get_contents($bootstrap) . "\n" . file_get_contents($tunnel);
+$all = file_get_contents($bootstrap) . "\n" . file_get_contents($tunnel) . "\n" . file_get_contents($bridge);
 foreach ([
     '127.0.0.1:5557',
     '-R 5558:127.0.0.1:5557',
@@ -26,6 +27,11 @@ foreach ([
     'Enable-ScheduledTask -TaskName $TaskName',
     'Ensure-Task',
     '*-R*2223:127.0.0.1:22*',
+    'ShopVivaliz DESKTOP-KOCEPSV Remote Control SSH 24h',
+    'REMOTE_CONTROL_KOCEPSV_SIDECAR_TASK=PASS',
+    'REMOTE_CONTROL_KOCEPSV_SIDECAR=PASS',
+    'Start-RemoteControlTunnel',
+    '[regex]::Replace',
     'function Capture-WorkingTunnelConfig',
     'desktopkocepsv-relay-runtime.json',
     'Loaded persisted connection metadata captured from working legacy tunnel',
