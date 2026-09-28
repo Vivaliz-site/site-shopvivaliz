@@ -81,8 +81,55 @@ jobs:
           set -Eeuo pipefail
           SSH_VM=(bash -lc)
 
-          # Recover Fred-Win through legacy loopback MCP 5557 when reverse SSH 2222 is absent.
-          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+          # A reverse-forward listener can remain reachable even when the Windows-side
+          # OpenSSH target (127.0.0.1:22) is down.  Ensure sshd through the independent
+          # legacy MCP recovery relays before trusting either reverse SSH route.
+          python3 - <<'PY'
+          import base64, json, urllib.request
+
+          peers = (("FRED", 5557), ("KOCEPSV", 5558))
+          script = r"""$ErrorActionPreference='Stop'
+          $svc = Get-Service -Name sshd -ErrorAction Stop
+          if ($svc.StartType -ne 'Automatic') { Set-Service -Name sshd -StartupType Automatic }
+          if ($svc.Status -ne 'Running') { Start-Service -Name sshd }
+          $svc = Get-Service -Name sshd -ErrorAction Stop
+          if ($svc.Status -ne 'Running') { throw 'sshd_not_running_after_recovery' }
+          Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD=PASS host=' + $env:COMPUTERNAME)
+          """
+          command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + base64.b64encode(script.encode("utf-16le")).decode()
+          for label, port in peers:
+              endpoint = f"http://127.0.0.1:{port}/mcp/tool/execute_command"
+              body = json.dumps({"params": {"command": command, "timeout": 30}}).encode()
+              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=40) as response:
+                      payload = json.load(response)
+                  result = payload.get("result") or {}
+                  output = str(result.get("output") or "")
+                  if not result.get("success") or "REMOTE_CONTROL_WINDOWS_SSHD=PASS" not in output:
+                      raise RuntimeError(str(result.get("error") or output or result))
+                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=PASS")
+              except Exception as exc:
+                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=FAIL type={type(exc).__name__}")
+                  raise
+          PY
+
+          ssh_protocol_alive() {
+            local port="$1"
+            local out
+            out="$(mktemp)"
+            if timeout 8 ssh-keyscan -T 5 -p "$port" 127.0.0.1 >"$out" 2>/dev/null && test -s "$out"; then
+              rm -f "$out"
+              return 0
+            fi
+            rm -f "$out"
+            return 1
+          }
+
+          # Recover Fred-Win through legacy loopback MCP 5557 when the real SSH
+          # protocol is unavailable. Raw TCP-open is intentionally insufficient.
+
+          if ! ssh_protocol_alive 2222; then
             "${SSH_VM[@]}" 'python3 -' <<'PY'
           import base64, json, urllib.request
           endpoint = "http://127.0.0.1:5557/mcp/tool/execute_command"
@@ -125,11 +172,14 @@ jobs:
           print("REMOTE_CONTROL_FRED_RELAY_UPGRADE_QUEUED=PASS")
           PY
             for _ in $(seq 1 30); do
-              if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              if ssh_protocol_alive 2222; then break; fi
               sleep 2
             done
           fi
-          "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          if ! ssh_protocol_alive 2222; then
+            echo "REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL protocol_handshake_unavailable"
+            exit 1
+          fi
           echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
           # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
@@ -140,10 +190,10 @@ jobs:
           echo "::endgroup::"
 
           kocepsv_precheck_open=0
-          if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          if ssh_protocol_alive 2223; then
             kocepsv_precheck_open=1
           fi
-          echo "REMOTE_CONTROL_KOCEPSV_PRECHECK_2223=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+          echo "REMOTE_CONTROL_KOCEPSV_PRECHECK_2223=$([ "$kocepsv_precheck_open" -eq 1 ] && echo SSH_OK || echo SSH_UNAVAILABLE)"
 
           if [ "$kocepsv_precheck_open" -ne 1 ]; then
             "${SSH_VM[@]}" 'python3 -' <<'PY'
@@ -218,7 +268,7 @@ jobs:
 
             kocepsv_wait_opened=0
             for attempt in $(seq 1 30); do
-              if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+              if ssh_protocol_alive 2223; then
                 kocepsv_wait_opened=1
                 echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=opened on attempt $attempt"
                 break
@@ -234,12 +284,12 @@ jobs:
           ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=still no local listener on 2222/2223/5557/5558"
           echo "::endgroup::"
 
-          if ! "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          if ! ssh_protocol_alive 2223; then
             echo "::group::KOCEPSV 2223 diagnostic: final failure state"
             ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=no local listener at time of final failure"
             sudo -n ss -tlnp 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=sudo ss -tlnp unavailable or no owning process visible"
             echo "::endgroup::"
-            echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=FAIL precheck=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+            echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=FAIL precheck=$([ "$kocepsv_precheck_open" -eq 1 ] && echo SSH_OK || echo SSH_UNAVAILABLE)"
             exit 1
           fi
           echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
