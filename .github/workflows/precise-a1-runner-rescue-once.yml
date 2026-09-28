@@ -1,0 +1,138 @@
+name: Precise A1 Runner Rescue Once
+
+on:
+  push:
+    branches:
+      - ops/a1-runner-precise-rescue-20260928
+    paths:
+      - '.github/workflows/precise-a1-runner-rescue-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+    steps:
+      - name: Configure protected OCI profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Install OCI SDK
+        shell: bash
+        run: python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Restart only idle ShopVivaliz production runner listener
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os, time, oci
+          cfg=oci.config.from_file(os.environ['OCI_CONFIG_FILE'],os.environ['OCI_PROFILE'])
+          search=oci.resource_search.ResourceSearchClient(cfg)
+          compute=oci.core.ComputeClient(cfg)
+          agent=oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models=oci.compute_instance_agent.models
+          q="query instance resources where displayName = '"+os.environ['SITE_INSTANCE_NAME']+"'"
+          items=search.search_resources(oci.resource_search.models.StructuredSearchDetails(query=q,type='Structured')).data.items
+          if len(items)!=1: raise SystemExit(f'Expected one A1 instance, got {len(items)}')
+          instance_id=items[0].identifier
+          inst=compute.get_instance(instance_id).data
+          if inst.display_name!=os.environ['SITE_INSTANCE_NAME'] or inst.lifecycle_state!='RUNNING':
+              raise SystemExit('A1 identity/lifecycle mismatch')
+          command=r'''set -Eeuo pipefail
+          service='shopvivaliz-actions-runner.service'
+          pattern='^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)'
+          worker_count="$(pgrep -fc "$pattern" || true)"
+          echo "SHOPVIVALIZ_WORKER_COUNT=$worker_count"
+          if [ "$worker_count" -gt 1 ]; then
+            echo 'PRECISE_RUNNER_RESCUE=ambiguous_multiple_workers'
+            exit 24
+          fi
+          uid="$(id -u ubuntu)"
+          runtime="/run/user/$uid"
+          bus="unix:path=$runtime/bus"
+          test -S "$runtime/bus"
+          enabled="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled "$service" 2>/dev/null || true)"
+          active="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active "$service" 2>/dev/null || true)"
+          echo "RUNNER_ENABLED_BEFORE=$enabled"
+          echo "RUNNER_ACTIVE_BEFORE=$active"
+          if [ "$worker_count" -eq 1 ]; then
+            echo 'PRECISE_RUNNER_RESCUE=worker_active_no_restart'
+            exit 0
+          fi
+          sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
+          sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+          for _ in $(seq 1 15); do
+            if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"; then
+              echo 'PRECISE_RUNNER_RESCUE=listener_restarted'
+              echo 'RUNNER_ACTIVE_AFTER=active'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'PRECISE_RUNNER_RESCUE=restart_failed'
+          exit 25
+          '''
+          details=models.CreateInstanceAgentCommandDetails(
+            compartment_id=inst.compartment_id,
+            execution_time_out_in_seconds=120,
+            target=models.InstanceAgentCommandTarget(instance_id=instance_id),
+            content=models.InstanceAgentCommandContent(
+              source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT',text=command),
+              output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
+            ),
+            display_name='shopvivaliz-precise-runner-rescue',
+          )
+          cid=agent.create_instance_agent_command(details).data.id
+          execution=None
+          for _ in range(40):
+              execution=agent.get_instance_agent_command_execution(instance_agent_command_id=cid,instance_id=instance_id).data
+              if execution.lifecycle_state in {'SUCCEEDED','FAILED','TIMED_OUT','CANCELED'}: break
+              time.sleep(3)
+          if execution is None: raise SystemExit('no OCI execution')
+          text=getattr(execution.content,'text','') or ''
+          for prefix in ('SHOPVIVALIZ_WORKER_COUNT=','RUNNER_ENABLED_BEFORE=','RUNNER_ACTIVE_BEFORE=','PRECISE_RUNNER_RESCUE=','RUNNER_ACTIVE_AFTER='):
+              for line in text.splitlines():
+                  if line.startswith(prefix): print(line)
+          code=int(getattr(execution.content,'exit_code',1))
+          if execution.lifecycle_state!='SUCCEEDED' or code!=0:
+              raise SystemExit(f'precise rescue failed state={execution.lifecycle_state} exit={code}')
+          PY
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          for f in "${OCI_KEY_FILE:-}" "${OCI_CONFIG_FILE:-}"; do
+            if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
+          done
