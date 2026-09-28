@@ -217,6 +217,14 @@ class BootstrapContractTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
         self.assertEqual(text.count("'.github/workflows/remote-control-mcp-*.yml'"), 2)
 
+    def test_oci_bastion_workflow_recovers_fred_reverse_ssh(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("http://127.0.0.1:5557/mcp/tool/execute_command", text)
+        self.assertIn("scripts/fredwin-remote-bootstrap.ps1", text)
+        self.assertIn("scripts/ssh-tunnel-service-managed.ps1", text)
+        self.assertIn("REMOTE_CONTROL_FRED_RECOVERY_QUEUED=PASS", text)
+        self.assertIn("REMOTE_CONTROL_FRED_REVERSE_SSH=PASS", text)
+
     def test_oci_bastion_workflow_supports_remote_control_stages(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for action in (
