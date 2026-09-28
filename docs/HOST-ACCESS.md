@@ -18,11 +18,11 @@ Este arquivo é um runbook local e **não contém segredos**. A fonte central ma
 - KOCEPSV `127.0.0.1:2223`: **rota canônica, ainda não comprovada operacionalmente**. Tratar como indisponível até um teste fresco comprovar a porta e a identidade administrativa.
 - Etapas posteriores do Remote Control MCP (E2E 4 hosts, tarefa durável independente de GitHub e integração final com ChatGPT) não devem ser declaradas concluídas sem evidência nova.
 
-## Shell Linux
+## Ordem de acesso e shell Linux
 
-1. Preferir rede privada/VCN/Tailscale e identidade dedicada `shopvivaliz-agent`.
-2. GitHub Actions administrativos usam runners privados autorizados; GitHub é fonte/bootstrap/recovery, não transporte normal do Remote Control MCP em runtime.
-3. Quando não houver rota privada, usar OCI Bastion/control plane auditável.
+1. Usar o **Remote Control MCP** como rota operacional primária para ações allowlisted e estado durável.
+2. Usar rede privada/VCN/Tailscale com identidade dedicada `shopvivaliz-agent` quando a operação exigir shell direto que o MCP não exponha.
+3. GitHub Actions administrativos e OCI Bastion ficam para bootstrap/recovery/reparo quando o Remote Control MCP ou a rota privada não estiverem disponíveis.
 4. Antes de alterar qualquer coisa, provar:
    - `hostname`
    - `whoami` e/ou `id`
@@ -53,10 +53,12 @@ Ao validar Windows, comprovar `hostname`, `whoami` e que a sessão administrativ
 - Navegador de agente ShopVivaliz: somente `always-free-arm-1787907847-26`.
 - Não abrir navegador operacional em Fred-Win ou KOCEPSV.
 - GUI: RustDesk self-hosted é o caminho principal.
-- Desktop Commander: contingência somente.
+- O browser de agentes continua restrito à backend; não mover navegação para Windows como fallback.
 - Sessões headless/invisíveis devem ser identificadas por tarefa/agente/máquina, com PID/perfil quando aplicável e TTL de 2h renovável; encerrar ao concluir.
 
 ## Remote Control MCP
+
+Esta é a rota operacional prioritária para agentes. Se a ação necessária não existir no MCP, usar o próximo método autorizado em vez de abrir uma rota pública ou improvisar transporte.
 
 Arquitetura alvo:
 
