@@ -88,3 +88,16 @@ STATUS=PASS
 - Existing MCP relays `5557/5558` remain bootstrap/recovery surfaces only.
 - Remote Control MCP Windows runtime will use loopback reverse SSH, not direct peer TCP/22 over Tailscale.
 - Detailed implementation sequence persisted in `remote-control-mcp/ACTION_PLAN.md`.
+
+
+### STAGE 5 — Windows reverse-SSH implementation and tests
+STATUS=PASS
+- Controller runtime uses Fred-Win via backend loopback `127.0.0.1:2222` and KOCEPSV via `127.0.0.1:2223`; Windows runtime no longer discovers Tailscale peer IPs.
+- KOCEPSV managed tunnel now carries both SSH `2223 -> 22` and legacy recovery MCP `5558 -> 5557`.
+- KOCEPSV supervisor only accepts a live tunnel when both forwards are present and replaces an incomplete legacy tunnel.
+- Bootstrap workflow uses reverse SSH for both Windows hosts; KOCEPSV legacy MCP `5558` is used only for the one-time relay upgrade when `2223` is absent.
+- Windows reverse-port host keys are pinned on the backend before live MCP validation.
+- Regression review found and fixed a stale Tailscale unit-test reference plus duplicated/malformed temporary-forward cleanup.
+- Canonical executable validation: Remote Control MCP CI run `36370863304` completed SUCCESS at implementation commit `8756e28d88dbbd0b2ff8a9de6e2e833c6839d3c8`.
+- Local container clone could not resolve `github.com`; this was not counted as a pass. GitHub CI provided the successful executable evidence.
+- Next stage is PR validation/merge only. No PR was opened and no bootstrap/deploy was performed in this stage.
