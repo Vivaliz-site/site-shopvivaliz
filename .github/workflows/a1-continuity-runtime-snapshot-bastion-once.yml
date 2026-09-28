@@ -6,6 +6,7 @@ on:
       - diag/chatgpt-cdp-a1-20260927
     paths:
       - '.github/workflows/a1-continuity-runtime-snapshot-bastion-once.yml'
+      - 'scripts/diag-a1-continuity-runtime-snapshot.py'
 
 permissions:
   contents: read
