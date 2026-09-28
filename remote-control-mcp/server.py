@@ -195,8 +195,17 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + [remote]
 
 
+def relay_shell_command(platform: str, command: str) -> str:
+    if platform != "windows":
+        return command
+    encoded = base64.b64encode(command.encode("utf-16le")).decode()
+    return f"powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand {encoded}"
+
+
 def relay_call(host: str, url: str, command: str, timeout: int) -> dict[str, Any]:
-    body = json.dumps({"params": {"command": command, "timeout": timeout}}).encode("utf-8")
+    cfg = validate_host(host)
+    relay_command = relay_shell_command(str(cfg["platform"]), command)
+    body = json.dumps({"params": {"command": relay_command, "timeout": timeout}}).encode("utf-8")
     request = urllib.request.Request(
         url + "/mcp/tool/execute_command",
         data=body,
