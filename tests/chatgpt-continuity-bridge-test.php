@@ -101,7 +101,7 @@ try {
     cbSame(404, $unknownResult['status'], 'Result for an unknown task_id must 404.');
 
     $statusCall = cbCall($base, $token, ['operation' => 'status', 'task_id' => 'task-1']);
-    cbSame('SENT', $statusCall['body']['nudge']['status'], 'Status must reflect the recorded result.');
+    cbSame('PROGRESS_CONFIRMED', $statusCall['body']['nudge']['status'], 'Status must reflect the latest confirmed progress result.');
 
     $badOp = cbCall($base, $token, ['operation' => 'not-a-real-operation']);
     cbSame(400, $badOp['status'], 'Unsupported operation must be rejected with 400.');
