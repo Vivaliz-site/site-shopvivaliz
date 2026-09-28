@@ -34,3 +34,5 @@ jobs:
           python3 tests/remote-control-mcp-test.py
       - name: Shell syntax
         run: bash -n scripts/setup-remote-control-access.sh
+      - name: Bootstrap workflow YAML syntax
+        run: ruby -e 'require "yaml"; YAML.parse_file(ARGV[0])' .github/workflows/remote-control-mcp-bootstrap.yml
