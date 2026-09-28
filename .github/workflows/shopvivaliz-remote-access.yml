@@ -491,7 +491,7 @@ jobs:
               echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
 
               bridge_endpoint=''
-              bridge_endpoint="$("${SSH[@]}" 'set -Eeuo pipefail; token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token; token=$(cat "$token_file"); trap "unset token" EXIT; for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do tmp=$(mktemp); if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data "{\"operation\":\"heartbeat\"}" "$candidate" > "$tmp" && jq -e ".status == \"OK\"" "$tmp" >/dev/null 2>&1; then rm -f "$tmp"; printf "%s\\n" "$candidate"; exit 0; fi; rm -f "$tmp"; done; exit 41')"
+              bridge_endpoint="$("${SSH[@]}" 'set -Eeuo pipefail; token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token; token=$(dd if="$token_file" status=none); trap "unset token" EXIT; for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do tmp=$(mktemp); if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data "{\"operation\":\"heartbeat\"}" "$candidate" > "$tmp" && jq -e ".status == \"OK\"" "$tmp" >/dev/null 2>&1; then rm -f "$tmp"; printf "%s\\n" "$candidate"; exit 0; fi; rm -f "$tmp"; done; exit 41')"
               test -n "$bridge_endpoint"
               echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=$bridge_endpoint"
 
