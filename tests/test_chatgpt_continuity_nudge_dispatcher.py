@@ -192,6 +192,7 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
         rows[-1]["attempt_count"] = 2
+        rows[-1]["send_attempt_count"] = 2
         ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
         def unconfirmed_status(**kwargs):
