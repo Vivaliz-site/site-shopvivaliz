@@ -3,7 +3,7 @@
 TASK_ID=private-remote-control-mcp-4hosts-20260927
 STATUS=RUNNING
 REPOSITORY=Vivaliz-site/site-shopvivaliz
-BRANCH=main (REMOTE_CONTROL_FOUR_HOST_E2E=PASS achieved live for the first time — see ACTION STAGE 6 below; completion gate items 1-5 all confirmed; remaining work is Etapa 6/7 of ACTION_PLAN.md)
+BRANCH=main (REMOTE_CONTROL_FOUR_HOST_E2E=PASS achieved live for the first time — see ACTION STAGE 6 below; Stage 6 runtime independence is also PASS; remaining work is Stage 7 cloud-client integration.)
 
 ## Goal
 Ativar o ShopVivaliz Remote Control MCP independente de GitHub em runtime nos quatro hosts canônicos.
@@ -185,3 +185,8 @@ STATUS=PASS
 - Job also confirmed `runtime_github_dependency=false` in the persisted bootstrap evidence artifact — the controller call path (`host_health`/`task_submit`/`task_status`) executes entirely via the SSH client on the backend host talking to `127.0.0.1:5580`, never touching the GitHub API at runtime; GitHub Actions is only the execution shell this session uses to trigger and observe the run, not part of the MCP's own runtime transport.
 - STATUS remains RUNNING at the task level (not CONCLUIDO) because `remote-control-mcp/ACTION_PLAN.md` Etapa 6 (formal proof/documentation of the non-GitHub-runtime property, distinct from the architectural fact already evidenced above) and Etapa 7 (ChatGPT integration) are still PENDING with no work done.
 - Next authorized stage: ACTION STAGE 7 — scope and execute Etapa 6 (decide what additional evidence, if any, is needed beyond the `runtime_github_dependency=false` artifact field already produced) and Etapa 7 (ChatGPT integration — blocked from this session by a platform-level "External Ingress Tunnel" denial when attempting to build a public Cloudflare Tunnel + Access in front of the loopback-only controller; requires either the user provisioning the public endpoint themselves, or a ChatGPT client running on the same private network as the backend). Per the task's standing evidence rule, PR #2038 being merged is not itself proof the fix works in practice — a fresh live run is still required.
+
+### ACTION STAGE 7 — Runtime independence formally reconciled; cloud-client work remains live-gated
+STATUS=RUNNING
+- **Stage 6 is PASS.** Run `36449123839` persisted `runtime_github_dependency=false` while calling the backend controller through `127.0.0.1:5580`. Independent disconnected-client evidence in issues #2045/#2046 recorded `DURABLE_AFTER_DISCONNECT=PASS` and `RUNTIME_GITHUB_DEPENDENCY=false`. These prove GitHub is neither transport, queue, heartbeat, executor nor state store at runtime.
+- Stage 7 is not inferred from that result. ChatGPT requires an OpenAI Secure MCP Tunnel and Claude Code cloud requires either the existing backend-attached remote-control session or a separately authenticated public MCP route. The loopback controller bearer remains backend/root-only in every case.
