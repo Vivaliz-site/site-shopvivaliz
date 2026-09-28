@@ -1,0 +1,41 @@
+name: Cancel Waiting ChatGPT Arm Run Once
+
+on:
+  push:
+    branches:
+      - ops/chatgpt-continuity-backend-runtime-20260927
+    paths:
+      - '.github/workflows/cancel-waiting-chatgpt-arm-once.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Cancel obsolete A1-waiting arm run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: '36360545012'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          state="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.status + "/" + (.conclusion // "")')"
+          echo "TARGET_STATE_BEFORE=$state"
+          case "$state" in
+            completed/*) echo "TARGET_ALREADY_TERMINAL=true"; exit 0 ;;
+          esac
+          gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/cancel" >/dev/null || true
+          for _ in $(seq 1 30); do
+            state="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.status + "/" + (.conclusion // "")')"
+            case "$state" in
+              completed/*) echo "TARGET_STATE_AFTER=$state"; exit 0 ;;
+            esac
+            sleep 2
+          done
+          echo "::error::arm run did not become terminal"
+          exit 1
