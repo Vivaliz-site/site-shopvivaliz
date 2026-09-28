@@ -1,6 +1,6 @@
 name: Task Continuity Production E2E
 
-# Manual-only, observe-only production proof for detached task-continuity
+# Audited observe-only production proof for detached task-continuity
 # recovery (DETACHED_TASK_RECOVERY_E2E_V7). This workflow creates exactly one
 # synthetic RUNNING checkpoint on the production host and then only polls
 # durable state/ledger files while the already-running autonomous daemon
@@ -8,6 +8,8 @@ name: Task Continuity Production E2E
 # own schedule. It never invokes the daemon's internal stale-detection or
 # detached-execution entrypoints directly.
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       repository:
@@ -28,6 +30,7 @@ concurrency:
 
 jobs:
   probe:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && github.event.comment.body == '/continuity-e2e')
     name: Run detached continuity E2E probe against production
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
