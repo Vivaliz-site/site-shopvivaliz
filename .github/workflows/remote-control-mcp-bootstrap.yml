@@ -67,37 +67,72 @@ jobs:
           PUBKEY="$(cat /tmp/shopvivaliz-remote-control.pub)"
           sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY="$PUBKEY" bash scripts/setup-remote-control-access.sh install-target
 
-      - name: Discover and bootstrap Windows peers
+      - name: Bootstrap Windows reverse SSH relays
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          peer_info="$("${SSH_VM[@]}" 'tailscale status --json' | python3 -c '
-          import json,sys
-          d=json.load(sys.stdin); peers=d.get("Peer") or {}
-          wanted={"LAPTOP-NIG4IFUU":"","DESKTOP-KOCEPSV":""}
-          for p in peers.values():
-              name=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".").upper()
-              if not p.get("Online"):
-                  continue
-              for target in list(wanted):
-                  if target in name:
-                      ips=p.get("TailscaleIPs") or []
-                      wanted[target]=next((str(x) for x in ips if ":" not in str(x)),"")
-          [print(k+"="+v) for k,v in wanted.items()]
-          ')"
-          fred_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="LAPTOP-NIG4IFUU"{print $2}')"
-          desk_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="DESKTOP-KOCEPSV"{print $2}')"
-          test -n "$fred_ip"
-          test -n "$desk_ip"
-          "${SSH_VM[@]}" "timeout 5 bash -c '</dev/tcp/$fred_ip/22'"
-          "${SSH_VM[@]}" "timeout 5 bash -c '</dev/tcp/$desk_ip/22'"
 
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32223:$fred_ip:22" ubuntu@10.0.1.38
-          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32224:$desk_ip:22" ubuntu@10.0.1.38
+          # Fred-Win already exposes SSH privately as backend loopback 127.0.0.1:2222.
+          "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+
+          # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
+          # Use that bootstrap/recovery surface once to sync main and restart its
+          # managed tunnel with the new persistent SSH reverse forward on 2223.
+          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            "${SSH_VM[@]}" 'python3 -' <<'PY'
+          import base64
+          import json
+          import urllib.request
+
+          inner = r"""$ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 2
+          Set-Location 'C:\site-shopvivaliz'
+          git fetch origin main | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
+          git merge --ff-only origin/main | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'sync failed' }
+          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode Ensure
+          """
+          inner_b64 = base64.b64encode(inner.encode('utf-16le')).decode()
+          outer = (
+              "$p=Start-Process -FilePath 'powershell.exe' -ArgumentList "
+              "@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',"
+              "'-EncodedCommand','" + inner_b64 + "') -WindowStyle Hidden -PassThru; "
+              "Write-Output ('REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS pid=' + $p.Id)"
+          )
+          outer_b64 = base64.b64encode(outer.encode('utf-16le')).decode()
+          command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + outer_b64
+          body = json.dumps({"params": {"command": command, "timeout": 20}}).encode()
+          req = urllib.request.Request(
+              "http://127.0.0.1:5558/mcp/tool/execute_command",
+              data=body,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=25) as response:
+              payload = json.load(response)
+          result = payload.get("result") or {}
+          if not result.get("success"):
+              raise RuntimeError("KOCEPSV relay upgrade queue failed: " + str(result.get("error") or result))
+          if "REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS" not in str(result.get("output") or ""):
+              raise RuntimeError("KOCEPSV relay upgrade queue acknowledgement missing")
+          PY
+
+            for _ in $(seq 1 30); do
+              if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+          fi
+          "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+
+          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32222:127.0.0.1:2222" ubuntu@10.0.1.38
+          ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" -L "32223:127.0.0.1:2223" ubuntu@10.0.1.38
           sleep 2
 
-          for spec in 'FRED 32223 FRED' 'DESKTOP 32224 user'; do
+          for spec in 'FRED 32222 FRED' 'DESKTOP 32223 user'; do
             set -- $spec
             label="$1"; port="$2"; user="$3"
             ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>/dev/null > "/tmp/$label.remote-control.hosts"
@@ -109,23 +144,18 @@ jobs:
             ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue"
           done
 
-          printf '%s\n' "$fred_ip" > /tmp/shopvivaliz-fred-ip
-          printf '%s\n' "$desk_ip" > /tmp/shopvivaliz-kocepsv-ip
-
       - name: Pin private host keys for controller
         shell: bash
         run: |
           set -Eeuo pipefail
-          fred_ip="$(cat /tmp/shopvivaliz-fred-ip)"
-          desk_ip="$(cat /tmp/shopvivaliz-kocepsv-ip)"
           SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/remote-control-bootstrap.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/remote-control-bootstrap.key" ubuntu@10.0.1.38)
-          printf -v fred_q '%q' "$fred_ip"
-          printf -v desk_q '%q' "$desk_ip"
-          "${SSH_VM[@]}" "FRED_IP=$fred_q DESK_IP=$desk_q bash -s" <<'REMOTE'
+          "${SSH_VM[@]}" 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           tmp=$(mktemp)
           trap 'rm -f "$tmp"' EXIT
-          ssh-keyscan -T 5 10.0.1.112 "$FRED_IP" "$DESK_IP" > "$tmp" 2>/dev/null
+          ssh-keyscan -T 5 10.0.1.112 > "$tmp" 2>/dev/null
+          ssh-keyscan -T 5 -p 2222 127.0.0.1 >> "$tmp" 2>/dev/null
+          ssh-keyscan -T 5 -p 2223 127.0.0.1 >> "$tmp" 2>/dev/null
           test "$(grep -cv '^#' "$tmp")" -ge 3
           sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts
           sudo -n systemctl restart shopvivaliz-remote-control-mcp.service
@@ -219,10 +249,12 @@ jobs:
         shell: bash
         run: |
           if pgrep -f '32223:' >/dev/null 2>&1; then
-            pkill -f '32223:'
+            pkill -f '32222:' >/dev/null 2>&1 || :
+          pkill -f '32223:'
           fi
-          if pgrep -f '32224:' >/dev/null 2>&1; then
-            pkill -f '32224:'
+          if pgrep -f '32223:' >/dev/null 2>&1; then
+            pkill -f '32222:' >/dev/null 2>&1 || :
+          pkill -f '32223:'
           fi
           rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
           rm -f /tmp/shopvivaliz-remote-control.pub /tmp/shopvivaliz-fred-ip /tmp/shopvivaliz-kocepsv-ip
