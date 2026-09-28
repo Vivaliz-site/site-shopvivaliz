@@ -371,6 +371,36 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("process.exit(process.exitCode || 0)", text)
         self.assertNotIn("browser.close(", text)
 
+        auth_script = ROOT / "scripts" / "openai-secure-mcp-platform-auth.mjs"
+        self.assertTrue(auth_script.exists(), "Secure MCP Platform auth helper missing")
+        auth_text = auth_script.read_text(encoding="utf-8")
+        for needle in (
+            "https://platform.openai.com/settings/organization/tunnels",
+            "Continue with Google",
+            "OPENAI_PLATFORM_AUTH_RESULT=",
+            "OPENAI_PLATFORM_AUTHENTICATED=",
+            "OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=",
+            "OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=",
+            "CLOUD_CLIENT_COMPATIBILITY_REQUIRED=",
+            "CLAUDE_CLOUD_ACCESS_REQUIRED=",
+        ):
+            self.assertIn(needle, auth_text)
+        self.assertNotIn("console.log(bodyText", auth_text)
+        self.assertNotIn("console.log(currentUrl", auth_text)
+
+        auth_flow = ROOT / ".github" / "workflows" / "secure-mcp-platform-auth.yml"
+        self.assertTrue(auth_flow.exists(), "Secure MCP Platform auth workflow missing")
+        auth_flow_text = auth_flow.read_text(encoding="utf-8")
+        for needle in (
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]",
+            "github.event.issue.title == '[secure-mcp-platform-auth]'",
+            "github.event.issue.user.login == 'fredmourao-ai'",
+            "github.event.issue.body == 'action=auth'",
+            "timeout 120s node scripts/openai-secure-mcp-platform-auth.mjs",
+            "OPENAI_PLATFORM_AUTH_RESULT=PASS",
+        ):
+            self.assertIn(needle, auth_flow_text)
+
         direct = ROOT / ".github" / "workflows" / "secure-mcp-platform-ui-probe.yml"
         self.assertTrue(direct.exists(), "direct backend Platform UI probe workflow missing")
         direct_text = direct.read_text(encoding="utf-8")
