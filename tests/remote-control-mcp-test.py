@@ -556,6 +556,23 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'"{tool}"', setup)
             self.assertIn(tool, {item["name"] for item in m.tool_specs()})
 
+    def test_remote_access_can_diagnose_chatgpt_continuity_runtime(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for needle in (
+            "chatgpt_continuity_diagnostic",
+            "CHATGPT_CONTINUITY_AGENT_ACTIVE=",
+            "CHATGPT_CONTINUITY_RUNNING_TASKS=",
+            "CHATGPT_CONTINUITY_PENDING_REQUESTS=",
+            "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=",
+            "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=",
+            "CHATGPT_CONTINUITY_CDP_REACHABLE=",
+            "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=",
+            "CHATGPT_CONTINUITY_DIAGNOSTIC=PASS",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertIn('action == "chatgpt_continuity_diagnostic"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",

@@ -59,6 +59,7 @@ on:
           - claude_remote_control_probe
           - claude_remote_control_install
           - claude_remote_control_status
+          - chatgpt_continuity_diagnostic
           - chatgpt_freeze_task_state
       reason:
         description: Audit reason
@@ -112,7 +113,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_freeze_task_state"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_freeze_task_state"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -147,6 +148,8 @@ jobs:
               raise SystemExit("Claude Remote Control install is restricted to the backend VM")
           if action == "claude_remote_control_status" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Claude Remote Control status is restricted to the backend VM")
+          if action == "chatgpt_continuity_diagnostic" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -436,6 +439,103 @@ jobs:
                   --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
+              ;;
+            chatgpt_continuity_diagnostic)
+              runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+              agent_active=false
+              if systemctl is-active --quiet shopvivaliz-agent.service; then agent_active=true; fi
+
+              diag_json="$RUNNER_TEMP/chatgpt-continuity-runtime.json"
+              python3 - "$runtime_dir" > "$diag_json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          running = 0
+          if root.is_dir():
+              for path in root.glob("*.json"):
+                  if path.name.startswith("_") or not path.is_file():
+                      continue
+                  try:
+                      row = json.loads(path.read_text(encoding="utf-8"))
+                  except Exception:
+                      continue
+                  if isinstance(row, dict) and str(row.get("status", "")).strip() == "RUNNING":
+                      running += 1
+
+          pending = 0
+          requests = root / "_resume-requests.jsonl"
+          if requests.is_file():
+              for line in requests.read_text(encoding="utf-8", errors="replace").splitlines():
+                  try:
+                      row = json.loads(line)
+                  except Exception:
+                      continue
+                  if isinstance(row, dict) and str(row.get("status", "")).strip() == "queued":
+                      pending += 1
+
+          latest = "NONE"
+          ledger = root / "_chatgpt-continuity-nudges.jsonl"
+          allowed = {
+              "", "PENDING", "CLAIMED", "SENT", "SENT_UNCONFIRMED",
+              "PROGRESS_CONFIRMED", "STALLED_NOT_CONFIRMED",
+              "CONVERSATION_NOT_FOUND", "ERROR",
+          }
+          if ledger.is_file():
+              for line in ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+                  try:
+                      row = json.loads(line)
+                  except Exception:
+                      continue
+                  if not isinstance(row, dict):
+                      continue
+                  candidate = str(row.get("worker_status", "")).strip().upper()
+                  if candidate in allowed:
+                      latest = candidate or "EMPTY"
+
+          print(json.dumps({"running": running, "pending": pending, "latest": latest}, sort_keys=True))
+          PY
+              running_tasks="$(jq -r '.running' "$diag_json")"
+              pending_requests="$(jq -r '.pending' "$diag_json")"
+              latest_nudge="$(jq -r '.latest' "$diag_json")"
+              rm -f "$diag_json"
+
+              backend_worker=false
+              if "${SSH[@]}" 'systemctl is-active --quiet shopvivaliz-chatgpt-continuity.service'; then backend_worker=true; fi
+
+              cdp_reachable=false
+              if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null'; then cdp_reachable=true; fi
+
+              bridge_heartbeat=false
+              token_file="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token"
+              if [ -s "$token_file" ]; then
+                heartbeat_tmp="$(mktemp)"
+                trap 'rm -f "$heartbeat_tmp"' RETURN
+                token="$(cat "$token_file")"
+                if curl -fsS --connect-timeout 5 --max-time 10 \
+                  -H 'Host: shopvivaliz.com.br' \
+                  -H "Authorization: Bearer $token" \
+                  -H 'Content-Type: application/json' \
+                  --data '{"operation":"heartbeat"}' \
+                  http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
+                  if jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null 2>&1; then
+                    bridge_heartbeat=true
+                  fi
+                fi
+                unset token
+                rm -f "$heartbeat_tmp"
+                trap - RETURN
+              fi
+
+              echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
+              echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
+              echo "CHATGPT_CONTINUITY_PENDING_REQUESTS=$pending_requests"
+              echo "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=$latest_nudge"
+              echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
+              echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"
+              echo "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=$bridge_heartbeat"
+              echo "CHATGPT_CONTINUITY_DIAGNOSTIC=PASS"
               ;;
             secure_mcp_platform_ui_probe)
               remote_script="/tmp/openai-secure-mcp-platform-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
