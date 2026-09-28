@@ -101,3 +101,23 @@ STATUS=PASS
 - Canonical executable validation: Remote Control MCP CI run `36370863304` completed SUCCESS at implementation commit `8756e28d88dbbd0b2ff8a9de6e2e833c6839d3c8`.
 - Local container clone could not resolve `github.com`; this was not counted as a pass. GitHub CI provided the successful executable evidence.
 - Next stage is PR validation/merge only. No PR was opened and no bootstrap/deploy was performed in this stage.
+
+
+### ACTION STAGE 2 — Reverse SSH implementation and tests
+STATUS=PASS
+- Branch: `fix/remote-control-windows-reverse-ssh-20260927`.
+- Runtime Windows changed from direct Tailscale peer SSH to backend-loopback reverse SSH.
+- Fred-Win target: `127.0.0.1:2222`.
+- KOCEPSV target: `127.0.0.1:2223`.
+- KOCEPSV managed tunnel now persists SSH `2223->127.0.0.1:22` plus legacy bootstrap MCP `5558->127.0.0.1:5557`.
+- Bootstrap workflow no longer probes `$fred_ip:22` / `$desk_ip:22`.
+- Bootstrap uses legacy KOCEPSV MCP 5558 only to queue the one-time relay upgrade, then requires reverse SSH 2223.
+- Controller known_hosts pins production plus loopback ports 2222 and 2223 before live validation.
+- CI coverage extended to KOCEPSV relay scripts/contract.
+- Validation PR #1974 is DRAFT only.
+- Remote Control MCP CI run #36, id `36370874616`: SUCCESS.
+  - Python syntax and unit tests: PASS.
+  - KOCEPSV reverse relay contract: PASS.
+  - Shell syntax: PASS.
+- No merge, live Windows bootstrap, or four-host E2E was executed in this stage.
+- Next authorized stage: ACTION STAGE 3 — validate and merge PR.
