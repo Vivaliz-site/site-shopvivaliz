@@ -758,9 +758,13 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "CHATGPT_CONTINUITY_OCI_REPAIR=PASS",
             "CHATGPT_CONTINUITY_SUCCESSOR=PASS",
-            "chatgpt-freeze-root-cause-20260928-g2",
+            "scripts/ensure-chatgpt-freeze-successor.py",
+            "--base-id chatgpt-freeze-root-cause-20260928",
         ):
             self.assertIn(needle, workflow)
+        remote_access = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/ensure-chatgpt-freeze-successor.py", remote_access)
+        self.assertNotIn('successor_id="chatgpt-freeze-root-cause-20260928-g2"', remote_access)
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
