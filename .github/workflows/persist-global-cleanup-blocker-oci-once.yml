@@ -1,0 +1,131 @@
+name: Persist Global Cleanup Blocker OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/persist-global-cleanup-blocker-oci-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      OCI_PROFILE: AGENTS
+      A1_INSTANCE_NAME: shopvivaliz-free-a1
+    steps:
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve production A1 and Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$A1_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING
+          printf 'A1_INSTANCE_ID=%s\nA1_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo A1_RUN_COMMAND=PASS
+
+      - name: Persist terminal task state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > "$RUNNER_TEMP/persist.sh" <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          echo "HOST=$(hostname)"
+          echo "UTC=$(date -u +%FT%TZ)"
+          ROOT=/home/ubuntu/shopvivaliz-deploy/current
+          STATE=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+          TASK=global-continuity-cleanup-v2-20260927
+
+          sudo -u ubuntu env SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$STATE" ROOT="$ROOT" TASK="$TASK" bash -s <<'INNER'
+          set -Eeuo pipefail
+          cd "$ROOT"
+          if ! python3 scripts/agent_task_state.py show --task "$TASK" >/dev/null 2>&1; then
+            python3 scripts/agent_task_state.py start               --task "$TASK"               --goal "Concluir as pendencias finais do GLOBAL_TASK_CONTINUITY_V8: excluir fredmourao-ai/solange-rolla e remover as duas branches mergeadas, com validacao fresca."               --agent chatgpt               --repository Vivaliz-site/site-shopvivaliz >/dev/null
+          fi
+          status="$(python3 scripts/agent_task_state.py show --task "$TASK" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+          if [ "$status" = "BLOCKED_EXTERNAL" ]; then
+            python3 scripts/agent_task_state.py resume               --task "$TASK"               --next-action "Refresh exact external authorization blocker after successful branch cleanup." >/dev/null
+          elif [ "$status" = "CONCLUIDO" ]; then
+            echo "ERROR_STALE_FALSE_TERMINAL=true"
+            exit 4
+          fi
+          python3 scripts/agent_task_state.py block             --task "$TASK"             --description "GitHub repository deletion requires external authorization unavailable to automation: native gh has admin visibility but lacks delete_repo, token alternatives did not supply it, and authenticated GitHub Web is redirected to /sessions/two-factor/webauthn before repository Settings."             --evidence "Fresh API validation: fredmourao-ai/solange-rolla still resolves and fredmourao-ai/solange-rolla-consultorio resolves."             --evidence "Native delete workflow failed because the GitHub authorization lacks delete_repo."             --evidence "Authenticated GitHub Web navigation is redirected to /sessions/two-factor/webauthn before repository Settings."             --evidence "Workflow 36364649127 deleted both named merged branches; fresh branch search returned both absent."             --alternative "Native gh/API deletion attempted; authorization lacks delete_repo."             --alternative "GH_REPO_TOKEN/GH_PAT routes attempted; no usable delete_repo authorization."             --alternative "Authenticated GitHub Web Settings route attempted; GitHub requires WebAuthn/2FA."             --resume-condition "Complete GitHub 2FA/WebAuthn and delete fredmourao-ai/solange-rolla in authenticated Settings, OR authorize gh using gh auth refresh -h github.com -s delete_repo, OR provision GH_REPO_TOKEN with delete_repo; then validate until gh repo view returns not found." >/dev/null
+          python3 scripts/agent_task_state.py terminal --task "$TASK" |
+            python3 -c 'import json,sys; d=json.load(sys.stdin); print("TASK_TERMINAL="+str(d.get("status",""))); print("RESUME_CONDITION_PRESENT="+str(bool((d.get("blocker") or {}).get("resume_condition"))).lower())'
+          INNER
+          REMOTE
+
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          content="$RUNNER_TEMP/content.json"
+          target="$RUNNER_TEMP/target.json"
+          jq -n --rawfile text "$RUNNER_TEMP/persist.sh" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$A1_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$A1_COMPARTMENT_ID"             --display-name "Persist global continuity cleanup blocker"             --content "file://$content"             --target "file://$target"             --timeout-in-seconds 120             --query 'data.id' --raw-output)"
+          execution=''
+          for _ in $(seq 1 40); do
+            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$A1_INSTANCE_ID" 2>/dev/null || true)"
+            state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS|'') sleep 4 ;;
+              *) break ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
+          code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution" 2>/dev/null || true)"
+          printf '%s\n' "$output" | grep -E '^(HOST|UTC|TASK_TERMINAL|RESUME_CONDITION_PRESENT|ERROR_)=' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+          grep -Fq 'TASK_TERMINAL=BLOCKED_EXTERNAL' <<<"$output"
+          grep -Fq 'RESUME_CONDITION_PRESENT=true' <<<"$output"
+          echo GLOBAL_CONTINUITY_BLOCKER_PERSIST=PASS
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
