@@ -143,7 +143,8 @@ jobs:
           Include status, main SHA, Stage 6 evidence, ChatGPT integration status, Claude cloud integration status, PRs/runs created, and exact blocker/resume condition if any. Never include secrets.
 
           Continue autonomously until CONCLUIDO validated or only a real external blocker remains after exhausting safe alternatives.
-          EOF          chmod 600 "$prompt"
+          EOF
+          chmod 600 "$prompt"
           test "$(wc -c < "$prompt")" -gt 2500
           printf 'path=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
           printf 'sha256=%s\n' "$(sha256sum "$prompt" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
