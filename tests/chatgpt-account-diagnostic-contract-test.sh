@@ -21,6 +21,17 @@ if grep -Fq 'chatgpt_account_diag' "$remote"; then
   echo "remote access must not expose automated ChatGPT Web diagnostics" >&2
   exit 1
 fi
+
+# The canonical issue #1586 control plane must expose a fixed, read-only
+# checkpoint readback for the freeze investigation. It may print only the
+# allowlisted summary, never the raw durable JSON/evidence payload.
+grep -Fq 'chatgpt_freeze_task_state' "$remote"
+grep -Fq '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state' "$remote"
+grep -Fq 'TASK_STATE_STATUS=' "$remote"
+if grep -Fq 'cat "$state_file"' "$remote"; then
+  echo "task-state readback must not print the raw durable checkpoint" >&2
+  exit 1
+fi
 if grep -Fq 'readlink -f /home/ubuntu/.local/bin/shopvivaliz-browser-chromium' "$remote"; then
   echo "diagnostic browser export must not derive a directory from a mutable symlink target" >&2
   exit 1
