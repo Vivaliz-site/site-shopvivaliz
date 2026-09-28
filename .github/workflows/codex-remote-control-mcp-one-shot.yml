@@ -176,6 +176,18 @@ jobs:
           "$launcher" --version
           "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
 
+          for spec in "FRED:$HOME/.local/bin/codex-fred" "MARINA:$HOME/.local/bin/codex-marina"; do
+            label="${spec%%:*}"
+            bin="${spec#*:}"
+            if [ ! -x "$bin" ]; then
+              echo "CODEX_PROFILE_${label}_LOGIN=MISSING"
+            elif "$bin" login status >/dev/null 2>&1; then
+              echo "CODEX_PROFILE_${label}_LOGIN=PASS"
+            else
+              echo "CODEX_PROFILE_${label}_LOGIN=FAIL"
+            fi
+          done
+
           cd "$WORKTREE"
           out="$RUNNER_TEMP/codex-remote-control-mcp.output"
           rc=0
@@ -204,12 +216,16 @@ jobs:
           text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").lower()
           classes=[]
           patterns={
+              "no_usable_profile":r"(no usable chatgpt profile|no usable profile)",
               "auth":r"(not logged in|authentication|unauthorized|forbidden|401|403)",
-              "rate_limit":r"(rate.?limit|too many requests|429|quota|usage limit)",
-              "model":r"(unknown model|model.*unavailable|not supported.*model)",
+              "rate_limit":r"(rate.?limit|too many requests|429|quota|usage limit|limit reached|out of credits)",
+              "model":r"(unknown model|model.*unavailable|not supported.*model|invalid.*model)",
               "network":r"(network|connection|timeout|timed out|dns|tls)",
               "approval":r"(approval|approve-for-me|permission denied)",
               "context":r"(context.*length|too many tokens|prompt.*too large)",
+              "input":r"(input.*required|stdin|positional argument)",
+              "trust":r"(trusted directory|untrusted directory|not a git repository)",
+              "config":r"(config.*invalid|configuration.*invalid|toml)",
               "tool_runtime":r"(tool.*unavailable|sandbox|required mcp servers failed)",
           }
           for name, pattern in patterns.items():
