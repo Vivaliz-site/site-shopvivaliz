@@ -2,7 +2,7 @@ name: Home Category Image Audit
 
 on:
   pull_request:
-    paths:
+    paths: &home_category_image_audit_paths
       - 'index.php'
       - 'api/catalog/products.php'
       - 'api/catalog/category-images.php'
@@ -15,9 +15,10 @@ on:
       - 'tests/catalog-live-fallback-test.php'
       - 'tests/home-category-image-audit.mjs'
       - '.github/workflows/home-category-image-audit.yml'
+  push:
+    branches: [main]
+    paths: *home_category_image_audit_paths
   workflow_dispatch:
-  schedule:
-    - cron: '51 6 * * *'
 
 permissions:
   contents: read

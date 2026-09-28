@@ -1,8 +1,9 @@
 name: Repair catalog hard quality pending
 
 on:
-  schedule:
-    - cron: '23 7 * * *'
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
   workflow_dispatch:
 
 permissions:

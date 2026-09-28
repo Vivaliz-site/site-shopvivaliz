@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '59 7 * * *'
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
 
 concurrency:
   group: public-layout-audit
