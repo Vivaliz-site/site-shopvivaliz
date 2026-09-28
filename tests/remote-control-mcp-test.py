@@ -749,6 +749,19 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, workflow)
 
+    def test_oci_bastion_can_repair_continuity_and_ensure_successor(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for needle in (
+            "action=chatgpt-continuity-repair",
+            "action=chatgpt-continuity-successor",
+            "scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "CHATGPT_CONTINUITY_OCI_REPAIR=PASS",
+            "CHATGPT_CONTINUITY_SUCCESSOR=PASS",
+            "chatgpt-freeze-root-cause-20260928-g2",
+        ):
+            self.assertIn(needle, workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
