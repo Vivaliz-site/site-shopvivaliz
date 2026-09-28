@@ -144,6 +144,7 @@ class BootstrapContractTests(unittest.TestCase):
         for text in (unit, setup):
             self.assertNotIn("ProtectSystem=full", text)
             self.assertNotIn("ProtectHome=read-only", text)
+            self.assertNotIn("PrivateTmp=true", text)
 
     def test_windows_bootstrap_requires_administrator(self):
         text = (ROOT / "scripts" / "setup-remote-control-windows.ps1").read_text(encoding="utf-8")
