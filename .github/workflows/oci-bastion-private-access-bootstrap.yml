@@ -204,14 +204,72 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh scripts/windows-openssh-recovery.ps1 ubuntu@127.0.0.1:/tmp/
           "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh'
           PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
           test -n "$PUBKEY"
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
           "${SITE_SSH[@]}" "PUB_B64='$PUB_B64' bash -c 'set -Eeuo pipefail; pub=\$(printf %s \"\$PUB_B64\" | base64 -d); sudo -n env SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY=\"\$pub\" bash -s -- install-target'" < scripts/setup-remote-control-access.sh
+          "\${BACKEND_SSH[@]}" 'python3 -' <<'PY'
+          import json
+          import time
+          import urllib.request
+          from pathlib import Path
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then
+          repair_content = Path('/tmp/windows-openssh-recovery.ps1').read_text(encoding='utf-8-sig')
+          repair_path = 'scripts/windows-openssh-recovery.ps1'
+          launch = (
+              "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "
+              "\"$p=Start-Process -FilePath 'powershell.exe' -ArgumentList "
+              "@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',"
+              "'-File','C:\\site-shopvivaliz\\scripts\\windows-openssh-recovery.ps1') "
+              "-WindowStyle Hidden -PassThru; "
+              "Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS pid=' + $p.Id)\""
+          )
+
+          def call(port, tool, params, timeout):
+              endpoint = f'http://127.0.0.1:{port}/mcp/tool/{tool}'
+              body = json.dumps({'params': params}).encode()
+              req = urllib.request.Request(
+                  endpoint,
+                  data=body,
+                  headers={'Content-Type': 'application/json'},
+                  method='POST',
+              )
+              with urllib.request.urlopen(req, timeout=timeout) as response:
+                  payload = json.load(response)
+              result = payload.get('result') or {}
+              if result.get('success') is not True:
+                  raise RuntimeError(str(result.get('error') or result))
+              return str(result.get('output') or '')
+
+          for label, port in (('FRED', 5557), ('KOCEPSV', 5558)):
+              queued = False
+              last_error = None
+              for attempt in range(1, 6):
+                  try:
+                      call(port, 'write_file', {'path': repair_path, 'content': repair_content}, 15)
+                      output = call(port, 'execute_command', {'command': launch, 'timeout': 10}, 20)
+                      if 'REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS' not in output:
+                          raise RuntimeError('OpenSSH recovery queue acknowledgement missing')
+                      print(f'REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS attempt={attempt}')
+                      queued = True
+                      break
+                  except Exception as exc:
+                      last_error = exc
+                      time.sleep(3)
+              if not queued:
+                  print(f'REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUE=FAIL type={type(last_error).__name__}')
+                  raise last_error
+          PY
+
+          backend_ssh_protocol_alive() {
+            local port="$1"
+            "\${BACKEND_SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; timeout 8 ssh-keyscan -T 5 -p '$port' 127.0.0.1 >\"\$tmp\" 2>/dev/null; test -s \"\$tmp\""
+          }
+
+
+          if ! backend_ssh_protocol_alive 2222; then
             FRED_BOOT_B64="$(base64 -w0 scripts/fredwin-remote-bootstrap.ps1)"
             FRED_TUNNEL_B64="$(base64 -w0 scripts/ssh-tunnel-service-managed.ps1)"
             "${BACKEND_SSH[@]}" "FRED_BOOT_B64='$FRED_BOOT_B64' FRED_TUNNEL_B64='$FRED_TUNNEL_B64' python3 - <<'PY'
@@ -233,14 +291,14 @@ jobs:
               raise SystemExit('Fred-Win recovery queue failed')
           PY"
             for _ in $(seq 1 30); do
-              if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2222'" >/dev/null 2>&1; then break; fi
+              if backend_ssh_protocol_alive 2222; then break; fi
               sleep 2
             done
           fi
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2222'"
+          backend_ssh_protocol_alive 2222
           echo "REMOTE_CONTROL_FRED_REVERSE_SSH=PASS"
 
-          if ! "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          if ! backend_ssh_protocol_alive 2223; then
             SIDE_B64="$(base64 -w0 scripts/desktopkocepsv-remote-control-ssh-bridge.ps1)"
             if ! "${BACKEND_SSH[@]}" "SIDE_B64='$SIDE_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
@@ -275,10 +333,11 @@ jobs:
             fi
           fi
           for _ in $(seq 1 30); do
-            if "${BACKEND_SSH[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then break; fi
+            if backend_ssh_protocol_alive 2223; then break; fi
             sleep 2
           done
-          "${BACKEND_SSH[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+          backend_ssh_protocol_alive 2223
+          echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32222:127.0.0.1:2222 ubuntu@127.0.0.1
           ssh -fNT "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ExitOnForwardFailure=yes -p "$BACKEND_TUNNEL_PORT" -L 32223:127.0.0.1:2223 ubuntu@127.0.0.1
@@ -309,6 +368,7 @@ jobs:
             sudo -n systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
             curl -fsS http://127.0.0.1:5580/health >/dev/null
           '
+          "${BACKEND_SSH[@]}" "rm -f /tmp/windows-openssh-recovery.ps1"
           echo "REMOTE_CONTROL_STAGE4_WINDOWS_BOOTSTRAP=PASS"
 
       - name: Remote Control MCP four-host E2E through OCI Bastion
