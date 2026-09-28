@@ -135,7 +135,17 @@ jobs:
           # KOCEPSV currently exposes only its legacy loopback MCP relay on 5558.
           # Stage the two relay scripts synchronously from origin/main first, so a
           # divergent/dirty local branch cannot make the async restart fail silently.
-          if ! "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+          echo "::group::KOCEPSV 2223 diagnostic: local listener state before precheck"
+          ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=no local listener on 2222/2223/5557/5558 yet"
+          echo "::endgroup::"
+
+          kocepsv_precheck_open=0
+          if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            kocepsv_precheck_open=1
+          fi
+          echo "REMOTE_CONTROL_KOCEPSV_PRECHECK_2223=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+
+          if [ "$kocepsv_precheck_open" -ne 1 ]; then
             "${SSH_VM[@]}" 'python3 -' <<'PY'
           import base64
           import json
@@ -206,25 +216,72 @@ jobs:
           print("REMOTE_CONTROL_KOCEPSV_RELAY_UPGRADE_QUEUED=PASS")
           PY
 
-            for _ in $(seq 1 30); do
+            kocepsv_wait_opened=0
+            for attempt in $(seq 1 30); do
               if "${SSH_VM[@]}" "timeout 3 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+                kocepsv_wait_opened=1
+                echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=opened on attempt $attempt"
                 break
               fi
               sleep 2
             done
+            if [ "$kocepsv_wait_opened" -ne 1 ]; then
+              echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=timed out after 30 attempts (60s), port never opened"
+            fi
           fi
-          "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'"
+
+          echo "::group::KOCEPSV 2223 diagnostic: local listener state before final check"
+          ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=still no local listener on 2222/2223/5557/5558"
+          echo "::endgroup::"
+
+          if ! "${SSH_VM[@]}" "timeout 8 bash -c '</dev/tcp/127.0.0.1/2223'" >/dev/null 2>&1; then
+            echo "::group::KOCEPSV 2223 diagnostic: final failure state"
+            ss -tln 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=no local listener at time of final failure"
+            sudo -n ss -tlnp 2>/dev/null | grep -E ':(2222|2223|5557|5558)\b' || echo "REMOTE_CONTROL_KOCEPSV_DIAG=sudo ss -tlnp unavailable or no owning process visible"
+            echo "::endgroup::"
+            echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=FAIL precheck=$([ "$kocepsv_precheck_open" -eq 1 ] && echo OPEN || echo CLOSED)"
+            exit 1
+          fi
+          echo "REMOTE_CONTROL_KOCEPSV_REVERSE_SSH=PASS"
 
           for spec in 'FRED 2222 FRED' 'DESKTOP 2223 user'; do
             set -- $spec
             label="$1"; port="$2"; user="$3"
-            ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>/dev/null > "/tmp/$label.remote-control.hosts"
-            test -s "/tmp/$label.remote-control.hosts"
+            echo "::group::Admin key install diagnostic: $label (port $port)"
+
+            ssh-keyscan -T 5 -p "$port" 127.0.0.1 2>"/tmp/$label.keyscan.err" > "/tmp/$label.remote-control.hosts" && keyscan_rc=0 || keyscan_rc=$?
+            if [ "$keyscan_rc" -ne 0 ] || [ ! -s "/tmp/$label.remote-control.hosts" ]; then
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at ssh-keyscan rc=$keyscan_rc stderr=$(tail -c 500 "/tmp/$label.keyscan.err" 2>/dev/null)"
+              echo "::endgroup::"
+              exit 1
+            fi
+            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label ssh-keyscan OK ($(wc -l < "/tmp/$label.remote-control.hosts") host key line(s))"
             chmod 600 "/tmp/$label.remote-control.hosts"
-            scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1"
+
+            scp -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1 "$user@127.0.0.1:shopvivaliz-remote-control-bootstrap.ps1" 2>"/tmp/$label.scp.err" && scp_rc=0 || scp_rc=$?
+            if [ "$scp_rc" -ne 0 ]; then
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at scp rc=$scp_rc stderr=$(tail -c 500 "/tmp/$label.scp.err" 2>/dev/null)"
+              echo "::endgroup::"
+              exit 1
+            fi
+            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label scp OK"
+
             pub_b64="$(base64 -w0 /tmp/shopvivaliz-remote-control.pub)"
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $pub_b64"
-            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue"
+            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shopvivaliz-remote-control-bootstrap.ps1 -PublicKeyBase64 $pub_b64" 2>"/tmp/$label.install.err" && install_rc=0 || install_rc=$?
+            if [ "$install_rc" -ne 0 ]; then
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label FAIL at bootstrap install rc=$install_rc stderr=$(tail -c 500 "/tmp/$label.install.err" 2>/dev/null)"
+              echo "::endgroup::"
+              exit 1
+            fi
+            echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label bootstrap install OK"
+
+            ssh -p "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/$label.remote-control.hosts" -i "$HOME/.ssh/remote-control-bootstrap.key" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command Remove-Item -LiteralPath shopvivaliz-remote-control-bootstrap.ps1 -Force -ErrorAction SilentlyContinue" 2>"/tmp/$label.cleanup.err" && cleanup_rc=0 || cleanup_rc=$?
+            if [ "$cleanup_rc" -ne 0 ]; then
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label WARN cleanup rc=$cleanup_rc stderr=$(tail -c 300 "/tmp/$label.cleanup.err" 2>/dev/null) (non-fatal)"
+            else
+              echo "REMOTE_CONTROL_ADMIN_KEY_STEP=$label cleanup OK"
+            fi
+            echo "::endgroup::"
           done
 
       - name: Pin private host keys for controller
@@ -336,3 +393,7 @@ jobs:
           rm -f "$HOME/.ssh/remote-control-bootstrap.key" "$HOME/.ssh/remote-control-bootstrap.known_hosts"
           rm -f /tmp/shopvivaliz-remote-control.pub
           rm -f /tmp/FRED.remote-control.hosts /tmp/DESKTOP.remote-control.hosts
+          rm -f /tmp/FRED.keyscan.err /tmp/DESKTOP.keyscan.err
+          rm -f /tmp/FRED.scp.err /tmp/DESKTOP.scp.err
+          rm -f /tmp/FRED.install.err /tmp/DESKTOP.install.err
+          rm -f /tmp/FRED.cleanup.err /tmp/DESKTOP.cleanup.err

@@ -12,13 +12,6 @@ on:
       - 'includes/**'
       - 'scripts/seo-integrity-audit.py'
       - '.github/workflows/seo-integrity-audit.yml'
-  workflow_run:
-    workflows:
-      - Master Production Pipeline 24/7
-    types:
-      - completed
-    branches:
-      - main
   schedule:
     - cron: '17 8 * * *'
   workflow_dispatch:
@@ -79,7 +72,7 @@ jobs:
           retention-days: 30
 
       - name: Enforce URL integrity after deployment
-        if: ${{ github.event_name == 'workflow_run' }}
+        if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
         shell: bash
         run: |
           set -euo pipefail
