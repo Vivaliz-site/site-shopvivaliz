@@ -36,6 +36,16 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("python3 scripts/agent_task_state.py complete", next_action)
         self.assertIn("continuity_e2e_pass", next_action)
 
+    def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("issue_comment:", workflow)
+        self.assertIn("github.event.issue.number == 1586", workflow)
+        self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", workflow)
+        self.assertIn("github.event.comment.body == '/continuity-e2e'", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+
 
 class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
     """Regression for a real production escape: the workflow pointed the probe at
