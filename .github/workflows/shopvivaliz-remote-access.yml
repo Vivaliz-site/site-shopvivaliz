@@ -282,43 +282,43 @@ jobs:
               SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
                 python3 scripts/agent_task_state.py show --task chatgpt-freeze-root-cause-20260927 > "$state_file"
               python3 - "$state_file" <<'PY'
-              import hashlib
-              import json
-              import re
-              import sys
+          import hashlib
+          import json
+          import re
+          import sys
 
-              path = sys.argv[1]
-              with open(path, encoding="utf-8") as handle:
-                  payload = json.load(handle)
+          path = sys.argv[1]
+          with open(path, encoding="utf-8") as handle:
+              payload = json.load(handle)
 
-              def safe_text(value, limit=700):
-                  text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
-                  patterns = (
-                      r"(?i)\b(token|password|passwd|secret|cookie|authorization|api[_-]?key)\b\s*[:=]\s*\S+",
-                      r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/-]+=*",
-                  )
-                  for pattern in patterns:
-                      text = re.sub(pattern, lambda m: m.group(1) + "=[REDACTED]", text)
-                  return text[:limit]
+          def safe_text(value, limit=700):
+              text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
+              patterns = (
+                  r"(?i)\b(token|password|passwd|secret|cookie|authorization|api[_-]?key)\b\s*[:=]\s*\S+",
+                  r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/-]+=*",
+              )
+              for pattern in patterns:
+                  text = re.sub(pattern, lambda m: m.group(1) + "=[REDACTED]", text)
+              return text[:limit]
 
-              evidence = payload.get("evidence")
-              evidence_rows = evidence if isinstance(evidence, list) else []
-              last_evidence = str(evidence_rows[-1]) if evidence_rows else ""
-              blocker = payload.get("blocker") if isinstance(payload.get("blocker"), dict) else {}
-              summary = {
-                  "task_id": safe_text(payload.get("task_id"), 180),
-                  "repository": safe_text(payload.get("repository"), 180),
-                  "status": safe_text(payload.get("status"), 64),
-                  "updated_at": safe_text(payload.get("updated_at"), 64),
-                  "next_action": safe_text(payload.get("next_action")),
-                  "evidence_count": len(evidence_rows),
-                  "last_evidence_sha256": hashlib.sha256(last_evidence.encode("utf-8")).hexdigest() if last_evidence else "",
-                  "verification_present": bool(payload.get("verification")),
-                  "blocker_external": blocker.get("external") is True,
-                  "resume_condition": safe_text(blocker.get("resume_condition")),
-              }
-              print("TASK_STATE_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
-              PY
+          evidence = payload.get("evidence")
+          evidence_rows = evidence if isinstance(evidence, list) else []
+          last_evidence = str(evidence_rows[-1]) if evidence_rows else ""
+          blocker = payload.get("blocker") if isinstance(payload.get("blocker"), dict) else {}
+          summary = {
+              "task_id": safe_text(payload.get("task_id"), 180),
+              "repository": safe_text(payload.get("repository"), 180),
+              "status": safe_text(payload.get("status"), 64),
+              "updated_at": safe_text(payload.get("updated_at"), 64),
+              "next_action": safe_text(payload.get("next_action")),
+              "evidence_count": len(evidence_rows),
+              "last_evidence_sha256": hashlib.sha256(last_evidence.encode("utf-8")).hexdigest() if last_evidence else "",
+              "verification_present": bool(payload.get("verification")),
+              "blocker_external": blocker.get("external") is True,
+              "resume_condition": safe_text(blocker.get("resume_condition")),
+          }
+          print("TASK_STATE_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          PY
               ;;
             repo_status)
               echo "REMOTE_REPO_STATUS_BEGIN"
