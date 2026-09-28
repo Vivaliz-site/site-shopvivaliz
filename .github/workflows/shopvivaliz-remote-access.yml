@@ -25,6 +25,7 @@ on:
           - storage_scan
           - runtime_status
           - repo_status
+          - task_state_show
           - rdp_prepare
           - rdp_status
           - rdp_otp_prepare
@@ -104,11 +105,19 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "task_state_show", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
+          task_id = ""
+          if action == "task_state_show":
+              if target != "shopvivaliz-free-a1":
+                  raise SystemExit("Task state readback is restricted to the site production host")
+              task_match = re.fullmatch(r"task=([A-Za-z0-9._-]{1,160})", reason)
+              if not task_match:
+                  raise SystemExit("task_state_show reason must be exactly task=<safe-id>")
+              task_id = task_match.group(1)
           if action.startswith("rdp_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("RDP actions are restricted to the backend VM")
           if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
@@ -131,6 +140,7 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"target={target}\n")
               output.write(f"action={action}\n")
+              output.write(f"task_id={task_id}\n")
           print(f"REMOTE_REQUEST target={target} action={action} requested_at={requested_at}")
           print(f"REMOTE_REASON={reason}")
           PY
@@ -190,6 +200,7 @@ jobs:
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit'
         env:
           ACTION: ${{ steps.req.outputs.action }}
+          TASK_ID: ${{ steps.req.outputs.task_id }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -231,6 +242,13 @@ jobs:
               ;;
             runtime_status)
               bash scripts/runtime-service-status.sh site
+              ;;
+            task_state_show)
+              test -n "$TASK_ID"
+              echo "REMOTE_TASK_STATE_BEGIN"
+              SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+                python3 scripts/agent_task_state.py show --task "$TASK_ID"
+              echo "REMOTE_TASK_STATE_END"
               ;;
             amazon_support_readback)
               sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
