@@ -70,19 +70,21 @@ claude_bin() {
 probe_eligibility() {
   require_backend
   local bin rc out
-  set +e
-  bin="$(claude_bin 2>/dev/null)"
-  rc=$?
-  set -e
+  if bin="$(claude_bin 2>/dev/null)"; then
+    rc=0
+  else
+    rc=$?
+  fi
   [ "$rc" -eq 0 ] && [ -n "$bin" ] || die claude_not_installed 30
   echo "CLAUDE_PRESENT=PASS"
   run_as_claude "$bin" --version | head -n 1 | sed -E 's/[^A-Za-z0-9._+() -]/?/g'
 
   out="$(mktemp)"
-  set +e
-  run_as_claude bash -lc 'timeout 20s claude remote-control --help' >"$out" 2>&1
-  rc=$?
-  set -e
+  if run_as_claude bash -lc 'timeout 20s claude remote-control --help' >"$out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
   if [ "$rc" -eq 0 ]; then
     rm -f "$out"
     echo "REMOTE_CONTROL_ELIGIBLE=PASS"
@@ -220,15 +222,16 @@ accept_remote_control_once() {
   local bin out rc
   bin="$(claude_bin)"
   out="$(mktemp)"
-  set +e
-  printf 'y\n' | run_as_claude timeout 12s "$bin" remote-control \
+  if printf 'y\n' | run_as_claude timeout 12s "$bin" remote-control \
     --name "ShopVivaliz Bootstrap" \
     --spawn worktree \
     --capacity 1 \
     --no-create-session-in-dir \
-    --permission-mode default >"$out" 2>&1
-  rc=$?
-  set -e
+    --permission-mode default >"$out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
 
   if grep -Eqi 'requires a claude\.ai subscription|full-scope login token|run.*/login|sign in' "$out"; then
     rm -f "$out"
