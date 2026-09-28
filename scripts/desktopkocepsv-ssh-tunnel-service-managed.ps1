@@ -1,6 +1,7 @@
 ﻿$ErrorActionPreference = 'Continue'
 $LogDir = 'C:\site-shopvivaliz\logs'
 $LogFile = Join-Path $LogDir 'desktopkocepsv-managed-tunnel.log'
+$RelayConfigFile = Join-Path $LogDir 'desktopkocepsv-relay-runtime.json'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -41,39 +42,63 @@ $KnownHostsCandidates = @(
     'C:\Users\FRED\.ssh\known_hosts',
     'C:\Users\user\.ssh\known_hosts'
 ) | Where-Object { $_ }
-$KeyPath = $KeyCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-$KnownHostsPath = $KnownHostsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+$KeyPath = $null
+$KnownHostsPath = $null
+$VMHost = $null
+$VMPortRaw = $null
+$VMUser = $null
 
-# The Windows hosts can reach the site A1 SSH ingress directly. Keep machine
-# environment variables as an explicit override, but do not let a missing
-# variable permanently disable the watchdog after reboot or account changes.
-$DefaultIngressHost = '137.131.149.55'
-$DefaultIngressPort = '22'
-$VMHost = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_HOST', 'Machine')
-$VMPortRaw = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_PORT', 'Machine')
-$VMHost = $VMHost.Trim()
-$VMPortRaw = $VMPortRaw.Trim()
+if (Test-Path -LiteralPath $RelayConfigFile) {
+    try {
+        $runtime = Get-Content -LiteralPath $RelayConfigFile -Raw | ConvertFrom-Json -ErrorAction Stop
+        if ($runtime.key_path -and (Test-Path -LiteralPath ([string]$runtime.key_path))) { $KeyPath = [string]$runtime.key_path }
+        if ($runtime.known_hosts_path -and (Test-Path -LiteralPath ([string]$runtime.known_hosts_path))) { $KnownHostsPath = [string]$runtime.known_hosts_path }
+        if ($runtime.backend_host) { $VMHost = ([string]$runtime.backend_host).Trim() }
+        if ($runtime.backend_port) { $VMPortRaw = ([string]$runtime.backend_port).Trim() }
+        if ($runtime.backend_user) { $VMUser = ([string]$runtime.backend_user).Trim() }
+        Log 'Loaded persisted connection metadata captured from working legacy tunnel'
+    } catch {
+        Log 'Persisted connection metadata is invalid; falling back to canonical discovery'
+    }
+}
+
+if (-not $KeyPath) { $KeyPath = $KeyCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }
+if (-not $KnownHostsPath) { $KnownHostsPath = $KnownHostsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1 }
+
+$DefaultBackendHost = '100.66.174.74'
+$DefaultBackendPort = '22'
 if ([string]::IsNullOrWhiteSpace($VMHost)) {
-    $VMHost = $DefaultIngressHost
-    Log 'SSH ingress host override missing; using canonical site A1 ingress'
+    $VMHost = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_HOST', 'Machine')
+    $VMHost = $VMHost.Trim()
 }
 if ([string]::IsNullOrWhiteSpace($VMPortRaw)) {
-    $VMPortRaw = $DefaultIngressPort
-    Log 'SSH ingress port override missing; using canonical site A1 ingress port'
+    $VMPortRaw = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_PORT', 'Machine')
+    $VMPortRaw = $VMPortRaw.Trim()
 }
-$VMUser = 'ubuntu'
+if ([string]::IsNullOrWhiteSpace($VMHost)) {
+    $VMHost = $DefaultBackendHost
+    Log 'SSH endpoint override missing; using canonical private backend Tailscale address'
+}
+if ([string]::IsNullOrWhiteSpace($VMPortRaw)) {
+    $VMPortRaw = $DefaultBackendPort
+    Log 'SSH endpoint port override missing; using canonical backend SSH port'
+}
+if ([string]::IsNullOrWhiteSpace($VMUser)) { $VMUser = 'ubuntu' }
 $VMPort = [int]$VMPortRaw
+$SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 if (-not $KeyPath) { Log ('ERROR private key missing; checked: ' + ($KeyCandidates -join ' | ')); exit 2 }
 if (-not $KnownHostsPath) { Log ('ERROR known_hosts missing; checked: ' + ($KnownHostsCandidates -join ' | ')); exit 3 }
+if (!(Test-Path -LiteralPath $SshExe)) { Log 'ERROR Git SSH missing at managed path'; exit 4 }
 Log ('Resolved key=' + $KeyPath + ' known_hosts=' + $KnownHostsPath)
 
 Log 'Managed reverse tunnel service started'
 $attempt = 0
 while ($true) {
     $attempt++
-    Log ("Connecting attempt=$attempt forward=5558->127.0.0.1:5557")
+    Log ("Connecting attempt=$attempt forwards=2223->127.0.0.1:22,5558->127.0.0.1:5557")
     try {
-        & ssh -i $KeyPath -p $VMPort `
+        & $SshExe -i $KeyPath -p $VMPort `
+            -R 2223:127.0.0.1:22 `
             -R 5558:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
             -o 'ServerAliveInterval=30' `
@@ -81,7 +106,7 @@ while ($true) {
             -o 'ExitOnForwardFailure=yes' `
             -o 'StrictHostKeyChecking=yes' `
             -o ("UserKnownHostsFile=" + $KnownHostsPath) `
-            ${VMUser}@${VMHost} -N -T 2>&1 | ForEach-Object { Log 'SSH lifecycle message received' }
+            ${VMUser}@${VMHost} -N -T 2>&1 | ForEach-Object { Log ('SSH lifecycle: ' + ([string]$_ -replace '(?i)(identity file\s+)[^\s]+','$1[REDACTED]')) }
     } catch { Log ('ERROR tunnel exception: ' + $_.Exception.Message) }
     Log 'Tunnel disconnected; retrying in 10 seconds'
     Start-Sleep -Seconds 10

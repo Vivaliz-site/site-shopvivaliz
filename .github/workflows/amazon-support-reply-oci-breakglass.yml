@@ -9,12 +9,19 @@ permissions:
 
 jobs:
   reply:
+    concurrency:
+      group: shopvivaliz-oci-bastion-mutation
+      cancel-in-progress: false
     if: >-
       ${{
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.number == 1586 &&
         github.event.comment.user.login == 'fredmourao-ai' &&
-        github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501'
+        (
+          github.event.comment.body == '/amazon-support-reply case_ids=22153077391,22153259501' ||
+          github.event.comment.body == '/amazon-support-readback case_ids=22153077391,22153259501' ||
+          github.event.comment.body == '/amazon-support-chat-reply case_ids=22199842931'
+        )
       }}
     runs-on: ubuntu-latest
     environment: Production
@@ -48,7 +55,7 @@ jobs:
           OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
           VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
           VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
-          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-ed25519"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
           BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
           ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
           EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
@@ -69,7 +76,7 @@ jobs:
           key_file=$OCI_KEY_FILE
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
-          ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-amazon-support-bastion -f "$BASTION_KEY_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-amazon-support-bastion -f "$BASTION_KEY_FILE"
           chmod 600 "$BASTION_KEY_FILE"
           echo "OCI_REGION=$OCI_CLI_REGION" >> "$GITHUB_ENV"
 
@@ -122,7 +129,7 @@ jobs:
             --bastion-id "$BASTION_ID" \
             --target-private-ip "$SITE_PRIVATE_IP" \
             --target-port 22 \
-            --session-ttl 900 \
+            --session-ttl 1800 \
             --display-name shopvivaliz-site-amazon-support \
             --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
             --query 'data.id' --raw-output)"
@@ -131,6 +138,9 @@ jobs:
           for _ in $(seq 1 36); do
             state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
             if [ "$state" = "ACTIVE" ]; then
+              BASTION_SSH_COMMAND="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+              test -n "$BASTION_SSH_COMMAND"
+              echo "BASTION_SSH_COMMAND=$BASTION_SSH_COMMAND" >> "$GITHUB_ENV"
               echo "BASTION_SITE_SESSION=ACTIVE"
               exit 0
             fi
@@ -146,17 +156,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          bastion_host="host.bastion.$OCI_REGION.oci.oraclecloud.com"
-          ssh -fNT \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o ExitOnForwardFailure=yes \
-            -o ServerAliveInterval=30 \
-            -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile="$BASTION_KNOWN_HOSTS" \
-            -i "$BASTION_KEY_FILE" \
-            -L "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" \
-            -p 22 "$SITE_SESSION_ID@$bastion_host"
+          test -n "${BASTION_SSH_COMMAND:-}"
+          tunnel_command="${BASTION_SSH_COMMAND//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel_command="${tunnel_command//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel_command="${tunnel_command/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          bash -lc "$tunnel_command"
           sleep 3
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 \
@@ -164,18 +168,30 @@ jobs:
           echo "PRIVATE_SITE_SSH=PASS"
 
       - name: Reply to existing Amazon cases and verify read-back
+        env:
+          SUPPORT_REQUEST_BODY: ${{ github.event.comment.body }}
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=20 -i "$VM_KEY_FILE")
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           remote_rc=0
-          "${SITE_SSH[@]}" 'sudo -n bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          if [[ "$SUPPORT_REQUEST_BODY" == '/amazon-support-readback case_ids=22153077391,22153259501' ]]; then
+            EXPECTED_CASE_IDS='22153077391,22153259501'
+            "${SITE_SSH[@]}" 'sudo -n bash -s' < scripts/amazon-support-readback-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          elif [[ "$SUPPORT_REQUEST_BODY" == '/amazon-support-chat-reply case_ids=22199842931' ]]; then
+            EXPECTED_CASE_IDS='22199842931'
+            "${SITE_SSH[@]}" 'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22199842931 bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          else
+            EXPECTED_CASE_IDS='22153077391,22153259501'
+            "${SITE_SSH[@]}" 'sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501 bash -s' < scripts/amazon-support-reply-oci-site.sh | tee "$RESULT_FILE" || remote_rc=${PIPESTATUS[0]}
+          fi
           export REMOTE_RC="$remote_rc"
+          export EXPECTED_CASE_IDS
           python3 - "$RESULT_FILE" <<'PY'
           import json, os, sys
           path=sys.argv[1]
-          expected={'22153077391','22153259501'}
+          expected={x for x in os.environ['EXPECTED_CASE_IDS'].split(',') if x}
           results={}
           for raw in open(path, errors='ignore'):
               line=raw.strip()
@@ -190,13 +206,13 @@ jobs:
                   continue
               cid=str(item.get('case_id') or '')
               if cid in expected:
-                  safe={k:item.get(k) for k in ('case_id','order_id','status','result','read_back','error') if k in item}
+                  safe={k:item.get(k) for k in ('case_id','order_id','status','result','read_back','error','match_scope','expected_sha256','matched_sha256','detail_sha256','contact_count','total_contacts','last_outbound_present','last_outbound_sha256','last_outbound_length') if k in item}
                   results[cid]=safe
                   print('CASE_RESULT='+json.dumps(safe,ensure_ascii=False,separators=(',',':')))
           if int(os.environ['REMOTE_RC']) != 0:
               raise SystemExit('Amazon support Bastion command failed')
           if set(results) != expected:
-              raise SystemExit('Amazon support Bastion command did not verify both cases')
+              raise SystemExit('Amazon support Bastion command did not verify the requested cases')
           if any(item.get('result') not in {'SENT','ALREADY_EXISTS'} or item.get('read_back') is not True for item in results.values()):
               raise SystemExit('Amazon support Bastion read-back validation failed')
           print('AMAZON_SUPPORT_REPLY_VERIFIED=true')

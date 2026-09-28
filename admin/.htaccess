@@ -1,14 +1,24 @@
 # Rodada 5 (2026-08-19): paineis .html soltos aqui (monitor-*.html,
 # squad-chat.html, trio-dashboard.html etc) eram variantes antigas/de teste
 # sem nenhuma autenticacao, servidas publicamente por serem arquivos estaticos
-# dentro de admin/. Nao foram apagadas (restricao de filesystem deste
-# ambiente), so bloqueadas via .htaccess. Ver R5-3 no relatorio da Rodada 5.
+# dentro de admin/. Eles continuam fail-closed. A unica compatibilidade e o
+# antigo /admin/squad-chat.html, que redireciona para o wrapper PHP autenticado.
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Compatibilidade do bookmark/URL antigo sem tornar o HTML estatico publico.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^squad-chat\.html$ /admin/squad-chat.php [R=302,L,NE,QSD]
+
+    # Qualquer outro HTML estatico do admin (e qualquer metodo de escrita no
+    # caminho legado acima) permanece bloqueado.
     RewriteCond %{REQUEST_URI} \.html$ [NC]
     RewriteRule .* - [F,L]
 </IfModule>
 
-<FilesMatch "\.html$">
-    Require all denied
-</FilesMatch>
+# Se mod_rewrite nao estiver disponivel, falhar fechado para TODOS os HTML.
+<IfModule !mod_rewrite.c>
+    <FilesMatch "\.html$">
+        Require all denied
+    </FilesMatch>
+</IfModule>

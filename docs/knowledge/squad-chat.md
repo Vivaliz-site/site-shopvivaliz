@@ -79,3 +79,15 @@ Providers esperados podem incluir:
 - Google Gemini
 
 Nunca registrar, devolver ou expor os valores das chaves de API. GitHub Secrets são somente gravação e não podem ser recuperados em texto após o cadastro.
+
+## Painel administrativo multiagente
+
+A interface administrativa canônica é `/admin/squad-chat.php`. Ela não envia `SQUAD_TOKEN` ao navegador. O wrapper autenticado mantém o secret apenas no servidor, exige CSRF de sessão e encaminha o JSON para `/claude/api/agent/squad-chat.php`.
+
+O endpoint administrativo aceita `agents` como lista de IDs válidos e mantém `agent` singular apenas por compatibilidade. Seleção inválida falha explicitamente; não deve ser ignorada.
+
+Anexos ainda não fazem parte do contrato do endpoint administrativo. Qualquer payload com `attachment` deve retornar `422 attachment_not_supported`; a UI não deve oferecer upload até existir suporte real e testado.
+
+Execuções recorrentes com IA paga são proibidas. O painel permite somente comandos, ciclos guiados e debates finitos iniciados manualmente.
+
+Respostas multiagente expõem `ok`, `partial`, `successful_agents` e `failed_agents`. HTTP 200 representa conclusão integral; 207 representa resultado parcial; 502 representa falha total do conjunto solicitado.

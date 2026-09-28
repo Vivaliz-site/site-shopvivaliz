@@ -93,7 +93,7 @@ systemctl --user enable "$service" >/dev/null
 systemctl --user start "$service"
 
 health_url="http://127.0.0.1:17657/health"
-for _ in $(seq 1 50); do
+for _ in $(seq 1 120); do
   if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
     if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
       && printf '%s' "$body" | grep -q '"ok":true' \

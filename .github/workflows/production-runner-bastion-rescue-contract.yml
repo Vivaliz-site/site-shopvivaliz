@@ -1,0 +1,24 @@
+name: Production Runner Bastion Rescue Contract
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/production-runner-bastion-rescue.yml"
+      - ".github/workflows/production-runner-bastion-rescue-contract.yml"
+      - "tests/production-runner-bastion-rescue-v2-contract-test.php"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Execute Bastion rescue contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -v
+          php tests/production-runner-bastion-rescue-v2-contract-test.php

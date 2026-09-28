@@ -2,6 +2,13 @@ name: Policy Engine
 
 on:
   pull_request:
+    paths:
+      - 'scripts/check-erp.js'
+      - 'scripts/policy*'
+      - 'scripts/*policy*'
+      - 'tests/*policy*'
+      - 'erp/**'
+      - '.github/workflows/policy-engine.yml'
   workflow_dispatch:
     inputs:
       base_sha:
@@ -12,6 +19,10 @@ on:
         description: Exact PR head SHA being replayed
         required: true
         type: string
+
+concurrency:
+  group: policy-engine-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -129,7 +140,7 @@ jobs:
           VISUAL_ARTIFACT_ID=''
           VISUAL_ARTIFACT_NAME=''
           VISUAL_ARTIFACT_DIGEST=''
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 60); do
             runs="$(gh api -X GET "repos/$GH_REPO/actions/workflows/storefront-browser-audit.yml/runs"               -f event=pull_request -f head_sha="$POLICY_HEAD_SHA" -f status=success -f per_page=20)"
             VISUAL_RUN_ID="$(jq -r --arg sha "$POLICY_HEAD_SHA"               '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
             if [[ -n "$VISUAL_RUN_ID" ]]; then

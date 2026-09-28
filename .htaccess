@@ -142,6 +142,12 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{THE_REQUEST} \s/+admin/index\.php(?:[?\s]) [NC]
     RewriteRule ^admin/index\.php$ /admin/ [R=301,L,NE,QSD,NC]
+    # Compatibilidade segura: o antigo painel estatico e bloqueado por admin/.htaccess.
+    # Redirecione apenas GET/HEAD para o wrapper PHP autenticado antes de entrar no subdiretorio.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/squad-chat\.html$ /admin/squad-chat.php [R=302,L,NE,QSD,NC]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/squad-chat\.html$ - [F,L,NC]
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]

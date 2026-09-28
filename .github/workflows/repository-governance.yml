@@ -6,6 +6,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: PR base SHA for replayed governance
+        required: false
+        type: string
+      head_sha:
+        description: Exact PR head SHA for replayed governance
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.head_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -55,27 +65,39 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
+          REPLAY_BASE_SHA: ${{ inputs.base_sha }}
+          REPLAY_HEAD_SHA: ${{ inputs.head_sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
-            base="$PR_BASE_SHA"
+          PR_CONTEXT="false"
+          head="$(git rev-parse HEAD)"
+
+          if [ "$EVENT_NAME" = "pull_request" ] && git cat-file -e origin/main^{commit} 2>/dev/null; then
+            PR_CONTEXT="true"
+            base="$(git merge-base HEAD origin/main)"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$REPLAY_BASE_SHA" ] && [ -n "$REPLAY_HEAD_SHA" ]; then
+            git cat-file -e "${REPLAY_BASE_SHA}^{commit}"
+            git cat-file -e "${REPLAY_HEAD_SHA}^{commit}"
+            test "$head" = "$REPLAY_HEAD_SHA"
+            PR_CONTEXT="true"
+            base="$REPLAY_BASE_SHA"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
             base="$PUSH_BEFORE_SHA"
           elif git cat-file -e origin/main^{commit} 2>/dev/null; then
-            # workflow_dispatch (used as a shadow status check when a pull_request
-            # run is stuck action_required) has no PR/push context. HEAD^ used to be
-            # the fallback, but on a merge commit that resolves to the first parent
-            # only, which can be an arbitrary pre-merge point on this branch rather
-            # than where it actually diverged from main -- producing false-positive
-            # "changed automation surfaces" for files this branch never touched.
-            # Compare against where the branch diverged from main instead.
             base="$(git merge-base HEAD origin/main)"
           else
             base="$(git rev-parse HEAD^)"
           fi
+
           git cat-file -e "${base}^{commit}"
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> artifacts/repository-governance/run-context.txt
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "pr_context=$PR_CONTEXT" >> "$GITHUB_OUTPUT"
+          {
+            echo "base=$base"
+            echo "head=$head"
+            echo "pr_context=$PR_CONTEXT"
+          } >> artifacts/repository-governance/run-context.txt
 
       - name: Compile governance and canonical entrypoints
         run: |
@@ -128,6 +150,16 @@ jobs:
             tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
+          python tests/test_production_deploy_event_gate.py
+          python tests/test_ecommerce_excellence_deploy_wait_retry.py
+          python tests/test_ai_stale_pr_repair_cache.py
+          python tests/test_actions_high_impact_performance_contract.py
+          php tests/nondeploy-release-wait-cost-guard-test.php
+
+      - name: Enforce Absolute Audit V5 bridge
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/repository-governance-validate.sh absolute-audit
 
       - name: Self-test extreme audit governance
         run: |
@@ -150,32 +182,25 @@ jobs:
         run: |
           python scripts/maintenance/audit_automation_changes.py \
             --base "${{ steps.base.outputs.base }}" \
-            --head "${{ github.sha }}"
+            --head "${{ steps.base.outputs.head }}"
 
       - name: Audit all active workflows
         if: always()
         shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            status=0
-            python scripts/maintenance/audit_active_workflows.py || status=$?
-            test -s artifacts/workflow-policy/report.json
-            test -s artifacts/workflow-policy/report.md
-            if [ "$status" -ne 0 ]; then
-              echo "::warning::Repository-wide workflow debt remains on the base branch; PR blocking is enforced by the changed-automation audit above."
-            fi
-          else
-            python scripts/maintenance/audit_active_workflows.py
-          fi
+          status=0
+          python scripts/maintenance/audit_active_workflows.py || status=$?
+          test -s artifacts/workflow-policy/report.json
+          test -s artifacts/workflow-policy/report.md
+          exit "$status"
 
       - name: Audit token and secret references
         if: always()
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PR_CONTEXT: ${{ steps.base.outputs.pr_context }}
         run: |
           set -euo pipefail
           status=0
@@ -183,7 +208,7 @@ jobs:
           test -s artifacts/secret-references/report.json
           test -s artifacts/secret-references/report.md
 
-          if [ "$EVENT_NAME" = "pull_request" ] && [ "$status" -ne 0 ]; then
+          if [ "$PR_CONTEXT" = "true" ] && [ "$status" -ne 0 ]; then
             base_dir="$RUNNER_TEMP/secret-audit-base-${GITHUB_RUN_ID}"
             git worktree add --detach "$base_dir" "${{ steps.base.outputs.base }}"
             if (

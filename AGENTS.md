@@ -1,8 +1,35 @@
+<!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
+## Acesso canônico aos hosts ShopVivaliz
+
+Antes de qualquer operação em host, VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia `docs/HOST-ACCESS.md`. No repositório principal, a fonte central detalhada permanece `Vivaliz-site/site-shopvivaliz:docs/knowledge/host-access.md`.
+
+Regras obrigatórias:
+- produção web/deploy: `shopvivaliz-free-a1`, privado `10.0.1.112`;
+- backend/controller/browser: `always-free-arm-1787907847-26`, privado `10.0.1.38`;
+- navegador de agente roda somente no backend/controller; não usar navegador operacional em Fred-Win ou KOCEPSV;
+- rota operacional primaria para hosts/servicos/diagnostico: **Remote Control MCP** privado e auditavel;
+- shell Linux direto: usar SSH privado/Tailscale com identidade dedicada somente quando a capacidade necessaria nao existir no MCP ou ele estiver comprovadamente indisponivel; SSH público, senha interativa e root público são proibidos;
+- sem rota privada ou para reparar/bootstrap do MCP: usar OCI Bastion/GitHub control plane auditável; RustDesk self-hosted permanece para GUI;
+- Windows via backend: Fred-Win = `127.0.0.1:2222`; KOCEPSV = `127.0.0.1:2223`; os relays legados `5557/5558` são apenas bootstrap/recovery;
+- evidência fresca obrigatória antes de operar: `hostname`, identidade (`whoami`/`id`), diretório e estado Git quando aplicável;
+- nunca registrar em Git, docs, logs ou chat o conteúdo de chaves, senhas, tokens, cookies, OTP/TOTP ou secrets.
+<!-- /SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
+
+<!-- GEPETO_EVERY_TASK_V1 -->
+## Gepeto obrigatorio em toda tarefa
+Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova mencao do usuario. Leia e cumpra `GEPETO-POLICY.md`. Se o runtime nao expuser o plugin, registre `GEPETO_UNAVAILABLE`, informe a limitacao e continue o trabalho autorizado sem simular participacao. Aplicar um plugin nao comprova delegacao nem revisao independente.
+<!-- /GEPETO_EVERY_TASK_V1 -->
+
+<!-- SHOPVIVALIZ_REMOTE_ACCESS_V1 -->
+## Acesso remoto obrigatório para agentes
+
+Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs ou recuperação, leia **`docs/AGENT-REMOTE-ACCESS.md`**. O padrão vigente é **Remote Control MCP primeiro**; SSH privado/Tailscale com `shopvivaliz-agent` apenas para shell direto não exposto pelo MCP; OCI Bastion/GitHub control plane para bootstrap/recovery; RustDesk para GUI. Navegador ShopVivaliz deve rodar na VM backend, nunca nos hosts Windows.
+
 # 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
-> 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md).
-> Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Prefira Remote Desktop Commander por nome do dispositivo; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
+> 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md). O GPT `@dev` e qualquer agente adicional usado como programador/revisor também devem ler [`docs/knowledge/dev-agent-briefing.md`](docs/knowledge/dev-agent-briefing.md), inclusive a política de pesquisa técnica atualizada na web.
+> Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay/controller = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Use **Remote Control MCP como primeira rota operacional**; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
 
 <!-- SUPERPOWERS_EVERY_STAGE_V1 -->
 > 🧭 **@Superpowers CONTÍNUO E OBRIGATÓRIO:** toda conversa, sessão, agente e retomada de tarefa ShopVivaliz deve usar @Superpowers **em cada etapa material**, não apenas no início. Reaplique a disciplina adequada ao passar por planejamento, investigação, implementação, debugging, TDD/testes, revisão, correção, PR/merge, deploy, pós-deploy e auditoria. Em `retome/continue/prossiga`, continue do último checkpoint comprovado sob @Superpowers. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`.
@@ -435,24 +462,26 @@ Regras:
 
 7. O service roda em loop e observa a `inbox` a cada 30 segundos.
 
-### Remote MCP para agentes
+### Remote Control MCP para agentes
 
-O PDF `C:\Users\FRED\Downloads\mcp.pdf` foi inspecionado em 2026-08-11 e registra um fluxo de autenticacao bem-sucedido com Remote MCP server por device authorization.
+O **Remote Control MCP privado do ShopVivaliz** é a rota operacional prioritária para controle de hosts. Consulte primeiro `docs/HOST-ACCESS.md`, `docs/knowledge/host-access.md` e `remote-control-mcp/SPEC.md`.
 
 Regras:
 
-1. Consulte [`docs/AGENT-MCP-REMOTE.md`](docs/AGENT-MCP-REMOTE.md) antes de usar MCP remoto em tarefas de agente.
-2. Nunca commitar codigo de device, device ID completo, e-mail completo, token, cookie ou screenshot sem mascara.
-3. Validar estado atual do MCP antes de declarar disponibilidade; se nao houver ferramenta/evidencia atual, reportar `INCONCLUSIVO`.
-4. MCP remoto nao amplia permissoes: continuam proibidos force-push, bypass de protecoes, exposicao de secrets e alteracoes de preco/estoque/pedido fora do escopo aprovado.
+1. Controller canônico: `always-free-arm-1787907847-26`; endpoint MCP privado/loopback, nunca público.
+2. Use ações allowlisted e tarefas duráveis do MCP antes de recorrer a shell direto.
+3. Se a capacidade necessária não existir no MCP ou o control plane estiver comprovadamente indisponível, use SSH privado/Tailscale; para bootstrap/recovery, GitHub Actions/OCI Bastion.
+4. Nunca publicar token, cookie, chave, OTP/TOTP, conteúdo de secret ou credencial de sessão.
+5. Validar `hostname`, identidade, alvo e resultado real antes de declarar acesso funcional.
+6. Browser de agentes permanece na backend; Windows não é fallback de navegação.
 
 ### Se Tiver Que Acessar a VM
 
 ```bash
-# SSH publico direto esta desabilitado.
-# Prefira Remote Desktop Commander; no runner self-hosted da VM do site:
+# Remote Control MCP e a primeira rota operacional.
+# SSH publico direto esta desabilitado. Se precisar de shell direto no runner self-hosted:
 ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1
-# Fora da VCN, use uma sessao OCI Bastion.
+# Fora da VCN ou para bootstrap/recovery, use OCI Bastion/control plane auditavel.
 
 # Monitorar deploy (a cada 2 min, cron roda)
 tail -f /var/log/shopvivaliz-deploy.log
@@ -531,3 +560,76 @@ Antes de qualquer operacao em terminal/CLI, leia e cumpra a secao `Isolamento ob
 
 ## Auditoria Extrema - arquitetura e deploy
 Nos gatilhos de `AUDIT_POLICY.md`, execute tambem `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. A auditoria inclui gargalos de CI/deploy, arquitetura/codigo, ownership, contratos cross-repo e melhorias seguras de velocidade sem reduzir cobertura.
+
+
+<!-- AUDIT_ABSOLUTE_V5_ENTRYPOINT -->
+## Auditoria Extrema V5 absoluta — entrada obrigatória
+Antes de qualquer auditoria completa/extrema, validação de release ou declaração de aptidão, leia e execute integralmente `AUDIT_POLICY.md`, `docs/quality/AUDIT_ABSOLUTE_GATE_V1.md`, `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`, `docs/quality/AUDIT_APTO_REMEDIATION_LOOP_V1.md`, `docs/quality/AUDIT_AUTH_CREDENTIAL_DISCOVERY_V1.md`, `docs/quality/AUDIT_PROJECT_REQUIREMENTS_V1.md` e `docs/quality/AUDIT_PROJECT_REQUIREMENTS.json`.
+Se existir UI, o próprio agente executa E2E real no navegador gráfico no mesmo release. API/CLI/headless-only não certificam. Todo bloqueador executável deve ser corrigido, testado, deployado quando aplicável e reauditado até o certifier retornar `AUDIT_VERDICT=APTO`. Antes de declarar bloqueio por login/credencial, esgote a descoberta segura em todos os repositórios governados e fontes canônicas sem expor secrets.
+
+
+<!-- AUDIT_MERGE_ENFORCEMENT_V1 -->
+## Enforcement absoluto de merge/main
+Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate local deve executar `scripts/absolute-audit-governance-validate.sh`, e todo push em `main`/`master` deve passar pelo **Absolute Audit Main Guard** com prova de PR mesclado. Não trate a existência do workflow como evidência de branch protection.
+
+<!-- TASK_CONTINUITY_ENFORCEMENT_V3 -->
+## Continuidade obrigatória até estado terminal
+
+- Estados finais permitidos para uma tarefa iniciada: `CONCLUIDO` com validação fresca, ou `BLOCKED_EXTERNAL` com impedimento externo objetivo e intransponível após esgotar alternativas seguras.
+- Pedido explícito do usuário para executar, implementar, corrigir, auditar, resolver ou continuar até conclusão, somado à autorização operacional vigente, já satisfaz gates genéricos de aprovação de plano/design para ações reversíveis e dentro do escopo. Não parar apenas para pedir "posso continuar?" ou aprovação intermediária equivalente.
+- Essa autorização não elimina confirmações obrigatórias de segurança/plataforma para ação destrutiva ou irreversível não autorizada exatamente, cobrança real, segredo, login/CAPTCHA/recovery ou ampliação material de escopo.
+- Falha de ferramenta, plugin, CLI, API, navegador, sessão, runner, workflow, timeout ou rota primária é estado `RUNNING`, nunca terminal enquanto existir fallback seguro ou próxima ação executável.
+- Tarefa simples segue a mesma regra: progresso parcial, diagnóstico ou erro recuperável não autorizam encerrar.
+- Quando o runtime tiver acesso ao repositório, persistir o estado em `scripts/agent_task_state.py`; antes de alegar término, o gate `terminal --task <id>` deve aceitar o estado.
+- Contrato detalhado: `docs/knowledge/task-continuity.md`.
+<!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
+
+<!-- CODEX_LAST_RESORT_V1 -->
+## Codex como última opção de execução
+
+- Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
+- Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois SSH privado/Tailscale e somente para bootstrap/recovery GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Não consumir Codex para esse trabalho por padrão.
+- Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
+- `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+<!-- /CODEX_LAST_RESORT_V1 -->
+
+<!-- CHATGPT_RESUME_ORDER_V5 -->
+## Ordem obrigatória de retomada
+
+Policy: `CHATGPT_RESUME_ORDER_V5`.
+
+Para qualquer tarefa abandonada, interrompida ou com checkpoint `RUNNING`, a ordem é fixa:
+
+1. **ChatGPT comum** — primeira opção; retoma do checkpoint no próximo turno disponível.
+2. **ChatGPT Work** — segunda opção, quando a tarefa exige continuidade persistente/multi-etapas.
+3. **CLI** — terceira e última opção, somente depois das duas camadas ChatGPT anteriores terem sido tentadas ou comprovadamente indisponíveis/inadequadas.
+
+Roteamento persistido: `chatgpt_common_then_work_then_cli`.
+Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
+
+Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
+<!-- /CHATGPT_RESUME_ORDER_V5 -->
+
+<!-- GLOBAL_TASK_CONTINUITY_V8 -->
+## Continuidade global multi-repositório
+O `site-shopvivaliz` é o controlador canônico de `GLOBAL_TASK_CONTINUITY_V8`.
+Todo estado persistido deve carregar `repository=owner/name`; o runtime canônico
+executa watchdog -> dispatcher -> Gemini e o background permanece Gemini-only.
+A presença de adapter não certifica continuidade: somente `continuity_e2e_pass`
+real para o mesmo repositório autoriza APTO global.
+<!-- /GLOBAL_TASK_CONTINUITY_V8 -->
+
+<!-- CHECKPOINT_FIRST_V9 -->
+## Checkpoint antes da primeira etapa material
+Toda tarefa potencialmente longa ou mutável deve registrar `agent_task_state.py start`
+**antes** da primeira investigação extensa, chamada remota material, edição, mutação,
+execução longa, delegação ou espera de CI. O objetivo é eliminar a janela em que uma
+interrupção do ChatGPT ocorre antes de existir estado durável.
+
+Depois de cada avanço material, atualize `progress` com evidência e `next_action`.
+Não adie o primeiro checkpoint para depois do diagnóstico. Se o contexto atual não
+consegue alcançar o controlador canônico, falhe fechado para tarefas que dependem de
+retomada automática e use a rota operacional auditável que consiga registrar o estado.
+<!-- /CHECKPOINT_FIRST_V9 -->
+

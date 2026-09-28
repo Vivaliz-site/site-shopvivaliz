@@ -1,0 +1,64 @@
+name: Secure MCP Platform UI Probe
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[secure-mcp-platform-ui-probe]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=probe'
+      }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Clear only the stale OCI Platform probe
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pattern='^node /tmp/openai-secure-mcp-platform-probe.mjs$'
+          if pgrep -f "$pattern" >/dev/null; then
+            pkill -f "$pattern"
+            for _ in $(seq 1 10); do
+              if ! pgrep -f "$pattern" >/dev/null; then
+                echo "STALE_PLATFORM_UI_PROBE_CLEANUP=PASS"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "::error::Stale Platform probe process did not terminate"
+            exit 2
+          fi
+          echo "STALE_PLATFORM_UI_PROBE_CLEANUP=not_needed"
+
+      - name: Probe OpenAI Platform tunnel settings
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          probe_output=''
+          probe_rc=0
+          if probe_output="$(timeout 90s node scripts/openai-secure-mcp-platform-probe.mjs 2>&1)"; then
+            probe_rc=0
+          else
+            probe_rc=$?
+          fi
+          safe_output="$(printf '%s\n' "$probe_output" | grep -E '^OPENAI_TUNNEL_UI_[A-Z_]+=' || printf '')"
+          if [ -n "$safe_output" ]; then
+            printf '%s\n' "$safe_output"
+          fi
+          if [ "$probe_rc" -ne 0 ]; then
+            echo "::error::Platform UI probe failed rc=$probe_rc"
+            exit "$probe_rc"
+          fi
+          printf '%s\n' "$safe_output" | grep -Fq 'OPENAI_TUNNEL_UI_PROBE=PASS'
+          echo "SECURE_MCP_PLATFORM_DIRECT_PROBE=PASS"

@@ -27,6 +27,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -40,12 +44,14 @@ on:
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
       - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/desktopkocepsv-package-version-integrity-contract-test.php"
       - "tests/local-auto-sync-dc-separation-contract-test.php"
       - "tests/vm-desktop-commander-guardian-contract-test.php"
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
   push:
     branches: [main]
@@ -70,6 +76,10 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
+      - "scripts/desktop-commander-four-host-sentinel.sh"
+      - "scripts/install-desktop-commander-four-host-sentinel.sh"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.service"
+      - "ops/systemd/shopvivaliz-dc-four-host-sentinel.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
@@ -83,12 +93,14 @@ on:
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
       - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/desktopkocepsv-package-version-integrity-contract-test.php"
       - "tests/local-auto-sync-dc-separation-contract-test.php"
       - "tests/vm-desktop-commander-guardian-contract-test.php"
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/desktop-commander-local-sentinel-contract-test.php"
       - "tests/production-runner-rescue-contract-test.php"
 
 permissions:
@@ -121,9 +133,12 @@ jobs:
           php tests/production-runner-rescue-contract-test.php
           php tests/desktopkocepsv-recoverable-channel-contract-test.php
           php tests/desktopkocepsv-runner-hardening-contract-test.php
+          php tests/desktopkocepsv-package-version-integrity-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
           php tests/desktopkocepsv-launcher-tree-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
+          php tests/windows-desktop-commander-private-relay-persistence-contract-test.php
+          php tests/desktop-commander-local-sentinel-contract-test.php
           php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
@@ -132,7 +147,7 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
     env:
-      ALLOW_REPAIR: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      ALLOW_REPAIR: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure verified VM SSH
@@ -253,7 +268,7 @@ jobs:
               else:
                   recovery = 'not_attempted'
               if not auth and (not structurally_healthy or not provider_connected) and MAX_REPAIR_ATTEMPTS == 1:
-                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Restart' if structurally_healthy else 'Ensure'
+                  repair_mode = 'InstallTask' if not structurally_healthy else 'Restart'
                   repair = (
                       'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                       '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
@@ -432,7 +447,7 @@ jobs:
           python3 - <<'PY'
           import json
           data=json.load(open('/tmp/dc-control-plane-status.json',encoding='utf-8'))
-          critical_hosts = {'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
+          critical_hosts = {'LAPTOP-NIG4IFUU', 'DESKTOP-KOCEPSV', 'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
           if any(item.get('host') in critical_hosts and item.get('state') != 'healthy' for item in data):
               raise SystemExit(1)
           PY

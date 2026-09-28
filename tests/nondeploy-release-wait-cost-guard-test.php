@@ -11,13 +11,12 @@ foreach (['workflow_call:', 'runs-on: ubuntu-latest', 'if [[ -z "$EXPECTED_SHA" 
 
 $cases = [
     '.github/workflows/runtime-token-security.yml' => [
-        'id: production_impact',
-        'bash scripts/should-deploy-production.sh',
-        '[[ "$should_deploy" == \'true\' ]] && expected_sha="$GITHUB_SHA"',
-        'uses: ./.github/workflows/production-release-await.yml',
-        'expected_sha: ${{ needs.preflight.outputs.expected_sha }}',
+        'workflow_run:',
+        'Master Production Pipeline 24/7',
+        'uses: ./.github/workflows/production-deploy-event-gate.yml',
+        'production-audit-gate:',
         'audit:',
-        'needs: await-release',
+        'needs: production-audit-gate',
     ],
     '.github/workflows/runtime-env-keyset-lock.yml' => [
         'id: production_impact',

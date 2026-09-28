@@ -202,7 +202,7 @@ function installHomeCategoryImages() {
     });
 }
 function isPublicPath(path) {
-  return !/^\/(?:admin|api|auth|checkout|painel|claude|mcp)\b/i.test(String(path || ''));
+  return !/^\/(?:admin|api|auth|painel|claude|mcp)\b/i.test(String(path || ''));
 }
 function syncBottomUiOffset() {
   var root = document.documentElement;

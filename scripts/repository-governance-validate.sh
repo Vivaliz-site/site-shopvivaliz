@@ -3,11 +3,36 @@ set -Eeuo pipefail
 root="$(git rev-parse --show-toplevel)"; cd "$root"
 phase="${1:-manual}"
 
+if [ "$phase" = "absolute-audit" ]; then
+  exec bash scripts/absolute-audit-governance-validate.sh ci
+fi
+
+
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 python3 scripts/validate-recurring-ai-policy.py
 python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
+python3 scripts/validate-task-continuity-enforcement.py
+bash tests/chatgpt-account-diagnostic-contract-test.sh
+python3 -m unittest tests.test_task_continuity_enforcement -v
+python3 -m unittest tests.test_task_continuation_watchdog -v
+python3 -m unittest tests.test_task_resume_dispatcher -v
+python3 -m unittest tests.test_global_task_continuity_v8 -v
+python3 -m unittest tests.test_checkpoint_first_zero_window -v
+python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
+python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
+bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
+python3 -m unittest tests.test_executor_fallback_order -v
+python3 -m unittest tests.test_background_gemini_runner -v
+python3 -m unittest tests.test_ci_feedback_optimization -v
+python3 -m unittest tests.test_pr_gate_scope -v
+python3 -m unittest tests.test_pr_gate_replay -v
+python3 -m unittest tests.test_workflow_latency_budget -v
+python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
+python3 -m unittest tests.test_ci_performance_monitor -v
+python3 tests/test_ci_performance_monitor_workflow.py
+python3 -m unittest tests.test_ci_performance_fetch -v
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict

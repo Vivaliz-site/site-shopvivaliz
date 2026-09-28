@@ -40,6 +40,9 @@ $inventoryLibrary = (string)file_get_contents($root . '/includes/inventory-reser
 svh_assert(!str_contains($inventoryLibrary, 'CREATE TABLE IF NOT EXISTS'), 'checkout inventory path must not execute DDL');
 $deployScript = (string)file_get_contents($root . '/scripts/deploy-production.sh');
 svh_assert(str_contains($deployScript, 'apply-storefront-hardening-migration.php'), 'deploy must apply storefront migration before activation');
+$migrationScript = (string)file_get_contents($root . '/scripts/apply-storefront-hardening-migration.php');
+svh_assert(str_contains($migrationScript, 'existing_domain_admin'), 'storefront migration must prefer an already persisted domain admin before promotion');
+svh_assert(str_contains($migrationScript, 'AND is_admin = 1'), 'storefront migration must query existing domain admins explicitly');
 $errorPage = (string)file_get_contents($root . '/500.php');
 svh_assert(str_contains($errorPage, "[500, 502, 503]"), 'custom error page must preserve upstream status');
 $htaccess = (string)file_get_contents($root . '/.htaccess');

@@ -38,11 +38,31 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - amazon_support_readback
+          - amazon_support_readback_221530_221532
+          - amazon_support_reply
+          - amazon_support_reply_221532_221546
+          - amazon_support_email_reply_221532_221546
+          - amazon_support_chat_reply_221998
+          - amazon_support_reply_221530_221532
           - rustdesk_server_install
           - rustdesk_client_install
           - rustdesk_status
           - agent_ssh_install
           - agent_ssh_status
+          - backend_browser_runner_install
+          - backend_browser_runner_status
+          - secure_mcp_platform_ui_probe
+          - secure_mcp_platform_auth
+          - secure_mcp_cloudflare_access_probe
+          - secure_mcp_cloudflare_ui_probe
+          - claude_remote_control_probe
+          - claude_remote_control_install
+          - claude_remote_control_status
+          - chatgpt_continuity_diagnostic
+          - chatgpt_continuity_repair
+          - chatgpt_freeze_task_state
+          - chatgpt_freeze_task_successor
       reason:
         description: Audit reason
         required: true
@@ -95,7 +115,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -106,12 +126,36 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if action.startswith("amazon_support_") and target != "shopvivaliz-free-a1":
+              raise SystemExit("Amazon Seller Support actions are restricted to the site VM")
           if action == "rustdesk_server_install" and target != "always-free-arm-1787907847-26":
               raise SystemExit("RustDesk server is restricted to the backend VM")
           if action.startswith("rustdesk_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
               raise SystemExit("RustDesk actions are restricted to the two Linux VMs")
           if action.startswith("agent_ssh_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
               raise SystemExit("Agent SSH actions are restricted to the two Linux VMs")
+          if action.startswith("backend_browser_runner_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Backend browser runner actions are restricted to the backend VM")
+          if action == "secure_mcp_platform_ui_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Platform UI probe is restricted to the backend VM")
+          if action == "secure_mcp_platform_auth" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Platform auth is restricted to the backend VM")
+          if action == "secure_mcp_cloudflare_access_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Cloudflare Access probe is restricted to the backend VM")
+          if action == "secure_mcp_cloudflare_ui_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Secure MCP Cloudflare UI probe is restricted to the backend VM")
+          if action == "claude_remote_control_probe" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control probe is restricted to the backend VM")
+          if action == "claude_remote_control_install" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control install is restricted to the backend VM")
+          if action == "claude_remote_control_status" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Claude Remote Control status is restricted to the backend VM")
+          if action == "chatgpt_continuity_diagnostic" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
+          if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
+          if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
+              raise SystemExit("ChatGPT freeze task actions are restricted to the site VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -219,6 +263,27 @@ jobs:
             runtime_status)
               bash scripts/runtime-service-status.sh site
               ;;
+            amazon_support_readback)
+              sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
+              ;;
+            amazon_support_readback_221530_221532)
+              sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=legacy-original AMAZON_SUPPORT_READBACK_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-readback-oci-site.sh
+              ;;
+            amazon_support_reply)
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets bash scripts/amazon-support-reply-oci-site.sh
+              ;;
+            amazon_support_reply_221532_221546)
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22153259501,22154699381 bash scripts/amazon-support-reply-oci-site.sh
+              ;;
+            amazon_support_email_reply_221532_221546)
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_REPLY_CHANNEL=Email bash scripts/amazon-support-reply-oci-site.sh
+              ;;
+            amazon_support_chat_reply_221998)
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=current-tickets AMAZON_SUPPORT_REPLY_CASE_IDS=22199842931 bash scripts/amazon-support-reply-oci-site.sh
+              ;;
+            amazon_support_reply_221530_221532)
+              sudo -n env AMAZON_SUPPORT_REPLY_PROFILE=legacy-original AMAZON_SUPPORT_REPLY_CASE_IDS=22153077391,22153259501 bash scripts/amazon-support-reply-oci-site.sh
+              ;;
             rustdesk_client_install)
               SERVER_KEY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub")"
               test -n "$SERVER_KEY"
@@ -241,6 +306,116 @@ jobs:
             agent_ssh_status)
               sudo -n bash scripts/setup-agent-ssh.sh status
               ;;
+            chatgpt_freeze_task_successor)
+              state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+              predecessor_id="chatgpt-freeze-root-cause-20260927"
+              successor_id="chatgpt-freeze-root-cause-20260928-g2"
+              successor_file="$state_dir/$successor_id.json"
+              state_file="$RUNNER_TEMP/chatgpt-freeze-successor-state.json"
+              trap 'rm -f "$state_file"' EXIT
+
+              if [ ! -f "$successor_file" ]; then
+                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927 --goal "Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption" --agent gpt-5.6-sol >/dev/null
+                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2 --next-action "Validate post-2103 live continuity runtime, preserve automatic checkpoint resume, and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker" --evidence "Fresh natural freezes and lifecycle evidence occurred after predecessor completion at 2026-09-27T23:45:43Z" >/dev/null
+              fi
+
+              SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir"                 python3 scripts/agent_task_state.py show --task "$successor_id" > "$state_file"
+              python3 - "$state_file" "$predecessor_id" <<'PY'
+          import json
+          import re
+          import sys
+
+          path, expected_predecessor = sys.argv[1], sys.argv[2]
+          with open(path, encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          def safe_text(value, limit=700):
+              text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
+              return text[:limit]
+
+          if payload.get("predecessor_task_id") != expected_predecessor:
+              raise SystemExit("successor predecessor mismatch")
+
+          evidence = payload.get("evidence")
+          evidence_rows = evidence if isinstance(evidence, list) else []
+          summary = {
+              "task_id": safe_text(payload.get("task_id"), 180),
+              "predecessor_task_id": safe_text(payload.get("predecessor_task_id"), 180),
+              "status": safe_text(payload.get("status"), 64),
+              "updated_at": safe_text(payload.get("updated_at"), 64),
+              "next_action": safe_text(payload.get("next_action")),
+              "evidence_count": len(evidence_rows),
+          }
+          print("CHATGPT_FREEZE_SUCCESSOR_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          PY
+              if SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir"                 python3 scripts/agent_task_state.py terminal --task "$successor_id" >/dev/null
+              then
+                echo "CHATGPT_FREEZE_SUCCESSOR_TERMINAL_GATE=PASS"
+              else
+                terminal_rc=$?
+                if [ "$terminal_rc" -eq 3 ]; then
+                  echo "CHATGPT_FREEZE_SUCCESSOR_TERMINAL_GATE=NONTERMINAL"
+                else
+                  exit "$terminal_rc"
+                fi
+              fi
+              ;;
+            chatgpt_freeze_task_state)
+              state_file="$RUNNER_TEMP/chatgpt-freeze-task-state.json"
+              trap 'rm -f "$state_file"' EXIT
+              SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+                python3 scripts/agent_task_state.py show --task chatgpt-freeze-root-cause-20260927 > "$state_file"
+              python3 - "$state_file" <<'PY'
+          import hashlib
+          import json
+          import re
+          import sys
+
+          path = sys.argv[1]
+          with open(path, encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          def safe_text(value, limit=700):
+              text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
+              patterns = (
+                  r"(?i)\b(token|password|passwd|secret|cookie|authorization|api[_-]?key)\b\s*[:=]\s*\S+",
+                  r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/-]+=*",
+              )
+              for pattern in patterns:
+                  text = re.sub(pattern, lambda m: m.group(1) + "=[REDACTED]", text)
+              return text[:limit]
+
+          evidence = payload.get("evidence")
+          evidence_rows = evidence if isinstance(evidence, list) else []
+          last_evidence = str(evidence_rows[-1]) if evidence_rows else ""
+          blocker = payload.get("blocker") if isinstance(payload.get("blocker"), dict) else {}
+          summary = {
+              "task_id": safe_text(payload.get("task_id"), 180),
+              "repository": safe_text(payload.get("repository"), 180),
+              "status": safe_text(payload.get("status"), 64),
+              "updated_at": safe_text(payload.get("updated_at"), 64),
+              "next_action": safe_text(payload.get("next_action")),
+              "evidence_count": len(evidence_rows),
+              "last_evidence_sha256": hashlib.sha256(last_evidence.encode("utf-8")).hexdigest() if last_evidence else "",
+              "verification_present": bool(payload.get("verification")),
+              "blocker_external": blocker.get("external") is True,
+              "resume_condition": safe_text(blocker.get("resume_condition")),
+          }
+          print("TASK_STATE_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+          PY
+              if SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+                python3 scripts/agent_task_state.py terminal --task chatgpt-freeze-root-cause-20260927 >/dev/null
+              then
+                echo "TASK_TERMINAL_GATE=PASS"
+              else
+                terminal_rc=$?
+                if [ "$terminal_rc" -eq 3 ]; then
+                  echo "TASK_TERMINAL_GATE=NONTERMINAL"
+                else
+                  exit "$terminal_rc"
+                fi
+              fi
+              ;;
             repo_status)
               echo "REMOTE_REPO_STATUS_BEGIN"
               cd /home/ubuntu/shopvivaliz-deploy/repo
@@ -257,6 +432,8 @@ jobs:
         env:
           ACTION: ${{ steps.req.outputs.action }}
           SHOPVIVALIZ_AGENT_SSH_PUBKEY: ${{ secrets.SHOPVIVALIZ_AGENT_SSH_PUBKEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -285,6 +462,388 @@ jobs:
             repo_status)
               CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
               "${SSH[@]}" "$CMD"
+              ;;
+            backend_browser_runner_install)
+              remote_script="/tmp/install-shopvivaliz-backend-browser-runner-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/install-shopvivaliz-backend-browser-runner.sh
+              "${SSH[@]}" "set -Eeuo pipefail
+                script='$remote_script'
+                cleanup() { rm -f \"\$script\" \"\${token_file:-}\"; }
+                trap cleanup EXIT
+                if [[ ! -f /home/ubuntu/actions-runner-shopvivaliz-browser/.runner ]]; then
+                  command -v gh >/dev/null
+                  command -v jq >/dev/null
+                  token_file=\$(mktemp)
+                  chmod 600 \"\$token_file\"
+                  gh api --method POST repos/Vivaliz-site/site-shopvivaliz/actions/runners/registration-token > \"\$token_file\"
+                  token=\$(jq -r '.token // empty' \"\$token_file\")
+                  test -n \"\$token\"
+                  RUNNER_TOKEN=\"\$token\" bash \"\$script\"
+                  unset token RUNNER_TOKEN
+                else
+                  bash \"\$script\"
+                fi
+                echo BACKEND_BROWSER_RUNNER_INSTALL=PASS"
+              ;;
+            backend_browser_runner_status)
+              "${SSH[@]}" 'set -Eeuo pipefail
+                runtime="/run/user/$(id -u)"
+                export XDG_RUNTIME_DIR="$runtime"
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+                unit=actions.runner.shopvivaliz-backend-browser.service
+                systemctl --user is-enabled --quiet "$unit"
+                systemctl --user is-active --quiet "$unit"
+                test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+                curl -fsS http://127.0.0.1:17777/health | jq -e ".ok == true and .endpoint == \"browser-worker\" and .browser_path_exists == true" >/dev/null
+                gh api repos/Vivaliz-site/site-shopvivaliz/actions/runners?per_page=100 \
+                  --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
+                  | grep -Fxq shopvivaliz-backend-browser
+                echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
+              ;;
+            chatgpt_continuity_repair)
+              token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
+              token_file="$token_dir/bridge.token"
+              local_tmp="$(mktemp)"
+              remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_continuity_repair() {
+                rm -f "$local_tmp"
+                "${SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
+              }
+              trap cleanup_continuity_repair RETURN
+
+              if ! sudo -n test -s "$token_file"; then
+                umask 077
+                python3 -c 'import secrets; print(secrets.token_hex(32))' > "$local_tmp"
+                sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
+                sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
+              fi
+              sudo -n python3 - "$token_file" <<'PY'
+          import pathlib, sys
+          value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+          if len(value) < 32:
+              raise SystemExit("continuity bridge token is missing or too short")
+          PY
+
+              heartbeat_tmp="$(mktemp)"
+              token="$(sudo -n dd if="$token_file" status=none)"
+              if ! curl -fsS --connect-timeout 5 --max-time 15 \
+                -H 'Host: shopvivaliz.com.br' \
+                -H "Authorization: Bearer $token" \
+                -H 'Content-Type: application/json' \
+                --data '{"operation":"heartbeat"}' \
+                http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
+                unset token
+                rm -f "$heartbeat_tmp"
+                echo "::error::Production continuity bridge heartbeat failed before backend repair"
+                exit 31
+              fi
+              unset token
+              jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null
+              rm -f "$heartbeat_tmp"
+
+              "${SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+              "${SSH[@]}" "dd of='$remote_dir/install.sh' status=none && chmod 700 '$remote_dir/install.sh'" < scripts/install-chatgpt-continuity-backend-bridge.sh
+              "${SSH[@]}" "dd of='$remote_dir/worker.mjs' status=none && chmod 700 '$remote_dir/worker.mjs'" < scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+              sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
+              echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
+
+              bridge_endpoint=''
+              bridge_endpoint="$("${SSH[@]}" 'set -Eeuo pipefail; token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token; token=$(dd if="$token_file" status=none); trap "unset token" EXIT; for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do tmp=$(mktemp); if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data "{\"operation\":\"heartbeat\"}" "$candidate" > "$tmp" && jq -e ".status == \"OK\"" "$tmp" >/dev/null 2>&1; then rm -f "$tmp"; printf "%s\\n" "$candidate"; exit 0; fi; rm -f "$tmp"; done; exit 41')"
+              test -n "$bridge_endpoint"
+              echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=$bridge_endpoint"
+
+              "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
+              install_output=''
+              install_rc=0
+              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
+                install_rc=0
+              else
+                install_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$install_output" | awk '/^CHATGPT_CONTINUITY_(BRIDGE_HEARTBEAT|BACKEND_SERVICE)=PASS$/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$install_rc" -ne 0 ]; then
+                echo "::error::ChatGPT continuity backend installer failed rc=$install_rc"
+                exit "$install_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
+              printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+              echo "CHATGPT_CONTINUITY_REPAIR=PASS"
+              ;;
+            chatgpt_continuity_diagnostic)
+              runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+              agent_active=false
+              if systemctl is-active --quiet shopvivaliz-agent.service; then agent_active=true; fi
+
+              diag_json="$RUNNER_TEMP/chatgpt-continuity-runtime.json"
+              python3 - "$runtime_dir" > "$diag_json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          running = 0
+          if root.is_dir():
+              for path in root.glob("*.json"):
+                  if path.name.startswith("_") or not path.is_file():
+                      continue
+                  try:
+                      row = json.loads(path.read_text(encoding="utf-8"))
+                  except Exception:
+                      continue
+                  if isinstance(row, dict) and str(row.get("status", "")).strip() == "RUNNING":
+                      running += 1
+
+          pending = 0
+          requests = root / "_resume-requests.jsonl"
+          if requests.is_file():
+              for line in requests.read_text(encoding="utf-8", errors="replace").splitlines():
+                  try:
+                      row = json.loads(line)
+                  except Exception:
+                      continue
+                  if isinstance(row, dict) and str(row.get("status", "")).strip() == "queued":
+                      pending += 1
+
+          latest = "NONE"
+          ledger = root / "_chatgpt-continuity-nudges.jsonl"
+          allowed = {
+              "", "PENDING", "CLAIMED", "SENT", "SENT_UNCONFIRMED",
+              "PROGRESS_CONFIRMED", "STALLED_NOT_CONFIRMED",
+              "CONVERSATION_NOT_FOUND", "ERROR",
+          }
+          if ledger.is_file():
+              for line in ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+                  try:
+                      row = json.loads(line)
+                  except Exception:
+                      continue
+                  if not isinstance(row, dict):
+                      continue
+                  candidate = str(row.get("worker_status", "")).strip().upper()
+                  if candidate in allowed:
+                      latest = candidate or "EMPTY"
+
+          print(json.dumps({"running": running, "pending": pending, "latest": latest}, sort_keys=True))
+          PY
+              running_tasks="$(jq -r '.running' "$diag_json")"
+              pending_requests="$(jq -r '.pending' "$diag_json")"
+              latest_nudge="$(jq -r '.latest' "$diag_json")"
+              rm -f "$diag_json"
+
+              backend_worker=false
+              if "${SSH[@]}" 'runtime="/run/user/$(id -u)"; XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service'; then backend_worker=true; fi
+
+              cdp_reachable=false
+              if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null'; then cdp_reachable=true; fi
+
+              latest_conversation_discoverable=false
+              latest_probe_output=''
+              if latest_probe_output="$("${SSH[@]}" 'node --input-type=module -e '"'"'import {Cdp,latestConversationProbe,normalizeLatestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await latestConversationProbe(c); const m=normalizeLatestConversationMeta(p); const status=Number.isFinite(Number(p?.http_status)) ? Number(p.http_status) : 0; const source=["filtered","fallback_unfiltered"].includes(String(p?.source||"")) ? String(p.source) : "none"; const id=String(p?.id||"").trim(); const rawUpdate=p?.update_time??p?.updated_at??null; let updateNumber=Number(rawUpdate||0); if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||"")); updateNumber=Number.isFinite(parsed)?parsed/1000:0;} const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; console.log("CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS="+status); console.log("CHATGPT_CONTINUITY_LATEST_LIST_SOURCE="+source); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+(p?.item_present?"true":"false")); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+(id?"true":"false")); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+(/^[A-Za-z0-9_-]{8,160}$/.test(id)?"true":"false")); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+((rawUpdate!==null&&String(rawUpdate).trim()!=="")?"true":"false")); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+((Number.isFinite(updateNumber)&&updateNumber>0)?"true":"false")); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_META_VALID="+(m ? "true" : "false")); } finally { c.close(); }'"'"'' 2>/dev/null)"; then
+                :
+              else
+                latest_probe_output="$(printf '%s\n' 'CHATGPT_CONTINUITY_LATEST_LIST_HTTP_STATUS=0' 'CHATGPT_CONTINUITY_LATEST_LIST_SOURCE=none' 'CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT=false' 'CHATGPT_CONTINUITY_LATEST_ID_PRESENT=false' 'CHATGPT_CONTINUITY_LATEST_ID_VALID=false' 'CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT=false' 'CHATGPT_CONTINUITY_LATEST_UPDATE_VALID=false' 'CHATGPT_CONTINUITY_LATEST_ITEM_KEYS=NONE' 'CHATGPT_CONTINUITY_LATEST_META_VALID=false')"
+              fi
+              printf '%s\n' "$latest_probe_output" | awk '/^CHATGPT_CONTINUITY_LATEST_(LIST_(HTTP_STATUS|SOURCE)|ITEM_(PRESENT|KEYS)|ID_(PRESENT|VALID)|UPDATE_(PRESENT|VALID))=/{print}'
+              if printf '%s\n' "$latest_probe_output" | grep -Fq 'CHATGPT_CONTINUITY_LATEST_META_VALID=true'; then
+                latest_conversation_discoverable=true
+              fi
+
+              bridge_heartbeat=false
+              if "${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                test -s "$token_file"
+                token="$(dd if="$token_file" status=none)"
+                trap "unset token" EXIT
+                heartbeat_ok=false
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
+                  heartbeat_tmp="$(mktemp)"
+                  if curl -fsS --connect-timeout 4 --max-time 10 \
+                    -H "Host: shopvivaliz.com.br" \
+                    -H "Authorization: Bearer $token" \
+                    -H "Content-Type: application/json" \
+                    --data '"'"'{"operation":"heartbeat"}'"'"' \
+                    "$candidate" > "$heartbeat_tmp" &&
+                    jq -e '"'"'.status == "OK"'"'"' "$heartbeat_tmp" >/dev/null 2>&1
+                  then
+                    rm -f "$heartbeat_tmp"
+                    heartbeat_ok=true
+                    break
+                  fi
+                  rm -f "$heartbeat_tmp"
+                done
+                test "$heartbeat_ok" = true'
+              then
+                bridge_heartbeat=true
+              fi
+
+              echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
+              echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
+              echo "CHATGPT_CONTINUITY_PENDING_REQUESTS=$pending_requests"
+              echo "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=$latest_nudge"
+              echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
+              echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"
+              echo "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=$bridge_heartbeat"
+              echo "CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=$latest_conversation_discoverable"
+              echo "CHATGPT_CONTINUITY_DIAGNOSTIC=PASS"
+              ;;
+            secure_mcp_platform_ui_probe)
+              remote_script="/tmp/openai-secure-mcp-platform-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 600 '$remote_script'" < scripts/openai-secure-mcp-platform-probe.mjs
+              probe_output=''
+              probe_rc=0
+              if probe_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 90s node '$remote_script'" 2>&1)"; then
+                probe_rc=0
+              else
+                probe_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$probe_output" | awk '/^OPENAI_TUNNEL_UI_[A-Z_]+=/{print}')"
+              if [ -n "$safe_output" ]; then
+                printf '%s\n' "$safe_output"
+              fi
+              if [ "$probe_rc" -ne 0 ]; then
+                echo "::error::Remote Platform UI probe failed rc=$probe_rc"
+                exit "$probe_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'OPENAI_TUNNEL_UI_PROBE=PASS'
+              echo "SECURE_MCP_PLATFORM_REMOTE_PROBE=PASS"
+              ;;
+            secure_mcp_platform_auth)
+              remote_script="/tmp/openai-secure-mcp-platform-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 600 '$remote_script'" < scripts/openai-secure-mcp-platform-auth.mjs
+              auth_output=''
+              auth_rc=0
+              if auth_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 120s node '$remote_script'" 2>&1)"; then
+                auth_rc=0
+              else
+                auth_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$auth_output" | awk '/^(OPENAI_PLATFORM_[A-Z_]+|CLOUD_CLIENT_COMPATIBILITY_REQUIRED|CLAUDE_CLOUD_ACCESS_REQUIRED)=/{print}')"
+              if [ -n "$safe_output" ]; then
+                printf '%s\n' "$safe_output"
+              fi
+              if [ "$auth_rc" -ne 0 ]; then
+                echo "::error::Remote Platform auth failed rc=$auth_rc"
+                exit "$auth_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'OPENAI_PLATFORM_AUTH_RESULT=PASS'
+              echo "SECURE_MCP_PLATFORM_REMOTE_AUTH=PASS"
+              ;;
+            secure_mcp_cloudflare_access_probe)
+              test -n "${CLOUDFLARE_API_TOKEN:-}"
+              test -n "${CLOUDFLARE_DNS_EDIT_TOKEN:-}"
+              zone_tmp="$(mktemp)"
+              apps_tmp="$(mktemp)"
+              tokens_tmp="$(mktemp)"
+              cleanup_cf_probe() { rm -f "$zone_tmp" "$apps_tmp" "$tokens_tmp"; }
+              trap cleanup_cf_probe RETURN
+
+              zone_code="$(curl -sS -o "$zone_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_DNS_EDIT_TOKEN" \
+                "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br&status=active&per_page=1")"
+              test "$zone_code" = 200
+              account_id="$(jq -r '.result[0].account.id // empty' "$zone_tmp")"
+              test -n "$account_id"
+
+              apps_code="$(curl -sS -o "$apps_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$account_id/access/apps?per_page=1")"
+              tokens_code="$(curl -sS -o "$tokens_tmp" -w '%{http_code}' \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$account_id/access/service_tokens?per_page=1")"
+
+              apps_read=false
+              service_tokens_read=false
+              managed_oauth=false
+              if [ "$apps_code" = 200 ] && jq -e '.success == true' "$apps_tmp" >/dev/null; then
+                apps_read=true
+                managed_oauth=true
+              fi
+              if [ "$tokens_code" = 200 ] && jq -e '.success == true' "$tokens_tmp" >/dev/null; then
+                service_tokens_read=true
+              fi
+              echo "CLOUDFLARE_ACCESS_APPS_READ=$apps_read"
+              echo "CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=$service_tokens_read"
+              echo "CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=$managed_oauth"
+              echo "CLOUDFLARE_ACCESS_PROBE=PASS"
+              ;;
+            secure_mcp_cloudflare_ui_probe)
+              remote_script="/tmp/cloudflare-access-ui-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 600 '$remote_script'" < scripts/cloudflare-access-ui-probe.mjs
+              probe_output=''
+              probe_rc=0
+              if probe_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 120s node '$remote_script'" 2>&1)"; then
+                probe_rc=0
+              else
+                probe_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$probe_output" | awk '/^CLOUDFLARE_[A-Z_]+=/{print}')"
+              if [ -n "$safe_output" ]; then
+                printf '%s\n' "$safe_output"
+              fi
+              if [ "$probe_rc" -ne 0 ]; then
+                echo "::error::Remote Cloudflare UI probe failed rc=$probe_rc"
+                exit "$probe_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLOUDFLARE_UI_PROBE=PASS'
+              echo "SECURE_MCP_CLOUDFLARE_UI_REMOTE_PROBE=PASS"
+              ;;
+            claude_remote_control_probe)
+              remote_script="/tmp/claude-remote-control-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+              "${SSH[@]}" "cat > '$remote_script' && chmod 700 '$remote_script'" < scripts/claude-remote-control-probe.sh
+              probe_output=''
+              probe_rc=0
+              if probe_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -f '$remote_script'' EXIT; timeout 60s '$remote_script'" 2>&1)"; then
+                probe_rc=0
+              else
+                probe_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$probe_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$probe_rc" -ne 0 ]; then
+                echo "::error::Remote Claude Remote Control probe failed rc=$probe_rc"
+                exit "$probe_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_PROBE=PASS'
+              echo "SECURE_CLAUDE_REMOTE_CONTROL_PROBE=PASS"
+              ;;
+            claude_remote_control_install)
+              remote_dir="/tmp/shopvivaliz-claude-remote-control-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              "${SSH[@]}" "install -d -m 700 '$remote_dir'"
+              "${SSH[@]}" "cat > '$remote_dir/setup.sh' && chmod 700 '$remote_dir/setup.sh'" < scripts/setup-claude-remote-control.sh
+              "${SSH[@]}" "cat > '$remote_dir/bridge.py' && chmod 600 '$remote_dir/bridge.py'" < scripts/claude-remote-control-mcp-stdio.py
+              "${SSH[@]}" "cat > '$remote_dir/trust.py' && chmod 600 '$remote_dir/trust.py'" < scripts/claude_workspace_trust_bootstrap.py
+              "${SSH[@]}" "cat > '$remote_dir/service.unit' && chmod 600 '$remote_dir/service.unit'" < deploy/systemd/shopvivaliz-claude-remote-control.service
+              install_output=''
+              install_rc=0
+              if install_output="$("${SSH[@]}" "set -Eeuo pipefail; trap 'rm -rf '$remote_dir'' EXIT; sudo -n bash '$remote_dir/setup.sh' install '$remote_dir/bridge.py' '$remote_dir/service.unit' '$remote_dir/trust.py'" 2>&1)"; then
+                install_rc=0
+              else
+                install_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$install_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$install_rc" -ne 0 ]; then
+                echo "::error::Claude Remote Control install failed rc=$install_rc"
+                exit "$install_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_INSTALL=PASS'
+              ;;
+            claude_remote_control_status)
+              status_output=''
+              status_rc=0
+              if status_output="$("${SSH[@]}" "sudo -n /usr/local/sbin/shopvivaliz-setup-claude-remote-control status" 2>&1)"; then
+                status_rc=0
+              else
+                status_rc=$?
+              fi
+              safe_output="$(printf '%s\n' "$status_output" | awk '/^CLAUDE_[A-Z_]+=/{print}')"
+              [ -z "$safe_output" ] || printf '%s\n' "$safe_output"
+              if [ "$status_rc" -ne 0 ]; then
+                echo "::error::Claude Remote Control status failed rc=$status_rc"
+                exit "$status_rc"
+              fi
+              printf '%s\n' "$safe_output" | grep -Fq 'CLAUDE_REMOTE_CONTROL_STATUS=PASS'
               ;;
             agent_ssh_install|agent_ssh_status)
               case "$ACTION" in
@@ -413,7 +972,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/remote-windows-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 - <<'PY'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ["REMOTE_CMD_B64"]).decode("utf-8")
           port = os.environ["REMOTE_PORT"]
@@ -432,7 +991,7 @@ jobs:
               print(output)
           if result.get("success") is not True:
               raise SystemExit("remote Windows action failed")
-          PY"
+          PY
 
       - name: Cleanup
         if: always()

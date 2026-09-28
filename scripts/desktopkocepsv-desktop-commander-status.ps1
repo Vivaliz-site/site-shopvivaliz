@@ -1,6 +1,7 @@
 param()
 $ErrorActionPreference = 'Continue'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
+$PinnedVersion = '0.2.51'
 
 if (-not $env:USERPROFILE) {
     try {
@@ -37,11 +38,33 @@ function Get-LauncherRoots([object[]]$Launchers) {
     return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
 }
 
+function Test-PinnedPackageRoot([string]$Root) {
+    if ([string]::IsNullOrWhiteSpace($Root)) { return $false }
+    $manifestPath = Join-Path $Root 'package.json'
+    $entryPoint = Join-Path $Root 'dist\index.js'
+    if (-not (Test-Path -LiteralPath $manifestPath) -or -not (Test-Path -LiteralPath $entryPoint)) { return $false }
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        return ($manifest.name -eq '@wonderwhy-er/desktop-commander' -and $manifest.version -eq $PinnedVersion)
+    }
+    catch { return $false }
+}
+
+function Test-CanonicalRemoteCommand([string]$Command) {
+    if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+    if ($Command -match '@wonderwhy-er/desktop-commander@0\.2\.51(?=\s|["''])[^\r\n]*\bremote\b.*--persist-session') { return $true }
+    if ($Command -notmatch '(?<entry>[A-Za-z]:\\[^"]*?@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js).*?\bremote\b.*--persist-session') { return $false }
+    $entryPoint = [string]$Matches['entry']
+    try {
+        $packageRoot = Split-Path -Parent (Split-Path -Parent $entryPoint)
+        return (Test-PinnedPackageRoot -Root $packageRoot)
+    }
+    catch { return $false }
+}
+
 function Get-CanonicalRemoteLaunchers {
     $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
-        $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
-        ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
+        Test-CanonicalRemoteCommand -Command ([string]$_.CommandLine)
     })
     return @(Get-LauncherRoots $matches)
 }
@@ -49,9 +72,7 @@ function Get-CanonicalRemoteLaunchers {
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
-        $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
-        ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
+        Test-CanonicalRemoteCommand -Command ([string]$_.CommandLine)
     })
     $canonicalIds = @($canonicalProcesses.ProcessId)
     $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })

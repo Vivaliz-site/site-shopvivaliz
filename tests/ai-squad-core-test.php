@@ -19,16 +19,65 @@ ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL')
 ais_assert(($deep['openai']['effort'] ?? '') === 'medium', 'deep OpenAI effort must be medium');
 ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'), 'deep Anthropic model mismatch');
 ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic effort must be medium');
-ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash'), 'deep Gemini model mismatch');
+ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
 ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
-ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingBudget' => 8192], 'Gemini 2.5 MEDIUM must use thinkingBudget 8192');
+ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingLevel' => 'medium'], 'Gemini 3.5 MEDIUM must use thinkingLevel medium');
+$balanced = $catalog['balanced'];
+ais_assert(($balanced['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_BALANCED_MODEL') ?: 'gemini-3.5-flash'), 'balanced Gemini model mismatch');
+ais_assert(($balanced['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'balanced Gemini thinking must be MEDIUM');
+ais_assert(svais_gemini_thinking_config($balanced['gemini']) === ['thinkingLevel' => 'medium'], 'Gemini 3.5 MEDIUM must use thinkingLevel medium');
 $fast = $catalog['fast'];
-ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingBudget' => 1024], 'Gemini 2.5 LOW must use thinkingBudget 1024');
+ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingLevel' => 'low'], 'Gemini 3.5 LOW must use thinkingLevel low');
 ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 'thinking_level' => 'MEDIUM']) === ['thinkingLevel' => 'medium'], 'Gemini 3 must use thinkingLevel');
 
 ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
 ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
 ais_assert(svais_health_state(false, false) === 'unavailable', 'unconfigured provider health mismatch');
+ais_assert(function_exists('svais_bridge_stream_chunk'), 'bridge stream chunk helper missing');
+if (!defined('SVAIS_STREAM_HEARTBEAT')) {
+    define('SVAIS_STREAM_HEARTBEAT', true);
+}
+$heartbeatBody = '';
+$heartbeatEmitted = [];
+$heartbeatLength = svais_bridge_stream_chunk(
+    "\n",
+    $heartbeatBody,
+    static function (string $chunk) use (&$heartbeatEmitted): void { $heartbeatEmitted[] = $chunk; }
+);
+ais_assert($heartbeatLength === 1, 'heartbeat chunk length mismatch');
+ais_assert($heartbeatBody === "\n", 'heartbeat chunk must remain in provider body');
+ais_assert($heartbeatEmitted === ["\n"], 'blank bridge heartbeat must be relayed to streaming client');
+ais_assert(
+    svais_failure_class(new RuntimeException('claude_bridge_oauth_refresh_contention')) === 'oauth_refresh_contention',
+    'OAuth refresh contention must not be reported as quota, auth, or transport'
+);
+
+$geminiProbeCalls = [];
+$geminiProbe = svais_gemini_health_probe(
+    $deep['gemini'],
+    function (array $cfg, string $system, string $prompt, bool $webSearch, int $timeout) use (&$geminiProbeCalls, $deep): array {
+        $geminiProbeCalls[] = [$cfg, $system, $prompt, $webSearch, $timeout];
+        return [
+            'text' => 'OK',
+            'sources' => [],
+            'usage' => [],
+            'model' => $deep['gemini']['model'],
+            'transport' => 'vertex_oauth',
+        ];
+    }
+);
+ais_assert(($geminiProbe['verified'] ?? false) === true, 'Gemini live health probe success must verify provider');
+ais_assert(($geminiProbe['transport'] ?? '') === 'vertex_oauth', 'Gemini live health probe must report verified transport');
+ais_assert(count($geminiProbeCalls) === 1, 'Gemini live health probe must execute exactly one dispatch');
+ais_assert(($geminiProbeCalls[0][0]['thinking_level'] ?? '') === 'LOW', 'Gemini health probe must use low thinking effort');
+ais_assert(($geminiProbeCalls[0][0]['max_output_tokens'] ?? 0) <= 64, 'Gemini health probe must keep output bounded');
+ais_assert($geminiProbeCalls[0][3] === false, 'Gemini health probe must not use web search');
+ais_assert(($geminiProbeCalls[0][4] ?? 999) <= 30, 'Gemini health probe must use a short provider timeout');
+$geminiProbeFailure = svais_gemini_health_probe(
+    $deep['gemini'],
+    static function (): array { throw new RuntimeException('provider_transport_error'); }
+);
+ais_assert(($geminiProbeFailure['verified'] ?? true) === false, 'Gemini failed live probe must not report verified');
 
 $serialized = strtolower(json_encode($catalog, JSON_UNESCAPED_SLASHES) ?: '');
 ais_assert(!str_contains($serialized, 'fable'), 'Fable must not appear in any AI Squad preset');
@@ -123,6 +172,18 @@ ais_assert(
     !svais_cycle_complete_for_consensus($errorTranscript, ['openai', 'anthropic', 'gemini'], ['research', 'critique', 'converge']),
     'provider error must block consensus coverage'
 );
+$intermediateFailure = $completeTranscript;
+$intermediateFailure[2] = ['type'=>'agent_error','ok'=>false,'provider'=>'gemini','phase'=>'research','failure_class'=>'timeout'];
+$intermediateCoverage = svais_cycle_coverage($intermediateFailure, ['openai','anthropic','gemini'], ['research','critique','converge']);
+ais_assert(($intermediateCoverage['provider_status']['gemini'] ?? '') === 'error', 'later success must not mask phase failure');
+ais_assert(($intermediateCoverage['provider_phase_status']['gemini']['research']['status'] ?? '') === 'error', 'phase failure must remain observable');
+ais_assert(($intermediateCoverage['provider_phase_status']['gemini']['research']['failure_class'] ?? '') === 'timeout', 'failure class must remain observable');
+ais_assert(($intermediateCoverage['complete_provider_coverage'] ?? true) === false, 'phase failure must block consensus coverage');
+$sourceMissingTranscript = $completeTranscript;
+$sourceMissingTranscript[1] = ['type'=>'agent_error','ok'=>false,'provider'=>'anthropic','phase'=>'research','failure_class'=>'source_missing'];
+$sourceMissingCoverage = svais_cycle_coverage($sourceMissingTranscript, ['openai','anthropic','gemini'], ['research','critique','converge']);
+ais_assert(($sourceMissingCoverage['provider_phase_status']['anthropic']['research']['failure_class'] ?? '') === 'source_missing', 'source-missing failure class must remain observable');
+ais_assert(($sourceMissingCoverage['complete_provider_coverage'] ?? true) === false, 'source-missing research failure must block 9/9 consensus coverage');
 
 $order = svais_openai_transport_order();
 ais_assert($order === ['codex_chatgpt', 'manual_chatgpt'], 'OpenAI transport order mismatch');
@@ -286,6 +347,18 @@ ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mism
 
 $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
+
+$previousGoogleApiKey = getenv('GOOGLE_API_KEY');
+putenv('GOOGLE_API_KEY=unit-test-placeholder');
+$verifiedGeminiState = svais_provider_state(
+    $deep,
+    true,
+    static fn(array $cfg): array => ['verified' => true, 'transport' => 'vertex_oauth']
+);
+if ($previousGoogleApiKey === false) putenv('GOOGLE_API_KEY');
+else putenv('GOOGLE_API_KEY=' . $previousGoogleApiKey);
+ais_assert(($verifiedGeminiState['gemini']['health'] ?? '') === 'verified', 'live Gemini health probe success must produce verified health');
+ais_assert(($verifiedGeminiState['gemini']['verified_transport'] ?? '') === 'vertex_oauth', 'Gemini health must expose the transport proven by live probe');
 ais_assert(($state['openai']['manual_chatgpt_fallback'] ?? false) === true, 'health manual ChatGPT fallback missing');
 ais_assert(($state['openai']['platform_api_fallback'] ?? true) === false, 'OpenAI health must explicitly disable Platform API fallback');
 ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
@@ -305,11 +378,11 @@ foreach (['openai', 'anthropic', 'gemini'] as $providerId) {
     );
 }
 
-$uiSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+$uiSource = (string)file_get_contents(dirname(__DIR__) . '/admin/buscador.php');
 ais_assert(str_contains($uiSource, 'configured_unverified'), 'UI must expose configured-but-unverified state');
 ais_assert(str_contains($uiSource, 'healthState(p)'), 'UI must normalize provider health state');
 ais_assert(!str_contains($uiSource, "(p.configured?'ok':'bad')"), 'UI must not paint configured-only providers green');
-ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate AI Squad health endpoint identity');
+ais_assert(str_contains($uiSource, "j.endpoint!=='buscador'"), 'UI must validate Buscador health endpoint identity');
 
 $coreSource = (string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php');
 ais_assert(!str_contains($coreSource, 'function svais_openai_call'), 'AI Squad core must not retain dormant OpenAI Platform API transport');
@@ -318,19 +391,20 @@ ais_assert(!str_contains($coreSource, 'function svais_anthropic_call'), 'AI Squa
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_vertex_call'), 'AI Squad core must not retain dormant Anthropic Vertex transport');
 ais_assert(!str_contains($coreSource, "getenv('ANTHROPIC_API_KEY')"), 'AI Squad core must not read ANTHROPIC_API_KEY');
 
-$adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+$adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/buscador.php');
 ais_assert(str_contains($adminSource, 'manual_chatgpt'), 'UI must expose manual ChatGPT fallback');
 ais_assert(str_contains($adminSource, 'https://chatgpt.com/'), 'UI must provide explicit ChatGPT fallback action');
 
-$apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/ai-squad.php');
+$apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/buscador.php');
+ais_assert(str_contains($apiSource, 'svais_provider_state($profile, true)'), 'health endpoint must request live Gemini verification');
 ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');
 $legacyPolicy = 'opus' . '5_primary_no_fable';
 ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
-$apiSource = file_get_contents(__DIR__ . '/../api/agent/ai-squad.php');
+$apiSource = file_get_contents(__DIR__ . '/../api/agent/buscador.php');
 ais_assert(str_contains($apiSource, 'set_time_limit(900)'), 'AI Squad API must allow deep-research cycles beyond default PHP timeout');
 ais_assert(str_contains($apiSource, 'ignore_user_abort(true)'), 'AI Squad API must finish audit cycle after transient client disconnect');
-ais_assert(str_contains($apiSource, 'svais_cycle_complete_for_consensus'), 'API must gate consensus on complete provider/phase coverage');
+ais_assert(str_contains($apiSource, 'svais_cycle_coverage'), 'API must gate consensus on complete provider/phase coverage');
 ais_assert(!str_contains($apiSource, 'if ($successful !== [])'), 'API must not allow partial-success consensus');
 ais_assert(str_contains((string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php'), 'CURLOPT_TIMEOUT_MS => 25000'), 'Codex health probe timeout must cover live bridge verification');
 echo "AI_SQUAD_CORE_TEST=PASS\n";

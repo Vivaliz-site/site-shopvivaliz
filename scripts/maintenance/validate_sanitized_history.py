@@ -26,13 +26,18 @@ class Finding:
     message: str
 
 
-def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(
+    *args: str,
+    check: bool = True,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         cwd=ROOT,
         text=True,
         capture_output=True,
         check=check,
+        input=input_text,
     )
 
 
@@ -54,6 +59,7 @@ def fetch_all_refs() -> None:
         "--force",
         "--prune",
         "--tags",
+        "--filter=blob:none",
         "origin",
         "+refs/heads/*:refs/remotes/origin/*",
     )
@@ -86,24 +92,51 @@ def remote_tags() -> dict[str, str]:
     return {name: peeled.get(name, sha) for name, sha in direct.items()}
 
 
-def commit_exists(sha: str) -> bool:
-    return run("git", "cat-file", "-e", f"{sha}^{{commit}}", check=False).returncode == 0
-
-
-def is_ancestor(ancestor: str, descendant: str) -> bool:
-    return run(
+def existing_commit_shas(shas: list[str] | tuple[str, ...] | set[str]) -> set[str]:
+    ordered = sorted({sha for sha in shas if sha})
+    if not ordered:
+        return set()
+    result = run(
         "git",
-        "merge-base",
-        "--is-ancestor",
-        ancestor,
-        descendant,
-        check=False,
-    ).returncode == 0
+        "cat-file",
+        "--batch-check=%(objectname) %(objecttype)",
+        input_text="\n".join(ordered) + "\n",
+    )
+    existing: set[str] = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "commit":
+            existing.add(parts[0])
+    return existing
 
 
-def commit_count(root_sha: str, ref_sha: str) -> int:
-    result = run("git", "rev-list", "--count", f"{root_sha}..{ref_sha}")
-    return int(result.stdout.strip())
+def branches_containing_root(root_sha: str) -> set[str]:
+    result = run(
+        "git",
+        "for-each-ref",
+        "--format=%(refname:short)",
+        f"--contains={root_sha}",
+        "refs/remotes/origin",
+    )
+    names: set[str] = set()
+    for line in result.stdout.splitlines():
+        name = line.strip()
+        if not name or name == "origin/HEAD":
+            continue
+        if name.startswith("origin/"):
+            names.add(name.removeprefix("origin/"))
+    return names
+
+
+def tags_containing_root(root_sha: str) -> set[str]:
+    result = run(
+        "git",
+        "for-each-ref",
+        "--format=%(refname:short)",
+        f"--contains={root_sha}",
+        "refs/tags",
+    )
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
 
 def evaluate() -> tuple[list[Finding], dict[str, object]]:
@@ -115,6 +148,7 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
     fetch_all_refs()
     heads = remote_heads()
     tags = remote_tags()
+    known_commits = existing_commit_shas({root_sha, *heads.values(), *tags.values()})
 
     checks: dict[str, object] = {
         "root_sha": root_sha,
@@ -124,11 +158,17 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
         "remote_branches": heads,
         "remote_tags": tags,
         "descendant_commit_counts": {},
+        "ancestry_check": "batched_ref_contains",
     }
 
-    if not commit_exists(root_sha):
+    if root_sha not in known_commits:
         findings.append(Finding("critical", "root_missing", root_sha, "Sanitized root commit is unavailable."))
         return findings, checks
+
+    descendant_branches = branches_containing_root(root_sha)
+    descendant_tags = tags_containing_root(root_sha)
+    checks["descendant_branch_count"] = len(descendant_branches)
+    checks["descendant_tag_count"] = len(descendant_tags)
 
     parent_line = run("git", "rev-list", "--parents", "-n", "1", root_sha).stdout.strip().split()
     root_has_no_parent = len(parent_line) == 1
@@ -145,23 +185,19 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
         ref = f"refs/heads/{name}"
         if any(part in name for part in FORBIDDEN_REF_PARTS):
             findings.append(Finding("high", "transient_branch_present", ref, "Transient cleanup branch must not remain reachable."))
-        if not commit_exists(sha):
+        if sha not in known_commits:
             findings.append(Finding("critical", "branch_commit_missing", ref, "Branch commit object is unavailable."))
             continue
-        if not is_ancestor(root_sha, sha):
+        if name not in descendant_branches:
             findings.append(Finding("critical", "branch_outside_clean_history", ref, "Branch does not descend from the sanitized root."))
-            continue
-        checks["descendant_commit_counts"][ref] = commit_count(root_sha, sha)
 
     for name, sha in sorted(tags.items()):
         ref = f"refs/tags/{name}"
-        if not commit_exists(sha):
+        if sha not in known_commits:
             findings.append(Finding("critical", "tag_commit_missing", ref, "Tag target commit is unavailable."))
             continue
-        if not is_ancestor(root_sha, sha):
+        if name not in descendant_tags:
             findings.append(Finding("critical", "tag_outside_clean_history", ref, "Tag does not descend from the sanitized root."))
-            continue
-        checks["descendant_commit_counts"][ref] = commit_count(root_sha, sha)
 
     expected_tag_sha = tags.get(expected_tag)
     expected_tag_matches_root = expected_tag_sha == root_sha

@@ -26,9 +26,13 @@ Recursos para geração, tratamento, seleção e associação de imagens aos pro
 
 Módulo destinado à criação, otimização e acompanhamento de anúncios e campanhas em canais externos. Preço, estoque e logística não devem ser inventados ou alterados sem evidência da fonte comercial.
 
+### Buscador
+
+Motor multi-IA de pesquisa profunda, debate contraditório e consenso entre OpenAI, Claude e Gemini. A UI canônica é `/admin/buscador.php` e o endpoint canônico é `/api/agent/buscador.php`. O código-fonte dedicado vive em `Vivaliz-site/buscador`.
+
 ### Squad Chat
 
-Canal de comunicação com agentes de IA por meio do endpoint `/api/agent/squad-chat.php`, utilizado para diagnóstico, orientação e apoio operacional.
+Canal genérico de comunicação com agentes de IA por meio do endpoint `/api/agent/squad-chat.php`, utilizado para diagnóstico, orientação e apoio operacional. Não confundir com o Buscador.
 
 ### Atualizador
 

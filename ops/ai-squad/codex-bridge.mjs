@@ -414,6 +414,23 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+export function beginHeartbeat(res, schedule = setInterval, cancel = clearInterval) {
+  res.writeHead(200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('\n');
+  const timer = schedule(() => {
+    if (!res.destroyed && !res.writableEnded) res.write('\n');
+  }, 15000);
+  timer.unref?.();
+  return (payload) => {
+    cancel(timer);
+    if (!res.writableEnded) res.end(JSON.stringify(payload));
+  };
+}
+
 async function readJson(req) {
   let size = 0;
   const chunks = [];
@@ -445,8 +462,16 @@ export function createServer() {
       active++;
       try {
         const request = validateRequest(await readJson(req));
-        const result = await respond(request);
-        return sendJson(res, result.ok ? 200 : 503, result);
+        const finish = beginHeartbeat(res);
+        try {
+          const result = await respond(request);
+          finish(result);
+          return;
+        } catch (error) {
+          const safe = sanitizeBridgeError(error);
+          finish({ ok: false, error: safe });
+          return;
+        }
       } finally {
         active--;
       }

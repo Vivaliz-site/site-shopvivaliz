@@ -36,5 +36,8 @@ assert(workflow.includes('storefront-browser-audit.yml/runs'), 'Policy workflow 
 assert(workflow.includes('POLICY_HEAD_SHA'), 'Policy workflow must bind visual proof to the exact PR head SHA');
 assert(workflow.includes('head_sha'), 'Policy workflow must query browser evidence by head SHA');
 assert(workflow.includes('for attempt in'), 'Policy workflow must wait for concurrently generated browser evidence');
+const visualWait = workflow.match(/for attempt in \$\(seq 1 (\d+)\); do[\s\S]*?sleep (\d+)/);
+assert(visualWait, 'Policy workflow must expose a bounded visual-artifact wait loop');
+assert(Number(visualWait[1]) * Number(visualWait[2]) >= 300, 'Policy workflow must allow at least 300s for the concurrent browser artifact');
 assert(workflow.includes("Path('visual-proof.json').write_text"), 'Policy workflow must write fresh runtime visual-proof metadata');
 assert(workflow.includes('visual_proof_head_sha'), 'Policy workflow must record the exact visual proof head SHA');

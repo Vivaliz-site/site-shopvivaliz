@@ -7,11 +7,21 @@ foreach ([$healthPath, $controlPath] as $path) {
 }
 
 $health = (string) file_get_contents($healthPath);
-foreach (["TASK_EXISTS", "'InstallTask' if", '-Mode {repair_mode}', '-Mode Ensure', 'MAX_REPAIR_ATTEMPTS = 1'] as $needle) {
+foreach ([
+    "TASK_EXISTS",
+    "repair_mode = 'InstallTask' if not structurally_healthy else 'Restart'",
+    '-Mode {repair_mode}',
+    '-Mode Ensure',
+    'MAX_REPAIR_ATTEMPTS = 1'
+] as $needle) {
     if (strpos($health, $needle) === false) {
         fwrite(STDERR, "desktop-commander-24h-health.yml: bounded repair guard ausente: {$needle}\n");
         exit(1);
     }
+}
+if (strpos($health, "else 'Restart' if structurally_healthy else 'Ensure'") !== false) {
+    fwrite(STDERR, "desktop-commander-24h-health.yml: structural drift ainda cai em Ensure\n");
+    exit(1);
 }
 if (preg_match('/bootstrap[^\n]*-Mode InstallTask/i', $health)) {
     fwrite(STDERR, "desktop-commander-24h-health.yml: bootstrap agendado nao pode usar InstallTask\n");

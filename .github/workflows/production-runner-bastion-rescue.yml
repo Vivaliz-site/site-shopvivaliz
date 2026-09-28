@@ -1,0 +1,326 @@
+name: Production Runner Bastion Rescue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: production-runner-bastion-rescue
+  cancel-in-progress: false
+
+jobs:
+  rescue:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[production-runner-bastion-rescue]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=restart-idle-listener-private'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      SITE_PRIVATE_IP: 10.0.1.112
+      SITE_TUNNEL_PORT: "22212"
+
+    steps:
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected rescue secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-runner-rescue -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+
+      - name: Discover canonical site and temporarily allow this runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1" || { echo "::error::Expected exactly one site instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          display_name="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."display-name"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          test "$display_name" = "$SITE_INSTANCE_NAME"
+          test "$lifecycle" = "RUNNING"
+
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state') == 'ACTIVE']
+          if len(active) != 1:
+              raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          test -n "$BASTION_ID"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress, json, sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2], encoding='utf-8'))
+          if not isinstance(src, list):
+              raise SystemExit('Bastion CIDR allowlist is not a list')
+          cidrs=list(dict.fromkeys([str(x) for x in src] + [ip + '/32']))
+          json.dump(cidrs, open(sys.argv[3], 'w', encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+          echo BASTION_RUNNER_ALLOWLIST=temporary
+
+      - name: Create and open private site tunnel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          SITE_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" \
+            --target-private-ip "$SITE_PRIVATE_IP" \
+            --target-port 22 \
+            --session-ttl 1800 \
+            --display-name shopvivaliz-runner-rescue \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$SITE_SESSION_ID"
+          echo "SITE_SESSION_ID=$SITE_SESSION_ID" >> "$GITHUB_ENV"
+          state=''
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then break; fi
+            case "$state" in
+              FAILED|DELETED) echo "::error::Bastion session entered $state"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          test "$state" = ACTIVE
+          metadata="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$metadata"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          tunnel_ready=false
+          for attempt in $(seq 1 8); do
+            if bash -lc "$tunnel"; then
+              listener_ready=false
+              for listener_attempt in $(seq 1 12); do
+                if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$SITE_TUNNEL_PORT" 2>/dev/null; then
+                  echo "BASTION_LOCAL_LISTENER_READY_ATTEMPT=$listener_attempt"
+                  listener_ready=true
+                  tunnel_ready=true
+                  break
+                fi
+                sleep 1
+              done
+              if [ "$listener_ready" = true ]; then
+                echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+                break
+              fi
+              echo "BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=$attempt"
+              if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
+                pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+              fi
+            else
+              echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
+            fi
+            sleep 5
+          done
+          if [ "$tunnel_ready" != true ]; then
+            echo "::error::Bastion tunnel authentication/listener did not become ready after 8 attempts"
+            exit 1
+          fi
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
+          echo PRIVATE_SITE_TUNNEL=PASS
+
+      - name: Restart idle production runner listener only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'set -Eeuo pipefail
+            service=shopvivaliz-actions-runner.service
+            if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
+            printf "RUNNER_WORKER_COUNT=%s\n" "$workers"
+            if [ "$workers" -gt 0 ]; then
+              echo RUNNER_BASTION_RESCUE=refused_worker_active
+              exit 23
+            fi
+            uid="$(id -u)"
+            runtime="/run/user/$uid"
+            bus="unix:path=$runtime/bus"
+            test -S "$runtime/bus"
+            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
+            diag_dir=/home/ubuntu/actions-runner-shopvivaliz/_diag
+            marker="$(mktemp)"
+            trap 'rm -f "$marker"' EXIT
+            touch "$marker"
+            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+            active=false
+            for _ in $(seq 1 12); do
+              if env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"; then
+                active=true
+                break
+              fi
+              sleep 2
+            done
+            test "$active" = true
+            mainpid="$(env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user show -p MainPID --value "$service")"
+            [[ "$mainpid" =~ ^[0-9]+$ ]]
+            test "$mainpid" -gt 1
+
+            listener_connected=false
+            listener_failure=unknown
+            for _ in $(seq 1 30); do
+              latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)"
+              if [ -n "$latest_log" ]; then
+                if grep -Fq 'Listening for Jobs' "$latest_log"; then
+                  listener_connected=true
+                  listener_failure=none
+                  break
+                fi
+                if grep -Fq 'A session for this runner already exists' "$latest_log"; then
+                  listener_failure=session_conflict
+                elif grep -Fq 'Runner connect error' "$latest_log"; then
+                  listener_failure=connect_error
+                fi
+              fi
+              sleep 2
+            done
+            echo "RUNNER_LISTENER_CONNECTED=$listener_connected"
+            echo "RUNNER_LISTENER_FAILURE_CLASS=$listener_failure"
+            test "$listener_connected" = true
+            echo RUNNER_BASTION_RESCUE=listener_restarted
+            echo RUNNER_SERVICE_ACTIVE=true
+          '
+
+      - name: Ensure one canonical deploy exists for current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
+          active_id="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow master-production-pipeline.yml \
+            --branch main \
+            --limit 50 \
+            --json databaseId,headSha,status \
+            --jq ".[] | select(.headSha == \"$head_sha\") | select(.status == \"queued\" or .status == \"pending\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"requested\") | .databaseId" \
+            | head -1)"
+          if [ -n "$active_id" ]; then
+            echo "CANONICAL_DEPLOY=already_active"
+            echo "CANONICAL_DEPLOY_RUN_ID=$active_id"
+          else
+            gh workflow run master-production-pipeline.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f confirmation=DEPLOY
+
+            run_id=''
+            for _ in $(seq 1 30); do
+              run_id="$(gh run list \
+                --repo "$GITHUB_REPOSITORY" \
+                --workflow master-production-pipeline.yml \
+                --event workflow_dispatch \
+                --branch main \
+                --limit 30 \
+                --json databaseId,headSha,status \
+                --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" \
+                | head -1)"
+              test -n "$run_id" && break
+              sleep 2
+            done
+            test -n "$run_id"
+            echo "CANONICAL_DEPLOY=dispatched"
+            echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
+          fi
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          cleanup_status=0
+          if [ -n "${SITE_SESSION_ID:-}" ]; then
+            if ! "${OCI[@]}" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null 2>&1; then
+              echo "::error::Failed to delete temporary Bastion session"
+              cleanup_status=1
+            fi
+          fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            if ! "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1; then
+              echo "::error::Failed to restore Bastion CIDR allowlist"
+              cleanup_status=1
+            fi
+          fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
+            if ! pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"; then
+              echo "::error::Failed to stop temporary Bastion tunnel"
+              cleanup_status=1
+            fi
+          fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$f" ] && [ -f "$f" ]; then
+              if ! shred -u "$f"; then
+                echo "::error::Failed to shred temporary credential file"
+                cleanup_status=1
+              fi
+            fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$cleanup_status"

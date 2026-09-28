@@ -3,7 +3,7 @@ name: Public Layout Audit
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '59 7 * * *'
   workflow_run:
     workflows: ['Master Production Pipeline 24/7']
     types: [completed]
@@ -15,10 +15,12 @@ concurrency:
 jobs:
   audit:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 35
     permissions:
       contents: read
+    env:
+      SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,7 +28,11 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Verify canonical backend browser runtime
+        run: |
+          set -Eeuo pipefail
+          test -x "$SHOPVIVALIZ_CHROMIUM_PATH"
+          curl -fsS http://127.0.0.1:17777/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(j.ok!==true||j.endpoint!=="browser-worker"||j.browser_path_exists!==true)process.exit(1);});'
       - name: Audit all public layouts
         env:
           E2E_BASE_URL: https://shopvivaliz.com.br

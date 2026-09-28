@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_PORT = 17657;
-const DEFAULT_TIMEOUT_MS = 240000;
+const DEFAULT_TIMEOUT_MS = 225000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const DEFAULT_CLAUDE_BIN = '/home/ubuntu/.local/bin/claude';
@@ -22,6 +22,14 @@ const MODEL_ALLOWLIST = new Set([
 ]);
 
 let authState = { checked_at: 0, authenticated: false };
+let authProbePromise = null;
+let claudeWorkQueue = Promise.resolve();
+
+export function serializeClaudeWork(work) {
+  const queued = claudeWorkQueue.catch(() => {}).then(work);
+  claudeWorkQueue = queued.catch(() => {});
+  return queued;
+}
 
 export function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -50,6 +58,9 @@ export function sanitizeBridgeError(value) {
 
 export function classifyClaudeError(value) {
   const text = String(value || '').toLowerCase();
+  if (text.includes('source_missing')) return 'source_missing';
+  if (text.includes('refresh oauth token')
+    && (text.includes('another claude code process is refreshing') || text.includes('exited mid-refresh'))) return 'oauth_refresh_contention';
   if (text.includes('oauth') || text.includes('authenticate') || text.includes('authentication') || text.includes('token expired')) return 'auth';
   if (text.includes('quota') || text.includes('usage limit') || text.includes('session limit') || text.includes('rate limit') || text.includes('credit balance')) return 'quota';
   if (text.includes('timed out') || text.includes('timeout')) return 'timeout';
@@ -84,6 +95,9 @@ export function buildClaudeArgs(request) {
     '--system-prompt', request.system,
     '--tools', request.web_search ? 'WebSearch,WebFetch' : '',
   ];
+  if (request.web_search) {
+    args.push('--allowedTools', 'WebSearch,WebFetch');
+  }
   return args;
 }
 
@@ -200,41 +214,56 @@ function runClaude(args, input, timeoutMs, token) {
   });
 }
 
+export function shouldReprobeAuth(state, now = Date.now(), minIntervalMs = 5000) {
+  if (state?.authenticated === true) return false;
+  const checkedAt = Number(state?.checked_at || 0);
+  return checkedAt <= 0 || (now - checkedAt) >= minIntervalMs;
+}
+
+function scheduleAuthProbe() {
+  if (authProbePromise) return authProbePromise;
+  authState = { ...authState, checked_at: Date.now() };
+  authProbePromise = probeAuth().finally(() => { authProbePromise = null; });
+  return authProbePromise;
+}
+
 async function probeAuth() {
-  const auth = claudeAuthSource();
-  if (!auth.configured) {
-    authState = { checked_at: Date.now(), authenticated: false };
-    return false;
-  }
-  try {
-    // `claude auth status` can report loggedIn=true for an OAuth token that
-    // cannot perform inference. Health must prove the same non-interactive
-    // path used by the AI Squad, otherwise the UI can go falsely green.
-    const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
-    const statusData = JSON.parse(status.stdout || '{}');
-    if (status.code !== 0 || statusData?.loggedIn !== true) {
+  return serializeClaudeWork(async () => {
+    const auth = claudeAuthSource();
+    if (!auth.configured) {
       authState = { checked_at: Date.now(), authenticated: false };
       return false;
     }
+    try {
+      // `claude auth status` can report loggedIn=true for an OAuth token that
+      // cannot perform inference. Health must prove the same non-interactive
+      // path used by the AI Squad, otherwise the UI can go falsely green.
+      const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
+      const statusData = JSON.parse(status.stdout || '{}');
+      if (status.code !== 0 || statusData?.loggedIn !== true) {
+        authState = { checked_at: Date.now(), authenticated: false };
+        return false;
+      }
 
-    const request = {
-      model: 'claude-sonnet-5',
-      effort: 'low',
-      system: 'AI Squad authentication health probe. Reply only OK.',
-      prompt: 'OK',
-      web_search: false,
-    };
-    const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
-    const data = parseClaudeOutput(result.stdout || '');
-    const ok = result.code === 0
-      && data.is_error !== true
-      && data.result !== '';
-    authState = { checked_at: Date.now(), authenticated: ok };
-    return ok;
-  } catch {
-    authState = { checked_at: Date.now(), authenticated: false };
-    return false;
-  }
+      const request = {
+        model: 'claude-sonnet-5',
+        effort: 'low',
+        system: 'AI Squad authentication health probe. Reply only OK.',
+        prompt: 'OK',
+        web_search: false,
+      };
+      const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
+      const data = parseClaudeOutput(result.stdout || '');
+      const ok = result.code === 0
+        && data.is_error !== true
+        && data.result !== '';
+      authState = { checked_at: Date.now(), authenticated: ok };
+      return ok;
+    } catch {
+      authState = { checked_at: Date.now(), authenticated: false };
+      return false;
+    }
+  });
 }
 
 function extractUrls(text) {
@@ -297,32 +326,78 @@ export function parseClaudeOutput(stdout) {
   };
 }
 
-async function answer(request) {
-  const auth = claudeAuthSource();
+export function buildSourceRetryPrompt(prompt) {
+  return `${String(prompt || '')}\n\nRETENTATIVA OBRIGATÓRIA DE PESQUISA WEB: use a ferramenta WebSearch antes de responder e inclua pelo menos uma URL completa e verificável (http:// ou https://) das fontes efetivamente consultadas na resposta final. Não invente URLs; se não conseguir obter uma fonte verificável, declare a limitação.`;
+}
+
+export async function answerClaudeRequest(request, options = {}) {
+  const now = options.now || Date.now;
+  const timeoutMs = options.timeoutMs ?? Math.max(30000, Math.min(DEFAULT_TIMEOUT_MS, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
+  const deadline = options.deadline ?? (now() + timeoutMs);
+  return serializeClaudeWork(() => answerClaudeRequestUnserialized(request, {
+    ...options,
+    now,
+    timeoutMs,
+    deadline,
+  }));
+}
+
+async function answerClaudeRequestUnserialized(request, options = {}) {
+  const auth = options.auth || claudeAuthSource();
   if (!auth.configured) throw new Error('missing token');
 
-  const timeoutMs = Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
-  const result = await runClaude(buildClaudeArgs(request), request.prompt, timeoutMs, auth.token);
-  if (result.code !== 0) {
-    const detail = claudeFailureDetail(result);
-    throw new Error(detail || 'claude_transport_error');
-  }
-  const data = parseClaudeOutput(result.stdout);
-  if (data.is_error === true) {
-    throw new Error(sanitizeBridgeError(data.error || data.result || 'claude_error'));
-  }
-  const text = data.result;
-  if (!text) throw new Error('empty_response');
+  const timeoutMs = options.timeoutMs;
+  const now = options.now || Date.now;
+  const deadline = options.deadline ?? (now() + timeoutMs);
+  const run = options.run || runClaude;
+  const sleep = options.sleep || (delay => new Promise(resolve => setTimeout(resolve, delay)));
+  const attempts = request.web_search ? 2 : 1;
 
-  authState = { checked_at: Date.now(), authenticated: true };
-  return {
-    ok: true,
-    text,
-    model: request.model,
-    transport: 'claude_code',
-    sources: data.sources,
-    usage: data.usage,
-  };
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const prompt = attempt === 0 ? request.prompt : buildSourceRetryPrompt(request.prompt);
+    let result;
+    let contentionRetries = 0;
+    while (true) {
+      const remainingMs = Math.max(0, deadline - now());
+      if (remainingMs <= 0) throw new Error('request_timeout');
+      result = await run(buildClaudeArgs(request), prompt, remainingMs, auth.token);
+      if (result.code === 0) break;
+      const detail = claudeFailureDetail(result);
+      if (classifyClaudeError(detail) === 'oauth_refresh_contention' && contentionRetries < 1) {
+        contentionRetries += 1;
+        await sleep(250 * contentionRetries);
+        continue;
+      }
+      throw new Error(detail || 'claude_transport_error');
+    }
+    const data = parseClaudeOutput(result.stdout);
+    if (data.is_error === true) {
+      throw new Error(sanitizeBridgeError(data.error || data.result || 'claude_error'));
+    }
+    const text = data.result;
+    if (!text) throw new Error('empty_response');
+
+    if (request.web_search && data.sources.length === 0) {
+      if (attempt === 0) continue;
+      throw new Error('source_missing');
+    }
+
+    authState = { checked_at: Date.now(), authenticated: true };
+    return {
+      ok: true,
+      text,
+      model: request.model,
+      transport: 'claude_code',
+      sources: data.sources,
+      usage: data.usage,
+    };
+  }
+
+  throw new Error('source_missing');
+}
+
+async function answer(request) {
+  return answerClaudeRequest(request);
 }
 
 function sendJson(res, status, payload) {
@@ -335,8 +410,26 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+function beginHeartbeat(res) {
+  res.writeHead(200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('\n');
+  const timer = setInterval(() => {
+    if (!res.destroyed && !res.writableEnded) res.write('\n');
+  }, 15000);
+  timer.unref?.();
+  return (payload) => {
+    clearInterval(timer);
+    if (!res.writableEnded) res.end(JSON.stringify(payload));
+  };
+}
+
 async function handle(req, res) {
   if (req.method === 'GET' && req.url === '/health') {
+    if (shouldReprobeAuth(authState)) scheduleAuthProbe().catch(() => {});
     const auth = claudeAuthSource();
     const bin = process.env.AI_SQUAD_CLAUDE_BIN || DEFAULT_CLAUDE_BIN;
     const binaryConfigured = fs.existsSync(bin);
@@ -373,8 +466,16 @@ async function handle(req, res) {
   try {
     const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     const request = validateRequest(parsed);
-    const response = await answer(request);
-    sendJson(res, 200, response);
+    const finish = beginHeartbeat(res);
+    try {
+      const response = await answer(request);
+      finish(response);
+    } catch (error) {
+      const safe = sanitizeBridgeError(error?.message || error);
+      const errorClass = classifyClaudeError(safe);
+      if (errorClass === 'auth') authState = { checked_at: Date.now(), authenticated: false };
+      finish({ ok: false, error_class: errorClass });
+    }
   } catch (error) {
     const safe = sanitizeBridgeError(error?.message || error);
     const errorClass = classifyClaudeError(safe);
@@ -395,7 +496,7 @@ async function main() {
   server.requestTimeout = 310000;
   server.headersTimeout = 10000;
   server.listen(port, host, () => {
-    probeAuth().catch(() => {});
+    scheduleAuthProbe().catch(() => {});
   });
 }
 
