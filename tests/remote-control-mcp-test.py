@@ -182,6 +182,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertEqual(text.count("- name: Cleanup bootstrap material"), 1)
         self.assertIn("test \"$(grep -cv '^#' \"$tmp\")\" -ge 3", text)
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
+        self.assertIn("REMOTE_CONTROL_CONTROLLER_READY=PASS", text)
+        self.assertIn("for attempt in $(seq 1 30)", text)
+        self.assertIn("curl -fsS --connect-timeout 1 --max-time 3 http://127.0.0.1:5580/health", text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
     def test_bootstrap_runs_on_controller_backend(self):
