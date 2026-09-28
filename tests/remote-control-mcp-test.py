@@ -606,6 +606,20 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('cat "$token_file"', repair_block)
         self.assertIn('dd if="$token_file" status=none', repair_block)
 
+    def test_chatgpt_continuity_repair_discovers_authenticated_private_bridge_route(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        for needle in (
+            "CHATGPT_CONTINUITY_BRIDGE_ROUTE=",
+            "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
+            "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
+            "jq -e '.status == \"OK\"'",
+        ):
+            self.assertIn(needle, workflow)
+        repair = workflow.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
+        self.assertIn("bridge_endpoint=''", repair)
+        self.assertIn("for candidate in", repair)
+        self.assertIn('CHATGPT_CONTINUITY_BRIDGE_ENDPOINT="$bridge_endpoint"', repair)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
