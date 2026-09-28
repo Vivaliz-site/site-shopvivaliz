@@ -5,6 +5,7 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/ensure-chatgpt-freeze-successor.py'
       - 'scripts/setup-claude-remote-control.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
       - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
@@ -44,7 +45,7 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py scripts/ensure-chatgpt-freeze-successor.py
           python3 tests/remote-control-mcp-test.py
           python3 tests/test_chatgpt_freeze_successor.py
       - name: KOCEPSV reverse relay contract
