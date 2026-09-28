@@ -181,16 +181,14 @@ class BootstrapContractTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("127.0.0.1/2222", text)
         self.assertIn("127.0.0.1/2223", text)
-        self.assertIn("32222:127.0.0.1:2222", text)
-        self.assertIn("32223:127.0.0.1:2223", text)
+        self.assertNotIn("32222:127.0.0.1:2222", text)
+        self.assertNotIn("32223:127.0.0.1:2223", text)
         self.assertIn("http://127.0.0.1:5558/mcp/tool/execute_command", text)
         self.assertNotIn("tailscale status --json", text)
         self.assertNotIn("</dev/tcp/$fred_ip/22", text)
         self.assertNotIn("</dev/tcp/$desk_ip/22", text)
         self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
         self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
-        self.assertEqual(text.count("pkill -f '32222:127.0.0.1:2222'"), 1)
-        self.assertEqual(text.count("pkill -f '32223:127.0.0.1:2223'"), 1)
 
     def test_fred_bootstrap_recovers_missing_2222_via_legacy_relay(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
