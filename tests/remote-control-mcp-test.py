@@ -620,6 +620,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("for candidate in", repair)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint'", repair)
 
+    def test_chatgpt_continuity_diagnostic_checks_user_service_scope(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("chatgpt_continuity_diagnostic)", 1)[1].split("secure_mcp_platform_ui_probe)", 1)[0]
+        self.assertIn("systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service", diagnostic)
+        self.assertIn("XDG_RUNTIME_DIR=", diagnostic)
+        self.assertIn("DBUS_SESSION_BUS_ADDRESS=", diagnostic)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
