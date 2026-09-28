@@ -562,6 +562,7 @@ class BootstrapContractTests(unittest.TestCase):
         for needle in (
             "scripts/setup-claude-remote-control.sh",
             "scripts/claude-remote-control-mcp-stdio.py",
+            "scripts/claude_workspace_trust_bootstrap.py",
             "deploy/systemd/shopvivaliz-claude-remote-control.service",
             "CLAUDE_REMOTE_CONTROL_INSTALL=PASS",
             "CLAUDE_REMOTE_CONTROL_STATUS=PASS",
