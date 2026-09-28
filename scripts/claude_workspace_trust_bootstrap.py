@@ -24,11 +24,14 @@ def trust_prompt_visible(value: str) -> bool:
     return "quick safety check" in text and "yes, i trust this folder" in text
 
 
+def remote_control_confirmation_visible(value: str) -> bool:
+    return "enable remote control?" in clean_screen(value).lower()
+
+
 def unexpected_prompt_visible(value: str) -> bool:
     text = clean_screen(value).lower()
     return (
-        "enable remote control?" in text
-        or "do you want to allow this tool" in text
+        "do you want to allow this tool" in text
         or "permission to use" in text
     )
 
@@ -71,14 +74,15 @@ def main(argv: list[str]) -> int:
     master_fd, slave_fd = pty.openpty()
     proc: subprocess.Popen[bytes] | None = None
     buffer = ""
-    accepted = False
+    trust_accepted = False
+    remote_control_accepted = False
     unexpected = False
     accepted_at = 0.0
     deadline = time.monotonic() + 15.0
 
     try:
         proc = subprocess.Popen(
-            [claude_bin],
+            [claude_bin, "--remote-control"],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
@@ -90,7 +94,10 @@ def main(argv: list[str]) -> int:
         slave_fd = -1
 
         while time.monotonic() < deadline:
-            if accepted and time.monotonic() - accepted_at >= 1.5:
+            elapsed = time.monotonic() - accepted_at if accepted_at else 0.0
+            if remote_control_accepted and elapsed >= 1.5:
+                break
+            if trust_accepted and elapsed >= 5.0:
                 break
             ready, _, _ = select.select([master_fd], [], [], 0.25)
             if not ready:
@@ -104,12 +111,19 @@ def main(argv: list[str]) -> int:
             if not chunk:
                 break
             buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
-            if not accepted and trust_prompt_visible(buffer):
+            if not trust_accepted and trust_prompt_visible(buffer):
                 os.write(master_fd, b"1\r")
-                accepted = True
+                trust_accepted = True
                 accepted_at = time.monotonic()
                 continue
-            if not accepted and unexpected_prompt_visible(buffer):
+            if trust_accepted and not remote_control_accepted and remote_control_confirmation_visible(buffer):
+                os.write(master_fd, b"y\r")
+                remote_control_accepted = True
+                accepted_at = time.monotonic()
+                continue
+            if unexpected_prompt_visible(buffer) or (
+                not trust_accepted and remote_control_confirmation_visible(buffer)
+            ):
                 unexpected = True
                 break
     finally:
@@ -119,7 +133,7 @@ def main(argv: list[str]) -> int:
             stop_process(proc)
         os.close(master_fd)
 
-    if accepted:
+    if trust_accepted:
         print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS")
         return 0
     if unexpected:

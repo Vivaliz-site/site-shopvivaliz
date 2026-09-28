@@ -525,19 +525,41 @@ class BootstrapContractTests(unittest.TestCase):
         assert spec and spec.loader
         spec.loader.exec_module(module)
 
-        self.assertTrue(
-            module.trust_prompt_visible(
-                "Quick safety check: Is this a project you created or one you trust?\n"
-                "1. Yes, I trust this folder\n2. No, exit"
-            )
+        current_278 = (
+            "Accessing workspace:\n/tmp/shopvivaliz\n"
+            "Quick safety check: Is this a project you created or one you trust?\n"
+            "❯ No, exit\n"
+            "  Yes, I trust this folder\n"
+            "Enter to confirm · Esc to cancel"
         )
-        self.assertFalse(module.trust_prompt_visible("Enable Remote Control? (y/n)"))
-        self.assertFalse(module.trust_prompt_visible("Do you want to allow this tool?"))
+        newer_dialog = (
+            "Do you trust the files in this folder?\n"
+            "❯ No, exit\n"
+            "  Yes, I trust this folder"
+        )
+        already_selected_yes = (
+            "Quick safety check: Is this a project you created or one you trust?\n"
+            "  No, exit\n"
+            "❯ Yes, I trust this folder"
+        )
+
+        self.assertTrue(module.trust_prompt_visible(current_278))
+        self.assertTrue(module.trust_prompt_visible(newer_dialog))
+        self.assertEqual(module.trust_acceptance_sequence(current_278), b"\x1b[B\r")
+        self.assertEqual(module.trust_acceptance_sequence(newer_dialog), b"\x1b[B\r")
+        self.assertEqual(module.trust_acceptance_sequence(already_selected_yes), b"\r")
+        self.assertIsNone(module.trust_acceptance_sequence("Enable Remote Control? (y/n)"))
+        self.assertIsNone(module.trust_acceptance_sequence("Do you want to allow this tool?"))
+        self.assertTrue(module.unexpected_prompt_visible("Enable Remote Control? (y/n)"))
+        self.assertTrue(module.unexpected_prompt_visible("Do you want to allow this tool?"))
 
         helper_text = helper.read_text(encoding="utf-8")
         setup_text = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
         self.assertIn("pty.openpty()", helper_text)
-        self.assertIn('os.write(master_fd, b"1\\r")', helper_text)
+        self.assertIn("TIOCSWINSZ", helper_text)
+        self.assertIn('env["TERM"] = "xterm-256color"', helper_text)
+        self.assertNotIn('os.write(master_fd, b"1\\r")', helper_text)
+        self.assertNotIn('[claude_bin, "--remote-control"]', helper_text)
         self.assertIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", setup_text)
