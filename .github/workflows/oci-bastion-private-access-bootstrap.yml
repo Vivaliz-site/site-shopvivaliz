@@ -548,7 +548,7 @@ jobs:
           if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service; then worker=true; fi
           cdp=false
           curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null && cdp=true
-          sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{const candidates=["/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false","/backend-api/conversations?offset=0&limit=1&order=updated"];let last={item_present:false,id_present:false,id_valid:false,update_present:false,update_valid:false,item_keys:[]};for(const url of candidates){try{const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});let body=null;try{body=await response.json();}catch{}const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));last={...last,item_present:items.length>0};if(!response.ok||items.length===0)continue;const item=items[0]||{};const id=String(item.id||item.conversation_id||"").trim();const rawUpdate=item.update_time??item.updateTime??item.updated_at??item.updatedAt??null;let updateNumber=Number(rawUpdate||0);if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||""));updateNumber=Number.isFinite(parsed)?parsed/1000:0;}const item_keys=Object.keys(item).map(key=>String(key).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32);return {item_present:true,id_present:Boolean(id),id_valid:/^[A-Za-z0-9_-]{8,160}$/.test(id),update_present:rawUpdate!==null&&String(rawUpdate).trim()!=="",update_valid:Number.isFinite(updateNumber)&&updateNumber>0,item_keys};}catch{}}return last;})()`); const b=v=>v?"true":"false"; const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+b(p?.item_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+b(p?.id_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+b(p?.id_valid)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+b(p?.update_present)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+b(p?.update_valid)); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE="+b(p?.id_valid&&p?.update_valid)); } finally { c.close(); }'
+          sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{const kind=v=>Array.isArray(v)?"array":(v===null?"null":(typeof v==="object"?"object":"other"));const count=v=>Array.isArray(v)?Math.min(v.length,9999):0;const candidates=[{name:"filtered",url:"/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false"},{name:"fallback",url:"/backend-api/conversations?offset=0&limit=1&order=updated"}];let selected={item_present:false,id_present:false,id_valid:false,update_present:false,update_valid:false,item_keys:[]};const observations=[];for(const candidate of candidates){const o={name:candidate.name,http_status:0,body_kind:"null",items_count:0,conversations_count:0,data_kind:"null",data_items_count:0,data_conversations_count:0};try{const response=await fetch(candidate.url,{credentials:"same-origin",cache:"no-store"});o.http_status=Number(response.status||0);let body=null;try{body=await response.json();}catch{}o.body_kind=kind(body);o.items_count=count(body?.items);o.conversations_count=count(body?.conversations);o.data_kind=kind(body?.data??null);o.data_items_count=count(body?.data?.items);o.data_conversations_count=count(body?.data?.conversations);const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));if(response.ok&&items.length>0&&!selected.item_present){const item=items[0]||{};const id=String(item.id||item.conversation_id||"").trim();const rawUpdate=item.update_time??item.updateTime??item.updated_at??item.updatedAt??null;let updateNumber=Number(rawUpdate||0);if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||""));updateNumber=Number.isFinite(parsed)?parsed/1000:0;}const item_keys=Object.keys(item).map(key=>String(key).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32);selected={item_present:true,id_present:Boolean(id),id_valid:/^[A-Za-z0-9_-]{8,160}$/.test(id),update_present:rawUpdate!==null&&String(rawUpdate).trim()!=="",update_valid:Number.isFinite(updateNumber)&&updateNumber>0,item_keys};}}catch{}observations.push(o);}const path=String(location.pathname||"");const match=path.match(/^\\/c\\/([^/?#]+)/);const path_kind=match?"conversation":(path==="/"?"home":"other");let current_fetch_status=0;if(match){try{const response=await fetch("/backend-api/conversation/"+encodeURIComponent(match[1]),{credentials:"same-origin",cache:"no-store"});current_fetch_status=Number(response.status||0);}catch{}}return {...selected,observations,path_kind,current_fetch_status};})()`); const b=v=>v?"true":"false"; const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; const obs=Object.fromEntries((Array.isArray(p?.observations)?p.observations:[]).map(o=>[String(o?.name||""),o])); const emit=(prefix,o)=>{const v=o||{};console.log("CHATGPT_CONTINUITY_"+prefix+"_HTTP_STATUS="+Math.max(0,Math.min(599,Number(v.http_status||0))));console.log("CHATGPT_CONTINUITY_"+prefix+"_BODY_KIND="+(["object","array","null","other"].includes(String(v.body_kind))?String(v.body_kind):"other"));console.log("CHATGPT_CONTINUITY_"+prefix+"_ITEMS_COUNT="+Math.max(0,Math.min(9999,Number(v.items_count||0))));console.log("CHATGPT_CONTINUITY_"+prefix+"_CONVERSATIONS_COUNT="+Math.max(0,Math.min(9999,Number(v.conversations_count||0))));console.log("CHATGPT_CONTINUITY_"+prefix+"_DATA_KIND="+(["object","array","null","other"].includes(String(v.data_kind))?String(v.data_kind):"other"));console.log("CHATGPT_CONTINUITY_"+prefix+"_DATA_ITEMS_COUNT="+Math.max(0,Math.min(9999,Number(v.data_items_count||0))));console.log("CHATGPT_CONTINUITY_"+prefix+"_DATA_CONVERSATIONS_COUNT="+Math.max(0,Math.min(9999,Number(v.data_conversations_count||0))));}; console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+b(p?.item_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+b(p?.id_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+b(p?.id_valid)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+b(p?.update_present)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+b(p?.update_valid)); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE="+b(p?.id_valid&&p?.update_valid)); emit("FILTERED",obs.filtered); emit("FALLBACK",obs.fallback); console.log("CHATGPT_CONTINUITY_CURRENT_PATH_KIND="+(["conversation","home","other"].includes(String(p?.path_kind))?String(p.path_kind):"other")); console.log("CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS="+Math.max(0,Math.min(599,Number(p?.current_fetch_status||0)))); } finally { c.close(); }'
           echo CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$worker
           echo CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp"""
 
@@ -579,6 +579,22 @@ jobs:
               'CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT',
               'CHATGPT_CONTINUITY_LATEST_UPDATE_VALID',
               'CHATGPT_CONTINUITY_LATEST_ITEM_KEYS',
+              'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS',
+              'CHATGPT_CONTINUITY_FILTERED_BODY_KIND',
+              'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
+              'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT',
+              'CHATGPT_CONTINUITY_FILTERED_DATA_KIND',
+              'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT',
+              'CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT',
+              'CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS',
+              'CHATGPT_CONTINUITY_FALLBACK_BODY_KIND',
+              'CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT',
+              'CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT',
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_KIND',
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT',
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
+              'CHATGPT_CONTINUITY_CURRENT_PATH_KIND',
+              'CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS',
           }
           seen = {}
           for output in outputs:
@@ -591,9 +607,35 @@ jobs:
                   if key in {
                       'CHATGPT_CONTINUITY_RUNNING_TASKS',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
+                      'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT',
+                      'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT',
+                      'CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT',
+                      'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
                   }:
-                      if not re.fullmatch(r'\d+', value):
+                      if not re.fullmatch(r'\d{1,4}', value):
                           raise RuntimeError('invalid diagnostic count')
+                  elif key in {
+                      'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS',
+                      'CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS',
+                      'CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS',
+                  }:
+                      if not re.fullmatch(r'\d{1,3}', value) or not (0 <= int(value) <= 599):
+                          raise RuntimeError('invalid diagnostic http status')
+                  elif key in {
+                      'CHATGPT_CONTINUITY_FILTERED_BODY_KIND',
+                      'CHATGPT_CONTINUITY_FILTERED_DATA_KIND',
+                      'CHATGPT_CONTINUITY_FALLBACK_BODY_KIND',
+                      'CHATGPT_CONTINUITY_FALLBACK_DATA_KIND',
+                  }:
+                      if value not in {'object','array','null','other'}:
+                          raise RuntimeError('invalid diagnostic body kind')
+                  elif key == 'CHATGPT_CONTINUITY_CURRENT_PATH_KIND':
+                      if value not in {'conversation','home','other'}:
+                          raise RuntimeError('invalid diagnostic path kind')
                   elif key == 'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS':
                       if value not in {'NONE','EMPTY','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}:
                           raise RuntimeError('invalid nudge status')
