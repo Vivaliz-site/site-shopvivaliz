@@ -72,18 +72,46 @@ configure_mcp(){
 
 verify_bridge(){
   systemctl is-active --quiet shopvivaliz-remote-control-mcp.service || die controller_inactive 43
-  local out
-  out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | run_as_claude sudo -n "$BRIDGE_TARGET")"
-  python3 - "$out" <<'PY'
+  local out bridge_rc classification
+  bridge_rc=0
+  if out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | run_as_claude sudo -n "$BRIDGE_TARGET" 2>/dev/null)"; then
+    bridge_rc=0
+  else
+    bridge_rc=$?
+  fi
+  if [ "$bridge_rc" -ne 0 ]; then
+    echo "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=adapter"
+    return 54
+  fi
+  classification="$(python3 - "$out" <<'PY'
 import json,sys
-p=json.loads(sys.argv[1])
-names={x.get("name") for x in p.get("result",{}).get("tools",[])}
+try:
+    p=json.loads(sys.argv[1])
+except Exception:
+    print("json")
+    raise SystemExit(0)
+names={x.get("name") for x in p.get("result",{}).get("tools",[]) if isinstance(x,dict)}
 required={"hosts_list","host_health","task_submit","task_status","task_result"}
-missing=sorted(required-names)
-if missing:
-    raise SystemExit("missing_tools:"+",".join(missing))
+print("ok" if required.issubset(names) else "tools")
 PY
-  echo "CLAUDE_PRIVATE_MCP_BRIDGE=PASS"
+)"
+  case "$classification" in
+    ok)
+      echo "CLAUDE_PRIVATE_MCP_BRIDGE=PASS"
+      ;;
+    json)
+      echo "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=json"
+      return 55
+      ;;
+    tools)
+      echo "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=tools"
+      return 56
+      ;;
+    *)
+      echo "CLAUDE_PRIVATE_MCP_BRIDGE=FAIL class=json"
+      return 55
+      ;;
+  esac
 }
 
 accept_consent(){
