@@ -46,10 +46,10 @@ function fakeCdp({
 async function run() {
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
-  assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })));
+  assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: false })), false);
   assert.equal(await composerIsUsable(fakeCdp({ composerUsable: false })), false);
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })));
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
   // observed banner text, not a guess.
@@ -57,7 +57,7 @@ async function run() {
     await errorBannerPresent(fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' })),
     true,
   );
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })));
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
@@ -119,7 +119,7 @@ async function run() {
   {
     const result = await reinforcementCheckOnce(async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }), 1);
     assert.equal(result.action, 'confirmed');
-    assert.equal(result.sent);
+    assert.equal(result.sent, true);
   }
 
   console.log('reinforcementCheckOnce branches: PASS');
