@@ -154,18 +154,33 @@ jobs:
           tunnel_ready=false
           for attempt in $(seq 1 8); do
             if bash -lc "$tunnel"; then
-              echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
-              tunnel_ready=true
-              break
+              listener_ready=false
+              for listener_attempt in $(seq 1 12); do
+                if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$SITE_TUNNEL_PORT" 2>/dev/null; then
+                  echo "BASTION_LOCAL_LISTENER_READY_ATTEMPT=$listener_attempt"
+                  listener_ready=true
+                  tunnel_ready=true
+                  break
+                fi
+                sleep 1
+              done
+              if [ "$listener_ready" = true ]; then
+                echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+                break
+              fi
+              echo "BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=$attempt"
+              if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
+                pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+              fi
+            else
+              echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
             fi
-            echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
             sleep 5
           done
           if [ "$tunnel_ready" != true ]; then
-            echo "::error::Bastion tunnel authentication did not become ready after 8 attempts"
+            echo "::error::Bastion tunnel authentication/listener did not become ready after 8 attempts"
             exit 1
           fi
-          sleep 2
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo PRIVATE_SITE_TUNNEL=PASS
