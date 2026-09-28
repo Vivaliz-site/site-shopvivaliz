@@ -1,0 +1,241 @@
+name: GitHub Legacy Delete UI Preflight OCI Once
+
+on:
+  push:
+    branches:
+      - diag/chatgpt-cdp-a1-20260927
+    paths:
+      - '.github/workflows/github-legacy-delete-ui-preflight-oci-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-oci-bastion-mutation
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      BACKEND_TUNNEL_PORT: "22214"
+      CHAT_CLI_SESSION_ID: chatgpt-20260927-2145-global-cleanup
+      TARGET_REPO: fredmourao-ai/solange-rolla
+      CANONICAL_REPO: fredmourao-ai/solange-rolla-consultorio
+
+    steps:
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n'             "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-github-delete-ui-preflight -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI and open verified backend tunnel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state')=='ACTIVE']
+          if len(active)!=1: raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress,json,sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2],encoding='utf-8'))
+          if not isinstance(src,list): raise SystemExit('Bastion CIDR allowlist is not a list')
+          json.dump(list(dict.fromkeys([str(x) for x in src]+[ip+'/32'])),open(sys.argv[3],'w',encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+
+          BACKEND_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name shopvivaliz-github-delete-ui-preflight             --ssh-public-key-file "$BASTION_KEY_FILE.pub"             --query 'data.id' --raw-output)"
+          echo "BACKEND_SESSION_ID=$BACKEND_SESSION_ID" >> "$GITHUB_ENV"
+          metadata=''
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then
+              metadata="$("${OCI[@]}" bastion session get --session-id "$BACKEND_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+              break
+            fi
+            case "$state" in FAILED|DELETED) exit 2 ;; esac
+            sleep 5
+          done
+          test -n "$metadata"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel="${tunnel//<localPort>/$BACKEND_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+          bash -lc "$tunnel"
+          sleep 2
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+          echo "PRIVATE_BACKEND_SSH=PASS"
+
+      - name: Verify immutable API preconditions through native backend gh
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" "TARGET_REPO='$TARGET_REPO' CANONICAL_REPO='$CANONICAL_REPO' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          unset GH_TOKEN GITHUB_TOKEN
+          gh auth status --hostname github.com >/dev/null
+          test "$(gh repo view "$TARGET_REPO" --json nameWithOwner --jq .nameWithOwner)" = "$TARGET_REPO"
+          test "$(gh repo view "$CANONICAL_REPO" --json nameWithOwner --jq .nameWithOwner)" = "$CANONICAL_REPO"
+          test "$(gh api "repos/$TARGET_REPO" --jq '.permissions.admin // false')" = true
+          readme="$(gh api "repos/$TARGET_REPO/readme" -H 'Accept: application/vnd.github.raw+json')"
+          grep -Fq 'REPOSITÓRIO HISTÓRICO / SUPERSEDIDO' <<<"$readme"
+          grep -Fq "$CANONICAL_REPO" <<<"$readme"
+          echo GITHUB_REPO_DELETE_PREFLIGHT_API=PASS
+          REMOTE
+
+      - name: Probe authenticated GitHub settings UI without deleting
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > "$RUNNER_TEMP/preflight.mjs" <<'NODE'
+          import fs from 'node:fs';
+          const profile='/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/ai-squad-chatgpt';
+          const pwCandidates=[
+            '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
+            '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
+            '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
+          ];
+          const browserCandidates=['/home/ubuntu/.local/bin/shopvivaliz-browser-chromium','/usr/bin/chromium'];
+          let chromium=null;
+          for(const p of pwCandidates){
+            if(!fs.existsSync(p)) continue;
+            const mod=await import('file://'+p);
+            chromium=mod.chromium||mod.default?.chromium;
+            if(chromium) break;
+          }
+          if(!chromium) throw new Error('playwright_runtime_missing');
+
+          let browser=null,context=null,page=null,launched=false;
+          try{
+            try{
+              browser=await chromium.connectOverCDP('http://127.0.0.1:9555');
+              context=browser.contexts()[0]||null;
+            }catch{}
+            if(!context){
+              if(!fs.existsSync(profile)) throw new Error('canonical_profile_missing');
+              const worker=await fetch('http://127.0.0.1:17777/sessions',{signal:AbortSignal.timeout(3000)}).then(r=>r.ok?r.json():null).catch(()=>null);
+              const locked=Array.isArray(worker?.sessions)&&worker.sessions.some(s=>s?.persistent===true&&s?.profile==='ai-squad-chatgpt');
+              if(locked) throw new Error('canonical_profile_locked_without_cdp');
+              const executablePath=browserCandidates.find(p=>fs.existsSync(p))||chromium.executablePath();
+              context=await chromium.launchPersistentContext(profile,{
+                executablePath,headless:false,viewport:{width:1440,height:900},
+                env:{...process.env,DISPLAY:process.env.DISPLAY||':98',LIBGL_ALWAYS_SOFTWARE:'1'},
+                args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-vulkan','--use-gl=swiftshader'],
+              });
+              launched=true;
+            }
+            page=await context.newPage();
+            page.setDefaultTimeout(15000);
+            const settings='https://github.com/fredmourao-ai/solange-rolla/settings';
+            await page.goto(settings,{waitUntil:'domcontentloaded',timeout:45000});
+            await page.waitForTimeout(1200);
+
+            if(/github\.com\/login(?:\?|$)/.test(page.url()) || await page.locator('input[name="login"]').count()){
+              const google=page.locator('button,a').filter({hasText:/Google/i}).first();
+              if(!(await google.count())) throw new Error('github_web_login_required');
+              await google.click();
+              await page.waitForTimeout(1800);
+              if(/accounts\.google\.com/.test(page.url())){
+                const fred=page.locator('[data-identifier],[role="link"],[role="button"]').filter({hasText:/Fred/i}).first();
+                if(!(await fred.count())) throw new Error('google_account_selection_required');
+                await fred.click();
+                await page.waitForTimeout(2500);
+              }
+              if(/accounts\.google\.com/.test(page.url()) && await page.locator('input[type="password"]').count()) throw new Error('google_interactive_challenge_required');
+              await page.goto(settings,{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(1200);
+            }
+
+            if(!page.url().includes('/fredmourao-ai/solange-rolla/settings')) throw new Error('settings_page_not_reached');
+            const body=(await page.locator('body').innerText()).replace(/\s+/g,' ');
+            const danger=/Danger Zone/i.test(body);
+            const button=page.getByRole('button',{name:/Delete this repository/i}).first();
+            const buttonPresent=(await button.count())>0;
+            console.log('GITHUB_UI_AUTH=true');
+            console.log('GITHUB_DANGER_ZONE_PRESENT='+String(danger));
+            console.log('GITHUB_DELETE_BUTTON_PRESENT='+String(buttonPresent));
+            if(!danger||!buttonPresent) throw new Error('delete_controls_missing');
+            console.log('GITHUB_REPO_DELETE_UI_PREFLIGHT=PASS');
+          } finally {
+            if(page) await page.close().catch(()=>{});
+            if(launched && context) await context.close().catch(()=>{});
+            if(browser) await browser.close().catch(()=>{});
+          }
+          NODE
+
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=15 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'DISPLAY=:98 node --input-type=module -' < "$RUNNER_TEMP/preflight.mjs"
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          cleanup_rc=0
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then "${OCI[@]}" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null 2>&1 || cleanup_rc=1; fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || cleanup_rc=1; fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null 2>&1; then pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" || cleanup_rc=1; fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do [ -n "$f" ] && [ -f "$f" ] && shred -u "$f" || true; done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json" "$RUNNER_TEMP/preflight.mjs"
+          exit "$cleanup_rc"
