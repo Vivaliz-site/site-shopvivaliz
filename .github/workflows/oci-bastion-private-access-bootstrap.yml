@@ -580,23 +580,37 @@ jobs:
           agent_active=false
           systemctl is-active --quiet shopvivaliz-agent.service && agent_active=true
           python3 - "$runtime" "$agent_active" <<'INNER'
-          import json, pathlib, sys
+          import hashlib, json, pathlib, sys
           root=pathlib.Path(sys.argv[1]); agent=sys.argv[2]
           running=0
+          current_fingerprints=set()
           if root.is_dir():
               for p in root.glob('*.json'):
                   if p.name.startswith('_') or not p.is_file(): continue
                   try: row=json.loads(p.read_text(encoding='utf-8'))
                   except Exception: continue
-                  if isinstance(row,dict) and str(row.get('status','')).strip()=='RUNNING': running+=1
+                  if not isinstance(row,dict) or str(row.get('status','')).strip()!='RUNNING': continue
+                  running+=1
+                  basis='\n'.join([
+                      str(row.get('repository','Vivaliz-site/site-shopvivaliz')).strip(),
+                      str(row.get('task_id','')).strip(),
+                      str(row.get('updated_at','')).strip(),
+                      str(row.get('next_action','')).strip(),
+                  ])
+                  current_fingerprints.add(hashlib.sha256(basis.encode('utf-8')).hexdigest())
           pending=0
+          matching=0
           req=root/'_resume-requests.jsonl'
           if req.is_file():
               for line in req.read_text(encoding='utf-8',errors='replace').splitlines():
                   try: row=json.loads(line)
                   except Exception: continue
-                  if isinstance(row,dict) and str(row.get('status','')).strip()=='queued': pending+=1
+                  if not isinstance(row,dict) or str(row.get('status','')).strip()!='queued': continue
+                  pending+=1
+                  if str(row.get('fingerprint','')).strip() in current_fingerprints:
+                      matching+=1
           latest='NONE'
+          current_ledger_present=False
           allowed={'','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}
           ledger=root/'_chatgpt-continuity-nudges.jsonl'
           if ledger.is_file():
@@ -604,11 +618,36 @@ jobs:
                   try: row=json.loads(line)
                   except Exception: continue
                   if not isinstance(row,dict): continue
+                  fingerprint=str(row.get('fingerprint','')).strip()
+                  if fingerprint in current_fingerprints:
+                      current_ledger_present=True
                   value=str(row.get('worker_status','')).strip().upper()
                   if value in allowed: latest=value or 'EMPTY'
+          token_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token')
+          token_available=False
+          try:
+              token_available=token_path.is_file() and bool(token_path.read_text(encoding='utf-8').strip())
+          except (OSError,UnicodeError):
+              token_available=False
+          dispatcher_log_seen=False
+          log_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/logs/autonomous-agent.log')
+          try:
+              if log_path.is_file():
+                  with log_path.open('rb') as handle:
+                      handle.seek(0,2)
+                      size=handle.tell()
+                      handle.seek(max(0,size-524288))
+                      tail=handle.read().decode('utf-8',errors='replace')
+                  dispatcher_log_seen='ChatGPT continuity nudge dispatcher completed.' in tail
+          except OSError:
+              dispatcher_log_seen=False
           print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
           print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
           print('CHATGPT_CONTINUITY_PENDING_REQUESTS='+str(pending))
+          print('CHATGPT_CONTINUITY_MATCHING_REQUESTS='+str(matching))
+          print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
+          print('CHATGPT_CONTINUITY_TOKEN_AVAILABLE='+('true' if token_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN='+('true' if dispatcher_log_seen else 'false'))
           print('CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS='+latest)
           INNER
           heartbeat=false
@@ -648,6 +687,10 @@ jobs:
               'CHATGPT_CONTINUITY_AGENT_ACTIVE',
               'CHATGPT_CONTINUITY_RUNNING_TASKS',
               'CHATGPT_CONTINUITY_PENDING_REQUESTS',
+              'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
+              'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
+              'CHATGPT_CONTINUITY_TOKEN_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN',
               'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS',
               'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE',
               'CHATGPT_CONTINUITY_CDP_REACHABLE',
@@ -687,6 +730,7 @@ jobs:
                   if key in {
                       'CHATGPT_CONTINUITY_RUNNING_TASKS',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
+                      'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
                       'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT',
@@ -696,7 +740,7 @@ jobs:
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
                   }:
-                      if not re.fullmatch(r'\d{1,4}', value):
+                      if not re.fullmatch(r'\d+', value):
                           raise RuntimeError('invalid diagnostic count')
                   elif key in {
                       'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS',
