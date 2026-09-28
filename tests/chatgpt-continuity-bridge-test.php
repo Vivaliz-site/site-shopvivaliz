@@ -89,9 +89,13 @@ try {
     $pullAgain = cbCall($base, $token, ['operation' => 'pull']);
     cbSame('NO_JOB', $pullAgain['body']['status'], 'A second immediate pull must find no other job.');
 
-    $result = cbCall($base, $token, ['operation' => 'result', 'task_id' => 'task-1', 'result_status' => 'SENT', 'detail' => 'typed continue']);
-    cbSame(200, $result['status'], 'Result must be accepted.');
-    cbSame('ACK', $result['body']['status'], 'Result must ACK.');
+    $unconfirmed = cbCall($base, $token, ['operation' => 'result', 'task_id' => 'task-1', 'result_status' => 'SENT_UNCONFIRMED', 'detail' => 'typed continue; no assistant progress']);
+    cbSame(200, $unconfirmed['status'], 'Retryable unconfirmed send must be accepted.');
+    cbSame('ACK', $unconfirmed['body']['status'], 'Unconfirmed result must ACK.');
+
+    $result = cbCall($base, $token, ['operation' => 'result', 'task_id' => 'task-1', 'result_status' => 'PROGRESS_CONFIRMED', 'detail' => 'assistant output advanced']);
+    cbSame(200, $result['status'], 'Confirmed progress result must be accepted.');
+    cbSame('ACK', $result['body']['status'], 'Confirmed result must ACK.');
 
     $unknownResult = cbCall($base, $token, ['operation' => 'result', 'task_id' => 'never-enqueued', 'result_status' => 'SENT']);
     cbSame(404, $unknownResult['status'], 'Result for an unknown task_id must 404.');
