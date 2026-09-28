@@ -29,9 +29,11 @@ class ClaudeRemoteControlSetupContract(unittest.TestCase):
 
     def test_setup_requires_eligible_claude_ai_login_before_service_start(self) -> None:
         text = SETUP.read_text(encoding="utf-8")
-        self.assertIn("claude remote-control --help", text)
+        self.assertIn("auth status", text)
+        self.assertIn("claude doctor", text)
         self.assertIn("REMOTE_CONTROL_ELIGIBLE=PASS", text)
         self.assertIn("REMOTE_CONTROL_LOGIN_REQUIRED", text)
+        self.assertIn("REMOTE_CONTROL_POLICY_REQUIRED", text)
 
     def test_setup_installs_official_native_claude_when_missing(self) -> None:
         text = SETUP.read_text(encoding="utf-8")
