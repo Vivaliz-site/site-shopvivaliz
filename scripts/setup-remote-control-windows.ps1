@@ -34,15 +34,30 @@ $adminLines = @(Get-Content -LiteralPath $adminAuth -ErrorAction SilentlyContinu
 if ($LASTEXITCODE -ne 0) { throw 'administrators_authorized_keys_acl_failed' }
 
 $svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
-if (-not $svc) {
+$cap = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' } | Select-Object -First 1
+if (-not $svc -and (-not $cap -or $cap.State -ne 'Installed')) {
+  $install = Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
   $cap = Get-WindowsCapability -Online | Where-Object { $_.Name -like 'OpenSSH.Server*' } | Select-Object -First 1
-  if (-not $cap -or $cap.State -ne 'Installed') {
-    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+  if (-not $cap -or $cap.State -ne 'Installed') { throw 'openssh_server_capability_not_installed' }
+  $svc = Get-Service -Name sshd -ErrorAction SilentlyContinue
+}
+if (-not $svc) {
+  $openSshDir = Join-Path $env:SystemRoot 'System32\OpenSSH'
+  $sshdExe = Join-Path $openSshDir 'sshd.exe'
+  $keygenExe = Join-Path $openSshDir 'ssh-keygen.exe'
+  if (-not (Test-Path -LiteralPath $sshdExe)) { throw 'openssh_server_binary_missing' }
+  if (Test-Path -LiteralPath $keygenExe) {
+    & $keygenExe -A | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'openssh_host_key_generation_failed' }
   }
+  New-Service -Name sshd -BinaryPathName ('"' + $sshdExe + '"') -DisplayName 'OpenSSH SSH Server' -StartupType Automatic | Out-Null
   $svc = Get-Service -Name sshd -ErrorAction Stop
+  Write-Output 'REMOTE_CONTROL_WINDOWS_SSHD_SERVICE_REPAIRED=PASS'
 }
 if ($svc.StartType -ne 'Automatic') { Set-Service -Name sshd -StartupType Automatic }
 if ($svc.Status -ne 'Running') { Start-Service -Name sshd }
+$svc = Get-Service -Name sshd -ErrorAction Stop
+if ($svc.Status -ne 'Running') { throw 'sshd_not_running_after_recovery' }
 
 Write-Output ('REMOTE_CONTROL_WINDOWS_HOST=' + $env:COMPUTERNAME)
 Write-Output ('REMOTE_CONTROL_WINDOWS_USER=' + [Environment]::UserName)
