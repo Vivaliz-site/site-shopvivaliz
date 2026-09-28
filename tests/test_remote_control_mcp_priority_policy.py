@@ -11,6 +11,9 @@ ACTIVE_ACCESS_DOCS = (
     ROOT / "docs" / "knowledge" / "agent-rules.md",
     ROOT / "CLAUDE.md",
     ROOT / "docs" / "knowledge" / "claude-vm-bootstrap.md",
+    ROOT / "GEMINI.md",
+    ROOT / "docs" / "knowledge" / "README.md",
+    ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
 )
 
 LEGACY_CLAUDE_ACCESS_DOCS = (
