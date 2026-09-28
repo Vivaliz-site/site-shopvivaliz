@@ -167,3 +167,31 @@ jobs:
           systemctl --user list-unit-files --no-legend 2>/dev/null | grep -Ei 'browser|chrom|chatgpt' | sed -n '1,30p' | sed 's/^/BACKEND_USER_UNIT=/' || true
           echo BROWSER_API_DIAG_END
           REMOTE
+
+
+  backend-private-probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 3
+    steps:
+      - name: Probe A1 private continuity bridge from backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          code="$(curl -sS -o /tmp/a1-private-bridge-body -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+            -H 'Host: shopvivaliz.com.br' \
+            -H 'Content-Type: application/json' \
+            --data '{"operation":"heartbeat"}' \
+            http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php || true)"
+          echo "BACKEND_DIRECT_TO_A1_BRIDGE_HTTP=${code:-000}"
+          if [ -s /tmp/a1-private-bridge-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/a1-private-bridge-body').read_text(encoding='utf-8',errors='replace').split())[:200]
+          print('BACKEND_DIRECT_TO_A1_BRIDGE_BODY='+body)
+          PY
+          fi
+          if [ "$code" = "401" ]; then
+            echo "BACKEND_DIRECT_TO_A1_BRIDGE_REACHABLE=true"
+          else
+            echo "BACKEND_DIRECT_TO_A1_BRIDGE_REACHABLE=false"
+          fi
