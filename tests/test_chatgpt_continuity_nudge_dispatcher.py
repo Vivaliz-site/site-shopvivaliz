@@ -176,6 +176,84 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(stopped["skipped_attempt_limit"], 1)
         self.assertEqual(len(self.calls), 1)
 
+    def test_active_claim_is_repolled_until_worker_reaches_terminal_result(self) -> None:
+        self._stale_checkpoint_and_request()
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(
+            json.dumps(
+                {
+                    "fingerprint": fingerprint,
+                    "task_id": "task-1",
+                    "repository": state.DEFAULT_REPOSITORY,
+                    "dispatched_at": self.dispatcher.utc_now(),
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "CLAIMED",
+                    "attempt_count": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        status_calls: list[dict] = []
+        def confirmed_status(**kwargs):
+            status_calls.append(kwargs)
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "PROGRESS_CONFIRMED"}},
+            }
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=confirmed_status,
+        )
+
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(len(status_calls), 1, "CLAIMED must be re-polled instead of cached forever")
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(rows[-1]["worker_status"], "PROGRESS_CONFIRMED")
+
+    def test_unchanged_active_status_is_repolled_without_ledger_spam(self) -> None:
+        self._stale_checkpoint_and_request()
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        initial = {
+            "fingerprint": fingerprint,
+            "task_id": "task-1",
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": self.dispatcher.utc_now(),
+            "bridge_ok": True,
+            "http_status": 200,
+            "worker_status": "PENDING",
+            "attempt_count": 1,
+        }
+        ledger.write_text(json.dumps(initial) + "\n", encoding="utf-8")
+
+        def pending_status(**kwargs):
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "PENDING"}},
+            }
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=pending_status,
+        )
+
+        self.assertEqual(result["dispatched"], 0)
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1, "unchanged PENDING status must not append duplicate ledger rows")
+
     def test_missing_token_skips_without_crashing_and_never_marks_the_ledger(self) -> None:
         self._stale_checkpoint_and_request()
         result = self.dispatcher.run_once(
