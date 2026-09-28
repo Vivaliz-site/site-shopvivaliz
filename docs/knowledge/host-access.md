@@ -144,3 +144,32 @@ providers presente
 ## Segurança
 
 Este arquivo é público no repositório. Por isso contém somente endereços, papéis e **nomes de secrets/paths**, não o conteúdo de credenciais. Segredos devem permanecer em Secret Manager, GitHub Secrets, arquivo local protegido ou runtime autorizado.
+
+<!-- REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
+## Remote Control MCP — rotas atuais e estado comprovado
+
+Controller canônico:
+
+- host: `always-free-arm-1787907847-26` (`10.0.1.38`)
+- MCP: `127.0.0.1:5580`, somente loopback
+- GitHub pode ser usado para source/bootstrap/recovery, mas **não** pode ser o transporte normal de comandos, queue, heartbeat ou estado do runtime.
+
+Rotas Windows pelo backend:
+
+| Host | Rota runtime | Relay legado | Estado comprovado em 2026-09-28 |
+|---|---|---|---|
+| Fred-Win / `LAPTOP-NIG4IFUU` | `127.0.0.1:2222 -> Windows:22` | `5557` | `2222` PASS recente |
+| KOCEPSV / `DESKTOP-KOCEPSV` | `127.0.0.1:2223 -> Windows:22` | `5558` | `2223` **ainda não comprovado** |
+
+Os relays `5557/5558` são apenas bootstrap/recovery. Nunca tratá-los como transporte normal do Remote Control MCP.
+
+Até existir evidência fresca de `2223` + identidade administrativa correta no KOCEPSV, o host deve ser considerado **indisponível para o E2E final do control plane**. Não inferir Administrator apenas porque a porta SSH abriu.
+
+Ao validar os quatro hosts, exigir evidência real de:
+
+1. rota de rede/SSH disponível;
+2. `hostname` correto;
+3. identidade correta (`id`/root nos Linux, Administrator/elevado nos Windows);
+4. execução de tarefa durável via controller;
+5. recuperação de status/resultado sem usar GitHub como transporte de runtime.
+<!-- /REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
