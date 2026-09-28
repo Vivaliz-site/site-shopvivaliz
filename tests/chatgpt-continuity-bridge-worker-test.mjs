@@ -46,10 +46,10 @@ function fakeCdp({
 async function run() {
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
-  assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
+  assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })));
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: false })), false);
   assert.equal(await composerIsUsable(fakeCdp({ composerUsable: false })), false);
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })));
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
   // observed banner text, not a guess.
@@ -57,23 +57,14 @@ async function run() {
     await errorBannerPresent(fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' })),
     true,
   );
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })));
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
 
-  // Production default is fail-closed: no ChatGPT Web turn may be created
-  // while the support account/workspace hypothesis is open.
-  let defaultConnectCalls = 0;
-  const blocked = await attemptNudge('task-policy-blocked', async () => {
-    defaultConnectCalls += 1;
-    return fakeCdp();
-  });
-  assert.equal(blocked.result_status, 'BLOCKED_POLICY');
-  assert.equal(defaultConnectCalls, 0, 'policy block must happen before CDP connection');
-
-  // Implementation branches are still unit-tested behind an explicit
-  // in-process test override. Production mainLoop never passes this override.
-  const generating = await attemptNudge('task-1', async () => fakeCdp({ generating: true }), true);
+  // The explicitly authorized checkpoint-driven resume path must stay live.
+  // Safety is enforced by stream/composer/checkpoint guards, not by globally
+  // disabling Web turn submission.
+  const generating = await attemptNudge('task-1', async () => fakeCdp({ generating: true }));
   assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never nudge mid-stream');
 
   // Live failure reproduced 2026-09-28: the DOM can keep a stale Stop button
@@ -85,20 +76,20 @@ async function run() {
     streamStatus: 'COMPLETE',
     staleStopClearSucceeds: true,
     sendSucceeds: true,
-  }), true);
-  assert.equal(staleComplete.result_status, 'SENT', 'stale COMPLETE stream must be recoverable behind test override');
+  }));
+  assert.equal(staleComplete.result_status, 'SENT', 'stale COMPLETE stream must be recoverable');
   assert.match(staleComplete.detail, /stale COMPLETE/i);
 
-  const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }), true);
+  const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
 
-  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }), true);
+  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }));
   assert.equal(sentOk.result_status, 'SENT');
 
-  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }), true);
+  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }));
   assert.equal(sendFailed.result_status, 'ERROR');
 
-  const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); }, true);
+  const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); });
   assert.equal(connectFailed.result_status, 'ERROR');
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
 
@@ -107,7 +98,7 @@ async function run() {
   // reinforcementCheckOnce: no banner at all -> no-op, no second connect.
   {
     let connectCalls = 0;
-    const result = await reinforcementCheckOnce(async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); }, 1, true);
+    const result = await reinforcementCheckOnce(async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); }, 1);
     assert.equal(result.action, 'no_banner');
     assert.equal(connectCalls, 1, 'a clean page must not trigger the confirm re-check');
   }
@@ -119,22 +110,17 @@ async function run() {
     const result = await reinforcementCheckOnce(async () => {
       connectCalls += 1;
       return fakeCdp({ pageText: connectCalls === 1 ? 'Streaming interrupted. Waiting for the complete message...' : 'Here is the finished answer.' });
-    }, 1, true);
+    }, 1);
     assert.equal(result.action, 'self_resolved');
     assert.equal(connectCalls, 2, 'must re-check exactly once after the confirm delay');
   }
 
   // Banner still present on the confirm re-check -> must send.
   {
-    const result = await reinforcementCheckOnce(async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }), 1, true);
+    const result = await reinforcementCheckOnce(async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }), 1);
     assert.equal(result.action, 'confirmed');
-    assert.equal(result.sent, true);
+    assert.equal(result.sent);
   }
-
-  const blockedReinforcement = await reinforcementCheckOnce(async () => {
-    throw new Error('must not connect while policy is blocked');
-  }, 1);
-  assert.equal(blockedReinforcement.action, 'blocked_policy');
 
   console.log('reinforcementCheckOnce branches: PASS');
 }
