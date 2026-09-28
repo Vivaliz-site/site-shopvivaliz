@@ -117,22 +117,39 @@ jobs:
           if ($svc.Status -ne 'Running') { throw 'sshd_not_running_after_recovery' }
           Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD=PASS host=' + $env:COMPUTERNAME)
           """
-          command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + base64.b64encode(script.encode("utf-16le")).decode()
+          import time
+          inner_b64 = base64.b64encode(script.encode("utf-16le")).decode()
+          outer = (
+              "$p=Start-Process -FilePath 'powershell.exe' -ArgumentList "
+              "@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',"
+              "'-EncodedCommand','" + inner_b64 + "') -WindowStyle Hidden -PassThru; "
+              "Write-Output ('REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS pid=' + $p.Id)"
+          )
+          command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + base64.b64encode(outer.encode("utf-16le")).decode()
           for label, port in peers:
               endpoint = f"http://127.0.0.1:{port}/mcp/tool/execute_command"
-              body = json.dumps({"params": {"command": command, "timeout": 30}}).encode()
-              req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
-              try:
-                  with urllib.request.urlopen(req, timeout=40) as response:
-                      payload = json.load(response)
-                  result = payload.get("result") or {}
-                  output = str(result.get("output") or "")
-                  if not result.get("success") or "REMOTE_CONTROL_WINDOWS_SSHD=PASS" not in output:
-                      raise RuntimeError(str(result.get("error") or output or result))
-                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=PASS")
-              except Exception as exc:
-                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY=FAIL type={type(exc).__name__}")
-                  raise
+              queued = False
+              last_error = None
+              for attempt in range(1, 6):
+                  body = json.dumps({"params": {"command": command, "timeout": 15}}).encode()
+                  req = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                  try:
+                      with urllib.request.urlopen(req, timeout=25) as response:
+                          payload = json.load(response)
+                      result = payload.get("result") or {}
+                      output = str(result.get("output") or "")
+                      if result.get("success") and "REMOTE_CONTROL_WINDOWS_SSHD_RECOVERY_QUEUED=PASS" in output:
+                          print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS attempt={attempt}")
+                          queued = True
+                          break
+                      last_error = RuntimeError(str(result.get("error") or output or result))
+                  except Exception as exc:
+                      last_error = exc
+                  time.sleep(3)
+              if not queued:
+                  print(f"REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUE=FAIL type={type(last_error).__name__}")
+                  raise last_error
+          PY
           PY
 
           ssh_protocol_alive() {
