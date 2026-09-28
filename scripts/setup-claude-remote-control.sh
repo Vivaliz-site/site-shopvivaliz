@@ -5,6 +5,7 @@ MODE="${1:-install}"
 BACKEND_HOST="always-free-arm-1787907847-26"
 CLAUDE_USER="${SHOPVIVALIZ_CLAUDE_REMOTE_USER:-ubuntu}"
 CLAUDE_HOME="${SHOPVIVALIZ_CLAUDE_REMOTE_HOME:-/home/${CLAUDE_USER}}"
+CLAUDE_NATIVE_BIN="${CLAUDE_HOME}/.local/bin/claude"
 WORKSPACE="${SHOPVIVALIZ_CLAUDE_REMOTE_WORKSPACE:-${CLAUDE_HOME}/shopvivaliz-claude-workspace/site-shopvivaliz}"
 STATE_DIR="/var/lib/shopvivaliz-remote-control"
 TOKEN_FILE="${STATE_DIR}/mcp-token"
@@ -40,7 +41,29 @@ run_as_claude() {
     "$@"
 }
 
+install_claude_if_missing() {
+  require_backend
+  if [ -x "$CLAUDE_NATIVE_BIN" ]; then
+    echo "CLAUDE_NATIVE_INSTALL=PASS state=present"
+    return 0
+  fi
+
+  local installer
+  installer="$(mktemp)"
+  curl -fsSL https://claude.ai/install.sh -o "$installer"
+  chown "$CLAUDE_USER:$CLAUDE_USER" "$installer"
+  chmod 0700 "$installer"
+  run_as_claude bash "$installer" latest >/dev/null
+  rm -f "$installer"
+  [ -x "$CLAUDE_NATIVE_BIN" ] || die claude_native_install_failed 29
+  echo "CLAUDE_NATIVE_INSTALL=PASS state=installed"
+}
+
 claude_bin() {
+  if [ -x "$CLAUDE_NATIVE_BIN" ]; then
+    printf '%s\n' "$CLAUDE_NATIVE_BIN"
+    return 0
+  fi
   run_as_claude bash -lc 'command -v claude'
 }
 
@@ -53,7 +76,7 @@ probe_eligibility() {
   set -e
   [ "$rc" -eq 0 ] && [ -n "$bin" ] || die claude_not_installed 30
   echo "CLAUDE_PRESENT=PASS"
-  run_as_claude "$bin" --version | tr -cd '[:alnum:]. _+()-\n'
+  run_as_claude "$bin" --version | head -n 1 | sed -E 's/[^A-Za-z0-9._+() -]/?/g'
 
   out="$(mktemp)"
   set +e
@@ -246,11 +269,14 @@ start_service() {
 
 case "$MODE" in
   probe)
+    require_root
+    install_claude_if_missing
     probe_eligibility
     ;;
   install)
     require_backend
     require_root
+    install_claude_if_missing
     install_auth_helper
     prepare_workspace
     configure_mcp
