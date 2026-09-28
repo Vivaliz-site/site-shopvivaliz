@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +107,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         inv = m.remote_invocation("shopvivaliz-free-a1", "id -u")
         self.assertIn("sudo -n bash", inv[-1])
         self.assertIn("shopvivaliz-remote@10.0.1.112", inv)
+
+    def test_host_command_tolerates_non_utf8_windows_console_bytes(self):
+        completed = m.subprocess.CompletedProcess(
+            args=["ssh"],
+            returncode=0,
+            stdout=b'{"hostname":"FRED-WIN","administrator":true}\xa2',
+            stderr=b"",
+        )
+        with mock.patch.object(m, "remote_invocation", return_value=["ssh"]), \
+             mock.patch.object(m.subprocess, "run", return_value=completed):
+            result = m.run_host_command("Fred-Win", "Get-Date", 10)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("FRED-WIN", result["stdout"])
+        self.assertIn("administrator", result["stdout"])
 
     def test_windows_uses_reverse_ssh_ports_not_tailscale(self):
         m.SSH_KEY.write_text("x")

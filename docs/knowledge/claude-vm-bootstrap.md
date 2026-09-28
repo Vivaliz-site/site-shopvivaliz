@@ -33,6 +33,34 @@ Use a fonte canônica `docs/knowledge/host-access.md` antes de qualquer operaç�
 
 Não introduza acesso público direto nem altere essa ordem com base em documentação histórica.
 
+
+### Claude Web/mobile → backend sem expor o MCP
+
+O caminho canônico para Claude é **Claude Code Remote Control** executando localmente em `always-free-arm-1787907847-26`. O Claude Web/mobile em `claude.ai/code` controla essa sessão local; a sessão mantém acesso aos arquivos, ferramentas e MCPs instalados na backend.
+
+Fluxo:
+
+```text
+claude.ai/code / Claude mobile
+        │ HTTPS/TLS de saída via Anthropic
+        ▼
+Claude Code Remote Control (backend)
+        │ localhost + header dinâmico
+        ▼
+http://127.0.0.1:5580/mcp
+        │
+        ├─ shopvivaliz-free-a1
+        ├─ Fred-Win
+        ├─ KOCEPSV
+        └─ backend local
+```
+
+O endpoint `127.0.0.1:5580` **permanece loopback-only**. Não usar Cloudflare Tunnel, ngrok ou exposição HTTPS pública do MCP para Claude. GitHub Actions pode instalar/reparar/verificar o serviço, mas não é o transporte normal das tarefas após o bootstrap.
+
+O serviço local é `shopvivaliz-claude-remote-control.service`. Ele mantém apenas o transporte Remote Control; não agenda prompts nem cria loop autônomo de IA paga. Novas sessões são criadas sob demanda em worktrees isolados.
+
+Pré-requisitos da Anthropic: Claude Code elegível e autenticado com login `claude.ai` (API key isolada não serve para Remote Control), recurso habilitado para o workspace Team/Enterprise e nenhuma configuração incompatível como `ANTHROPIC_BASE_URL` customizado. O bootstrap valida isso com `claude remote-control --help` antes de iniciar o serviço.
+
 ## Regra de navegador
 
 Para tarefas ShopVivaliz, navegador de agente deve executar na VM destinada à navegação. Não use Opera Connector nem navegador visível/headless nos hosts Windows como caminho operacional. Os hosts Windows servem apenas de apoio/acesso remoto quando necessário.
