@@ -17,7 +17,7 @@ BACKEND = "always-free-arm-1787907847-26"
 SITE = "shopvivaliz-free-a1"
 
 
-def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str]:
+def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str]:
     token = TOKEN_FILE.read_text(encoding="utf-8").strip()
     body = json.dumps(
         {
@@ -44,7 +44,25 @@ def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str]:
         or result.get("ok") is False
         or result.get("error")
     )
-    return (not failed), str(result.get("stdout") or "")
+    return (not failed), str(result.get("stdout") or ""), str(result.get("stderr") or "")
+
+
+def classify_remote_failure(stdout: str, stderr: str) -> str:
+    text = (stdout + "\n" + stderr).lower()
+    checks = (
+        ("storage", ("no space left", "disk full", "insufficient_free_space")),
+        ("trust", ("workspace not trusted", "trust_bootstrap", "plain_prompt_missing", "trust_not_persisted")),
+        ("auth", ("not logged in", "authentication", "unauthorized", "login required")),
+        ("timeout", ("timed out", "timeout", "deadline exceeded")),
+        ("permission", ("permission denied", "operation not permitted")),
+        ("missing", ("no such file", "not found", "command not found")),
+        ("service", ("service_not_enabled", "systemctl", "unit ", "service ")),
+        ("mcp", ("mcp", "jsonrpc", "tools/list")),
+    )
+    for label, needles in checks:
+        if any(needle in text for needle in needles):
+            return label
+    return "remote_command"
 
 
 def safe_markers(stdout: str, prefixes: tuple[str, ...]) -> list[str]:
@@ -75,11 +93,12 @@ out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
 exit "$rc"
 """
-    ok, stdout = call_admin(BACKEND, command, 180)
+    ok, stdout, stderr = call_admin(BACKEND, command, 180)
     safe = safe_markers(stdout, ("CLAUDE_",))
     if not ok:
         if safe:
             print("\n".join(safe))
+        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr))
         raise SystemExit("Remote Control MCP Claude install action failed")
     required = {
         "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS",
@@ -104,11 +123,12 @@ out="$(/usr/local/sbin/shopvivaliz-setup-claude-remote-control status 2>&1)" || 
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
 exit "$rc"
 """
-    ok, stdout = call_admin(BACKEND, command, 45)
+    ok, stdout, stderr = call_admin(BACKEND, command, 45)
     safe = safe_markers(stdout, ("CLAUDE_",))
     if not ok:
         if safe:
             print("\n".join(safe))
+        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr))
         raise SystemExit("Remote Control MCP Claude status action failed")
     required = {
         "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS",
@@ -163,7 +183,7 @@ print('CHATGPT_FREEZE_LATEST_STATE=' + json.dumps(summary, ensure_ascii=False, s
 print('TASK_TERMINAL_GATE=' + ('PASS' if status in {'CONCLUIDO','BLOCKED_EXTERNAL'} else 'NONTERMINAL'))
 INNER
 """
-    ok, stdout = call_admin(SITE, command, 45)
+    ok, stdout, _stderr = call_admin(SITE, command, 45)
     safe = safe_markers(stdout, ("CHATGPT_FREEZE_LATEST_STATE=", "TASK_TERMINAL_GATE="))
     if not ok:
         raise SystemExit("Remote Control MCP freeze-state action failed")
