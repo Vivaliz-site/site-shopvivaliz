@@ -251,16 +251,23 @@ status(){
 
 case "$MODE" in
   install)
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=eligibility"
     require_backend; require_root
     probe_auth_and_command
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_install"
     install_bridge
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=workspace"
     prepare_workspace
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=mcp_config"
     configure_mcp
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_verify"
     verify_bridge
     if systemctl is-active --quiet "$SERVICE"; then
       systemctl stop "$SERVICE"
     fi
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=consent"
     accept_consent
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=service"
     install_service
     echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
     ;;
