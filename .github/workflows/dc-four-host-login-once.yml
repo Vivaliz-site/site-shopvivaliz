@@ -288,6 +288,25 @@ jobs:
             "$fred_mode" "$kocepsv_mode" "$fred_ip" "$kocepsv_ip" >> "$GITHUB_OUTPUT"
           echo "DC_WINDOWS_PRIVATE_ROUTES=PASS fred_mode=$fred_mode kocepsv_mode=$kocepsv_mode"
 
+      - name: Ensure backend auth scratch space
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'set -Eeuo pipefail
+            before_kb="$(df -Pk "$HOME" | awk "NR==2 {print \$4}")"
+            echo "DC_BACKEND_SCRATCH before_kb=$before_kb"
+            if [ "$before_kb" -lt 262144 ]; then
+              if [ -d "$HOME/.npm/_cacache" ]; then
+                rm -rf "$HOME/.npm/_cacache"
+              fi
+              sudo -n journalctl --vacuum-size=100M >/dev/null
+            fi
+            after_kb="$(df -Pk "$HOME" | awk "NR==2 {print \$4}")"
+            echo "DC_BACKEND_SCRATCH after_kb=$after_kb"
+            test "$after_kb" -ge 131072
+          '
+
       - name: Generate four private Desktop Commander login links
         id: generate
         shell: bash
@@ -644,7 +663,7 @@ jobs:
               -o UserKnownHostsFile="$hosts_file" -o ConnectTimeout=10 \
               -p "$port" -i "$VM_KEY_FILE" "$user@127.0.0.1")
             remote_ps='C:\site-shopvivaliz\logs\dc-reauth-diagnose.ps1'
-            command="& { \\$p='$remote_ps'; [IO.File]::WriteAllBytes(\\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\$p -Phase diagnose -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \\$p -Force -ErrorAction SilentlyContinue } }"
+            command="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase diagnose -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
 
             remote_out=''
             if remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$command\"")"; then
