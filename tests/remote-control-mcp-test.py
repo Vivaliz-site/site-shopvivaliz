@@ -559,7 +559,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("TIOCSWINSZ", helper_text)
         self.assertIn('env["TERM"] = "xterm-256color"', helper_text)
         self.assertNotIn('os.write(master_fd, b"1\\r")', helper_text)
-        self.assertNotIn('[claude_bin, "--remote-control"]', helper_text)
+        self.assertIn('[claude_bin, "--remote-control"]', helper_text)
         self.assertIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", setup_text)

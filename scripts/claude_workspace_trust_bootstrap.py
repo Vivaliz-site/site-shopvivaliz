@@ -117,7 +117,7 @@ def main(argv: list[str]) -> int:
         env = os.environ.copy()
         env["TERM"] = "xterm-256color"
         proc = subprocess.Popen(
-            [claude_bin],
+            [claude_bin, "--remote-control"],
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
