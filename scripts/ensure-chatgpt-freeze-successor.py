@@ -20,6 +20,17 @@ def load_json(path: Path) -> dict[str, Any]:
         raise SystemExit(f"invalid task state: {path.name}")
     return value
 
+def normalize_state_permissions(path: Path, state_dir: Path) -> None:
+    """Keep privileged successor writes consumable by the ubuntu continuity agent."""
+    try:
+        runtime_stat = state_dir.stat()
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            os.chown(path, runtime_stat.st_uid, runtime_stat.st_gid)
+        os.chmod(path, 0o600)
+    except OSError as exc:
+        raise SystemExit(f"cannot normalize task state permissions: {path.name}") from exc
+
+
 
 def run_state(state_script: Path, state_dir: Path, *args: str) -> dict[str, Any]:
     env = os.environ.copy()
@@ -83,7 +94,8 @@ def ensure_successor(
     generations.sort(key=lambda row: row[0])
 
     if generations:
-        number, _, latest = generations[-1]
+        number, latest_path, latest = generations[-1]
+        normalize_state_permissions(latest_path, state_dir)
         status = str(latest.get("status", "")).strip()
         if status in {"RUNNING", "READY_TO_COMPLETE"}:
             return summarize(latest)
@@ -127,6 +139,7 @@ def ensure_successor(
     )
     if str(created.get("task_id", "")).strip() != str(progressed.get("task_id", "")).strip():
         raise SystemExit("successor progress target mismatch")
+    normalize_state_permissions(state_dir / f"{task_id}.json", state_dir)
     return summarize(progressed)
 
 
