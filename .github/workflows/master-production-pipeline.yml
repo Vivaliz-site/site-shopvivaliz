@@ -322,13 +322,37 @@ jobs:
           # Validate Safe Sync after releasing the activation lock. Starting the
           # oneshot while fd 8 is held would make it wait on our own lock.
           flock -u 8
-          if ! sudo systemctl start shopvivaliz-sync-safe.service; then
-            echo 'safe_repo_sync_postdeploy_start_failed=true' >&2
+
+          # install-safe-sync-service refreshes the dedicated sync checkout to
+          # origin/main. During a serialized deploy queue that checkout can
+          # legitimately be newer than the SHA this workflow is activating.
+          # Starting the oneshot in that state would recursively hand the newer
+          # main to deploy-production.sh *inside* this deploy and turn a healthy
+          # intermediate release into a false rollback. Validate the oneshot
+          # only when it represents this exact release; otherwise defer the
+          # newer-main handoff to its own canonical pipeline/timer cycle.
+          if ! safe_sync_repo_sha="$(git -C "$root/sync-repo" rev-parse HEAD 2>/dev/null)"; then
+            safe_sync_repo_sha=''
+          fi
+          if [ "$safe_sync_repo_sha" = "$sha" ]; then
+            echo "SAFE_SYNC_POSTDEPLOY=RUN_MATCHING_SHA"
+            if ! sudo systemctl start shopvivaliz-sync-safe.service; then
+              echo 'safe_repo_sync_postdeploy_start_failed=true' >&2
+              fail=1
+            fi
+            safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"
+            echo "safe_sync_result -> $safe_sync_result"
+            [ "$safe_sync_result" = success ] || fail=1
+          elif [ -n "$safe_sync_repo_sha" ] \
+            && git -C "$root/sync-repo" cat-file -e "${sha}^{commit}" 2>/dev/null \
+            && git -C "$root/sync-repo" merge-base --is-ancestor "$sha" "$safe_sync_repo_sha"; then
+            echo "SAFE_SYNC_POSTDEPLOY=DEFERRED_NEWER_MAIN"
+            echo "safe_sync_repo_sha -> $safe_sync_repo_sha"
+          else
+            echo "SAFE_SYNC_POSTDEPLOY=UNEXPECTED_DIVERGENCE" >&2
+            echo "safe_sync_repo_sha -> ${safe_sync_repo_sha:-missing}" >&2
             fail=1
           fi
-          safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"
-          echo "safe_sync_result -> $safe_sync_result"
-          [ "$safe_sync_result" = success ] || fail=1
           sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer || fail=1
           sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer || fail=1
           sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
