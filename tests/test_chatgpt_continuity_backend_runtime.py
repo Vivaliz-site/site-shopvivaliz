@@ -104,11 +104,15 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         installer = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text(encoding="utf-8")
         dispatcher = (ROOT / "scripts" / "chatgpt_continuity_nudge_dispatcher.py").read_text(encoding="utf-8")
         worker = (ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-continuity-bridge-worker.mjs").read_text(encoding="utf-8")
-        self.assertIn("http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php", installer)
+        self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", installer)
+        self.assertIn("shopvivaliz-chatgpt-continuity-a1-tunnel.service", installer)
+        self.assertIn("/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor", installer)
+        self.assertIn("-L 127.0.0.1:18081:127.0.0.1:8080", installer)
+        self.assertIn("ubuntu@10.0.1.112", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", installer)
         self.assertIn("http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php", dispatcher)
         self.assertIn("Host", dispatcher)
-        self.assertIn("http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php", worker)
+        self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", worker)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", worker)
 
 
