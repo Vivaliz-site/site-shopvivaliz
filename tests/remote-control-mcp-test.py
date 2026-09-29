@@ -1000,6 +1000,18 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('systemctl stop "$SERVICE" || true', setup)
         self.assertIn('timeout 90s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN"', setup)
 
+    def test_claude_trust_helper_bootstraps_plain_cli_before_server_mode(self):
+        helper = (ROOT / "scripts" / "claude_workspace_trust_bootstrap.py").read_text(encoding="utf-8")
+        main_body = helper.split("def main(argv: list[str]) -> int:", 1)[1]
+        plain_call = "plain = bootstrap_plain_workspace_trust(claude_bin, workspace)"
+        server_call = "server = run_server_mode(claude_bin, workspace)"
+        self.assertIn(plain_call, main_body)
+        self.assertIn(server_call, main_body)
+        self.assertLess(main_body.index(plain_call), main_body.index(server_call))
+        self.assertIn('"plain_prompt_missing"', main_body)
+        self.assertIn('"plain_trust_persisted"', main_body)
+        self.assertIn('"trust_not_persisted"', main_body)
+
     def test_claude_workspace_not_trusted_classifier_is_sanitized(self):
         helper_path = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
         spec = importlib.util.spec_from_file_location("claude_workspace_trust_bootstrap_v2", helper_path)
