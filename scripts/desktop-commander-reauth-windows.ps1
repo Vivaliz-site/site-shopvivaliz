@@ -30,15 +30,17 @@ $WorkDir = 'C:\site-shopvivaliz\logs'
 $LinkFile = Join-Path $WorkDir 'dc-reauth-link.txt'
 $StateFile = Join-Path $WorkDir 'dc-reauth-state.txt'
 $PidFile = Join-Path $WorkDir 'dc-reauth-session.pid'
+$SessionLog = Join-Path $WorkDir 'dc-reauth-session.log'
 $SessionScript = Join-Path $WorkDir 'dc-reauth-session.ps1'
 New-Item -ItemType Directory -Force -Path $DeviceDir,$WorkDir | Out-Null
 
 function Stop-RemoteLaunchers {
     $candidates = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        ([string]$_.Name) -in @('node.exe','cmd.exe') -and
+        ([string]$_.Name) -in @('node.exe','cmd.exe','powershell.exe') -and
         ([string]$_.CommandLine) -match '(@wonderwhy-er/desktop-commander|desktop-commander).*\bremote\b'
     })
     foreach ($p in $candidates) {
+        if ($p.ProcessId -eq $PID) { continue }
         try { & taskkill.exe /PID $p.ProcessId /T /F 2>$null | Out-Null } catch {}
     }
 }
@@ -64,50 +66,45 @@ if ($Phase -eq 'begin') {
     }
     Stop-ManualSession
 
-    $npx = (Get-Command npx.cmd -ErrorAction Stop).Source
-    & $npx --yes $Package remote --logout 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Desktop Commander logout failed: $LASTEXITCODE" }
-
+    Remove-Item -LiteralPath $DeviceFile -Force -ErrorAction SilentlyContinue
     foreach ($path in $CooldownFiles) {
         Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item -LiteralPath $LinkFile,$StateFile,$PidFile,$SessionScript -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $LinkFile,$StateFile,$PidFile,$SessionLog,$SessionScript -Force -ErrorAction SilentlyContinue
 
+    $npx = (Get-Command npx.cmd -ErrorAction Stop).Source
     $child = @'
-param([string]$Package,[string]$LinkFile,[string]$StateFile,[string]$Npx)
+param([string]$Package,[string]$SessionLog,[string]$Npx)
 $ErrorActionPreference = 'Continue'
-& $Npx --yes $Package remote --persist-session 2>&1 | ForEach-Object {
-    $line = [string]$_
-    $clean = [regex]::Replace($line, ([char]27).ToString() + '\[[0-9;]*[A-Za-z]', '')
-    $match = [regex]::Match($clean, 'https://[^\s]+')
-    if ($match.Success) {
-        [IO.File]::WriteAllText($LinkFile, $match.Value.Trim())
-    }
-    if ($clean -match 'Device ready') {
-        [IO.File]::WriteAllText($StateFile, 'DEVICE_READY')
-    }
-}
-if (-not (Test-Path -LiteralPath $StateFile)) {
-    [IO.File]::WriteAllText($StateFile, 'EXITED')
-}
+& $Npx --yes $Package remote --persist-session *> $SessionLog
 '@
     Set-Content -LiteralPath $SessionScript -Value $child -Encoding UTF8
 
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(
-        "& '$SessionScript' -Package '$Package' -LinkFile '$LinkFile' -StateFile '$StateFile' -Npx '$npx'"
+        "& '$SessionScript' -Package '$Package' -SessionLog '$SessionLog' -Npx '$npx'"
     ))
     $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
         '-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded
     ) -WindowStyle Hidden -PassThru
     Set-Content -LiteralPath $PidFile -Value ([string]$proc.Id) -Encoding ASCII
 
-    for ($i = 0; $i -lt 60; $i++) {
-        if ((Test-Path -LiteralPath $LinkFile) -and (Get-Item -LiteralPath $LinkFile).Length -gt 0) { break }
-        Start-Sleep -Seconds 1
+    $url = $null
+    for ($i = 0; $i -lt 90; $i++) {
+        if (Test-Path -LiteralPath $SessionLog) {
+            $raw = Get-Content -LiteralPath $SessionLog -Raw -ErrorAction SilentlyContinue
+            $match = [regex]::Match([string]$raw, 'https://[^\s]+')
+            if ($match.Success) {
+                $url = $match.Value.Trim()
+                break
+            }
+        }
+        if ($proc.HasExited) { break }
+        & timeout.exe /t 1 /nobreak 2>$null | Out-Null
     }
-    if (-not (Test-Path -LiteralPath $LinkFile)) { throw 'Desktop Commander verification link was not produced' }
-    $url = (Get-Content -LiteralPath $LinkFile -Raw).Trim()
-    if ($url -notmatch '^https://') { throw 'Desktop Commander verification link is invalid' }
+
+    if ([string]::IsNullOrWhiteSpace($url)) { throw 'Desktop Commander verification link was not produced' }
+    [IO.File]::WriteAllText($LinkFile, $url)
+    [IO.File]::WriteAllText($StateFile, 'AUTH_LINK_READY')
     Write-Output 'DC_REAUTH_BEGIN=PASS'
     exit 0
 }
@@ -116,7 +113,7 @@ if (-not (Test-Path -LiteralPath $DeviceFile)) {
     throw 'Desktop Commander device state is absent; authorization has not completed'
 }
 Stop-ManualSession
-Remove-Item -LiteralPath $LinkFile,$StateFile,$SessionScript -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $LinkFile,$StateFile,$SessionLog,$SessionScript -Force -ErrorAction SilentlyContinue
 foreach ($name in $TaskNames) {
     $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if ($task) {
