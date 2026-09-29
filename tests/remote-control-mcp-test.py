@@ -972,6 +972,25 @@ class BootstrapContractTests(unittest.TestCase):
         status_start = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
         self.assertNotIn("mcp-token", workflow[install_start:status_start])
 
+    def test_oci_stage7_claude_failure_diagnostics_are_sanitized(self):
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        self.assertIn("def classify_remote_failure(", helper)
+        self.assertIn("CLAUDE_OCI_FAILURE_CLASS=", helper)
+        for label in (
+            "storage",
+            "trust",
+            "auth",
+            "timeout",
+            "permission",
+            "missing",
+            "service",
+            "mcp",
+            "remote_command",
+        ):
+            self.assertIn(f'"{label}"', helper)
+        self.assertNotIn('print(stderr)', helper)
+        self.assertNotIn('print(result.get("stderr"', helper)
+
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
 
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
