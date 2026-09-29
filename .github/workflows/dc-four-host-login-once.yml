@@ -289,6 +289,7 @@ jobs:
           echo "DC_WINDOWS_PRIVATE_ROUTES=PASS fred_mode=$fred_mode kocepsv_mode=$kocepsv_mode"
 
       - name: Generate four private Desktop Commander login links
+        id: generate
         shell: bash
         env:
           FRED_MODE: ${{ steps.windows.outputs.fred_mode }}
@@ -409,8 +410,23 @@ jobs:
             grep -Eq '^https://[^[:space:]]+$' "$out"
           }
 
-          start_linux site 0.2.51 "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"
-          start_linux backend 0.2.51 "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"
+          missing_hosts=()
+
+          if start_linux site 0.2.51 "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"; then
+            echo "DC_LOGIN_HOST_RESULT host=shopvivaliz-free-a1 status=link_ready"
+          else
+            rm -f "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"
+            missing_hosts+=(shopvivaliz-free-a1)
+            echo "DC_LOGIN_HOST_RESULT host=shopvivaliz-free-a1 status=failed"
+          fi
+
+          if start_linux backend 0.2.51 "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"; then
+            echo "DC_LOGIN_HOST_RESULT host=always-free-arm-1787907847-26 status=link_ready"
+          else
+            rm -f "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"
+            missing_hosts+=(always-free-arm-1787907847-26)
+            echo "DC_LOGIN_HOST_RESULT host=always-free-arm-1787907847-26 status=failed"
+          fi
 
           make_win_tunnel() {
             local_port="$1"
@@ -446,9 +462,6 @@ jobs:
             echo "DC_WINDOWS_LOCAL_TUNNEL=PASS host=$host_key mode=$mode"
           }
 
-          make_win_tunnel 32225 "$FRED_MODE" "$FRED_IP" 2222 fred-win
-          make_win_tunnel 32226 "$KOCEPSV_MODE" "$KOCEPSV_IP" 2223 kocepsv
-
           script_b64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
 
           start_windows() {
@@ -472,17 +485,46 @@ jobs:
             "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
           }
 
-          start_windows fred-win FRED 32225 "$LINK_DIR/dc-reauth-fred-win.txt"
-          start_windows kocepsv user 32226 "$LINK_DIR/dc-reauth-kocepsv.txt"
+          if make_win_tunnel 32225 "$FRED_MODE" "$FRED_IP" 2222 fred-win; then
+            if start_windows fred-win FRED 32225 "$LINK_DIR/dc-reauth-fred-win.txt"; then
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=link_ready"
+            else
+              rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
+              missing_hosts+=(fred-win)
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
+            fi
+          else
+            rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
+            missing_hosts+=(fred-win)
+            echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
+          fi
 
-          for file in "$LINK_DIR"/*.txt; do
+          if make_win_tunnel 32226 "$KOCEPSV_MODE" "$KOCEPSV_IP" 2223 kocepsv; then
+            if start_windows kocepsv user 32226 "$LINK_DIR/dc-reauth-kocepsv.txt"; then
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=link_ready"
+            else
+              rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
+              missing_hosts+=(kocepsv)
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=failed"
+            fi
+          else
+            rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
+            missing_hosts+=(kocepsv)
+            echo "DC_LOGIN_HOST_RESULT host=kocepsv status=failed"
+          fi
+
+          shopt -s nullglob
+          files=("$LINK_DIR"/dc-reauth-*.txt)
+          for file in "${files[@]}"; do
             test -s "$file"
             grep -Eq '^https://[^[:space:]]+$' "$file"
             chmod 600 "$file"
           done
 
-          test "$(find "$LINK_DIR" -maxdepth 1 -type f -name 'dc-reauth-*.txt' | wc -l)" -eq 4
-          echo DC_FOUR_LOGIN_LINKS_READY=PASS
+          missing_csv="$(IFS=,; echo "${missing_hosts[*]}")"
+          printf 'missing_hosts=%s\n' "$missing_csv" >> "$GITHUB_OUTPUT"
+          echo "DC_LOGIN_MISSING_HOSTS=${missing_csv:-none}"
+          echo "DC_LOGIN_LINK_COUNT=${#files[@]}"
 
       - name: Diagnose Linux Desktop Commander auth failure safely
         if: failure()
@@ -582,7 +624,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Report missing host login links after artifact upload
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          missing="${{ steps.generate.outputs.missing_hosts }}"
+          echo "DC_LOGIN_MISSING_HOSTS=${missing:-none}"
+          if [ -n "$missing" ]; then
+            exit 1
+          fi
+
       - name: Wait for authorization and restore canonical owners
+        if: steps.generate.outputs.missing_hosts == ''
         shell: bash
         env:
           FRED_IP: ${{ steps.windows.outputs.fred_ip }}
