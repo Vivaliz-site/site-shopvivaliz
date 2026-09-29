@@ -23,7 +23,7 @@ if (str_contains($linux, 'remote --logout')) {
 }
 
 $requiredWindows = [
-    "Remove-Item -LiteralPath $DeviceFile",
+    'Remove-Item -LiteralPath $DeviceFile',
     'timeout.exe /t',
     'dc-reauth-session.log',
 ];
