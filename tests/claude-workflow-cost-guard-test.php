@@ -62,8 +62,9 @@ if ($router === false) {
 $router = str_replace("\r\n", "\n", $router);
 $routerChecks = [
     'single comment trigger' => "  issue_comment:\n",
-    'authorized comment actor' => "if: github.actor == 'fredmourao-ai'",
-    'Claude mention recognition' => '"@claude" in body',
+    'authorized comment actor' => "github.actor == 'fredmourao-ai'",
+    'bot exclusion' => "!endsWith(github.actor, '[bot]')",
+    'Claude mention recognition' => "contains(github.event.comment.body, '@claude')",
     'Claude route' => 'route = "claude"',
     'Claude action' => 'uses: anthropics/claude-code-action@v1',
     'Claude turn limit' => '--max-turns 5',
