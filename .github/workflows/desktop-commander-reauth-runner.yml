@@ -163,7 +163,9 @@ jobs:
             tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
             ready=false
             for _ in $(seq 1 8); do
-              bash -lc "$tunnel" || true
+              if bash -lc "$tunnel"; then
+                :
+              fi
               for _ in $(seq 1 12); do
                 if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
                   ready=true
@@ -172,7 +174,9 @@ jobs:
                 sleep 1
               done
               [ "$ready" = true ] && break
-              pkill -f "$local_port:$target_ip:22" 2>/dev/null || true
+              if pgrep -f "$local_port:$target_ip:22" >/dev/null 2>&1; then
+                pkill -f "$local_port:$target_ip:22"
+              fi
               sleep 5
             done
             test "$ready" = true
@@ -262,7 +266,9 @@ jobs:
               -L "$local_port:$peer_ip:22" ubuntu@127.0.0.1
 
             for _ in $(seq 1 10); do
-              ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host.hosts" || true
+              if ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host.hosts"; then
+                :
+              fi
               [ -s "$RUNNER_TEMP/$host.hosts" ] && break
               sleep 1
             done
@@ -324,12 +330,15 @@ jobs:
           if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
             "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
           fi
-          pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" 2>/dev/null || true
-          pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" 2>/dev/null || true
-          pkill -f '32225:.*:22' 2>/dev/null || true
-          pkill -f '32226:.*:22' 2>/dev/null || true
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
           for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
-            [ -n "$key" ] && [ -f "$key" ] && shred -u "$key" || true
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
           done
           rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts"
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
