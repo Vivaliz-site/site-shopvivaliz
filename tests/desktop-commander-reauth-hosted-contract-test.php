@@ -11,7 +11,7 @@ $required = [
     'always-free-arm-1787907847-26',
     '10.0.1.112',
     '10.0.1.38',
-    'oci bastion session create-port-forwarding',
+    'bastion session create-port-forwarding',
     'LAPTOP-NIG4IFUU',
     'DESKTOP-KOCEPSV',
     'target=(all|shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv)',
