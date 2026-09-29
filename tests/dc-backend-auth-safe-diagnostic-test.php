@@ -5,8 +5,9 @@ $root = dirname(__DIR__);
 $workflow = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
 
 $required = [
-    'DC_SITE_AUTH_DIAG',
-    'DC_BACKEND_AUTH_DIAG',
+    'diagnose_host SITE',
+    'diagnose_host BACKEND',
+    'tag = f"DC_{prefix}_AUTH_DIAG"',
     'SSH_BACKEND=(',
     'reauth-session.log',
     'device_json',
