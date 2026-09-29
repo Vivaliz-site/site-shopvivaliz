@@ -41,6 +41,7 @@ class IssueCommentRouterTest(unittest.TestCase):
             "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
             "/delete-superseded-solange-v1 CONFIRM": "delete_superseded_solange",
             "/codex-remote-control-mcp-run": "codex_remote_control",
+            "/codex-global-issue-comment-routing-v1": "codex_global_issue_comment_routing",
             "/codex-auto-continuity-v7-goal prompt_comment=123": "codex_continuity_goal",
             "/codex-auto-continuity-v7\nlong prompt": "codex_continuity_launcher",
             "/amazon-support-chat-reply case_ids=22199842931": "amazon_support_breakglass",
