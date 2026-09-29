@@ -9,7 +9,7 @@ def test_bridge_is_manual_auditable_and_fail_closed() -> None:
     trigger = text.split("permissions:", 1)[0]
 
     assert "workflow_dispatch:" in trigger
-    assert "issue_comment:" in trigger
+    assert "workflow_call:" in trigger
     assert "push:" not in trigger
     assert "schedule:" not in trigger
 
