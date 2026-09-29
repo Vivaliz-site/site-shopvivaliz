@@ -84,4 +84,13 @@ foreach ($forbidden as $needle) {
     }
 }
 
+$githubJobGuard = 'if [ "$ACTIVE_A1_JOB_COUNT_FIRST" -ne 0 ] || [ "$ACTIVE_A1_JOB_COUNT_SECOND" -ne 0 ]; then';
+$workerBranch = 'if [ "$workers" -gt 0 ]; then';
+$githubJobGuardPos = strpos($text, $githubJobGuard);
+$workerBranchPos = strpos($text, $workerBranch);
+if ($githubJobGuardPos === false || $workerBranchPos === false || $githubJobGuardPos > $workerBranchPos) {
+    fwrite(STDERR, "GitHub active-job guard must refuse rescue before local Runner.Worker branching\n");
+    exit(1);
+}
+
 echo "PRODUCTION_RUNNER_BASTION_RESCUE_CONTRACT=PASS\n";
