@@ -33,15 +33,14 @@ if (str_contains($workflow, 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1
     exit(1);
 }
 
-
 $linux = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-linux-once.sh');
 $windows = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-windows.ps1');
+$oneShot = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
 
 if (!str_contains($linux, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Linux reauth must extract the provider-issued verification_uri_complete by context\n");
     exit(1);
 }
-
 foreach ([
     'script -q -f -c',
     ': > "$SESSION_LOG"',
@@ -55,14 +54,29 @@ if (!str_contains($windows, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Windows reauth must extract the provider-issued verification_uri_complete by context\n");
     exit(1);
 }
-
 if (!str_contains($windows, 'AuthPackageVersion')) {
     fwrite(STDERR, "Windows reauth must support a one-time auth package override\n");
     exit(1);
 }
-$oneShot = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
-if (!str_contains($oneShot, "start_linux site 0.2.51") ||
-    !str_contains($oneShot, "start_linux backend 0.2.51") ||
+if (substr_count($windows, '$DeviceFile = Join-Path $DeviceDir') !== 1) {
+    fwrite(STDERR, "Windows reauth script must contain exactly one canonical device/session implementation\n");
+    exit(1);
+}
+$overrideGuard = <<<'PS'
+if ($AuthPackageVersion -notmatch '^0\.2\.(48|49|50|51)$') {
+PS;
+if (!str_contains($windows, $overrideGuard)) {
+    fwrite(STDERR, "Windows auth package override validator is malformed or missing\n");
+    exit(1);
+}
+$deviceDirPos = strpos($windows, '$DeviceDir = Join-Path $env:USERPROFILE');
+$deviceFilePos = strpos($windows, '$DeviceFile = Join-Path $DeviceDir');
+if ($deviceDirPos === false || $deviceFilePos === false || $deviceDirPos > $deviceFilePos) {
+    fwrite(STDERR, "Windows reauth must define DeviceDir before DeviceFile\n");
+    exit(1);
+}
+if (!str_contains($oneShot, 'start_linux site 0.2.51') ||
+    !str_contains($oneShot, 'start_linux backend 0.2.51') ||
     !str_contains($oneShot, "-AuthPackageVersion '0.2.51'")) {
     fwrite(STDERR, "four-host login must use 0.2.51 only for complete device login URLs\n");
     exit(1);
