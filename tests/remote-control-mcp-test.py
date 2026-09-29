@@ -1026,6 +1026,18 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'CLAUDE_REMOTE_CONTROL_PHASE={phase}', setup)
 
 
+    def test_claude_setup_emits_sanitized_eligibility_subphases_and_guards_tmpfile(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        for phase in (
+            "binary",
+            "auth_status",
+            "logged_in",
+            "remote_control_help",
+        ):
+            self.assertIn(f'CLAUDE_REMOTE_CONTROL_ELIGIBILITY={phase}', setup)
+        self.assertIn('tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33', setup)
+
+
     def test_claude_setup_classifies_auth_json_state_without_set_e_silence(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
