@@ -36,10 +36,14 @@ grep -Fq 'TASK_TERMINAL_GATE=NONTERMINAL' "$remote"
 # successor generation; never mutate/reopen the completed predecessor.
 grep -Fq 'chatgpt_freeze_task_successor' "$remote"
 grep -Fq 'ChatGPT freeze task actions are restricted to the site VM' "$remote"
-grep -Fq 'agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927' "$remote"
-grep -Fq 'agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2' "$remote"
+grep -Fq 'scripts/ensure-chatgpt-freeze-successor.py' "$remote"
+grep -Fq -- '--base-id chatgpt-freeze-root-cause-20260928' "$remote"
 grep -Fq 'CHATGPT_FREEZE_SUCCESSOR_STATUS=' "$remote"
 grep -Fq 'predecessor_task_id' "$remote"
+if grep -Fq 'agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2' "$remote"; then
+  echo "freeze successor action must not be hardcoded to g2" >&2
+  exit 1
+fi
 if grep -Fq 'cat "$state_file"' "$remote"; then
   echo "task-state readback must not print the raw durable checkpoint" >&2
   exit 1

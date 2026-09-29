@@ -308,47 +308,44 @@ jobs:
               ;;
             chatgpt_freeze_task_successor)
               state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
-              predecessor_id="chatgpt-freeze-root-cause-20260927"
-              successor_id="chatgpt-freeze-root-cause-20260928-g2"
-              successor_file="$state_dir/$successor_id.json"
+              result="$(python3 scripts/ensure-chatgpt-freeze-successor.py \
+                --state-dir "$state_dir" \
+                --predecessor chatgpt-freeze-root-cause-20260927 \
+                --base-id chatgpt-freeze-root-cause-20260928 \
+                --goal "Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption" \
+                --next-action "Preserve automatic checkpoint resume and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker" \
+                --evidence "Fresh natural freeze occurred after the prior terminal generation" \
+                --agent gpt-5.6-sol)"
+
               state_file="$RUNNER_TEMP/chatgpt-freeze-successor-state.json"
+              printf '%s\n' "$result" > "$state_file"
               trap 'rm -f "$state_file"' EXIT
-
-              if [ ! -f "$successor_file" ]; then
-                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927 --goal "Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption" --agent gpt-5.6-sol >/dev/null
-                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2 --next-action "Validate post-2103 live continuity runtime, preserve automatic checkpoint resume, and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker" --evidence "Fresh natural freezes and lifecycle evidence occurred after predecessor completion at 2026-09-27T23:45:43Z" >/dev/null
-              fi
-
-              SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir"                 python3 scripts/agent_task_state.py show --task "$successor_id" > "$state_file"
-              python3 - "$state_file" "$predecessor_id" <<'PY'
-          import json
-          import re
-          import sys
-
-          path, expected_predecessor = sys.argv[1], sys.argv[2]
-          with open(path, encoding="utf-8") as handle:
-              payload = json.load(handle)
-
-          def safe_text(value, limit=700):
-              text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(value or "")).strip()
-              return text[:limit]
-
-          if payload.get("predecessor_task_id") != expected_predecessor:
-              raise SystemExit("successor predecessor mismatch")
-
-          evidence = payload.get("evidence")
-          evidence_rows = evidence if isinstance(evidence, list) else []
-          summary = {
-              "task_id": safe_text(payload.get("task_id"), 180),
-              "predecessor_task_id": safe_text(payload.get("predecessor_task_id"), 180),
-              "status": safe_text(payload.get("status"), 64),
-              "updated_at": safe_text(payload.get("updated_at"), 64),
-              "next_action": safe_text(payload.get("next_action")),
-              "evidence_count": len(evidence_rows),
-          }
-          print("CHATGPT_FREEZE_SUCCESSOR_STATUS=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+              task_id="$(python3 - "$state_file" <<'PY'
+          import json, re, sys
+          row=json.load(open(sys.argv[1], encoding="utf-8"))
+          task_id=str(row.get("task_id") or "")
+          predecessor=str(row.get("predecessor_task_id") or "")
+          status=str(row.get("status") or "")
+          if not re.fullmatch(r"chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*", task_id):
+              raise SystemExit("unexpected successor task id")
+          if not re.fullmatch(r"(?:chatgpt-freeze-root-cause-20260927|chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*)", predecessor):
+              raise SystemExit("unexpected successor predecessor")
+          if status != "RUNNING":
+              raise SystemExit("successor is not RUNNING")
+          print(task_id)
           PY
-              if SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir"                 python3 scripts/agent_task_state.py terminal --task "$successor_id" >/dev/null
+              )"
+              python3 - "$state_file" <<'PY'
+          import json, sys
+          row=json.load(open(sys.argv[1], encoding="utf-8"))
+          summary={
+              "task_id": str(row.get("task_id") or ""),
+              "predecessor_task_id": str(row.get("predecessor_task_id") or ""),
+              "status": str(row.get("status") or ""),
+          }
+          print("CHATGPT_FREEZE_SUCCESSOR_STATUS=" + json.dumps(summary, sort_keys=True))
+          PY
+              if SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py terminal --task "$task_id" >/dev/null
               then
                 echo "CHATGPT_FREEZE_SUCCESSOR_TERMINAL_GATE=PASS"
               else

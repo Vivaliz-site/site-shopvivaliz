@@ -836,6 +836,24 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertGreaterEqual(ci.count(watched), 2)
         self.assertIn("scripts/claude_workspace_trust_bootstrap.py", ci.split("python3 -m py_compile", 1)[1])
 
+    def test_oci_bastion_can_ensure_next_chatgpt_freeze_generation(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for needle in (
+            "action=chatgpt-continuity-successor",
+            "scripts/ensure-chatgpt-freeze-successor.py",
+            "CHATGPT_CONTINUITY_SUCCESSOR=PASS",
+            "--base-id chatgpt-freeze-root-cause-20260928",
+        ):
+            self.assertIn(needle, workflow)
+
+    def test_remote_access_successor_action_is_generational(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        block = workflow.split("chatgpt_freeze_task_successor)", 1)[1].split("chatgpt_freeze_task_state)", 1)[0]
+        self.assertIn("scripts/ensure-chatgpt-freeze-successor.py", block)
+        self.assertIn("--base-id chatgpt-freeze-root-cause-20260928", block)
+        self.assertIn("CHATGPT_FREEZE_SUCCESSOR_STATUS=", block)
+        self.assertNotIn("successor --task chatgpt-freeze-root-cause-20260928-g2", block)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
