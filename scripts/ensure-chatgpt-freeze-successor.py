@@ -44,7 +44,7 @@ def run_state(state_script: Path, state_dir: Path, *args: str) -> dict[str, Any]
 
 
 def generation(path: Path, base_id: str) -> int | None:
-    match = re.fullmatch(re.escape(base_id) + r"-g([2-9][0-9]*)\.json", path.name)
+    match = re.fullmatch(re.escape(base_id) + r"-g([2-9]|[1-9][0-9]+)\.json", path.name)
     return int(match.group(1)) if match else None
 
 
