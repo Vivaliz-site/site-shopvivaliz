@@ -120,6 +120,21 @@ if ! chmod 700 {q(setup)} || ! chmod 600 {q(bridge)} {q(trust)} {q(unit)}; then
   exit 62
 fi
 echo "CLAUDE_OCI_STAGE_PREPARE=PASS"
+if [ ! -s {q(setup)} ] || [ ! -r {q(setup)} ]; then
+  echo "CLAUDE_OCI_STAGE_SETUP_FILE=FAIL class=unreadable"
+  exit 63
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_FILE=PASS"
+if ! grep -Fq 'CLAUDE_REMOTE_CONTROL_PHASE=eligibility' {q(setup)} || ! grep -Fq 'CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary' {q(setup)}; then
+  echo "CLAUDE_OCI_STAGE_SETUP_CONTRACT=FAIL class=markers"
+  exit 64
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_CONTRACT=PASS"
+if ! bash -n {q(setup)} >/dev/null 2>&1; then
+  echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=FAIL"
+  exit 65
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS"
 echo "CLAUDE_OCI_STAGE_INSTALLER=START"
 rc=0
 out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?

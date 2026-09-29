@@ -1009,6 +1009,10 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CLAUDE_OCI_STAGE_PREPARE=PASS", helper)
         self.assertIn("CLAUDE_OCI_STAGE_PREPARE=FAIL class=permissions", helper)
         self.assertIn("CLAUDE_OCI_STAGE_INSTALLER=START", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_SETUP_FILE=PASS", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_SETUP_CONTRACT=PASS", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS", helper)
+        self.assertIn("bash -n", helper)
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
 
