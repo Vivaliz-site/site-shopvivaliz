@@ -318,14 +318,16 @@ jobs:
           rm -f "$d/device.json" "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/reauth-link.txt" "$d/reauth-session.log" "$d/reauth-session.pid"
 
           cmd="npx --yes @wonderwhy-er/desktop-commander@$version remote --persist-session"
+          : > "$d/reauth-session.log"
+          chmod 600 "$d/reauth-session.log"
           if command -v script >/dev/null 2>&1; then
             RUNNER_TRACKING_ID= nohup setsid timeout 600s script -q -f -c "$cmd" "$d/reauth-session.log" >/dev/null 2>&1 < /dev/null &
           else
-            RUNNER_TRACKING_ID= nohup setsid timeout 600s bash -lc "$cmd" >"$d/reauth-session.log" 2>&1 < /dev/null &
+            RUNNER_TRACKING_ID= nohup setsid timeout 600s bash -lc "$cmd" >>"$d/reauth-session.log" 2>&1 < /dev/null &
           fi
           pid=$!
           printf '%s\n' "$pid" > "$d/reauth-session.pid"
-          chmod 600 "$d/reauth-session.pid" "$d/reauth-session.log"
+          chmod 600 "$d/reauth-session.pid"
 
           found=false
           for _ in $(seq 1 120); do
