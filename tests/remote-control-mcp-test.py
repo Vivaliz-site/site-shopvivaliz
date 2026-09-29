@@ -860,6 +860,21 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("always-free-arm-1787907847-26", workflow)
         self.assertIn("shopvivaliz-free-a1", workflow)
 
+    def test_oci_continuity_diagnostic_bounds_backend_browser_probes(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
+        self.assertGreaterEqual(
+            diagnostic.count("timeout 10s sudo -u ubuntu node --input-type=module"),
+            3,
+            "every backend browser probe must have its own deadline inside the 45s MCP command budget",
+        )
+        for fallback in (
+            "CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS=0",
+            "CHATGPT_CONTINUITY_SESSION_HTTP_STATUS=0",
+            "CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE=probe_failed",
+        ):
+            self.assertIn(fallback, diagnostic)
+
     def test_oci_continuity_diagnostic_uses_installed_worker_latest_probe(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
