@@ -72,6 +72,11 @@ def _path(task_id: str) -> Path:
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_owner: tuple[int, int] | None = None
+    if os.geteuid() == 0:
+        parent_stat = path.parent.stat()
+        runtime_owner = (parent_stat.st_uid, parent_stat.st_gid)
+
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     tmp = Path(tmp_name)
     try:
@@ -80,6 +85,9 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
+        if runtime_owner is not None:
+            os.chown(tmp, *runtime_owner)
+        os.chmod(tmp, 0o600)
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
