@@ -15,6 +15,7 @@ import sys
 import termios
 import time
 
+POST_ACCEPT_SETTLE_SECONDS = 5.0
 ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
@@ -136,7 +137,7 @@ def main(argv: list[str]) -> int:
         slave_fd = -1
 
         while time.monotonic() < deadline:
-            if accepted and time.monotonic() - accepted_at >= 1.5:
+            if accepted and time.monotonic() - accepted_at >= POST_ACCEPT_SETTLE_SECONDS:
                 break
             ready, _, _ = select.select([master_fd], [], [], 0.25)
             if not ready:

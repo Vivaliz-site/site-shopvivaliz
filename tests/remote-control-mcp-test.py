@@ -550,6 +550,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertEqual(module.trust_acceptance_sequence(already_selected_yes), b"\r")
         self.assertEqual(module.remote_control_acceptance_sequence("Enable Remote Control? (y/n)"), b"y\r")
         self.assertIsNone(module.remote_control_acceptance_sequence("Enable Remote Control? (yes/no)"))
+        self.assertGreaterEqual(module.POST_ACCEPT_SETTLE_SECONDS, 5.0)
         self.assertIsNone(module.trust_acceptance_sequence("Enable Remote Control? (y/n)"))
         self.assertIsNone(module.trust_acceptance_sequence("Do you want to allow this tool?"))
         self.assertTrue(module.unexpected_prompt_visible("Enable Remote Control? (y/n)"))
