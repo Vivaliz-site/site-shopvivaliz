@@ -387,6 +387,16 @@ jobs:
             fi
 
             if ! "${SSH[@]}" "bash -s -- begin '$version'" < scripts/desktop-commander-reauth-linux-once.sh; then
+              "${SSH[@]}" 'set -Eeuo pipefail
+                d="$HOME/.desktop-commander-device"
+                install -d -m 700 "$d"
+                if [ -s "$d/reauth-session.log" ]; then
+                  cp -f "$d/reauth-session.log" "$d/reauth-primary.log"
+                else
+                  : > "$d/reauth-primary.log"
+                fi
+                chmod 600 "$d/reauth-primary.log"
+              '
               echo "DC_LINUX_PRIMARY_HELPER=fallback label=$label"
               "${SSH[@]}" "bash -s -- '$version'" < "$RUNNER_TEMP/linux-auth-fallback.sh"
             fi
@@ -498,36 +508,38 @@ jobs:
           prefix = os.environ["DC_DIAG_PREFIX"]
           base = Path.home() / ".desktop-commander-device"
           log = base / "reauth-session.log"
+          primary_log = base / "reauth-primary.log"
           pid_file = base / "reauth-session.pid"
           device = base / "device.json"
           link = base / "reauth-link.txt"
 
-          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
-          lower = text.lower()
-          flags = {
-              "startup_started": "starting mcp device" in lower,
-              "local_mcp_connect_started": "connecting to local desktop commander mcp using" in lower,
-              "local_mcp_connected": "connected to desktop commander mcp" in lower,
-              "local_mcp_not_found": "desktop commander mcp not found" in lower,
-              "local_mcp_start_failed": "failed to start desktop commander mcp" in lower,
-              "remote_connect_started": "connecting to remote mcp" in lower,
-              "remote_connect_succeeded": "connected to remote mcp" in lower,
-              "auth_started": "authenticating with remote mcp server" in lower,
-              "auth_instructions": "please complete authentication" in lower,
-              "verification_url_prompt": "verify this device in your browser" in lower,
-              "code_prompt": "make sure the code matches" in lower,
-              "waiting_authorization": "waiting for authorization" in lower,
-              "device_ready": "device ready" in lower,
-              "device_startup_failed": "device startup failed" in lower,
-              "command_not_found": "command not found" in lower,
-              "module_not_found": "cannot find module" in lower or "module_not_found" in lower,
-              "permission_denied": "permission denied" in lower or "eacces" in lower,
-              "npm_error": "npm err" in lower,
-              "fetch_failed": "fetch failed" in lower,
-              "network_error": any(x in lower for x in ("econn", "enotfound", "eai_again", "timed out", "timeout")),
-              "auth_error": any(x in lower for x in ("unauthorized", "forbidden", "invalid_grant", "authentication failed")),
-              "generic_error": bool(re.search(r"\b(error|failed|exception)\b", lower)),
-          }
+          def classify(path):
+              text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+              lower = text.lower()
+              return {
+                  "startup_started": "starting mcp device" in lower,
+                  "local_mcp_connect_started": "connecting to local desktop commander mcp using" in lower,
+                  "local_mcp_connected": "connected to desktop commander mcp" in lower,
+                  "local_mcp_not_found": "desktop commander mcp not found" in lower,
+                  "local_mcp_start_failed": "failed to start desktop commander mcp" in lower,
+                  "remote_connect_started": "connecting to remote mcp" in lower,
+                  "remote_connect_succeeded": "connected to remote mcp" in lower,
+                  "auth_started": "authenticating with remote mcp server" in lower,
+                  "auth_instructions": "please complete authentication" in lower,
+                  "verification_url_prompt": "verify this device in your browser" in lower,
+                  "code_prompt": "make sure the code matches" in lower,
+                  "waiting_authorization": "waiting for authorization" in lower,
+                  "device_ready": "device ready" in lower,
+                  "device_startup_failed": "device startup failed" in lower,
+                  "command_not_found": "command not found" in lower,
+                  "module_not_found": "cannot find module" in lower or "module_not_found" in lower,
+                  "permission_denied": "permission denied" in lower or "eacces" in lower,
+                  "npm_error": "npm err" in lower,
+                  "fetch_failed": "fetch failed" in lower,
+                  "network_error": any(x in lower for x in ("econn", "enotfound", "eai_again", "timed out", "timeout")),
+                  "auth_error": any(x in lower for x in ("unauthorized", "forbidden", "invalid_grant", "authentication failed")),
+                  "generic_error": bool(re.search(r"\b(error|failed|exception)\b", lower)),
+              }
 
           pid = None
           alive = False
@@ -542,18 +554,27 @@ jobs:
                       alive = False
 
           tag = f"DC_{prefix}_AUTH_DIAG"
+          flags = classify(log)
           print(f"{tag} log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
           print(f"{tag} pid_present={int(pid is not None)} process_alive={int(alive)}")
           print(f"{tag} device_json={int(device.exists())} link_file={int(link.exists())}")
           for name, value in flags.items():
               print(f"{tag} {name}={int(value)}")
+
+          if primary_log.exists():
+              primary_tag = "DC_PRIMARY_AUTH_DIAG"
+              primary_flags = classify(primary_log)
+              print(f"{primary_tag} host={prefix} log_exists=1 log_bytes={primary_log.stat().st_size}")
+              for name, value in primary_flags.items():
+                  print(f"{primary_tag} host={prefix} {name}={int(value)}")
           PY
           }
 
           diagnose_host SITE
           diagnose_host BACKEND
 
-      - name: Upload four private login links
+      - name: Upload available private login links
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dc-four-host-login-links-${{ github.run_id }}
