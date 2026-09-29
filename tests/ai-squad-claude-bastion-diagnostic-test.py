@@ -10,6 +10,7 @@ required = (
     "AI_SQUAD_CLAUDE_HEALTH_OK=",
     "AI_SQUAD_CLAUDE_AUTH_LOGGED_IN=",
     "AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=",
+    "pgrep -c -u ubuntu",
     "'host': 'shopvivaliz-free-a1'",
 )
 for marker in required:

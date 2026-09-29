@@ -828,7 +828,7 @@ jobs:
           print('AI_SQUAD_CLAUDE_AUTH_SUBSCRIPTION_CLASS=' + subscription)
           INNER_AUTH
 
-          process_count="$(pgrep -u ubuntu -f '/home/ubuntu/.local/bin/claude' 2>/dev/null | wc -l | tr -d ' ')"
+          process_count="$(pgrep -c -u ubuntu -f '/home/ubuntu/.local/bin/claude' 2>/dev/null || true)"
           case "$process_count" in ''|*[!0-9]*) process_count=0 ;; esac
           printf 'AI_SQUAD_CLAUDE_PROCESS_COUNT=%s\n' "$process_count"
 
