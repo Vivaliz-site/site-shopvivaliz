@@ -458,4 +458,5 @@ nao e impresso e nao e persistido.
 Mudancas em `api/chatgpt-continuity/**`,
 `includes/chatgpt-continuity/**`, `task_resume_queue.py`, watchdog ou higiene
 de Actions devem acionar o `Task Continuity Fast Gate`.
+Se `main` avancar enquanto o PR de continuidade estiver em validacao, os gates devem ser reexecutados contra a nova base antes do merge; verde calculado apenas contra base anterior nao certifica a integracao final.
 <!-- /CONTINUITY_QUEUE_CERTIFICATION_V13 -->
