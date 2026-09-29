@@ -114,8 +114,12 @@ if [ ! -f {q(setup)} ] || [ ! -f {q(bridge)} ] || [ ! -f {q(trust)} ] || [ ! -f 
   exit 61
 fi
 echo "CLAUDE_OCI_PREFLIGHT=PASS"
-chmod 700 {q(setup)}
-chmod 600 {q(bridge)} {q(trust)} {q(unit)}
+if ! chmod 700 {q(setup)} || ! chmod 600 {q(bridge)} {q(trust)} {q(unit)}; then
+  echo "CLAUDE_OCI_STAGE_PREPARE=FAIL class=permissions"
+  exit 62
+fi
+echo "CLAUDE_OCI_STAGE_PREPARE=PASS"
+echo "CLAUDE_OCI_STAGE_INSTALLER=START"
 rc=0
 out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
