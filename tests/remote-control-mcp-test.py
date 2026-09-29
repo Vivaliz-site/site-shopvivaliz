@@ -936,6 +936,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("sudo -u ubuntu -H python3", helper)
         self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", helper)
 
+        step_start = workflow.index("- name: Read latest ChatGPT freeze state through Remote Control MCP")
+        step_end = workflow.index("- name: ChatGPT continuity diagnostic through Remote Control MCP", step_start)
+        freeze_step = workflow[step_start:step_end]
+        self.assertIn('BACKEND_SSH=(ssh "${SSH_COMMON[@]}"', freeze_step)
+        self.assertIn('"${BACKEND_SSH[@]}" "sudo -n python3 - freeze-state"', freeze_step)
+        self.assertNotIn(r'"\${BACKEND_SSH[@]}"', freeze_step)
+
     def test_oci_continuity_diagnostic_probes_team_account_scope_without_leaking_credentials(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
