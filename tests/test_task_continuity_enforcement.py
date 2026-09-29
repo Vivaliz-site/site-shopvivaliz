@@ -100,14 +100,14 @@ class AgentTaskStateTests(unittest.TestCase):
 
         with ledger.open("a", encoding="utf-8") as handle:
             handle.write(
-                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"STALLED_NOT_CONFIRMED","worker_status_observed_at":"2026-09-29T01:31:00Z"}\\n'
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"STALLED_NOT_CONFIRMED","worker_status_observed_at":"2026-09-29T01:31:00Z"}\n'
             )
         with self.assertRaisesRegex(state.TaskStateError, "PROGRESS_CONFIRMED"):
             state.complete_task(task_id)
 
         with ledger.open("a", encoding="utf-8") as handle:
             handle.write(
-                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"PROGRESS_CONFIRMED","worker_status_observed_at":"2026-09-29T01:32:00Z"}\\n'
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"PROGRESS_CONFIRMED","worker_status_observed_at":"2026-09-29T01:32:00Z"}\n'
             )
         completed = state.complete_task(task_id)
         self.assertEqual(completed["status"], "CONCLUIDO")
