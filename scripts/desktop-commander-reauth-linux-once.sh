@@ -44,7 +44,24 @@ case "$PHASE" in
     found=false
     for _ in $(seq 1 90); do
       if [[ -s "$SESSION_LOG" ]]; then
-        url="$(grep -Eo 'https://[^[:space:]]*verify-device[^[:space:]]*' "$SESSION_LOG" 2>/dev/null | tail -n 1 || true)"
+        url="$(python3 - "$SESSION_LOG" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+patterns = (
+    r"Verify this device in your browser:\s*(https://\S+)",
+    r"Please visit:\s*(https://\S+)",
+)
+for pattern in patterns:
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    if match:
+        print(match.group(1).strip())
+        break
+PY
+)"
         if [[ "$url" == https://* ]]; then
           umask 077
           printf '%s\n' "$url" > "$LINK_FILE"
