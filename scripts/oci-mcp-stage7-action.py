@@ -100,7 +100,7 @@ def require_exact(lines: list[str], required: set[str], label: str) -> None:
 
 
 def claude_install(stage_dir: str) -> None:
-    if not re.fullmatch(r"/tmp/shopvivaliz-claude-oci-[A-Za-z0-9._-]+", stage_dir):
+    if not re.fullmatch(r"/home/ubuntu/\\.local/state/shopvivaliz/claude-stage7/oci-[A-Za-z0-9._-]+", stage_dir):
         raise SystemExit("invalid Claude staging directory")
     q = shlex.quote
     setup = stage_dir + "/setup-claude-remote-control.sh"
