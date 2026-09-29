@@ -19,7 +19,7 @@ SERVICE="shopvivaliz-claude-remote-control.service"
 die(){ echo "CLAUDE_REMOTE_CONTROL_SETUP=FAIL reason=$1" >&2; exit "${2:-1}"; }
 require_backend(){ [ "$(hostname)" = "$BACKEND_HOST" ] || die backend_host_mismatch 21; }
 require_root(){ [ "$(id -u)" -eq 0 ] || die root_required 22; }
-run_as_claude(){ sudo -u "$CLAUDE_USER" -H env -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME="$CLAUDE_HOME" "$@"; }
+run_as_claude(){ sudo -u "$CLAUDE_USER" -H env -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK -u DISABLE_TELEMETRY -u DO_NOT_TRACK HOME="$CLAUDE_HOME" "$@"; }
 run_in_workspace_as_claude(){ run_as_claude bash -c 'cd "$1"; shift; exec "$@"' bash "$WORKSPACE" "$@"; }
 
 probe_auth_and_command(){
