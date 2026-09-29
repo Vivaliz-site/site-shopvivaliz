@@ -972,6 +972,17 @@ class BootstrapContractTests(unittest.TestCase):
         status_start = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
         self.assertNotIn("mcp-token", workflow[install_start:status_start])
 
+    def test_stage7_claude_staging_avoids_ephemeral_backend_tmp(self):
+        oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        stable_root = "/home/ubuntu/.local/state/shopvivaliz/claude-stage7"
+        self.assertIn(stable_root, oci)
+        self.assertIn(stable_root, remote)
+        self.assertIn(stable_root, helper)
+        self.assertNotIn('remote_dir="/tmp/shopvivaliz-claude-oci-', oci)
+        self.assertNotIn('remote_dir="/tmp/shopvivaliz-claude-remote-control-', remote)
+
     def test_oci_stage7_claude_failure_diagnostics_are_sanitized(self):
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
         self.assertIn("def classify_remote_failure(", helper)
