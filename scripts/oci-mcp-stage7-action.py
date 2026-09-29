@@ -178,7 +178,7 @@ if [ "$rc" -ne 0 ]; then
   printf 'CLAUDE_OCI_SETUP_OUTPUT_PRESENT=%s\n' "$setup_output_present"
   printf 'CLAUDE_OCI_SETUP_FAILURE_CLASS=%s\n' "$setup_failure_class"
 fi
-printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
+printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{{print}}'
 exit "$rc"
 """
     ok, stdout, stderr, error, exit_code = call_admin(BACKEND, command, 180)
