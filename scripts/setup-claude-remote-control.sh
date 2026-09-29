@@ -243,6 +243,9 @@ case "$MODE" in
     prepare_workspace
     configure_mcp
     verify_bridge
+    if systemctl is-active --quiet "$SERVICE"; then
+      systemctl stop "$SERVICE"
+    fi
     accept_consent
     install_service
     echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
