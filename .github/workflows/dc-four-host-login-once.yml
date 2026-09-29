@@ -471,6 +471,57 @@ jobs:
           test "$(find "$LINK_DIR" -maxdepth 1 -type f -name 'dc-reauth-*.txt' | wc -l)" -eq 4
           echo DC_FOUR_LOGIN_LINKS_READY=PASS
 
+      - name: Diagnose site Desktop Commander auth failure safely
+        if: failure()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'python3 -' <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          base = Path.home() / ".desktop-commander-device"
+          log = base / "reauth-session.log"
+          pid_file = base / "reauth-session.pid"
+          device = base / "device.json"
+          link = base / "reauth-link.txt"
+
+          text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
+          lower = text.lower()
+          flags = {
+              "auth_instructions": "please complete authentication" in lower,
+              "verification_url_prompt": "verify this device in your browser" in lower,
+              "code_prompt": "make sure the code matches" in lower,
+              "waiting_authorization": "waiting for authorization" in lower,
+              "device_ready": "device ready" in lower,
+              "npm_error": "npm err" in lower,
+              "fetch_failed": "fetch failed" in lower,
+              "network_error": any(x in lower for x in ("econn", "enotfound", "eai_again", "timed out", "timeout")),
+              "auth_error": any(x in lower for x in ("unauthorized", "forbidden", "invalid_grant", "authentication failed")),
+              "generic_error": bool(re.search(r"\b(error|failed|exception)\b", lower)),
+          }
+
+          pid = None
+          alive = False
+          if pid_file.exists():
+              raw = pid_file.read_text(encoding="utf-8", errors="replace").strip()
+              if raw.isdigit():
+                  pid = int(raw)
+                  try:
+                      os.kill(pid, 0)
+                      alive = True
+                  except OSError:
+                      alive = False
+
+          print(f"DC_SITE_AUTH_DIAG log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
+          print(f"DC_SITE_AUTH_DIAG pid_present={int(pid is not None)} process_alive={int(alive)}")
+          print(f"DC_SITE_AUTH_DIAG device_json={int(device.exists())} link_file={int(link.exists())}")
+          for name, value in flags.items():
+              print(f"DC_SITE_AUTH_DIAG {name}={int(value)}")
+          PY
+
       - name: Upload four private login links
         uses: actions/upload-artifact@v4
         with:
