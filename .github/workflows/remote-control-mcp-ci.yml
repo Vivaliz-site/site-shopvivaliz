@@ -9,6 +9,7 @@ on:
       - 'scripts/setup-claude-remote-control.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
       - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
       - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
@@ -29,6 +30,7 @@ on:
       - 'scripts/setup-claude-remote-control.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
       - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
       - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
@@ -54,7 +56,7 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py
           python3 tests/remote-control-mcp-test.py
           python3 tests/test_chatgpt_freeze_successor.py
       - name: KOCEPSV reverse relay contract
