@@ -925,6 +925,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("mcp-token", workflow[install_start:status_start])
 
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
+
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
         self.assertIn("action=chatgpt-freeze-task-state", workflow)
@@ -936,6 +937,14 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("sudo -u ubuntu -H python3", helper)
         self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", helper)
 
+
+    def test_oci_stage7_uses_real_bash_array_expansion(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        stage7 = workflow.split("Install Claude Remote Control through Remote Control MCP", 1)[1].split("ChatGPT continuity diagnostic through Remote Control MCP", 1)[0]
+        self.assertNotIn(r'"\${BACKEND_SSH[@]}"', stage7)
+        self.assertNotIn(r'"\${BACKEND_SCP[@]}"', stage7)
+        self.assertIn('"${BACKEND_SSH[@]}"', stage7)
+        self.assertIn('"${BACKEND_SCP[@]}"', stage7)
     def test_oci_continuity_diagnostic_probes_team_account_scope_without_leaking_credentials(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
