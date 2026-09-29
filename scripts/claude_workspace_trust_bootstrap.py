@@ -60,6 +60,13 @@ def trust_acceptance_sequence(value: str) -> bytes | None:
     return None
 
 
+def remote_control_acceptance_sequence(value: str) -> bytes | None:
+    for line in clean_screen(value).splitlines():
+        if re.fullmatch(r"\s*enable remote control\?\s*\(y/n\)\s*", line, re.IGNORECASE):
+            return b"y\r"
+    return None
+
+
 def unexpected_prompt_visible(value: str) -> bool:
     text = clean_screen(value).lower()
     return (
@@ -145,6 +152,12 @@ def main(argv: list[str]) -> int:
             buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
             if not accepted:
                 sequence = trust_acceptance_sequence(buffer)
+                if sequence is not None:
+                    os.write(master_fd, sequence)
+                    accepted = True
+                    accepted_at = time.monotonic()
+                    continue
+                sequence = remote_control_acceptance_sequence(buffer)
                 if sequence is not None:
                     os.write(master_fd, sequence)
                     accepted = True
