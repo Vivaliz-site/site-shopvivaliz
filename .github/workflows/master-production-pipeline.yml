@@ -323,7 +323,7 @@ jobs:
           # oneshot while fd 8 is held would make it wait on our own lock.
           flock -u 8
           # install-safe-sync-service refreshes the dedicated sync checkout to
-          # current origin/main. In a serialized deploy queue, that checkout
+          # current origin/main. In a serialized deploy queue, the canonical checkout
           # can legitimately be newer than the SHA this run is activating.
           # Running the oneshot in that state recursively deploys newer main
           # inside this older activation and creates a false rollback.
