@@ -1009,6 +1009,21 @@ class BootstrapContractTests(unittest.TestCase):
         status_start = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
         self.assertNotIn("mcp-token", workflow[install_start:status_start])
 
+    def test_oci_stage7_claude_install_does_not_require_optional_trust_bootstrap_marker(self):
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        install_body = helper.split("def claude_install", 1)[1].split("def claude_status", 1)[0]
+        required_block = install_body.split("required = {", 1)[1].split("}", 1)[0]
+        self.assertNotIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", required_block)
+        for marker in (
+            "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS",
+            "CLAUDE_PRIVATE_MCP_BRIDGE=PASS",
+            "CLAUDE_REMOTE_CONTROL_CONSENT=PASS",
+            "CLAUDE_REMOTE_CONTROL_SERVICE=PASS",
+            "CLAUDE_REMOTE_CONTROL_INSTALL=PASS",
+        ):
+            self.assertIn(marker, required_block)
+        self.assertIn('safe = safe_markers(stdout, ("CLAUDE_",))', install_body)
+
     def test_stage7_claude_staging_avoids_ephemeral_backend_tmp(self):
         oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
