@@ -16,6 +16,7 @@ on:
       - 'tests/desktop-commander-reauth-hosted-contract-test.php'
       - 'tests/dc-backend-auth-safe-diagnostic-test.php'
       - 'tests/dc-backend-auth-stage-diagnostic-test.php'
+      - 'tests/dc-partial-links-primary-evidence-test.php'
       - '.github/workflows/dc-four-host-login-once.yml'
       - 'tests/dc-four-host-login-single-bastion-test.php'
       - '.github/workflows/dc-four-host-login-once.yml'
@@ -88,6 +89,7 @@ jobs:
           php tests/desktop-commander-reauth-hosted-contract-test.php
           php tests/dc-backend-auth-safe-diagnostic-test.php
           php tests/dc-backend-auth-stage-diagnostic-test.php
+          php tests/dc-partial-links-primary-evidence-test.php
           php tests/dc-four-host-login-single-bastion-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
