@@ -57,4 +57,24 @@ if (str_contains($workflow, 'python3 - "$wanted" <<')) {
     fwrite(STDERR, "Windows peer discovery must not consume stdin for both Python source and Tailscale JSON\n");
     exit(1);
 }
+
+if (substr_count($workflow, '- name: Upload private reauth links') !== 1) {
+    fwrite(STDERR, "DC reauth workflow must contain exactly one artifact-upload step\n");
+    exit(1);
+}
+if (substr_count($workflow, '- name: Cleanup temporary Bastion access and credentials') !== 1) {
+    fwrite(STDERR, "DC reauth workflow must contain exactly one cleanup step\n");
+    exit(1);
+}
+if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+
+ \"$out_file\"")) {
+    fwrite(STDERR, "Windows reauth link validation must be a complete quoted URL assertion\n");
+    exit(1);
+}
+if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+
+ \"$file\"")) {
+    fwrite(STDERR, "Collected reauth link validation must be a complete quoted URL assertion\n");
+    exit(1);
+}
+
 echo "desktop-commander-reauth-hosted: ok\n";
