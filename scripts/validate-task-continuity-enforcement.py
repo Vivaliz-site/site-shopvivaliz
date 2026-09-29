@@ -120,7 +120,7 @@ else:
     for token in (
         "auto_resume",
         "stale_seconds",
-        "_resume-requests.jsonl",
+        "resume_queue.REQUESTS_FILE",
         "chatgpt_common",
         "chatgpt_work",
         "final_fallback",
