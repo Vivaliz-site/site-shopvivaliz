@@ -119,6 +119,14 @@ jobs:
     uses: ./.github/workflows/codex-remote-control-mcp-one-shot.yml
     secrets: inherit
 
+  codex-global-issue-comment-routing:
+    needs: classify
+    if: needs.classify.outputs.route == 'codex_global_issue_comment_routing'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/codex-global-issue-comment-routing.yml
+    secrets: inherit
+
   amazon-support-breakglass:
     needs: classify
     if: needs.classify.outputs.route == 'amazon_support_breakglass'
