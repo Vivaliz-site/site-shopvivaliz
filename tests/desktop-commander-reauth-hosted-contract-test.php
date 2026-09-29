@@ -41,6 +41,16 @@ if (!str_contains($linux, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Linux reauth must extract the provider-issued verification_uri_complete by context\n");
     exit(1);
 }
+
+foreach ([
+    'script -q -f -c',
+    ': > "$SESSION_LOG"',
+] as $needle) {
+    if (!str_contains($linux, $needle)) {
+        fwrite(STDERR, "Linux reauth must use a PTY-backed, pre-created session log: {$needle}\n");
+        exit(1);
+    }
+}
 if (!str_contains($windows, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Windows reauth must extract the provider-issued verification_uri_complete by context\n");
     exit(1);
