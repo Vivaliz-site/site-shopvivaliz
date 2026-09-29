@@ -75,6 +75,52 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(completed["status"], "CONCLUIDO")
         self.assertTrue(state.is_terminal(completed))
 
+    def test_chatgpt_freeze_task_requires_browser_progress_before_ready(self) -> None:
+        task_id = "chatgpt-freeze-root-cause-20260929-g4"
+        state.start_task(task_id, "Prove natural ChatGPT continuity after a freeze", "gpt")
+
+        with self.assertRaisesRegex(state.TaskStateError, "PROGRESS_CONFIRMED"):
+            state.mark_ready(
+                task_id,
+                evidence=["code and CI are green"],
+                verification="implementation looks complete",
+            )
+
+        ledger = state.RUNTIME_DIR / "_chatgpt-continuity-nudges.jsonl"
+        ledger.write_text(
+            '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"PROGRESS_CONFIRMED","worker_status_observed_at":"2026-09-29T01:30:00Z"}\n',
+            encoding="utf-8",
+        )
+        ready = state.mark_ready(
+            task_id,
+            evidence=["browser worker observed assistant progress"],
+            verification="natural freeze recovery verified",
+        )
+        self.assertEqual(ready["status"], "READY_TO_COMPLETE")
+
+        with ledger.open("a", encoding="utf-8") as handle:
+            handle.write(
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"STALLED_NOT_CONFIRMED","worker_status_observed_at":"2026-09-29T01:31:00Z"}\n'
+            )
+        with self.assertRaisesRegex(state.TaskStateError, "PROGRESS_CONFIRMED"):
+            state.complete_task(task_id)
+
+        with ledger.open("a", encoding="utf-8") as handle:
+            handle.write(
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"PROGRESS_CONFIRMED","worker_status_observed_at":"2026-09-29T01:32:00Z"}\n'
+            )
+        completed = state.complete_task(task_id)
+        self.assertEqual(completed["status"], "CONCLUIDO")
+
+    def test_non_freeze_task_does_not_require_browser_progress_ledger(self) -> None:
+        state.start_task("ordinary-task", "Finish ordinary work", "gpt")
+        ready = state.mark_ready(
+            "ordinary-task",
+            evidence=["objective check passed"],
+            verification="goal verified",
+        )
+        self.assertEqual(ready["status"], "READY_TO_COMPLETE")
+
     def test_completed_task_starts_explicit_successor_without_mutating_predecessor(self) -> None:
         state.start_task("task-v1", "Investigar falha original", "gpt")
         state.mark_ready(
