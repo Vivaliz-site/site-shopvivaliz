@@ -7,6 +7,7 @@ on:
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-claude-remote-control.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
       - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
@@ -21,6 +22,10 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
@@ -43,7 +48,7 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py
           python3 tests/remote-control-mcp-test.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
