@@ -190,61 +190,62 @@ jobs:
         run: |
           set -Eeuo pipefail
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
-          "${SSH_SITE[@]}" 'set -Eeuo pipefail
-            service=shopvivaliz-actions-runner.service
-            if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
-            printf "RUNNER_WORKER_COUNT=%s\n" "$workers"
-            if [ "$workers" -gt 0 ]; then
-              echo RUNNER_BASTION_RESCUE=refused_worker_active
-              exit 23
+          "${SSH_SITE[@]}" 'bash -s' <<'REMOTE_RUNNER_RESCUE'
+          set -Eeuo pipefail
+          service=shopvivaliz-actions-runner.service
+          if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
+          printf "RUNNER_WORKER_COUNT=%s\n" "$workers"
+          if [ "$workers" -gt 0 ]; then
+            echo RUNNER_BASTION_RESCUE=refused_worker_active
+            exit 23
+          fi
+          uid="$(id -u)"
+          runtime="/run/user/$uid"
+          bus="unix:path=$runtime/bus"
+          test -S "$runtime/bus"
+          env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
+          diag_dir=/home/ubuntu/actions-runner-shopvivaliz/_diag
+          marker="$(mktemp)"
+          trap 'rm -f "$marker"' EXIT
+          touch "$marker"
+          env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+          active=false
+          for _ in $(seq 1 12); do
+            if env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"; then
+              active=true
+              break
             fi
-            uid="$(id -u)"
-            runtime="/run/user/$uid"
-            bus="unix:path=$runtime/bus"
-            test -S "$runtime/bus"
-            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
-            diag_dir=/home/ubuntu/actions-runner-shopvivaliz/_diag
-            marker="$(mktemp)"
-            trap "rm -f \"$marker\"" EXIT
-            touch "$marker"
-            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
-            active=false
-            for _ in $(seq 1 12); do
-              if env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"; then
-                active=true
+            sleep 2
+          done
+          test "$active" = true
+          mainpid="$(env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user show -p MainPID --value "$service")"
+          [[ "$mainpid" =~ ^[0-9]+$ ]]
+          test "$mainpid" -gt 1
+
+          listener_connected=false
+          listener_failure=unknown
+          for _ in $(seq 1 30); do
+            latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)"
+            if [ -n "$latest_log" ]; then
+              if grep -Fq 'Listening for Jobs' "$latest_log"; then
+                listener_connected=true
+                listener_failure=none
                 break
               fi
-              sleep 2
-            done
-            test "$active" = true
-            mainpid="$(env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user show -p MainPID --value "$service")"
-            [[ "$mainpid" =~ ^[0-9]+$ ]]
-            test "$mainpid" -gt 1
-
-            listener_connected=false
-            listener_failure=unknown
-            for _ in $(seq 1 30); do
-              latest_log="$(find "$diag_dir" -maxdepth 1 -type f -name 'Runner_*.log' -newer "$marker" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)"
-              if [ -n "$latest_log" ]; then
-                if grep -Fq 'Listening for Jobs' "$latest_log"; then
-                  listener_connected=true
-                  listener_failure=none
-                  break
-                fi
-                if grep -Fq 'A session for this runner already exists' "$latest_log"; then
-                  listener_failure=session_conflict
-                elif grep -Fq 'Runner connect error' "$latest_log"; then
-                  listener_failure=connect_error
-                fi
+              if grep -Fq 'A session for this runner already exists' "$latest_log"; then
+                listener_failure=session_conflict
+              elif grep -Fq 'Runner connect error' "$latest_log"; then
+                listener_failure=connect_error
               fi
-              sleep 2
-            done
-            echo "RUNNER_LISTENER_CONNECTED=$listener_connected"
-            echo "RUNNER_LISTENER_FAILURE_CLASS=$listener_failure"
-            test "$listener_connected" = true
-            echo RUNNER_BASTION_RESCUE=listener_restarted
-            echo RUNNER_SERVICE_ACTIVE=true
-          '
+            fi
+            sleep 2
+          done
+          echo "RUNNER_LISTENER_CONNECTED=$listener_connected"
+          echo "RUNNER_LISTENER_FAILURE_CLASS=$listener_failure"
+          test "$listener_connected" = true
+          echo RUNNER_BASTION_RESCUE=listener_restarted
+          echo RUNNER_SERVICE_ACTIVE=true
+          REMOTE_RUNNER_RESCUE
 
       - name: Ensure one canonical deploy exists for current main
         env:
