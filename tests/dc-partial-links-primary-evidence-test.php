@@ -9,7 +9,7 @@ $required = [
     'DC_PRIMARY_AUTH_DIAG',
     '- name: Upload available private login links',
     'if: always()',
-    'if-no-files-found: warn',
+    'if-no-files-found: error',
 ];
 
 foreach ($required as $needle) {
