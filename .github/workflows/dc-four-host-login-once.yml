@@ -474,17 +474,28 @@ jobs:
           test "$(find "$LINK_DIR" -maxdepth 1 -type f -name 'dc-reauth-*.txt' | wc -l)" -eq 4
           echo DC_FOUR_LOGIN_LINKS_READY=PASS
 
-      - name: Diagnose site Desktop Commander auth failure safely
+      - name: Diagnose Linux Desktop Commander auth failure safely
         if: failure()
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
-          "${SSH_SITE[@]}" 'python3 -' <<'PY'
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          diagnose_host() {
+            label="$1"
+            if [ "$label" = SITE ]; then
+              SSH=("${SSH_SITE[@]}")
+            else
+              SSH=("${SSH_BACKEND[@]}")
+            fi
+
+            "${SSH[@]}" "DC_DIAG_PREFIX='$label' python3 -" <<'PY'
           import os
           import re
           from pathlib import Path
 
+          prefix = os.environ["DC_DIAG_PREFIX"]
           base = Path.home() / ".desktop-commander-device"
           log = base / "reauth-session.log"
           pid_file = base / "reauth-session.pid"
@@ -518,12 +529,17 @@ jobs:
                   except OSError:
                       alive = False
 
-          print(f"DC_SITE_AUTH_DIAG log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
-          print(f"DC_SITE_AUTH_DIAG pid_present={int(pid is not None)} process_alive={int(alive)}")
-          print(f"DC_SITE_AUTH_DIAG device_json={int(device.exists())} link_file={int(link.exists())}")
+          tag = f"DC_{prefix}_AUTH_DIAG"
+          print(f"{tag} log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
+          print(f"{tag} pid_present={int(pid is not None)} process_alive={int(alive)}")
+          print(f"{tag} device_json={int(device.exists())} link_file={int(link.exists())}")
           for name, value in flags.items():
-              print(f"DC_SITE_AUTH_DIAG {name}={int(value)}")
+              print(f"{tag} {name}={int(value)}")
           PY
+          }
+
+          diagnose_host SITE
+          diagnose_host BACKEND
 
       - name: Upload four private login links
         uses: actions/upload-artifact@v4
