@@ -18,6 +18,7 @@ EXACT_CONTROL_ROUTES = {
     "/provision-governed-backend-ci-runners-v1": "provision_backend_runners",
     "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
     "/codex-remote-control-mcp-run": "codex_remote_control",
+    "/codex-global-issue-comment-routing-v1": "codex_global_issue_comment_routing",
     "/amazon-support-reply case_ids=22153077391,22153259501": "amazon_support_breakglass",
     "/amazon-support-readback case_ids=22153077391,22153259501": "amazon_support_breakglass",
     "/amazon-support-chat-reply case_ids=22199842931": "amazon_support_breakglass",
