@@ -1,8 +1,12 @@
 name: Codex Auto Continuity V7 Goal
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      prompt_comment:
+        description: Original handoff comment id
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -10,10 +14,6 @@ permissions:
 
 jobs:
   activate-goal:
-    if: >-
-      github.event.issue.number == 1586 &&
-      github.event.comment.user.login == 'fredmourao-ai' &&
-      startsWith(github.event.comment.body, '/codex-auto-continuity-v7-goal ')
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
 
@@ -21,25 +21,12 @@ jobs:
       - name: Resolve bounded Goal request
         id: req
         env:
-          GH_TOKEN: ${{ github.token }}
+          PROMPT_COMMENT: ${{ inputs.prompt_comment }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 - "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT" <<'PY'
-          import json
-          import re
-          import sys
-          from pathlib import Path
-
-          event_path, output_path = sys.argv[1:3]
-          event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-          body = str((event.get("comment") or {}).get("body") or "").strip()
-          match = re.fullmatch(r"/codex-auto-continuity-v7-goal\s+prompt_comment=(\d+)", body)
-          if not match:
-              raise SystemExit("invalid bounded Goal request")
-          with Path(output_path).open("a", encoding="utf-8") as fh:
-              fh.write(f"prompt_comment={match.group(1)}\n")
-          PY
+          [[ "$PROMPT_COMMENT" =~ ^[0-9]+$ ]]
+          printf 'prompt_comment=%s\n' "$PROMPT_COMMENT" >> "$GITHUB_OUTPUT"
 
       - name: Fetch original handoff without logging body
         id: prompt
