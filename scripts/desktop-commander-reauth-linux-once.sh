@@ -36,10 +36,15 @@ case "$PHASE" in
     rm -f "$DEVICE_DIR/device.json"
     rm -f "$DEVICE_DIR/auth-required.cooldown" "$DEVICE_DIR/provider-connected.marker"       "$LINK_FILE" "$STATE_FILE" "$SESSION_LOG"
 
-    RUNNER_TRACKING_ID= nohup setsid timeout 600s       npx --yes "$PACKAGE" remote --persist-session >"$SESSION_LOG" 2>&1 < /dev/null &
+    command -v script >/dev/null 2>&1
+    : > "$SESSION_LOG"
+    chmod 600 "$SESSION_LOG"
+    cmd="npx --yes $PACKAGE remote --persist-session"
+    RUNNER_TRACKING_ID= nohup setsid timeout 600s \
+      script -q -f -c "$cmd" "$SESSION_LOG" >/dev/null 2>&1 < /dev/null &
     pid=$!
     printf '%s\n' "$pid" > "$PID_FILE"
-    chmod 600 "$PID_FILE" "$SESSION_LOG"
+    chmod 600 "$PID_FILE"
 
     found=false
     for _ in $(seq 1 90); do
