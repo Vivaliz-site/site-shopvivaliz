@@ -40,7 +40,7 @@ class PrGateScopeTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(completed.stdout, "Task Continuity Fast Gate\\n")
+        self.assertEqual(completed.stdout, "Task Continuity Fast Gate\n")
 
     def test_storefront_change_selects_runtime_gates(self) -> None:
         scope = load_scope()
