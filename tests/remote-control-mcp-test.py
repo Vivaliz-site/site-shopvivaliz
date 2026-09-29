@@ -1004,6 +1004,7 @@ class BootstrapContractTests(unittest.TestCase):
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
         self.assertIn("claude_not_logged_in", setup)
         self.assertIn("claude_auth_status_invalid", setup)
+        self.assertIn("isinstance(data, dict)", setup)
         self.assertIn('"claude_not_logged_in"', helper)
         self.assertIn('"claude_auth_status_invalid"', helper)
 
