@@ -36,6 +36,20 @@ if (str_contains($workflow, 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1
 
 $linux = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-linux-once.sh');
 $windows = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-windows.ps1');
+$oneShot = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
+
+if (!str_contains($linux, 'script -q -f -c')) {
+    fwrite(STDERR, "Linux DC auth must run under a PTY so the device-login prompt is emitted\n");
+    exit(1);
+}
+if (!str_contains($linux, ': > "$SESSION_LOG"')) {
+    fwrite(STDERR, "Linux DC auth must create the session log before chmod/background launch\n");
+    exit(1);
+}
+if (!str_contains($oneShot, ': > "$d/reauth-session.log"')) {
+    fwrite(STDERR, "One-shot Linux fallback must create its session log before chmod/background launch\n");
+    exit(1);
+}
 
 if (!str_contains($linux, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Linux reauth must extract the provider-issued verification_uri_complete by context\n");
