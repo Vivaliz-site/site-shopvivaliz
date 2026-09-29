@@ -785,21 +785,19 @@ jobs:
               data={}
           endpoint=str(data.get('endpoint') or '')
           print('AI_SQUAD_CLAUDE_HEALTH_ENDPOINT_VALID=' + ('true' if endpoint == 'ai-squad-claude-bridge' else 'false'))
-          for src, dst in (
-              ('ok','OK'),
-              ('token_configured','TOKEN_CONFIGURED'),
-              ('credential_store_configured','CREDENTIAL_STORE_CONFIGURED'),
-              ('authenticated','AUTHENTICATED'),
-              ('binary_configured','BINARY_CONFIGURED'),
-          ):
-              print('AI_SQUAD_CLAUDE_HEALTH_' + dst + '=' + ('true' if data.get(src) is True else 'false'))
+          print('AI_SQUAD_CLAUDE_HEALTH_OK=' + ('true' if data.get('ok') is True else 'false'))
+          print('AI_SQUAD_CLAUDE_HEALTH_TOKEN_CONFIGURED=' + ('true' if data.get('token_configured') is True else 'false'))
+          print('AI_SQUAD_CLAUDE_HEALTH_CREDENTIAL_STORE_CONFIGURED=' + ('true' if data.get('credential_store_configured') is True else 'false'))
+          print('AI_SQUAD_CLAUDE_HEALTH_AUTHENTICATED=' + ('true' if data.get('authenticated') is True else 'false'))
+          print('AI_SQUAD_CLAUDE_HEALTH_BINARY_CONFIGURED=' + ('true' if data.get('binary_configured') is True else 'false'))
           INNER_HEALTH
 
           help_tmp="$(mktemp)"
           auth_tmp="$(mktemp)"
           probe_out="$(mktemp)"
           probe_err="$(mktemp)"
-          trap 'rm -f "$help_tmp" "$auth_tmp" "$probe_out" "$probe_err"' EXIT
+          probe_debug="$(mktemp)"
+          trap 'rm -f "$help_tmp" "$auth_tmp" "$probe_out" "$probe_err" "$probe_debug"' EXIT
 
           sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --help >"$help_tmp" 2>&1 || :
           for spec in SAFE_MODE:--safe-mode RESTRICTED:--restricted PERMISSION_PROMPTS:--permission-prompts NO_CHROME:--no-chrome; do
@@ -809,6 +807,30 @@ jobs:
             if grep -Fq -- "$flag" "$help_tmp"; then supported=true; fi
             printf 'AI_SQUAD_CLAUDE_FLAG_%s=%s\n' "$key" "$supported"
           done
+
+          version_raw="$(sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --version 2>/dev/null | head -n 1 || true)"
+          version="$(printf '%s' "$version_raw" | grep -Eo '[0-9]+(\.[0-9]+){1,3}' | head -n 1 || true)"
+          [ -n "$version" ] || version=unknown
+          printf 'AI_SQUAD_CLAUDE_VERSION=%s\n' "$version"
+
+          service_env="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user show "$service" --property=Environment --value 2>/dev/null || true)"
+          env_has() { printf '%s\n' "$service_env" | grep -Eq "(^|[[:space:]])$1="; }
+          base_url_set=false
+          api_key_set=false
+          auth_token_set=false
+          if env_has ANTHROPIC_BASE_URL; then base_url_set=true; fi
+          if env_has ANTHROPIC_API_KEY; then api_key_set=true; fi
+          if env_has CLAUDE_CODE_OAUTH_TOKEN; then auth_token_set=true; fi
+          printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_BASE_URL_SET=%s\n' "$base_url_set"
+          printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_API_KEY_SET=%s\n' "$api_key_set"
+          printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_AUTH_TOKEN_SET=%s\n' "$auth_token_set"
+
+          api_dns_ok=false
+          api_reachable=false
+          if getent ahosts api.anthropic.com >/dev/null 2>&1; then api_dns_ok=true; fi
+          if curl -sS --connect-timeout 5 --max-time 8 -o /dev/null https://api.anthropic.com/ 2>/dev/null; then api_reachable=true; fi
+          printf 'AI_SQUAD_CLAUDE_API_DNS_OK=%s\n' "$api_dns_ok"
+          printf 'AI_SQUAD_CLAUDE_API_REACHABLE=%s\n' "$api_reachable"
 
           auth_rc=0
           if sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude auth status --json >"$auth_tmp" 2>/dev/null; then
@@ -837,7 +859,7 @@ jobs:
           printf 'AI_SQUAD_CLAUDE_PROCESS_COUNT=%s\n' "$process_count"
 
           probe_rc=0
-          if timeout 35s sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin             /home/ubuntu/.local/bin/claude -p             --output-format stream-json --verbose --no-session-persistence             --safe-mode --restricted --permission-mode dontAsk --permission-prompts none             --disable-slash-commands --no-chrome --model claude-sonnet-5 --effort low             --system-prompt 'AI Squad authentication health probe. Reply only OK.' --tools ''             >"$probe_out" 2>"$probe_err" <<'INNER_PROMPT'
+          if timeout 35s sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin             /home/ubuntu/.local/bin/claude -p             --output-format stream-json --verbose --debug-file "$probe_debug" --no-session-persistence             --safe-mode --restricted --permission-mode dontAsk --permission-prompts none             --disable-slash-commands --no-chrome --model claude-sonnet-5 --effort low             --system-prompt 'AI Squad authentication health probe. Reply only OK.' --tools ''             >"$probe_out" 2>"$probe_err" <<'INNER_PROMPT'
           OK
           INNER_PROMPT
           then
@@ -847,8 +869,9 @@ jobs:
           fi
 
           failure_class=none
+          transport_detail=none
           if [ "$probe_rc" -ne 0 ]; then
-            combined="$(tr '[:upper:]' '[:lower:]' <"$probe_err"; tr '[:upper:]' '[:lower:]' <"$probe_out")"
+            combined="$(tr '[:upper:]' '[:lower:]' <"$probe_err"; tr '[:upper:]' '[:lower:]' <"$probe_out"; tr '[:upper:]' '[:lower:]' <"$probe_debug")"
             if [ "$probe_rc" -eq 124 ]; then
               failure_class=timeout
             elif grep -Eq 'another claude code process is refreshing|exited mid-refresh|refresh oauth token' <<<"$combined"; then
@@ -863,12 +886,30 @@ jobs:
               failure_class=auth
             else
               failure_class=transport
+              if grep -Eq 'workspace not trusted|trust this (folder|workspace)|untrusted workspace' <<<"$combined"; then
+                transport_detail=workspace_trust
+              elif grep -Eq 'connection refused|econnrefused' <<<"$combined"; then
+                transport_detail=connection_refused
+              elif grep -Eq 'connection reset|econnreset|socket hang up' <<<"$combined"; then
+                transport_detail=connection_reset
+              elif grep -Eq 'could not resolve|name or service not known|enotfound|eai_again' <<<"$combined"; then
+                transport_detail=dns
+              elif grep -Eq 'certificate|tls|ssl|x509' <<<"$combined"; then
+                transport_detail=tls
+              elif grep -Eq 'proxy|tunnel connection failed' <<<"$combined"; then
+                transport_detail=proxy
+              elif grep -Eq 'network is unreachable|enetunreach|no route to host' <<<"$combined"; then
+                transport_detail=network_unreachable
+              else
+                transport_detail=unknown_transport
+              fi
             fi
           elif ! grep -q '"type":"result"' "$probe_out"; then
             failure_class=invalid_output
           fi
           printf 'AI_SQUAD_CLAUDE_PROBE_OK=%s\n' "$([ "$failure_class" = none ] && echo true || echo false)"
           printf 'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=%s\n' "$failure_class"
+          printf 'AI_SQUAD_CLAUDE_PROBE_TRANSPORT_DETAIL=%s\n' "$transport_detail"
           '''
 
           body = json.dumps({
@@ -908,6 +949,9 @@ jobs:
               'AI_SQUAD_CLAUDE_HEALTH_',
               'AI_SQUAD_CLAUDE_FLAG_',
               'AI_SQUAD_CLAUDE_AUTH_',
+              'AI_SQUAD_CLAUDE_VERSION=',
+              'AI_SQUAD_CLAUDE_SERVICE_ENV_',
+              'AI_SQUAD_CLAUDE_API_',
               'AI_SQUAD_CLAUDE_PROCESS_COUNT=',
               'AI_SQUAD_CLAUDE_PROBE_',
           )
@@ -917,7 +961,14 @@ jobs:
               'AI_SQUAD_CLAUDE_HEALTH_OK',
               'AI_SQUAD_CLAUDE_HEALTH_AUTHENTICATED',
               'AI_SQUAD_CLAUDE_AUTH_LOGGED_IN',
+              'AI_SQUAD_CLAUDE_VERSION',
+              'AI_SQUAD_CLAUDE_SERVICE_ENV_BASE_URL_SET',
+              'AI_SQUAD_CLAUDE_SERVICE_ENV_API_KEY_SET',
+              'AI_SQUAD_CLAUDE_SERVICE_ENV_AUTH_TOKEN_SET',
+              'AI_SQUAD_CLAUDE_API_REACHABLE',
+              'AI_SQUAD_CLAUDE_API_DNS_OK',
               'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS',
+              'AI_SQUAD_CLAUDE_PROBE_TRANSPORT_DETAIL',
           }
           seen={line.split('=',1)[0] for line in safe if '=' in line}
           if required.difference(seen):
