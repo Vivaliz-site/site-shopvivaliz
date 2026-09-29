@@ -6,8 +6,7 @@ $workflow=$root.'/.github/workflows/amazon-support-reply-oci-breakglass.yml';
 if(!is_file($workflow)){fwrite(STDERR,"amazon support Bastion breakglass workflow missing\n");exit(1);}
 $text=(string)file_get_contents($workflow);
 $required=[
-  'issue_comment:',
-  'types: [created]',
+  'workflow_call:',
   'runs-on: ubuntu-latest',
   'concurrency:',
   'group: shopvivaliz-oci-bastion-mutation',
