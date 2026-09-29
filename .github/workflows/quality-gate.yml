@@ -14,6 +14,7 @@ on:
       - 'tests/claude-workflow-cost-guard-test.php'
       - 'tests/desktop-commander-reauth-independent-transport-test.php'
       - 'tests/desktop-commander-reauth-hosted-contract-test.php'
+      - 'tests/desktop-commander-three-host-auth-diagnostics-test.php'
       - 'tests/desktop-commander-per-host-links-clean-test.php'
       - 'tests/desktop-commander-reauth-windows-reverse-first-test.php'
       - 'tests/dc-backend-auth-safe-diagnostic-test.php'
@@ -89,6 +90,7 @@ jobs:
           php tests/claude-workflow-cost-guard-test.php
           php tests/desktop-commander-reauth-independent-transport-test.php
           php tests/desktop-commander-reauth-hosted-contract-test.php
+          php tests/desktop-commander-three-host-auth-diagnostics-test.php
           php tests/desktop-commander-per-host-links-clean-test.php
           php tests/desktop-commander-reauth-windows-reverse-first-test.php
           php tests/dc-backend-auth-safe-diagnostic-test.php

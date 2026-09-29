@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('begin','finalize')]
+    [ValidateSet('begin','finalize','diagnose')]
     [string]$Phase,
     [Parameter(Mandatory=$true)]
     [ValidateSet('fred-win','kocepsv')]
@@ -100,10 +100,10 @@ $ErrorActionPreference = 'Continue'
     for ($i = 0; $i -lt 90; $i++) {
         if (Test-Path -LiteralPath $SessionLog) {
             $raw = Get-Content -LiteralPath $SessionLog -Raw -ErrorAction SilentlyContinue
-            $clean = [regex]::Replace([string]$raw, ([char]27).ToString() + '\\[[0-?]*[ -/]*[@-~]', '')
-            $match = [regex]::Match($clean, 'Verify this device in your browser:\\s*(https://\\S+)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            $clean = [regex]::Replace([string]$raw, ([char]27).ToString() + '\[[0-?]*[ -/]*[@-~]', '')
+            $match = [regex]::Match($clean, 'Verify this device in your browser:\s*(https://\S+)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
             if (-not $match.Success) {
-                $match = [regex]::Match($clean, 'Please visit:\\s*(https://\\S+)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                $match = [regex]::Match($clean, 'Please visit:\s*(https://\S+)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
             }
             if ($match.Success) {
                 $url = $match.Groups[1].Value.Trim()
@@ -118,6 +118,53 @@ $ErrorActionPreference = 'Continue'
     [IO.File]::WriteAllText($LinkFile, $url)
     [IO.File]::WriteAllText($StateFile, 'AUTH_LINK_READY')
     Write-Output 'DC_REAUTH_BEGIN=PASS'
+    exit 0
+}
+
+if ($Phase -eq 'diagnose') {
+    $raw = if (Test-Path -LiteralPath $SessionLog) {
+        Get-Content -LiteralPath $SessionLog -Raw -ErrorAction SilentlyContinue
+    } else {
+        ''
+    }
+    $clean = [regex]::Replace([string]$raw, ([char]27).ToString() + '\[[0-?]*[ -/]*[@-~]', '')
+    $lower = $clean.ToLowerInvariant()
+    $pidPresent = $false
+    $processAlive = $false
+    if (Test-Path -LiteralPath $PidFile) {
+        $pidRaw = (Get-Content -LiteralPath $PidFile -Raw -ErrorAction SilentlyContinue).Trim()
+        if ($pidRaw -match '^\d+$') {
+            $pidPresent = $true
+            $processAlive = $null -ne (Get-Process -Id ([int]$pidRaw) -ErrorAction SilentlyContinue)
+        }
+    }
+
+    $flags = [ordered]@{
+        startup_started = $lower.Contains('starting mcp device')
+        local_mcp_connect_started = $lower.Contains('connecting to local desktop commander mcp using')
+        local_mcp_connected = $lower.Contains('connected to desktop commander mcp')
+        local_mcp_not_found = $lower.Contains('desktop commander mcp not found')
+        local_mcp_start_failed = $lower.Contains('failed to start desktop commander mcp')
+        remote_connect_started = $lower.Contains('connecting to remote mcp')
+        remote_connect_succeeded = $lower.Contains('connected to remote mcp')
+        auth_started = $lower.Contains('authenticating with remote mcp server')
+        verification_url_prompt = $lower.Contains('verify this device in your browser')
+        waiting_authorization = $lower.Contains('waiting for authorization')
+        device_ready = $lower.Contains('device ready')
+        npm_error = $lower.Contains('npm err')
+        network_error = ($lower -match 'econn|enotfound|eai_again|timed out|timeout')
+        auth_error = ($lower -match 'unauthorized|forbidden|invalid_grant|authentication failed')
+        generic_error = ($lower -match '\b(error|failed|exception)\b')
+    }
+
+    $logExists = Test-Path -LiteralPath $SessionLog
+    $logBytes = if ($logExists) { (Get-Item -LiteralPath $SessionLog).Length } else { 0 }
+    Write-Output ("DC_WINDOWS_AUTH_DIAG host={0} log_exists={1} log_bytes={2}" -f $HostKey, [int]$logExists, $logBytes)
+    Write-Output ("DC_WINDOWS_AUTH_DIAG host={0} pid_present={1} process_alive={2}" -f $HostKey, [int]$pidPresent, [int]$processAlive)
+    Write-Output ("DC_WINDOWS_AUTH_DIAG host={0} device_json={1} link_file={2}" -f $HostKey, [int](Test-Path -LiteralPath $DeviceFile), [int](Test-Path -LiteralPath $LinkFile))
+    foreach ($entry in $flags.GetEnumerator()) {
+        Write-Output ("DC_WINDOWS_AUTH_DIAG host={0} {1}={2}" -f $HostKey, $entry.Key, [int][bool]$entry.Value)
+    }
     exit 0
 }
 
