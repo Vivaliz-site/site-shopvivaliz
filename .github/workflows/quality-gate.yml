@@ -19,6 +19,8 @@ on:
       - 'composer.json'
       - 'composer.lock'
       - '.github/workflows/quality-gate.yml'
+      - '.github/workflows/claude.yml'
+      - '.github/workflows/comment-command-router.yml'
       - '.github/workflows/public-layout-audit.yml'
       - '.github/workflows/shopvivaliz-remote-access.yml'
       - 'scripts/public-layout-audit.mjs'
