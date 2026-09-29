@@ -8,8 +8,7 @@ name: Task Continuity Production E2E
 # own schedule. It never invokes the daemon's internal stale-detection or
 # detached-execution entrypoints directly.
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
   workflow_dispatch:
     inputs:
       repository:

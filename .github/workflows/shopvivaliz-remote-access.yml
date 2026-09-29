@@ -1,8 +1,7 @@
 name: ShopVivaliz Remote Access
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
   workflow_dispatch:
     inputs:
       target:
