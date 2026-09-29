@@ -20,6 +20,28 @@ REMOTE_CONTROL_PROMPT = "Enable Remote Control?"
 SERVER_SESSION_URL_RE = re.compile(r"https://claude\.ai/code/[^\s\x1b]+", re.IGNORECASE)
 
 
+TRUST_PERSIST_SECONDS = 5.0
+def workspace_trust_command(claude_bin: str) -> list[str]:
+    """Use Claude's normal interactive workspace-trust flow first."""
+    return [claude_bin]
+
+
+def remote_control_server_command(claude_bin: str) -> list[str]:
+    return [
+        claude_bin,
+        "remote-control",
+        "--name",
+        "ShopVivaliz-Trust-Bootstrap",
+        "--spawn",
+        "worktree",
+        "--capacity",
+        "1",
+        "--no-create-session-in-dir",
+        "--permission-mode",
+        "default",
+
+    ]
+
 def clean_screen(value: str) -> str:
     return ANSI_RE.sub("", value).replace("\r", "\n")
 
@@ -138,6 +160,60 @@ def stop_process(proc: subprocess.Popen[bytes]) -> None:
     except subprocess.TimeoutExpired:
         pass
 
+def bootstrap_workspace_trust(claude_bin: str, workspace: str) -> str:
+    """Accept only the normal-session workspace-trust prompt through a PTY."""
+    master_fd, slave_fd = pty.openpty()
+    proc: subprocess.Popen[bytes] | None = None
+    buffer = ""
+    accepted = False
+    deadline = time.monotonic() + 15.0
+    accepted_at = 0.0
+    try:
+        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
+        env = os.environ.copy()
+        env["TERM"] = "xterm-256color"
+        proc = subprocess.Popen(
+            workspace_trust_command(claude_bin),
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            start_new_session=True,
+            env=env,
+        )
+        os.close(slave_fd)
+        slave_fd = -1
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([master_fd], [], [], 0.25)
+            if not ready:
+                if accepted and time.monotonic() - accepted_at >= TRUST_PERSIST_SECONDS:
+                    return "accepted"
+                if proc.poll() is not None:
+                    break
+                continue
+            try:
+                chunk = os.read(master_fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
+            sequence = legacy_trust_acceptance_sequence(buffer)
+            if sequence is not None:
+                os.write(master_fd, sequence)
+                accepted = True
+                accepted_at = time.monotonic()
+                continue
+            if unexpected_prompt_visible(buffer, workspace):
+                return "unexpected"
+    finally:
+        if slave_fd >= 0:
+            os.close(slave_fd)
+        if proc is not None:
+            stop_process(proc)
+        os.close(master_fd)
+    return "accepted" if accepted else "not_shown"
+
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
@@ -150,6 +226,11 @@ def main(argv: list[str]) -> int:
         return 65
 
     workspace = os.path.realpath(os.getcwd())
+    trust_result = bootstrap_workspace_trust(claude_bin, workspace)
+    if trust_result == "unexpected":
+        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=unexpected_prompt")
+        return 66
+
     master_fd, slave_fd = pty.openpty()
     proc: subprocess.Popen[bytes] | None = None
     buffer = ""
@@ -159,19 +240,7 @@ def main(argv: list[str]) -> int:
     unexpected = False
     deadline = time.monotonic() + 30.0
 
-    command = [
-        claude_bin,
-        "remote-control",
-        "--name",
-        "ShopVivaliz-Trust-Bootstrap",
-        "--spawn",
-        "worktree",
-        "--capacity",
-        "1",
-        "--no-create-session-in-dir",
-        "--permission-mode",
-        "default",
-    ]
+    command = remote_control_server_command(claude_bin)
 
     try:
         fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
