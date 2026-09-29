@@ -138,6 +138,27 @@ echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS"
 echo "CLAUDE_OCI_STAGE_INSTALLER=START"
 rc=0
 out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
+if [ "$rc" -ne 0 ]; then
+  setup_output_present=false
+  setup_failure_class=setup_runtime
+  if [ -n "$out" ]; then
+    setup_output_present=true
+    out_lc="$(printf '%s' "$out" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$out_lc" == *"bad interpreter"* || "$out_lc" == *"cannot execute"* || "$out_lc" == *"exec format"* || "$out_lc" == *"invalid option"* || "$out_lc" == *"syntax error near unexpected token"* ]]; then
+      setup_failure_class=shell_startup
+    elif [[ "$out_lc" == *"no space left"* || "$out_lc" == *"disk full"* || "$out_lc" == *"insufficient_free_space"* ]]; then
+      setup_failure_class=storage
+    elif [[ "$out_lc" == *"permission denied"* || "$out_lc" == *"operation not permitted"* ]]; then
+      setup_failure_class=permission
+    elif [[ "$out_lc" == *"no such file"* || "$out_lc" == *"command not found"* || "$out_lc" == *"not found"* ]]; then
+      setup_failure_class=missing
+    elif [[ "$out_lc" == *"resource temporarily unavailable"* || "$out_lc" == *"cannot fork"* || "$out_lc" == *"fork: retry"* ]]; then
+      setup_failure_class=resource
+    fi
+  fi
+  printf 'CLAUDE_OCI_SETUP_OUTPUT_PRESENT=%s\n' "$setup_output_present"
+  printf 'CLAUDE_OCI_SETUP_FAILURE_CLASS=%s\n' "$setup_failure_class"
+fi
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
 exit "$rc"
 """

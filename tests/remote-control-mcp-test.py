@@ -1013,6 +1013,18 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CLAUDE_OCI_STAGE_SETUP_CONTRACT=PASS", helper)
         self.assertIn("CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS", helper)
         self.assertIn("bash -n", helper)
+        self.assertIn("CLAUDE_OCI_SETUP_OUTPUT_PRESENT=", helper)
+        self.assertIn("CLAUDE_OCI_SETUP_FAILURE_CLASS=", helper)
+        for setup_label in (
+            "shell_startup",
+            "storage",
+            "permission",
+            "missing",
+            "resource",
+            "setup_runtime",
+        ):
+            self.assertIn(setup_label, helper)
+        self.assertNotIn("CLAUDE_OCI_SETUP_OUTPUT=", helper)
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
 
