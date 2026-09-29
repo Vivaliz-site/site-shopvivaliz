@@ -144,6 +144,9 @@ async function run() {
       assert.match(expression, /is_archived=false/);
       assert.match(expression, /is_starred=false/);
       assert.match(expression, /order=updated/);
+      assert.match(expression, /\/api\/auth\/session/);
+      assert.match(expression, /session\?\.account\?\.id/);
+      assert.match(expression, /ChatGPT-Account-Id/);
       assert.match(expression, /body\?\.conversations/);
       assert.match(expression, /fallback_unfiltered/);
       return {id:'latest-thread-updated-at',updated_at:iso,http_status:200,source:'filtered'};
