@@ -47,6 +47,8 @@ $required = [
     'Runner connect error',
     'RUNNER_LISTENER_CONNECTED=',
     'RUNNER_LISTENER_FAILURE_CLASS=',
+    "-printf '%T@:%p\\n'",
+    'cut -d: -f2-',
     "<<'REMOTE_RUNNER_RESCUE'",
     'bash -s',
     'trap \'rm -f "$marker"\' EXIT',
@@ -76,6 +78,7 @@ $forbidden = [
     '--session-ttl 900',
     'cat "$latest_log"',
     '"${SSH_SITE[@]}" \'set -Eeuo pipefail',
+    "cut -d' ' -f2-",
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
