@@ -61,7 +61,7 @@ def classify_remote_failure(stdout: str, stderr: str, error: str = "") -> str:
     checks = (
         ("storage", ("no space left", "disk full", "insufficient_free_space")),
         ("trust", ("workspace not trusted", "trust_bootstrap", "plain_prompt_missing", "trust_not_persisted")),
-        ("auth", ("not logged in", "authentication", "unauthorized", "login required")),
+        ("auth", ("not logged in", "claude_not_logged_in", "claude_auth_status_invalid", "authentication", "unauthorized", "login required")),
         ("timeout", ("timed out", "timeout", "deadline exceeded")),
         ("permission", ("permission denied", "operation not permitted")),
         ("missing", ("no such file", "not found", "command not found")),
