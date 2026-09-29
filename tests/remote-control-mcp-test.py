@@ -950,6 +950,8 @@ class BootstrapContractTests(unittest.TestCase):
         watched = "- 'scripts/claude_workspace_trust_bootstrap.py'"
         self.assertGreaterEqual(ci.count(watched), 2)
         self.assertIn("scripts/claude_workspace_trust_bootstrap.py", ci.split("python3 -m py_compile", 1)[1])
+        self.assertGreaterEqual(ci.count("- 'scripts/oci-mcp-stage7-action.py'"), 2)
+        self.assertIn("scripts/oci-mcp-stage7-action.py", ci.split("python3 -m py_compile", 1)[1])
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
