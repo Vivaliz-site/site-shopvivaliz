@@ -933,7 +933,8 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=",
             "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=",
             "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=",
-            "task_resume_queue.certify_queue",
+            "task_resume_queue.py",
+            "timeout=8",
         ):
             self.assertIn(marker, workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_QUEUE_ROW=", workflow)
@@ -973,7 +974,7 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(marker, workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE=", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION=", workflow)
-        self.assertIn("import hashlib, json, pathlib, re, sys", workflow)
+        self.assertIn("import hashlib, json, pathlib, re, subprocess, sys", workflow)
 
 
     def test_oci_bastion_can_ensure_next_chatgpt_freeze_generation(self):
