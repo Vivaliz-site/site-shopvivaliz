@@ -41,6 +41,9 @@ GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
 FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
 DISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"
 DISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"
+QUEUE = ROOT / "scripts" / "task_resume_queue.py"
+QUEUE_TEST = ROOT / "tests" / "test_task_resume_queue.py"
+QUEUE_MARKER = "RESUME_QUEUE_CERTIFICATION_V12"
 LOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
 E2E_PROBE = ROOT / "scripts" / "task_continuity_e2e.py"
 E2E_PROBE_TEST = ROOT / "tests" / "test_task_continuity_e2e.py"
@@ -173,6 +176,26 @@ else:
 if not DISPATCHER_TEST.is_file():
     errors.append("missing tests/test_task_resume_dispatcher.py")
 
+if not QUEUE.is_file():
+    errors.append("missing scripts/task_resume_queue.py")
+else:
+    queue_text = QUEUE.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "_resume-requests-archive.jsonl",
+        "_resume-queue.lock",
+        "checkpoint_fingerprint",
+        "certify_queue",
+        "compact_queue",
+        "fcntl.LOCK_EX",
+        "os.replace",
+        "os.fsync",
+    ):
+        if token not in queue_text:
+            errors.append(f"scripts/task_resume_queue.py: missing {token}")
+
+if not QUEUE_TEST.is_file():
+    errors.append("missing tests/test_task_resume_queue.py")
+
 continuity_docs = ROOT / "docs" / "knowledge" / "task-continuity.md"
 if not continuity_docs.is_file():
     errors.append("missing docs/knowledge/task-continuity.md")
@@ -184,6 +207,8 @@ else:
         errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_MARKER}")
     if E2E_VERIFICATION not in continuity_docs_text:
         errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_VERIFICATION}")
+    if QUEUE_MARKER not in continuity_docs_text:
+        errors.append(f"docs/knowledge/task-continuity.md: missing {QUEUE_MARKER}")
     if GLOBAL_MARKER not in continuity_docs_text:
         errors.append(f"docs/knowledge/task-continuity.md: missing {GLOBAL_MARKER}")
 
@@ -246,6 +271,10 @@ else:
         errors.append("repository governance does not execute auto-resume regression tests")
     if "tests.test_task_resume_dispatcher" not in governance:
         errors.append("repository governance does not execute detached-resume regression tests")
+    if "tests.test_task_resume_queue" not in governance:
+        errors.append("repository governance does not execute resume-queue certification tests")
+    if "chatgpt-continuity-bridge-worker-test.mjs" not in governance:
+        errors.append("repository governance does not execute ChatGPT bridge-worker regression")
     if "tests.test_global_task_continuity_v8" not in governance:
         errors.append("repository governance does not execute global-continuity regression tests")
 
