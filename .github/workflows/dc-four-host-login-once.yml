@@ -474,16 +474,28 @@ jobs:
             "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
           }
 
-          if make_win_tunnel 32225 "$FRED_MODE" "$FRED_IP" 2222 fred-win && start_windows fred-win FRED 32225 "$LINK_DIR/dc-reauth-fred-win.txt"; then
-            echo "DC_LOGIN_HOST_RESULT host=fred-win status=link_ready"
+          if make_win_tunnel 32225 "$FRED_MODE" "$FRED_IP" 2222 fred-win; then
+            if ! start_windows fred-win FRED 32225 "$LINK_DIR/dc-reauth-fred-win.txt"; then
+              rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
+              missing_hosts+=(fred-win)
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
+            else
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=link_ready"
+            fi
           else
             rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
             missing_hosts+=(fred-win)
             echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
           fi
 
-          if make_win_tunnel 32226 "$KOCEPSV_MODE" "$KOCEPSV_IP" 2223 kocepsv && start_windows kocepsv user 32226 "$LINK_DIR/dc-reauth-kocepsv.txt"; then
-            echo "DC_LOGIN_HOST_RESULT host=kocepsv status=link_ready"
+          if make_win_tunnel 32226 "$KOCEPSV_MODE" "$KOCEPSV_IP" 2223 kocepsv; then
+            if ! start_windows kocepsv user 32226 "$LINK_DIR/dc-reauth-kocepsv.txt"; then
+              rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
+              missing_hosts+=(kocepsv)
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=failed"
+            else
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=link_ready"
+            fi
           else
             rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
             missing_hosts+=(kocepsv)
@@ -561,7 +573,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          missing="$(cat "$RUNNER_TEMP/dc-login-missing-hosts.txt" 2>/dev/null || printf 'generation-step-failed')"
+          if [ -s "$RUNNER_TEMP/dc-login-missing-hosts.txt" ]; then
+            missing="$(cat "$RUNNER_TEMP/dc-login-missing-hosts.txt")"
+          else
+            missing="generation-step-failed"
+          fi
           echo "DC_LOGIN_MISSING_HOSTS=${missing:-none}"
           if [ -n "$missing" ]; then
             exit 1
