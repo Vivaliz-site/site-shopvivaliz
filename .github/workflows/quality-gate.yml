@@ -14,6 +14,8 @@ on:
       - 'tests/claude-workflow-cost-guard-test.php'
       - 'tests/desktop-commander-reauth-independent-transport-test.php'
       - 'tests/desktop-commander-reauth-hosted-contract-test.php'
+      - 'tests/dc-backend-auth-safe-diagnostic-test.php'
+      - '.github/workflows/dc-four-host-login-once.yml'
       - 'tests/dc-four-host-login-single-bastion-test.php'
       - '.github/workflows/dc-four-host-login-once.yml'
       - 'scripts/desktop-commander-reauth-linux-once.sh'
@@ -83,6 +85,7 @@ jobs:
           php tests/claude-workflow-cost-guard-test.php
           php tests/desktop-commander-reauth-independent-transport-test.php
           php tests/desktop-commander-reauth-hosted-contract-test.php
+          php tests/dc-backend-auth-safe-diagnostic-test.php
           php tests/dc-four-host-login-single-bastion-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
