@@ -66,13 +66,11 @@ if (substr_count($workflow, '- name: Cleanup temporary Bastion access and creden
     fwrite(STDERR, "DC reauth workflow must contain exactly one cleanup step\n");
     exit(1);
 }
-if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+
- \"$out_file\"")) {
+if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+\$' \"\$out_file\"")) {
     fwrite(STDERR, "Windows reauth link validation must be a complete quoted URL assertion\n");
     exit(1);
 }
-if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+
- \"$file\"")) {
+if (!str_contains($workflow, "grep -Eq '^https://[^[:space:]]+\$' \"\$file\"")) {
     fwrite(STDERR, "Collected reauth link validation must be a complete quoted URL assertion\n");
     exit(1);
 }
