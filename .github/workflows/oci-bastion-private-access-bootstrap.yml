@@ -766,6 +766,35 @@ jobs:
                               event=re.sub(r'[^A-Za-z0-9_-]','',str(row.get('event','')))[:64]
                               if event: events.append(event)
                       canonical_task_history_events=','.join(events) if events else 'NONE'
+          latest_generation_number=0
+          latest_generation_status='MISSING'
+          latest_generation_readable=False
+          latest_generation_owner_matches_runtime=False
+          latest_generation_mode_0600=False
+          generation_re=re.compile(r'^chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)\.json$')
+          generation_paths=[]
+          if root.is_dir():
+              for candidate_path in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
+                  match=generation_re.fullmatch(candidate_path.name)
+                  if match and candidate_path.is_file():
+                      generation_paths.append((int(match.group(1)),candidate_path))
+          if generation_paths:
+              generation_paths.sort(key=lambda item:item[0])
+              latest_generation_number,latest_generation_path=generation_paths[-1]
+              try:
+                  runtime_stat=root.stat()
+                  latest_stat=latest_generation_path.stat()
+                  latest_generation_owner_matches_runtime=(
+                      latest_stat.st_uid==runtime_stat.st_uid and latest_stat.st_gid==runtime_stat.st_gid
+                  )
+                  latest_generation_mode_0600=(latest_stat.st_mode & 0o7777)==0o600
+                  latest_payload=json.loads(latest_generation_path.read_text(encoding='utf-8'))
+              except (OSError,UnicodeError,json.JSONDecodeError):
+                  latest_generation_status='UNREADABLE'
+              else:
+                  latest_generation_readable=True
+                  latest_candidate=str(latest_payload.get('status','')).strip() if isinstance(latest_payload,dict) else ''
+                  latest_generation_status=latest_candidate if latest_candidate in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'} else 'INVALID'
           if root.is_dir():
               for p in root.glob('*.json'):
                   if p.name.startswith('_') or not p.is_file(): continue
@@ -872,6 +901,11 @@ jobs:
               dispatcher_log_seen=False
           print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
           print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER='+str(latest_generation_number))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS='+latest_generation_status)
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_READABLE='+('true' if latest_generation_readable else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_OWNER_MATCHES_RUNTIME='+('true' if latest_generation_owner_matches_runtime else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_MODE_0600='+('true' if latest_generation_mode_0600 else 'false'))
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS='+canonical_task_status)
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT='+canonical_task_updated_at)
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT='+canonical_task_completed_at)
@@ -935,6 +969,11 @@ jobs:
           allowed_keys = {
               'CHATGPT_CONTINUITY_AGENT_ACTIVE',
               'CHATGPT_CONTINUITY_RUNNING_TASKS',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_READABLE',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_OWNER_MATCHES_RUNTIME',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_MODE_0600',
               'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS',
               'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
               'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
@@ -1005,6 +1044,7 @@ jobs:
                       continue
                   if key in {
                       'CHATGPT_CONTINUITY_RUNNING_TASKS',
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER',
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
                       'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
@@ -1050,6 +1090,9 @@ jobs:
                   elif key == 'CHATGPT_CONTINUITY_CURRENT_PATH_KIND':
                       if value not in {'conversation','home','other'}:
                           raise RuntimeError('invalid diagnostic path kind')
+                  elif key == 'CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS':
+                      if value not in {'MISSING','UNREADABLE','INVALID','RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
+                          raise RuntimeError('invalid latest generation status')
                   elif key == 'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS':
                       if value not in {'MISSING','UNREADABLE','INVALID','RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
                           raise RuntimeError('invalid canonical task status')
