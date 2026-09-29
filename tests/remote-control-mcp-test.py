@@ -1072,6 +1072,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('if [ "${BASH_ENV+x}" = x ]', helper)
         self.assertNotIn("CLAUDE_OCI_BASH_ENV_VALUE=", helper)
         self.assertNotIn("CLAUDE_OCI_BASH_STARTUP_OUTPUT=", helper)
+        install_helper = helper.split("def claude_install", 1)[1].split("def claude_status", 1)[0]
+        self.assertIn("awk '/^CLAUDE_[A-Z0-9_]+=/{{print}}'", install_helper)
+        self.assertNotIn("awk '/^CLAUDE_[A-Z0-9_]+=/{print}'", install_helper)
 
     def test_claude_setup_emits_sanitized_phase_markers_before_each_install_step(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
