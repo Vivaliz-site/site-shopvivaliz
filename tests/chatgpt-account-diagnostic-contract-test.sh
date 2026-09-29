@@ -72,7 +72,7 @@ from pathlib import Path
 import sys
 
 lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-needle = 'python3 - "$state_file" <<\'PY\''
+needle = 'python3 - "$state_file" "$canonical_task_id" <<\'PY\''
 start = next((i for i, line in enumerate(lines) if needle in line), None)
 if start is None:
     raise SystemExit("task-state sanitizer heredoc command missing")
