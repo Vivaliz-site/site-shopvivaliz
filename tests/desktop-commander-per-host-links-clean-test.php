@@ -12,7 +12,7 @@ $required = [
     'DC_LOGIN_HOST_RESULT host=kocepsv',
     'missing_hosts=()',
     'Upload available private login links',
-    "if-no-files-found: warn",
+    "if-no-files-found: error",
     'DC_LOGIN_MISSING_HOSTS',
 ];
 
