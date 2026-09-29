@@ -935,7 +935,7 @@ jobs:
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          remote_dir="/tmp/shopvivaliz-claude-oci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote_dir="/home/ubuntu/.local/state/shopvivaliz/claude-stage7/oci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir'"
           cleanup_stage() { "${BACKEND_SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :; }
           trap cleanup_stage EXIT
