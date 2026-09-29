@@ -862,6 +862,21 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("chatgpt-freeze-root-cause-20260928-g2.json", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_JSON=", workflow)
 
+    def test_oci_continuity_diagnostic_surfaces_latest_generation_health_safely(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for marker in (
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_READABLE=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_OWNER_MATCHES_RUNTIME=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_MODE_0600=",
+        ):
+            self.assertIn(marker, workflow)
+        self.assertIn("chatgpt-freeze-root-cause-20260928-g*.json", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_LATEST_GENERATION_TASK_ID=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_LATEST_GENERATION_JSON=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_LATEST_GENERATION_EVIDENCE=", workflow)
+
     def test_oci_continuity_diagnostic_surfaces_g2_terminal_history_safely(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
