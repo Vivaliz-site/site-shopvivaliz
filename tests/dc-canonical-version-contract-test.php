@@ -19,7 +19,9 @@ foreach ($requiredDocs as $needle) {
 $requiredWorkflow = [
     'start_linux site 0.2.48',
     'start_linux backend 0.2.48',
-    "-AuthPackageVersion '0.2.48'",
+    'auth_version=0.2.48',
+    'auth_version=0.2.51',
+    "-AuthPackageVersion '$auth_version'",
 ];
 
 foreach ($requiredWorkflow as $needle) {
