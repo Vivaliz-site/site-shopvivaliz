@@ -550,11 +550,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertEqual(module.trust_acceptance_sequence(already_selected_yes), b"\r")
         self.assertEqual(module.remote_control_acceptance_sequence("Enable Remote Control? (y/n)"), b"y\r")
         self.assertIsNone(module.remote_control_acceptance_sequence("Enable Remote Control? (yes/no)"))
-        self.assertGreaterEqual(module.POST_ACCEPT_SETTLE_SECONDS, 5.0)
+        self.assertEqual(module.documented_server_trust_sequence("Trust /tmp/shopvivaliz? [y/N]", "/tmp/shopvivaliz"), b"y\r")
+        self.assertTrue(module.server_startup_visible("https://claude.ai/code/example-session"))
         self.assertIsNone(module.trust_acceptance_sequence("Enable Remote Control? (y/n)"))
         self.assertIsNone(module.trust_acceptance_sequence("Do you want to allow this tool?"))
-        self.assertTrue(module.unexpected_prompt_visible("Enable Remote Control? (y/n)"))
-        self.assertTrue(module.unexpected_prompt_visible("Do you want to allow this tool?"))
+        self.assertFalse(module.unexpected_prompt_visible("Enable Remote Control? (y/n)", "/tmp/shopvivaliz"))
+        self.assertTrue(module.unexpected_prompt_visible("Do you want to allow this tool?", "/tmp/shopvivaliz"))
 
         helper_text = helper.read_text(encoding="utf-8")
         setup_text = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
@@ -562,7 +563,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("TIOCSWINSZ", helper_text)
         self.assertIn('env["TERM"] = "xterm-256color"', helper_text)
         self.assertNotIn('os.write(master_fd, b"1\\r")', helper_text)
-        self.assertIn('[claude_bin, "--remote-control"]', helper_text)
+        self.assertNotIn('[claude_bin, "--remote-control"]', helper_text)
+        self.assertIn('"remote-control"', helper_text)
+        self.assertIn("ShopVivaliz-Trust-Bootstrap", helper_text)
         self.assertIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", helper_text)
         self.assertNotIn("hasTrustDialogAccepted", setup_text)
@@ -927,6 +930,28 @@ class BootstrapContractTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("|| true", text, f"{path} must handle failures explicitly")
             self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
+
+
+    def test_claude_trust_bootstrap_uses_production_server_mode(self):
+        helper = (ROOT / "scripts" / "claude_workspace_trust_bootstrap.py").read_text(encoding="utf-8")
+        self.assertIn('"remote-control"', helper)
+        self.assertIn("ShopVivaliz-Trust-Bootstrap", helper)
+        self.assertIn("Trust ", helper)
+        self.assertIn("[y/N]", helper)
+        self.assertIn("Enable Remote Control?", helper)
+        self.assertNotIn('[claude_bin, "--remote-control"]', helper)
+
+    def test_claude_remote_control_unsets_feature_flag_blockers(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service").read_text(encoding="utf-8")
+        for name in (
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+            "DISABLE_GROWTHBOOK",
+            "DISABLE_TELEMETRY",
+            "DO_NOT_TRACK",
+        ):
+            self.assertIn(f"-u {name}", setup)
+            self.assertIn(name, unit)
 
 
 if __name__ == "__main__":
