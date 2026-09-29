@@ -795,6 +795,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("always-free-arm-1787907847-26", workflow)
         self.assertIn("shopvivaliz-free-a1", workflow)
 
+    def test_oci_continuity_diagnostic_uses_installed_worker_latest_probe(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for needle in (
+            "latestConversationProbe",
+            "normalizeLatestConversationMeta",
+            "CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS=",
+            "CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE=",
+            "CHATGPT_CONTINUITY_WORKER_LATEST_META_VALID=",
+        ):
+            self.assertIn(needle, workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_WORKER_LATEST_CONVERSATION_ID=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_WORKER_ACCOUNT_ID=", workflow)
+
     def test_oci_continuity_diagnostic_surfaces_dispatcher_link(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
