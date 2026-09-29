@@ -1,0 +1,241 @@
+name: Comment Command Router
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  route:
+    if: github.actor == 'fredmourao-ai'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+      target: ${{ steps.route.outputs.target }}
+      action: ${{ steps.route.outputs.action }}
+      operation: ${{ steps.route.outputs.operation }}
+      phase: ${{ steps.route.outputs.phase }}
+      prompt_comment: ${{ steps.route.outputs.prompt_comment }}
+      reason_b64: ${{ steps.route.outputs.reason_b64 }}
+      comment_id: ${{ steps.route.outputs.comment_id }}
+    steps:
+      - name: Resolve exactly one comment command
+        id: route
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$GITHUB_EVENT_PATH" "$GITHUB_OUTPUT" <<'PY'
+          import base64
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          event_path, output_path = sys.argv[1:3]
+          event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+          comment = event.get("comment") or {}
+          body = str(comment.get("body") or "").strip()
+          issue = event.get("issue") or {}
+          issue_number = int(issue.get("number") or 0)
+          comment_id = str(comment.get("id") or "")
+
+          route = "none"
+          target = ""
+          action = ""
+          operation = ""
+          phase = ""
+          prompt_comment = ""
+          reason = ""
+
+          if issue_number == 1586:
+              exact = {
+                  "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_scope",
+                  "/delete-superseded-solange-v1 CONFIRM": "delete_superseded_solange",
+                  "/continuity-e2e": "continuity_e2e",
+                  "/provision-governed-backend-ci-runners-v1": "provision_governed_runners",
+                  "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_scope",
+                  "/codex-remote-control-mcp-run": "codex_remote_control",
+                  "/amazon-support-reply case_ids=22153077391,22153259501": "amazon_reply_legacy",
+                  "/amazon-support-readback case_ids=22153077391,22153259501": "amazon_readback_legacy",
+                  "/amazon-support-chat-reply case_ids=22199842931": "amazon_chat_221998",
+              }
+              route = exact.get(body, "none")
+
+              if route == "none":
+                  match = re.fullmatch(
+                      r"/codex-auto-continuity-v7-goal\s+prompt_comment=(\d+)",
+                      body,
+                  )
+                  if match:
+                      route = "codex_goal"
+                      prompt_comment = match.group(1)
+
+              if route == "none":
+                  lines = body.splitlines()
+                  if lines and lines[0].strip() == "/codex-auto-continuity-v7":
+                      route = "codex_launcher"
+
+              if route == "none":
+                  match = re.fullmatch(
+                      r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)\s+reason=(.{3,500})",
+                      body,
+                  )
+                  if match:
+                      route = "mlrr"
+                      operation = match.group(1)
+                      reason = match.group(2).strip()
+
+              if route == "none":
+                  match = re.fullmatch(
+                      r"/remote\s+target=([A-Za-z0-9._-]+)\s+action=([A-Za-z0-9._-]+)\s+reason=(.{3,500})",
+                      body,
+                  )
+                  if match:
+                      route = "remote"
+                      target = match.group(1)
+                      action = match.group(2)
+                      reason = match.group(3).strip()
+
+              if route == "none":
+                  match = re.fullmatch(
+                      r"/dc-reauth\s+target=(shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv)\s+phase=(begin|finalize)",
+                      body,
+                  )
+                  if match:
+                      route = "dc_reauth"
+                      target = match.group(1)
+                      phase = match.group(2)
+
+          # Explicit operational commands always win over a mention embedded in
+          # their payload. Claude handles only otherwise-unmatched @claude comments.
+          if route == "none" and "@claude" in body:
+              route = "claude"
+
+          if route == "amazon_reply_legacy":
+              operation = "reply_legacy_221530_221532"
+          elif route == "amazon_readback_legacy":
+              operation = "readback_legacy_221530_221532"
+          elif route == "amazon_chat_221998":
+              operation = "chat_reply_221998"
+
+          values = {
+              "route": route,
+              "target": target,
+              "action": action,
+              "operation": operation,
+              "phase": phase,
+              "prompt_comment": prompt_comment,
+              "reason_b64": base64.b64encode(reason.encode("utf-8")).decode("ascii"),
+              "comment_id": comment_id,
+          }
+          with Path(output_path).open("a", encoding="utf-8") as out:
+              for key, value in values.items():
+                  out.write(f"{key}={value}\n")
+          print(f"COMMENT_COMMAND_ROUTE={route}")
+          PY
+
+  dispatch:
+    needs: route
+    if: needs.route.outputs.route != 'none' && needs.route.outputs.route != 'claude'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ROUTE: ${{ needs.route.outputs.route }}
+      TARGET: ${{ needs.route.outputs.target }}
+      ACTION: ${{ needs.route.outputs.action }}
+      OPERATION: ${{ needs.route.outputs.operation }}
+      PHASE: ${{ needs.route.outputs.phase }}
+      PROMPT_COMMENT: ${{ needs.route.outputs.prompt_comment }}
+      COMMENT_ID: ${{ needs.route.outputs.comment_id }}
+      REASON_B64: ${{ needs.route.outputs.reason_b64 }}
+    steps:
+      - name: Dispatch only the matching workflow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          reason=""
+          if [ -n "$REASON_B64" ]; then
+            reason="$(printf '%s' "$REASON_B64" | base64 -d)"
+          fi
+
+          case "$ROUTE" in
+            refresh_backend_scope)
+              gh workflow run refresh-backend-delete-repo-scope-once.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            delete_superseded_solange)
+              gh workflow run delete-superseded-solange-once.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            continuity_e2e)
+              gh workflow run task-continuity-production-e2e.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            provision_governed_runners)
+              gh workflow run provision-governed-backend-ci-runners.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            mlrr)
+              gh workflow run mlrr-production-ops-bridge.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f operation="$OPERATION" -f reason="$reason"
+              ;;
+            codex_launcher)
+              gh workflow run codex-auto-continuity-v7-launcher.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f prompt_comment="$COMMENT_ID"
+              ;;
+            refresh_a1_scope)
+              gh workflow run refresh-a1-delete-repo-scope-once.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            codex_goal)
+              gh workflow run codex-auto-continuity-v7-goal.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f prompt_comment="$PROMPT_COMMENT"
+              ;;
+            remote)
+              gh workflow run shopvivaliz-remote-access.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f target="$TARGET" -f action="$ACTION" -f reason="$reason"
+              ;;
+            codex_remote_control)
+              gh workflow run codex-remote-control-mcp-one-shot.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            amazon_reply_legacy|amazon_readback_legacy|amazon_chat_221998)
+              gh workflow run amazon-support-reply-oci-breakglass.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f operation="$OPERATION"
+              ;;
+            dc_reauth)
+              gh workflow run desktop-commander-reauth-runner.yml --repo "$GITHUB_REPOSITORY" --ref main \
+                -f target="$TARGET" -f phase="$PHASE"
+              ;;
+            *)
+              echo "unsupported route: $ROUTE" >&2
+              exit 2
+              ;;
+          esac
+          echo "COMMENT_COMMAND_DISPATCH=PASS route=$ROUTE"
+
+  claude:
+    needs: route
+    if: needs.route.outputs.route == 'claude'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: claude-${{ github.repository }}-${{ github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Action
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --max-turns 5
