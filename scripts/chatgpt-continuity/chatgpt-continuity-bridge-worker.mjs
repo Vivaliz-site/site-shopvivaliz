@@ -225,14 +225,18 @@ async function latestConversationProbe(cdp) {
   try {
     const result = await cdp.evaluate(`(async()=>{
       let accountId='';
+      let accessToken='';
       try{
         const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
         if(sessionResponse.ok){
           let session=null; try{session=await sessionResponse.json();}catch{}
           accountId=String(session?.account?.id||'').trim();
+          accessToken=String(session?.accessToken||session?.access_token||'').trim();
         }
       }catch{}
-      const headers=accountId?{'ChatGPT-Account-Id':accountId}:{};
+      const headers={Accept:'application/json'};
+      if(accessToken) headers.Authorization='Bearer '+accessToken;
+      if(accountId) headers['ChatGPT-Account-Id']=accountId;
       const candidates = [
         {source:'filtered',url:'/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false'},
         {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=1&order=updated'},
