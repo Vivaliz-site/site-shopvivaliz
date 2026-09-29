@@ -611,7 +611,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("TIOCSWINSZ", helper_text)
         self.assertIn('env["TERM"] = "xterm-256color"', helper_text)
         self.assertNotIn('os.write(master_fd, b"1\\r")', helper_text)
-        self.assertNotIn('[claude_bin, "--remote-control"]', helper_text)
+        self.assertIn('[claude_bin, "--remote-control", "ShopVivaliz-Trust-Bootstrap"]', helper_text)
         self.assertIn('"remote-control"', helper_text)
         self.assertIn("ShopVivaliz-Trust-Bootstrap", helper_text)
         self.assertIn("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS", helper_text)
@@ -1186,7 +1186,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("Trust ", helper)
         self.assertIn("[y/N]", helper)
         self.assertIn("Enable Remote Control?", helper)
-        self.assertNotIn('[claude_bin, "--remote-control"]', helper)
+        self.assertIn('[claude_bin, "--remote-control", "ShopVivaliz-Trust-Bootstrap"]', helper)
 
     def test_claude_remote_control_unsets_feature_flag_blockers(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
@@ -1217,10 +1217,13 @@ class BootstrapContractTests(unittest.TestCase):
         helper = (ROOT / "scripts" / "claude_workspace_trust_bootstrap.py").read_text(encoding="utf-8")
         main_body = helper.split("def main(argv: list[str]) -> int:", 1)[1]
         plain_call = "plain = bootstrap_plain_workspace_trust(claude_bin, workspace)"
+        longform_call = "interactive = run_interactive_remote_control_mode(claude_bin, workspace)"
         server_call = "server = run_server_mode(claude_bin, workspace)"
         self.assertIn(plain_call, main_body)
+        self.assertIn(longform_call, main_body)
         self.assertIn(server_call, main_body)
-        self.assertLess(main_body.index(plain_call), main_body.index(server_call))
+        self.assertLess(main_body.index(plain_call), main_body.index(longform_call))
+        self.assertLess(main_body.index(longform_call), main_body.index(server_call))
         self.assertIn('"plain_prompt_missing"', main_body)
         self.assertIn('"plain_trust_persisted"', main_body)
         self.assertIn('"trust_not_persisted"', main_body)
