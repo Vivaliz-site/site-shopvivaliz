@@ -875,6 +875,27 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(fallback, diagnostic)
 
+    def test_oci_continuity_diagnostic_bounds_site_queue_certifier(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
+        self.assertIn("task_resume_queue.py", diagnostic)
+        self.assertIn("timeout=8", diagnostic)
+        self.assertNotIn("queue_summary=task_resume_queue.certify_queue(root)", diagnostic)
+
+    def test_oci_continuity_diagnostic_scopes_progress_to_latest_generation(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
+        self.assertIn("latest_generation_fingerprint", diagnostic)
+        self.assertIn("fingerprint==latest_generation_fingerprint", diagnostic)
+        for marker in (
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_UPDATED_AT=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_COMPLETED_AT=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_EVIDENCE_COUNT=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_VERIFICATION_PRESENT=",
+            "CHATGPT_CONTINUITY_LATEST_GENERATION_HISTORY_EVENTS=",
+        ):
+            self.assertIn(marker, diagnostic)
+
     def test_oci_continuity_diagnostic_uses_installed_worker_latest_probe(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
