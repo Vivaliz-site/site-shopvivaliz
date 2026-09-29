@@ -92,7 +92,7 @@ $ErrorActionPreference = 'Continue'
     for ($i = 0; $i -lt 90; $i++) {
         if (Test-Path -LiteralPath $SessionLog) {
             $raw = Get-Content -LiteralPath $SessionLog -Raw -ErrorAction SilentlyContinue
-            $match = [regex]::Match([string]$raw, 'https://[^\s]+')
+            $match = [regex]::Match([string]$raw, 'https://[^\s]*verify-device[^\s]*')
             if ($match.Success) {
                 $url = $match.Value.Trim()
                 break

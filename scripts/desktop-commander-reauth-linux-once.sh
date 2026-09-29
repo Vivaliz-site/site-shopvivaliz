@@ -44,7 +44,7 @@ case "$PHASE" in
     found=false
     for _ in $(seq 1 90); do
       if [[ -s "$SESSION_LOG" ]]; then
-        url="$(grep -Eo 'https://[^[:space:]]+' "$SESSION_LOG" 2>/dev/null | head -n 1 || true)"
+        url="$(grep -Eo 'https://[^[:space:]]*verify-device[^[:space:]]*' "$SESSION_LOG" 2>/dev/null | tail -n 1 || true)"
         if [[ "$url" == https://* ]]; then
           umask 077
           printf '%s\n' "$url" > "$LINK_FILE"
