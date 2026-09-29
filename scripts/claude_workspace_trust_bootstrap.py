@@ -14,7 +14,6 @@ import subprocess
 import sys
 import termios
 import time
-from dataclasses import dataclass
 
 ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 REMOTE_CONTROL_PROMPT = "Enable Remote Control?"
@@ -22,11 +21,16 @@ SERVER_SESSION_URL_RE = re.compile(r"https://claude\.ai/code/[^\s\x1b]+", re.IGN
 TRUST_SETTLE_SECONDS = 5.0
 
 
-@dataclass
 class PtyResult:
-    status: str
-    accepted_trust: bool = False
-    accepted_remote_control: bool = False
+    def __init__(
+        self,
+        status: str,
+        accepted_trust: bool = False,
+        accepted_remote_control: bool = False,
+    ) -> None:
+        self.status = status
+        self.accepted_trust = accepted_trust
+        self.accepted_remote_control = accepted_remote_control
 
 
 def clean_screen(value: str) -> str:
@@ -82,6 +86,7 @@ def trust_acceptance_sequence(value: str) -> bytes | None:
 
 
 def documented_server_trust_sequence(value: str, workspace: str) -> bytes | None:
+    # Official server-mode prompt: Trust <directory>? [y/N]
     canonical = os.path.realpath(workspace)
     for raw in clean_screen(value).splitlines():
         line = raw.strip()
