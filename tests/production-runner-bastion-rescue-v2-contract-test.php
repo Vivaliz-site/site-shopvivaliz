@@ -40,7 +40,9 @@ $required = [
     'Runner connect error',
     'RUNNER_LISTENER_CONNECTED=',
     'RUNNER_LISTENER_FAILURE_CLASS=',
-    'trap "rm -f \\"$marker\\"" EXIT',
+    "<<'REMOTE_RUNNER_RESCUE'",
+    'bash -s',
+    'trap \'rm -f "$marker"\' EXIT',
     'gh workflow run master-production-pipeline.yml',
     '-f confirmation=DEPLOY',
     'bastion session delete',
@@ -66,7 +68,7 @@ $forbidden = [
     'exit 0',
     '--session-ttl 900',
     'cat "$latest_log"',
-    'trap \'rm -f "$marker"\' EXIT',
+    '"${SSH_SITE[@]}" \'set -Eeuo pipefail',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
