@@ -766,6 +766,29 @@ jobs:
               then
                 bridge_heartbeat=true
               fi
+              bridge_store_certified=false
+              bridge_store_archive_rows=0
+              bridge_store_resolved_recent=0
+              bridge_store_invalid=0
+              bridge_store_status="$("${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                test -s "$token_file"
+                token="$(dd if="$token_file" status=none)"
+                trap "unset token" EXIT
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
+                  tmp="$(mktemp)"
+                  if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '"'"'{"operation":"queue_status"}'"'"' "$candidate" > "$tmp" && jq -e '"'"'.status == "OK" and (.queue.certified | type == "boolean")'"'"' "$tmp" >/dev/null 2>&1; then
+                    jq -r '"'"'[.queue.certified,.queue.archive_rows,.queue.resolved_recent,.queue.invalid] | @tsv'"'"' "$tmp"
+                    rm -f "$tmp"
+                    exit 0
+                  fi
+                  rm -f "$tmp"
+                done
+                exit 42' 2>/dev/null || true)"
+              if [ -n "$bridge_store_status" ]; then
+                read -r bridge_store_certified bridge_store_archive_rows bridge_store_resolved_recent bridge_store_invalid <<< "$bridge_store_status"
+              fi
+
 
               echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
               echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
@@ -781,6 +804,10 @@ jobs:
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=$bridge_queue_claimed"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=$bridge_queue_active"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=$bridge_queue_resolved"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_CERTIFIED=$bridge_store_certified"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_ARCHIVE_ROWS=$bridge_store_archive_rows"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_RESOLVED_RECENT=$bridge_store_resolved_recent"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_INVALID=$bridge_store_invalid"
               echo "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=$latest_nudge"
               echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
               echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"
