@@ -1,0 +1,163 @@
+name: Desktop Commander Reauth Runner
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  reauth:
+    if: github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/dc-reauth ')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve request
+        id: req
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+          body = str((event.get('comment') or {}).get('body') or '').strip()
+          m = re.fullmatch(r'/dc-reauth\s+target=(shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv)\s+phase=(begin|finalize)', body)
+          if not m:
+              raise SystemExit('invalid dc reauth command')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as out:
+              out.write(f'target={m.group(1)}\n')
+              out.write(f'phase={m.group(2)}\n')
+          print(f'DC_REAUTH_REQUEST target={m.group(1)} phase={m.group(2)}')
+          PY
+
+      - name: Configure backend SSH
+        if: steps.req.outputs.target != 'shopvivaliz-free-a1'
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Run on site VM
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1'
+        env:
+          PHASE: ${{ steps.req.outputs.phase }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/desktop-commander-reauth-linux-once.sh "$PHASE" 0.2.48
+          if [ "$PHASE" = begin ]; then
+            install -m 600 "$HOME/.desktop-commander-device/reauth-link.txt" "$RUNNER_TEMP/dc-reauth-link.txt"
+            rm -f "$HOME/.desktop-commander-device/reauth-link.txt"
+          fi
+
+      - name: Run on backend VM
+        if: steps.req.outputs.target == 'always-free-arm-1787907847-26'
+        env:
+          PHASE: ${{ steps.req.outputs.phase }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+          "${SSH[@]}" "bash -s -- '$PHASE' 0.2.48" < scripts/desktop-commander-reauth-linux-once.sh
+          if [ "$PHASE" = begin ]; then
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38:/home/ubuntu/.desktop-commander-device/reauth-link.txt "$RUNNER_TEMP/dc-reauth-link.txt"
+            "${SSH[@]}" 'rm -f "$HOME/.desktop-commander-device/reauth-link.txt"'
+          fi
+
+      - name: Run on Windows host
+        if: steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv'
+        env:
+          TARGET: ${{ steps.req.outputs.target }}
+          PHASE: ${{ steps.req.outputs.phase }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ "$TARGET" = fred-win ]; then PORT=5557; else PORT=5558; fi
+          SCRIPT_B64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
+          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$p='C:\\site-shopvivaliz\\logs\\dc-reauth-runner.ps1'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$SCRIPT_B64')); try { & \$p -Phase '$PHASE' -HostKey '$TARGET' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }\""
+          CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['REMOTE_CMD_B64']).decode()
+          port = os.environ['REMOTE_PORT']
+          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode()
+          req = urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=190) as r:
+              payload = json.loads(r.read().decode())
+          result = payload.get('result') or {}
+          output = str(result.get('output') or '')
+          for line in output.splitlines():
+              if line.startswith('DC_REAUTH_'):
+                  print(line)
+          if result.get('success') is not True:
+              raise SystemExit('Windows DC reauth action failed')
+          PY
+          if [ "$PHASE" = begin ]; then
+            OUT="$RUNNER_TEMP/dc-reauth-link.txt"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_PORT='$PORT' REMOTE_OUT_B64='$(printf '%s' "$OUT" | base64 -w0)' python3 -" <<'PY'
+          import base64, json, os, pathlib, urllib.request
+          port = os.environ['REMOTE_PORT']
+          out = pathlib.Path(base64.b64decode(os.environ['REMOTE_OUT_B64']).decode())
+          body = json.dumps({'params': {'path': r'C:\site-shopvivaliz\logs\dc-reauth-link.txt'}}).encode()
+          req = urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/read_file', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=30) as r:
+              payload = json.loads(r.read().decode())
+          result = payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('could not read Windows reauth link')
+          content = str(result.get('content') or '').strip()
+          if not content.startswith('https://'):
+              raise SystemExit('invalid Windows reauth link')
+          out.write_text(content + '\n', encoding='utf-8')
+          PY
+            DEL='powershell.exe -NoProfile -NonInteractive -Command "Remove-Item -LiteralPath ''C:\site-shopvivaliz\logs\dc-reauth-link.txt'' -Force -ErrorAction SilentlyContinue"'
+            DEL_B64="$(printf '%s' "$DEL" | base64 -w0)"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$DEL_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
+          import base64, json, os, urllib.request
+          body = json.dumps({'params': {'command': base64.b64decode(os.environ['REMOTE_CMD_B64']).decode(), 'timeout': 30}}).encode()
+          req = urllib.request.Request(f"http://127.0.0.1:{os.environ['REMOTE_PORT']}/mcp/tool/execute_command", data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=40) as r:
+              payload = json.loads(r.read().decode())
+          if (payload.get('result') or {}).get('success') is not True:
+              raise SystemExit('Windows reauth link cleanup failed')
+          PY
+          fi
+
+      - name: Validate private reauth link
+        if: steps.req.outputs.phase == 'begin'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s "$RUNNER_TEMP/dc-reauth-link.txt"
+          grep -Eq '^https://' "$RUNNER_TEMP/dc-reauth-link.txt"
+          chmod 600 "$RUNNER_TEMP/dc-reauth-link.txt"
+          echo "DC_REAUTH_LINK_CAPTURED=PASS"
+
+      - name: Upload private reauth link
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-${{ steps.req.outputs.target }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/dc-reauth-link.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/dc-reauth-link.txt" "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
