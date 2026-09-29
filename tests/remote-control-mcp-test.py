@@ -836,6 +836,16 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertGreaterEqual(ci.count(watched), 2)
         self.assertIn("scripts/claude_workspace_trust_bootstrap.py", ci.split("python3 -m py_compile", 1)[1])
 
+    def test_oci_bastion_can_ensure_next_chatgpt_freeze_generation(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for needle in (
+            "action=chatgpt-continuity-successor",
+            "scripts/ensure-chatgpt-freeze-successor.py",
+            "CHATGPT_CONTINUITY_SUCCESSOR=PASS",
+            "--base-id chatgpt-freeze-root-cause-20260928",
+        ):
+            self.assertIn(needle, workflow)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
