@@ -29,7 +29,14 @@ $required = [
     'BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=',
     '--session-ttl 1800',
     'Runner.Worker',
-    'RUNNER_BASTION_RESCUE=refused_worker_active',
+    'RUNNER_BASTION_RESCUE=refused_github_job_active',
+    'ACTIVE_A1_JOB_COUNT_FIRST=',
+    'ACTIVE_A1_JOB_COUNT_SECOND=',
+    'shopvivaliz-a1-deploy',
+    'etimes',
+    'RUNNER_STALE_WORKER_CANDIDATE=true',
+    'RUNNER_STALE_WORKER_CLEARED=true',
+    'kill "$pid"',
     'shopvivaliz-actions-runner.service',
     'systemctl --user restart',
     'RUNNER_BASTION_RESCUE=listener_restarted',
@@ -45,7 +52,6 @@ $required = [
     "<<'REMOTE_RUNNER_RESCUE'",
     'bash -s',
     'trap \'rm -f "$marker"\' EXIT',
-    "cut -d' ' -f2-",
     'gh workflow run master-production-pipeline.yml',
     '-f confirmation=DEPLOY',
     'bastion session delete',
@@ -72,12 +78,22 @@ $forbidden = [
     '--session-ttl 900',
     'cat "$latest_log"',
     '"${SSH_SITE[@]}" \'set -Eeuo pipefail',
+    "cut -d' ' -f2-",
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
         fwrite(STDERR, "forbidden rescue behavior: {$needle}\n");
         exit(1);
     }
+}
+
+$githubJobGuard = 'if [ "$ACTIVE_A1_JOB_COUNT_FIRST" -ne 0 ] || [ "$ACTIVE_A1_JOB_COUNT_SECOND" -ne 0 ]; then';
+$workerBranch = 'if [ "$workers" -gt 0 ]; then';
+$githubJobGuardPos = strpos($text, $githubJobGuard);
+$workerBranchPos = strpos($text, $workerBranch);
+if ($githubJobGuardPos === false || $workerBranchPos === false || $githubJobGuardPos > $workerBranchPos) {
+    fwrite(STDERR, "GitHub active-job guard must refuse rescue before local Runner.Worker branching\n");
+    exit(1);
 }
 
 echo "PRODUCTION_RUNNER_BASTION_RESCUE_CONTRACT=PASS\n";
