@@ -621,7 +621,7 @@ jobs:
         with:
           name: dc-four-host-login-links-${{ github.run_id }}
           path: ${{ env.LINK_DIR }}/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 1
 
       - name: Report missing host login links after artifact upload
