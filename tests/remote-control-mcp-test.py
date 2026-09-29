@@ -1001,6 +1001,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
 
+    def test_claude_setup_emits_sanitized_phase_markers_before_each_install_step(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        for phase in (
+            "eligibility",
+            "bridge_install",
+            "workspace",
+            "mcp_config",
+            "bridge_verify",
+            "consent",
+            "service",
+        ):
+            self.assertIn(f'CLAUDE_REMOTE_CONTROL_PHASE={phase}', setup)
+
 
     def test_claude_setup_classifies_auth_json_state_without_set_e_silence(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
