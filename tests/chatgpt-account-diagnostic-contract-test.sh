@@ -32,6 +32,13 @@ grep -Fq 'agent_task_state.py terminal --task chatgpt-freeze-root-cause-20260927
 grep -Fq 'TASK_TERMINAL_GATE=PASS' "$remote"
 grep -Fq 'TASK_TERMINAL_GATE=NONTERMINAL' "$remote"
 
+# The read-only freeze checkpoint action must also expose the latest generational
+# checkpoint safely. This is required to distinguish g3 RUNNING/READY/terminal
+# state without mutating it or creating a successor just to inspect it.
+grep -Fq 'CHATGPT_FREEZE_LATEST_STATE=' "$remote"
+grep -Fq 'chatgpt-freeze-root-cause-20260928-g' "$remote"
+grep -Fq 'latest_generation' "$remote"
+
 # Fresh evidence after a historical CONCLUIDO checkpoint must use a distinct
 # successor generation; never mutate/reopen the completed predecessor.
 grep -Fq 'chatgpt_freeze_task_successor' "$remote"
