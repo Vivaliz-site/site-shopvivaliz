@@ -33,4 +33,28 @@ if (str_contains($workflow, 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1
     exit(1);
 }
 
+
+$linux = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-linux-once.sh');
+$windows = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-windows.ps1');
+
+if (!str_contains($linux, 'Verify this device in your browser:')) {
+    fwrite(STDERR, "Linux reauth must extract the provider-issued verification_uri_complete by context\n");
+    exit(1);
+}
+if (!str_contains($windows, 'Verify this device in your browser:')) {
+    fwrite(STDERR, "Windows reauth must extract the provider-issued verification_uri_complete by context\n");
+    exit(1);
+}
+if (str_contains($linux, 'verify-device') || str_contains($windows, 'verify-device') || str_contains($workflow, 'verify-device')) {
+    fwrite(STDERR, "DC reauth must not hard-code the provider verification URL path\n");
+    exit(1);
+}
+if (!str_contains($workflow, 'dc-peer-discover.py')) {
+    fwrite(STDERR, "Windows peer discovery must preserve Tailscale JSON stdin via a script file\n");
+    exit(1);
+}
+if (str_contains($workflow, 'python3 - "$wanted" <<')) {
+    fwrite(STDERR, "Windows peer discovery must not consume stdin for both Python source and Tailscale JSON\n");
+    exit(1);
+}
 echo "desktop-commander-reauth-hosted: ok\n";
