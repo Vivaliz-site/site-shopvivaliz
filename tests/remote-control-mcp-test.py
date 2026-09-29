@@ -964,6 +964,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("server_startup_visible", helper)
         self.assertIn('systemctl stop "$SERVICE"', setup)
         self.assertNotIn('systemctl stop "$SERVICE" || true', setup)
+        self.assertIn('timeout 90s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN"', setup)
 
     def test_claude_workspace_not_trusted_classifier_is_sanitized(self):
         helper_path = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
