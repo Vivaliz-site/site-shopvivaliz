@@ -1001,6 +1001,16 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
 
+
+    def test_claude_setup_classifies_auth_json_state_without_set_e_silence(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        self.assertIn("claude_not_logged_in", setup)
+        self.assertIn("claude_auth_status_invalid", setup)
+        self.assertIn("isinstance(data, dict)", setup)
+        self.assertIn('"claude_not_logged_in"', helper)
+        self.assertIn('"claude_auth_status_invalid"', helper)
+
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
 
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")

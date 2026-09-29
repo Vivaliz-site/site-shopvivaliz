@@ -30,12 +30,26 @@ probe_auth_and_command(){
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
-  python3 - "$tmp" <<'PY'
+  local auth_state
+  auth_state="$(python3 - "$tmp" <<'PY'
 import json, sys
-with open(sys.argv[1], encoding="utf-8") as h:
-    data=json.load(h)
-raise SystemExit(0 if data.get("loggedIn") is True else 1)
+try:
+    with open(sys.argv[1], encoding="utf-8") as h:
+        data=json.load(h)
+except (OSError, UnicodeError, json.JSONDecodeError):
+    print("invalid")
+else:
+    if not isinstance(data, dict):
+        print("invalid")
+    else:
+        print("logged_in" if data.get("loggedIn") is True else "logged_out")
 PY
+)"
+  case "$auth_state" in
+    logged_in) ;;
+    logged_out) die claude_not_logged_in 31 ;;
+    *) die claude_auth_status_invalid 31 ;;
+  esac
   run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
