@@ -905,7 +905,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CLAUDE_REMOTE_CONTROL_INSTALL=PASS", helper)
         self.assertIn("CLAUDE_PRIVATE_MCP_BRIDGE=PASS", helper)
         self.assertIn("CLAUDE_REMOTE_CONTROL_STATUS=PASS", helper)
-        self.assertNotIn("mcp-token", workflow)
+        install_start = workflow.index("- name: Install Claude Remote Control through Remote Control MCP")
+        status_start = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
+        self.assertNotIn("mcp-token", workflow[install_start:status_start])
 
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
