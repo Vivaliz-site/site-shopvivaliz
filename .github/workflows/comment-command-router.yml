@@ -58,6 +58,7 @@ jobs:
                   "/provision-governed-backend-ci-runners-v1": "provision_governed_runners",
                   "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_scope",
                   "/codex-remote-control-mcp-run": "codex_remote_control",
+                  "/codex-comment-router-sweep-v1 CONFIRM": "codex_comment_router_sweep",
                   "/amazon-support-reply case_ids=22153077391,22153259501": "amazon_reply_legacy",
                   "/amazon-support-readback case_ids=22153077391,22153259501": "amazon_readback_legacy",
                   "/amazon-support-chat-reply case_ids=22199842931": "amazon_chat_221998",
@@ -198,6 +199,9 @@ jobs:
               ;;
             codex_remote_control)
               gh workflow run codex-remote-control-mcp-one-shot.yml --repo "$GITHUB_REPOSITORY" --ref main
+              ;;
+            codex_comment_router_sweep)
+              gh workflow run codex-comment-router-sweep-one-shot.yml --repo "$GITHUB_REPOSITORY" --ref main
               ;;
             amazon_reply_legacy|amazon_readback_legacy|amazon_chat_221998)
               gh workflow run amazon-support-reply-oci-breakglass.yml --repo "$GITHUB_REPOSITORY" --ref main \
