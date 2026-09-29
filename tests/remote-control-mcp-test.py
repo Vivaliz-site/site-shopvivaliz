@@ -1046,6 +1046,8 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CLAUDE_OCI_BASH_STARTUP=", helper)
         self.assertIn("CLAUDE_OCI_BASH_STARTUP_CLEAN=", helper)
         self.assertIn("env -u BASH_ENV bash -c", helper)
+        self.assertIn('${{BASH_ENV+x}}', helper)
+        self.assertNotIn('if [ "${BASH_ENV+x}" = x ]', helper)
         self.assertNotIn("CLAUDE_OCI_BASH_ENV_VALUE=", helper)
         self.assertNotIn("CLAUDE_OCI_BASH_STARTUP_OUTPUT=", helper)
 
