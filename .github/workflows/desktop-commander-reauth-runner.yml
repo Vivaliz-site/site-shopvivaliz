@@ -222,22 +222,27 @@ jobs:
             fi
           }
 
-          discover_peer() {
-            wanted="$1"
-            "${SSH_BACKEND[@]}" 'tailscale status --json 2>/dev/null' | python3 - "$wanted" <<'PY'
-          import json,sys
-          wanted=sys.argv[1].upper()
-          data=json.load(sys.stdin)
-          for p in (data.get("Peer") or {}).values():
-              host=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".").upper()
+          cat > "$RUNNER_TEMP/dc-peer-discover.py" <<'PY'
+          import json
+          import sys
+
+          wanted = sys.argv[1].upper()
+          data = json.load(sys.stdin)
+          for peer in (data.get("Peer") or {}).values():
+              host = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
               if wanted in host:
-                  ips=p.get("TailscaleIPs") or []
-                  ip=next((x for x in ips if ":" not in x), "")
+                  ips = peer.get("TailscaleIPs") or []
+                  ip = next((x for x in ips if ":" not in x), "")
                   if ip:
                       print(ip)
                       raise SystemExit(0)
           raise SystemExit(3)
           PY
+
+          discover_peer() {
+            wanted="$1"
+            "${SSH_BACKEND[@]}" 'tailscale status --json 2>/dev/null' |
+              python3 "$RUNNER_TEMP/dc-peer-discover.py" "$wanted"
           }
 
           run_windows() {
@@ -285,7 +290,7 @@ jobs:
 
             if [ "$PHASE" = begin ]; then
               "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Get-Content -LiteralPath '$remote_link' -Raw\"" > "$out_file"
-              grep -Eq '^https://[^[:space:]]*verify-device' "$out_file"
+              grep -Eq '^https://[^[:space:]]+ "$out_file"
               "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
             fi
           }
@@ -298,7 +303,258 @@ jobs:
           if [ "$PHASE" = begin ]; then
             for file in "$LINK_DIR"/*.txt; do
               test -s "$file"
-              grep -Eq '^https://[^[:space:]]*verify-device' "$file"
+              grep -Eq '^https://[^[:space:]]+
+              chmod 600 "$file"
+            done
+            echo DC_REAUTH_LINKS_READY=PASS
+          else
+            echo DC_REAUTH_FINALIZE_ALL=PASS
+          fi
+
+      - name: Upload private reauth links
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
+          done
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts" "$RUNNER_TEMP/dc-peer-discover.py"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"
+ "$out_file"
+              "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
+            fi
+          }
+
+          wants shopvivaliz-free-a1 && run_linux shopvivaliz-free-a1 0.2.48
+          wants always-free-arm-1787907847-26 && run_linux always-free-arm-1787907847-26 0.2.48
+          wants fred-win && run_windows fred-win
+          wants kocepsv && run_windows kocepsv
+
+          if [ "$PHASE" = begin ]; then
+            for file in "$LINK_DIR"/*.txt; do
+              test -s "$file"
+              grep -Eq '^https://[^[:space:]]+ "$file"
+              chmod 600 "$file"
+            done
+            echo DC_REAUTH_LINKS_READY=PASS
+          else
+            echo DC_REAUTH_FINALIZE_ALL=PASS
+          fi
+
+      - name: Upload private reauth links
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
+          done
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"
+ "$file"
+              chmod 600 "$file"
+            done
+            echo DC_REAUTH_LINKS_READY=PASS
+          else
+            echo DC_REAUTH_FINALIZE_ALL=PASS
+          fi
+
+      - name: Upload private reauth links
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
+          done
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"
+ "$file"
+              chmod 600 "$file"
+            done
+            echo DC_REAUTH_LINKS_READY=PASS
+          else
+            echo DC_REAUTH_FINALIZE_ALL=PASS
+          fi
+
+      - name: Upload private reauth links
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
+          done
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts" "$RUNNER_TEMP/dc-peer-discover.py"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"
+ "$out_file"
+              "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
+            fi
+          }
+
+          wants shopvivaliz-free-a1 && run_linux shopvivaliz-free-a1 0.2.48
+          wants always-free-arm-1787907847-26 && run_linux always-free-arm-1787907847-26 0.2.48
+          wants fred-win && run_windows fred-win
+          wants kocepsv && run_windows kocepsv
+
+          if [ "$PHASE" = begin ]; then
+            for file in "$LINK_DIR"/*.txt; do
+              test -s "$file"
+              grep -Eq '^https://[^[:space:]]+ "$file"
+              chmod 600 "$file"
+            done
+            echo DC_REAUTH_LINKS_READY=PASS
+          else
+            echo DC_REAUTH_FINALIZE_ALL=PASS
+          fi
+
+      - name: Upload private reauth links
+        if: steps.req.outputs.phase == 'begin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-reauth-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern"
+            fi
+          done
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              shred -u "$key"
+            fi
+          done
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"
+ "$file"
               chmod 600 "$file"
             done
             echo DC_REAUTH_LINKS_READY=PASS
