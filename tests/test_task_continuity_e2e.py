@@ -40,7 +40,7 @@ class ProbeStaticContractTests(unittest.TestCase):
         workflow = (
             ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("issue_comment:", workflow)
+        self.assertIn("workflow_call:", workflow)
         self.assertIn("github.event.issue.number == 1586", workflow)
         self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", workflow)
         self.assertIn("github.event.comment.body == '/continuity-e2e'", workflow)
