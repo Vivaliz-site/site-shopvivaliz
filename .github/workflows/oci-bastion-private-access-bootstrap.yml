@@ -28,7 +28,10 @@ jobs:
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
           github.event.issue.body == 'action=chatgpt-continuity-repair' ||
           github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
-          github.event.issue.body == 'action=chatgpt-continuity-successor'
+          github.event.issue.body == 'action=chatgpt-continuity-successor' ||
+          github.event.issue.body == 'action=chatgpt-freeze-task-state' ||
+          github.event.issue.body == 'action=claude-remote-control-install' ||
+          github.event.issue.body == 'action=claude-remote-control-status'
         )
       }}
     runs-on: ubuntu-latest
@@ -644,6 +647,47 @@ jobs:
               raise SystemExit('missing successor recovery markers')
           print('\n'.join(safe))
           PY
+
+      - name: Install Claude Remote Control through Remote Control MCP
+        if: github.event.issue.body == 'action=claude-remote-control-install'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "\${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "\${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-claude-oci-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"
+          "\${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir'"
+          cleanup_stage() { "\${BACKEND_SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :; }
+          trap cleanup_stage EXIT
+          "\${BACKEND_SCP[@]}" \
+            scripts/oci-mcp-stage7-action.py \
+            scripts/setup-claude-remote-control.sh \
+            scripts/claude-remote-control-mcp-stdio.py \
+            scripts/claude_workspace_trust_bootstrap.py \
+            deploy/systemd/shopvivaliz-claude-remote-control.service \
+            "ubuntu@127.0.0.1:$remote_dir/"
+          "\${BACKEND_SSH[@]}" "sudo -n python3 '$remote_dir/oci-mcp-stage7-action.py' claude-install --stage-dir '$remote_dir'"
+          trap - EXIT
+          cleanup_stage
+
+      - name: Check Claude Remote Control status through Remote Control MCP
+        if: github.event.issue.body == 'action=claude-remote-control-status'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "\${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "\${BACKEND_SSH[@]}" "sudo -n python3 - claude-status" < scripts/oci-mcp-stage7-action.py
+
+      - name: Read latest ChatGPT freeze state through Remote Control MCP
+        if: github.event.issue.body == 'action=chatgpt-freeze-task-state'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "\${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "\${BACKEND_SSH[@]}" "sudo -n python3 - freeze-state" < scripts/oci-mcp-stage7-action.py
 
       - name: ChatGPT continuity diagnostic through Remote Control MCP
         if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
