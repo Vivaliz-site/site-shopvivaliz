@@ -17,7 +17,7 @@ BACKEND = "always-free-arm-1787907847-26"
 SITE = "shopvivaliz-free-a1"
 
 
-def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str]:
+def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str, str, int | None]:
     token = TOKEN_FILE.read_text(encoding="utf-8").strip()
     body = json.dumps(
         {
@@ -39,16 +39,25 @@ def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str]:
     with urllib.request.urlopen(req, timeout=timeout + 50) as response:
         payload = json.load(response)
     result = (payload.get("result") or {}).get("structuredContent") or {}
+    error = str(result.get("error") or "")
+    exit_code_raw = result.get("exit_code")
+    exit_code = exit_code_raw if isinstance(exit_code_raw, int) else None
     failed = bool(
         (payload.get("result") or {}).get("isError")
         or result.get("ok") is False
-        or result.get("error")
+        or error
     )
-    return (not failed), str(result.get("stdout") or ""), str(result.get("stderr") or "")
+    return (
+        not failed,
+        str(result.get("stdout") or ""),
+        str(result.get("stderr") or ""),
+        error,
+        exit_code,
+    )
 
 
-def classify_remote_failure(stdout: str, stderr: str) -> str:
-    text = (stdout + "\n" + stderr).lower()
+def classify_remote_failure(stdout: str, stderr: str, error: str = "") -> str:
+    text = (stdout + "\n" + stderr + "\n" + error).lower()
     checks = (
         ("storage", ("no space left", "disk full", "insufficient_free_space")),
         ("trust", ("workspace not trusted", "trust_bootstrap", "plain_prompt_missing", "trust_not_persisted")),
@@ -63,6 +72,20 @@ def classify_remote_failure(stdout: str, stderr: str) -> str:
         if any(needle in text for needle in needles):
             return label
     return "remote_command"
+
+
+def print_failure_envelope(
+    stdout: str,
+    stderr: str,
+    error: str,
+    exit_code: int | None,
+    safe_count: int,
+) -> None:
+    print("CLAUDE_OCI_RESULT_EXIT_CODE=" + (str(exit_code) if exit_code is not None else "none"))
+    print("CLAUDE_OCI_STDOUT_BYTES=" + str(len(stdout.encode("utf-8", errors="replace"))))
+    print("CLAUDE_OCI_STDERR_BYTES=" + str(len(stderr.encode("utf-8", errors="replace"))))
+    print("CLAUDE_OCI_ERROR_PRESENT=" + ("true" if error else "false"))
+    print("CLAUDE_OCI_SAFE_MARKER_COUNT=" + str(safe_count))
 
 
 def safe_markers(stdout: str, prefixes: tuple[str, ...]) -> list[str]:
@@ -86,6 +109,11 @@ def claude_install(stage_dir: str) -> None:
     unit = stage_dir + "/shopvivaliz-claude-remote-control.service"
     command = f"""set -Eeuo pipefail
 trap 'rm -rf {q(stage_dir)}' EXIT
+if [ ! -f {q(setup)} ] || [ ! -f {q(bridge)} ] || [ ! -f {q(trust)} ] || [ ! -f {q(unit)} ]; then
+  echo "CLAUDE_OCI_PREFLIGHT=FAIL class=staging"
+  exit 61
+fi
+echo "CLAUDE_OCI_PREFLIGHT=PASS"
 chmod 700 {q(setup)}
 chmod 600 {q(bridge)} {q(trust)} {q(unit)}
 rc=0
@@ -93,12 +121,13 @@ out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
 exit "$rc"
 """
-    ok, stdout, stderr = call_admin(BACKEND, command, 180)
+    ok, stdout, stderr, error, exit_code = call_admin(BACKEND, command, 180)
     safe = safe_markers(stdout, ("CLAUDE_",))
     if not ok:
         if safe:
             print("\n".join(safe))
-        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr))
+        print_failure_envelope(stdout, stderr, error, exit_code, len(safe))
+        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr, error))
         raise SystemExit("Remote Control MCP Claude install action failed")
     required = {
         "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS",
@@ -123,12 +152,13 @@ out="$(/usr/local/sbin/shopvivaliz-setup-claude-remote-control status 2>&1)" || 
 printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
 exit "$rc"
 """
-    ok, stdout, stderr = call_admin(BACKEND, command, 45)
+    ok, stdout, stderr, error, exit_code = call_admin(BACKEND, command, 45)
     safe = safe_markers(stdout, ("CLAUDE_",))
     if not ok:
         if safe:
             print("\n".join(safe))
-        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr))
+        print_failure_envelope(stdout, stderr, error, exit_code, len(safe))
+        print("CLAUDE_OCI_FAILURE_CLASS=" + classify_remote_failure(stdout, stderr, error))
         raise SystemExit("Remote Control MCP Claude status action failed")
     required = {
         "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS",
@@ -183,7 +213,7 @@ print('CHATGPT_FREEZE_LATEST_STATE=' + json.dumps(summary, ensure_ascii=False, s
 print('TASK_TERMINAL_GATE=' + ('PASS' if status in {'CONCLUIDO','BLOCKED_EXTERNAL'} else 'NONTERMINAL'))
 INNER
 """
-    ok, stdout, _stderr = call_admin(SITE, command, 45)
+    ok, stdout, _stderr, _error, _exit_code = call_admin(SITE, command, 45)
     safe = safe_markers(stdout, ("CHATGPT_FREEZE_LATEST_STATE=", "TASK_TERMINAL_GATE="))
     if not ok:
         raise SystemExit("Remote Control MCP freeze-state action failed")
