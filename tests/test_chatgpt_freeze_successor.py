@@ -20,6 +20,16 @@ class ChatgptFreezeSuccessorTests(unittest.TestCase):
         out = subprocess.check_output([sys.executable, str(STATE), *args], env=env, text=True)
         return json.loads(out)
 
+    def confirm_browser_progress(self, runtime: Path, task_id: str) -> None:
+        ledger = runtime / "_chatgpt-continuity-nudges.jsonl"
+        row = {
+            "task_id": task_id,
+            "worker_status": "PROGRESS_CONFIRMED",
+            "worker_status_observed_at": "2026-09-29T00:00:00Z",
+        }
+        with ledger.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+
     def test_creates_g3_only_after_g2_is_concluido_and_preserves_g2_bytes(self):
         self.assertTrue(ENSURE.is_file(), "generational successor helper is missing")
         with tempfile.TemporaryDirectory() as tmp:
@@ -41,6 +51,7 @@ class ChatgptFreezeSuccessorTests(unittest.TestCase):
             ]
             first = json.loads(subprocess.check_output(cmd, text=True))
             self.assertEqual(first["task_id"], "chatgpt-freeze-root-cause-20260928-g2")
+            self.confirm_browser_progress(runtime, first["task_id"])
             self.run_state(runtime, "ready", "--task", first["task_id"], "--evidence", "verified", "--verification", "done")
             self.run_state(runtime, "complete", "--task", first["task_id"])
             g2_path = runtime / "chatgpt-freeze-root-cause-20260928-g2.json"
