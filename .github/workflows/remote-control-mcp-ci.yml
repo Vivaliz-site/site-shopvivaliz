@@ -18,6 +18,7 @@ on:
       - 'tests/remote-control-mcp-test.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
   push:
     paths:
       - 'remote-control-mcp/**'
@@ -35,6 +36,7 @@ on:
       - 'tests/remote-control-mcp-test.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
 
 permissions:
   contents: read
