@@ -8,6 +8,7 @@ RELAY_PORT="2224"
 SOCKET_UNIT="shopvivaliz-site-ssh-relay.socket"
 SERVICE_UNIT="shopvivaliz-site-ssh-relay.service"
 SYSTEMD_DIR="/etc/systemd/system"
+PROXY_BIN="/usr/lib/systemd/systemd-socket-proxyd"
 
 die() {
   echo "IPHONE_SSH_RELAY_ERROR=$1" >&2
@@ -34,17 +35,6 @@ tailscale_ipv4() {
   printf '%s\n' "$tailscale_ip"
 }
 
-socket_proxy_binary() {
-  local candidate
-  for candidate in /usr/lib/systemd/systemd-socket-proxyd /lib/systemd/systemd-socket-proxyd; do
-    if [ -x "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  command -v systemd-socket-proxyd 2>/dev/null || die systemd_socket_proxyd_missing 33
-}
-
 site_ssh_reachable() {
   timeout 5 bash -c "</dev/tcp/$SITE_PRIVATE_IP/22" >/dev/null 2>&1
 }
@@ -52,11 +42,20 @@ site_ssh_reachable() {
 host_key_digest() {
   local host="$1"
   local port="$2"
-  ssh-keyscan -T 5 -p "$port" "$host" 2>/dev/null |
+  local tmp
+  tmp="$(mktemp)"
+  if ! ssh-keyscan -T 5 -p "$port" "$host" 2>/dev/null |
     awk '$1 !~ /^#/ && NF >= 3 {print $2 " " $3}' |
-    sort -u |
-    sha256sum |
-    awk '{print $1}'
+    sort -u >"$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if [ ! -s "$tmp" ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  sha256sum "$tmp" | awk '{print $1}'
+  rm -f "$tmp"
 }
 
 status() {
@@ -90,8 +89,8 @@ status() {
   echo "IPHONE_SSH_RELAY_SITE_PRIVATE_SSH_REACHABLE=$site_ok"
   [ "$site_ok" = true ] || return 42
 
-  relay_digest="$(host_key_digest "$tailscale_ip" "$RELAY_PORT")"
-  site_digest="$(host_key_digest "$SITE_PRIVATE_IP" 22)"
+  relay_digest="$(host_key_digest "$tailscale_ip" "$RELAY_PORT" || true)"
+  site_digest="$(host_key_digest "$SITE_PRIVATE_IP" 22 || true)"
   handshake_ok=false
   if [ -n "$relay_digest" ] && [ "$relay_digest" = "$site_digest" ]; then
     handshake_ok=true
@@ -110,9 +109,9 @@ install_relay() {
   require_root
   assert_backend_host
 
-  local tailscale_ip proxy_bin
+  local tailscale_ip
   tailscale_ip="$(tailscale_ipv4)"
-  proxy_bin="$(socket_proxy_binary)"
+  [ -x "$PROXY_BIN" ] || die systemd_socket_proxyd_missing 33
   site_ssh_reachable || die site_private_ssh_unreachable 34
 
   cat >"$SYSTEMD_DIR/$SOCKET_UNIT" <<EOF
@@ -136,8 +135,7 @@ Requires=$SOCKET_UNIT
 After=network-online.target
 
 [Service]
-Type=notify
-ExecStart=$proxy_bin $SITE_PRIVATE_IP:22
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd $SITE_PRIVATE_IP:22
 DynamicUser=yes
 NoNewPrivileges=yes
 PrivateTmp=yes
