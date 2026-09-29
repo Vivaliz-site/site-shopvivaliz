@@ -897,5 +897,27 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertNotIn("set +e", text, f"{path} must keep shell fail-fast enabled")
 
 
+    def test_claude_trust_bootstrap_uses_production_server_mode(self):
+        helper = (ROOT / "scripts" / "claude_workspace_trust_bootstrap.py").read_text(encoding="utf-8")
+        self.assertIn('"remote-control"', helper)
+        self.assertIn("ShopVivaliz-Trust-Bootstrap", helper)
+        self.assertIn("Trust ", helper)
+        self.assertIn("[y/N]", helper)
+        self.assertIn("Enable Remote Control?", helper)
+        self.assertNotIn('[claude_bin, "--remote-control"]', helper)
+
+    def test_claude_remote_control_unsets_feature_flag_blockers(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service").read_text(encoding="utf-8")
+        for name in (
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+            "DISABLE_GROWTHBOOK",
+            "DISABLE_TELEMETRY",
+            "DO_NOT_TRACK",
+        ):
+            self.assertIn(f"-u {name}", setup)
+            self.assertIn(name, unit)
+
+
 if __name__ == "__main__":
     unittest.main()
