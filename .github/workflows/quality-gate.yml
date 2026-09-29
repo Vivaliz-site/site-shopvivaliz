@@ -15,6 +15,7 @@ on:
       - 'tests/desktop-commander-reauth-independent-transport-test.php'
       - 'tests/desktop-commander-reauth-hosted-contract-test.php'
       - 'tests/desktop-commander-reauth-windows-reverse-first-test.php'
+      - 'tests/desktop-commander-reauth-controller-key-test.php'
       - 'tests/dc-backend-auth-safe-diagnostic-test.php'
       - 'tests/dc-backend-auth-stage-diagnostic-test.php'
       - 'tests/dc-partial-links-primary-evidence-test.php'
@@ -89,6 +90,7 @@ jobs:
           php tests/desktop-commander-reauth-independent-transport-test.php
           php tests/desktop-commander-reauth-hosted-contract-test.php
           php tests/desktop-commander-reauth-windows-reverse-first-test.php
+          php tests/desktop-commander-reauth-controller-key-test.php
           php tests/dc-backend-auth-safe-diagnostic-test.php
           php tests/dc-backend-auth-stage-diagnostic-test.php
           php tests/dc-partial-links-primary-evidence-test.php
