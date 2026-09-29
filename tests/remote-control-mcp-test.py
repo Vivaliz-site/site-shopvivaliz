@@ -889,6 +889,38 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(needle, workflow)
 
+    def test_oci_bastion_can_validate_claude_stage7_via_remote_control_mcp(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        for action in (
+            "action=claude-remote-control-install",
+            "action=claude-remote-control-status",
+        ):
+            self.assertIn(action, workflow)
+        self.assertIn("scripts/oci-mcp-stage7-action.py", workflow)
+        self.assertIn("claude-install", workflow)
+        self.assertIn("claude-status", workflow)
+        self.assertIn("admin_command_run", helper)
+        self.assertIn('BACKEND = "always-free-arm-1787907847-26"', helper)
+        self.assertIn("CLAUDE_REMOTE_CONTROL_INSTALL=PASS", helper)
+        self.assertIn("CLAUDE_PRIVATE_MCP_BRIDGE=PASS", helper)
+        self.assertIn("CLAUDE_REMOTE_CONTROL_STATUS=PASS", helper)
+        install_start = workflow.index("- name: Install Claude Remote Control through Remote Control MCP")
+        status_start = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
+        self.assertNotIn("mcp-token", workflow[install_start:status_start])
+
+    def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        self.assertIn("action=chatgpt-freeze-task-state", workflow)
+        self.assertIn("freeze-state", workflow)
+        self.assertIn("admin_command_run", helper)
+        self.assertIn('SITE = "shopvivaliz-free-a1"', helper)
+        self.assertIn("CHATGPT_FREEZE_LATEST_STATE=", helper)
+        self.assertIn("TASK_TERMINAL_GATE=", helper)
+        self.assertIn("sudo -u ubuntu -H python3", helper)
+        self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", helper)
+
     def test_oci_continuity_diagnostic_probes_team_account_scope_without_leaking_credentials(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
@@ -920,6 +952,8 @@ class BootstrapContractTests(unittest.TestCase):
         watched = "- 'scripts/claude_workspace_trust_bootstrap.py'"
         self.assertGreaterEqual(ci.count(watched), 2)
         self.assertIn("scripts/claude_workspace_trust_bootstrap.py", ci.split("python3 -m py_compile", 1)[1])
+        self.assertGreaterEqual(ci.count("- 'scripts/oci-mcp-stage7-action.py'"), 2)
+        self.assertIn("scripts/oci-mcp-stage7-action.py", ci.split("python3 -m py_compile", 1)[1])
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
