@@ -995,6 +995,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("CLAUDE_OCI_STDERR_BYTES=", helper)
         self.assertIn("CLAUDE_OCI_ERROR_PRESENT=", helper)
         self.assertIn("CLAUDE_OCI_SAFE_MARKER_COUNT=", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_PREPARE=PASS", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_PREPARE=FAIL class=permissions", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_INSTALLER=START", helper)
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
 
