@@ -1,0 +1,794 @@
+name: DC Four Host Login Once
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dc-four-host-login-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dc-four-host-login-once
+  cancel-in-progress: false
+
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 25
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_PRIVATE_IP: 10.0.1.112
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      SITE_TUNNEL_PORT: "22212"
+      BACKEND_TUNNEL_PORT: "22213"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected secret missing: $name"; exit 1; }
+          done
+
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-rsa"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          LINK_DIR="$RUNNER_TEMP/dc-links"
+
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\nLINK_DIR=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" "$LINK_DIR" >> "$GITHUB_ENV"
+
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")" "$LINK_DIR"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+          ssh-keygen -q -t rsa -b 4096 -N '' -C shopvivaliz-dc-login-once -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+
+      - name: Discover Bastion and temporarily allow hosted runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+          query="query instance resources where displayName = 'shopvivaliz-free-a1'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8')).get('data') or []
+          active = [b for b in data if b.get('lifecycle-state') == 'ACTIVE']
+          if len(active) != 1:
+              raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          test -n "$BASTION_ID"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress, json, sys
+          ip = str(ipaddress.ip_address(sys.argv[1]))
+          src = json.load(open(sys.argv[2], encoding='utf-8'))
+          cidrs = list(dict.fromkeys([str(x) for x in src] + [ip + '/32']))
+          json.dump(cidrs, open(sys.argv[3], 'w', encoding='utf-8'))
+          PY
+
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+
+      - name: Open private site and backend tunnels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+          SITE_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" \
+            --target-private-ip "$SITE_PRIVATE_IP" \
+            --target-port 22 \
+            --session-ttl 1800 \
+            --display-name shopvivaliz-dc-login-site \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$SITE_SESSION_ID"
+          echo "SITE_SESSION_ID=$SITE_SESSION_ID" >> "$GITHUB_ENV"
+
+          state=''
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then break; fi
+            case "$state" in
+              FAILED|DELETED) echo "::error::Bastion session entered $state"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          test "$state" = ACTIVE
+
+          metadata="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$metadata"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
+
+          tunnel_ready=false
+          for attempt in $(seq 1 8); do
+            if bash -lc "$tunnel"; then
+              listener_ready=false
+              for listener_attempt in $(seq 1 12); do
+                if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$SITE_TUNNEL_PORT" 2>/dev/null; then
+                  echo "BASTION_LOCAL_LISTENER_READY_ATTEMPT=$listener_attempt"
+                  listener_ready=true
+                  tunnel_ready=true
+                  break
+                fi
+                sleep 1
+              done
+              if [ "$listener_ready" = true ]; then
+                echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+                break
+              fi
+              echo "BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=$attempt"
+              if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
+                pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+              fi
+            else
+              echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
+            fi
+            sleep 5
+          done
+          if [ "$tunnel_ready" != true ]; then
+            echo "::error::Bastion tunnel authentication/listener did not become ready after 8 attempts"
+            exit 1
+          fi
+
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
+
+          ssh -fNT \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=30 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$VM_KNOWN_HOSTS" \
+            -o HostKeyAlias="$SITE_PRIVATE_IP" \
+            -o ConnectTimeout=10 \
+            -i "$VM_KEY_FILE" \
+            -p "$SITE_TUNNEL_PORT" \
+            -L "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" \
+            ubuntu@127.0.0.1
+
+          backend_ready=false
+          for _ in $(seq 1 20); do
+            if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$BACKEND_TUNNEL_PORT" 2>/dev/null; then
+              backend_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$backend_ready" = true
+          echo DC_BACKEND_VIA_SITE_TUNNEL=PASS
+
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+          echo DC_LOGIN_PRIVATE_TUNNELS=PASS
+
+      - name: Prepare Windows private SSH routes
+        id: windows
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          backend_port_alive() {
+            port="$1"
+            "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/127.0.0.1/$port'"
+          }
+
+          fred_mode=reverse
+          kocepsv_mode=reverse
+          fred_ip=
+          kocepsv_ip=
+
+          if backend_port_alive 2222; then
+            echo "DC_FRED_REVERSE_SSH=PASS backend=127.0.0.1/2222"
+          else
+            fred_mode=direct
+          fi
+
+          if backend_port_alive 2223; then
+            echo "DC_KOCEPSV_REVERSE_SSH=PASS backend=127.0.0.1/2223"
+          else
+            kocepsv_mode=direct
+          fi
+
+          if [ "$fred_mode" = direct ] || [ "$kocepsv_mode" = direct ]; then
+            cat > "$RUNNER_TEMP/dc-peer-discover.py" <<'PY'
+          import json
+          import sys
+
+          wanted = sys.argv[1].upper()
+          data = json.load(sys.stdin)
+          for peer in (data.get("Peer") or {}).values():
+              host = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
+              if wanted in host:
+                  ips = peer.get("TailscaleIPs") or []
+                  ip = next((x for x in ips if ":" not in x), "")
+                  if ip:
+                      print(ip)
+                      raise SystemExit(0)
+          raise SystemExit(3)
+          PY
+            tailscale_json="$RUNNER_TEMP/tailscale.json"
+            "${SSH_BACKEND[@]}" 'tailscale status --json 2>/dev/null' > "$tailscale_json"
+            test -s "$tailscale_json"
+
+            if [ "$fred_mode" = direct ]; then
+              fred_ip="$(python3 "$RUNNER_TEMP/dc-peer-discover.py" LAPTOP-NIG4IFUU < "$tailscale_json")"
+              test -n "$fred_ip"
+              "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$fred_ip/22'"
+              echo "DC_FRED_TAILSCALE_SSH=PASS mode=direct"
+            fi
+
+            if [ "$kocepsv_mode" = direct ]; then
+              kocepsv_ip="$(python3 "$RUNNER_TEMP/dc-peer-discover.py" DESKTOP-KOCEPSV < "$tailscale_json")"
+              test -n "$kocepsv_ip"
+              "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/$kocepsv_ip/22'"
+              echo "DC_KOCEPSV_TAILSCALE_SSH=PASS mode=direct"
+            fi
+          fi
+
+          printf 'fred_mode=%s\nkocepsv_mode=%s\nfred_ip=%s\nkocepsv_ip=%s\n' \
+            "$fred_mode" "$kocepsv_mode" "$fred_ip" "$kocepsv_ip" >> "$GITHUB_OUTPUT"
+          echo "DC_WINDOWS_PRIVATE_ROUTES=PASS fred_mode=$fred_mode kocepsv_mode=$kocepsv_mode"
+
+      - name: Ensure backend auth scratch space
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SSH_BACKEND[@]}" 'set -Eeuo pipefail
+            before_kb="$(df -Pk "$HOME" | awk "NR==2 {print \$4}")"
+            echo "DC_BACKEND_SCRATCH before_kb=$before_kb"
+            if [ "$before_kb" -lt 262144 ]; then
+              if [ -d "$HOME/.npm/_cacache" ]; then
+                rm -rf "$HOME/.npm/_cacache"
+              fi
+              sudo -n journalctl --vacuum-size=100M >/dev/null
+            fi
+            after_kb="$(df -Pk "$HOME" | awk "NR==2 {print \$4}")"
+            echo "DC_BACKEND_SCRATCH after_kb=$after_kb"
+            test "$after_kb" -ge 131072
+          '
+
+      - name: Generate four private Desktop Commander login links
+        id: generate
+        shell: bash
+        env:
+          FRED_MODE: ${{ steps.windows.outputs.fred_mode }}
+          KOCEPSV_MODE: ${{ steps.windows.outputs.kocepsv_mode }}
+          FRED_IP: ${{ steps.windows.outputs.fred_ip }}
+          KOCEPSV_IP: ${{ steps.windows.outputs.kocepsv_ip }}
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          cat > "$RUNNER_TEMP/linux-auth-fallback.sh" <<'REMOTE'
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          version="${1:-0.2.48}"
+          d="$HOME/.desktop-commander-device"
+          install -d -m 700 "$d"
+          if systemctl list-unit-files shopvivaliz-desktop-commander-guardian.timer >/dev/null 2>&1; then
+            sudo -n systemctl stop shopvivaliz-desktop-commander-guardian.timer
+          fi
+          if systemctl list-unit-files shopvivaliz-desktop-commander.service >/dev/null 2>&1; then
+            sudo -n systemctl stop shopvivaliz-desktop-commander.service
+          fi
+          if pgrep -f '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' >/dev/null 2>&1; then
+            pkill -f '[n]pm exec @wonderwhy-er/desktop-commander@.* remote'
+          fi
+          if pgrep -f '[s]cript -q -f -c.*desktop-commander' >/dev/null 2>&1; then
+            pkill -f '[s]cript -q -f -c.*desktop-commander'
+          fi
+          rm -f "$d/device.json" "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/reauth-link.txt" "$d/reauth-session.log" "$d/reauth-session.pid"
+          : > "$d/reauth-session.log"
+          chmod 600 "$d/reauth-session.log"
+
+          cmd="npx --yes @wonderwhy-er/desktop-commander@$version remote --persist-session"
+          if command -v script >/dev/null 2>&1; then
+            RUNNER_TRACKING_ID= nohup setsid timeout 600s script -q -f -c "$cmd" "$d/reauth-session.log" >/dev/null 2>&1 < /dev/null &
+          else
+            RUNNER_TRACKING_ID= nohup setsid timeout 600s bash -lc "$cmd" >"$d/reauth-session.log" 2>&1 < /dev/null &
+          fi
+          pid=$!
+          printf '%s\n' "$pid" > "$d/reauth-session.pid"
+          chmod 600 "$d/reauth-session.pid"
+
+          found=false
+          for _ in $(seq 1 120); do
+            if python3 - "$d/reauth-session.log" "$d/reauth-link.txt" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          log = Path(sys.argv[1])
+          out = Path(sys.argv[2])
+          if not log.exists():
+              raise SystemExit(1)
+          text = log.read_text(encoding='utf-8', errors='replace')
+          text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
+          patterns = (
+              r'Verify this device in your browser:\s*(https://\S+)',
+              r'Please visit:\s*(https://\S+)',
+          )
+          for pattern in patterns:
+              match = re.search(pattern, text, flags=re.IGNORECASE)
+              if match:
+                  out.write_text(match.group(1).strip() + '\n', encoding='utf-8')
+                  raise SystemExit(0)
+          raise SystemExit(1)
+          PY
+            then
+              found=true
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          test "$found" = true
+          test -s "$d/reauth-link.txt"
+          echo DC_LINUX_LOGIN_LINK_READY=PASS
+          REMOTE
+          chmod 700 "$RUNNER_TEMP/linux-auth-fallback.sh"
+
+          start_linux() {
+            label="$1"
+            version="$2"
+            out="$3"
+            if [ "$label" = site ]; then
+              SSH=("${SSH_SITE[@]}")
+              port="$SITE_TUNNEL_PORT"
+              alias="$SITE_PRIVATE_IP"
+            else
+              SSH=("${SSH_BACKEND[@]}")
+              port="$BACKEND_TUNNEL_PORT"
+              alias="$BACKEND_PRIVATE_IP"
+            fi
+
+            if ! "${SSH[@]}" "bash -s -- begin '$version'" < scripts/desktop-commander-reauth-linux-once.sh; then
+              "${SSH[@]}" 'set -Eeuo pipefail
+                d="$HOME/.desktop-commander-device"
+                install -d -m 700 "$d"
+                if [ -s "$d/reauth-session.log" ]; then
+                  cp -f "$d/reauth-session.log" "$d/reauth-primary.log"
+                else
+                  : > "$d/reauth-primary.log"
+                fi
+                chmod 600 "$d/reauth-primary.log"
+              '
+              echo "DC_LINUX_PRIMARY_HELPER=fallback label=$label"
+              "${SSH[@]}" "bash -s -- '$version'" < "$RUNNER_TEMP/linux-auth-fallback.sh"
+            fi
+
+            scp -q -P "$port" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$alias" -i "$VM_KEY_FILE" \
+              ubuntu@127.0.0.1:/home/ubuntu/.desktop-commander-device/reauth-link.txt "$out"
+            "${SSH[@]}" 'rm -f "$HOME/.desktop-commander-device/reauth-link.txt"'
+            test -s "$out"
+            grep -Eq '^https://[^[:space:]]+$' "$out"
+          }
+
+          missing_hosts=()
+
+          if start_linux site 0.2.51 "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"; then
+            echo "DC_LOGIN_HOST_RESULT host=shopvivaliz-free-a1 status=link_ready"
+          else
+            rm -f "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"
+            missing_hosts+=(shopvivaliz-free-a1)
+            echo "DC_LOGIN_HOST_RESULT host=shopvivaliz-free-a1 status=failed"
+          fi
+
+          if start_linux backend 0.2.51 "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"; then
+            echo "DC_LOGIN_HOST_RESULT host=always-free-arm-1787907847-26 status=link_ready"
+          else
+            rm -f "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"
+            missing_hosts+=(always-free-arm-1787907847-26)
+            echo "DC_LOGIN_HOST_RESULT host=always-free-arm-1787907847-26 status=failed"
+          fi
+
+          make_win_tunnel() {
+            local_port="$1"
+            mode="$2"
+            peer_ip="$3"
+            reverse_port="$4"
+            host_key="$5"
+
+            if [ "$mode" = reverse ]; then
+              target_host=127.0.0.1
+              target_port="$reverse_port"
+            else
+              target_host="$peer_ip"
+              target_port=22
+            fi
+            test -n "$target_host"
+
+            ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" \
+              -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 \
+              -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" \
+              -L "$local_port:$target_host:$target_port" ubuntu@127.0.0.1
+
+            for _ in $(seq 1 10); do
+              if ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host_key.hosts"; then
+                :
+              fi
+              [ -s "$RUNNER_TEMP/$host_key.hosts" ] && break
+              sleep 1
+            done
+            test -s "$RUNNER_TEMP/$host_key.hosts"
+            chmod 600 "$RUNNER_TEMP/$host_key.hosts"
+            echo "DC_WINDOWS_LOCAL_TUNNEL=PASS host=$host_key mode=$mode"
+          }
+
+          script_b64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
+
+          start_windows() {
+            host="$1"
+            user="$2"
+            port="$3"
+            out="$4"
+            remote_ps='C:\site-shopvivaliz\logs\dc-reauth-runner.ps1'
+            remote_link='C:\site-shopvivaliz\logs\dc-reauth-link.txt'
+            WINSSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$RUNNER_TEMP/$host.hosts" -o ConnectTimeout=10 \
+              -p "$port" -i "$VM_KEY_FILE" "$user@127.0.0.1")
+
+            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase begin -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+            remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$write_and_run\"")"
+            printf '%s\n' "$remote_out" | grep -F 'DC_REAUTH_BEGIN=PASS' >/dev/null
+
+            "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Get-Content -LiteralPath '$remote_link' -Raw\"" > "$out"
+            test -s "$out"
+            grep -Eq '^https://[^[:space:]]+$' "$out"
+            "${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$remote_link' -Force -ErrorAction SilentlyContinue\"" >/dev/null
+          }
+
+          if make_win_tunnel 32225 "$FRED_MODE" "$FRED_IP" 2222 fred-win; then
+            if start_windows fred-win FRED 32225 "$LINK_DIR/dc-reauth-fred-win.txt"; then
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=link_ready"
+            else
+              rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
+              missing_hosts+=(fred-win)
+              echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
+            fi
+          else
+            rm -f "$LINK_DIR/dc-reauth-fred-win.txt"
+            missing_hosts+=(fred-win)
+            echo "DC_LOGIN_HOST_RESULT host=fred-win status=failed"
+          fi
+
+          if make_win_tunnel 32226 "$KOCEPSV_MODE" "$KOCEPSV_IP" 2223 kocepsv; then
+            if start_windows kocepsv user 32226 "$LINK_DIR/dc-reauth-kocepsv.txt"; then
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=link_ready"
+            else
+              rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
+              missing_hosts+=(kocepsv)
+              echo "DC_LOGIN_HOST_RESULT host=kocepsv status=failed"
+            fi
+          else
+            rm -f "$LINK_DIR/dc-reauth-kocepsv.txt"
+            missing_hosts+=(kocepsv)
+            echo "DC_LOGIN_HOST_RESULT host=kocepsv status=failed"
+          fi
+
+          shopt -s nullglob
+          files=("$LINK_DIR"/dc-reauth-*.txt)
+          for file in "${files[@]}"; do
+            test -s "$file"
+            grep -Eq '^https://[^[:space:]]+$' "$file"
+            chmod 600 "$file"
+          done
+
+          missing_csv="$(IFS=,; echo "${missing_hosts[*]}")"
+          printf 'missing_hosts=%s\n' "$missing_csv" >> "$GITHUB_OUTPUT"
+          echo "DC_LOGIN_MISSING_HOSTS=${missing_csv:-none}"
+          echo "DC_LOGIN_LINK_COUNT=${#files[@]}"
+
+      - name: Diagnose Linux Desktop Commander auth failure safely
+        if: steps.generate.outputs.missing_hosts != ''
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          diagnose_host() {
+            label="$1"
+            if [ "$label" = SITE ]; then
+              SSH=("${SSH_SITE[@]}")
+            else
+              SSH=("${SSH_BACKEND[@]}")
+            fi
+
+            "${SSH[@]}" "DC_DIAG_PREFIX='$label' python3 -" <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          prefix = os.environ["DC_DIAG_PREFIX"]
+          base = Path.home() / ".desktop-commander-device"
+          log = base / "reauth-session.log"
+          primary_log = base / "reauth-primary.log"
+          pid_file = base / "reauth-session.pid"
+          device = base / "device.json"
+          link = base / "reauth-link.txt"
+
+          def classify(path):
+              text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+              lower = text.lower()
+              return {
+                  "startup_started": "starting mcp device" in lower,
+                  "local_mcp_connect_started": "connecting to local desktop commander mcp using" in lower,
+                  "local_mcp_connected": "connected to desktop commander mcp" in lower,
+                  "local_mcp_not_found": "desktop commander mcp not found" in lower,
+                  "local_mcp_start_failed": "failed to start desktop commander mcp" in lower,
+                  "remote_connect_started": "connecting to remote mcp" in lower,
+                  "remote_connect_succeeded": "connected to remote mcp" in lower,
+                  "auth_started": "authenticating with remote mcp server" in lower,
+                  "auth_instructions": "please complete authentication" in lower,
+                  "verification_url_prompt": "verify this device in your browser" in lower,
+                  "code_prompt": "make sure the code matches" in lower,
+                  "waiting_authorization": "waiting for authorization" in lower,
+                  "device_ready": "device ready" in lower,
+                  "device_startup_failed": "device startup failed" in lower,
+                  "command_not_found": "command not found" in lower,
+                  "module_not_found": "cannot find module" in lower or "module_not_found" in lower,
+                  "permission_denied": "permission denied" in lower or "eacces" in lower,
+                  "npm_error": "npm err" in lower,
+                  "fetch_failed": "fetch failed" in lower,
+                  "network_error": any(x in lower for x in ("econn", "enotfound", "eai_again", "timed out", "timeout")),
+                  "auth_error": any(x in lower for x in ("unauthorized", "forbidden", "invalid_grant", "authentication failed")),
+                  "generic_error": bool(re.search(r"\b(error|failed|exception)\b", lower)),
+              }
+
+          pid = None
+          alive = False
+          if pid_file.exists():
+              raw = pid_file.read_text(encoding="utf-8", errors="replace").strip()
+              if raw.isdigit():
+                  pid = int(raw)
+                  try:
+                      os.kill(pid, 0)
+                      alive = True
+                  except OSError:
+                      alive = False
+
+          tag = f"DC_{prefix}_AUTH_DIAG"
+          flags = classify(log)
+          print(f"{tag} log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
+          print(f"{tag} pid_present={int(pid is not None)} process_alive={int(alive)}")
+          print(f"{tag} device_json={int(device.exists())} link_file={int(link.exists())}")
+          for name, value in flags.items():
+              print(f"{tag} {name}={int(value)}")
+
+          if primary_log.exists():
+              primary_tag = "DC_PRIMARY_AUTH_DIAG"
+              primary_flags = classify(primary_log)
+              print(f"{primary_tag} host={prefix} log_exists=1 log_bytes={primary_log.stat().st_size}")
+              for name, value in primary_flags.items():
+                  print(f"{primary_tag} host={prefix} {name}={int(value)}")
+          PY
+          }
+
+          diagnose_host SITE
+          diagnose_host BACKEND
+
+      - name: Diagnose Windows Desktop Commander auth failure safely
+        if: steps.generate.outputs.missing_hosts != ''
+        shell: bash
+        env:
+          MISSING_HOSTS: ${{ steps.generate.outputs.missing_hosts }}
+        run: |
+          set -Eeuo pipefail
+          script_b64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
+
+          diagnose_windows() {
+            host="$1"
+            user="$2"
+            port="$3"
+
+            case ",$MISSING_HOSTS," in
+              *,"$host",*) ;;
+              *) return 0 ;;
+            esac
+
+            hosts_file="$RUNNER_TEMP/$host.hosts"
+            if [ ! -s "$hosts_file" ]; then
+              echo "DC_WINDOWS_AUTH_DIAG host=$host ssh_hostfile=0"
+              return 0
+            fi
+
+            WINSSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$hosts_file" -o ConnectTimeout=10 \
+              -p "$port" -i "$VM_KEY_FILE" "$user@127.0.0.1")
+            remote_ps='C:\site-shopvivaliz\logs\dc-reauth-diagnose.ps1'
+            command="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase diagnose -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+
+            remote_out=''
+            if remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$command\"")"; then
+              if printf '%s\n' "$remote_out" | grep '^DC_WINDOWS_AUTH_DIAG ' >/dev/null; then
+                printf '%s\n' "$remote_out" | grep '^DC_WINDOWS_AUTH_DIAG '
+              else
+                echo "DC_WINDOWS_AUTH_DIAG host=$host markers=0"
+              fi
+            else
+              echo "DC_WINDOWS_AUTH_DIAG host=$host remote_probe=failed"
+            fi
+          }
+
+          diagnose_windows fred-win FRED 32225
+          diagnose_windows kocepsv user 32226
+
+      - name: Upload available private login links
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc-four-host-login-links-${{ github.run_id }}
+          path: ${{ env.LINK_DIR }}/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Report missing host login links after artifact upload
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          missing="${{ steps.generate.outputs.missing_hosts }}"
+          echo "DC_LOGIN_MISSING_HOSTS=${missing:-none}"
+          if [ -n "$missing" ]; then
+            exit 1
+          fi
+
+      - name: Wait for authorization and restore canonical owners
+        if: steps.generate.outputs.missing_hosts == ''
+        shell: bash
+        env:
+          FRED_IP: ${{ steps.windows.outputs.fred_ip }}
+          KOCEPSV_IP: ${{ steps.windows.outputs.kocepsv_ip }}
+        run: |
+          set -Eeuo pipefail
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          WIN_FRED=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/fred-win.hosts" -o ConnectTimeout=10 -p 32225 -i "$VM_KEY_FILE" FRED@127.0.0.1)
+          WIN_KOCEPSV=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/kocepsv.hosts" -o ConnectTimeout=10 -p 32226 -i "$VM_KEY_FILE" user@127.0.0.1)
+
+          all_ready=false
+          for _ in $(seq 1 100); do
+            site=false
+            backend=false
+            fred=false
+            kocepsv=false
+
+            if "${SSH_SITE[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"'; then site=true; fi
+            if "${SSH_BACKEND[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"'; then backend=true; fi
+            if "${WIN_FRED[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"'; then fred=true; fi
+            if "${WIN_KOCEPSV[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"'; then kocepsv=true; fi
+
+            if [ "$site" = true ] && [ "$backend" = true ] && [ "$fred" = true ] && [ "$kocepsv" = true ]; then
+              all_ready=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$all_ready" != true ]; then
+            echo "::warning::Authorization window ended before all four hosts completed; links remain valid only until the provider expires them."
+            exit 1
+          fi
+
+          "${SSH_SITE[@]}" "bash -s -- finalize 0.2.48" < scripts/desktop-commander-reauth-linux-once.sh
+          "${SSH_BACKEND[@]}" "bash -s -- finalize 0.2.48" < scripts/desktop-commander-reauth-linux-once.sh
+
+          script_b64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
+          finalize_windows() {
+            host="$1"
+            array_name="$2"
+            remote_ps='C:\site-shopvivaliz\logs\dc-reauth-runner.ps1'
+            if [ "$array_name" = fred ]; then
+              WINSSH=("${WIN_FRED[@]}")
+            else
+              WINSSH=("${WIN_KOCEPSV[@]}")
+            fi
+            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase finalize -HostKey '$host' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+            remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$write_and_run\"")"
+            printf '%s\n' "$remote_out" | grep -F 'DC_REAUTH_FINALIZE=PASS' >/dev/null
+          }
+
+          finalize_windows fred-win fred
+          finalize_windows kocepsv kocepsv
+          echo DC_FOUR_LOGIN_FINALIZE=PASS
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          rc=0
+
+          for id in "${SITE_SESSION_ID:-}"; do
+            if [ -n "$id" ]; then
+              "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
+            fi
+          done
+
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1 || rc=1
+          fi
+
+          for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              if ! pkill -f "$pattern"; then rc=1; fi
+            fi
+          done
+
+          for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$key" ] && [ -f "$key" ]; then
+              if ! shred -u "$key"; then rc=1; fi
+            fi
+          done
+
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts" "$RUNNER_TEMP/dc-peer-discover.py" "$RUNNER_TEMP/tailscale.json" "$RUNNER_TEMP/linux-auth-fallback.sh"
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
+          exit "$rc"

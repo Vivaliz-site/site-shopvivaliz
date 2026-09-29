@@ -1,0 +1,37 @@
+name: Task Continuity Actions Queue Hygiene
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/task_continuity_actions_queue.py'
+      - 'tests/test_task_continuity_actions_queue.py'
+      - '.github/workflows/task-continuity-actions-queue-hygiene.yml'
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: task-continuity-actions-queue-hygiene
+  cancel-in-progress: false
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Validate classifier
+        run: python3 -m unittest tests.test_task_continuity_actions_queue -v
+      - name: Certify and prune stale queued PR runs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/task_continuity_actions_queue.py --apply --min-age-seconds 21600

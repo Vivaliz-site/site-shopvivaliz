@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -18,13 +20,27 @@ def load_scope():
 
 
 class PrGateScopeTests(unittest.TestCase):
-    def test_continuity_only_change_does_not_require_unrelated_specialized_gates(self) -> None:
+    def test_continuity_change_requires_only_the_continuity_fast_gate(self) -> None:
         scope = load_scope()
         gates = scope.required_specialized_gates([
             "scripts/agent_task_state.py",
             "tests/test_task_continuity_enforcement.py",
         ])
-        self.assertEqual(gates, [])
+        self.assertEqual(gates, ["Task Continuity Fast Gate"])
+
+    def test_empty_scope_cli_emits_no_blank_gate(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "pr_gate_scope.py"),
+                "--file=scripts/agent_task_state.py",
+                "--file=tests/test_task_continuity_enforcement.py",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.stdout, "Task Continuity Fast Gate\n")
 
     def test_storefront_change_selects_runtime_gates(self) -> None:
         scope = load_scope()

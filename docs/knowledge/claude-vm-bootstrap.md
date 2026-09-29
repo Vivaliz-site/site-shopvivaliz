@@ -24,6 +24,15 @@ A documentação orienta, mas código, logs, banco, workflows e probes reais pre
 
 Use a fonte canônica `docs/knowledge/host-access.md` antes de qualquer operação, pois endereços e papéis podem mudar.
 
+## Ordem de acesso remoto do Claude
+
+1. **Remote Control MCP** é a primeira rota para host, serviço, diagnóstico, arquivos e tarefas duráveis.
+2. Use **SSH privado/Tailscale** somente para shell direto que o MCP não exponha ou quando o control plane estiver comprovadamente indisponível.
+3. Use **GitHub Actions/OCI Bastion** para bootstrap, recovery ou reparo do MCP.
+4. Use **RustDesk** para GUI. Navegador de agente continua exclusivamente na backend.
+
+Não introduza acesso público direto nem altere essa ordem com base em documentação histórica.
+
 ## Regra de navegador
 
 Para tarefas ShopVivaliz, navegador de agente deve executar na VM destinada à navegação. Não use Opera Connector nem navegador visível/headless nos hosts Windows como caminho operacional. Os hosts Windows servem apenas de apoio/acesso remoto quando necessário.

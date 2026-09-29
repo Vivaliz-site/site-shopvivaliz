@@ -95,36 +95,59 @@ def write_lock(path: Path, keys: set[str]) -> None:
         temp.unlink(missing_ok=True)
 
 
-def verify(env_path: Path, lock_path: Path) -> tuple[int, int]:
+def verify(
+    env_path: Path,
+    lock_path: Path,
+    *,
+    retired_keys: set[str] | None = None,
+) -> tuple[int, int]:
     current = read_env_keys(env_path)
     locked = read_lock(lock_path)
-    missing = sorted(locked - current)
+    retired = set(retired_keys or set())
+    invalid_retired = sorted(key for key in retired if not KEY_RE.fullmatch(key))
+    if invalid_retired:
+        raise ValueError("invalid retired key names: " + ",".join(invalid_retired))
+    effective_locked = locked - retired
+    missing = sorted(effective_locked - current)
     if missing:
         raise KeysetReductionError(
             "sealed environment keys disappeared or became empty: " + ",".join(missing)
         )
-    return len(locked), len(current)
+    return len(effective_locked), len(current)
 
 
-def seal(env_path: Path, lock_path: Path) -> tuple[int, int, int]:
+def seal(
+    env_path: Path,
+    lock_path: Path,
+    *,
+    retired_keys: set[str] | None = None,
+) -> tuple[int, int, int]:
     current = read_env_keys(env_path)
-    if not current:
+    retired = set(retired_keys or set())
+    invalid_retired = sorted(key for key in retired if not KEY_RE.fullmatch(key))
+    if invalid_retired:
+        raise ValueError("invalid retired key names: " + ",".join(invalid_retired))
+    effective_current = current - retired
+    if not effective_current:
         raise ValueError("refusing to seal empty environment active key-set")
 
     if lock_path.exists():
         locked = read_lock(lock_path)
-        missing = sorted(locked - current)
+        effective_locked = locked - retired
+        missing = sorted(effective_locked - effective_current)
         if missing:
             raise KeysetReductionError(
                 "sealed environment keys disappeared or became empty: " + ",".join(missing)
             )
     else:
         locked = set()
+        effective_locked = set()
 
-    added = current - locked
-    if added or not lock_path.exists():
-        write_lock(lock_path, current)
-    return len(locked), len(current), len(added)
+    added = effective_current - effective_locked
+    desired_locked = effective_current
+    if added or retired or not lock_path.exists() or desired_locked != locked:
+        write_lock(lock_path, desired_locked)
+    return len(effective_locked), len(effective_current), len(added)
 
 
 def parse_args() -> argparse.Namespace:
@@ -134,6 +157,13 @@ def parse_args() -> argparse.Namespace:
         child = sub.add_parser(command)
         child.add_argument("--env", required=True, dest="env_path")
         child.add_argument("--lock", required=True, dest="lock_path")
+        child.add_argument(
+            "--retire-key",
+            action="append",
+            default=[],
+            dest="retired_keys",
+            help="Explicitly retire a migrated key name from the sealed set; repeatable.",
+        )
     return parser.parse_args()
 
 
@@ -141,15 +171,24 @@ def main() -> int:
     args = parse_args()
     env_path = Path(args.env_path)
     lock_path = Path(args.lock_path)
+    retired_keys = set(args.retired_keys or [])
     try:
         if args.command == "seal":
-            previous_count, current_count, added_count = seal(env_path, lock_path)
+            previous_count, current_count, added_count = seal(
+                env_path,
+                lock_path,
+                retired_keys=retired_keys,
+            )
             print(f"keyset_lock_previous_count={previous_count}")
             print(f"keyset_lock_current_count={current_count}")
             print(f"keyset_lock_added_count={added_count}")
             print("keyset_reduction_blocked=true")
             return 0
-        locked_count, current_count = verify(env_path, lock_path)
+        locked_count, current_count = verify(
+            env_path,
+            lock_path,
+            retired_keys=retired_keys,
+        )
         print(f"keyset_lock_count={locked_count}")
         print(f"keyset_current_count={current_count}")
         print("keyset_reduction_detected=false")

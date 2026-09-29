@@ -16,7 +16,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-completion-enforcer
+  group: pr-completion-enforcer-${{ github.event.workflow_run.pull_requests[0].number || github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 3
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
+      target_pr: ${{ steps.gate.outputs.target_pr }}
     steps:
       - name: Check production deploy queue after event fan-out settles
         id: gate
@@ -33,8 +34,44 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TRIGGER_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
           set -Eeuo pipefail
+          target_pr="${TRIGGER_PR:-}"
+          if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
+            target_pr="$(
+              gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" |
+                jq -r --arg repo "$GITHUB_REPOSITORY" '
+                  [.[] | select(.head.repo.full_name == $repo)]
+                  | sort_by(
+                      (if ([.labels[].name] | index("repair-required-now")) then 0 else 1 end),
+                      .updated_at
+                    )
+                  | .[0].number // empty
+                '
+            )"
+            echo 'schedule_target_budget=1'
+            if [[ -z "$target_pr" ]]; then
+              echo "target_pr=" >> "$GITHUB_OUTPUT"
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'schedule_no_internal_open_pr=true'
+              exit 0
+            fi
+          fi
+          echo "target_pr=$target_pr" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' ]]; then
+            if [[ -z "$target_pr" || -z "${SOURCE_HEAD_SHA:-}" ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo 'workflow_run_without_actionable_pr=true'
+              exit 0
+            fi
+            current_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${target_pr}" --jq '.head.sha')"
+            if [[ "$current_head" != "$SOURCE_HEAD_SHA" ]]; then
+              echo 'should_run=false' >> "$GITHUB_OUTPUT"
+              echo "stale_gate_event=true target_pr=$target_pr"
+              exit 0
+            fi
+          fi
           if [[ "$GITHUB_EVENT_NAME" == 'workflow_run' && -n "${SOURCE_HEAD_SHA:-}" ]]; then
             settle_required=(
               'Quality Gate'
@@ -86,6 +123,8 @@ jobs:
       VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
+      TARGET_PR: ${{ needs.production-runner-gate.outputs.target_pr }}
+      SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
       - name: Checkout trusted finalizer from main
@@ -101,7 +140,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash -n trusted/scripts/merge_green_pr_via_vm.sh
-          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py
+          bash -n trusted/scripts/pr_conflict_vm_heal.sh
+          python3 -m py_compile trusted/scripts/pr_gate_replay.py trusted/scripts/pr_gate_scope.py trusted/scripts/pr_conflict_gemini_healer.py
 
       - name: Configure verified Oracle SSH
         shell: bash
@@ -137,19 +177,36 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          remote_script="/tmp/shopvivaliz-pr-finalizer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          remote_prefix="/tmp/shopvivaliz-pr-finalizer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote_script="${remote_prefix}-merge.sh"
+          remote_heal_script="${remote_prefix}-heal.sh"
+          remote_healer_py="${remote_prefix}-healer.py"
           echo "remote_script=$remote_script" >> "$GITHUB_OUTPUT"
+          echo "remote_heal_script=$remote_heal_script" >> "$GITHUB_OUTPUT"
+          echo "remote_healer_py=$remote_healer_py" >> "$GITHUB_OUTPUT"
           scp -q \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             trusted/scripts/merge_green_pr_via_vm.sh \
             "${VM_USER}@${VM_HOST}:${remote_script}"
+          scp -q \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            trusted/scripts/pr_conflict_vm_heal.sh \
+            "${VM_USER}@${VM_HOST}:${remote_heal_script}"
+          scp -q \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            trusted/scripts/pr_conflict_gemini_healer.py \
+            "${VM_USER}@${VM_HOST}:${remote_healer_py}"
 
-      - name: Repair and finalize every internal PR
+      - name: Repair and finalize triggering PR or scheduled sweep
         id: finalize
         shell: bash
         env:
           REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
+          REMOTE_HEAL_SCRIPT: ${{ steps.stage.outputs.remote_heal_script }}
+          REMOTE_HEALER_PY: ${{ steps.stage.outputs.remote_healer_py }}
         run: |
           set -Eeuo pipefail
           always_required=(
@@ -157,8 +214,15 @@ jobs:
             'Repository Governance'
           )
 
-          mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
-          echo "open_pr_count=${#prs[@]}"
+          if [[ -n "${TARGET_PR:-}" ]]; then
+            prs=("$TARGET_PR")
+          elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+          else
+            echo "no_target_pr_for_event=${GITHUB_EVENT_NAME}; self-hosted finalizer skipped"
+            exit 0
+          fi
+          echo "target_pr_count=${#prs[@]}"
           echo 'draft_policy=promote_internal_ready'
           echo 'historical failures ignored after newer success'
           echo 'latest_required_runs=latest-run-per-required-workflow'
@@ -203,19 +267,16 @@ jobs:
               fi
               stale_update_count=$((stale_update_count + 1))
               echo "pr_${pr}_repair-pr-branch=true"
-              if gh api --method PUT "repos/${REPO}/pulls/${pr}/update-branch" \
-                -f expected_head_sha="$head_sha" >/tmp/update-branch-${pr}.json 2>/tmp/update-branch-${pr}.err; then
-                echo "pr_${pr}_native_branch_update_requested=true"
+              if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+                "${VM_USER}@${VM_HOST}" \
+                "bash '${REMOTE_HEAL_SCRIPT}' '${pr}' '${head_ref}' '${head_sha}' '${REMOTE_HEALER_PY}'"; then
+                echo "pr_${pr}_external_auth_branch_sync=true"
               else
-                echo "pr_${pr}_native_update_conflicted=true"
-                marker="<!-- stale-pr-protected-conflict:${head_sha} -->"
-                comments="$(gh api "repos/${REPO}/issues/${pr}/comments?per_page=100")"
-                if jq -e --arg marker "$marker" '.[] | select(.body | contains($marker))' <<<"$comments" >/dev/null; then
-                  echo "pr_${pr}_protected_conflict_already_recorded=true"
-                else
-                  gh workflow run ai-stale-pr-repair.yml --repo "$REPO" --ref main -f "repair_pr_branch=${pr}"
-                  echo "pr_${pr}_free_ai_conflict_repair_dispatched=true"
-                fi
+                echo "pr_${pr}_external_auth_branch_sync_failed=true"
+                gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
+                repair_required_count=$((repair_required_count + 1))
+                continue
               fi
               gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
               waiting_count=$((waiting_count + 1))
@@ -344,12 +405,14 @@ jobs:
         shell: bash
         env:
           REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
+          REMOTE_HEAL_SCRIPT: ${{ steps.stage.outputs.remote_heal_script }}
+          REMOTE_HEALER_PY: ${{ steps.stage.outputs.remote_healer_py }}
         run: |
           set -Eeuo pipefail
           if [[ -n "${REMOTE_SCRIPT:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
             if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" "rm -f '${REMOTE_SCRIPT}'"; then
+              "${VM_USER}@${VM_HOST}" "rm -f -- '${REMOTE_SCRIPT}' '${REMOTE_HEAL_SCRIPT}' '${REMOTE_HEALER_PY}'"; then
               echo '::warning::temporary Oracle cleanup failed'
             fi
           fi
@@ -362,7 +425,8 @@ jobs:
           set -Eeuo pipefail
           echo 'failed_check_silently_skipped=false'
           echo 'same_branch_repair_required=true'
-          echo 'stale_branch_native_update_first=true'
+          echo 'stale_branch_external_auth_sync_first=true'
+          echo 'native_update_branch_forbidden=true'
           echo 'missing_required_gate_replayed=true'
           echo 'action_required_gate_replayed=true'
           echo 'failed_required_gate_auto_replayed=false'

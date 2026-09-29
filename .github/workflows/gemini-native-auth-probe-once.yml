@@ -1,0 +1,54 @@
+name: Gemini Native Auth Probe Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/gemini-native-auth-probe-once.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gemini-native-auth-probe-once
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Probe native Gemini CLI auth without API keys
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bin="${SHOPVIVALIZ_GEMINI_BIN:-/home/ubuntu/.local/bin/gemini}"
+          test -x "$bin"
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          if timeout 60 env             -u GEMINI_API_KEY             -u GOOGLE_API_KEY             -u GOOGLE_GEMINI_API_KEY             "$bin"               --model gemini-2.5-flash               --approval-mode auto_edit               --prompt 'Reply with exactly GEMINI_NATIVE_AUTH_OK and do not use tools.'               >"$tmp" 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
+
+          if grep -Fq 'GEMINI_NATIVE_AUTH_OK' "$tmp"; then
+            echo "GEMINI_NATIVE_AUTH=PASS"
+            exit 0
+          fi
+
+          lower="$(tr '[:upper:]' '[:lower:]' < "$tmp")"
+          if grep -Eq 'sign in|log in|authenticate|authentication|oauth|api key|required' <<<"$lower"; then
+            echo "GEMINI_NATIVE_AUTH=UNAVAILABLE reason=authentication_required"
+          elif grep -Eq 'quota|resource_exhausted|rate limit' <<<"$lower"; then
+            echo "GEMINI_NATIVE_AUTH=UNAVAILABLE reason=quota_exhausted"
+          elif [ "$rc" -eq 124 ]; then
+            echo "GEMINI_NATIVE_AUTH=UNAVAILABLE reason=timeout"
+          else
+            echo "GEMINI_NATIVE_AUTH=UNAVAILABLE reason=unknown_safe_error rc=$rc"
+          fi
+          exit 1

@@ -40,6 +40,10 @@ RUNTIME_DIR = resolve_runtime_dir(ROOT, os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
+DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
+CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 
 
 class TaskStateError(RuntimeError):
@@ -57,12 +61,24 @@ def _safe_id(value: str, label: str) -> str:
     return normalized[:160]
 
 
+def _safe_repository(value: str) -> str:
+    repository = str(value).strip()
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise TaskStateError("repository must be owner/name")
+    return repository
+
+
 def _path(task_id: str) -> Path:
     return RUNTIME_DIR / f"{_safe_id(task_id, 'task_id')}.json"
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    runtime_owner: tuple[int, int] | None = None
+    if os.geteuid() == 0:
+        parent_stat = path.parent.stat()
+        runtime_owner = (parent_stat.st_uid, parent_stat.st_gid)
+
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     tmp = Path(tmp_name)
     try:
@@ -71,6 +87,9 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
+        if runtime_owner is not None:
+            os.chown(tmp, *runtime_owner)
+        os.chmod(tmp, 0o600)
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
@@ -100,16 +119,68 @@ def is_terminal(payload: dict[str, Any]) -> bool:
     return str(payload.get("status", "")) in TERMINAL_STATES
 
 
-def start_task(task_id: str, goal: str, agent_id: str = "") -> dict[str, Any]:
+def _freeze_generation_requires_browser_progress(task_id: str) -> bool:
+    return CHATGPT_FREEZE_GENERATION_RE.fullmatch(str(task_id).strip()) is not None
+
+
+def _latest_chatgpt_nudge_row(task_id: str) -> dict[str, Any] | None:
+    ledger = RUNTIME_DIR / CHATGPT_NUDGE_LEDGER_FILE
+    if not ledger.is_file():
+        return None
+    latest: dict[str, Any] | None = None
+    try:
+        lines = ledger.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("task_id", "")).strip() != str(task_id).strip():
+            continue
+        latest = row
+    return latest
+
+
+def _require_freeze_browser_progress(task_id: str) -> None:
+    if not _freeze_generation_requires_browser_progress(task_id):
+        return
+    latest = _latest_chatgpt_nudge_row(task_id)
+    if not latest:
+        raise TaskStateError(
+            "ChatGPT freeze generation requires browser-worker PROGRESS_CONFIRMED before terminal readiness"
+        )
+    status = str(latest.get("worker_status", "")).strip().upper()
+    observed_at = str(latest.get("worker_status_observed_at", "")).strip()
+    if status != "PROGRESS_CONFIRMED" or not observed_at:
+        raise TaskStateError(
+            "ChatGPT freeze generation requires latest browser-worker PROGRESS_CONFIRMED before terminal readiness"
+        )
+
+
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
         raise TaskStateError("goal is required")
+    repository_name = _safe_repository(
+        repository
+        or os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", "")
+        or os.getenv("GITHUB_REPOSITORY", "")
+        or DEFAULT_REPOSITORY
+    )
     now = utc_now()
     payload = {
         "schema_version": SCHEMA_VERSION,
         "task_id": task,
         "agent_id": str(agent_id).strip(),
+        "repository": repository_name,
         "goal": goal_text,
         "status": "RUNNING",
         "next_action": "determine and execute the next safe action required by the original goal",
@@ -121,6 +192,59 @@ def start_task(task_id: str, goal: str, agent_id: str = "") -> dict[str, Any]:
         "history": [{"at": now, "event": "started"}],
     }
     _atomic_write(_path(task), payload)
+    return payload
+
+
+def start_successor_task(
+    task_id: str,
+    *,
+    predecessor_task_id: str,
+    goal: str,
+    agent_id: str = "",
+    repository: str = "",
+) -> dict[str, Any]:
+    task = _safe_id(task_id, "task_id")
+    predecessor = _load(predecessor_task_id)
+    if predecessor.get("status") != "CONCLUIDO":
+        raise TaskStateError("successor requires a CONCLUIDO predecessor; BLOCKED_EXTERNAL must use explicit resume")
+    if task == predecessor.get("task_id"):
+        raise TaskStateError("successor task_id must differ from predecessor")
+    path = _path(task)
+    if path.exists():
+        raise TaskStateError(f"successor task state already exists: {task}")
+
+    goal_text = str(goal).strip()
+    if not goal_text:
+        raise TaskStateError("goal is required")
+    repository_name = _safe_repository(
+        repository
+        or str(predecessor.get("repository", "")).strip()
+        or DEFAULT_REPOSITORY
+    )
+    now = utc_now()
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "task_id": task,
+        "agent_id": str(agent_id).strip(),
+        "repository": repository_name,
+        "goal": goal_text,
+        "status": "RUNNING",
+        "next_action": "determine and execute the next safe action required by the successor goal",
+        "evidence": [],
+        "verification": None,
+        "blocker": None,
+        "predecessor_task_id": str(predecessor.get("task_id", "")).strip(),
+        "predecessor_status": "CONCLUIDO",
+        "predecessor_completed_at": str(predecessor.get("completed_at", "")).strip(),
+        "created_at": now,
+        "updated_at": now,
+        "history": [{
+            "at": now,
+            "event": "started_successor",
+            "predecessor_task_id": str(predecessor.get("task_id", "")).strip(),
+        }],
+    }
+    _atomic_write(path, payload)
     return payload
 
 
@@ -155,6 +279,7 @@ def mark_ready(
         raise TaskStateError("READY_TO_COMPLETE requires fresh evidence")
     if not verification_text:
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
+    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
     payload["status"] = "READY_TO_COMPLETE"
@@ -172,6 +297,7 @@ def complete_task(task_id: str) -> dict[str, Any]:
         raise TaskStateError("completion rejected: executable next_action still exists")
     if not payload.get("evidence") or not payload.get("verification"):
         raise TaskStateError("completion rejected: verification evidence is missing")
+    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     payload["status"] = "CONCLUIDO"
     payload["completed_at"] = utc_now()
     _history(payload, "completed")
@@ -248,6 +374,14 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--task", required=True)
     start.add_argument("--goal", required=True)
     start.add_argument("--agent", default="")
+    start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
+
+    successor = sub.add_parser("successor")
+    successor.add_argument("--task", required=True)
+    successor.add_argument("--predecessor", required=True)
+    successor.add_argument("--goal", required=True)
+    successor.add_argument("--agent", default="")
+    successor.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
 
     progress = sub.add_parser("progress")
     progress.add_argument("--task", required=True)
@@ -285,7 +419,15 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent)
+            payload = start_task(args.task, args.goal, args.agent, args.repository)
+        elif args.command == "successor":
+            payload = start_successor_task(
+                args.task,
+                predecessor_task_id=args.predecessor,
+                goal=args.goal,
+                agent_id=args.agent,
+                repository=args.repository,
+            )
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":

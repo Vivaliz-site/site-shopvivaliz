@@ -3,6 +3,10 @@ name: PR Policy Enforcement
 on:
   pull_request:
     paths:
+      - '.github/workflows/pr-completion-enforcer.yml'
+      - '.github/workflows/history-integrity.yml'
+      - 'scripts/maintenance/validate_sanitized_history.py'
+      - 'tests/test_ci_latency_contract.py'
       - 'scripts/check_pr_completion_policy.py'
       - 'scripts/pr_conflict_gemini_healer.py'
       - 'scripts/pr_gate_replay.py'
@@ -44,7 +48,8 @@ jobs:
             scripts/check_pr_completion_policy.py \
             scripts/pr_gate_replay.py \
             tests/test_pr_conflict_gemini_healer.py \
-            tests/test_pr_gate_replay.py
+            tests/test_pr_gate_replay.py \
+            tests/test_ci_latency_contract.py
           bash -n scripts/pr_conflict_vm_heal.sh
           bash -n scripts/merge_green_pr_via_vm.sh
 
@@ -59,6 +64,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m unittest tests.test_pr_gate_replay -v
+
+      - name: Run CI latency regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_ci_latency_contract -v
 
       - name: Verify policy enforcement surfaces
         shell: bash
