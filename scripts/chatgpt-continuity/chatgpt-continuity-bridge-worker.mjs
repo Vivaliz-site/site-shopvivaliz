@@ -40,6 +40,10 @@ const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
 );
+const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
+);
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -221,9 +225,15 @@ async function confirmAssistantProgress(
   return false;
 }
 
-async function latestConversationProbe(cdp) {
+async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROBE_TIMEOUT_MS) {
+  let timeoutHandle;
   try {
-    const result = await cdp.evaluate(`(async()=>{
+    const requestedTimeout = Number(timeoutMs);
+    const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+      ? Math.max(10, requestedTimeout)
+      : LATEST_CONVERSATION_PROBE_TIMEOUT_MS;
+    const result = await Promise.race([
+      cdp.evaluate(`(async()=>{
       let accountId='';
       let accessToken='';
       try{
@@ -259,12 +269,21 @@ async function latestConversationProbe(cdp) {
         }catch{last={http_status:0,source:candidate.source,item_present:false,item_keys:[]};}
       }
       return last;
-    })()`);
+    })()`),
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error('latest conversation probe timeout')),
+          boundedTimeoutMs,
+        );
+      }),
+    ]);
     return result && typeof result === 'object'
       ? result
       : {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
   } catch {
     return {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
