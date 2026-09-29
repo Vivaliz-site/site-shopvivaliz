@@ -12,6 +12,7 @@ on:
       - 'tests/google-indexing-canonical-regression-test.php'
       - 'tests/asset-source-dist-parity-test.php'
       - 'tests/claude-workflow-cost-guard-test.php'
+      - 'tests/single-issue-comment-router-test.php'
       - 'tests/nondeploy-release-wait-cost-guard-test.php'
       - 'package.json'
       - 'package-lock.json'
@@ -74,6 +75,7 @@ jobs:
           php tests/google-indexing-canonical-regression-test.php
           php tests/asset-source-dist-parity-test.php
           php tests/claude-workflow-cost-guard-test.php
+          php tests/single-issue-comment-router-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
           php tests/fredwin-runtime-audit-action-test.php
