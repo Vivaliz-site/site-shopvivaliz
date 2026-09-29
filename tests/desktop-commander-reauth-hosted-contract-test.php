@@ -36,6 +36,10 @@ if (str_contains($workflow, 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1
 $linux = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-linux-once.sh');
 $windows = (string) file_get_contents($root . '/scripts/desktop-commander-reauth-windows.ps1');
 $oneShot = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
+if (!str_contains($oneShot, "  workflow_dispatch:\n")) {
+    fwrite(STDERR, "four-host login workflow must support explicit manual reruns\n");
+    exit(1);
+}
 
 if (!str_contains($linux, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Linux reauth must extract the provider-issued verification_uri_complete by context\n");

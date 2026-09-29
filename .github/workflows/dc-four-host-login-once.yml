@@ -1,6 +1,7 @@
 name: DC Four Host Login Once
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
