@@ -14,7 +14,7 @@ from pathlib import Path
 ENDPOINT = "http://127.0.0.1:5580/mcp"
 TOKEN_FILE = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
 BACKEND = "always-free-arm-1787907847-26"
-SITE = "shopvivaliz-free-a1"
+SITE = "shopvivaliz-free-a1"\nCLAUDE_STAGE_ROOT = "/home/ubuntu/.local/state/shopvivaliz/claude-stage7"
 
 
 def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str, str, int | None]:
@@ -100,7 +100,7 @@ def require_exact(lines: list[str], required: set[str], label: str) -> None:
 
 
 def claude_install(stage_dir: str) -> None:
-    if not re.fullmatch(r"/home/ubuntu/\\.local/state/shopvivaliz/claude-stage7/oci-[A-Za-z0-9._-]+", stage_dir):
+    if not re.fullmatch(re.escape(CLAUDE_STAGE_ROOT) + r"/oci-[A-Za-z0-9._-]+", stage_dir):
         raise SystemExit("invalid Claude staging directory")
     q = shlex.quote
     setup = stage_dir + "/setup-claude-remote-control.sh"
