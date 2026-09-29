@@ -507,7 +507,15 @@ jobs:
           files=("$LINK_DIR"/dc-reauth-*.txt)
           for file in "${files[@]}"; do
             test -s "$file"
-            grep -Eq '^https://[^[:space:]]+
+            grep -Eq '^https://[^[:space:]]+' "$file"
+            chmod 600 "$file"
+          done
+
+          missing_csv="$(IFS=,; echo "${missing_hosts[*]}")"
+          printf 'missing_hosts=%s\n' "$missing_csv" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$missing_csv" > "$RUNNER_TEMP/dc-login-missing-hosts.txt"
+          echo "DC_LOGIN_MISSING_HOSTS=${missing_csv:-none}"
+          echo "DC_LOGIN_LINK_COUNT=${#files[@]}"
 
       - name: Diagnose backend Desktop Commander auth failure safely
         if: always()
