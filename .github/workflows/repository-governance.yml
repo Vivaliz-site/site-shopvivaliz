@@ -155,6 +155,7 @@ jobs:
           python tests/test_ai_stale_pr_repair_cache.py
           python tests/test_actions_high_impact_performance_contract.py
           php tests/nondeploy-release-wait-cost-guard-test.php
+          php tests/single-issue-comment-router-test.php
 
       - name: Enforce Absolute Audit V5 bridge
         env:
