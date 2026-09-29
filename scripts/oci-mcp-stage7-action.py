@@ -136,7 +136,7 @@ if ! bash -n {q(setup)} >/dev/null 2>&1; then
 fi
 echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS"
 echo "CLAUDE_OCI_STAGE_INSTALLER=START"
-if [ "${BASH_ENV+x}" = x ]; then
+if [ "${{BASH_ENV+x}}" = x ]; then
   echo "CLAUDE_OCI_BASH_ENV_PRESENT=true"
 else
   echo "CLAUDE_OCI_BASH_ENV_PRESENT=false"
