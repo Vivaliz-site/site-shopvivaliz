@@ -83,6 +83,35 @@ async function cdpReady() {
   }
 }
 
+function chatgptTabRank(tab) {
+  if (!tab || tab.type !== 'page' || !tab.webSocketDebuggerUrl) return Number.POSITIVE_INFINITY;
+  let url;
+  try {
+    url = new URL(String(tab.url || ''));
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com') return Number.POSITIVE_INFINITY;
+  if (/^\/c\/[^/]+/.test(url.pathname)) return 0;
+  if (url.pathname === '/' || url.pathname === '') return 1;
+  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(url.pathname)) return 3;
+  return 2;
+}
+
+function selectChatgptTab(tabs) {
+  if (!Array.isArray(tabs)) return null;
+  let selected = null;
+  let selectedRank = Number.POSITIVE_INFINITY;
+  for (const tab of tabs) {
+    const rank = chatgptTabRank(tab);
+    if (rank < selectedRank) {
+      selected = tab;
+      selectedRank = rank;
+    }
+  }
+  return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -106,7 +135,7 @@ class Cdp {
       );
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
-    const page = tabs.find(tab => tab.type === 'page' && /^https:\/\/chatgpt\.com\//.test(tab.url || ''));
+    const page = selectChatgptTab(tabs);
     if (!page?.webSocketDebuggerUrl) {
       throw new Error('no open chatgpt.com tab found in the attached browser');
     }
@@ -538,6 +567,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 export {
   Cdp,
+  selectChatgptTab,
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
