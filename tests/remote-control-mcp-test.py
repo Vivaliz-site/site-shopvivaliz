@@ -990,6 +990,13 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'"{label}"', helper)
         self.assertNotIn('print(stderr)', helper)
         self.assertNotIn('print(result.get("stderr"', helper)
+        self.assertIn("CLAUDE_OCI_RESULT_EXIT_CODE=", helper)
+        self.assertIn("CLAUDE_OCI_STDOUT_BYTES=", helper)
+        self.assertIn("CLAUDE_OCI_STDERR_BYTES=", helper)
+        self.assertIn("CLAUDE_OCI_ERROR_PRESENT=", helper)
+        self.assertIn("CLAUDE_OCI_SAFE_MARKER_COUNT=", helper)
+        self.assertIn('str(result.get("error") or "")', helper)
+        self.assertNotIn("print(error)", helper)
 
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
 
