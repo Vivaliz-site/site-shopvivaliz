@@ -1,8 +1,7 @@
 name: Desktop Commander Reauth Runner
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
 
 permissions:
   contents: read
