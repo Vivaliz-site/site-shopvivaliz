@@ -5,8 +5,7 @@ $root = dirname(__DIR__);
 $workflow = (string) file_get_contents($root . '/.github/workflows/desktop-commander-reauth-runner.yml');
 
 $required = [
-    'backend_port_alive 2222',
-    'backend_port_alive 2223',
+    'backend_port_alive "$reverse_port"',
     'reverse_port=2222',
     'reverse_port=2223',
     'target_host=127.0.0.1',
