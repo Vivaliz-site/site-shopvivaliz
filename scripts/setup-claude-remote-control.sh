@@ -24,12 +24,14 @@ run_in_workspace_as_claude(){ run_as_claude bash -c 'cd "$1"; shift; exec "$@"' 
 
 probe_auth_and_command(){
   test -x "$CLAUDE_BIN" || die claude_missing 30
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33
   trap 'rm -f "$tmp"' RETURN
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=auth_status"
   local auth_state
   auth_state="$(python3 - "$tmp" <<'PY'
 import json, sys
@@ -50,7 +52,9 @@ PY
     logged_out) die claude_not_logged_in 31 ;;
     *) die claude_auth_status_invalid 31 ;;
   esac
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=logged_in"
   run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help"
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
 
