@@ -235,14 +235,14 @@ jobs:
           fi
           printf "RUNNER_WORKER_COUNT=%s\n" "$workers"
 
-          if [ "$workers" -gt 0 ]; then
-            [[ "${ACTIVE_A1_JOB_COUNT_FIRST:-}" =~ ^[0-9]+$ ]]
-            [[ "${ACTIVE_A1_JOB_COUNT_SECOND:-}" =~ ^[0-9]+$ ]]
-            if [ "$ACTIVE_A1_JOB_COUNT_FIRST" -ne 0 ] || [ "$ACTIVE_A1_JOB_COUNT_SECOND" -ne 0 ]; then
-              echo RUNNER_BASTION_RESCUE=refused_worker_active
-              exit 23
-            fi
+          [[ "${ACTIVE_A1_JOB_COUNT_FIRST:-}" =~ ^[0-9]+$ ]]
+          [[ "${ACTIVE_A1_JOB_COUNT_SECOND:-}" =~ ^[0-9]+$ ]]
+          if [ "$ACTIVE_A1_JOB_COUNT_FIRST" -ne 0 ] || [ "$ACTIVE_A1_JOB_COUNT_SECOND" -ne 0 ]; then
+            echo RUNNER_BASTION_RESCUE=refused_github_job_active
+            exit 23
+          fi
 
+          if [ "$workers" -gt 0 ]; then
             min_age=2147483647
             for pid in $worker_output; do
               age="$(ps -o etimes= -p "$pid" | tr -d ' ')"
