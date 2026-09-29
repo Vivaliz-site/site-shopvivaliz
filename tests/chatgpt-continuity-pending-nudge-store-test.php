@@ -53,7 +53,31 @@ try {
     // expected
 }
 
-unlink($tmp);
-rmdir(dirname($tmp));
+$historyTmp = sys_get_temp_dir() . '/chatgpt-continuity-history-test-' . bin2hex(random_bytes(6)) . '/pending-nudges.json';
+$historyArchive = dirname($historyTmp) . '/pending-nudges-archive.jsonl';
+$historyStore = new SvChatgptContinuityPendingNudgeStore($historyTmp, $historyArchive, 0);
+cgnAssert($historyStore->enqueue('task-history', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T20:00:00Z'), 'History enqueue must succeed.');
+cgnAssert($historyStore->pullOldest() !== null, 'History task must be claimable.');
+cgnAssert($historyStore->recordResult('task-history', 'PROGRESS_CONFIRMED', 'done'), 'History result must be recorded.');
+
+$historySummary = $historyStore->summary();
+cgnSame(0, $historySummary['total'], 'Resolved rows past retention must leave the hot store.');
+cgnSame(0, $historySummary['active'], 'No active nudge may be manufactured by compaction.');
+cgnSame(1, $historySummary['archive_rows'], 'Resolved history must move to the archive exactly once.');
+cgnAssert($historySummary['certified'] === true, 'Compacted bridge queue must certify.');
+
+$archivedStatus = $historyStore->status('task-history');
+cgnAssert($archivedStatus !== null, 'Archived status must remain queryable for compatibility.');
+cgnSame('PROGRESS_CONFIRMED', $archivedStatus['status'], 'Archived status must preserve the worker result.');
+
+cgnAssert($historyStore->enqueue('task-history', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T20:05:00Z'), 'A later interruption may reuse an archived task_id.');
+$historyActive = $historyStore->status('task-history');
+cgnSame('PENDING', $historyActive['status'], 'Active state must take precedence over archived history.');
+
+@unlink($tmp);
+@rmdir(dirname($tmp));
+@unlink($historyTmp);
+@unlink($historyArchive);
+@rmdir(dirname($historyTmp));
 
 echo "CHATGPT_CONTINUITY_PENDING_NUDGE_STORE_TEST=PASS\n";

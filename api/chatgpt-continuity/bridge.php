@@ -73,7 +73,7 @@ if (!is_array($input)) {
     sv_cgn_bridge_reply(['status' => 'INVALID_JSON'], 400);
 }
 $operation = strtolower(trim((string)($input['operation'] ?? '')));
-if (!in_array($operation, ['heartbeat', 'enqueue', 'pull', 'result', 'status'], true)) {
+if (!in_array($operation, ['heartbeat', 'enqueue', 'pull', 'result', 'status', 'queue_status'], true)) {
     sv_cgn_bridge_reply(['status' => 'INVALID_OPERATION'], 400);
 }
 
@@ -82,6 +82,15 @@ if ($operation === 'heartbeat') {
 }
 
 $store = sv_cgn_bridge_store();
+
+if ($operation === 'queue_status') {
+    try {
+        sv_cgn_bridge_reply(['status' => 'OK', 'queue' => $store->summary()]);
+    } catch (Throwable $e) {
+        error_log('[chatgpt-continuity-bridge-queue-status] ' . $e->getMessage());
+        sv_cgn_bridge_reply(['status' => 'SERVER_ERROR'], 500);
+    }
+}
 
 function sv_cgn_safe_task_id(mixed $value): string
 {
