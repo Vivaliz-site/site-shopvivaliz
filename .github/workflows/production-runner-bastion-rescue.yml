@@ -186,19 +186,106 @@ jobs:
           echo PRIVATE_SITE_TUNNEL=PASS
 
       - name: Restart idle production runner listener only
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
+
+          count_active_a1_jobs() {
+            local total=0
+            local run_id count
+            while IFS= read -r run_id; do
+              test -n "$run_id" || continue
+              count="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" --jq '[.jobs[] | select(.status == "in_progress") | select(((.labels // []) | index("shopvivaliz-a1-deploy")) != null)] | length')"
+              [[ "$count" =~ ^[0-9]+$ ]]
+              total=$((total + count))
+            done < <(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --jq '.workflow_runs[].id')
+            printf '%s\n' "$total"
+          }
+
+          active_first="$(count_active_a1_jobs)"
+          echo "ACTIVE_A1_JOB_COUNT_FIRST=$active_first"
+          sleep 5
+          active_second="$(count_active_a1_jobs)"
+          echo "ACTIVE_A1_JOB_COUNT_SECOND=$active_second"
+
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
-          "${SSH_SITE[@]}" 'bash -s' <<'REMOTE_RUNNER_RESCUE'
+          "${SSH_SITE[@]}" "ACTIVE_A1_JOB_COUNT_FIRST='$active_first' ACTIVE_A1_JOB_COUNT_SECOND='$active_second' bash -s" <<'REMOTE_RUNNER_RESCUE'
           set -Eeuo pipefail
           service=shopvivaliz-actions-runner.service
-          if workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"; then :; else workers=0; fi
+          worker_pattern='^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)'
+
+          worker_output=''
+          pgrep_rc=0
+          if worker_output="$(pgrep -f "$worker_pattern" 2>/dev/null)"; then
+            pgrep_rc=0
+          else
+            pgrep_rc=$?
+          fi
+          case "$pgrep_rc" in
+            0) ;;
+            1) worker_output='' ;;
+            *) echo RUNNER_WORKER_DISCOVERY=failed; exit 22 ;;
+          esac
+
+          workers=0
+          if [ -n "$worker_output" ]; then
+            workers="$(printf '%s\n' "$worker_output" | wc -l | tr -d ' ')"
+          fi
           printf "RUNNER_WORKER_COUNT=%s\n" "$workers"
-          if [ "$workers" -gt 0 ]; then
-            echo RUNNER_BASTION_RESCUE=refused_worker_active
+
+          [[ "${ACTIVE_A1_JOB_COUNT_FIRST:-}" =~ ^[0-9]+$ ]]
+          [[ "${ACTIVE_A1_JOB_COUNT_SECOND:-}" =~ ^[0-9]+$ ]]
+          if [ "$ACTIVE_A1_JOB_COUNT_FIRST" -ne 0 ] || [ "$ACTIVE_A1_JOB_COUNT_SECOND" -ne 0 ]; then
+            echo RUNNER_BASTION_RESCUE=refused_github_job_active
             exit 23
           fi
+
+          if [ "$workers" -gt 0 ]; then
+            min_age=2147483647
+            for pid in $worker_output; do
+              age="$(ps -o etimes= -p "$pid" | tr -d ' ')"
+              [[ "$age" =~ ^[0-9]+$ ]]
+              if [ "$age" -lt "$min_age" ]; then
+                min_age="$age"
+              fi
+            done
+            echo "RUNNER_WORKER_MIN_AGE_SECONDS=$min_age"
+            if [ "$min_age" -lt 120 ]; then
+              echo RUNNER_BASTION_RESCUE=refused_worker_recent
+              exit 23
+            fi
+
+            echo RUNNER_STALE_WORKER_CANDIDATE=true
+            for pid in $worker_output; do
+              kill "$pid"
+            done
+
+            cleared=false
+            for _ in $(seq 1 15); do
+              remaining=''
+              remaining_rc=0
+              if remaining="$(pgrep -f "$worker_pattern" 2>/dev/null)"; then
+                remaining_rc=0
+              else
+                remaining_rc=$?
+              fi
+              case "$remaining_rc" in
+                0) ;;
+                1) remaining='' ;;
+                *) echo RUNNER_WORKER_RECHECK=failed; exit 24 ;;
+              esac
+              if [ -z "$remaining" ]; then
+                cleared=true
+                break
+              fi
+              sleep 2
+            done
+            test "$cleared" = true
+            echo RUNNER_STALE_WORKER_CLEARED=true
+          fi
+
           uid="$(id -u)"
           runtime="/run/user/$uid"
           bus="unix:path=$runtime/bus"
