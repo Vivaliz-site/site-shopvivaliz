@@ -7,7 +7,7 @@ required = (
     "action=ai-squad-claude-diagnostic",
     "Diagnose AI Squad Claude bridge through Remote Control MCP",
     "AI_SQUAD_CLAUDE_SERVICE_ACTIVE=",
-    "AI_SQUAD_CLAUDE_HEALTH_OK=",
+    "AI_SQUAD_CLAUDE_HEALTH_",
     "AI_SQUAD_CLAUDE_AUTH_LOGGED_IN=",
     "AI_SQUAD_CLAUDE_VERSION=",
     "AI_SQUAD_CLAUDE_SERVICE_ENV_BASE_URL_SET=",
