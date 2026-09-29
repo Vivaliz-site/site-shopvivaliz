@@ -30,6 +30,7 @@ jobs:
           github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
           github.event.issue.body == 'action=chatgpt-continuity-successor' ||
           github.event.issue.body == 'action=chatgpt-freeze-task-state' ||
+          github.event.issue.body == 'action=ai-squad-claude-diagnostic' ||
           github.event.issue.body == 'action=claude-remote-control-install' ||
           github.event.issue.body == 'action=claude-remote-control-status'
         )
@@ -646,6 +647,185 @@ jobs:
           if required.difference(seen):
               raise SystemExit('missing successor recovery markers')
           print('\n'.join(safe))
+          PY
+
+      - name: Diagnose AI Squad Claude bridge through Remote Control MCP
+        if: github.event.issue.body == 'action=ai-squad-claude-diagnostic'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+          command = r'''set -Eeuo pipefail
+          uid="$(id -u ubuntu)"
+          xdg="/run/user/$uid"
+          service="shopvivaliz-squad-claude-bridge.service"
+          service_active=false
+          if sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user is-active --quiet "$service"; then
+            service_active=true
+          fi
+          printf 'AI_SQUAD_CLAUDE_SERVICE_ACTIVE=%s\n' "$service_active"
+
+          health='{}'
+          if value="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health 2>/dev/null)"; then
+            health="$value"
+          fi
+          python3 - "$health" <<'INNER_HEALTH'
+          import json, sys
+          try:
+              data=json.loads(sys.argv[1])
+          except Exception:
+              data={}
+          endpoint=str(data.get('endpoint') or '')
+          print('AI_SQUAD_CLAUDE_HEALTH_ENDPOINT_VALID=' + ('true' if endpoint == 'ai-squad-claude-bridge' else 'false'))
+          for src, dst in (
+              ('ok','OK'),
+              ('token_configured','TOKEN_CONFIGURED'),
+              ('credential_store_configured','CREDENTIAL_STORE_CONFIGURED'),
+              ('authenticated','AUTHENTICATED'),
+              ('binary_configured','BINARY_CONFIGURED'),
+          ):
+              print('AI_SQUAD_CLAUDE_HEALTH_' + dst + '=' + ('true' if data.get(src) is True else 'false'))
+          INNER_HEALTH
+
+          help_tmp="$(mktemp)"
+          auth_tmp="$(mktemp)"
+          probe_out="$(mktemp)"
+          probe_err="$(mktemp)"
+          trap 'rm -f "$help_tmp" "$auth_tmp" "$probe_out" "$probe_err"' EXIT
+
+          sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --help >"$help_tmp" 2>&1 || :
+          for spec in SAFE_MODE:--safe-mode RESTRICTED:--restricted PERMISSION_PROMPTS:--permission-prompts NO_CHROME:--no-chrome; do
+            key="${spec%%:*}"
+            flag="${spec#*:}"
+            supported=false
+            if grep -Fq -- "$flag" "$help_tmp"; then supported=true; fi
+            printf 'AI_SQUAD_CLAUDE_FLAG_%s=%s\n' "$key" "$supported"
+          done
+
+          auth_rc=0
+          if sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude auth status --json >"$auth_tmp" 2>/dev/null; then
+            auth_rc=0
+          else
+            auth_rc=$?
+          fi
+          python3 - "$auth_tmp" "$auth_rc" <<'INNER_AUTH'
+          import json, sys
+          path, rc = sys.argv[1], int(sys.argv[2])
+          try:
+              data=json.load(open(path, encoding='utf-8'))
+          except Exception:
+              data={}
+          logged=data.get('loggedIn') is True
+          raw=str(data.get('subscriptionType') or '').strip().lower()
+          allowed={'free','pro','max','team','enterprise','business','unknown'}
+          subscription=raw if raw in allowed else ('unknown' if raw else 'none')
+          print('AI_SQUAD_CLAUDE_AUTH_COMMAND_OK=' + ('true' if rc == 0 else 'false'))
+          print('AI_SQUAD_CLAUDE_AUTH_LOGGED_IN=' + ('true' if logged else 'false'))
+          print('AI_SQUAD_CLAUDE_AUTH_SUBSCRIPTION_CLASS=' + subscription)
+          INNER_AUTH
+
+          process_count="$(pgrep -u ubuntu -f '/home/ubuntu/.local/bin/claude' 2>/dev/null | wc -l | tr -d ' ')"
+          case "$process_count" in ''|*[!0-9]*) process_count=0 ;; esac
+          printf 'AI_SQUAD_CLAUDE_PROCESS_COUNT=%s\n' "$process_count"
+
+          probe_rc=0
+          if timeout 35s sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin             /home/ubuntu/.local/bin/claude -p             --output-format stream-json --verbose --no-session-persistence             --safe-mode --restricted --permission-mode dontAsk --permission-prompts none             --disable-slash-commands --no-chrome --model claude-sonnet-5 --effort low             --system-prompt 'AI Squad authentication health probe. Reply only OK.' --tools ''             >"$probe_out" 2>"$probe_err" <<'INNER_PROMPT'
+          OK
+          INNER_PROMPT
+          then
+            probe_rc=0
+          else
+            probe_rc=$?
+          fi
+
+          failure_class=none
+          if [ "$probe_rc" -ne 0 ]; then
+            combined="$(tr '[:upper:]' '[:lower:]' <"$probe_err"; tr '[:upper:]' '[:lower:]' <"$probe_out")"
+            if [ "$probe_rc" -eq 124 ]; then
+              failure_class=timeout
+            elif grep -Eq 'another claude code process is refreshing|exited mid-refresh|refresh oauth token' <<<"$combined"; then
+              failure_class=oauth_refresh_contention
+            elif grep -Eq 'unknown option|unknown argument|invalid option' <<<"$combined"; then
+              failure_class=cli_flags
+            elif grep -Eq 'selected model|model.*(not exist|access)|not.*access.*model' <<<"$combined"; then
+              failure_class=model_access
+            elif grep -Eq 'usage limit|rate limit|quota|credit balance' <<<"$combined"; then
+              failure_class=quota
+            elif grep -Eq 'oauth|authenticate|authentication|not logged in|token expired|login' <<<"$combined"; then
+              failure_class=auth
+            else
+              failure_class=transport
+            fi
+          elif ! grep -q '"type":"result"' "$probe_out"; then
+            failure_class=invalid_output
+          fi
+          printf 'AI_SQUAD_CLAUDE_PROBE_OK=%s\n' "$([ "$failure_class" = none ] && echo true || echo false)"
+          printf 'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=%s\n' "$failure_class"
+          '''
+
+          body = json.dumps({
+              'jsonrpc':'2.0',
+              'id':1,
+              'method':'tools/call',
+              'params':{
+                  'name':'admin_command_run',
+                  'arguments':{
+                      'host':'shopvivaliz-free-a1',
+                      'command':command,
+                      'timeout':55,
+                  },
+              },
+          }).encode()
+          req=urllib.request.Request(
+              endpoint,
+              data=body,
+              headers={'Content-Type':'application/json','Authorization':'Bearer '+token},
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=75) as response:
+                  payload=json.load(response)
+          except urllib.error.HTTPError as exc:
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=http_' + str(exc.code))
+              raise SystemExit(1)
+
+          result=(payload.get('result') or {}).get('structuredContent') or {}
+          if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=tool_error')
+              raise SystemExit(1)
+
+          stdout=str(result.get('stdout') or '')
+          prefixes=(
+              'AI_SQUAD_CLAUDE_SERVICE_ACTIVE=',
+              'AI_SQUAD_CLAUDE_HEALTH_',
+              'AI_SQUAD_CLAUDE_FLAG_',
+              'AI_SQUAD_CLAUDE_AUTH_',
+              'AI_SQUAD_CLAUDE_PROCESS_COUNT=',
+              'AI_SQUAD_CLAUDE_PROBE_',
+          )
+          safe=[line for line in stdout.splitlines() if line.startswith(prefixes)]
+          required={
+              'AI_SQUAD_CLAUDE_SERVICE_ACTIVE',
+              'AI_SQUAD_CLAUDE_HEALTH_OK',
+              'AI_SQUAD_CLAUDE_HEALTH_AUTHENTICATED',
+              'AI_SQUAD_CLAUDE_AUTH_LOGGED_IN',
+              'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS',
+          }
+          seen={line.split('=',1)[0] for line in safe if '=' in line}
+          if required.difference(seen):
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=missing_markers')
+              raise SystemExit(1)
+          print('\n'.join(safe))
+          print('AI_SQUAD_CLAUDE_MCP_DIAGNOSTIC=PASS')
           PY
 
       - name: Install Claude Remote Control through Remote Control MCP
