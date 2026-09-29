@@ -891,32 +891,33 @@ class BootstrapContractTests(unittest.TestCase):
 
     def test_oci_bastion_can_validate_claude_stage7_via_remote_control_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
         for action in (
             "action=claude-remote-control-install",
             "action=claude-remote-control-status",
         ):
             self.assertIn(action, workflow)
-        start = workflow.index("- name: Install Claude Remote Control through Remote Control MCP")
-        end = workflow.index("- name: Check Claude Remote Control status through Remote Control MCP")
-        install_block = workflow[start:end]
-        self.assertIn("admin_command_run", install_block)
-        self.assertIn("always-free-arm-1787907847-26", install_block)
-        self.assertIn("CLAUDE_REMOTE_CONTROL_INSTALL=PASS", install_block)
-        self.assertIn("CLAUDE_PRIVATE_MCP_BRIDGE=PASS", install_block)
-        status_block = workflow[end:]
-        self.assertIn("admin_command_run", status_block)
-        self.assertIn("CLAUDE_REMOTE_CONTROL_STATUS=PASS", status_block)
+        self.assertIn("scripts/oci-mcp-stage7-action.py", workflow)
+        self.assertIn("claude-install", workflow)
+        self.assertIn("claude-status", workflow)
+        self.assertIn("admin_command_run", helper)
+        self.assertIn('BACKEND = "always-free-arm-1787907847-26"', helper)
+        self.assertIn("CLAUDE_REMOTE_CONTROL_INSTALL=PASS", helper)
+        self.assertIn("CLAUDE_PRIVATE_MCP_BRIDGE=PASS", helper)
+        self.assertIn("CLAUDE_REMOTE_CONTROL_STATUS=PASS", helper)
+        self.assertNotIn("mcp-token", workflow)
 
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
         self.assertIn("action=chatgpt-freeze-task-state", workflow)
-        start = workflow.index("- name: Read latest ChatGPT freeze state through Remote Control MCP")
-        block = workflow[start:]
-        self.assertIn("admin_command_run", block)
-        self.assertIn("shopvivaliz-free-a1", block)
-        self.assertIn("CHATGPT_FREEZE_LATEST_STATE=", block)
-        self.assertIn("TASK_TERMINAL_GATE=", block)
-        self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", block)
+        self.assertIn("freeze-state", workflow)
+        self.assertIn("admin_command_run", helper)
+        self.assertIn('SITE = "shopvivaliz-free-a1"', helper)
+        self.assertIn("CHATGPT_FREEZE_LATEST_STATE=", helper)
+        self.assertIn("TASK_TERMINAL_GATE=", helper)
+        self.assertIn("sudo -u ubuntu -H python3", helper)
+        self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", helper)
 
     def test_oci_continuity_diagnostic_probes_team_account_scope_without_leaking_credentials(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
