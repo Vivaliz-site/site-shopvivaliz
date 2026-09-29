@@ -767,6 +767,15 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("cat $token_file", repair)
         self.assertIn("dd if=\"$token_file\" status=none", repair)
 
+    def test_oci_stage7_and_freeze_state_expand_shell_arrays(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        start = workflow.index("- name: Install Claude Remote Control through Remote Control MCP")
+        end = workflow.index("- name: ChatGPT continuity diagnostic through Remote Control MCP")
+        block = workflow[start:end]
+        self.assertNotIn(r"\${", block)
+        self.assertIn('BACKEND_SSH=(ssh "${SSH_COMMON[@]}"', block)
+        self.assertIn('"${BACKEND_SSH[@]}" "sudo -n python3 - freeze-state"', block)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
