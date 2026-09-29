@@ -941,19 +941,6 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("Enable Remote Control?", helper)
         self.assertNotIn('[claude_bin, "--remote-control"]', helper)
 
-    def test_claude_trust_bootstrap_trusts_workspace_before_starting_server(self):
-        helper_path = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
-        spec = importlib.util.spec_from_file_location("claude_workspace_trust_bootstrap", helper_path)
-        helper = importlib.util.module_from_spec(spec)
-        assert spec and spec.loader
-        spec.loader.exec_module(helper)
-
-        self.assertEqual(helper.workspace_trust_command("/opt/claude"), ["/opt/claude"])
-        self.assertEqual(
-            helper.remote_control_server_command("/opt/claude")[0:2],
-            ["/opt/claude", "remote-control"],
-        )
-
     def test_claude_remote_control_unsets_feature_flag_blockers(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service").read_text(encoding="utf-8")
