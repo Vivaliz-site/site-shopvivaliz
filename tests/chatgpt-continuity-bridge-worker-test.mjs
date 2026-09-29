@@ -9,6 +9,7 @@ import {
   attemptNudge,
   reinforcementCheckOnce,
   selectChatgptTab,
+  connectFirstUsableChatgptTab,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -72,6 +73,21 @@ async function run() {
       { type: 'page', url: 'https://example.com/', webSocketDebuggerUrl: 'ws://external' },
     ]);
     assert.equal(selected?.webSocketDebuggerUrl, 'ws://aux', 'auxiliary ChatGPT tab remains a bounded fallback');
+  }
+
+  {
+    const attempts = [];
+    const connected = await connectFirstUsableChatgptTab([
+      { type: 'page', url: 'https://chatgpt.com/c/stale', webSocketDebuggerUrl: 'ws://stale' },
+      { type: 'page', url: 'https://chatgpt.com/c/live', webSocketDebuggerUrl: 'ws://live' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ], async tab => {
+      attempts.push(tab.webSocketDebuggerUrl);
+      if (tab.webSocketDebuggerUrl === 'ws://stale') throw new Error('stale target');
+      return { marker: tab.webSocketDebuggerUrl };
+    });
+    assert.deepEqual(attempts, ['ws://stale', 'ws://live'], 'must fall through stale same-rank target before lower-rank home');
+    assert.equal(connected?.marker, 'ws://live');
   }
 
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
