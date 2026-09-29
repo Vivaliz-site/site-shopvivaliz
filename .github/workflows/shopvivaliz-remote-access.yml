@@ -998,7 +998,7 @@ jobs:
               echo "SECURE_CLAUDE_REMOTE_CONTROL_PROBE=PASS"
               ;;
             claude_remote_control_install)
-              remote_dir="/tmp/shopvivaliz-claude-remote-control-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              remote_dir="/home/ubuntu/.local/state/shopvivaliz/claude-stage7/remote-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
               "${SSH[@]}" "install -d -m 700 '$remote_dir'"
               "${SSH[@]}" "cat > '$remote_dir/setup.sh' && chmod 700 '$remote_dir/setup.sh'" < scripts/setup-claude-remote-control.sh
               "${SSH[@]}" "cat > '$remote_dir/bridge.py' && chmod 600 '$remote_dir/bridge.py'" < scripts/claude-remote-control-mcp-stdio.py
