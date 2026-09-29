@@ -600,7 +600,7 @@ jobs:
                   candidate=str(canonical.get('status','')).strip() if isinstance(canonical,dict) else ''
                   canonical_task_status=candidate if candidate in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'} else 'INVALID'
                   if isinstance(canonical,dict):
-                      iso_pattern=r'\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z'
+                      iso_pattern=r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z'
                       updated=str(canonical.get('updated_at','')).strip()
                       completed=str(canonical.get('completed_at','')).strip()
                       canonical_task_updated_at=updated if re.fullmatch(iso_pattern,updated) else 'NONE'
@@ -811,7 +811,7 @@ jobs:
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
                   }:
-                      if value != 'NONE' and not re.fullmatch(r'\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z', value):
+                      if value != 'NONE' and not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', value):
                           raise RuntimeError('invalid canonical task timestamp')
                   elif key == 'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS':
                       if not re.fullmatch(r'(?:NONE|[A-Za-z0-9_]{1,64}(?:,[A-Za-z0-9_]{1,64}){0,31})', value):
