@@ -40,6 +40,8 @@ $required = [
     'Runner connect error',
     'RUNNER_LISTENER_CONNECTED=',
     'RUNNER_LISTENER_FAILURE_CLASS=',
+    "-printf '%T@:%p\\n'",
+    'cut -d: -f2-',
     'trap "rm -f \\"$marker\\"" EXIT',
     'gh workflow run master-production-pipeline.yml',
     '-f confirmation=DEPLOY',
@@ -67,6 +69,7 @@ $forbidden = [
     '--session-ttl 900',
     'cat "$latest_log"',
     'trap \'rm -f "$marker"\' EXIT',
+    "cut -d' ' -f2-",
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
