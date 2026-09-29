@@ -112,6 +112,21 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
+async function connectFirstUsableChatgptTab(tabs, connector) {
+  if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
+  const ranked = tabs
+    .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
+    .filter(row => Number.isFinite(row.rank))
+    .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+  for (const { tab } of ranked) {
+    try {
+      const connected = await connector(tab);
+      if (connected) return connected;
+    } catch {}
+  }
+  return null;
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -135,16 +150,34 @@ class Cdp {
       );
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
-    const page = selectChatgptTab(tabs);
-    if (!page?.webSocketDebuggerUrl) {
-      throw new Error('no open chatgpt.com tab found in the attached browser');
-    }
-    const ws = new WebSocket(page.webSocketDebuggerUrl);
-    await new Promise((resolve, reject) => {
-      ws.addEventListener('open', resolve, { once: true });
-      ws.addEventListener('error', reject, { once: true });
+    const connected = await connectFirstUsableChatgptTab(tabs, async page => {
+      let ws;
+      let cdp;
+      try {
+        ws = new WebSocket(page.webSocketDebuggerUrl);
+        await Promise.race([
+          new Promise((resolve, reject) => {
+            ws.addEventListener('open', resolve, { once: true });
+            ws.addEventListener('error', reject, { once: true });
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target open timeout')), 3000)),
+        ]);
+        cdp = new Cdp(ws);
+        await Promise.race([
+          cdp.evaluate('true'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target liveness timeout')), 3000)),
+        ]);
+        return cdp;
+      } catch (error) {
+        try { cdp?.close(); } catch {}
+        try { ws?.close(); } catch {}
+        throw error;
+      }
     });
-    return new Cdp(ws);
+    if (!connected) {
+      throw new Error('no usable open chatgpt.com tab found in the attached browser');
+    }
+    return connected;
   }
 
   send(method, params = {}) {
@@ -568,6 +601,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 export {
   Cdp,
   selectChatgptTab,
+  connectFirstUsableChatgptTab,
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
