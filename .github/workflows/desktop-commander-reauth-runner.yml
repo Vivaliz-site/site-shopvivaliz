@@ -279,6 +279,7 @@ jobs:
               target_port=22
             fi
             echo "DC_REAUTH_WINDOWS_ROUTE host=$host mode=$mode"
+            echo "SSH22=reachable"
 
             ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
               -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" \
