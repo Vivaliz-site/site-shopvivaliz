@@ -77,7 +77,7 @@ jobs:
             "${SSH[@]}" 'rm -f "$HOME/.desktop-commander-device/reauth-link.txt"'
           fi
 
-      - name: Run on Windows host
+      - name: Run on Windows host through independent private SSH
         if: steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv'
         env:
           TARGET: ${{ steps.req.outputs.target }}
@@ -85,55 +85,64 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [ "$TARGET" = fred-win ]; then PORT=5557; else PORT=5558; fi
+          SSH_VM=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+
+          if [ "$TARGET" = fred-win ]; then
+            PEER_NAME=LAPTOP-NIG4IFUU
+            WIN_USER=FRED
+            LOCAL_PORT=32225
+          else
+            PEER_NAME=DESKTOP-KOCEPSV
+            WIN_USER=user
+            LOCAL_PORT=32226
+          fi
+
+          cat > "$RUNNER_TEMP/dc-peer-discover.py" <<'PY'
+          import json
+          import sys
+
+          wanted = sys.argv[1].upper()
+          data = json.load(sys.stdin)
+          for peer in (data.get("Peer") or {}).values():
+              host = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
+              if wanted in host:
+                  ips = peer.get("TailscaleIPs") or []
+                  ip = next((x for x in ips if ":" not in x), "")
+                  if ip:
+                      print(ip)
+                      raise SystemExit(0)
+          raise SystemExit(3)
+          PY
+
+          peer_ip="$("${SSH_VM[@]}" 'tailscale status --json 2>/dev/null' | python3 "$RUNNER_TEMP/dc-peer-discover.py" "$PEER_NAME")"
+          test -n "$peer_ip"
+          "${SSH_VM[@]}" "timeout 4 bash -c '</dev/tcp/$peer_ip/22'"
+          echo "SSH22=reachable"
+
+          ssh -fNT             -o BatchMode=yes             -o IdentitiesOnly=yes             -o ExitOnForwardFailure=yes             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -o ConnectTimeout=10             -i "$HOME/.ssh/shopvivaliz_vmkey"             -L "$LOCAL_PORT:$peer_ip:22"             ubuntu@10.0.1.38
+
+          for _ in $(seq 1 10); do
+            if ssh-keyscan -T 3 -p "$LOCAL_PORT" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/windows-reauth.hosts" && [ -s "$RUNNER_TEMP/windows-reauth.hosts" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test -s "$RUNNER_TEMP/windows-reauth.hosts"
+          chmod 600 "$RUNNER_TEMP/windows-reauth.hosts"
+
           SCRIPT_B64="$(base64 -w0 scripts/desktop-commander-reauth-windows.ps1)"
-          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$p='C:\\site-shopvivaliz\\logs\\dc-reauth-runner.ps1'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$SCRIPT_B64')); try { & \$p -Phase '$PHASE' -HostKey '$TARGET' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }\""
-          CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
-          import base64, json, os, urllib.request
-          command = base64.b64decode(os.environ['REMOTE_CMD_B64']).decode()
-          port = os.environ['REMOTE_PORT']
-          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode()
-          req = urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=190) as r:
-              payload = json.loads(r.read().decode())
-          result = payload.get('result') or {}
-          output = str(result.get('output') or '')
-          for line in output.splitlines():
-              if line.startswith('DC_REAUTH_'):
-                  print(line)
-          if result.get('success') is not True:
-              raise SystemExit('Windows DC reauth action failed')
-          PY
+          REMOTE_PS='C:\site-shopvivaliz\logs\dc-reauth-runner.ps1'
+          REMOTE_LINK='C:\site-shopvivaliz\logs\dc-reauth-link.txt'
+          WINDOWS_SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/windows-reauth.hosts" -o ConnectTimeout=10 -p "$LOCAL_PORT" -i "$HOME/.ssh/shopvivaliz_vmkey" "$WIN_USER@127.0.0.1")
+
+          write_and_run="& { \$p='$REMOTE_PS'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$SCRIPT_B64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase '$PHASE' -HostKey '$TARGET' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+          remote_out="$("${WINDOWS_SSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$write_and_run\"")"
+          printf '%s\n' "$remote_out" | grep -E '^DC_REAUTH_(BEGIN|FINALIZE)=PASS$'
+
           if [ "$PHASE" = begin ]; then
-            OUT="$RUNNER_TEMP/dc-reauth-link.txt"
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_PORT='$PORT' REMOTE_OUT_B64='$(printf '%s' "$OUT" | base64 -w0)' python3 -" <<'PY'
-          import base64, json, os, pathlib, urllib.request
-          port = os.environ['REMOTE_PORT']
-          out = pathlib.Path(base64.b64decode(os.environ['REMOTE_OUT_B64']).decode())
-          body = json.dumps({'params': {'path': r'C:\site-shopvivaliz\logs\dc-reauth-link.txt'}}).encode()
-          req = urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/read_file', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=30) as r:
-              payload = json.loads(r.read().decode())
-          result = payload.get('result') or {}
-          if result.get('success') is not True:
-              raise SystemExit('could not read Windows reauth link')
-          content = str(result.get('content') or '').strip()
-          if not content.startswith('https://'):
-              raise SystemExit('invalid Windows reauth link')
-          out.write_text(content + '\n', encoding='utf-8')
-          PY
-            DEL='powershell.exe -NoProfile -NonInteractive -Command "Remove-Item -LiteralPath ''C:\site-shopvivaliz\logs\dc-reauth-link.txt'' -Force -ErrorAction SilentlyContinue"'
-            DEL_B64="$(printf '%s' "$DEL" | base64 -w0)"
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$DEL_B64' REMOTE_PORT='$PORT' python3 -" <<'PY'
-          import base64, json, os, urllib.request
-          body = json.dumps({'params': {'command': base64.b64decode(os.environ['REMOTE_CMD_B64']).decode(), 'timeout': 30}}).encode()
-          req = urllib.request.Request(f"http://127.0.0.1:{os.environ['REMOTE_PORT']}/mcp/tool/execute_command", data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=40) as r:
-              payload = json.loads(r.read().decode())
-          if (payload.get('result') or {}).get('success') is not True:
-              raise SystemExit('Windows reauth link cleanup failed')
-          PY
+            "${WINDOWS_SSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Get-Content -LiteralPath '$REMOTE_LINK' -Raw\"" > "$RUNNER_TEMP/dc-reauth-link.txt"
+            grep -Eq '^https://' "$RUNNER_TEMP/dc-reauth-link.txt"
+            "${WINDOWS_SSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"Remove-Item -LiteralPath '$REMOTE_LINK' -Force -ErrorAction SilentlyContinue\"" >/dev/null
           fi
 
       - name: Validate private reauth link
@@ -159,4 +168,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f "$RUNNER_TEMP/dc-reauth-link.txt" "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+          pkill -f '32225:.*:22' 2>/dev/null || true
+          pkill -f '32226:.*:22' 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/dc-reauth-link.txt" "$RUNNER_TEMP/dc-peer-discover.py" "$RUNNER_TEMP/windows-reauth.hosts" "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
