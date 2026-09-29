@@ -336,6 +336,37 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
         self.assertIn("RUNTIME_GITHUB_DEPENDENCY=false", text)
 
+    def test_oci_bastion_stage7_storage_recovery_is_guarded(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for action in (
+            "action=backend-storage-scan",
+            "action=backend-storage-cleanup-safe",
+        ):
+            self.assertIn(action, text)
+
+        scan_name = "- name: Scan backend storage for Stage 7 recovery"
+        cleanup_name = "- name: Safely recover backend storage for Stage 7"
+        self.assertEqual(text.count(scan_name), 1)
+        self.assertEqual(text.count(cleanup_name), 1)
+
+        start = text.index(cleanup_name)
+        end = text.index("- name:", start + len(cleanup_name))
+        cleanup = text[start:end]
+        for needle in (
+            "path_in_use()",
+            "SKIPPED_ACTIVE=",
+            "BACKEND_STORAGE_CLEANUP_BEGIN",
+            "BACKEND_STORAGE_CLEANUP_END",
+            "/home/ubuntu/.cache/ms-playwright",
+            "/home/ubuntu/.npm/_cacache",
+            "/home/ubuntu/.npm/_npx",
+            "shopvivaliz-claude-oci-*",
+        ):
+            self.assertIn(needle, cleanup)
+        self.assertNotIn("docker system prune", cleanup)
+        self.assertNotIn("/home/ubuntu/shopvivaliz-deploy/releases", cleanup)
+        self.assertNotIn("/home/ubuntu/shopvivaliz-deploy/current", cleanup)
+
     def test_oci_bastion_secure_tunnel_probe_is_structurally_intact(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         probe_name = "- name: Probe Secure MCP Tunnel prerequisites"
