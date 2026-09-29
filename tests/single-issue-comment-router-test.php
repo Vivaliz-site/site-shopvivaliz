@@ -32,6 +32,7 @@ $required = [
     '/codex-auto-continuity-v7-goal',
     '/remote',
     '/codex-remote-control-mcp-run',
+    '/codex-comment-router-sweep-v1 CONFIRM',
     '/amazon-support-reply',
     '/amazon-support-readback',
     '/amazon-support-chat-reply',
@@ -47,6 +48,7 @@ $required = [
     'codex-auto-continuity-v7-goal.yml',
     'shopvivaliz-remote-access.yml',
     'codex-remote-control-mcp-one-shot.yml',
+    'codex-comment-router-sweep-one-shot.yml',
     'amazon-support-reply-oci-breakglass.yml',
     'desktop-commander-reauth-runner.yml',
 ];
