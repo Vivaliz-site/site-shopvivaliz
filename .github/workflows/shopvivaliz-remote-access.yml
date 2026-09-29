@@ -1,8 +1,7 @@
 name: ShopVivaliz Remote Access
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
   workflow_dispatch:
     inputs:
       target:
@@ -62,6 +61,7 @@ on:
           - chatgpt_continuity_diagnostic
           - chatgpt_continuity_repair
           - chatgpt_freeze_task_state
+          - chatgpt_freeze_state_owner_repair
           - chatgpt_freeze_task_successor
       reason:
         description: Audit reason
@@ -115,7 +115,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_task_successor"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -154,7 +154,7 @@ jobs:
               raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
           if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
               raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
-          if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
+          if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
               raise SystemExit("ChatGPT freeze task actions are restricted to the site VM")
           if not reason:
               raise SystemExit("Reason is required")
@@ -436,6 +436,64 @@ jobs:
                   exit "$terminal_rc"
                 fi
               fi
+              ;;
+            chatgpt_freeze_state_owner_repair)
+              state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+              test -d "$state_dir"
+              runtime_owner="$(id -u ubuntu):$(id -g ubuntu)"
+              [[ "$runtime_owner" =~ ^[0-9]+:[0-9]+$ ]]
+
+              # The ubuntu watchdog/dispatcher is the canonical owner of this
+              # shared runtime. Normalize only metadata; never alter JSON bytes.
+              sudo -n chown "$runtime_owner" "$state_dir"
+
+              latest_task_id="$(python3 - "$state_dir" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          pattern = re.compile(r"chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)")
+          candidates = []
+          for path in root.glob("chatgpt-freeze-root-cause-20260928-g*.json"):
+              match = pattern.fullmatch(path.stem)
+              if match and path.is_file() and not path.is_symlink():
+                  candidates.append((int(match.group(1)), path.stem))
+          if not candidates:
+              raise SystemExit("no generational freeze checkpoint found")
+          print(max(candidates)[1])
+          PY
+              )"
+
+              repaired=0
+              content_unchanged=true
+              while IFS= read -r -d '' path; do
+                name="$(basename "$path")"
+                [[ "$name" =~ ^chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)\.json$ ]] || continue
+                test ! -L "$path"
+                before="$(sudo -n sha256sum -- "$path" | awk '{print $1}')"
+                test -n "$before"
+                sudo -n chown "$runtime_owner" "$path"
+                sudo -n chmod 600 "$path"
+                after="$(sudo -n sha256sum -- "$path" | awk '{print $1}')"
+                test -n "$after"
+                if [ "$before" != "$after" ]; then
+                  content_unchanged=false
+                  echo "CHATGPT_FREEZE_STATE_OWNER_CONTENT_UNCHANGED=false"
+                  exit 71
+                fi
+                repaired=$((repaired + 1))
+              done < <(find "$state_dir" -maxdepth 1 -type f -name 'chatgpt-freeze-root-cause-20260928-g*.json' -print0)
+
+              test "$repaired" -gt 0
+              test "$content_unchanged" = true
+              sudo -u ubuntu test -r "$state_dir/$latest_task_id.json"
+              sudo -u ubuntu env SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" \
+                python3 scripts/agent_task_state.py show --task "$latest_task_id" >/dev/null
+
+              echo "CHATGPT_FREEZE_STATE_OWNER_CONTENT_UNCHANGED=true"
+              echo "CHATGPT_FREEZE_STATE_OWNER_READABLE=true"
+              echo "CHATGPT_FREEZE_STATE_OWNER_REPAIR=PASS"
               ;;
             repo_status)
               echo "REMOTE_REPO_STATUS_BEGIN"
@@ -766,6 +824,29 @@ jobs:
               then
                 bridge_heartbeat=true
               fi
+              bridge_store_certified=false
+              bridge_store_archive_rows=0
+              bridge_store_resolved_recent=0
+              bridge_store_invalid=0
+              bridge_store_status="$("${SSH[@]}" 'set -Eeuo pipefail
+                token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+                test -s "$token_file"
+                token="$(dd if="$token_file" status=none)"
+                trap "unset token" EXIT
+                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
+                  tmp="$(mktemp)"
+                  if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '"'"'{"operation":"queue_status"}'"'"' "$candidate" > "$tmp" && jq -e '"'"'.status == "OK" and (.queue.certified | type == "boolean")'"'"' "$tmp" >/dev/null 2>&1; then
+                    jq -r '"'"'[.queue.certified,.queue.archive_rows,.queue.resolved_recent,.queue.invalid] | @tsv'"'"' "$tmp"
+                    rm -f "$tmp"
+                    exit 0
+                  fi
+                  rm -f "$tmp"
+                done
+                exit 42' 2>/dev/null || true)"
+              if [ -n "$bridge_store_status" ]; then
+                read -r bridge_store_certified bridge_store_archive_rows bridge_store_resolved_recent bridge_store_invalid <<< "$bridge_store_status"
+              fi
+
 
               echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
               echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
@@ -781,6 +862,10 @@ jobs:
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=$bridge_queue_claimed"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=$bridge_queue_active"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=$bridge_queue_resolved"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_CERTIFIED=$bridge_store_certified"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_ARCHIVE_ROWS=$bridge_store_archive_rows"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_RESOLVED_RECENT=$bridge_store_resolved_recent"
+              echo "CHATGPT_CONTINUITY_BRIDGE_STORE_INVALID=$bridge_store_invalid"
               echo "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=$latest_nudge"
               echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
               echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"

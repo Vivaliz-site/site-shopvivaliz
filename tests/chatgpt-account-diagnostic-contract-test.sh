@@ -45,6 +45,16 @@ grep -Fq 'CHATGPT_FREEZE_LATEST_STATE=' "$remote"
 grep -Fq 'chatgpt-freeze-root-cause-20260928-g' "$remote"
 grep -Fq 'latest_generation' "$remote"
 
+# A privileged writer can create a 0600 checkpoint owned by root while the
+# canonical watchdog/dispatcher runs as ubuntu. The control plane must expose a
+# narrow repair action that changes only ownership/mode, verifies content hash
+# stability, and proves the latest generation is readable by ubuntu.
+grep -Fq 'chatgpt_freeze_state_owner_repair' "$remote"
+grep -Fq 'CHATGPT_FREEZE_STATE_OWNER_REPAIR=PASS' "$remote"
+grep -Fq 'CHATGPT_FREEZE_STATE_OWNER_CONTENT_UNCHANGED=true' "$remote"
+grep -Fq 'sudo -n chown "$runtime_owner" "$path"' "$remote"
+grep -Fq 'sudo -u ubuntu test -r "$state_dir/$latest_task_id.json"' "$remote"
+
 # Fresh evidence after a historical CONCLUIDO checkpoint must use a distinct
 # successor generation; never mutate/reopen the completed predecessor.
 grep -Fq 'chatgpt_freeze_task_successor' "$remote"

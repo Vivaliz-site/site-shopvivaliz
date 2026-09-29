@@ -301,25 +301,33 @@ def main(argv: list[str]) -> int:
 
     workspace = os.path.realpath(os.getcwd())
 
+    # The installer invokes this helper only after its bounded non-PTY
+    # server attempt has classified workspace trust as the blocker. Follow
+    # Claude's supported first-run order: plain CLI trust first, then
+    # remote-control server mode. If trust was already persisted, plain
+    # Claude may not prompt; only a real server startup can make that case
+    # PASS.
+    plain = bootstrap_plain_workspace_trust(claude_bin, workspace)
+    if plain.status not in {"plain_trust_persisted", "plain_prompt_missing"}:
+        print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={plain.status}")
+        return 69
+
     server = run_server_mode(claude_bin, workspace)
     if server.status == "started":
         print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS")
         return 0
 
     if server.status == "workspace_not_trusted":
-        plain = bootstrap_plain_workspace_trust(claude_bin, workspace)
-        if plain.status != "plain_trust_persisted":
-            print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={plain.status}")
-            return 69
-
-        server = run_server_mode(claude_bin, workspace)
-        if server.status == "started":
-            print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS")
-            return 0
+        safe_class = (
+            "trust_not_persisted"
+            if plain.status == "plain_trust_persisted"
+            else "plain_prompt_missing"
+        )
+        print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={safe_class}")
+        return 67
 
     safe_class = {
         "unexpected_prompt": "unexpected_prompt",
-        "workspace_not_trusted": "trust_not_persisted",
         "startup_missing": "startup_missing",
         "prompt_missing": "prompt_missing",
     }.get(server.status, "other")

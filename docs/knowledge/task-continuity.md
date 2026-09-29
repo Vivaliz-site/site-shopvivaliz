@@ -427,3 +427,36 @@ visivel como `oversized=true`; nunca e truncada apenas por tamanho.
 Mudancas na superficie de continuidade exigem o `Task Continuity Fast Gate`.
 O `Mandatory Validation Gate` tambem executa a regressao Node do bridge para
 impedir que um teste de continuidade vermelho seja mesclado como falso-verde.
+
+
+<!-- CONTINUITY_QUEUE_CERTIFICATION_V13 -->
+### Certificacao das tres filas de continuidade
+
+As filas de continuidade tem semanticas diferentes e nunca devem ser somadas
+num unico numero de "pendencias":
+
+1. **Resume requests**: `_resume-requests.jsonl` contem apenas requests
+   atualmente acionaveis; historico terminal/superseded/orfao/duplicado fica em
+   `_resume-requests-archive.jsonl`.
+2. **Bridge nudges**: `pending-nudges.json` mantem apenas PENDING/CLAIMED e
+   resultados resolvidos recentes. Resolvidos apos a janela de retencao saem
+   do hot store para `pending-nudges-archive.jsonl`, mas `status(task_id)`
+   continua consultando o ultimo resultado arquivado para compatibilidade.
+   A operacao autenticada `queue_status` expoe somente contagens agregadas:
+   active, pending, claimed, resolved_recent, invalid, archive_rows e certified.
+3. **GitHub Actions**: o job `Task Continuity Actions Queue Hygiene` roda em
+   GitHub-hosted runner e classifica runs `queued`. Cancelamento automatico e
+   restrito a runs `pull_request` com mais de 6 horas cujo head nao corresponda
+   a nenhum PR aberto no momento da certificacao. Runs de `issue_comment`,
+   `workflow_run`, push, workflow_dispatch ou PR aberto nunca sao cancelados
+   por essa rotina.
+
+A limpeza de Actions revalida o run imediatamente antes do cancelamento para
+evitar corrida de estado. O `GITHUB_TOKEN` e usado somente no proprio workflow,
+nao e impresso e nao e persistido.
+
+Mudancas em `api/chatgpt-continuity/**`,
+`includes/chatgpt-continuity/**`, `task_resume_queue.py`, watchdog ou higiene
+de Actions devem acionar o `Task Continuity Fast Gate`.
+Se `main` avancar enquanto o PR de continuidade estiver em validacao, os gates devem ser reexecutados contra a nova base antes do merge; verde calculado apenas contra base anterior nao certifica a integracao final.
+<!-- /CONTINUITY_QUEUE_CERTIFICATION_V13 -->

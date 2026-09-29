@@ -147,3 +147,12 @@ Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
 Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 
+
+
+## GitHub issue comments: single dispatcher
+
+- Exactly one active workflow may subscribe directly to `issue_comment`: `.github/workflows/issue-comment-dispatcher.yml`.
+- Workflows that implement comment commands must expose `workflow_call` and be invoked only by the dispatcher. Do not add a second `on: issue_comment` listener.
+- The dispatcher must classify each authorized comment into at most one route. Explicit slash commands take precedence over generic mentions such as `@claude`.
+- Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
+- Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.
