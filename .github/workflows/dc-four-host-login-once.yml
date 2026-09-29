@@ -398,8 +398,8 @@ jobs:
             grep -Eq '^https://[^[:space:]]+$' "$out"
           }
 
-          start_linux site 0.2.51 "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"
-          start_linux backend 0.2.51 "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"
+          start_linux site 0.2.48 "$LINK_DIR/dc-reauth-shopvivaliz-free-a1.txt"
+          start_linux backend 0.2.48 "$LINK_DIR/dc-reauth-always-free-arm-1787907847-26.txt"
 
           make_win_tunnel() {
             local_port="$1"
@@ -445,13 +445,18 @@ jobs:
             user="$2"
             port="$3"
             out="$4"
+            if [ "$host" = fred-win ]; then
+              auth_version=0.2.48
+            else
+              auth_version=0.2.51
+            fi
             remote_ps='C:\site-shopvivaliz\logs\dc-reauth-runner.ps1'
             remote_link='C:\site-shopvivaliz\logs\dc-reauth-link.txt'
             WINSSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$RUNNER_TEMP/$host.hosts" -o ConnectTimeout=10 \
               -p "$port" -i "$VM_KEY_FILE" "$user@127.0.0.1")
 
-            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase begin -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase begin -HostKey '$host' -AuthPackageVersion '$auth_version' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
             remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$write_and_run\"")"
             printf '%s\n' "$remote_out" | grep -F 'DC_REAUTH_BEGIN=PASS' >/dev/null
 
