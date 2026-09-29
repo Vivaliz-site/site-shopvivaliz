@@ -205,7 +205,7 @@ jobs:
             env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
             diag_dir=/home/ubuntu/actions-runner-shopvivaliz/_diag
             marker="$(mktemp)"
-            trap 'rm -f "$marker"' EXIT
+            trap "rm -f \"$marker\"" EXIT
             touch "$marker"
             env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
             active=false
