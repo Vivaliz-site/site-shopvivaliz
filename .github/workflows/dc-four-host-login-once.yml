@@ -183,12 +183,36 @@ jobs:
           }
 
           create_tunnel SITE_SESSION_ID "$SITE_PRIVATE_IP" "$SITE_TUNNEL_PORT" shopvivaliz-dc-login-site
-          create_tunnel BACKEND_SESSION_ID "$BACKEND_PRIVATE_IP" "$BACKEND_TUNNEL_PORT" shopvivaliz-dc-login-backend
 
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
-          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
-
           "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
+
+          ssh -fNT \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=30 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$VM_KNOWN_HOSTS" \
+            -o HostKeyAlias="$SITE_PRIVATE_IP" \
+            -o ConnectTimeout=10 \
+            -i "$VM_KEY_FILE" \
+            -p "$SITE_TUNNEL_PORT" \
+            -L "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" \
+            ubuntu@127.0.0.1
+
+          backend_ready=false
+          for _ in $(seq 1 20); do
+            if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$BACKEND_TUNNEL_PORT" 2>/dev/null; then
+              backend_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$backend_ready" = true
+          echo DC_BACKEND_VIA_SITE_TUNNEL=PASS
+
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SSH_BACKEND[@]}" 'test "$(hostname)" = "always-free-arm-1787907847-26"'
           echo DC_LOGIN_PRIVATE_TUNNELS=PASS
 
@@ -474,7 +498,7 @@ jobs:
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           rc=0
 
-          for id in "${SITE_SESSION_ID:-}" "${BACKEND_SESSION_ID:-}"; do
+          for id in "${SITE_SESSION_ID:-}"; do
             if [ -n "$id" ]; then
               "${OCI[@]}" bastion session delete --session-id "$id" --force >/dev/null 2>&1 || rc=1
             fi
