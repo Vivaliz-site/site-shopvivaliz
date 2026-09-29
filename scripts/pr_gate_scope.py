@@ -8,6 +8,20 @@ from fnmatch import fnmatch
 from typing import Iterable
 
 RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Task Continuity Fast Gate", (
+        "scripts/agent_task_state.py", "scripts/agent-operations-worker.py",
+        "scripts/task_continuation_watchdog.py", "scripts/task_resume_dispatcher.py",
+        "scripts/task_resume_queue.py", "scripts/task_continuity_e2e.py",
+        "scripts/validate-task-continuity-enforcement.py",
+        "scripts/chatgpt_continuity_nudge_dispatcher.py",
+        "scripts/chatgpt-continuity/**",
+        "scripts/install-chatgpt-continuity-backend-bridge.sh",
+        "scripts/autonomous-agent-loop.sh",
+        "tests/test_task_continuity*", "tests/test_task_resume*",
+        "tests/test_chatgpt_continuity*", "tests/chatgpt-continuity-*",
+        "docs/knowledge/task-continuity.md",
+        ".github/workflows/task-continuity-*",
+    )),
     ("Quality Gate", (
         "blog/**", "includes/blog-**", "tests/blog-**", "tests/google-indexing-**",
         "tests/asset-source-**", "tests/claude-workflow-**", "tests/nondeploy-release-**",

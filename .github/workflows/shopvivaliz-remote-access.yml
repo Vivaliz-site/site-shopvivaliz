@@ -615,16 +615,59 @@ jobs:
                   if isinstance(row, dict) and str(row.get("status", "")).strip() == "RUNNING":
                       running += 1
 
+          queue_certifier_available = False
+          queue_certified = False
+          queue_raw_rows = 0
+          queue_actionable_rows = 0
+          queue_nonactionable_rows = 0
+          queue_archive_present = False
           pending = 0
-          requests = root / "_resume-requests.jsonl"
-          if requests.is_file():
-              for line in requests.read_text(encoding="utf-8", errors="replace").splitlines():
-                  try:
-                      row = json.loads(line)
-                  except Exception:
+          try:
+              scripts_dir = pathlib.Path("/home/ubuntu/shopvivaliz-deploy/current/scripts")
+              if str(scripts_dir) not in sys.path:
+                  sys.path.insert(0, str(scripts_dir))
+              import task_resume_queue
+              queue_summary = task_resume_queue.certify_queue(root)
+              queue_certifier_available = True
+              queue_certified = bool(queue_summary.get("certified"))
+              queue_raw_rows = min(max(int(queue_summary.get("raw_rows", 0)), 0), 999999)
+              queue_actionable_rows = min(max(int(queue_summary.get("actionable_rows", 0)), 0), 999999)
+              queue_nonactionable_rows = min(max(int(queue_summary.get("nonactionable_rows", 0)), 0), 999999)
+              queue_archive_present = (root / task_resume_queue.ARCHIVE_FILE).is_file()
+              pending = queue_actionable_rows
+          except Exception:
+              requests = root / "_resume-requests.jsonl"
+              if requests.is_file():
+                  for line in requests.read_text(encoding="utf-8", errors="replace").splitlines():
+                      try:
+                          row = json.loads(line)
+                      except Exception:
+                          continue
+                      if isinstance(row, dict) and str(row.get("status", "")).strip() == "queued":
+                          pending += 1
+
+          bridge_queue_total = 0
+          bridge_queue_pending = 0
+          bridge_queue_claimed = 0
+          bridge_store = pathlib.Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json")
+          try:
+              bridge_data = json.loads(bridge_store.read_text(encoding="utf-8")) if bridge_store.is_file() else {}
+              nudges = bridge_data.get("nudges", []) if isinstance(bridge_data, dict) else []
+              if not isinstance(nudges, list):
+                  nudges = []
+              for item in nudges:
+                  if not isinstance(item, dict):
                       continue
-                  if isinstance(row, dict) and str(row.get("status", "")).strip() == "queued":
-                      pending += 1
+                  bridge_queue_total += 1
+                  status = str(item.get("status", "")).strip().upper()
+                  if status == "PENDING":
+                      bridge_queue_pending += 1
+                  elif status == "CLAIMED":
+                      bridge_queue_claimed += 1
+          except (OSError, UnicodeError, json.JSONDecodeError):
+              pass
+          bridge_queue_active = bridge_queue_pending + bridge_queue_claimed
+          bridge_queue_resolved = max(0, bridge_queue_total - bridge_queue_active)
 
           latest = "NONE"
           ledger = root / "_chatgpt-continuity-nudges.jsonl"
@@ -645,11 +688,37 @@ jobs:
                   if candidate in allowed:
                       latest = candidate or "EMPTY"
 
-          print(json.dumps({"running": running, "pending": pending, "latest": latest}, sort_keys=True))
+          print(json.dumps({
+              "running": running,
+              "pending": pending,
+              "latest": latest,
+              "queue_certifier_available": queue_certifier_available,
+              "queue_certified": queue_certified,
+              "queue_raw_rows": queue_raw_rows,
+              "queue_actionable_rows": queue_actionable_rows,
+              "queue_nonactionable_rows": queue_nonactionable_rows,
+              "queue_archive_present": queue_archive_present,
+              "bridge_queue_total": bridge_queue_total,
+              "bridge_queue_pending": bridge_queue_pending,
+              "bridge_queue_claimed": bridge_queue_claimed,
+              "bridge_queue_active": bridge_queue_active,
+              "bridge_queue_resolved": bridge_queue_resolved,
+          }, sort_keys=True))
           PY
               running_tasks="$(jq -r '.running' "$diag_json")"
               pending_requests="$(jq -r '.pending' "$diag_json")"
               latest_nudge="$(jq -r '.latest' "$diag_json")"
+              queue_certifier_available="$(jq -r '.queue_certifier_available' "$diag_json")"
+              queue_certified="$(jq -r '.queue_certified' "$diag_json")"
+              queue_raw_rows="$(jq -r '.queue_raw_rows' "$diag_json")"
+              queue_actionable_rows="$(jq -r '.queue_actionable_rows' "$diag_json")"
+              queue_nonactionable_rows="$(jq -r '.queue_nonactionable_rows' "$diag_json")"
+              queue_archive_present="$(jq -r '.queue_archive_present' "$diag_json")"
+              bridge_queue_total="$(jq -r '.bridge_queue_total' "$diag_json")"
+              bridge_queue_pending="$(jq -r '.bridge_queue_pending' "$diag_json")"
+              bridge_queue_claimed="$(jq -r '.bridge_queue_claimed' "$diag_json")"
+              bridge_queue_active="$(jq -r '.bridge_queue_active' "$diag_json")"
+              bridge_queue_resolved="$(jq -r '.bridge_queue_resolved' "$diag_json")"
               rm -f "$diag_json"
 
               backend_worker=false
@@ -701,6 +770,17 @@ jobs:
               echo "CHATGPT_CONTINUITY_AGENT_ACTIVE=$agent_active"
               echo "CHATGPT_CONTINUITY_RUNNING_TASKS=$running_tasks"
               echo "CHATGPT_CONTINUITY_PENDING_REQUESTS=$pending_requests"
+              echo "CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE=$queue_certifier_available"
+              echo "CHATGPT_CONTINUITY_QUEUE_CERTIFIED=$queue_certified"
+              echo "CHATGPT_CONTINUITY_QUEUE_RAW_ROWS=$queue_raw_rows"
+              echo "CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS=$queue_actionable_rows"
+              echo "CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS=$queue_nonactionable_rows"
+              echo "CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT=$queue_archive_present"
+              echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL=$bridge_queue_total"
+              echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING=$bridge_queue_pending"
+              echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=$bridge_queue_claimed"
+              echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=$bridge_queue_active"
+              echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=$bridge_queue_resolved"
               echo "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=$latest_nudge"
               echo "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$backend_worker"
               echo "CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp_reachable"

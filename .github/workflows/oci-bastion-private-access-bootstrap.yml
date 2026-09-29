@@ -738,6 +738,12 @@ jobs:
                   current_fingerprints.add(hashlib.sha256(basis.encode('utf-8')).hexdigest())
           pending=0
           matching=0
+          queue_certifier_available=False
+          queue_certified=False
+          queue_raw_rows=0
+          queue_actionable_rows=0
+          queue_nonactionable_rows=0
+          queue_archive_present=False
           req=root/'_resume-requests.jsonl'
           if req.is_file():
               for line in req.read_text(encoding='utf-8',errors='replace').splitlines():
@@ -747,6 +753,47 @@ jobs:
                   pending+=1
                   if str(row.get('fingerprint','')).strip() in current_fingerprints:
                       matching+=1
+          try:
+              scripts_dir=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/scripts')
+              if str(scripts_dir) not in sys.path:
+                  sys.path.insert(0,str(scripts_dir))
+              import task_resume_queue
+              queue_summary=task_resume_queue.certify_queue(root)
+              queue_certifier_available=True
+              queue_certified=bool(queue_summary.get('certified'))
+              queue_raw_rows=min(max(int(queue_summary.get('raw_rows',0)),0),999999)
+              queue_actionable_rows=min(max(int(queue_summary.get('actionable_rows',0)),0),999999)
+              queue_nonactionable_rows=min(max(int(queue_summary.get('nonactionable_rows',0)),0),999999)
+              queue_archive_present=(root/task_resume_queue.ARCHIVE_FILE).is_file()
+              pending=queue_actionable_rows
+              matching=queue_actionable_rows
+          except Exception:
+              queue_certifier_available=False
+
+          bridge_queue_total=0
+          bridge_queue_pending=0
+          bridge_queue_claimed=0
+          bridge_queue_active=0
+          bridge_queue_resolved=0
+          bridge_store=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json')
+          try:
+              bridge_data=json.loads(bridge_store.read_text(encoding='utf-8')) if bridge_store.is_file() else {}
+              nudges=bridge_data.get('nudges',[]) if isinstance(bridge_data,dict) else []
+              if not isinstance(nudges,list):
+                  nudges=[]
+              for item in nudges:
+                  if not isinstance(item,dict):
+                      continue
+                  bridge_queue_total+=1
+                  status=str(item.get('status','')).strip().upper()
+                  if status=='PENDING':
+                      bridge_queue_pending+=1
+                  elif status=='CLAIMED':
+                      bridge_queue_claimed+=1
+              bridge_queue_active=bridge_queue_pending+bridge_queue_claimed
+              bridge_queue_resolved=max(0,bridge_queue_total-bridge_queue_active)
+          except (OSError,UnicodeError,json.JSONDecodeError):
+              pass
           latest='NONE'
           current_ledger_present=False
           allowed={'','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}
@@ -789,6 +836,17 @@ jobs:
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS='+canonical_task_history_events)
           print('CHATGPT_CONTINUITY_PENDING_REQUESTS='+str(pending))
           print('CHATGPT_CONTINUITY_MATCHING_REQUESTS='+str(matching))
+          print('CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE='+('true' if queue_certifier_available else 'false'))
+          print('CHATGPT_CONTINUITY_QUEUE_CERTIFIED='+('true' if queue_certified else 'false'))
+          print('CHATGPT_CONTINUITY_QUEUE_RAW_ROWS='+str(queue_raw_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS='+str(queue_actionable_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS='+str(queue_nonactionable_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT='+('true' if queue_archive_present else 'false'))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL='+str(bridge_queue_total))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING='+str(bridge_queue_pending))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED='+str(bridge_queue_claimed))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE='+str(bridge_queue_active))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED='+str(bridge_queue_resolved))
           print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
           print('CHATGPT_CONTINUITY_TOKEN_AVAILABLE='+('true' if token_available else 'false'))
           print('CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN='+('true' if dispatcher_log_seen else 'false'))
@@ -841,6 +899,17 @@ jobs:
               'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS',
               'CHATGPT_CONTINUITY_PENDING_REQUESTS',
               'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
+              'CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE',
+              'CHATGPT_CONTINUITY_QUEUE_CERTIFIED',
+              'CHATGPT_CONTINUITY_QUEUE_RAW_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
               'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
               'CHATGPT_CONTINUITY_TOKEN_AVAILABLE',
               'CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN',
@@ -895,6 +964,14 @@ jobs:
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
                       'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
+                      'CHATGPT_CONTINUITY_QUEUE_RAW_ROWS',
+                      'CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS',
+                      'CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
                       'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT',

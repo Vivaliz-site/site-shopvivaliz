@@ -17,10 +17,12 @@ from typing import Any
 
 try:
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
+    from . import task_resume_queue as resume_queue
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
+    import task_resume_queue as resume_queue
 
-REQUESTS_FILE = "_resume-requests.jsonl"
+REQUESTS_FILE = resume_queue.REQUESTS_FILE
 DEFAULT_STALE_SECONDS = 120
 
 
@@ -60,40 +62,15 @@ def _read_state(path: Path) -> dict[str, Any] | None:
 
 
 def _fingerprint(payload: dict[str, Any]) -> str:
-    basis = "\n".join(
-        [
-            str(payload.get("repository", DEFAULT_REPOSITORY)).strip(),
-            str(payload.get("task_id", "")).strip(),
-            str(payload.get("updated_at", "")).strip(),
-            str(payload.get("next_action", "")).strip(),
-        ]
-    )
-    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
+    return resume_queue.checkpoint_fingerprint(payload)
 
 
 def read_requests(runtime_dir: Path | None = None) -> list[dict[str, Any]]:
-    root = Path(runtime_dir or RUNTIME_DIR)
-    path = root / REQUESTS_FILE
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
+    return resume_queue.read_requests(runtime_dir)
 
 
 def _append_request(runtime_dir: Path, row: dict[str, Any]) -> None:
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    path = runtime_dir / REQUESTS_FILE
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    resume_queue.append_request(runtime_dir, row)
 
 
 def run_once(
@@ -105,6 +82,7 @@ def run_once(
     root = Path(runtime_dir or RUNTIME_DIR)
     current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = max(1, int(stale_seconds))
+    queue_maintenance = resume_queue.compact_queue(root)
 
     existing = {
         str(row.get("fingerprint", "")).strip()
@@ -170,6 +148,7 @@ def run_once(
         existing.add(fingerprint)
         dispatched += 1
 
+    queue_after = resume_queue.certify_queue(root)
     return {
         "ok": True,
         "runtime_dir": str(root),
@@ -177,6 +156,12 @@ def run_once(
         "scanned": scanned,
         "eligible": eligible,
         "dispatched": dispatched,
+        "queue": {
+            "compacted": bool(queue_maintenance.get("compacted")),
+            "archived_rows": int(queue_maintenance.get("archived_rows") or 0),
+            "before": queue_maintenance.get("before") or {},
+            "after": queue_after,
+        },
         "generated_at": utc_now(),
     }
 

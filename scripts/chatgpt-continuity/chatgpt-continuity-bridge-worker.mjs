@@ -230,6 +230,7 @@ async function latestConversationProbe(cdp) {
         const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
         if(sessionResponse.ok){
           let session=null; try{session=await sessionResponse.json();}catch{}
+          accessToken=String(session?.accessToken||session?.access_token||'').trim();
           accountId=String(session?.account?.id||'').trim();
           accessToken=String(session?.accessToken||session?.access_token||'').trim();
         }

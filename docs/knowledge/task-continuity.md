@@ -399,3 +399,31 @@ encerrar. Uma falha individual não pode esconder o estado dos repositórios
 seguintes.
 
 <!-- /GLOBAL_TASK_CONTINUITY_V8 -->
+
+
+<!-- RESUME_QUEUE_CERTIFICATION_V12 -->
+### Certificacao e compactacao da fila de retomada
+
+`_resume-requests.jsonl` e a **fila operacional ativa**, nao o historico completo.
+Cada ciclo do watchdog certifica a fila contra os checkpoints duraveis atuais.
+Somente uma linha `queued` unica cujo `task_id`, repositorio,
+`checkpoint_updated_at`, `next_action` e fingerprint coincidam com um
+checkpoint `RUNNING` atual permanece acionavel.
+
+Linhas de checkpoint terminal, superseded/mismatched, orfas, duplicadas,
+malformadas ou com status nao operacional saem da fila ativa e sao preservadas
+em `_resume-requests-archive.jsonl`. A compactacao usa
+`_resume-queue.lock`, append com fsync no arquivo de auditoria e replace
+atomico + fsync para a fila ativa. Assim, historico nao e contado como
+`pending` nem percorrido pelos dispatchers em cada tick.
+
+`scripts/task_resume_queue.py` fornece duas operacoes deterministicas:
+`certify_queue` (somente contagens agregadas, sem payloads) e
+`compact_queue` (preserva auditoria e mantem apenas trabalho atual unico).
+O watchdog executa essa manutencao antes de emitir uma nova solicitacao e
+recertifica depois do append. Uma fila grande de requests correntes continua
+visivel como `oversized=true`; nunca e truncada apenas por tamanho.
+
+Mudancas na superficie de continuidade exigem o `Task Continuity Fast Gate`.
+O `Mandatory Validation Gate` tambem executa a regressao Node do bridge para
+impedir que um teste de continuidade vermelho seja mesclado como falso-verde.

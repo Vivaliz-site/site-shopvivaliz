@@ -637,6 +637,17 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_AGENT_ACTIVE=",
             "CHATGPT_CONTINUITY_RUNNING_TASKS=",
             "CHATGPT_CONTINUITY_PENDING_REQUESTS=",
+            "CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE=",
+            "CHATGPT_CONTINUITY_QUEUE_CERTIFIED=",
+            "CHATGPT_CONTINUITY_QUEUE_RAW_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=",
             "CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS=",
             "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=",
             "CHATGPT_CONTINUITY_CDP_REACHABLE=",
@@ -820,6 +831,27 @@ class BootstrapContractTests(unittest.TestCase):
             "CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN=",
         ):
             self.assertIn(marker, workflow)
+
+    def test_oci_continuity_diagnostic_certifies_both_queues_without_payloads(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for marker in (
+            "CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE=",
+            "CHATGPT_CONTINUITY_QUEUE_CERTIFIED=",
+            "CHATGPT_CONTINUITY_QUEUE_RAW_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS=",
+            "CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=",
+            "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=",
+            "task_resume_queue.certify_queue",
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_QUEUE_ROW=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_BRIDGE_QUEUE_TASK_ID=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_BRIDGE_QUEUE_DETAIL=", workflow)
 
     def test_oci_continuity_diagnostic_surfaces_canonical_g2_status(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
