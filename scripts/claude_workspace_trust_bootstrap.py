@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bootstrap Claude Code server-mode trust/consent over a bounded real PTY."""
+"""Bootstrap Claude Code workspace trust and Remote Control through bounded PTYs."""
 
 from __future__ import annotations
 
@@ -14,10 +14,19 @@ import subprocess
 import sys
 import termios
 import time
+from dataclasses import dataclass
 
 ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 REMOTE_CONTROL_PROMPT = "Enable Remote Control?"
 SERVER_SESSION_URL_RE = re.compile(r"https://claude\.ai/code/[^\s\x1b]+", re.IGNORECASE)
+TRUST_SETTLE_SECONDS = 5.0
+
+
+@dataclass
+class PtyResult:
+    status: str
+    accepted_trust: bool = False
+    accepted_remote_control: bool = False
 
 
 def clean_screen(value: str) -> str:
@@ -73,7 +82,6 @@ def trust_acceptance_sequence(value: str) -> bytes | None:
 
 
 def documented_server_trust_sequence(value: str, workspace: str) -> bytes | None:
-    # Current official server-mode prompt: Trust <directory>? [y/N]
     canonical = os.path.realpath(workspace)
     for raw in clean_screen(value).splitlines():
         line = raw.strip()
@@ -84,6 +92,11 @@ def documented_server_trust_sequence(value: str, workspace: str) -> bytes | None
         if os.path.isabs(target) and os.path.realpath(target) == canonical:
             return b"y\r"
     return None
+
+
+def workspace_not_trusted_visible(value: str) -> bool:
+    text = clean_screen(value).lower()
+    return "workspace not trusted" in text and "trust" in text
 
 
 def remote_control_acceptance_sequence(value: str) -> bytes | None:
@@ -103,62 +116,98 @@ def unexpected_prompt_visible(value: str, workspace: str) -> bool:
 
     if "do you want to allow this tool" in lowered or "permission to use" in lowered:
         return True
-
     if REMOTE_CONTROL_PROMPT.lower() in lowered and remote_control_acceptance_sequence(value) is None:
         return True
-
     if re.search(r"(?im)^\s*Trust\s+.+?\?\s*\[y/N\]\s*$", text):
         if documented_server_trust_sequence(value, workspace) is None:
             return True
-
     return False
 
 
 def stop_process(proc: subprocess.Popen[bytes]) -> None:
     if proc.poll() is not None:
         return
-    try:
-        os.killpg(proc.pid, signal.SIGINT)
-        proc.wait(timeout=2)
-        return
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        pass
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-        proc.wait(timeout=2)
-        return
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        pass
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    try:
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        pass
+    for sig, timeout in ((signal.SIGINT, 2), (signal.SIGTERM, 2), (signal.SIGKILL, 2)):
+        try:
+            os.killpg(proc.pid, sig)
+            proc.wait(timeout=timeout)
+            return
+        except ProcessLookupError:
+            return
+        except subprocess.TimeoutExpired:
+            continue
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=args")
-        return 64
-
-    claude_bin = argv[1]
-    if not os.path.isfile(claude_bin) or not os.access(claude_bin, os.X_OK):
-        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=binary")
-        return 65
-
-    workspace = os.path.realpath(os.getcwd())
+def open_pty_process(command: list[str]) -> tuple[subprocess.Popen[bytes], int, int]:
     master_fd, slave_fd = pty.openpty()
-    proc: subprocess.Popen[bytes] | None = None
-    buffer = ""
-    trust_accepted = False
-    remote_control_accepted = False
-    started = False
-    unexpected = False
-    deadline = time.monotonic() + 30.0
+    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
+    env = os.environ.copy()
+    env["TERM"] = "xterm-256color"
+    proc = subprocess.Popen(
+        command,
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        close_fds=True,
+        start_new_session=True,
+        env=env,
+    )
+    return proc, master_fd, slave_fd
 
+
+def read_chunk(master_fd: int) -> bytes | None:
+    ready, _, _ = select.select([master_fd], [], [], 0.25)
+    if not ready:
+        return None
+    try:
+        return os.read(master_fd, 4096)
+    except OSError:
+        return b""
+
+
+def bootstrap_plain_workspace_trust(claude_bin: str, workspace: str) -> PtyResult:
+    command = [claude_bin]
+    proc, master_fd, slave_fd = open_pty_process(command)
+    buffer = ""
+    accepted_at: float | None = None
+    deadline = time.monotonic() + 25.0
+
+    try:
+        os.close(slave_fd)
+        slave_fd = -1
+        while time.monotonic() < deadline:
+            if accepted_at is not None and time.monotonic() - accepted_at >= TRUST_SETTLE_SECONDS:
+                return PtyResult("plain_trust_persisted", accepted_trust=True)
+
+            chunk = read_chunk(master_fd)
+            if chunk is None:
+                if proc.poll() is not None:
+                    break
+                continue
+            if not chunk:
+                break
+
+            buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
+            sequence = documented_server_trust_sequence(buffer, workspace)
+            if sequence is None:
+                sequence = legacy_trust_acceptance_sequence(buffer)
+            if sequence is not None and accepted_at is None:
+                os.write(master_fd, sequence)
+                accepted_at = time.monotonic()
+                continue
+
+            if unexpected_prompt_visible(buffer, workspace):
+                return PtyResult("unexpected_prompt")
+    finally:
+        if slave_fd >= 0:
+            os.close(slave_fd)
+        stop_process(proc)
+        os.close(master_fd)
+
+    return PtyResult("plain_prompt_missing")
+
+
+def run_server_mode(claude_bin: str, workspace: str) -> PtyResult:
     command = [
         claude_bin,
         "remote-control",
@@ -172,80 +221,105 @@ def main(argv: list[str]) -> int:
         "--permission-mode",
         "default",
     ]
+    proc, master_fd, slave_fd = open_pty_process(command)
+    buffer = ""
+    accepted_trust = False
+    accepted_remote = False
+    deadline = time.monotonic() + 30.0
 
     try:
-        fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
-        env = os.environ.copy()
-        env["TERM"] = "xterm-256color"
-        proc = subprocess.Popen(
-            command,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            close_fds=True,
-            start_new_session=True,
-            env=env,
-        )
         os.close(slave_fd)
         slave_fd = -1
-
         while time.monotonic() < deadline:
-            ready, _, _ = select.select([master_fd], [], [], 0.25)
-            if not ready:
+            chunk = read_chunk(master_fd)
+            if chunk is None:
                 if proc.poll() is not None:
                     break
                 continue
-
-            try:
-                chunk = os.read(master_fd, 4096)
-            except OSError:
-                break
             if not chunk:
                 break
 
             buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
 
-            if not trust_accepted:
+            if workspace_not_trusted_visible(buffer):
+                return PtyResult("workspace_not_trusted")
+
+            if not accepted_trust:
                 sequence = documented_server_trust_sequence(buffer, workspace)
                 if sequence is None:
                     sequence = legacy_trust_acceptance_sequence(buffer)
                 if sequence is not None:
                     os.write(master_fd, sequence)
-                    trust_accepted = True
+                    accepted_trust = True
                     continue
 
-            if not remote_control_accepted:
+            if not accepted_remote:
                 sequence = remote_control_acceptance_sequence(buffer)
                 if sequence is not None:
                     os.write(master_fd, sequence)
-                    remote_control_accepted = True
+                    accepted_remote = True
                     continue
 
             if server_startup_visible(buffer):
-                started = True
-                break
+                return PtyResult(
+                    "started",
+                    accepted_trust=accepted_trust,
+                    accepted_remote_control=accepted_remote,
+                )
 
             if unexpected_prompt_visible(buffer, workspace):
-                unexpected = True
-                break
+                return PtyResult("unexpected_prompt")
     finally:
         if slave_fd >= 0:
             os.close(slave_fd)
-        if proc is not None:
-            stop_process(proc)
+        stop_process(proc)
         os.close(master_fd)
 
-    if started:
+    if accepted_trust or accepted_remote:
+        return PtyResult(
+            "startup_missing",
+            accepted_trust=accepted_trust,
+            accepted_remote_control=accepted_remote,
+        )
+    return PtyResult("prompt_missing")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
+        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=args")
+        return 64
+
+    claude_bin = argv[1]
+    if not os.path.isfile(claude_bin) or not os.access(claude_bin, os.X_OK):
+        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=binary")
+        return 65
+
+    workspace = os.path.realpath(os.getcwd())
+
+    server = run_server_mode(claude_bin, workspace)
+    if server.status == "started":
         print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS")
         return 0
-    if unexpected:
-        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=unexpected_prompt")
-        return 66
-    if trust_accepted or remote_control_accepted:
-        print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=startup_missing")
-        return 68
-    print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=prompt_missing")
-    return 67
+
+    if server.status == "workspace_not_trusted":
+        plain = bootstrap_plain_workspace_trust(claude_bin, workspace)
+        if plain.status != "plain_trust_persisted":
+            print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={plain.status}")
+            return 69
+
+        server = run_server_mode(claude_bin, workspace)
+        if server.status == "started":
+            print("CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS")
+            return 0
+
+    safe_class = {
+        "unexpected_prompt": "unexpected_prompt",
+        "workspace_not_trusted": "trust_not_persisted",
+        "startup_missing": "startup_missing",
+        "prompt_missing": "prompt_missing",
+    }.get(server.status, "other")
+    print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={safe_class}")
+    return 66 if safe_class == "unexpected_prompt" else 67
 
 
 if __name__ == "__main__":
