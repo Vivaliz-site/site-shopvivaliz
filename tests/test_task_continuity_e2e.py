@@ -36,15 +36,17 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("python3 scripts/agent_task_state.py complete", next_action)
         self.assertIn("continuity_e2e_pass", next_action)
 
-    def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
+    def test_workflow_is_dispatch_only_and_router_owns_comment_command(self) -> None:
         workflow = (
             ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("issue_comment:", workflow)
-        self.assertIn("github.event.issue.number == 1586", workflow)
-        self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", workflow)
-        self.assertIn("github.event.comment.body == '/continuity-e2e'", workflow)
+        router = (
+            ROOT / ".github" / "workflows" / "comment-command-router.yml"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("issue_comment:", workflow)
         self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn('"/continuity-e2e": "continuity_e2e"', router)
+        self.assertIn("task-continuity-production-e2e.yml", router)
 
 
 class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
