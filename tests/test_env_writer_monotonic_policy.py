@@ -33,6 +33,7 @@ class EnvWriterMonotonicPolicyTest(unittest.TestCase):
         self.assertIn('sudo chown root:root "$VM_LOCK"', workflow)
         self.assertIn('sudo chmod 0444 "$VM_LOCK"', workflow)
         self.assertNotIn("cat $VM_ENV", workflow)
+        self.assertEqual(workflow.count("--retire-key CLAUDE_CODE_OAUTH_TOKEN"), 2)
 
 
 if __name__ == "__main__":

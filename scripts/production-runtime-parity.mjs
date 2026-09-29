@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const baseUrl = (process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const proxyServer = process.env.E2E_PROXY_SERVER || '';
+const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const outDir = path.resolve('artifacts/public-layout-audit');
 const evidence = { release: null, steps: [], pageErrors: [], consoleErrors: [], requestFailures: [], serverErrors: [] };
 
@@ -46,6 +47,7 @@ function expectedRequestFailureReason({ url, error, resourceType }) {
 await fs.mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
+  executablePath: configuredBrowserPath || undefined,
   ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
 });
 const context = await browser.newContext({ viewport: { width: 1365, height: 900 } });

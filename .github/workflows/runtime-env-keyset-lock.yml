@@ -109,10 +109,12 @@ jobs:
           # seal() is fail-closed: if an already sealed key disappeared or was
           # emptied, it exits non-zero before changing the lock. Only newly
           # populated key names expand it.
-          sudo python3 "$guard" seal --env "$VM_ENV" --lock "$VM_LOCK"
+          sudo python3 "$guard" seal --env "$VM_ENV" --lock "$VM_LOCK" \
+            --retire-key CLAUDE_CODE_OAUTH_TOKEN
           sudo chown root:root "$VM_LOCK"
           sudo chmod 0444 "$VM_LOCK"
-          sudo python3 "$guard" verify --env "$VM_ENV" --lock "$VM_LOCK"
+          sudo python3 "$guard" verify --env "$VM_ENV" --lock "$VM_LOCK" \
+            --retire-key CLAUDE_CODE_OAUTH_TOKEN
 
           echo 'production_env_keyset_monotonic=true'
           echo 'production_env_key_deletion_blocked=true'

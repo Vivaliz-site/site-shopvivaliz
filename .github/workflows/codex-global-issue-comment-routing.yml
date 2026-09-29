@@ -1,0 +1,173 @@
+name: Codex Global Issue Comment Routing
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-global-issue-comment-routing-v1
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout canonical control repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify native GitHub and Codex sessions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          "$launcher" --version
+          "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
+          printf 'CODEX_LAUNCHER=%s\n' "$launcher" >> "$GITHUB_ENV"
+          echo "CODEX_GLOBAL_ROUTING_PREREQUISITES=PASS"
+
+      - name: Build bounded global repository task
+        id: prompt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          prompt="$RUNNER_TEMP/codex-global-issue-comment-routing-v1.md"
+          cat > "$prompt" <<'EOF'
+          Execute GLOBAL_ISSUE_COMMENT_ROUTING_V1 across every canonical ShopVivaliz repository listed in
+          Vivaliz-site/site-shopvivaliz:docs/quality/GLOBAL_AUDIT_MANIFEST.json under required_repositories.
+
+          User intent:
+          - A comment or generic GitHub event must not wake many unrelated workflows just so they become skipped.
+          - In every repository, at most ONE active workflow may subscribe directly to issue_comment.
+          - If a repository needs issue-comment commands, that one listener must be a dispatcher/router that selects at most one related handler.
+          - Explicit slash commands take precedence over generic mentions such as @claude.
+          - Unrelated/unauthorized comments may cost one lightweight dispatcher/classifier run, but MUST NOT create separate workflow runs for unrelated handlers.
+          - Repositories with no issue_comment today must NOT gain a new issue_comment listener merely for this task.
+          - The architecture must be guarded so future PRs cannot silently reintroduce multiple direct listeners.
+
+          Canonical repositories to cover, and no others unless the manifest itself has changed:
+          - Vivaliz-site/site-shopvivaliz
+          - Vivaliz-site/-shopvivaliz-pipeline
+          - Vivaliz-site/amazon-returns-safet
+          - Vivaliz-site/ml-pricing-api
+          - Vivaliz-site/mercadolivre-returns-recovery
+          - Vivaliz-site/shopvivaliz-m365
+          - Vivaliz-site/buscador
+          - fredmourao-ai/mei-mg-email
+          - fredmourao-ai/solange-rolla-consultorio
+
+          Known fresh state:
+          - site-shopvivaliz PR #2190 already merged the first implementation of a single dispatcher:
+            .github/workflows/issue-comment-dispatcher.yml
+            scripts/issue-comment-router.py
+            tests/test_issue_comment_router.py
+          - Live smoke after #2190 proved an unrelated comment created only one Issue Comment Dispatcher workflow run.
+          - Live /remote smoke proved the single dispatcher selected only remote-access as the executable related route.
+          - A pre-delegation GitHub search found no active issue_comment listeners in the other 8 canonical repositories. Treat that only as a lead; verify from each repository's current main before deciding.
+
+          Required procedure:
+          1. Read the control repo rules first:
+             docs/knowledge/host-access.md
+             docs/knowledge/README.md
+             docs/knowledge/agent-rules.md
+             AGENTS.md
+             REGRAS-AGENTES-CENTRALIZADAS.md
+          2. For EACH canonical repository, fetch current main and inspect only active .github/workflows/*.yml and *.yaml. Ignore *.disabled/history as listeners.
+          3. Count direct issue_comment subscriptions and identify all current command grammars/mentions and non-comment triggers that must be preserved.
+          4. If count > 1:
+             - implement one dispatcher and convert related handlers to workflow_call or an equivalent reusable target,
+             - preserve original event context where handlers depend on comment body, actor, issue/PR number,
+             - prove route exclusivity and precedence,
+             - do not weaken permissions or trust checks.
+          5. If count == 1:
+             - verify the single listener is intentionally the repo's dispatcher/router or can be safely made so,
+             - do not split it into more listeners.
+          6. If count == 0:
+             - do not add issue_comment.
+          7. In ALL repositories, add or integrate a lightweight repository-native governance regression that fails CI/governance if more than one active direct issue_comment listener appears in the future. Prefer existing governance test infrastructure over adding a new standalone workflow.
+          8. Preserve all unrelated triggers and behavior (pull_request, pull_request_review_comment, issues, schedule, workflow_dispatch, workflow_run, push, etc.).
+          9. Use TDD for changed behavior: RED test/guard first, then implementation, then focused tests, then full applicable repo gate.
+          10. Use isolated branches/worktrees per repository. Preserve unrelated concurrent work; never overwrite active worktrees.
+          11. Open one focused PR per repository that needs a change. Repositories already compliant may be recorded PASS without a PR only if an existing governance guard already enforces the rule; otherwise add the guard.
+          12. Wait for applicable CI. Merge only green, mergeable PRs under the repository's normal policy. Never force-push main or bypass required checks.
+          13. After merges, re-read each repository's main and prove:
+              ACTIVE_ISSUE_COMMENT_LISTENERS <= 1
+              and the governance guard exists and passes.
+          14. Do not deploy application/runtime code merely for this repository-governance change unless that repository's normal merge policy requires an automatic deployment. Never edit active production releases directly.
+          15. Never expose tokens, cookies, private keys, OAuth device codes, bearer values, or secret contents in logs/comments/commits.
+          16. Do not use Desktop Commander. Use native GitHub access and repository runners only as needed.
+          17. Before terminal exit, post exactly ONE sanitized comment to Vivaliz-site/site-shopvivaliz issue #1586 beginning:
+              CODEX_GLOBAL_ISSUE_COMMENT_ROUTING_V1=
+              Include per-repository status, listener count after, guard location/test, PR number(s), merged SHA(s), and any objectively proven external blocker. No secrets.
+          18. Continue until all nine repositories are either CONCLUIDO with evidence or BLOCKED_EXTERNAL with an exact external resume condition. Do not stop at a plan or partial audit.
+
+          The goal is behavior and durable governance, not merely documentation.
+          EOF
+          chmod 600 "$prompt"
+          test "$(wc -c < "$prompt")" -gt 5000
+          printf 'path=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+          printf 'sha256=%s\n' "$(sha256sum "$prompt" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Execute Codex global routing task
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          out="$RUNNER_TEMP/codex-global-issue-comment-routing-v1.output"
+          rm -f -- "$out"
+          rc=0
+          env -u GH_TOKEN -u GITHUB_TOKEN "$CODEX_LAUNCHER" exec             --approve-for-me             --model gpt-5.6-terra             --config 'model_reasoning_effort="medium"'             - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
+
+          bytes="$(wc -c < "$out" | tr -d ' ')"
+          digest="$(sha256sum "$out" | awk '{print $1}')"
+          echo "CODEX_GLOBAL_ROUTING_EXIT_CODE=$rc"
+          echo "CODEX_GLOBAL_ROUTING_OUTPUT_BYTES=$bytes"
+          echo "CODEX_GLOBAL_ROUTING_OUTPUT_SHA256=$digest"
+
+          if [ "$rc" -ne 0 ]; then
+            python3 - "$out" <<'PY'
+          import re, sys
+          from pathlib import Path
+          text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").lower()
+          patterns = {
+              "auth": r"(not logged in|authentication|unauthorized|forbidden|401|403)",
+              "rate_limit": r"(rate.?limit|too many requests|429|quota|usage limit|limit reached)",
+              "model": r"(unknown model|model.*unavailable|not supported.*model)",
+              "network": r"(network|connection|timeout|timed out|dns|tls)",
+              "approval": r"(approval|approve-for-me|permission denied)",
+              "context": r"(context.*length|too many tokens|prompt.*too large)",
+              "git": r"(merge conflict|non-fast-forward|protected branch|required status check)",
+              "tool_runtime": r"(tool.*unavailable|required mcp servers failed|sandbox)",
+          }
+          classes = [name for name, pattern in patterns.items() if re.search(pattern, text)]
+          print("CODEX_GLOBAL_ROUTING_SAFE_ERROR_CLASSES=" + (",".join(classes) if classes else "unclassified"))
+          PY
+          fi
+
+          rm -f -- "$out"
+          exit "$rc"
+
+      - name: Cleanup transient prompt
+        if: always()
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${PROMPT_FILE:-}" ]; then
+            rm -f -- "$PROMPT_FILE"
+          fi

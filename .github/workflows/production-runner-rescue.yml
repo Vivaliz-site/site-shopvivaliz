@@ -87,7 +87,8 @@ jobs:
 
           command = r'''set -Eeuo pipefail
           service='shopvivaliz-actions-runner.service'
-          worker_count="$(pgrep -fc '^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)')"
+          worker_count="$(pgrep -fc '/home/ubuntu/actions-runner-shopvivaliz/bin/Runner[.]Worker( |$)' || :)"
+          [[ "$worker_count" =~ ^[0-9]+$ ]]
           printf 'RUNNER_WORKER_COUNT=%s\n' "$worker_count"
           if [ "$worker_count" -ne 0 ]; then
             echo 'RUNNER_RESCUE=refused_worker_active'

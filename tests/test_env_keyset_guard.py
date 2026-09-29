@@ -60,6 +60,38 @@ class EnvKeysetGuardTest(unittest.TestCase):
             locked_after_failure = json.loads(lock.read_text(encoding="utf-8"))["keys"]
             self.assertEqual(locked_before_failure, locked_after_failure)
 
+    def test_seal_can_retire_explicit_key_without_allowing_other_reductions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = root / ".env"
+            lock = root / ".env.keyset.lock.json"
+            env.write_text("A=1\nB=2\nCLAUDE_CODE_OAUTH_TOKEN=legacy\n", encoding="utf-8")
+            mod.seal(env, lock)
+
+            env.write_text("A=9\nB=8\n", encoding="utf-8")
+            mod.seal(env, lock, retired_keys={"CLAUDE_CODE_OAUTH_TOKEN"})
+            locked = json.loads(lock.read_text(encoding="utf-8"))["keys"]
+            self.assertEqual(locked, ["A", "B"])
+
+            env.write_text("A=9\n", encoding="utf-8")
+            with self.assertRaises(mod.KeysetReductionError):
+                mod.seal(env, lock, retired_keys={"CLAUDE_CODE_OAUTH_TOKEN"})
+
+    def test_verify_ignores_only_explicitly_retired_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = root / ".env"
+            lock = root / ".env.keyset.lock.json"
+            env.write_text("A=1\nB=2\nCLAUDE_CODE_OAUTH_TOKEN=legacy\n", encoding="utf-8")
+            mod.seal(env, lock)
+
+            env.write_text("A=1\nB=2\n", encoding="utf-8")
+            mod.verify(env, lock, retired_keys={"CLAUDE_CODE_OAUTH_TOKEN"})
+
+            env.write_text("A=1\n", encoding="utf-8")
+            with self.assertRaises(mod.KeysetReductionError):
+                mod.verify(env, lock, retired_keys={"CLAUDE_CODE_OAUTH_TOKEN"})
+
     def test_verify_requires_all_sealed_keys_to_remain_nonempty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

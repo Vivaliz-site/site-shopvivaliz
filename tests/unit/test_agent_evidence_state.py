@@ -27,6 +27,61 @@ AGENTS = load("all_documented_agents", "scripts/all-documented-agents.py")
 
 
 class QueueEvidenceTests(unittest.TestCase):
+    def test_required_automation_paths_skip_repository_only_workflows_in_deployed_release(self):
+        self.assertTrue(
+            hasattr(HEALTH, "required_automation_paths"),
+            "system health must distinguish repository checkout from deployed release",
+        )
+        with self.subTest(context="deployed-release"):
+            root = Path("/tmp/shopvivaliz-release-without-git-metadata")
+            paths = HEALTH.required_automation_paths(root)
+            self.assertNotIn(root / ".github/workflows/agents-hourly-deep-audit.yml", paths)
+            self.assertNotIn(root / ".github/workflows/repository-governance.yml", paths)
+            self.assertIn(root / "scripts/maintenance/system_health_check.py", paths)
+        with self.subTest(context="repository-checkout"):
+            root = Path("/tmp/shopvivaliz-repository-checkout")
+            paths = HEALTH.required_automation_paths(root, repository_checkout=True)
+            self.assertIn(root / ".github/workflows/agents-hourly-deep-audit.yml", paths)
+            self.assertIn(root / ".github/workflows/repository-governance.yml", paths)
+
+    def test_accepts_canonical_verification_without_legacy_evidence(self):
+        task = {
+            "id": "V-2",
+            "status": "completed_verified",
+            "completed_at": "2026-09-27T00:36:33Z",
+            "last_result": {"success": True},
+            "verification": {
+                "run_id": "run-1",
+                "commit_sha": "1" * 40,
+                "pull_request": "#1861",
+                "artifact_digest": "sha256:abc",
+                "verified_at": "2026-09-27T00:36:33Z",
+                "tests_passed": True,
+                "read_back_verified": True,
+            },
+        }
+        errors, _ = HEALTH.validate_queue({"tasks": [task]})
+        self.assertEqual(errors, [])
+
+    def test_rejects_incomplete_canonical_verification_without_legacy_evidence(self):
+        task = {
+            "id": "V-3",
+            "status": "completed_verified",
+            "completed_at": "2026-09-27T00:36:33Z",
+            "last_result": {"success": True},
+            "verification": {
+                "run_id": "run-2",
+                "commit_sha": "2" * 40,
+                "pull_request": "#1862",
+                "artifact_digest": "sha256:def",
+                "verified_at": "2026-09-27T00:36:33Z",
+                "tests_passed": False,
+                "read_back_verified": True,
+            },
+        }
+        errors, _ = HEALTH.validate_queue({"tasks": [task]})
+        self.assertTrue(any("lacks evidence fields" in error for error in errors))
+
     def test_accepts_failed_and_blocked_without_completion(self):
         payload = {
             "tasks": [

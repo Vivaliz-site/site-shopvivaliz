@@ -78,7 +78,11 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self._age_task("task-a", seconds=600)
         third = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
         self.assertEqual(third["dispatched"], 1)
-        self.assertEqual(len(watchdog.read_requests(self.runtime)), 2)
+        requests_after_advance = watchdog.read_requests(self.runtime)
+        self.assertEqual(len(requests_after_advance), 1)
+        self.assertEqual(requests_after_advance[0]["next_action"], "executar validacao final")
+        self.assertGreaterEqual(third["queue"]["archived_rows"], 1)
+        self.assertTrue((self.runtime / "_resume-requests-archive.jsonl").is_file())
 
     def test_fresh_or_terminal_tasks_do_not_dispatch(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
@@ -245,6 +249,31 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         watchdog_pos = loop.index("task_continuation_watchdog.py")
         worker_pos = loop.index("agent-operations-worker.py")
         self.assertLess(watchdog_pos, worker_pos)
+    def test_worker_timeline_marks_auto_resume_as_queued_ack_not_execution(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("task-worker-ack", "continuar sem simular execucao", "gpt")
+        state.record_progress("task-worker-ack", next_action="executar validacao real")
+        self._age_task("task-worker-ack", seconds=600)
+        watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+
+        worker = load_operations_worker()
+        worker.TASK_STATE_DIR = self.runtime
+        worker.INTERVENTIONS_FILE = self.runtime / "_agent-interventions.jsonl"
+        seen = []
+
+        def capture(runtime_state, agent_id, message, *, kind="activity", extra=None):
+            seen.append({"message": message, "kind": kind, "extra": extra})
+
+        worker.push_step = capture
+        self.assertEqual(worker.enqueue_continuation_requests({"agents": {}}), 1)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0]["kind"], "auto-resume-queued")
+        lowered = seen[0]["message"].lower()
+        self.assertIn("fila", lowered)
+        self.assertIn("nao comprova execucao", lowered)
+        self.assertNotIn("retomada automatica acionada", lowered)
+
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ No issue `#1586`, publique um comentário de uma única linha:
 /remote target=shopvivaliz-free-a1 action=ai_squad_ui_audit reason=auditoria extrema AI Squad
 ```
 
-O workflow `.github/workflows/shopvivaliz-remote-access.yml` aceita somente comentários criados nesse issue pelo usuário autorizado `fredmourao-ai`. Também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
+Comentários de controle são recebidos exclusivamente por `.github/workflows/issue-comment-dispatcher.yml`, que classifica o comando e chama `.github/workflows/shopvivaliz-remote-access.yml` por `workflow_call` somente quando o prefixo `/remote ` corresponde. O workflow de acesso remoto também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
 
 O arquivo `ops/remote-access-request.json` permanece temporariamente apenas como registro legado para não interromper execuções concorrentes. Ele não é mais gatilho do canal canônico.
 
