@@ -179,32 +179,24 @@ def freeze_state() -> None:
     command = r"""set -Eeuo pipefail
 sudo -u ubuntu -H python3 - <<'INNER'
 import json
-import re
 from pathlib import Path
 
-root = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state')
-pattern = re.compile(r'chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)\.json')
-candidates = []
-if root.is_dir():
-    for path in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
-        match = pattern.fullmatch(path.name)
-        if match:
-            candidates.append((int(match.group(1)), path))
-if not candidates:
-    raise SystemExit('no freeze generation found')
-_, path = max(candidates, key=lambda row: row[0])
+canonical_task_id = 'chatgpt-freeze-root-cause-20260928-g2'
+path = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state') / f'{canonical_task_id}.json'
+if not path.is_file():
+    raise SystemExit('canonical freeze generation missing')
 try:
     payload = json.loads(path.read_text(encoding='utf-8'))
 except Exception as exc:
-    raise SystemExit('latest freeze generation unreadable') from exc
+    raise SystemExit('canonical freeze generation unreadable') from exc
 if not isinstance(payload, dict):
-    raise SystemExit('latest freeze generation invalid')
+    raise SystemExit('canonical freeze generation invalid')
 task_id = str(payload.get('task_id') or '').strip()
 status = str(payload.get('status') or '').strip()
-if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g(?:[2-9]|[1-9][0-9]+)', task_id):
-    raise SystemExit('latest freeze task id invalid')
+if task_id != canonical_task_id:
+    raise SystemExit('canonical freeze task id mismatch')
 if status not in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
-    raise SystemExit('latest freeze status invalid')
+    raise SystemExit('canonical freeze status invalid')
 evidence = payload.get('evidence')
 summary = {
     'task_id': task_id,
@@ -212,22 +204,21 @@ summary = {
     'updated_at': str(payload.get('updated_at') or '')[:64],
     'evidence_count': len(evidence) if isinstance(evidence, list) else 0,
     'verification_present': bool(str(payload.get('verification') or '').strip()),
-    'latest_generation': True,
+    'canonical_generation': True,
 }
-print('CHATGPT_FREEZE_LATEST_STATE=' + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+print('CHATGPT_FREEZE_CANONICAL_STATE=' + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 print('TASK_TERMINAL_GATE=' + ('PASS' if status in {'CONCLUIDO','BLOCKED_EXTERNAL'} else 'NONTERMINAL'))
 INNER
 """
     ok, stdout, _stderr, _error, _exit_code = call_admin(SITE, command, 45)
-    safe = safe_markers(stdout, ("CHATGPT_FREEZE_LATEST_STATE=", "TASK_TERMINAL_GATE="))
+    safe = safe_markers(stdout, ("CHATGPT_FREEZE_CANONICAL_STATE=", "TASK_TERMINAL_GATE="))
     if not ok:
         raise SystemExit("Remote Control MCP freeze-state action failed")
     keys = {line.split("=", 1)[0] for line in safe if "=" in line}
-    if {"CHATGPT_FREEZE_LATEST_STATE", "TASK_TERMINAL_GATE"} - keys:
+    if {"CHATGPT_FREEZE_CANONICAL_STATE", "TASK_TERMINAL_GATE"} - keys:
         raise SystemExit("missing freeze-state markers")
     print("\n".join(safe))
     print("OCI_MCP_CHATGPT_FREEZE_STATE=PASS")
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
