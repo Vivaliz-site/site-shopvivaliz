@@ -178,6 +178,25 @@ async function run() {
     assert.deepEqual(probe.item_keys, ['id', 'update_time']);
   }
 
+  {
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      return new Promise(() => {});
+    };
+    const timeoutSentinel = { source: 'test_timeout' };
+    const probe = await Promise.race([
+      latestConversationProbe(cdp, 25),
+      new Promise(resolve => setTimeout(() => resolve(timeoutSentinel), 100)),
+    ]);
+    assert.notEqual(
+      probe.source,
+      'test_timeout',
+      'latestConversationProbe must bound a CDP evaluation that never resolves',
+    );
+    assert.equal(probe.source, 'probe_failed');
+  }
+
   console.log('cross-device latest-conversation alignment: PASS');
 
   // The explicitly authorized checkpoint-driven resume path must stay live.
