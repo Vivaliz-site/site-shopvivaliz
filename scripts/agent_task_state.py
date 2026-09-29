@@ -42,6 +42,8 @@ NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
+CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 
 
 class TaskStateError(RuntimeError):
@@ -115,6 +117,51 @@ def _history(payload: dict[str, Any], event: str, **extra: Any) -> None:
 
 def is_terminal(payload: dict[str, Any]) -> bool:
     return str(payload.get("status", "")) in TERMINAL_STATES
+
+
+def _freeze_generation_requires_browser_progress(task_id: str) -> bool:
+    return CHATGPT_FREEZE_GENERATION_RE.fullmatch(str(task_id).strip()) is not None
+
+
+def _latest_chatgpt_nudge_row(task_id: str) -> dict[str, Any] | None:
+    ledger = RUNTIME_DIR / CHATGPT_NUDGE_LEDGER_FILE
+    if not ledger.is_file():
+        return None
+    latest: dict[str, Any] | None = None
+    try:
+        lines = ledger.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("task_id", "")).strip() != str(task_id).strip():
+            continue
+        latest = row
+    return latest
+
+
+def _require_freeze_browser_progress(task_id: str) -> None:
+    if not _freeze_generation_requires_browser_progress(task_id):
+        return
+    latest = _latest_chatgpt_nudge_row(task_id)
+    if not latest:
+        raise TaskStateError(
+            "ChatGPT freeze generation requires browser-worker PROGRESS_CONFIRMED before terminal readiness"
+        )
+    status = str(latest.get("worker_status", "")).strip().upper()
+    observed_at = str(latest.get("worker_status_observed_at", "")).strip()
+    if status != "PROGRESS_CONFIRMED" or not observed_at:
+        raise TaskStateError(
+            "ChatGPT freeze generation requires latest browser-worker PROGRESS_CONFIRMED before terminal readiness"
+        )
 
 
 def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "") -> dict[str, Any]:
@@ -232,6 +279,7 @@ def mark_ready(
         raise TaskStateError("READY_TO_COMPLETE requires fresh evidence")
     if not verification_text:
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
+    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
     payload["status"] = "READY_TO_COMPLETE"
@@ -249,6 +297,7 @@ def complete_task(task_id: str) -> dict[str, Any]:
         raise TaskStateError("completion rejected: executable next_action still exists")
     if not payload.get("evidence") or not payload.get("verification"):
         raise TaskStateError("completion rejected: verification evidence is missing")
+    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     payload["status"] = "CONCLUIDO"
     payload["completed_at"] = utc_now()
     _history(payload, "completed")
