@@ -129,7 +129,7 @@ bootstrap_workspace_trust(){
   test -f "$TRUST_HELPER_SOURCE" || die trust_helper_missing 57
   trust_out="$(mktemp)"
   trust_rc=0
-  if run_in_workspace_as_claude timeout 25s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN" >"$trust_out" 2>&1; then
+  if run_in_workspace_as_claude timeout 90s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN" >"$trust_out" 2>&1; then
     trust_rc=0
   else
     trust_rc=$?
