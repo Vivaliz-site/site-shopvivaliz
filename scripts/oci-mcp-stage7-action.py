@@ -14,7 +14,8 @@ from pathlib import Path
 ENDPOINT = "http://127.0.0.1:5580/mcp"
 TOKEN_FILE = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
 BACKEND = "always-free-arm-1787907847-26"
-SITE = "shopvivaliz-free-a1"\nCLAUDE_STAGE_ROOT = "/home/ubuntu/.local/state/shopvivaliz/claude-stage7"
+SITE = "shopvivaliz-free-a1"
+CLAUDE_STAGE_ROOT = "/home/ubuntu/.local/state/shopvivaliz/claude-stage7"
 
 
 def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str, str, int | None]:
