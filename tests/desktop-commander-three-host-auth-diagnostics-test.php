@@ -25,7 +25,7 @@ $requiredWorkflow = [
     "if: steps.generate.outputs.missing_hosts != ''",
     'Diagnose Windows Desktop Commander auth failure safely',
     'DC_WINDOWS_AUTH_DIAG',
-    'dc-reauth-session.log',
+    'desktop-commander-reauth-windows.ps1',
     'verification_url_prompt',
     'waiting_authorization',
     'device_ready',
