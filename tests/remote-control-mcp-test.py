@@ -824,6 +824,11 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE=", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION=", workflow)
 
+    def test_remote_control_ci_watches_oci_continuity_workflow(self):
+        ci = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        watched = "- '.github/workflows/oci-bastion-private-access-bootstrap.yml'"
+        self.assertGreaterEqual(ci.count(watched), 2)
+
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
             ROOT / "scripts" / "setup-remote-control-access.sh",
