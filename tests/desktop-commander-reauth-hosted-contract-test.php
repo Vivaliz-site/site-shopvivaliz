@@ -55,6 +55,18 @@ if (!str_contains($windows, 'Verify this device in your browser:')) {
     fwrite(STDERR, "Windows reauth must extract the provider-issued verification_uri_complete by context\n");
     exit(1);
 }
+
+if (!str_contains($windows, 'AuthPackageVersion')) {
+    fwrite(STDERR, "Windows reauth must support a one-time auth package override\n");
+    exit(1);
+}
+$oneShot = (string) file_get_contents($root . '/.github/workflows/dc-four-host-login-once.yml');
+if (!str_contains($oneShot, "start_linux site 0.2.51") ||
+    !str_contains($oneShot, "start_linux backend 0.2.51") ||
+    !str_contains($oneShot, "-AuthPackageVersion '0.2.51'")) {
+    fwrite(STDERR, "four-host login must use 0.2.51 only for complete device login URLs\n");
+    exit(1);
+}
 if (str_contains($linux, 'verify-device') || str_contains($windows, 'verify-device') || str_contains($workflow, 'verify-device')) {
     fwrite(STDERR, "DC reauth must not hard-code the provider verification URL path\n");
     exit(1);
