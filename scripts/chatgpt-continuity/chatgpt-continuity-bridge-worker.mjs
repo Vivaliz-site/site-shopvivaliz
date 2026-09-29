@@ -224,6 +224,15 @@ async function confirmAssistantProgress(
 async function latestConversationProbe(cdp) {
   try {
     const result = await cdp.evaluate(`(async()=>{
+      let accountId='';
+      try{
+        const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+        if(sessionResponse.ok){
+          let session=null; try{session=await sessionResponse.json();}catch{}
+          accountId=String(session?.account?.id||'').trim();
+        }
+      }catch{}
+      const headers=accountId?{'ChatGPT-Account-Id':accountId}:{};
       const candidates = [
         {source:'filtered',url:'/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false'},
         {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=1&order=updated'},
@@ -231,7 +240,7 @@ async function latestConversationProbe(cdp) {
       let last={http_status:0,source:'none',item_present:false,item_keys:[]};
       for(const candidate of candidates){
         try{
-          const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store'});
+          const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store',headers});
           let body=null; try{body=await response.json();}catch{}
           const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
           last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0,item_keys:[]};
