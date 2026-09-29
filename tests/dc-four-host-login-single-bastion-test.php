@@ -24,4 +24,18 @@ if (str_contains($one, 'create_tunnel BACKEND_SESSION_ID')) {
     fwrite(STDERR, "DC login one-shot must not create a second Bastion session for backend\n");
     exit(1);
 }
+
+$windowsRequired = [
+    "127.0.0.1/2222",
+    "127.0.0.1/2223",
+    "fred_mode=reverse",
+    "kocepsv_mode=reverse",
+    "mode=direct",
+];
+foreach ($windowsRequired as $needle) {
+    if (!str_contains($one, $needle)) {
+        fwrite(STDERR, "DC login one-shot missing Windows reverse-SSH preference/fallback: {$needle}\n");
+        exit(1);
+    }
+}
 echo "dc-four-host-login-single-bastion: ok\n";
