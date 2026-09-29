@@ -30,6 +30,11 @@ def legacy_trust_prompt_visible(value: str) -> bool:
     return heading and "yes, i trust this folder" in text and "no, exit" in text
 
 
+def trust_prompt_visible(value: str) -> bool:
+    """Backward-compatible legacy TUI detector used by focused tests."""
+    return legacy_trust_prompt_visible(value)
+
+
 def legacy_trust_acceptance_sequence(value: str) -> bytes | None:
     if not legacy_trust_prompt_visible(value):
         return None
@@ -60,6 +65,11 @@ def legacy_trust_acceptance_sequence(value: str) -> bytes | None:
         if distance < 0:
             return b"\x1b[A" * (-distance) + b"\r"
     return None
+
+
+def trust_acceptance_sequence(value: str) -> bytes | None:
+    """Backward-compatible legacy acceptance helper used by focused tests."""
+    return legacy_trust_acceptance_sequence(value)
 
 
 def documented_server_trust_sequence(value: str, workspace: str) -> bytes | None:
