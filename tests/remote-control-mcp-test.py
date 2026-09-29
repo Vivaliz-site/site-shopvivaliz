@@ -825,6 +825,25 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION=", workflow)
         self.assertIn("import hashlib, json, pathlib, re, sys", workflow)
 
+    def test_oci_continuity_diagnostic_probes_team_account_scope_without_leaking_credentials(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for marker in (
+            "CHATGPT_CONTINUITY_SESSION_HTTP_STATUS=",
+            "CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN_PRESENT=",
+            "CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID_PRESENT=",
+            "CHATGPT_CONTINUITY_ACCOUNT_ID_SOURCE=",
+            "CHATGPT_CONTINUITY_ACCOUNT_SCOPED_HTTP_STATUS=",
+            "CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT=",
+            "CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CURRENT_FETCH_STATUS=",
+        ):
+            self.assertIn(marker, workflow)
+        self.assertIn("/api/auth/session", workflow)
+        self.assertIn("ChatGPT-Account-ID", workflow)
+        self.assertIn("Authorization", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID=", workflow)
+        self.assertNotIn("CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CONVERSATION_ID=", workflow)
+
     def test_remote_control_ci_watches_oci_continuity_workflow(self):
         ci = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
         watched = "- '.github/workflows/oci-bastion-private-access-bootstrap.yml'"
