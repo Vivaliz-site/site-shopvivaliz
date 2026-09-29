@@ -990,6 +990,39 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'"{label}"', helper)
         self.assertNotIn('print(stderr)', helper)
         self.assertNotIn('print(result.get("stderr"', helper)
+        self.assertIn("CLAUDE_OCI_RESULT_EXIT_CODE=", helper)
+        self.assertIn("CLAUDE_OCI_STDOUT_BYTES=", helper)
+        self.assertIn("CLAUDE_OCI_STDERR_BYTES=", helper)
+        self.assertIn("CLAUDE_OCI_ERROR_PRESENT=", helper)
+        self.assertIn("CLAUDE_OCI_SAFE_MARKER_COUNT=", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_PREPARE=PASS", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_PREPARE=FAIL class=permissions", helper)
+        self.assertIn("CLAUDE_OCI_STAGE_INSTALLER=START", helper)
+        self.assertIn('str(result.get("error") or "")', helper)
+        self.assertNotIn("print(error)", helper)
+
+    def test_claude_setup_emits_sanitized_phase_markers_before_each_install_step(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        for phase in (
+            "eligibility",
+            "bridge_install",
+            "workspace",
+            "mcp_config",
+            "bridge_verify",
+            "consent",
+            "service",
+        ):
+            self.assertIn(f'CLAUDE_REMOTE_CONTROL_PHASE={phase}', setup)
+
+
+    def test_claude_setup_classifies_auth_json_state_without_set_e_silence(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        self.assertIn("claude_not_logged_in", setup)
+        self.assertIn("claude_auth_status_invalid", setup)
+        self.assertIn("isinstance(data, dict)", setup)
+        self.assertIn('"claude_not_logged_in"', helper)
+        self.assertIn('"claude_auth_status_invalid"', helper)
 
     def test_oci_bastion_can_read_latest_freeze_state_via_remote_control_mcp(self):
 
