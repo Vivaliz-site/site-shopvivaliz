@@ -29,7 +29,7 @@ $required = [
     'BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=',
     '--session-ttl 1800',
     'Runner.Worker',
-    'RUNNER_BASTION_RESCUE=refused_worker_active',
+    'RUNNER_BASTION_RESCUE=refused_github_job_active',
     'ACTIVE_A1_JOB_COUNT_FIRST=',
     'ACTIVE_A1_JOB_COUNT_SECOND=',
     'shopvivaliz-a1-deploy',
