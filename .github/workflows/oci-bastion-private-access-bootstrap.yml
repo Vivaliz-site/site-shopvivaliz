@@ -580,7 +580,7 @@ jobs:
           agent_active=false
           systemctl is-active --quiet shopvivaliz-agent.service && agent_active=true
           python3 - "$runtime" "$agent_active" <<'INNER'
-          import hashlib, json, pathlib, sys
+          import hashlib, json, pathlib, re, sys
           root=pathlib.Path(sys.argv[1]); agent=sys.argv[2]
           running=0
           current_fingerprints=set()
