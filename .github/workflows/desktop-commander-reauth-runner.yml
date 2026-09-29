@@ -245,30 +245,46 @@ jobs:
               python3 "$RUNNER_TEMP/dc-peer-discover.py" "$wanted"
           }
 
+          backend_port_alive() {
+            port="$1"
+            "${SSH_BACKEND[@]}" "timeout 5 bash -c '</dev/tcp/127.0.0.1/$port'"
+          }
+
           run_windows() {
             host="$1"
             if [ "$host" = fred-win ]; then
               peer_name=LAPTOP-NIG4IFUU
               win_user=FRED
               local_port=32225
+              reverse_port=2222
               out_file="$LINK_DIR/dc-reauth-fred-win.txt"
             else
               peer_name=DESKTOP-KOCEPSV
               win_user=user
               local_port=32226
+              reverse_port=2223
               out_file="$LINK_DIR/dc-reauth-kocepsv.txt"
             fi
 
-            peer_ip="$(discover_peer "$peer_name")"
-            test -n "$peer_ip"
-            "${SSH_BACKEND[@]}" "timeout 4 bash -c '</dev/tcp/$peer_ip/22'"
-            echo "SSH22=reachable"
+            if backend_port_alive "$reverse_port"; then
+              mode=reverse
+              target_host=127.0.0.1
+              target_port="$reverse_port"
+            else
+              mode=direct
+              peer_ip="$(discover_peer "$peer_name")"
+              test -n "$peer_ip"
+              "${SSH_BACKEND[@]}" "timeout 4 bash -c '</dev/tcp/$peer_ip/22'"
+              target_host="$peer_ip"
+              target_port=22
+            fi
+            echo "DC_REAUTH_WINDOWS_ROUTE host=$host mode=$mode"
 
             ssh -fNT -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
               -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" \
               -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 \
               -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" \
-              -L "$local_port:$peer_ip:22" ubuntu@127.0.0.1
+              -L "$local_port:$target_host:$target_port" ubuntu@127.0.0.1
 
             for _ in $(seq 1 10); do
               if ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host.hosts"; then
@@ -284,7 +300,7 @@ jobs:
             remote_ps='C:\site-shopvivaliz\logs\dc-reauth-runner.ps1'
             remote_link='C:\site-shopvivaliz\logs\dc-reauth-link.txt'
             WINSSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/$host.hosts" -o ConnectTimeout=10 -p "$local_port" -i "$VM_KEY_FILE" "$win_user@127.0.0.1")
-            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase '$PHASE' -HostKey '$host' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
+            write_and_run="& { \$p='$remote_ps'; [IO.File]::WriteAllBytes(\$p,[Convert]::FromBase64String('$script_b64')); try { & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$p -Phase '$PHASE' -HostKey '$host' -AuthPackageVersion '0.2.51' } finally { Remove-Item -LiteralPath \$p -Force -ErrorAction SilentlyContinue } }"
             remote_out="$("${WINSSH[@]}" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$write_and_run\"")"
             printf '%s\n' "$remote_out" | grep -E '^DC_REAUTH_(BEGIN|FINALIZE)=PASS$'
 
