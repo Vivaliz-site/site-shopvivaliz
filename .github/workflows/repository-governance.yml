@@ -149,6 +149,7 @@ jobs:
             tests.unit.test_olist_entrypoints_safe \
             tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
+            tests.unit.test_check_issue_comment_listeners \
             -v
           python tests/test_production_deploy_event_gate.py
           python tests/test_ecommerce_excellence_deploy_wait_retry.py
@@ -165,6 +166,9 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/validate-audit-governance.py --output-dir artifacts/audit-governance-self-test
+
+      - name: Enforce single issue_comment listener
+        run: python3 scripts/governance/check-issue-comment-listeners.py
 
       - name: Generate repository inventory snapshot
         run: |
