@@ -840,6 +840,8 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("/api/auth/session", workflow)
         self.assertIn("ChatGPT-Account-ID", workflow)
         self.assertIn("Authorization", workflow)
+        self.assertIn("session?.account?.id", workflow)
+        self.assertNotIn("https://api.openai.com/auth", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN=", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID=", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CONVERSATION_ID=", workflow)
