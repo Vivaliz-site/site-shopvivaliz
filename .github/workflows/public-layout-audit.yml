@@ -21,12 +21,12 @@ jobs:
       contents: read
     env:
       SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+      NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
       - run: npm ci
       - name: Verify canonical backend browser runtime
         run: |
