@@ -163,7 +163,9 @@ jobs:
 
             ready=false
             for _ in $(seq 1 8); do
-              bash -lc "$tunnel" || true
+              if ! bash -lc "$tunnel"; then
+                echo "DC_BASTION_TUNNEL_ATTEMPT=retry"
+              fi
               for _ in $(seq 1 12); do
                 if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
                   ready=true
@@ -172,7 +174,9 @@ jobs:
                 sleep 1
               done
               [ "$ready" = true ] && break
-              pkill -f "$local_port:$target_ip:22" 2>/dev/null || true
+              if pgrep -f "$local_port:$target_ip:22" >/dev/null 2>&1; then
+                pkill -f "$local_port:$target_ip:22"
+              fi
               sleep 5
             done
             test "$ready" = true
@@ -243,10 +247,18 @@ jobs:
           version="${1:-0.2.48}"
           d="$HOME/.desktop-commander-device"
           install -d -m 700 "$d"
-          sudo -n systemctl stop shopvivaliz-desktop-commander-guardian.timer 2>/dev/null || true
-          sudo -n systemctl stop shopvivaliz-desktop-commander.service 2>/dev/null || true
-          pkill -f '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true
-          pkill -f '[s]cript -q -f -c.*desktop-commander' 2>/dev/null || true
+          if systemctl list-unit-files shopvivaliz-desktop-commander-guardian.timer >/dev/null 2>&1; then
+            sudo -n systemctl stop shopvivaliz-desktop-commander-guardian.timer
+          fi
+          if systemctl list-unit-files shopvivaliz-desktop-commander.service >/dev/null 2>&1; then
+            sudo -n systemctl stop shopvivaliz-desktop-commander.service
+          fi
+          if pgrep -f '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' >/dev/null 2>&1; then
+            pkill -f '[n]pm exec @wonderwhy-er/desktop-commander@.* remote'
+          fi
+          if pgrep -f '[s]cript -q -f -c.*desktop-commander' >/dev/null 2>&1; then
+            pkill -f '[s]cript -q -f -c.*desktop-commander'
+          fi
           rm -f "$d/device.json" "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/reauth-link.txt" "$d/reauth-session.log" "$d/reauth-session.pid"
 
           cmd="npx --yes @wonderwhy-er/desktop-commander@$version remote --persist-session"
@@ -340,7 +352,9 @@ jobs:
               -L "$local_port:$peer_ip:22" ubuntu@127.0.0.1
 
             for _ in $(seq 1 10); do
-              ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host_key.hosts" || true
+              if ssh-keyscan -T 3 -p "$local_port" 127.0.0.1 2>/dev/null > "$RUNNER_TEMP/$host_key.hosts"; then
+                :
+              fi
               [ -s "$RUNNER_TEMP/$host_key.hosts" ] && break
               sleep 1
             done
@@ -413,10 +427,10 @@ jobs:
             fred=false
             kocepsv=false
 
-            "${SSH_SITE[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"' && site=true || true
-            "${SSH_BACKEND[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"' && backend=true || true
-            "${WIN_FRED[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"' && fred=true || true
-            "${WIN_KOCEPSV[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"' && kocepsv=true || true
+            if "${SSH_SITE[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"'; then site=true; fi
+            if "${SSH_BACKEND[@]}" 'test -s "$HOME/.desktop-commander-device/device.json"'; then backend=true; fi
+            if "${WIN_FRED[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"'; then fred=true; fi
+            if "${WIN_KOCEPSV[@]}" 'powershell.exe -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ''.desktop-commander-device\device.json'')) { exit 0 } else { exit 1 }"'; then kocepsv=true; fi
 
             if [ "$site" = true ] && [ "$backend" = true ] && [ "$fred" = true ] && [ "$kocepsv" = true ]; then
               all_ready=true
@@ -427,7 +441,7 @@ jobs:
 
           if [ "$all_ready" != true ]; then
             echo "::warning::Authorization window ended before all four hosts completed; links remain valid only until the provider expires them."
-            exit 0
+            exit 1
           fi
 
           "${SSH_SITE[@]}" "bash -s -- finalize 0.2.48" < scripts/desktop-commander-reauth-linux-once.sh
@@ -471,12 +485,14 @@ jobs:
           fi
 
           for pattern in "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" '32225:.*:22' '32226:.*:22'; do
-            pkill -f "$pattern" 2>/dev/null || true
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              if ! pkill -f "$pattern"; then rc=1; fi
+            fi
           done
 
           for key in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
             if [ -n "$key" ] && [ -f "$key" ]; then
-              shred -u "$key" || true
+              if ! shred -u "$key"; then rc=1; fi
             fi
           done
 
