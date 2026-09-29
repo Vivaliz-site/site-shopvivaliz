@@ -316,6 +316,8 @@ jobs:
             pkill -f '[s]cript -q -f -c.*desktop-commander'
           fi
           rm -f "$d/device.json" "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/reauth-link.txt" "$d/reauth-session.log" "$d/reauth-session.pid"
+          : > "$d/reauth-session.log"
+          chmod 600 "$d/reauth-session.log"
 
           cmd="npx --yes @wonderwhy-er/desktop-commander@$version remote --persist-session"
           if command -v script >/dev/null 2>&1; then
@@ -325,7 +327,7 @@ jobs:
           fi
           pid=$!
           printf '%s\n' "$pid" > "$d/reauth-session.pid"
-          chmod 600 "$d/reauth-session.pid" "$d/reauth-session.log"
+          chmod 600 "$d/reauth-session.pid"
 
           found=false
           for _ in $(seq 1 120); do
