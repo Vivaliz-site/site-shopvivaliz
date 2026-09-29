@@ -17,6 +17,7 @@ jobs:
         github.repository == 'Vivaliz-site/site-shopvivaliz' &&
         github.event.issue.title == '[private-access-bootstrap]' &&
         github.event.issue.user.login == 'fredmourao-ai' &&
+        !endsWith(github.actor, '[bot]') &&
         (
           github.event.issue.body == 'action=install-rustdesk-and-agent-ssh' ||
           github.event.issue.body == 'action=validate-rustdesk-via-fredwin' ||
@@ -48,6 +49,7 @@ jobs:
       BACKEND_PRIVATE_IP: 10.0.1.38
       SITE_TUNNEL_PORT: "22212"
       BACKEND_TUNNEL_PORT: "22213"
+      ALLOW_PAID_AI: "explicit-human-issue-action"
 
     steps:
       - name: Checkout canonical main
@@ -808,19 +810,32 @@ jobs:
             printf 'AI_SQUAD_CLAUDE_FLAG_%s=%s\n' "$key" "$supported"
           done
 
-          version_raw="$(sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --version 2>/dev/null | head -n 1 || true)"
-          version="$(printf '%s' "$version_raw" | grep -Eo '[0-9]+(\.[0-9]+){1,3}' | head -n 1 || true)"
+          version_raw=''
+          if value="$(sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --version 2>/dev/null | head -n 1)"; then
+            version_raw="$value"
+          fi
+          version=''
+          if value="$(printf '%s' "$version_raw" | grep -Eo '[0-9]+(\.[0-9]+){1,3}' | head -n 1)"; then
+            version="$value"
+          fi
           [ -n "$version" ] || version=unknown
           printf 'AI_SQUAD_CLAUDE_VERSION=%s\n' "$version"
 
-          service_env="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user show "$service" --property=Environment --value 2>/dev/null || true)"
-          env_has() { printf '%s\n' "$service_env" | grep -Eq "(^|[[:space:]])$1="; }
+          service_pid=''
+          if value="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user show "$service" --property=MainPID --value 2>/dev/null)"; then
+            case "$value" in ''|*[!0-9]*|0) ;; *) service_pid="$value" ;; esac
+          fi
+          env_has() {
+            [ -n "$service_pid" ] &&
+              [ -r "/proc/$service_pid/environ" ] &&
+              tr '\0' '\n' <"/proc/$service_pid/environ" | grep -Eq "^$1="
+          }
           base_url_set=false
           api_key_set=false
           auth_token_set=false
           if env_has ANTHROPIC_BASE_URL; then base_url_set=true; fi
-          if env_has ANTHROPIC_API_KEY; then api_key_set=true; fi
-          if env_has CLAUDE_CODE_OAUTH_TOKEN; then auth_token_set=true; fi
+          if env_has ANTHROPIC_API_KEY || env_has CLAUDE_API_KEY; then api_key_set=true; fi
+          if env_has ANTHROPIC_AUTH_TOKEN || env_has CLAUDE_CODE_OAUTH_TOKEN; then auth_token_set=true; fi
           printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_BASE_URL_SET=%s\n' "$base_url_set"
           printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_API_KEY_SET=%s\n' "$api_key_set"
           printf 'AI_SQUAD_CLAUDE_SERVICE_ENV_AUTH_TOKEN_SET=%s\n' "$auth_token_set"
