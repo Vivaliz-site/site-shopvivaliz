@@ -31,6 +31,8 @@ jobs:
           github.event.issue.body == 'action=chatgpt-continuity-successor' ||
           github.event.issue.body == 'action=chatgpt-freeze-task-state' ||
           github.event.issue.body == 'action=ai-squad-claude-diagnostic' ||
+          github.event.issue.body == 'action=backend-storage-scan' ||
+          github.event.issue.body == 'action=backend-storage-cleanup-safe' ||
           github.event.issue.body == 'action=claude-remote-control-install' ||
           github.event.issue.body == 'action=claude-remote-control-status'
         )
@@ -212,6 +214,99 @@ jobs:
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"'
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo "PRIVATE_SSH_TUNNELS=PASS"
+
+      # Recovery-only path: use the private Bastion tunnel only when backend
+      # storage pressure prevents the loopback Remote Control MCP from staging
+      # its normal bounded action. Operational commands remain MCP-first.
+      - name: Scan backend storage for Stage 7 recovery
+        if: github.event.issue.body == 'action=backend-storage-scan'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            echo BACKEND_STORAGE_SCAN_BEGIN
+            df -h /
+            df -i /
+            echo HOME_UBUNTU
+            du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 50
+            echo VAR
+            sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40
+            echo REGENERABLE_CACHES
+            for p in /home/ubuntu/.cache/ms-playwright /home/ubuntu/.npm/_cacache /home/ubuntu/.npm/_npx /home/ubuntu/.cache/pip; do
+              if [ -e "$p" ]; then du -sh "$p"; else echo MISSING="$p"; fi
+            done
+            echo STAGE7_TMP
+            sudo -n find /tmp -maxdepth 1 -type d -name "shopvivaliz-claude-oci-*" -mmin +120 -printf "%TY-%Tm-%TdT%TH:%TM %p\n"
+            echo BACKEND_STORAGE_SCAN_END'
+
+      - name: Safely recover backend storage for Stage 7
+        if: github.event.issue.body == 'action=backend-storage-cleanup-safe'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            echo BACKEND_STORAGE_CLEANUP_BEGIN
+            df -h /
+
+            path_in_use() {
+              target="$1"
+              for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
+                resolved="$(readlink -f "$ref" 2>/dev/null || :)"
+                case "$resolved" in
+                  "$target"|"$target"/*) return 0 ;;
+                esac
+              done
+              return 1
+            }
+
+            clean_regenerable() {
+              target="$1"
+              if [ ! -e "$target" ]; then
+                echo MISSING="$target"
+                return 0
+              fi
+              if path_in_use "$target"; then
+                echo SKIPPED_ACTIVE="$target"
+                return 0
+              fi
+              rm -rf -- "$target"
+              echo CLEANED="$target"
+            }
+
+            clean_regenerable /home/ubuntu/.cache/ms-playwright
+            clean_regenerable /home/ubuntu/.npm/_cacache
+            clean_regenerable /home/ubuntu/.npm/_npx
+            clean_regenerable /home/ubuntu/.cache/pip
+
+            now="$(date +%s)"
+            for d in /tmp/shopvivaliz-claude-oci-*; do
+              [ -d "$d" ] || continue
+              modified="$(stat -c %Y "$d")"
+              age="$((now - modified))"
+              if [ "$age" -lt 7200 ]; then
+                echo SKIPPED_RECENT="$d"
+                continue
+              fi
+              if path_in_use "$d"; then
+                echo SKIPPED_ACTIVE="$d"
+                continue
+              fi
+              rm -rf -- "$d"
+              echo CLEANED="$d"
+            done
+
+            free_kb="$(df -Pk / | awk "NR==2 {print \\$4}")"
+            echo BACKEND_STORAGE_FREE_KB="$free_kb"
+            if [ "$free_kb" -lt 262144 ]; then
+              echo BACKEND_STORAGE_CLEANUP=FAIL class=insufficient_free_space
+              exit 72
+            fi
+            df -h /
+            echo BACKEND_STORAGE_CLEANUP_END'
 
       - name: Bootstrap Remote Control MCP through OCI Bastion
         if: github.event.issue.body == 'action=bootstrap-remote-control-mcp'
