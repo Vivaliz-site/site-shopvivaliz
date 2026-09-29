@@ -27,7 +27,8 @@ jobs:
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
           github.event.issue.body == 'action=chatgpt-continuity-repair' ||
-          github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
+          github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
+          github.event.issue.body == 'action=chatgpt-continuity-successor'
         )
       }}
     runs-on: ubuntu-latest
@@ -834,6 +835,51 @@ jobs:
               print(key + '=' + seen[key])
           print('CHATGPT_CONTINUITY_MCP_DIAGNOSTIC=PASS')
           PY
+
+      - name: Ensure next ChatGPT freeze generation through OCI Bastion
+        if: github.event.issue.body == 'action=chatgpt-continuity-successor'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -P "$SITE_TUNNEL_PORT")
+          remote_dir="/tmp/shopvivaliz-chatgpt-successor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_successor() {
+            "${SITE_SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
+          }
+          trap cleanup_successor EXIT
+
+          "${SITE_SSH[@]}" "install -d -m 700 '$remote_dir'"
+          "${SITE_SCP[@]}" scripts/agent_task_state.py scripts/ensure-chatgpt-freeze-successor.py "ubuntu@127.0.0.1:$remote_dir/"
+
+          result="$("${SITE_SSH[@]}" "set -Eeuo pipefail; python3 '$remote_dir/ensure-chatgpt-freeze-successor.py' \
+            --state-dir /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+            --predecessor chatgpt-freeze-root-cause-20260927 \
+            --base-id chatgpt-freeze-root-cause-20260928 \
+            --goal 'Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption' \
+            --next-action 'Preserve automatic checkpoint resume and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker' \
+            --evidence 'Fresh natural freeze occurred after the prior terminal generation' \
+            --agent gpt-5.6-sol")"
+
+          python3 - "$result" <<'PY'
+          import json, re, sys
+          row=json.loads(sys.argv[1])
+          task_id=str(row.get("task_id") or "")
+          predecessor=str(row.get("predecessor_task_id") or "")
+          status=str(row.get("status") or "")
+          if not re.fullmatch(r"chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*", task_id):
+              raise SystemExit("unexpected successor task id")
+          if not re.fullmatch(r"(?:chatgpt-freeze-root-cause-20260927|chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*)", predecessor):
+              raise SystemExit("unexpected predecessor task id")
+          if status != "RUNNING":
+              raise SystemExit("successor task is not RUNNING")
+          print("CHATGPT_CONTINUITY_SUCCESSOR=PASS")
+          print("CHATGPT_CONTINUITY_SUCCESSOR_TASK=" + task_id)
+          PY
+
+          cleanup_successor
+          trap - EXIT
 
       - name: Probe Secure MCP Tunnel prerequisites
         if: github.event.issue.body == 'action=secure-mcp-tunnel-probe'
