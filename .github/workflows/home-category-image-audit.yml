@@ -2,7 +2,7 @@ name: Home Category Image Audit
 
 on:
   pull_request:
-    paths: &home_category_image_audit_paths
+    paths:
       - 'index.php'
       - 'api/catalog/products.php'
       - 'api/catalog/category-images.php'
@@ -17,7 +17,19 @@ on:
       - '.github/workflows/home-category-image-audit.yml'
   push:
     branches: [main]
-    paths: *home_category_image_audit_paths
+    paths:
+      - 'index.php'
+      - 'api/catalog/products.php'
+      - 'api/catalog/category-images.php'
+      - 'includes/catalog-runtime.php'
+      - 'includes/catalog-image-enrich.php'
+      - 'public/assets/category-images/**'
+      - 'js/public-experience-v1.js'
+      - 'js/category-real-images-v52.js'
+      - 'js/shopvivaliz-ab-testing.js'
+      - 'tests/catalog-live-fallback-test.php'
+      - 'tests/home-category-image-audit.mjs'
+      - '.github/workflows/home-category-image-audit.yml'
   workflow_dispatch:
 
 permissions:
