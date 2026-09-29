@@ -1,0 +1,171 @@
+name: Codex Comment Router Sweep One-Shot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-comment-router-sweep-one-shot
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout canonical control repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify native operator authentication
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          "$launcher" --version
+          echo "CODEX_COMMENT_ROUTER_SWEEP_PREFLIGHT=PASS"
+
+      - name: Build bounded multi-repository task
+        id: prompt
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          prompt="$RUNNER_TEMP/codex-comment-router-sweep.prompt"
+          cat > "$prompt" <<'EOF'
+          Execute a finite ShopVivaliz GitHub Actions governance sweep across ALL repositories accessible to the authenticated operator under the Vivaliz-site and fredmourao-ai owners.
+
+          User requirement:
+          - A simple GitHub issue/PR comment must never create many unrelated workflow runs.
+          - For each repository, at most ONE active workflow may declare the GitHub Actions issue_comment event.
+          - That single listener must route an authorized comment deterministically to exactly ONE matching operational target. Unmatched comments must perform no operational dispatch.
+          - Target workflows must use workflow_dispatch (or another narrow event appropriate to their actual purpose), not issue_comment.
+          - Explicit commands must be mutually exclusive; prefix collisions such as /foo and /foo-bar must not trigger two targets.
+          - Paid AI triggered from a comment must retain explicit human opt-in, bot rejection, finite timeout/turn limits, and must not become recurring/background paid AI.
+          - Preserve non-comment triggers that are legitimately needed (push, PR, review, schedule, workflow_dispatch, etc.).
+          - Do not weaken permissions, authentication, safety gates, environment protection, concurrency, or existing command validation.
+
+          Canonical control repository already has an in-flight implementation pattern in Vivaliz-site/site-shopvivaliz:
+          - .github/workflows/comment-command-router.yml
+          - tests/single-issue-comment-router-test.php
+          - PR #2197 (or its merged successor if main advanced)
+          Treat the final merged version on main as the reference pattern, not stale branch assumptions.
+
+          Mandatory bootstrap in Vivaliz-site/site-shopvivaliz:
+          1. Read docs/knowledge/host-access.md
+          2. Read docs/knowledge/README.md
+          3. Read docs/knowledge/agent-rules.md
+          4. Read AGENTS.md
+          Never expose or log secret/token/key/cookie contents.
+
+          Repository scope:
+          - Discover live repositories with the authenticated native gh session; do not rely only on this list.
+          - Known accessible repositories at task start:
+            fredmourao-ai/mei-mg-email
+            fredmourao-ai/solange-rolla-consultorio
+            fredmourao-ai/solange-rolla
+            Vivaliz-site/site-shopvivaliz
+            Vivaliz-site/-shopvivaliz-pipeline
+            Vivaliz-site/amazon-returns-safet
+            Vivaliz-site/ml-pricing-api
+            Vivaliz-site/mercadolivre-returns-recovery
+            Vivaliz-site/shopvivaliz-m365
+            Vivaliz-site/buscador
+          - Scan every accessible repository in the two owners. If a repository is explicitly historical/superseded and scheduled for deletion, do not add new architecture unnecessarily; record the finding and only make a minimal safety repair if an active issue_comment fan-out remains a live risk.
+
+          Required procedure, repository by repository:
+          A. Inventory all active .github/workflows/*.yml and *.yaml. Ignore *.disabled.
+          B. Count direct issue_comment listeners and map every current comment command/mention to its actual target behavior.
+          C. If count is 0, record PASS/no-change.
+          D. If count is 1, verify it is a true router or otherwise does not cause unrelated operational jobs; repair if needed.
+          E. If count >1, consolidate to one router. Convert operational targets to workflow_dispatch with typed/bounded inputs.
+          F. Preserve exact authorization constraints, command semantics, audit reasons, bounded case IDs, issue numbers, and actor restrictions.
+          G. Add a repository-level regression test that fails if more than one active workflow declares issue_comment. Wire it into an existing mandatory/governance gate; do not create a noisy extra push workflow just for the test.
+          H. Run syntax/actionlint or the repository's existing workflow validator plus focused tests.
+          I. Open a dedicated PR per repository. Do not combine unrelated business changes.
+          J. Observe required CI. Fix failures. Merge only when required gates are objectively green and branch protection permits it.
+          K. After merge, verify main contains the invariant and no duplicate issue_comment listener remains.
+          L. Do not deploy application code merely because workflow governance changed unless that repository's documented process explicitly requires deployment for workflow-only changes.
+
+          For Vivaliz-site/site-shopvivaliz specifically:
+          - Reconcile with the current PR implementing the single-router invariant instead of duplicating it.
+          - Ensure its mandatory validator, repository governance, Quality Gate/actionlint, and regression contract are green before merge.
+
+          Deliverables:
+          - Final table for every repository: active issue_comment listeners before -> after, commands preserved, PR, CI result, merge SHA/status.
+          - Explicit list of repositories with no changes needed.
+          - Any genuine BLOCKED_EXTERNAL must include exact external blocker and resume condition. Do not call code/CI work externally blocked.
+          - Finish all repositories possible in this run. Do not stop after analysis or after opening PRs.
+          EOF
+          chmod 600 "$prompt"
+          printf 'path=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+          echo "CODEX_COMMENT_ROUTER_SWEEP_PROMPT=READY"
+
+      - name: Run finite Codex sweep
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s "$PROMPT_FILE"
+          launcher="$HOME/.local/bin/codex-auto"
+          if [ ! -x "$launcher" ]; then
+            launcher="$(command -v codex-auto || true)"
+          fi
+          test -n "$launcher"
+          test -x "$launcher"
+          "$launcher" exec --help 2>&1 | grep -Fq -- '--approve-for-me'
+          "$launcher" exec --help 2>&1 | grep -Eq -- '(^|[[:space:]])(-m|--model)([=[:space:]]|$)'
+          "$launcher" exec --help 2>&1 | grep -Eq -- '(^|[[:space:]])(-c|--config)([=[:space:]]|$)'
+
+          output="$RUNNER_TEMP/codex-comment-router-sweep.output"
+          rm -f "$output"
+          rc=0
+          "$launcher" exec             --approve-for-me             --model gpt-5.6-terra             --config 'model_reasoning_effort="medium"'             - < "$PROMPT_FILE" >"$output" 2>&1 || rc=$?
+
+          bytes="$(wc -c < "$output" | tr -d ' ')"
+          sha="$(sha256sum "$output" | awk '{print $1}')"
+          echo "CODEX_COMMENT_ROUTER_SWEEP_EXIT=$rc"
+          echo "CODEX_COMMENT_ROUTER_SWEEP_OUTPUT_BYTES=$bytes"
+          echo "CODEX_COMMENT_ROUTER_SWEEP_OUTPUT_SHA256=$sha"
+
+          if [ "$rc" -ne 0 ]; then
+            python3 - "$output" <<'PY'
+          import re, sys
+          text=open(sys.argv[1], encoding='utf-8', errors='replace').read()
+          classes=[]
+          patterns={
+              'auth': r'(auth|login|credential|unauthorized|forbidden)',
+              'quota': r'(quota|rate.?limit|usage limit)',
+              'network': r'(network|connection|timeout|timed out|dns|tls)',
+              'context': r'(context.*length|too many tokens|prompt.*large)',
+              'policy': r'(policy|permission|not allowed)',
+          }
+          for name, pattern in patterns.items():
+              if re.search(pattern, text, re.I):
+                  classes.append(name)
+          print('CODEX_COMMENT_ROUTER_SWEEP_SAFE_ERROR_CLASSES=' + (','.join(classes) if classes else 'unclassified'))
+          PY
+            exit "$rc"
+          fi
+          echo "CODEX_COMMENT_ROUTER_SWEEP=PASS"
+
+      - name: Cleanup transient prompt
+        if: always()
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.path }}
+        shell: bash
+        run: |
+          if [ -n "${PROMPT_FILE:-}" ]; then rm -f -- "$PROMPT_FILE"; fi
