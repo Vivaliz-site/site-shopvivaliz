@@ -28,7 +28,13 @@ fi
 grep -Fq 'chatgpt_freeze_task_state' "$remote"
 grep -Fq '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state' "$remote"
 grep -Fq 'TASK_STATE_STATUS=' "$remote"
-grep -Fq 'agent_task_state.py terminal --task chatgpt-freeze-root-cause-20260927' "$remote"
+grep -Fq 'latest_task_id=' "$remote"
+grep -Fq 'agent_task_state.py show --task "$latest_task_id"' "$remote"
+grep -Fq 'agent_task_state.py terminal --task "$latest_task_id"' "$remote"
+if grep -Fq 'agent_task_state.py show --task chatgpt-freeze-root-cause-20260927' "$remote"; then
+  echo "freeze task readback must not be hardcoded to the historical predecessor" >&2
+  exit 1
+fi
 grep -Fq 'TASK_TERMINAL_GATE=PASS' "$remote"
 grep -Fq 'TASK_TERMINAL_GATE=NONTERMINAL' "$remote"
 
