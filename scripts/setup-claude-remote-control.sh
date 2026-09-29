@@ -39,7 +39,10 @@ try:
 except (OSError, UnicodeError, json.JSONDecodeError):
     print("invalid")
 else:
-    print("logged_in" if data.get("loggedIn") is True else "logged_out")
+    if not isinstance(data, dict):
+        print("invalid")
+    else:
+        print("logged_in" if data.get("loggedIn") is True else "logged_out")
 PY
 )"
   case "$auth_state" in
