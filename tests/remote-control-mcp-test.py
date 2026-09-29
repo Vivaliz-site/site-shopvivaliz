@@ -367,6 +367,23 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("/home/ubuntu/shopvivaliz-deploy/releases", cleanup)
         self.assertNotIn("/home/ubuntu/shopvivaliz-deploy/current", cleanup)
 
+    def test_oci_bastion_stage7_storage_recovery_shell_is_bounded_and_nounset_safe(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        cleanup_name = "- name: Safely recover backend storage for Stage 7"
+        scan_name = "- name: Scan backend storage for Stage 7 recovery"
+        cleanup_start = text.index(cleanup_name)
+        cleanup_end = text.index("- name:", cleanup_start + len(cleanup_name))
+        cleanup = text[cleanup_start:cleanup_end]
+        scan_start = text.index(scan_name)
+        scan_end = text.index("- name:", scan_start + len(scan_name))
+        scan = text[scan_start:scan_end]
+
+        self.assertIn("read -r filesystem blocks used free_kb capacity mountpoint", cleanup)
+        self.assertNotIn('awk "NR==2 {print', cleanup)
+        self.assertIn("BACKEND_STORAGE_SCAN_WARN=home_du_partial", scan)
+        self.assertIn("BACKEND_STORAGE_SCAN_WARN=var_du_partial", scan)
+        self.assertIn("timeout 120s", scan)
+
     def test_oci_bastion_secure_tunnel_probe_is_structurally_intact(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         probe_name = "- name: Probe Secure MCP Tunnel prerequisites"

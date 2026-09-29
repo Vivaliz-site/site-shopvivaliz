@@ -230,9 +230,13 @@ jobs:
             df -h /
             df -i /
             echo HOME_UBUNTU
-            du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 50
+            if ! timeout 120s du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 50; then
+              echo BACKEND_STORAGE_SCAN_WARN=home_du_partial
+            fi
             echo VAR
-            sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40
+            if ! timeout 120s sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; then
+              echo BACKEND_STORAGE_SCAN_WARN=var_du_partial
+            fi
             echo REGENERABLE_CACHES
             for p in /home/ubuntu/.cache/ms-playwright /home/ubuntu/.npm/_cacache /home/ubuntu/.npm/_npx /home/ubuntu/.cache/pip; do
               if [ -e "$p" ]; then du -sh "$p"; else echo MISSING="$p"; fi
@@ -299,7 +303,7 @@ jobs:
               echo CLEANED="$d"
             done
 
-            free_kb="$(df -Pk / | awk "NR==2 {print \\$4}")"
+            read -r filesystem blocks used free_kb capacity mountpoint < <(df -Pk / | tail -n 1)
             echo BACKEND_STORAGE_FREE_KB="$free_kb"
             if [ "$free_kb" -lt 262144 ]; then
               echo BACKEND_STORAGE_CLEANUP=FAIL class=insufficient_free_space
