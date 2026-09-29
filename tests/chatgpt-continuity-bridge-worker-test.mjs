@@ -8,6 +8,7 @@ import {
   alignToLatestConversation,
   attemptNudge,
   reinforcementCheckOnce,
+  selectChatgptTab,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -47,6 +48,32 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const selected = selectChatgptTab([
+      { type: 'page', url: 'https://chatgpt.com/auth/login', webSocketDebuggerUrl: 'ws://auth' },
+      { type: 'page', url: 'https://chatgpt.com/gpts', webSocketDebuggerUrl: 'ws://other' },
+      { type: 'page', url: 'https://chatgpt.com/c/active-thread', webSocketDebuggerUrl: 'ws://conversation' },
+      { type: 'page', url: 'https://example.com/', webSocketDebuggerUrl: 'ws://external' },
+    ]);
+    assert.equal(selected?.webSocketDebuggerUrl, 'ws://conversation', 'conversation tab must win over auxiliary/auth ChatGPT tabs');
+  }
+
+  {
+    const selected = selectChatgptTab([
+      { type: 'page', url: 'https://chatgpt.com/auth/login', webSocketDebuggerUrl: 'ws://auth' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ]);
+    assert.equal(selected?.webSocketDebuggerUrl, 'ws://home', 'ChatGPT home must win over auth page when no conversation tab exists');
+  }
+
+  {
+    const selected = selectChatgptTab([
+      { type: 'page', url: 'https://chatgpt.com/gpts', webSocketDebuggerUrl: 'ws://aux' },
+      { type: 'page', url: 'https://example.com/', webSocketDebuggerUrl: 'ws://external' },
+    ]);
+    assert.equal(selected?.webSocketDebuggerUrl, 'ws://aux', 'auxiliary ChatGPT tab remains a bounded fallback');
+  }
+
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
