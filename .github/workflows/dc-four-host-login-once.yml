@@ -474,17 +474,24 @@ jobs:
           test "$(find "$LINK_DIR" -maxdepth 1 -type f -name 'dc-reauth-*.txt' | wc -l)" -eq 4
           echo DC_FOUR_LOGIN_LINKS_READY=PASS
 
-      - name: Diagnose site Desktop Commander auth failure safely
+      - name: Diagnose Linux Desktop Commander auth failure safely
         if: failure()
         shell: bash
         run: |
           set -Eeuo pipefail
           SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
-          "${SSH_SITE[@]}" 'python3 -' <<'PY'
+          SSH_BACKEND=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          diagnose_host() {
+            label="$1"
+            shift
+            "$@" 'python3 -' "$label" <<'PY'
           import os
           import re
+          import sys
           from pathlib import Path
 
+          label = sys.argv[1]
           base = Path.home() / ".desktop-commander-device"
           log = base / "reauth-session.log"
           pid_file = base / "reauth-session.pid"
@@ -500,6 +507,10 @@ jobs:
               "waiting_authorization": "waiting for authorization" in lower,
               "device_ready": "device ready" in lower,
               "npm_error": "npm err" in lower,
+              "unsupported_engine": any(x in lower for x in ("ebadengine", "unsupported engine")),
+              "module_error": any(x in lower for x in ("cannot find module", "module_not_found")),
+              "command_not_found": "command not found" in lower,
+              "permission_error": "permission denied" in lower,
               "fetch_failed": "fetch failed" in lower,
               "network_error": any(x in lower for x in ("econn", "enotfound", "eai_again", "timed out", "timeout")),
               "auth_error": any(x in lower for x in ("unauthorized", "forbidden", "invalid_grant", "authentication failed")),
@@ -518,12 +529,17 @@ jobs:
                   except OSError:
                       alive = False
 
-          print(f"DC_SITE_AUTH_DIAG log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
-          print(f"DC_SITE_AUTH_DIAG pid_present={int(pid is not None)} process_alive={int(alive)}")
-          print(f"DC_SITE_AUTH_DIAG device_json={int(device.exists())} link_file={int(link.exists())}")
+          prefix = f"DC_{label.upper()}_AUTH_DIAG"
+          print(f"{prefix} log_exists={int(log.exists())} log_bytes={log.stat().st_size if log.exists() else 0}")
+          print(f"{prefix} pid_present={int(pid is not None)} process_alive={int(alive)}")
+          print(f"{prefix} device_json={int(device.exists())} link_file={int(link.exists())}")
           for name, value in flags.items():
-              print(f"DC_SITE_AUTH_DIAG {name}={int(value)}")
+              print(f"{prefix} {name}={int(value)}")
           PY
+          }
+
+          diagnose_host site "${SSH_SITE[@]}"
+          diagnose_host backend "${SSH_BACKEND[@]}"
 
       - name: Upload four private login links
         uses: actions/upload-artifact@v4
