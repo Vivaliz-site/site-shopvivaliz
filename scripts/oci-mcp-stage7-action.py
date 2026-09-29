@@ -136,6 +136,25 @@ if ! bash -n {q(setup)} >/dev/null 2>&1; then
 fi
 echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS"
 echo "CLAUDE_OCI_STAGE_INSTALLER=START"
+if [ "${BASH_ENV+x}" = x ]; then
+  echo "CLAUDE_OCI_BASH_ENV_PRESENT=true"
+else
+  echo "CLAUDE_OCI_BASH_ENV_PRESENT=false"
+fi
+bash_startup_rc=0
+bash_startup_out="$(bash -c 'printf "%s\\n" CLAUDE_OCI_BASH_STARTUP_BODY=PASS' 2>&1)" || bash_startup_rc=$?
+if [ "$bash_startup_rc" -eq 0 ] && printf '%s\\n' "$bash_startup_out" | grep -Fqx 'CLAUDE_OCI_BASH_STARTUP_BODY=PASS'; then
+  echo "CLAUDE_OCI_BASH_STARTUP=PASS"
+else
+  echo "CLAUDE_OCI_BASH_STARTUP=FAIL"
+fi
+bash_startup_clean_rc=0
+bash_startup_clean_out="$(env -u BASH_ENV bash -c 'printf "%s\\n" CLAUDE_OCI_BASH_STARTUP_CLEAN_BODY=PASS' 2>&1)" || bash_startup_clean_rc=$?
+if [ "$bash_startup_clean_rc" -eq 0 ] && printf '%s\\n' "$bash_startup_clean_out" | grep -Fqx 'CLAUDE_OCI_BASH_STARTUP_CLEAN_BODY=PASS'; then
+  echo "CLAUDE_OCI_BASH_STARTUP_CLEAN=PASS"
+else
+  echo "CLAUDE_OCI_BASH_STARTUP_CLEAN=FAIL"
+fi
 rc=0
 out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
 if [ "$rc" -ne 0 ]; then
