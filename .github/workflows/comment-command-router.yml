@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   route:
-    if: github.actor == 'fredmourao-ai'
+    if: "!endsWith(github.actor, '[bot]') && github.actor == 'fredmourao-ai'"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -216,7 +216,7 @@ jobs:
 
   claude:
     needs: route
-    if: needs.route.outputs.route == 'claude'
+    if: "!endsWith(github.actor, '[bot]') && contains(github.event.comment.body, '@claude') && needs.route.outputs.route == 'claude'"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
