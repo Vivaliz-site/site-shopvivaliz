@@ -954,5 +954,29 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(name, unit)
 
 
+    def test_claude_trust_bootstrap_handles_workspace_not_trusted_with_plain_cli(self):
+        helper = (ROOT / "scripts" / "claude_workspace_trust_bootstrap.py").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        self.assertIn("workspace_not_trusted_visible", helper)
+        self.assertIn("bootstrap_plain_workspace_trust", helper)
+        self.assertIn("[claude_bin]", helper)
+        self.assertIn("run_server_mode", helper)
+        self.assertIn("server_startup_visible", helper)
+        self.assertIn('systemctl stop "$SERVICE"', setup)
+        self.assertNotIn('systemctl stop "$SERVICE" || true', setup)
+        self.assertIn('timeout 90s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN"', setup)
+
+    def test_claude_workspace_not_trusted_classifier_is_sanitized(self):
+        helper_path = ROOT / "scripts" / "claude_workspace_trust_bootstrap.py"
+        spec = importlib.util.spec_from_file_location("claude_workspace_trust_bootstrap_v2", helper_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        self.assertTrue(module.workspace_not_trusted_visible(
+            "Error: Workspace not trusted. Please run claude in /tmp/example first to review and accept the workspace trust dialog."
+        ))
+        self.assertFalse(module.workspace_not_trusted_visible("Enable Remote Control? (y/n)"))
+
+
 if __name__ == "__main__":
     unittest.main()

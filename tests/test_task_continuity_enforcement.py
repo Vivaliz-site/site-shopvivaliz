@@ -5,6 +5,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,25 @@ class AgentTaskStateTests(unittest.TestCase):
     def tearDown(self) -> None:
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
+
+    def test_privileged_atomic_write_inherits_runtime_directory_owner(self) -> None:
+        runtime = Path(self.temp.name)
+        target = runtime / "root-created.json"
+        parent = runtime.stat()
+        chown_calls: list[tuple[Path, int, int]] = []
+
+        def record_chown(path, uid, gid):
+            chown_calls.append((Path(path), uid, gid))
+
+        with (
+            mock.patch.object(state.os, "geteuid", return_value=0),
+            mock.patch.object(state.os, "chown", side_effect=record_chown),
+        ):
+            state._atomic_write(target, {"schema_version": state.SCHEMA_VERSION})
+
+        self.assertEqual(len(chown_calls), 1)
+        self.assertEqual((chown_calls[0][1], chown_calls[0][2]), (parent.st_uid, parent.st_gid))
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_running_task_cannot_be_completed_before_ready_gate(self) -> None:
         current = state.start_task("task-simple", "Corrigir uma tarefa simples", "gpt")
