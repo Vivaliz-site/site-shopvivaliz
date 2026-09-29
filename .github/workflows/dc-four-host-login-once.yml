@@ -127,64 +127,66 @@ jobs:
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
 
-          create_tunnel() {
-            id_var="$1"
-            target_ip="$2"
-            local_port="$3"
-            display="$4"
+          SITE_SESSION_ID="$("${OCI[@]}" bastion session create-port-forwarding \
+            --bastion-id "$BASTION_ID" \
+            --target-private-ip "$SITE_PRIVATE_IP" \
+            --target-port 22 \
+            --session-ttl 1800 \
+            --display-name shopvivaliz-dc-login-site \
+            --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
+            --query 'data.id' --raw-output)"
+          test -n "$SITE_SESSION_ID"
+          echo "SITE_SESSION_ID=$SITE_SESSION_ID" >> "$GITHUB_ENV"
 
-            session_id="$("${OCI[@]}" bastion session create-port-forwarding \
-              --bastion-id "$BASTION_ID" \
-              --target-private-ip "$target_ip" \
-              --target-port 22 \
-              --session-ttl 1800 \
-              --display-name "$display" \
-              --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
-              --query 'data.id' --raw-output)"
-            test -n "$session_id"
-            printf '%s=%s\n' "$id_var" "$session_id" >> "$GITHUB_ENV"
+          state=''
+          for _ in $(seq 1 36); do
+            state="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$state" = ACTIVE ]; then break; fi
+            case "$state" in
+              FAILED|DELETED) echo "::error::Bastion session entered $state"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          test "$state" = ACTIVE
 
-            state=''
-            for _ in $(seq 1 36); do
-              state="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."lifecycle-state"' --raw-output)"
-              [ "$state" = ACTIVE ] && break
-              case "$state" in
-                FAILED|DELETED) exit 1 ;;
-              esac
-              sleep 5
-            done
-            test "$state" = ACTIVE
+          metadata="$("${OCI[@]}" bastion session get --session-id "$SITE_SESSION_ID" --query 'data."ssh-metadata".command' --raw-output)"
+          test -n "$metadata"
+          tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
+          tunnel="${tunnel//<localPort>/$SITE_TUNNEL_PORT}"
+          tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
 
-            metadata="$("${OCI[@]}" bastion session get --session-id "$session_id" --query 'data."ssh-metadata".command' --raw-output)"
-            test -n "$metadata"
-            tunnel="${metadata//<privateKey>/$BASTION_KEY_FILE}"
-            tunnel="${tunnel//<localPort>/$local_port}"
-            tunnel="${tunnel/ssh /ssh -f -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o UserKnownHostsFile=$BASTION_KNOWN_HOSTS }"
-
-            ready=false
-            for _ in $(seq 1 8); do
-              if ! bash -lc "$tunnel"; then
-                echo "DC_BASTION_TUNNEL_ATTEMPT=retry"
-              fi
-              for _ in $(seq 1 12); do
-                if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
-                  ready=true
+          tunnel_ready=false
+          for attempt in $(seq 1 8); do
+            if bash -lc "$tunnel"; then
+              listener_ready=false
+              for listener_attempt in $(seq 1 12); do
+                if timeout 2 bash -c "true </dev/tcp/127.0.0.1/$SITE_TUNNEL_PORT" 2>/dev/null; then
+                  echo "BASTION_LOCAL_LISTENER_READY_ATTEMPT=$listener_attempt"
+                  listener_ready=true
+                  tunnel_ready=true
                   break
                 fi
                 sleep 1
               done
-              [ "$ready" = true ] && break
-              if pgrep -f "$local_port:$target_ip:22" >/dev/null 2>&1; then
-                pkill -f "$local_port:$target_ip:22"
+              if [ "$listener_ready" = true ]; then
+                echo "BASTION_TUNNEL_READY_ATTEMPT=$attempt"
+                break
               fi
-              sleep 5
-            done
-            test "$ready" = true
-          }
+              echo "BASTION_LOCAL_LISTENER_NOT_READY_ATTEMPT=$attempt"
+              if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1; then
+                pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+              fi
+            else
+              echo "BASTION_TUNNEL_AUTH_NOT_READY_ATTEMPT=$attempt"
+            fi
+            sleep 5
+          done
+          if [ "$tunnel_ready" != true ]; then
+            echo "::error::Bastion tunnel authentication/listener did not become ready after 8 attempts"
+            exit 1
+          fi
 
-          create_tunnel SITE_SESSION_ID "$SITE_PRIVATE_IP" "$SITE_TUNNEL_PORT" shopvivaliz-dc-login-site
-
-          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias="$SITE_PRIVATE_IP" -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SSH_SITE=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o HostKeyAlias=127.0.0.1 -o ConnectTimeout=10 -i "$VM_KEY_FILE" -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           "${SSH_SITE[@]}" 'test "$(hostname)" = "shopvivaliz-free-a1"'
 
           ssh -fNT \
