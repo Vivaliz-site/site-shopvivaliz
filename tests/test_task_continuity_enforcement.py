@@ -98,6 +98,20 @@ class AgentTaskStateTests(unittest.TestCase):
         )
         self.assertEqual(ready["status"], "READY_TO_COMPLETE")
 
+        with ledger.open("a", encoding="utf-8") as handle:
+            handle.write(
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"STALLED_NOT_CONFIRMED","worker_status_observed_at":"2026-09-29T01:31:00Z"}\\n'
+            )
+        with self.assertRaisesRegex(state.TaskStateError, "PROGRESS_CONFIRMED"):
+            state.complete_task(task_id)
+
+        with ledger.open("a", encoding="utf-8") as handle:
+            handle.write(
+                '{"task_id":"chatgpt-freeze-root-cause-20260929-g4","worker_status":"PROGRESS_CONFIRMED","worker_status_observed_at":"2026-09-29T01:32:00Z"}\\n'
+            )
+        completed = state.complete_task(task_id)
+        self.assertEqual(completed["status"], "CONCLUIDO")
+
     def test_non_freeze_task_does_not_require_browser_progress_ledger(self) -> None:
         state.start_task("ordinary-task", "Finish ordinary work", "gpt")
         ready = state.mark_ready(
