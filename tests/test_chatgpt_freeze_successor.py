@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import subprocess
@@ -53,6 +54,15 @@ class ChatgptFreezeSuccessorTests(unittest.TestCase):
             same = json.loads(subprocess.check_output(cmd, text=True))
             self.assertEqual(same["task_id"], second["task_id"])
             self.assertEqual(len(list(runtime.glob("chatgpt-freeze-root-cause-20260928-g*.json"))), 2)
+
+
+    def test_generation_parser_supports_double_digits(self):
+        spec = importlib.util.spec_from_file_location("ensure_chatgpt_freeze_successor", ENSURE)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        path = Path("chatgpt-freeze-root-cause-20260928-g10.json")
+        self.assertEqual(module.generation(path, "chatgpt-freeze-root-cause-20260928"), 10)
 
 
 if __name__ == "__main__":
