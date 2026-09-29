@@ -1042,6 +1042,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("CLAUDE_OCI_SETUP_OUTPUT=", helper)
         self.assertIn('str(result.get("error") or "")', helper)
         self.assertNotIn("print(error)", helper)
+        self.assertIn("CLAUDE_OCI_BASH_ENV_PRESENT=", helper)
+        self.assertIn("CLAUDE_OCI_BASH_STARTUP=", helper)
+        self.assertIn("CLAUDE_OCI_BASH_STARTUP_CLEAN=", helper)
+        self.assertIn("env -u BASH_ENV bash -c", helper)
+        self.assertNotIn("CLAUDE_OCI_BASH_ENV_VALUE=", helper)
+        self.assertNotIn("CLAUDE_OCI_BASH_STARTUP_OUTPUT=", helper)
 
     def test_claude_setup_emits_sanitized_phase_markers_before_each_install_step(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
