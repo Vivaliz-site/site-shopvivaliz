@@ -222,22 +222,27 @@ jobs:
             fi
           }
 
-          discover_peer() {
-            wanted="$1"
-            "${SSH_BACKEND[@]}" 'tailscale status --json 2>/dev/null' | python3 - "$wanted" <<'PY'
-          import json,sys
-          wanted=sys.argv[1].upper()
-          data=json.load(sys.stdin)
-          for p in (data.get("Peer") or {}).values():
-              host=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".").upper()
+          cat > "$RUNNER_TEMP/dc-peer-discover.py" <<'PY'
+          import json
+          import sys
+
+          wanted = sys.argv[1].upper()
+          data = json.load(sys.stdin)
+          for peer in (data.get("Peer") or {}).values():
+              host = str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
               if wanted in host:
-                  ips=p.get("TailscaleIPs") or []
-                  ip=next((x for x in ips if ":" not in x), "")
+                  ips = peer.get("TailscaleIPs") or []
+                  ip = next((x for x in ips if ":" not in x), "")
                   if ip:
                       print(ip)
                       raise SystemExit(0)
           raise SystemExit(3)
           PY
+
+          discover_peer() {
+            wanted="$1"
+            "${SSH_BACKEND[@]}" 'tailscale status --json 2>/dev/null' |
+              python3 "$RUNNER_TEMP/dc-peer-discover.py" "$wanted"
           }
 
           run_windows() {
@@ -340,6 +345,6 @@ jobs:
               shred -u "$key"
             fi
           done
-          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts"
+          rm -rf "${LINK_DIR:-}" "$RUNNER_TEMP/fred-win.hosts" "$RUNNER_TEMP/kocepsv.hosts" "$RUNNER_TEMP/dc-peer-discover.py"
           rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"
           exit "$rc"
