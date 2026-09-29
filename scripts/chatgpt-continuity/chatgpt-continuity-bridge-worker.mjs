@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
-  || 'http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php';
+  || 'http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php';
 const BRIDGE_HOST_HEADER = process.env.CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER || 'shopvivaliz.com.br';
 const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
   || '/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token';
