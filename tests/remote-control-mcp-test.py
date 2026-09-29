@@ -823,6 +823,19 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(marker, workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE=", workflow)
         self.assertNotIn("CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION=", workflow)
+        self.assertIn("iso_pattern=r'\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z'", workflow)
+        self.assertIn("re.fullmatch(r'\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z', value)", workflow)
+
+    def test_remote_control_ci_watches_oci_continuity_workflow(self):
+        ci = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        watched = "- '.github/workflows/oci-bastion-private-access-bootstrap.yml'"
+        self.assertGreaterEqual(ci.count(watched), 2)
+
+    def test_remote_control_ci_watches_and_compiles_claude_trust_helper(self):
+        ci = (ROOT / ".github" / "workflows" / "remote-control-mcp-ci.yml").read_text(encoding="utf-8")
+        watched = "- 'scripts/claude_workspace_trust_bootstrap.py'"
+        self.assertGreaterEqual(ci.count(watched), 2)
+        self.assertIn("scripts/claude_workspace_trust_bootstrap.py", ci.split("python3 -m py_compile", 1)[1])
 
     def test_bootstrap_surfaces_do_not_discard_failures(self):
         paths = [
