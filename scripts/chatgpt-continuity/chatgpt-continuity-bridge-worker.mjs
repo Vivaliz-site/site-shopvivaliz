@@ -366,39 +366,44 @@ async function attemptNudge(
     cdp = await connect();
     let recoveredStaleComplete = false;
     if (await conversationIsGenerating(cdp)) {
+      // Never treat transport bookkeeping as semantic completion. Independent
+      // 2026-09 captures show stream/message COMPLETE can coexist with an
+      // unfinished assistant/tool branch. Every apparent active turn therefore
+      // gets one passive reattach before any Stop clear or continuation send.
+      const baseline = await assistantSnapshot(cdp);
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+      const progressed = await confirmProgress(
+        cdp,
+        baseline,
+        PASSIVE_REATTACH_CONFIRM_MS,
+        PROGRESS_POLL_MS,
+      );
+      if (progressed) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'passive reattach restored assistant progress without sending continuation',
+        };
+      }
+
+      // Re-read server bookkeeping only after the passive recovery window.
+      // Anything other than a confirmed COMPLETE remains potentially active
+      // and must not receive a duplicate continuation.
       const stream = await conversationStreamStatus(cdp);
       if (stream?.http_status !== 200 || stream?.status !== 'COMPLETE') {
-        // A real stream may still be in flight, but live failures also show
-        // the client stuck on Stop/Thinking while stream bookkeeping remains
-        // non-terminal. First try one read-only reattach of the same
-        // conversation. This can recover lost client/server reconciliation
-        // without creating a duplicate ChatGPT turn.
-        const baseline = await assistantSnapshot(cdp);
-        await cdp.evaluate(`(()=>{location.reload();return true})()`);
-        await sleep(1200);
-        const progressed = await confirmProgress(
-          cdp,
-          baseline,
-          PASSIVE_REATTACH_CONFIRM_MS,
-          PROGRESS_POLL_MS,
-        );
-        if (progressed) {
-          return {
-            result_status: 'PROGRESS_CONFIRMED',
-            detail: 'passive reattach restored assistant progress without sending continuation',
-          };
-        }
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
           detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
         };
       }
-      // Live evidence showed ChatGPT can leave the Stop button visible after
-      // its backend has already finalized the stream as COMPLETE. That stale
-      // client state blocks all future continuations unless the stale Stop is
-      // cleared first.
-      if (!(await clearStaleCompleteGeneration(cdp))) {
-        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
+
+      // If Stop survived the reattach while server bookkeeping says COMPLETE,
+      // clear only that stale UI state before sending the checkpoint-driven
+      // continuation. If Stop disappeared naturally, continue without a click.
+      if (await conversationIsGenerating(cdp)) {
+        if (!(await clearStaleCompleteGeneration(cdp))) {
+          return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
+        }
       }
       recoveredStaleComplete = true;
     }
