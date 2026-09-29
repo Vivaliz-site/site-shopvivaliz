@@ -1,15 +1,30 @@
 name: Desktop Commander Reauth Runner
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Desktop Commander host
+        required: true
+        type: choice
+        options:
+          - shopvivaliz-free-a1
+          - always-free-arm-1787907847-26
+          - fred-win
+          - kocepsv
+      phase:
+        description: Reauthentication phase
+        required: true
+        type: choice
+        options:
+          - begin
+          - finalize
 
 permissions:
   contents: read
 
 jobs:
   reauth:
-    if: github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/dc-reauth ')
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
 
@@ -19,22 +34,19 @@ jobs:
 
       - name: Resolve request
         id: req
+        env:
+          TARGET: ${{ inputs.target }}
+          PHASE: ${{ inputs.phase }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 - <<'PY'
-          import json, os, re
-          from pathlib import Path
-          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-          body = str((event.get('comment') or {}).get('body') or '').strip()
-          m = re.fullmatch(r'/dc-reauth\s+target=(shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv)\s+phase=(begin|finalize)', body)
-          if not m:
-              raise SystemExit('invalid dc reauth command')
-          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as out:
-              out.write(f'target={m.group(1)}\n')
-              out.write(f'phase={m.group(2)}\n')
-          print(f'DC_REAUTH_REQUEST target={m.group(1)} phase={m.group(2)}')
-          PY
+          case "$TARGET" in
+            shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv) ;;
+            *) echo "unsupported target" >&2; exit 2 ;;
+          esac
+          case "$PHASE" in begin|finalize) ;; *) echo "unsupported phase" >&2; exit 2 ;; esac
+          printf 'target=%s\nphase=%s\n' "$TARGET" "$PHASE" >> "$GITHUB_OUTPUT"
+          echo "DC_REAUTH_REQUEST target=$TARGET phase=$PHASE"
 
       - name: Configure backend SSH
         if: steps.req.outputs.target != 'shopvivaliz-free-a1'
