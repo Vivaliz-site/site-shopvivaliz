@@ -743,19 +743,19 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('cat "$token_file"', repair_block)
         self.assertIn('dd if="$token_file" status=none', repair_block)
 
-    def test_chatgpt_continuity_repair_discovers_authenticated_private_bridge_route(self):
+    def test_chatgpt_continuity_repair_uses_private_loopback_bridge_tunnel(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
-        for needle in (
-            "CHATGPT_CONTINUITY_BRIDGE_ROUTE=",
+        repair = workflow.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_ROUTE=private_loopback_18081", repair)
+        self.assertNotIn("bridge_endpoint=''", repair)
+        self.assertNotIn("for candidate in", repair)
+        self.assertNotIn("CHATGPT_CONTINUITY_BRIDGE_ENDPOINT=", repair)
+        for forbidden in (
             "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
             "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
-            "jq -e '.status == \"OK\"'",
+            "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
         ):
-            self.assertIn(needle, workflow)
-        repair = workflow.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
-        self.assertIn("bridge_endpoint=''", repair)
-        self.assertIn("for candidate in", repair)
-        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint'", repair)
+            self.assertNotIn(forbidden, repair)
 
     def test_chatgpt_continuity_diagnostic_checks_user_service_scope(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
@@ -764,17 +764,17 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("XDG_RUNTIME_DIR=", diagnostic)
         self.assertIn("DBUS_SESSION_BUS_ADDRESS=", diagnostic)
 
-    def test_chatgpt_continuity_diagnostic_uses_backend_bridge_route(self):
+    def test_chatgpt_continuity_diagnostic_uses_private_loopback_bridge_route(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
         diagnostic = workflow.split("chatgpt_continuity_diagnostic)", 1)[1].split("secure_mcp_platform_ui_probe)", 1)[0]
         self.assertIn("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", diagnostic)
-        for route in (
+        self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", diagnostic)
+        for forbidden in (
             "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
             "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
             "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
         ):
-            self.assertIn(route, diagnostic)
-        self.assertNotIn("http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php", diagnostic)
+            self.assertNotIn(forbidden, diagnostic)
 
     def test_chatgpt_continuity_diagnostic_surfaces_safe_latest_probe(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
@@ -814,6 +814,14 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("echo $token", repair)
         self.assertNotIn("cat $token_file", repair)
         self.assertIn("dd if=\"$token_file\" status=none", repair)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_ROUTE=private_loopback_18081", repair)
+        self.assertNotIn("CHATGPT_CONTINUITY_BRIDGE_ENDPOINT=", repair)
+        for forbidden in (
+            "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
+            "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
+            "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
+        ):
+            self.assertNotIn(forbidden, repair)
 
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
