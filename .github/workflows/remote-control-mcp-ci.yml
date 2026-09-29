@@ -29,6 +29,7 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-iphone-private-ssh-relay.sh'
       - 'scripts/ensure-chatgpt-freeze-successor.py'
       - 'scripts/setup-claude-remote-control.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
@@ -42,10 +43,12 @@ on:
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/iphone-private-ssh-relay-contract-test.py'
       - 'tests/test_chatgpt_freeze_successor.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
       - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
 
 permissions:
   contents: read
