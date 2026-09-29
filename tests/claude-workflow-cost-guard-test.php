@@ -24,13 +24,6 @@ foreach ($checks as $label => $needle) {
 }
 
 $eventGuards = [
-    'issue_comment' => <<<'YAML'
-        (
-          github.event_name == 'issue_comment' &&
-          contains(github.event.comment.body, '@claude') &&
-          github.actor == 'fredmourao-ai'
-        )
-YAML,
     'pull_request_review_comment' => <<<'YAML'
         (
           github.event_name == 'pull_request_review_comment' &&
@@ -58,6 +51,33 @@ foreach ($eventGuards as $event => $fragment) {
         fwrite(STDERR, "missing complete paid-AI guard for event: {$event}\n");
         exit(1);
     }
+}
+
+$routerPath = $root . '/.github/workflows/comment-command-router.yml';
+$router = file_get_contents($routerPath);
+if ($router === false) {
+    fwrite(STDERR, "comment command router missing\n");
+    exit(1);
+}
+$router = str_replace("\r\n", "\n", $router);
+$routerChecks = [
+    'single comment trigger' => "  issue_comment:\n",
+    'authorized comment actor' => "if: github.actor == 'fredmourao-ai'",
+    'Claude mention recognition' => '"@claude" in body',
+    'Claude route' => 'route = "claude"',
+    'Claude action' => 'uses: anthropics/claude-code-action@v1',
+    'Claude turn limit' => '--max-turns 5',
+    'Claude stale cancellation' => 'cancel-in-progress: true',
+];
+foreach ($routerChecks as $label => $needle) {
+    if (!str_contains($router, $needle)) {
+        fwrite(STDERR, "missing comment-router Claude guard: {$label}\n");
+        exit(1);
+    }
+}
+if (str_contains($text, "  issue_comment:\n")) {
+    fwrite(STDERR, "claude.yml must not listen to issue_comment directly\n");
+    exit(1);
 }
 
 $jobStart = strpos($text, "\njobs:\n  claude:\n");
