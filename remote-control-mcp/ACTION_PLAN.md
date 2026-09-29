@@ -111,18 +111,18 @@ STATUS=PASS
 - GitHub Actions permanece somente como shell auditável de bootstrap/observação; não participa do transporte de comandos, fila, heartbeat, execução nem estado do runtime.
 
 ## Etapa 7 — Integrar MCP com ChatGPT e encerrar
-STATUS=BLOCKED_EXTERNAL
+STATUS=RUNNING
 
 ### Evidência e subpassos concluídos
 - O controller permanece somente em `127.0.0.1:5580`; o bearer continua root-only no backend e não foi publicado.
 - OpenAI: run `36472954776` autenticou a Platform, mas retornou `OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false`. A nova tentativa `36491312473` retornou `OPENAI_PLATFORM_AUTHENTICATED=false`, portanto a sessão atual não pode criar ou administrar um Secure MCP Tunnel. A documentação oficial exige Secure MCP Tunnel para um MCP privado em ChatGPT.
 - Cloudflare: o probe de API `36473749120` retornou `CLOUDFLARE_ACCESS_APPS_READ=false`, `CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=false` e `CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=false`. O fallback autenticado no dashboard foi esgotado no run `36492154682`: `CLOUDFLARE_UI_AUTHENTICATED=false` e `CLOUDFLARE_UI_AUTH_CHALLENGE_REQUIRED=true`. Sem Access Apps/Policies não é seguro criar o caminho Managed OAuth para um cliente cloud.
-- Claude: o probe `36492159339` confirmou CLI autenticado e `remote-control` disponível. A instalação pós-merge `36493201912` comprovou `CLAUDE_MCP_BRIDGE_INSTALL=PASS`, `CLAUDE_MCP_CONFIG=PASS` e `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`; a configuração usa somente o adaptador stdio root-only que injeta o bearer localmente. A sessão cloud não pôde ser iniciada porque o produto exigiu confiança interativa do workspace: `CLAUDE_REMOTE_CONTROL_CONSENT=FAIL class=trust`.
+- Claude: o probe `36492159339` confirmou CLI autenticado e `remote-control` disponível. A instalação pós-merge `36493201912` comprovou `CLAUDE_MCP_BRIDGE_INSTALL=PASS`, `CLAUDE_MCP_CONFIG=PASS` e `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`; a configuração usa somente o adaptador stdio root-only que injeta o bearer localmente. A confiança do workspace canônico foi explicitamente autorizada e o bootstrap PTY suportado foi corrigido e mesclado em PRs #2162/#2163. As validações live `36505458895`, `36505902804` e `36506225110` ainda falharam no subpasso de confiança; portanto isto é implementação em andamento, não bloqueio externo.
 
 ### Resume condition
 1. Um administrador deve restaurar uma sessão OpenAI Platform com capacidade de gerenciar Secure MCP Tunnels, ou habilitar essa capacidade para a organização/conta; então provisionar o cliente de tunnel no backend e validar `initialize`/`tools/list` pelo caminho suportado do ChatGPT.
 2. Para a rota pública alternativa Claude, um administrador Cloudflare deve concluir o desafio de login e conceder ao runtime protegido `Access: Apps and Policies Write` (ou criar manualmente a aplicação Access Managed OAuth). Não usar service token estático em repositório.
-3. Um usuário Claude autorizado deve aprovar a confiança do workspace preparado em `/home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz`; então repetir `claude_remote_control_install` e `claude_remote_control_status` e validar a sessão cloud real.
+3. Corrigir o subpasso PTY de confiança do workspace canônico com marcadores sanitizados suficientes para distinguir prompt ausente, persistência e confirmação Remote Control; então repetir `claude_remote_control_install`, `claude_remote_control_status` e validar a sessão cloud real.
 
 ## Atualização — 2026-09-28 (sessão atual): SSH real + auth resolvidos nos dois Windows; novo bloqueio é do controller
 
