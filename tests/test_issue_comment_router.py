@@ -33,6 +33,7 @@ class IssueCommentRouterTest(unittest.TestCase):
     def test_explicit_routes_are_single_and_stable(self):
         cases = {
             "/dc-reauth target=fred-win phase=begin": "dc_reauth",
+            "/dc-reauth target=all phase=begin": "dc_reauth",
             "/remote target=fred-win action=health reason=test": "remote_access",
             "/mlrr operation=validate reason=test": "mlrr",
             "/continuity-e2e": "continuity_e2e",
