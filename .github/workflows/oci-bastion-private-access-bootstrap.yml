@@ -585,7 +585,13 @@ jobs:
           running=0
           current_fingerprints=set()
           canonical_task_status='MISSING'
+          canonical_task_updated_at='NONE'
+          canonical_task_completed_at='NONE'
+          canonical_task_evidence_count=0
+          canonical_task_verification_present=False
+          canonical_task_history_events='NONE'
           canonical_path=root/'chatgpt-freeze-root-cause-20260928-g2.json'
+          timestamp_re=re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$')
           if canonical_path.is_file():
               try:
                   canonical=json.loads(canonical_path.read_text(encoding='utf-8'))
@@ -594,6 +600,22 @@ jobs:
               else:
                   candidate=str(canonical.get('status','')).strip() if isinstance(canonical,dict) else ''
                   canonical_task_status=candidate if candidate in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'} else 'INVALID'
+                  if isinstance(canonical,dict):
+                      updated_at=str(canonical.get('updated_at','')).strip()
+                      completed_at=str(canonical.get('completed_at','')).strip()
+                      canonical_task_updated_at=updated_at if timestamp_re.fullmatch(updated_at) else 'NONE'
+                      canonical_task_completed_at=completed_at if timestamp_re.fullmatch(completed_at) else 'NONE'
+                      evidence=canonical.get('evidence')
+                      canonical_task_evidence_count=min(len(evidence),9999) if isinstance(evidence,list) else 0
+                      canonical_task_verification_present=bool(str(canonical.get('verification') or '').strip())
+                      events=[]
+                      history=canonical.get('history')
+                      if isinstance(history,list):
+                          for row in history[:32]:
+                              if not isinstance(row,dict): continue
+                              event=re.sub(r'[^A-Za-z0-9_-]','',str(row.get('event','')))[:64]
+                              if event: events.append(event)
+                      canonical_task_history_events=','.join(events) if events else 'NONE'
           if root.is_dir():
               for p in root.glob('*.json'):
                   if p.name.startswith('_') or not p.is_file(): continue
@@ -654,6 +676,11 @@ jobs:
           print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
           print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS='+canonical_task_status)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT='+canonical_task_updated_at)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT='+canonical_task_completed_at)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT='+str(canonical_task_evidence_count))
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION_PRESENT='+('true' if canonical_task_verification_present else 'false'))
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS='+canonical_task_history_events)
           print('CHATGPT_CONTINUITY_PENDING_REQUESTS='+str(pending))
           print('CHATGPT_CONTINUITY_MATCHING_REQUESTS='+str(matching))
           print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
@@ -698,6 +725,11 @@ jobs:
               'CHATGPT_CONTINUITY_AGENT_ACTIVE',
               'CHATGPT_CONTINUITY_RUNNING_TASKS',
               'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION_PRESENT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS',
               'CHATGPT_CONTINUITY_PENDING_REQUESTS',
               'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
               'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
@@ -741,6 +773,7 @@ jobs:
                       continue
                   if key in {
                       'CHATGPT_CONTINUITY_RUNNING_TASKS',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
                       'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
                       'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
@@ -775,6 +808,15 @@ jobs:
                   elif key == 'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS':
                       if value not in {'MISSING','UNREADABLE','INVALID','RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
                           raise RuntimeError('invalid canonical task status')
+                  elif key in {
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
+                  }:
+                      if value != 'NONE' and not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', value):
+                          raise RuntimeError('invalid canonical task timestamp')
+                  elif key == 'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS':
+                      if not re.fullmatch(r'(?:NONE|[A-Za-z0-9_-]{1,64}(?:,[A-Za-z0-9_-]{1,64}){0,31})', value):
+                          raise RuntimeError('invalid canonical task history events')
                   elif key == 'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS':
                       if value not in {'NONE','EMPTY','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}:
                           raise RuntimeError('invalid nudge status')
