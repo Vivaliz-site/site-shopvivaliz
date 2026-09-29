@@ -27,7 +27,8 @@ jobs:
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
           github.event.issue.body == 'action=chatgpt-continuity-repair' ||
-          github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
+          github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
+          github.event.issue.body == 'action=chatgpt-continuity-successor'
         )
       }}
     runs-on: ubuntu-latest
@@ -538,6 +539,111 @@ jobs:
 
           cleanup_continuity_repair
           trap - EXIT
+
+      - name: Ensure next ChatGPT freeze generation through Remote Control MCP
+        if: github.event.issue.body == 'action=chatgpt-continuity-successor'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          HELPER_B64="$(base64 -w0 scripts/ensure-chatgpt-freeze-successor.py)"
+          "${BACKEND_SSH[@]}" "sudo -n python3 - '$HELPER_B64'" <<'PY'
+          import json
+          import re
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          helper_b64 = sys.argv[1]
+          if not re.fullmatch(r'[A-Za-z0-9+/=]+', helper_b64):
+              raise SystemExit('invalid helper transport')
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+
+          command = r"""set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s' '__HELPER_B64__' | base64 -d > "$tmp/ensure.py"
+          chmod 700 "$tmp/ensure.py"
+          result="$(python3 "$tmp/ensure.py" \
+            --state-dir /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+            --state-script /home/ubuntu/shopvivaliz-deploy/current/scripts/agent_task_state.py \
+            --predecessor chatgpt-freeze-root-cause-20260927 \
+            --base-id chatgpt-freeze-root-cause-20260928 \
+            --goal 'Continue ChatGPT freeze root-cause investigation after the natural iOS transmission interruption at 2026-09-29T00:09:00Z' \
+            --next-action 'Validate the post-freeze continuity runtime, reconcile current ChatGPT lifecycle endpoints, preserve automatic checkpoint resume, and continue until verified completion or a proved external blocker' \
+            --evidence 'Natural iOS freeze at 2026-09-29T00:09:00Z showed Thinking plus interrupted transmission after g2 was already terminal' \
+            --agent gpt-5.6-sol)"
+          python3 - "$result" <<'INNER'
+          import json
+          import re
+          import sys
+          payload=json.loads(sys.argv[1])
+          task=str(payload.get('task_id','')).strip()
+          status=str(payload.get('status','')).strip()
+          predecessor=str(payload.get('predecessor_task_id','')).strip()
+          if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*',task):
+              raise SystemExit('invalid successor task')
+          if status not in {'RUNNING','READY_TO_COMPLETE'}:
+              raise SystemExit('successor is not resumable')
+          if not predecessor:
+              raise SystemExit('successor predecessor missing')
+          print('CHATGPT_CONTINUITY_SUCCESSOR_TASK='+task)
+          print('CHATGPT_CONTINUITY_SUCCESSOR_STATUS='+status)
+          print('CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT=true')
+          INNER
+          echo CHATGPT_CONTINUITY_SUCCESSOR=PASS
+          """.replace('__HELPER_B64__', helper_b64)
+
+          request_body = json.dumps({
+              'jsonrpc': '2.0',
+              'id': 1,
+              'method': 'tools/call',
+              'params': {
+                  'name': 'admin_command_run',
+                  'arguments': {
+                      'host': 'shopvivaliz-free-a1',
+                      'command': command,
+                      'timeout': 45,
+                  },
+              },
+          }).encode()
+          req = urllib.request.Request(
+              endpoint,
+              data=request_body,
+              headers={
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + token,
+              },
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=70) as response:
+              payload = json.load(response)
+          result = (payload.get('result') or {}).get('structuredContent') or {}
+          if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+              raise SystemExit('Remote Control MCP successor action failed')
+
+          stdout = str(result.get('stdout') or '')
+          allowed_prefixes = (
+              'CHATGPT_CONTINUITY_SUCCESSOR_TASK=',
+              'CHATGPT_CONTINUITY_SUCCESSOR_STATUS=',
+              'CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT=',
+              'CHATGPT_CONTINUITY_SUCCESSOR=',
+          )
+          safe = [line for line in stdout.splitlines() if line.startswith(allowed_prefixes)]
+          required = {
+              'CHATGPT_CONTINUITY_SUCCESSOR_TASK',
+              'CHATGPT_CONTINUITY_SUCCESSOR_STATUS',
+              'CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT',
+              'CHATGPT_CONTINUITY_SUCCESSOR',
+          }
+          seen = {line.split('=', 1)[0] for line in safe if '=' in line}
+          if required.difference(seen):
+              raise SystemExit('missing successor recovery markers')
+          print('\n'.join(safe))
+          PY
 
       - name: ChatGPT continuity diagnostic through Remote Control MCP
         if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
