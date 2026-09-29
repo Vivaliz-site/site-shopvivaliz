@@ -214,16 +214,49 @@ async function run() {
 
   // Live failure reproduced 2026-09-28: the DOM can keep a stale Stop button
   // even when the conversation backend already reports stream_status=COMPLETE.
-  // That state is not a real in-flight stream and must be repaired before
-  // sending the single continuation message.
-  const staleComplete = await attemptNudge('task-stale-complete', async () => fakeCdp({
+  // Independent 2026-09 evidence also shows transport COMPLETE can coexist
+  // with a semantically unfinished turn. Therefore even this branch must
+  // perform one passive reattach before any Stop clear or continuation send.
+  const staleCompleteCdp = fakeCdp({
     generating: true,
     streamStatus: 'COMPLETE',
     staleStopClearSucceeds: true,
     sendSucceeds: true,
-  }), async () => true);
+  });
+  let staleCompleteConfirmCalls = 0;
+  const staleComplete = await attemptNudge(
+    'task-stale-complete',
+    async () => staleCompleteCdp,
+    async () => {
+      staleCompleteConfirmCalls += 1;
+      return staleCompleteConfirmCalls > 1;
+    },
+  );
   assert.equal(staleComplete.result_status, 'PROGRESS_CONFIRMED', 'stale COMPLETE recovery is success only after assistant progress');
   assert.match(staleComplete.detail, /stale COMPLETE/i);
+  const staleCompleteReload = staleCompleteCdp.calls.findIndex(call => call.includes('location.reload'));
+  const staleCompleteSend = staleCompleteCdp.calls.findIndex(call => call.includes('b.click()'));
+  assert.ok(staleCompleteReload >= 0, 'COMPLETE plus Stop must still reattach passively before recovery');
+  assert.ok(staleCompleteSend > staleCompleteReload, 'continuation send must occur only after passive reattach failed to restore progress');
+
+  const completeRecoveredCdp = fakeCdp({
+    generating: true,
+    streamStatus: 'COMPLETE',
+    staleStopClearSucceeds: true,
+    sendSucceeds: true,
+  });
+  const completeRecovered = await attemptNudge(
+    'task-complete-passive-recovery',
+    async () => completeRecoveredCdp,
+    async () => true,
+  );
+  assert.equal(completeRecovered.result_status, 'PROGRESS_CONFIRMED');
+  assert.match(completeRecovered.detail, /passive reattach/i);
+  assert.equal(
+    completeRecoveredCdp.calls.some(call => call.includes('b.click()')),
+    false,
+    'COMPLETE state recovered by passive reattach must not send a continuation',
+  );
 
   const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
