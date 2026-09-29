@@ -584,7 +584,7 @@ jobs:
           task=str(payload.get('task_id','')).strip()
           status=str(payload.get('status','')).strip()
           predecessor=str(payload.get('predecessor_task_id','')).strip()
-          if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g[2-9][0-9]*',task):
+          if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g(?:[2-9]|[1-9][0-9]+)',task):
               raise SystemExit('invalid successor task')
           if status not in {'RUNNING','READY_TO_COMPLETE'}:
               raise SystemExit('successor is not resumable')
