@@ -243,7 +243,12 @@ async function clearStaleCompleteGeneration(cdp) {
 }
 
 async function composerIsUsable(cdp) {
-  return cdp.evaluate(`(()=>{const b=document.querySelector('[data-testid="send-button"]');return Boolean(b)&&!b.disabled})()`);
+  return cdp.evaluate(`(()=>{
+    const el=document.querySelector('[data-testid="prompt-textarea"]')
+      || document.querySelector('[role="textbox"][contenteditable="true"]');
+    if(!el) return false;
+    return !Boolean(el.disabled) && el.getAttribute('aria-disabled') !== 'true';
+  })()`);
 }
 
 async function assistantSnapshot(cdp) {
@@ -419,10 +424,10 @@ async function errorBannerPresent(cdp) {
 }
 
 async function sendContinueMessage(cdp) {
-  const composerSelector = '[data-testid="prompt-textarea"]';
   const typed = await cdp.evaluate(`(()=>{
-    const el = document.querySelector(${JSON.stringify(composerSelector)});
-    if (!el) return false;
+    const el = document.querySelector('[data-testid="prompt-textarea"]')
+      || document.querySelector('[role="textbox"][contenteditable="true"]');
+    if (!el || Boolean(el.disabled) || el.getAttribute('aria-disabled') === 'true') return false;
     el.focus();
     const isContentEditable = el.getAttribute('contenteditable') === 'true';
     if (isContentEditable) {
@@ -436,7 +441,37 @@ async function sendContinueMessage(cdp) {
   })()`);
   if (!typed) return false;
   await sleep(300);
-  return cdp.evaluate(`(()=>{const b=document.querySelector('[data-testid="send-button"]');if(!b||b.disabled)return false;b.click();return true})()`);
+  return cdp.evaluate(`(()=>{
+    const exactSelectors=[
+      '[data-testid="send-button"]',
+      'button[aria-label="Send"]',
+      'button[aria-label="Send prompt"]',
+      'button[aria-label="Send message"]',
+      'button[aria-label="Enviar"]',
+      'button[aria-label="Enviar prompt"]',
+      'button[aria-label="Enviar mensagem"]'
+    ];
+    let b=null;
+    for(const selector of exactSelectors){
+      const candidate=document.querySelector(selector);
+      if(candidate && !candidate.disabled && candidate.getAttribute('aria-disabled') !== 'true'){ b=candidate; break; }
+    }
+    if(!b){
+      const composer=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      let root=composer;
+      for(let i=0;i<6 && root && !b;i++,root=root.parentElement){
+        b=Array.from(root.querySelectorAll('button')).find(candidate=>{
+          if(candidate.disabled || candidate.getAttribute('aria-disabled') === 'true') return false;
+          const label=String(candidate.getAttribute('aria-label')||'').trim();
+          return /^(send|send prompt|send message|enviar|enviar prompt|enviar mensagem)$/i.test(label);
+        }) || null;
+      }
+    }
+    if(!b) return false;
+    b.click();
+    return true;
+  })()`);
 }
 
 async function attemptNudge(
