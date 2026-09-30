@@ -52,6 +52,10 @@ const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
 );
+const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
+  RECENT_CONVERSATION_MAX_AGE_MS,
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
+);
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
@@ -156,7 +160,7 @@ async function resolveAmbiguousConversationTabs(
   connector,
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
-  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
 ) {
   const sourceTabs = Array.isArray(tabs) ? tabs : [];
   const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
@@ -172,7 +176,7 @@ async function resolveAmbiguousConversationTabs(
 
     const updatedAtMs = Number(latest.update_time) * 1000;
     const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
-    const ageLimitMs = Math.max(60_000, Number(maxAgeMs || RECENT_CONVERSATION_MAX_AGE_MS));
+    const ageLimitMs = Math.max(60_000, Number(maxAgeMs || CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS));
     if (!Number.isFinite(ageMs) || ageMs > ageLimitMs) {
       throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
     }
