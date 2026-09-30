@@ -145,10 +145,14 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
         workflow_predicate = activation.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split('if ! previous=', 1)[0]
         self.assertNotIn("claude-vm-bootstrap.md", workflow_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', workflow_predicate)
+        self.assertIn('[ ! -d "$previous_release/ops/ai-squad" ]', workflow_predicate)
 
         deploy = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
         deploy_predicate = deploy.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split("reconcile_ai_squad_bridges() {", 1)[0]
         self.assertNotIn("claude-vm-bootstrap.md", deploy_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', deploy_predicate)
+        self.assertIn('[ ! -d "$previous_release/ops/ai-squad" ]', deploy_predicate)
 
         activate = deploy.split('ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"', 1)[1]
         activate = activate.split("if ! reconcile_abandoned_cart_recovery_units", 1)[0]
