@@ -204,6 +204,43 @@ async function run() {
   {
     const now = Date.now();
     const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const navigations = [];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor(now / 1000),
+      }),
+      now,
+      undefined,
+      async (tab, conversationId) => {
+        navigations.push({ tab: tab.webSocketDebuggerUrl, conversationId });
+        return true;
+      },
+    );
+    assert.deepEqual(
+      navigations,
+      [{ tab: 'ws://home', conversationId: 'latest-not-open' }],
+      'server-confirmed latest conversation that is not open must use the neutral ChatGPT home tab',
+    );
+    assert.equal(candidates.length, 1);
+    assert.equal(
+      candidates[0]?.webSocketDebuggerUrl,
+      'ws://home',
+      'the neutral tab becomes the only eligible continuation target after navigation',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
