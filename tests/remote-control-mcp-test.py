@@ -1124,6 +1124,13 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(f'CLAUDE_REMOTE_CONTROL_ELIGIBILITY={phase}', setup)
         self.assertIn('tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33', setup)
 
+    def test_claude_setup_clears_return_trap_before_leaving_auth_probe(self):
+        setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
+        probe = setup.split("probe_auth_and_command(){", 1)[1].split("\n}", 1)[0]
+        self.assertIn('trap \'rm -f "$tmp"\' RETURN', probe)
+        self.assertIn('trap - RETURN', probe)
+        self.assertLess(probe.index('trap - RETURN'), probe.index('CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS'))
+
 
     def test_claude_setup_classifies_auth_json_state_without_set_e_silence(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
