@@ -589,7 +589,7 @@ jobs:
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
-            token_dir=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity
+            token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
             token_file="$token_dir/bridge.token"
             sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
             sudo -n test -s "$token_file"
