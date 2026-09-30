@@ -174,6 +174,12 @@ def run_watchdog(
     }
 
     if initial['healthy']:
+        state = _load_state(state_path)
+        state['last_check_at'] = current
+        state['last_healthy'] = True
+        state['last_reasons'] = []
+        state['last_fingerprint'] = ''
+        _save_state(state_path, state)
         _append_event(watchdog_log, {'kind': 'watchdog', **result})
         return result
 
