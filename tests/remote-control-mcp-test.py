@@ -907,6 +907,27 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertNotIn("$remote_dir/install.sh", block)
             self.assertNotIn("$remote_dir/worker.mjs", block)
 
+    def test_chatgpt_continuity_repair_normalizes_existing_site_token_for_agent_user(self):
+        remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        remote_repair = remote.split("            chatgpt_continuity_repair)", 1)[1].split("              ;;", 1)[0]
+        oci_repair = oci.split("- name: ChatGPT continuity repair through OCI Bastion", 1)[1].split("- name:", 1)[0]
+
+        for block in (remote_repair, oci_repair):
+            self.assertIn('token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"', block)
+            self.assertIn('sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"', block)
+            self.assertIn('sudo -n chown www-data:ubuntu "$token_file"', block)
+            self.assertIn('sudo -n chmod 640 "$token_file"', block)
+
+        # Existing files must be normalized too; keeping chown/chmod only in
+        # the token-creation branch reproduces skipped_no_token for the
+        # ubuntu:ubuntu site agent when stale metadata survives a repair.
+        remote_after_creation = remote_repair.split('if ! sudo -n test -s "$token_file"; then', 1)[1].split("fi", 1)[1]
+        self.assertIn('sudo -n chown www-data:ubuntu "$token_file"', remote_after_creation)
+        self.assertIn('sudo -n chmod 640 "$token_file"', remote_after_creation)
+        self.assertNotIn("cat $token_file", remote_repair)
+        self.assertNotIn("cat $token_file", oci_repair)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
