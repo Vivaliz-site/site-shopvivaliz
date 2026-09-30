@@ -3,12 +3,27 @@ set -Eeuo pipefail
 
 browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
 cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
+worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
+
+runtime_eval_ready() {
+  CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" timeout 8s node --input-type=module -e '
+    const { Cdp } = await import("file://" + process.env.CHATGPT_CONTINUITY_WORKER_MODULE);
+    const c = await Cdp.connectToChatgptTab();
+    try {
+      const value = await c.evaluate("(()=>42)()");
+      if (value !== 42) process.exitCode = 1;
+    } finally {
+      c.close();
+    }
+  ' >/dev/null 2>&1
+}
 
 cdp_ready() {
   curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if isinstance(d.get("webSocketDebuggerUrl"), str) and d["webSocketDebuggerUrl"].startswith(("ws://","wss://")) else 1)' \
-    >/dev/null 2>&1
+    >/dev/null 2>&1 \
+    && runtime_eval_ready
 }
 
 wait_for_cdp() {
