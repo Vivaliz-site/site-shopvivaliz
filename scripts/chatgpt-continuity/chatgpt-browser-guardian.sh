@@ -11,25 +11,44 @@ cdp_ready() {
     >/dev/null 2>&1
 }
 
+wait_for_cdp() {
+  for _ in $(seq 1 15); do
+    sleep 1
+    if cdp_ready; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 status=0
 if cdp_ready; then
   echo "CHATGPT_BROWSER_GUARDIAN=HEALTHY"
 elif pgrep -u fredrdp -f "$browser_pattern" >/dev/null 2>&1; then
-  echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_PROCESS_PRESENT_CDP_UNAVAILABLE" >&2
-  status=1
+  if systemctl is-active --quiet "$browser_unit"; then
+    sleep 5
+    if cdp_ready; then
+      echo "CHATGPT_BROWSER_GUARDIAN=HEALTHY_AFTER_RECHECK"
+    else
+      systemctl restart "$browser_unit"
+      if wait_for_cdp; then
+        echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART"
+      else
+        echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+        status=1
+      fi
+    fi
+  else
+    echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_PROCESS_PRESENT_CDP_UNAVAILABLE" >&2
+    status=1
+  fi
 else
   systemctl start "$browser_unit"
-  status=1
-  for _ in $(seq 1 15); do
-    sleep 1
-    if cdp_ready; then
-      echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED"
-      status=0
-      break
-    fi
-  done
-  if [[ "$status" -ne 0 ]]; then
+  if wait_for_cdp; then
+    echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED"
+  else
     echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+    status=1
   fi
 fi
 
