@@ -18,6 +18,7 @@ import {
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
@@ -776,6 +777,74 @@ async function run() {
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
 
   console.log('attemptNudge branches: PASS');
+
+  // Multiple open conversations must not block the reinforcement monitor before
+  // it can preserve a 429 and schedule the wider discovery backoff. The local
+  // connector first scans for exactly one interrupted tab; with no banner it
+  // uses the single neutral home tab only as a read-only discovery context.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(selected.marker, 'ws://home', 'cross-device discovery must prefer the single neutral home tab');
+    selected.close();
+
+    const result = await reinforcementCheckOnce(
+      async () => connectReinforcementChatgptTab({
+        tabs,
+        connector,
+        probeBanner: async () => false,
+        allowCrossDeviceDiscovery: true,
+      }),
+      1,
+      async () => true,
+      async () => ({ action: 'latest_unavailable', http_status: 429 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 429);
+    assert.equal(result.cross_device_discovery, true);
+  }
+
+  // If one and only one open tab carries the interruption banner, local
+  // evidence wins and no account-scoped latest-conversation request is needed.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/healthy', webSocketDebuggerUrl: 'ws://healthy' },
+      { type: 'page', url: 'https://chatgpt.com/c/interrupted', webSocketDebuggerUrl: 'ws://interrupted' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: tab.webSocketDebuggerUrl === 'ws://interrupted'
+        ? 'Streaming interrupted. Waiting for the complete message...'
+        : 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async cdp => cdp.marker === 'ws://interrupted',
+      allowCrossDeviceDiscovery: false,
+    });
+    assert.equal(selected.marker, 'ws://interrupted', 'the unique locally interrupted tab must be selected without guessing');
+    selected.close();
+  }
 
   // Reinforcement must inspect the currently open conversation first.
   // A visible failure banner must be handled without any account-scoped
