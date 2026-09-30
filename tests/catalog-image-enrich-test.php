@@ -30,11 +30,11 @@ $products = [
     ],
     [
         'sku' => 'TINYV3',
-        'sync_source' => 'tiny_v3',
-        'image_url' => 'https://erp.example/tiny-primary.jpg',
+        'image_url' => 'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-primary.jpg',
         'images' => [
-            'https://erp.example/tiny-primary.jpg',
-            'https://erp.example/tiny-secondary.jpg',
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-primary.jpg',
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-secondary.jpg',
+            'https://untrusted.example/manual.jpg',
         ],
         'images_count' => 2,
         'price' => 58.50,
@@ -49,7 +49,7 @@ $result = svcie_apply_image_map($products, [
         'https://erp.example/keep-secondary.jpg',
     ],
     'TINYV3' => [
-        'https://erp.example/tiny-primary.jpg',
+        'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-primary.jpg',
     ],
 ]);
 
@@ -79,8 +79,8 @@ svcie_test_assert(
 );
 svcie_test_assert(
     ($result[2]['images'] ?? []) === [
-        'https://erp.example/tiny-primary.jpg',
-        'https://erp.example/tiny-secondary.jpg',
+        'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-primary.jpg',
+        'https://s3.amazonaws.com/tiny-anexos-us/erp/tiny-secondary.jpg',
     ],
     'Tiny v3 ERP gallery must not lose authoritative additional images when the local image mirror is partial.'
 );
