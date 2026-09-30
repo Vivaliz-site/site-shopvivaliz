@@ -357,7 +357,10 @@ async function connectReinforcementChatgptTab({
   if (allowCrossDeviceDiscovery) {
     const neutralHomes = opened.filter(row => row.rank === 1);
     const conversationRows = opened.filter(row => row.rank === 0);
-    if (neutralHomes.length === 1) {
+    if (neutralHomes.length >= 1) {
+      // Home tabs are neutral and equivalent discovery contexts. Prefer the
+      // first deterministically even when stale duplicate home tabs exist;
+      // ambiguity only applies to conversation targets, never to /.
       selected = neutralHomes[0];
     } else if (conversationRows.length > 1) {
       for (const row of opened) {
