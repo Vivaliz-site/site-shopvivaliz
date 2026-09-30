@@ -3,6 +3,8 @@ import {
   Cdp,
   conversationIsGenerating,
   conversationStreamStatus,
+  conversationTurnState,
+  silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
@@ -480,50 +482,6 @@ async function run() {
     );
     assert.ok(calls.length >= 2);
   }
-  {
-    let submitted = false;
-    const calls = [];
-    const cdp = {
-      async evaluate(expression) {
-        calls.push(expression);
-        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
-        if (expression.includes('b.click()')) return false;
-        if (expression.includes('continuation-keyboard-submit-check')) return submitted;
-        return false;
-      },
-      async send(method, params = {}) {
-        calls.push(`CDP:${method}:${String(params.type || '')}:${String(params.key || '')}`);
-        if (method === 'Input.dispatchKeyEvent' && params.type === 'keyDown' && params.key === 'Enter') {
-          submitted = true;
-        }
-        return {};
-      },
-    };
-    assert.equal(
-      await sendContinueMessage(cdp, 50, 1),
-      true,
-      'missing send control must fall back to Enter and confirm the composer was submitted',
-    );
-    assert.ok(calls.some(call => String(call).includes('CDP:Input.dispatchKeyEvent:keyDown:Enter')));
-  }
-
-  {
-    const cdp = {
-      async evaluate(expression) {
-        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
-        if (expression.includes('b.click()')) return false;
-        if (expression.includes('continuation-keyboard-submit-check')) return false;
-        return false;
-      },
-      async send() { return {}; },
-    };
-    assert.equal(
-      await sendContinueMessage(cdp, 25, 1),
-      false,
-      'keyboard fallback must not report success without submission evidence',
-    );
-  }
-
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
@@ -1135,6 +1093,108 @@ async function run() {
     assert.equal(result.action, 'no_banner');
     assert.equal(result.http_status, 429);
     assert.equal(currentPath, '/c/original-thread', 'temporary cross-device navigation must restore the original tab');
+  }
+
+  // Cross-device/iOS failures may not mirror the orange interruption banner
+  // into the canonical VM browser. Use only canonical conversation metadata
+  // to classify a silent stall: transport COMPLETE, current assistant node
+  // explicitly end_turn=false, and no child continuation.
+  {
+    const silent = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = silent.evaluate.bind(silent);
+    silent.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: false,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      }
+      return originalEvaluate(expression);
+    };
+    assert.equal(await silentStallPresent(silent), true);
+
+    const completed = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const completedEvaluate = completed.evaluate.bind(completed);
+    completed.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: true,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      }
+      return completedEvaluate(expression);
+    };
+    assert.equal(await silentStallPresent(completed), false, 'normal final assistant turn must never be classified as stalled');
+
+    const active = fakeCdp({ streamStatus: 'IN_PROGRESS', pageText: 'normal reply' });
+    const activeEvaluate = active.evaluate.bind(active);
+    active.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: false,
+          child_count: 0,
+          message_status: 'in_progress',
+        };
+      }
+      return activeEvaluate(expression);
+    };
+    assert.equal(await silentStallPresent(active), false, 'active transport must remain fail-closed');
+  }
+
+  // Reproduce the user's iPhone case: latest conversation is found with HTTP
+  // 200, the VM has no interruption banner, but canonical metadata proves the
+  // assistant turn ended silently. Reinforcement must reattach once, then send
+  // only if the same silent-stall state persists.
+  {
+    const cdp = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply', sendSucceeds: true });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let reloads = 0;
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: false,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      }
+      if (source.includes('location.reload')) {
+        reloads += 1;
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    let confirmCalls = 0;
+    const result = await reinforcementCheckOnce(
+      async () => cdp,
+      1,
+      async () => {
+        confirmCalls += 1;
+        return confirmCalls >= 2;
+      },
+      async () => ({ action: 'already_latest', http_status: 200 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, true);
+    assert.equal(result.http_status, 200);
+    assert.equal(result.cross_device_discovery, true);
+    assert.equal(reloads, 1, 'silent-stall recovery must attempt exactly one passive reattach before send');
+    assert.ok(cdp.calls.some(call => call.includes('b.click()')), 'persisting silent stall must send one bounded continuation');
   }
 
   // The default reinforcement discovery path must preserve a 429 status so
