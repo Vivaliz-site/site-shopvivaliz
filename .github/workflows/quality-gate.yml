@@ -139,6 +139,7 @@ jobs:
           bash tests/product-modal-image-regression.sh
           bash tests/chatgpt-account-diagnostic-contract-test.sh
           bash -n scripts/deploy-production.sh
+          python3 tests/unit/test_runtime_deploy_reconciliation.py
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
           grep -q 'Release gate visual 2026-08-29' css/public-experience-v1.css

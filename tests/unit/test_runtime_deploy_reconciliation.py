@@ -62,6 +62,23 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn("extension_loaded(\"pdo_sqlite\")", text)
         self.assertNotIn("php -m | grep -Fxq pdo_sqlite", text)
 
+    def test_master_pipeline_preserves_chatgpt_dispatcher_token_access(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        recursive = 'sudo chgrp -R www-data "$shared/$name"'
+        token_dir = 'continuity_token_dir="$shared/storage/private/chatgpt-continuity"'
+        token_file = 'continuity_token_file="$continuity_token_dir/bridge.token"'
+        self.assertIn(recursive, text)
+        self.assertIn(token_dir, text)
+        self.assertIn(token_file, text)
+        self.assertIn('sudo chown www-data:ubuntu "$continuity_token_dir" "$continuity_token_file"', text)
+        self.assertIn('sudo chmod 0750 "$continuity_token_dir"', text)
+        self.assertIn('sudo chmod 0640 "$continuity_token_file"', text)
+        self.assertIn('sudo -u ubuntu test -r "$continuity_token_file"', text)
+        self.assertIn('sha256sum -- "$continuity_token_file"', text)
+        self.assertIn('CHATGPT_CONTINUITY_DEPLOY_TOKEN_METADATA=PASS', text)
+        self.assertLess(text.index(recursive), text.index(token_dir))
+        self.assertNotIn('cat "$continuity_token_file"', text)
+
     def test_master_pipeline_rolls_back_a_failed_release(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('previous="$(readlink -f "$current" 2>/dev/null)"', text)
