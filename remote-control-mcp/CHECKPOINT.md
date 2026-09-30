@@ -191,14 +191,16 @@ STATUS=PASS
 STATUS=PASS
 - Stage 6 permanece PASS: run `36449123839` persistiu `runtime_github_dependency=false`; issues #2045/#2046 registraram `DURABLE_AFTER_DISCONNECT=PASS` e `RUNTIME_GITHUB_DEPENDENCY=false`.
 - Claude INSTALL live: OCI Bastion run `36654114288` = SUCCESS com `CLAUDE_REMOTE_CONTROL_INSTALL=PASS`, `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`, consent e service PASS.
-- Claude STATUS live: run `36654821456` = SUCCESS com `CLAUDE_REMOTE_CONTROL_STATUS=PASS` e `OCI_MCP_CLAUDE_STATUS=PASS`. RDC confirmou unit enabled+active e sessão Remote Control real.
-- OpenAI Platform: MFA concluído pelo usuário e Tunnels management acessível na organização `ShopVivaliz ltda`.
+- Claude STATUS live: run `36654821456` = SUCCESS com `CLAUDE_REMOTE_CONTROL_STATUS=PASS` e `OCI_MCP_CLAUDE_STATUS=PASS`. Revalidação fresca sem RDC, executada diretamente pelo Remote Control MCP, confirmou novamente `CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS`, `CLAUDE_PRIVATE_MCP_BRIDGE=PASS` e `CLAUDE_REMOTE_CONTROL_STATUS=PASS`. A tarefa limitada `8432087a-1239-417e-82dc-3a16d627c1f2` criou uma sessão Remote Control real e emitiu apenas marcadores sanitizados: `SESSION_URL_PRESENT=true`, nome esperado, sinal de conexão, `ERROR_SIGNAL=false` e `CLAUDE_STAGE7_CLOUD_SESSION_PROOF=PASS`; em seguida o serviço canônico foi restaurado para `active`.
+- OpenAI Platform: autenticação comprovada; a revalidação fresca `36658875119` retornou `already_authenticated`, `AUTHENTICATED=true` e `AUTH_RESULT=PASS`, sem necessidade de novo MFA.
 - Secure MCP Tunnel criado: `tunnel_6abc7096b85c8191b938b5a47b8dccff`, associado ao workspace `Espaço de trabalho de Frederico Mourao`.
 - Runtime oficial: `tunnel-client` v0.0.15 Linux ARM64 validado por SHA256; profile `shopvivaliz-remote-control`; alias gerenciado `shopvivaliz-private-mcp`; target stdio `sudo -n /usr/local/sbin/shopvivaliz-claude-mcp-stdio`.
 - `tunnel-client doctor --explain` = `RESULT ok`; `runtimes status --json` = `running=true`, `process_running=true`, `healthy=true`, `ready=true`, `runtime_state=ready`, `stale=false`, remote lookup sem erro.
 - MCP App privado criado no ChatGPT: `ShopVivaliz Remote Control`, plugin `plugin_asdk_app_6abc74328d708191a5393445675bf62f`, Connection=Tunnel, Authentication=None; UI confirmou Connected.
 - Logs do tunnel-client registraram discovery/initialize e comandos encaminhados no canal `main` para o MCP privado.
 - Prova E2E final do cliente ChatGPT: chamada read-only `host_health` para `always-free-arm-1787907847-26` retornou `ok=true`, privilege context `root`, `UID 0`.
+- Revalidação direta nesta sessão: o ChatGPT submeteu a tarefa durável `5afbd6cf-c428-4bf5-a93b-c893d81707eb` pelo ShopVivaliz Remote Control; ela terminou `succeeded` com `STAGE7_CHATGPT_TOOL_USE=PASS`. O `tunnel-client` v0.0.15 estava com `/healthz=200`, `/readyz=200`, `doctor` exit 0 sob o mesmo usuário/profile e incremento de `commands_polled_total` durante chamadas reais.
+- Gate de continuidade final: estado persistido em `/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/private-remote-control-mcp-4hosts-20260927.json`; READY_TO_COMPLETE -> CONCLUIDO e `agent_task_state.py terminal --task private-remote-control-mcp-4hosts-20260927` retornou exit 0.
 - Segurança final: controller continua `127.0.0.1:5580` loopback-only; bearer root-only; runtime key OpenAI modo `0600`; RSA/JWK/blob criptografado temporários removidos; nenhum segredo foi commitado.
 - PR #2351 eliminou o falso-fail do RETURN trap no status Claude. PR #2358 tornou a instalação da continuidade ChatGPT idempotente, evitando reinícios desnecessários durante respostas em andamento.
 - Cloudflare Managed OAuth não é mais pré-requisito da Etapa 7 porque o caminho oficial OpenAI Secure MCP Tunnel foi concluído e validado.
