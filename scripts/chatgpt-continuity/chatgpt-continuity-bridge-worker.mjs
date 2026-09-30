@@ -48,6 +48,14 @@ const PASSIVE_REATTACH_CONFIRM_MS = Math.max(
   3000,
   Number(process.env.CHATGPT_CONTINUITY_PASSIVE_REATTACH_CONFIRM_MS || 15000),
 );
+const COMPOSER_READY_TIMEOUT_MS = Math.max(
+  2000,
+  Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_TIMEOUT_MS || 15000),
+);
+const COMPOSER_READY_POLL_MS = Math.max(
+  250,
+  Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_POLL_MS || 500),
+);
 const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
@@ -324,6 +332,28 @@ async function composerIsUsable(cdp) {
   })()`);
 }
 
+async function waitForComposerUsable(
+  cdp,
+  timeoutMs = COMPOSER_READY_TIMEOUT_MS,
+  pollMs = COMPOSER_READY_POLL_MS,
+) {
+  const requestedTimeout = Number(timeoutMs);
+  const requestedPoll = Number(pollMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+    ? Math.max(10, requestedTimeout)
+    : COMPOSER_READY_TIMEOUT_MS;
+  const boundedPollMs = Number.isFinite(requestedPoll)
+    ? Math.max(10, requestedPoll)
+    : COMPOSER_READY_POLL_MS;
+  const deadline = Date.now() + boundedTimeoutMs;
+  while (true) {
+    if (await composerIsUsable(cdp)) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(boundedPollMs, remaining));
+  }
+}
+
 async function assistantSnapshot(cdp) {
   return cdp.evaluate(`(()=>{
     const candidates=[
@@ -589,6 +619,7 @@ async function attemptNudge(
   taskId,
   connect = () => Cdp.connectToChatgptTab({ allowLatestDisambiguation: true }),
   confirmProgress = confirmAssistantProgress,
+  waitComposer = waitForComposerUsable,
 ) {
   let cdp;
   try {
@@ -640,8 +671,11 @@ async function attemptNudge(
       }
       recoveredStaleComplete = true;
     }
-    if (!(await composerIsUsable(cdp))) {
-      return { result_status: 'CONVERSATION_NOT_FOUND', detail: 'composer/send-button selector not found (possible UI drift)' };
+    if (!(await waitComposer(cdp))) {
+      return {
+        result_status: 'CONVERSATION_NOT_FOUND',
+        detail: 'composer/send-button selector not found after bounded post-reattach wait (possible UI drift)',
+      };
     }
     const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
@@ -871,6 +905,7 @@ export {
   resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   composerIsUsable,
+  waitForComposerUsable,
   errorBannerPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
