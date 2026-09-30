@@ -9,6 +9,7 @@ User=fredrdp
 Group=fredrdp
 Environment=HOME=/home/fredrdp
 Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/fredrdp/.Xauthority
 ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X0
 ExecStart=/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium --remote-debugging-address=127.0.0.1 --remote-debugging-port=9555 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu https://chatgpt.com/
 Restart=always
@@ -17,6 +18,7 @@ KillMode=control-group
 TimeoutStopSec=20
 NoNewPrivileges=true
 PrivateTmp=true
+BindReadOnlyPaths=/tmp/.X11-unix
 
 [Install]
 WantedBy=multi-user.target
