@@ -64,6 +64,18 @@ const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
   Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
 );
+const requestedLatestNotOpenMaxAgeMs = Number(
+  process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS || 15 * 60_000,
+);
+const CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS = Math.min(
+  CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  Math.max(
+    RECENT_CONVERSATION_MAX_AGE_MS,
+    Number.isFinite(requestedLatestNotOpenMaxAgeMs)
+      ? requestedLatestNotOpenMaxAgeMs
+      : 15 * 60_000,
+  ),
+);
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
@@ -200,7 +212,7 @@ async function resolveAmbiguousConversationTabs(
     // already-open conversation: the latest item must still be within the
     // normal recent-conversation window and there must be exactly one neutral
     // ChatGPT home tab available to repurpose.
-    if (ageMs > RECENT_CONVERSATION_MAX_AGE_MS) {
+    if (ageMs > CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS) {
       throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
     }
     const neutralHomeTabs = sourceTabs.filter(tab => chatgptTabRank(tab) === 1);
