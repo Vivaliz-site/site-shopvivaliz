@@ -927,6 +927,23 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, workflow)
 
+    def test_oci_continuity_diagnostic_requires_fresh_dispatcher_cycle(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
+        for needle in (
+            "dispatcher_last_cycle_at='NONE'",
+            "dispatcher_log_fresh=False",
+            "dispatcher_event_re=re.compile",
+            "latest_generation_updated_at",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH=",
+        ):
+            self.assertIn(needle, diagnostic)
+        self.assertNotIn(
+            "dispatcher_log_seen='ChatGPT continuity nudge dispatcher completed.' in tail",
+            diagnostic,
+        )
+
     def test_oci_continuity_diagnostic_certifies_both_queues_without_payloads(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for marker in (
