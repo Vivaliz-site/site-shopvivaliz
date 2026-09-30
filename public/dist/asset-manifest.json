@@ -97,9 +97,9 @@
       "source_bytes": 6871
     },
     "/js/first-purchase-popup-v1.js": {
-      "file": "/public/dist/js/first-purchase-popup-v1.0805dde65a.min.js",
-      "bytes": 488,
-      "source_bytes": 889
+      "file": "/public/dist/js/first-purchase-popup-v1.c22f2d6eb3.min.js",
+      "bytes": 774,
+      "source_bytes": 1501
     },
     "/js/home-image-rotator-v1.js": {
       "file": "/public/dist/js/home-image-rotator-v1.c394ca106e.min.js",

@@ -333,6 +333,23 @@ disable_abandoned_cart_recovery_timer() {
   fi
 }
 
+disable_shopee_logistics_watchdog() {
+  local timer="shopvivaliz-shopee-logistics-watchdog.timer"
+  local service="shopvivaliz-shopee-logistics-watchdog.service"
+  if sudo systemctl cat "$timer" >/dev/null 2>&1; then
+    if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao desabilitar watchdog de logistica Shopee no rollback"
+      return 1
+    fi
+  fi
+  if sudo systemctl cat "$service" >/dev/null 2>&1; then
+    if ! sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao parar watchdog de logistica Shopee no rollback"
+      return 1
+    fi
+  fi
+}
+
 reconcile_shopee_logistics_units() {
   local release_path="$1"
   local installer="$release_path/scripts/install-shopee-logistics-worker.sh"
@@ -345,11 +362,18 @@ reconcile_shopee_logistics_units() {
     log ERROR "Falha ao reconciliar worker de logistica Shopee"
     return 1
   fi
+  # Rollback para uma release anterior ao watchdog deve remover o timer novo,
+  # evitando que ele tente executar um script inexistente apos o cutback.
+  if [ ! -f "$release_path/deploy/systemd/shopvivaliz-shopee-logistics-watchdog.service" ] \
+    || [ ! -f "$release_path/deploy/systemd/shopvivaliz-shopee-logistics-watchdog.timer" ]; then
+    disable_shopee_logistics_watchdog || return 1
+  fi
 }
 
 disable_shopee_logistics_timer() {
   local timer="shopvivaliz-shopee-logistics-worker.timer"
   local service="shopvivaliz-shopee-logistics-worker.service"
+  disable_shopee_logistics_watchdog || return 1
   if sudo systemctl cat "$timer" >/dev/null 2>&1; then
     if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
       log ERROR "Falha ao desabilitar timer de logistica Shopee no rollback"
@@ -357,7 +381,10 @@ disable_shopee_logistics_timer() {
     fi
   fi
   if sudo systemctl cat "$service" >/dev/null 2>&1; then
-    sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+    if ! sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao parar worker de logistica Shopee no rollback"
+      return 1
+    fi
   fi
 }
 
@@ -793,6 +820,15 @@ PY
 
 if ! git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   log FATAL "Clone Git nao existe ou e invalido: $REPO_DIR"
+  exit 1
+fi
+
+# Normalize the caller working directory before GNU find audits. Remote-control
+# invocations may start inside a root-only directory; when deploy runs as
+# ubuntu, find can traverse the target successfully but still exit non-zero
+# while restoring that inaccessible initial cwd.
+if ! cd -- "$REPO_DIR"; then
+  log FATAL "Nao foi possivel entrar no clone de deploy: $REPO_DIR"
   exit 1
 fi
 
