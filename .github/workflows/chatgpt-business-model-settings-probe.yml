@@ -1,0 +1,44 @@
+name: ChatGPT Business Model Settings Probe
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[chatgpt-business-model-settings-probe]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=probe'
+      }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Probe ChatGPT Business model settings through backend VM browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          probe_output=''
+          probe_rc=0
+          if probe_output="$(timeout 90s node scripts/chatgpt-business-model-settings-probe.mjs 2>&1)"; then
+            probe_rc=0
+          else
+            probe_rc=$?
+          fi
+          safe_output="$(printf '%s\n' "$probe_output" | grep -E '^CHATGPT_BUSINESS_MODELS_[A-Z_]+=' || printf '')"
+          test -n "$safe_output"
+          printf '%s\n' "$safe_output"
+          if [ "$probe_rc" -ne 0 ]; then
+            echo "::error::ChatGPT Business model settings probe failed rc=$probe_rc"
+            exit "$probe_rc"
+          fi
+          printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_BUSINESS_MODELS_PROBE=PASS'
+          echo "CHATGPT_BUSINESS_MODELS_DIRECT_PROBE=PASS"
