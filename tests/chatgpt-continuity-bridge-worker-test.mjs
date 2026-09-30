@@ -204,6 +204,118 @@ async function run() {
   {
     const now = Date.now();
     const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const navigations = [];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor(now / 1000),
+      }),
+      now,
+      undefined,
+      async (tab, conversationId) => {
+        navigations.push({ tab: tab.webSocketDebuggerUrl, conversationId });
+        return true;
+      },
+    );
+    assert.deepEqual(
+      navigations,
+      [{ tab: 'ws://home', conversationId: 'latest-not-open' }],
+      'server-confirmed latest conversation that is not open must use the neutral ChatGPT home tab',
+    );
+    assert.equal(candidates.length, 1);
+    assert.equal(
+      candidates[0]?.webSocketDebuggerUrl,
+      'ws://home',
+      'the neutral tab becomes the only eligible continuation target after navigation',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    let navigated = 0;
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+      }),
+      now,
+      undefined,
+      async () => { navigated += 1; return true; },
+    );
+    assert.equal(navigated, 1, '14-minute latest-not-open metadata must remain inside the bounded navigation window');
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0]?.webSocketDebuggerUrl, 'ws://home');
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor((now - 16 * 60 * 1000) / 1000),
+        }),
+        now,
+        undefined,
+        async () => true,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open navigation older than 15 minutes must remain fail-closed',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor(now / 1000),
+        }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open must remain fail-closed when no neutral ChatGPT home tab exists',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
