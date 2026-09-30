@@ -147,3 +147,31 @@ Próxima ação autorizada: rodar o bootstrap ao vivo de novo no main atual (já
 O health-check do controller (PR #2038) foi confirmado ao vivo — passou de forma confiável. A validação E2E de quatro hosts (`run_e2e=true`) foi tentada pela primeira vez de verdade e revelou dois bugs reais em sequência, ambos já corrigidos e mesclados: decode UTF-8 estrito quebrando em saída não-UTF8 do Windows, primeiro em `run_host_command` (PR #2041), depois no mesmo padrão em `task_worker` (PR #2042, mesclado por outra sessão concorrente antes do meu PR equivalente #2043, que fechei como duplicado). Com os dois fixes no main, o run `36449123839` completou com `REMOTE_CONTROL_FOUR_HOST_E2E=PASS` — detalhe completo em `CHECKPOINT.md` ACTION STAGE 6.
 
 **Restam apenas Etapa 6 (provar runtime sem GitHub — a arquitetura já não usa GitHub como transporte, falta decidir/documentar prova formal) e Etapa 7 (integrar com ChatGPT — bloqueada nesta sessão por recusa de plataforma ao expor o controller publicamente; requer decisão/ação do usuário).**
+
+
+## Atualização durável — 2026-09-30 UTC: autenticação OpenAI corrigida; gate atual é Tunnels Manage/feature
+STATUS=RUNNING
+
+Esta atualização supersede os bullets anteriores da Etapa 7 onde houver divergência.
+
+### ChatGPT / OpenAI Secure MCP Tunnel
+- PR #2365, merge `8fbcabeca387cc0820b784d716d79f41a9988868`: o helper de autenticação passou a acompanhar popup/segunda aba do Google e manter eventual MFA humano aberto por janela limitada, sem preencher OTP e sem registrar conteúdo bruto.
+- Run `36657162869` provou que o fluxo ainda não alcançava Google/MFA: `GOOGLE_POPUP_USED=false`, `MFA_WAIT_RESULT=not_needed`, `AUTHENTICATED=false`.
+- PR #2371, merge `e017f58bf37fdaa4d5bf8c3d515195302d324330`: adicionou somente classificadores sanitizados do estado pós-Google/final.
+- Run `36657522330` isolou a causa raiz: `POST_GOOGLE_LOCATION=openai_auth`, `FINAL_LOCATION=login`, `AUTH_BLOCKER=login`. O helper estava voltando ao target antes de o OpenAI Auth concluir o handoff OAuth.
+- PR #2376, merge `1fde558a614c28bab21e1565fdd552dcc162e6cc`: corrige o handoff, aguardando de forma limitada a transição OpenAI Auth -> Google -> conclusão antes de refrescar o target. TDD RED run `36657671418`; gates do PR verdes.
+- Fresh auth run `36657864181` no main corrigido: `OPENAI_PLATFORM_AUTH_STAGE=already_authenticated`, `OPENAI_PLATFORM_AUTHENTICATED=true`, `OPENAI_PLATFORM_AUTH_BLOCKER=none`, `OPENAI_PLATFORM_AUTH_RESULT=PASS`, `SECURE_MCP_PLATFORM_AUTH=PASS`. Não houve MFA porque a sessão já estava autenticada.
+- Fresh direct UI probe `36657955719`: `OPENAI_TUNNEL_UI_AUTHENTICATED=true`, `OPENAI_TUNNEL_UI_ACCESS_REQUIRED=false`, `OPENAI_TUNNEL_UI_EXISTING_COUNT=0`, `OPENAI_TUNNEL_UI_MANAGE_AVAILABLE=false`, `OPENAI_TUNNEL_UI_PROBE=PASS`.
+- A documentação oficial atual exige `Tunnels Read + Manage` para criar/editar e `Tunnels Read + Use` para executar/selecionar. O estado live (página autenticada, sem mensagem explícita de access-required, mas sem controle de criação) é consistente com ausência de `Manage` ou outro gate de habilitação da superfície. Não inferir que `Manage` existe enquanto o controle não aparecer.
+- Não voltar a investigar login Google/MFA do zero. O login está comprovado. Não publicar MCP bearer-only como workaround.
+
+### Claude Remote Control
+- Run `36654114288`, job `109694566519`: `CLAUDE_REMOTE_CONTROL_INSTALL=PASS` e `OCI_MCP_CLAUDE_INSTALL=PASS`.
+- A Etapa 7 continua RUNNING até existir prova de sessão Claude Remote Control real visível/operável pela superfície cloud e até o caminho ChatGPT Secure MCP Tunnel estar provado ponta a ponta.
+
+### Próxima ação autorizada
+1. Confirmar/ajustar, pela superfície suportada da organização OpenAI, a função/grupo do operador para incluir `Tunnels Read + Manage` e `Tunnels Read + Use`, ou obter de owner/RBAC admin um `tunnel_id` criado/associado ao workspace correto. Não alterar RBAC silenciosamente.
+2. Repetir o probe atual e exigir `OPENAI_TUNNEL_UI_MANAGE_AVAILABLE=true` ou um `tunnel_id` válido.
+3. Provisionar `tunnel-client` no backend privado somente após o tunnel existir; validar `doctor`, saúde do client, `initialize` e `tools/list` pelo caminho suportado.
+4. Associar o tunnel ao workspace ChatGPT alvo e validar discovery/uso em developer-mode.
+5. Preservar Claude INSTALL PASS e concluir STATUS + prova de sessão cloud real antes de marcar CONCLUIDO.
