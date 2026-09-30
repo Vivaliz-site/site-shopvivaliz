@@ -292,6 +292,75 @@ class Cdp {
   }
 }
 
+async function connectReinforcementChatgptTab({
+  allowCrossDeviceDiscovery = false,
+  tabs: providedTabs = null,
+  connector = connectCdpTarget,
+  probeBanner = errorBannerPresent,
+} = {}) {
+  let tabs = providedTabs;
+  if (!Array.isArray(tabs)) {
+    if (!(await cdpReady())) {
+      throw new Error(
+        `CDP endpoint unreachable at ${CDP_BASE}. This worker only attaches to the canonical authenticated browser.`,
+      );
+    }
+    tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+  }
+
+  const ranked = (Array.isArray(tabs) ? tabs : [])
+    .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
+    .filter(row => row.rank === 0 || row.rank === 1)
+    .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  const opened = [];
+  for (const row of ranked) {
+    let cdp;
+    try {
+      cdp = await connector(row.tab);
+      if (!cdp) continue;
+      const banner = Boolean(await probeBanner(cdp));
+      opened.push({ ...row, cdp, banner });
+    } catch {
+      try { cdp?.close(); } catch {}
+    }
+  }
+
+  if (opened.length === 0) {
+    throw new Error('no usable open chatgpt.com tab found in the attached browser');
+  }
+
+  const interrupted = opened.filter(row => row.banner);
+  if (interrupted.length === 1) {
+    const selected = interrupted[0];
+    for (const row of opened) {
+      if (row !== selected) {
+        try { row.cdp.close(); } catch {}
+      }
+    }
+    return selected.cdp;
+  }
+
+  if (interrupted.length > 1) {
+    for (const row of opened) {
+      try { row.cdp.close(); } catch {}
+    }
+    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+  }
+
+  let selected = opened[0];
+  if (allowCrossDeviceDiscovery) {
+    const neutralHome = opened.find(row => row.rank === 1);
+    if (neutralHome) selected = neutralHome;
+  }
+  for (const row of opened) {
+    if (row !== selected) {
+      try { row.cdp.close(); } catch {}
+    }
+  }
+  return selected.cdp;
+}
+
 async function navigateNeutralTabToConversation(
   tab,
   conversationId,
@@ -939,7 +1008,7 @@ async function reinforcementLoop(
     let outcome;
     try {
       outcome = await check(
-        () => Cdp.connectToChatgptTab(),
+        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
         alignLatestForReinforcement,
@@ -982,6 +1051,7 @@ export {
   Cdp,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   composerIsUsable,
