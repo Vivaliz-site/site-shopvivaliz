@@ -59,12 +59,11 @@ grep -Fq 'CHATGPT_FREEZE_STATE_OWNER_CONTENT_UNCHANGED=true' "$remote"
 grep -Fq 'sudo -n chown "$runtime_owner" "$path"' "$remote"
 grep -Fq 'sudo -u ubuntu test -r "$state_dir/$latest_task_id.json"' "$remote"
 
-# Fresh evidence after a historical CONCLUIDO checkpoint must use a distinct
-# successor generation; never mutate/reopen the completed predecessor.
+# Historical successor creation remains available for lineage/bootstrap, but
+# the current task contract must not depend on g2 being the active generation.
+# Current readback is validated above by highest-gN selection.
 grep -Fq 'chatgpt_freeze_task_successor' "$remote"
 grep -Fq 'ChatGPT freeze task actions are restricted to the site VM' "$remote"
-grep -Fq 'agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927' "$remote"
-grep -Fq 'agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2' "$remote"
 grep -Fq 'CHATGPT_FREEZE_SUCCESSOR_STATUS=' "$remote"
 grep -Fq 'predecessor_task_id' "$remote"
 if grep -Fq 'cat "$state_file"' "$remote"; then
