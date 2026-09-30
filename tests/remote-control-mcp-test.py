@@ -417,10 +417,19 @@ class BootstrapContractTests(unittest.TestCase):
             "OPENAI_TUNNEL_UI_GENERIC_CREATE_CONTROL=",
             "OPENAI_TUNNEL_UI_ORG_OWNER_SURFACE_AVAILABLE=",
             "OPENAI_TUNNEL_UI_ADMIN_KEYS_ACCESS_DENIED=",
+            "OPENAI_TUNNEL_UI_TARGET_ORG_VISIBLE=",
+            "OPENAI_TUNNEL_UI_ADMIN_KEYS_NAV_AVAILABLE=",
+            "OPENAI_TUNNEL_UI_ADMIN_KEYS_LOCATION=",
+            "OPENAI_TUNNEL_UI_ADMIN_KEYS_TEXT_PRESENT=",
             "OPENAI_TUNNEL_UI_RBAC_DIAG=",
         ):
             self.assertIn(marker, text)
         self.assertIn("https://platform.openai.com/settings/organization/admin-keys", text)
+        self.assertIn("classifyAdminKeysLocation(", text)
+        self.assertIn("ShopVivaliz ltda", text)
+        self.assertIn("adminKeysNavAvailable", text)
+        self.assertIn("adminKeysTextPresent", text)
+        self.assertNotIn("OPENAI_TUNNEL_UI_RAW_", text)
         self.assertNotIn("CREATE_ADMIN_KEY", text)
         self.assertIn("process.exit(process.exitCode || 0)", text)
         self.assertNotIn("browser.close(", text)
