@@ -233,6 +233,7 @@ def freeze_state() -> None:
     command = r"""set -Eeuo pipefail
 sudo -u ubuntu -H python3 - <<'INNER'
 import json
+import re
 from pathlib import Path
 
 root = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state')
