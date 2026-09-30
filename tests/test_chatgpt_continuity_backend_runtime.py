@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -137,6 +138,52 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         install_body = installer.read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
         self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
+
+    def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            count_file = root / "curl-count"
+            systemctl_log = root / "systemctl.log"
+
+            def executable(name: str, body: str) -> None:
+                path = fake_bin / name
+                path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\n" + body, encoding="utf-8")
+                path.chmod(0o755)
+
+            executable(
+                "curl",
+                'count=0; [[ -f "$GUARDIAN_CURL_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_CURL_COUNT_FILE")"; '
+                'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_CURL_COUNT_FILE"; '
+                'if [[ "$count" -ge 3 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
+            )
+            executable("pgrep", "exit 0\n")
+            executable(
+                "systemctl",
+                'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
+                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\n',
+            )
+            executable("sleep", "exit 0\n")
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["GUARDIAN_CURL_COUNT_FILE"] = str(count_file)
+            env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            result = subprocess.run(
+                ["bash", str(guardian)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = systemctl_log.read_text(encoding="utf-8")
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
 
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
