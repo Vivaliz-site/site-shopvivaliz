@@ -129,6 +129,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("pgrep -u fredrdp", guardian_body)
         self.assertIn('systemctl start "$browser_unit"', guardian_body)
         self.assertNotIn("kill ", guardian_body)
+        self.assertNotIn("exit 0", guardian_body)
+        self.assertIn('exit "$status"', guardian_body)
         timer_body = timer.read_text(encoding="utf-8")
         self.assertIn("OnUnitActiveSec=30s", timer_body)
         self.assertIn("AccuracySec=1s", timer_body)
