@@ -582,6 +582,103 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
   }
 }
 
+async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
+  const requestedTimeout = Number(timeoutMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+    ? Math.max(10, requestedTimeout)
+    : STREAM_STATUS_TIMEOUT_MS;
+  let outerTimeoutHandle;
+  try {
+    return await Promise.race([
+      cdp.evaluate(`(async()=>{
+        /* conversation-turn-state */
+        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        if(!match) {
+          return {
+            http_status:0,
+            role:'',
+            end_turn:null,
+            child_count:-1,
+            message_status:'NO_CONVERSATION'
+          };
+        }
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        try{
+          const response=await fetch(
+            '/backend-api/conversation/'+encodeURIComponent(match[1]),
+            {credentials:'same-origin',cache:'no-store',signal:controller.signal}
+          );
+          let body=null;
+          try{body=await response.json();}catch{}
+          if(!response.ok){
+            return {
+              http_status:Number(response.status||0),
+              role:'',
+              end_turn:null,
+              child_count:-1,
+              message_status:'HTTP_ERROR'
+            };
+          }
+          const current=String(body?.current_node||'');
+          const node=current && body?.mapping ? body.mapping[current] : null;
+          const message=node?.message||null;
+          const endTurn=message?.end_turn;
+          return {
+            http_status:Number(response.status||0),
+            role:String(message?.author?.role||''),
+            end_turn:endTurn===true?true:(endTurn===false?false:null),
+            child_count:Array.isArray(node?.children)?node.children.length:-1,
+            message_status:String(message?.status||'')
+          };
+        }catch(error){
+          return {
+            http_status:0,
+            role:'',
+            end_turn:null,
+            child_count:-1,
+            message_status:String(error?.name||'')==='AbortError'?'FETCH_TIMEOUT':'FETCH_FAILED'
+          };
+        }finally{
+          clearTimeout(timer);
+        }
+      })()`),
+      new Promise(resolve => {
+        outerTimeoutHandle = setTimeout(
+          () => resolve({
+            http_status: 0,
+            role: '',
+            end_turn: null,
+            child_count: -1,
+            message_status: 'FETCH_TIMEOUT',
+          }),
+          boundedTimeoutMs + 250,
+        );
+      }),
+    ]);
+  } finally {
+    if (outerTimeoutHandle) clearTimeout(outerTimeoutHandle);
+  }
+}
+
+async function silentStallPresent(cdp) {
+  const stream = await conversationStreamStatus(cdp);
+  if (
+    Number(stream?.http_status || 0) !== 200
+    || String(stream?.status || '').toUpperCase() !== 'COMPLETE'
+  ) {
+    return false;
+  }
+
+  const turn = await conversationTurnState(cdp);
+  return (
+    Number(turn?.http_status || 0) === 200
+    && String(turn?.role || '').toLowerCase() === 'assistant'
+    && turn?.end_turn === false
+    && Number(turn?.child_count) === 0
+  );
+}
+
 async function clearStaleCompleteGeneration(cdp) {
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
@@ -1073,13 +1170,16 @@ async function reinforcementCheckOnce(
   let crossDeviceDiscovery = false;
   let alignmentHttpStatus = 0;
   let restorePath = '';
+  let failureSignal = '';
   try {
     cdp = await connect();
 
     // Cheap, local signal first. Do not hit the account-scoped conversation
     // listing when the currently open conversation already exposes a failure.
     let bannerPresent = await errorBannerPresent(cdp);
-    if (!bannerPresent) {
+    if (bannerPresent) {
+      failureSignal = 'banner';
+    } else {
       if (!allowCrossDeviceDiscovery) {
         return { action: 'no_banner', cross_device_discovery: false };
       }
@@ -1104,18 +1204,16 @@ async function reinforcementCheckOnce(
           cross_device_discovery: true,
         };
       }
-      if (
-        alignment.action === 'already_latest'
-        || alignment.action === 'already_latest_sidebar_fallback'
-      ) {
-        return {
-          action: 'no_banner',
-          http_status: alignmentHttpStatus,
-          cross_device_discovery: true,
-        };
-      }
+
       bannerPresent = await errorBannerPresent(cdp);
-      if (!bannerPresent) {
+      if (bannerPresent) {
+        failureSignal = 'banner';
+      } else if (await silentStallPresent(cdp)) {
+        // The iOS client can show "Transmissão interrompida" while the same
+        // latest conversation has no banner in the canonical VM. Only the
+        // canonical unfinished-turn shape below is accepted as equivalent.
+        failureSignal = 'silent_stall';
+      } else {
         return {
           action: 'no_banner',
           http_status: alignmentHttpStatus,
@@ -1127,14 +1225,92 @@ async function reinforcementCheckOnce(
     await sleep(confirmDelayMs);
     cdp.close();
     cdp = await connect();
-    if (!(await errorBannerPresent(cdp))) {
-      console.log('chatgpt_continuity_reinforcement error_banner_self_resolved');
+
+    let failureStillPresent = await errorBannerPresent(cdp);
+    if (!failureStillPresent && crossDeviceDiscovery) {
+      const silentStillPresent = await silentStallPresent(cdp);
+      if (silentStillPresent) {
+        failureSignal = 'silent_stall';
+        failureStillPresent = true;
+      }
+    }
+    if (!failureStillPresent) {
+      console.log(`chatgpt_continuity_reinforcement ${failureSignal || 'failure'}_self_resolved`);
       return {
         action: 'self_resolved',
         http_status: alignmentHttpStatus,
         cross_device_discovery: crossDeviceDiscovery,
       };
     }
+
+    if (failureSignal === 'silent_stall') {
+      const passiveBaseline = await assistantSnapshot(cdp);
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+      const passiveProgressed = await confirmProgress(
+        cdp,
+        passiveBaseline,
+        PASSIVE_REATTACH_CONFIRM_MS,
+        PROGRESS_POLL_MS,
+      );
+      if (passiveProgressed) {
+        console.log('chatgpt_continuity_reinforcement silent_stall_passive_reattach_progress=true');
+        return {
+          action: 'self_resolved',
+          sent: false,
+          progress_confirmed: true,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      if (!(await silentStallPresent(cdp))) {
+        console.log('chatgpt_continuity_reinforcement silent_stall_state_cleared_after_reattach');
+        return {
+          action: 'self_resolved',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      if (!(await waitForComposerUsable(cdp))) {
+        console.log('chatgpt_continuity_reinforcement silent_stall_confirmed composer=false');
+        return {
+          action: 'send_failed',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      const baseline = await assistantSnapshot(cdp);
+      const sent = await sendContinueMessage(cdp);
+      if (!sent) {
+        console.log('chatgpt_continuity_reinforcement silent_stall_confirmed sent=false');
+        return {
+          action: 'send_failed',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      const progressed = await confirmProgress(cdp, baseline);
+      const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
+      console.log(`chatgpt_continuity_reinforcement silent_stall_confirmed sent=true progress=${progressed}`);
+      return {
+        action,
+        sent: true,
+        progress_confirmed: progressed,
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
+    }
+
     const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
     if (!sent) {
@@ -1256,6 +1432,8 @@ export {
   resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   conversationStreamStatus,
+  conversationTurnState,
+  silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
