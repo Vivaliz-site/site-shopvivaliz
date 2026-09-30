@@ -484,17 +484,40 @@ async function run() {
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
 
-  const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
+  const noComposer = await attemptNudge(
+    'task-1',
+    async () => fakeCdp({ composerUsable: false }),
+    async () => false,
+  );
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
 
-  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }), async () => true);
+  let sentOkConfirmCalls = 0;
+  const sentOkCdp = fakeCdp({ sendSucceeds: true });
+  const sentOk = await attemptNudge(
+    'task-1',
+    async () => sentOkCdp,
+    async () => {
+      sentOkConfirmCalls += 1;
+      return sentOkConfirmCalls > 1;
+    },
+  );
   assert.equal(sentOk.result_status, 'PROGRESS_CONFIRMED');
+  assert.ok(sentOkCdp.calls.findIndex(call => call.includes('location.reload')) >= 0);
+  assert.ok(
+    sentOkCdp.calls.findIndex(call => call.includes('b.click()'))
+      > sentOkCdp.calls.findIndex(call => call.includes('location.reload')),
+    'send path must remain available after passive reattach found no progress',
+  );
 
   const sentButNoProgress = await attemptNudge('task-no-progress', async () => fakeCdp({ sendSucceeds: true }), async () => false);
   assert.equal(sentButNoProgress.result_status, 'SENT_UNCONFIRMED');
   assert.match(sentButNoProgress.detail, /no assistant progress/i);
 
-  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }), async () => true);
+  const sendFailed = await attemptNudge(
+    'task-1',
+    async () => fakeCdp({ sendSucceeds: false }),
+    async () => false,
+  );
   assert.equal(sendFailed.result_status, 'ERROR');
 
   const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); });
