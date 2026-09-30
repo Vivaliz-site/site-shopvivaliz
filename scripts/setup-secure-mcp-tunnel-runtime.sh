@@ -35,6 +35,24 @@ count_tunnel_processes() {
   fi
 }
 
+health_endpoint_ok() {
+  local path="$1"
+  curl -fsS --connect-timeout 2 --max-time 4 "http://127.0.0.1:8080$path" >/dev/null 2>&1
+}
+
+emit_health_snapshot() {
+  if health_endpoint_ok /healthz; then
+    echo "SECURE_MCP_RUNTIME_HEALTHZ=true"
+  else
+    echo "SECURE_MCP_RUNTIME_HEALTHZ=false"
+  fi
+  if health_endpoint_ok /readyz; then
+    echo "SECURE_MCP_RUNTIME_READYZ=true"
+  else
+    echo "SECURE_MCP_RUNTIME_READYZ=false"
+  fi
+}
+
 find_client() {
   local candidate=""
   if candidate="$(run_as_tunnel_user bash -lc 'command -v tunnel-client 2>/dev/null')" && [ -x "$candidate" ]; then
@@ -194,6 +212,7 @@ diagnose() {
     echo "SECURE_MCP_RUNTIME_DOCTOR=false"
   fi
 
+  emit_health_snapshot
   echo "SECURE_MCP_RUNTIME_INITIALIZATION_ERRORS=$(initialization_error_count)"
   rm -f "$runtime_tmp"
   trap - RETURN
@@ -292,18 +311,28 @@ install_runtime() {
   done
   [ "$active" = true ] || die service_not_active 34
 
+  local ready=false
+  for _ in $(seq 1 30); do
+    if health_endpoint_ok /healthz && health_endpoint_ok /readyz; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  [ "$ready" = true ] || die runtime_not_ready 35
+
   local count
   count="$(count_tunnel_processes)"
-  [ "$count" = "1" ] || die tunnel_client_process_count 35
+  [ "$count" = "1" ] || die tunnel_client_process_count 36
 
-  doctor_ok "$CANONICAL_BIN" || die post_install_doctor_failed 36
+  doctor_ok "$CANONICAL_BIN" || die post_install_doctor_failed 37
 
   local restarts
   restarts="$(systemctl show "$SERVICE" -p NRestarts --value)"
   case "$restarts" in
-    ''|*[!0-9]*) die service_restart_counter_invalid 37 ;;
+    ''|*[!0-9]*) die service_restart_counter_invalid 38 ;;
   esac
-  [ "$restarts" -le 1 ] || die service_restart_loop 38
+  [ "$restarts" -le 1 ] || die service_restart_loop 39
 
   echo "SECURE_MCP_RUNTIME_REPAIR=PASS"
 }
@@ -320,6 +349,10 @@ validate_runtime() {
   [ "$count" = "1" ] || die tunnel_client_process_count 54
 
   systemctl is-active --quiet shopvivaliz-remote-control-mcp.service || die controller_inactive 55
+  health_endpoint_ok /healthz || die healthz_failed 56
+  health_endpoint_ok /readyz || die readyz_failed 57
+  echo "SECURE_MCP_RUNTIME_HEALTHZ=PASS"
+  echo "SECURE_MCP_RUNTIME_READYZ=PASS"
 
   echo "SECURE_MCP_RUNTIME_FINAL=PASS"
 }
