@@ -191,8 +191,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
     def test_chatgpt_browser_guardian_requires_runtime_evaluate_health(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
-        self.assertIn("Cdp.connectToChatgptTab", body)
+        self.assertIn("connectFirstUsableChatgptTab", body)
         self.assertIn("c.evaluate", body)
+        self.assertNotIn("Cdp.connectToChatgptTab", body)
 
     def test_chatgpt_browser_guardian_restarts_managed_browser_when_runtime_evaluate_fails(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
