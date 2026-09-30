@@ -265,7 +265,7 @@ jobs:
               echo "REMOTE_STORAGE_SCAN_END"
               ;;
             runtime_status)
-              bash scripts/runtime-service-status.sh site
+              bash scripts/runtime-status-policy.sh site
               ;;
             amazon_support_readback)
               sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
@@ -527,7 +527,7 @@ jobs:
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
           if [ "$ACTION" = "runtime_status" ]; then
-            "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-service-status.sh
+            "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-status-policy.sh
             exit 0
           fi
           case "$ACTION" in
