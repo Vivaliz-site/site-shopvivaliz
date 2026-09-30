@@ -333,6 +333,20 @@ disable_abandoned_cart_recovery_timer() {
   fi
 }
 
+disable_shopee_logistics_watchdog() {
+  local timer="shopvivaliz-shopee-logistics-watchdog.timer"
+  local service="shopvivaliz-shopee-logistics-watchdog.service"
+  if sudo systemctl cat "$timer" >/dev/null 2>&1; then
+    if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao desabilitar watchdog de logistica Shopee no rollback"
+      return 1
+    fi
+  fi
+  if sudo systemctl cat "$service" >/dev/null 2>&1; then
+    sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+  fi
+}
+
 reconcile_shopee_logistics_units() {
   local release_path="$1"
   local installer="$release_path/scripts/install-shopee-logistics-worker.sh"
@@ -345,11 +359,18 @@ reconcile_shopee_logistics_units() {
     log ERROR "Falha ao reconciliar worker de logistica Shopee"
     return 1
   fi
+  # Rollback para uma release anterior ao watchdog deve remover o timer novo,
+  # evitando que ele tente executar um script inexistente apos o cutback.
+  if [ ! -f "$release_path/deploy/systemd/shopvivaliz-shopee-logistics-watchdog.service" ] \
+    || [ ! -f "$release_path/deploy/systemd/shopvivaliz-shopee-logistics-watchdog.timer" ]; then
+    disable_shopee_logistics_watchdog || return 1
+  fi
 }
 
 disable_shopee_logistics_timer() {
   local timer="shopvivaliz-shopee-logistics-worker.timer"
   local service="shopvivaliz-shopee-logistics-worker.service"
+  disable_shopee_logistics_watchdog || return 1
   if sudo systemctl cat "$timer" >/dev/null 2>&1; then
     if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
       log ERROR "Falha ao desabilitar timer de logistica Shopee no rollback"
