@@ -3,8 +3,21 @@ set -Eeuo pipefail
 
 unit='shopvivaliz-chatgpt-continuity.service'
 tunnel_unit='shopvivaliz-chatgpt-continuity-a1-tunnel.service'
+browser_unit='shopvivaliz-chatgpt-browser.service'
+browser_guardian_service='shopvivaliz-chatgpt-browser-guardian.service'
+browser_guardian_timer='shopvivaliz-chatgpt-browser-guardian.timer'
 tunnel_key='/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor'
-worker_source="${CHATGPT_CONTINUITY_WORKER_SOURCE:-$(cd "$(dirname "$0")" && pwd)/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+worker_source="${CHATGPT_CONTINUITY_WORKER_SOURCE:-$script_dir/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
+browser_unit_source="$repo_root/ops/systemd/$browser_unit"
+browser_unit_target="/etc/systemd/system/$browser_unit"
+browser_guardian_source="$script_dir/chatgpt-continuity/chatgpt-browser-guardian.sh"
+browser_guardian_target="/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh"
+browser_guardian_service_source="$repo_root/ops/systemd/$browser_guardian_service"
+browser_guardian_service_target="/etc/systemd/system/$browser_guardian_service"
+browser_guardian_timer_source="$repo_root/ops/systemd/$browser_guardian_timer"
+browser_guardian_timer_target="/etc/systemd/system/$browser_guardian_timer"
 install_root='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity'
 config_root='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity'
 worker="$install_root/chatgpt-continuity-bridge-worker.mjs"
@@ -31,6 +44,18 @@ install_if_changed() {
   return 0
 }
 
+sudo_install_if_changed() {
+  local source="$1"
+  local target="$2"
+  local mode="$3"
+  if sudo -n test -f "$target" && sudo -n cmp -s "$source" "$target"; then
+    sudo -n chmod "$mode" "$target"
+    return 1
+  fi
+  sudo -n install -m "$mode" "$source" "$target"
+  return 0
+}
+
 [[ "$(id -u)" -ne 0 ]] || fail 'run as ubuntu, not root'
 node_bin="$(command -v node || true)"
 ssh_bin="$(command -v ssh || true)"
@@ -39,7 +64,13 @@ ssh_bin="$(command -v ssh || true)"
 command -v systemctl >/dev/null || fail 'systemctl is required'
 command -v curl >/dev/null || fail 'curl is required'
 command -v cmp >/dev/null || fail 'cmp is required'
+command -v sudo >/dev/null || fail 'sudo is required'
+sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser supervision'
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
+[[ -f "$browser_unit_source" ]] || fail "browser systemd unit missing: $browser_unit_source"
+[[ -f "$browser_guardian_source" ]] || fail "browser guardian missing: $browser_guardian_source"
+[[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
+[[ -f "$browser_guardian_timer_source" ]] || fail "browser guardian timer missing: $browser_guardian_timer_source"
 [[ -s "$token_file" ]] || fail "protected bridge token missing: $token_file"
 [[ -s "$tunnel_key" ]] || fail "private A1 tunnel key missing: $tunnel_key"
 
@@ -112,6 +143,32 @@ continuity_unit_changed=false
 if install_if_changed "$continuity_unit_tmp" "$HOME/.config/systemd/user/$unit" 644; then
   continuity_unit_changed=true
 fi
+
+sudo -n install -d -m 755 /usr/local/libexec
+system_units_changed=false
+browser_unit_changed=false
+if sudo_install_if_changed "$browser_unit_source" "$browser_unit_target" 644; then
+  browser_unit_changed=true
+  system_units_changed=true
+fi
+if sudo_install_if_changed "$browser_guardian_source" "$browser_guardian_target" 755; then
+  system_units_changed=true
+fi
+if sudo_install_if_changed "$browser_guardian_service_source" "$browser_guardian_service_target" 644; then
+  system_units_changed=true
+fi
+if sudo_install_if_changed "$browser_guardian_timer_source" "$browser_guardian_timer_target" 644; then
+  system_units_changed=true
+fi
+if [[ "$system_units_changed" = true ]]; then
+  sudo -n systemctl daemon-reload
+fi
+sudo -n systemctl enable "$browser_unit" >/dev/null
+if sudo -n systemctl is-active --quiet "$browser_unit" && [[ "$browser_unit_changed" = true ]]; then
+  sudo -n systemctl try-restart "$browser_unit"
+fi
+sudo -n systemctl enable --now "$browser_guardian_timer" >/dev/null
+sudo -n systemctl start "$browser_guardian_service"
 
 if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true ]]; then
   systemctl --user daemon-reload

@@ -98,6 +98,44 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertNotIn('systemctl --user restart "$tunnel_unit"\n', body)
         self.assertNotIn('systemctl --user restart "$unit"\n', body)
 
+    def test_canonical_chatgpt_browser_is_supervised_by_systemd(self) -> None:
+        installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
+        unit = ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser.service"
+        self.assertTrue(unit.is_file(), "canonical ChatGPT browser systemd unit must exist")
+        body = unit.read_text(encoding="utf-8")
+        self.assertIn("User=fredrdp", body)
+        self.assertIn("Environment=HOME=/home/fredrdp", body)
+        self.assertIn("Environment=DISPLAY=:0", body)
+        self.assertIn("--remote-debugging-port=9555", body)
+        self.assertIn("--user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium", body)
+        self.assertIn("Restart=always", body)
+        self.assertIn("ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X0", body)
+        install_body = installer.read_text(encoding="utf-8")
+        self.assertIn("shopvivaliz-chatgpt-browser.service", install_body)
+        self.assertIn("sudo -n systemctl enable", install_body)
+        self.assertIn("sudo_install_if_changed()", install_body)
+
+    def test_chatgpt_browser_guardian_starts_managed_browser_without_killing_live_profile(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        service = ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser-guardian.service"
+        timer = ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser-guardian.timer"
+        installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
+        self.assertTrue(guardian.is_file())
+        self.assertTrue(service.is_file())
+        self.assertTrue(timer.is_file())
+        guardian_body = guardian.read_text(encoding="utf-8")
+        self.assertIn("http://127.0.0.1:9555/json/version", guardian_body)
+        self.assertIn('curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null', guardian_body)
+        self.assertIn("pgrep -u fredrdp", guardian_body)
+        self.assertIn('systemctl start "$browser_unit"', guardian_body)
+        self.assertNotIn("kill ", guardian_body)
+        timer_body = timer.read_text(encoding="utf-8")
+        self.assertIn("OnUnitActiveSec=30s", timer_body)
+        self.assertIn("AccuracySec=1s", timer_body)
+        install_body = installer.read_text(encoding="utf-8")
+        self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
+        self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
+
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", bridge)
