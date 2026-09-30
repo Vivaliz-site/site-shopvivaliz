@@ -871,6 +871,29 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, repair)
 
+    def test_chatgpt_continuity_repairs_stage_full_installer_tree(self):
+        remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        remote_repair = remote.split("            chatgpt_continuity_repair)", 1)[1].split("              ;;", 1)[0]
+        oci_repair = oci.split("- name: ChatGPT continuity repair through OCI Bastion", 1)[1].split("- name:", 1)[0]
+
+        required_sources = (
+            "scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
+            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
+        )
+        for block in (remote_repair, oci_repair):
+            for needle in required_sources:
+                self.assertIn(needle, block)
+            self.assertIn("$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh", block)
+            self.assertIn("$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs", block)
+            self.assertIn("$remote_dir/ops/systemd", block)
+            self.assertNotIn("$remote_dir/install.sh", block)
+            self.assertNotIn("$remote_dir/worker.mjs", block)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
