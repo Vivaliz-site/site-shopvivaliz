@@ -8,6 +8,8 @@ import {
   latestConversationMeta,
   alignToLatestConversation,
   alignLatestForReinforcement,
+  assistantSnapshot,
+  assistantProgressed,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
@@ -163,6 +165,33 @@ async function run() {
       globalThis.fetch = originalFetch;
     }
   }
+
+  // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only
+  // through data-message-author-role. Progress confirmation must also see the
+  // virtualized data-turn-key/data-conversation-role structure, without
+  // dropping the legacy selector.
+  {
+    let expressionSeen = '';
+    const cdp = {
+      async evaluate(expression) {
+        expressionSeen = expression;
+        return { count: 1, lastText: 'done', lastLength: 4, lastKey: 'turn-current' };
+      },
+    };
+    const snapshot = await assistantSnapshot(cdp);
+    assert.equal(snapshot.count, 1);
+    assert.match(expressionSeen, /data-message-author-role/);
+    assert.match(expressionSeen, /data-conversation-role/);
+    assert.match(expressionSeen, /data-turn-key/);
+  }
+  assert.equal(
+    assistantProgressed(
+      { count: 1, lastText: 'a much longer previous answer', lastLength: 29, lastKey: 'turn-old' },
+      { count: 1, lastText: 'ok', lastLength: 2, lastKey: 'turn-new' },
+    ),
+    true,
+    'a new assistant turn key must confirm progress even when virtualization keeps count stable and the new answer is shorter',
+  );
 
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.

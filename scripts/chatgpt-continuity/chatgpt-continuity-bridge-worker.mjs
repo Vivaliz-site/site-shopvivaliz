@@ -282,17 +282,33 @@ async function composerIsUsable(cdp) {
 
 async function assistantSnapshot(cdp) {
   return cdp.evaluate(`(()=>{
-    const nodes=Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'));
+    const candidates=[
+      ...document.querySelectorAll('[data-message-author-role="assistant"]'),
+      ...document.querySelectorAll('[data-conversation-role="assistant"]')
+    ];
+    const nodes=[];
+    const seen=new Set();
+    for(const candidate of candidates){
+      const node=candidate.closest('[data-turn-key]')||candidate;
+      if(!node||seen.has(node)) continue;
+      seen.add(node);
+      nodes.push(node);
+    }
     const last=nodes.length ? nodes[nodes.length-1] : null;
     const lastText=(last?.innerText||last?.textContent||'').trim();
-    return {count:nodes.length,lastText,lastLength:lastText.length};
+    const keyed=last?.closest?.('[data-turn-key]')||last;
+    const lastKey=String(keyed?.getAttribute?.('data-turn-key')||'');
+    return {count:nodes.length,lastText,lastLength:lastText.length,lastKey};
   })()`);
 }
 
 function assistantProgressed(before, after) {
-  const prior = before || { count: 0, lastText: '', lastLength: 0 };
-  const current = after || { count: 0, lastText: '', lastLength: 0 };
+  const prior = before || { count: 0, lastText: '', lastLength: 0, lastKey: '' };
+  const current = after || { count: 0, lastText: '', lastLength: 0, lastKey: '' };
   if (Number(current.count || 0) > Number(prior.count || 0)) return true;
+  const priorKey = String(prior.lastKey || '');
+  const currentKey = String(current.lastKey || '');
+  if (priorKey && currentKey && currentKey !== priorKey) return true;
   const priorText = String(prior.lastText || '');
   const currentText = String(current.lastText || '');
   return currentText.length > priorText.length && currentText !== priorText;
