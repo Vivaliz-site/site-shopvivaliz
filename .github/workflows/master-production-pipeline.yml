@@ -298,11 +298,11 @@ jobs:
           # restore only this token's least-privilege metadata immediately.
           continuity_token_dir="$shared/storage/private/chatgpt-continuity"
           continuity_token_file="$continuity_token_dir/bridge.token"
-          if [ -e "$continuity_token_file" ]; then
-            test -d "$continuity_token_dir"
-            test ! -L "$continuity_token_dir"
-            test -f "$continuity_token_file"
-            test ! -L "$continuity_token_file"
+          if sudo test -e "$continuity_token_file"; then
+            sudo test -d "$continuity_token_dir"
+            ! sudo test -L "$continuity_token_dir"
+            sudo test -f "$continuity_token_file"
+            ! sudo test -L "$continuity_token_file"
             continuity_token_before="$(sudo sha256sum -- "$continuity_token_file" | awk '{print $1}')"
             test -n "$continuity_token_before"
             sudo chown www-data:ubuntu "$continuity_token_dir" "$continuity_token_file"

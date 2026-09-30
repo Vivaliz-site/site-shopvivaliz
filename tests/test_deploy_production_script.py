@@ -295,6 +295,9 @@ def test_deploy_restores_chatgpt_continuity_token_access_after_storage_reconcile
     assert 'sudo chmod 0750 "$token_dir"' in text
     assert 'sudo chmod 0640 "$token_file"' in text
     assert 'sudo -u ubuntu test -r "$token_file"' in text
+    assert 'sudo test -e "$token_file"' in text
+    assert 'sudo test -d "$token_dir"' in text
+    assert 'if [ ! -e "$token_file" ]; then' not in text
     assert 'sha256sum -- "$token_file"' in text
     assert re.search(
         r"reconcile_shared_runtime_permissions; then.*?reconcile_chatgpt_continuity_dispatcher_token_access",
