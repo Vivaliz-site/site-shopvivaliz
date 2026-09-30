@@ -1172,6 +1172,9 @@ jobs:
           except (OSError,UnicodeError):
               token_available=False
           dispatcher_log_seen=False
+          dispatcher_last_cycle_at='NONE'
+          dispatcher_log_fresh=False
+          dispatcher_event_suffix='] ChatGPT continuity nudge dispatcher completed.'
           log_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/logs/autonomous-agent.log')
           try:
               if log_path.is_file():
@@ -1180,9 +1183,27 @@ jobs:
                       size=handle.tell()
                       handle.seek(max(0,size-524288))
                       tail=handle.read().decode('utf-8',errors='replace')
-                  dispatcher_log_seen='ChatGPT continuity nudge dispatcher completed.' in tail
+                  for line in tail.splitlines():
+                      candidate_line=line.strip()
+                      if not candidate_line.startswith('[') or not candidate_line.endswith(dispatcher_event_suffix):
+                          continue
+                      candidate=candidate_line[1:21]
+                      if candidate_line!='['+candidate+dispatcher_event_suffix:
+                          continue
+                      if timestamp_re.fullmatch(candidate) and (
+                          dispatcher_last_cycle_at=='NONE' or candidate>dispatcher_last_cycle_at
+                      ):
+                          dispatcher_last_cycle_at=candidate
+                  dispatcher_log_fresh=(
+                      dispatcher_last_cycle_at!='NONE'
+                      and latest_generation_updated_at!='NONE'
+                      and dispatcher_last_cycle_at>=latest_generation_updated_at
+                  )
+                  dispatcher_log_seen=dispatcher_log_fresh
           except OSError:
               dispatcher_log_seen=False
+              dispatcher_last_cycle_at='NONE'
+              dispatcher_log_fresh=False
           print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
           print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
           print('CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER='+str(latest_generation_number))
@@ -1216,6 +1237,8 @@ jobs:
           print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED='+str(bridge_queue_resolved))
           print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
           print('CHATGPT_CONTINUITY_TOKEN_AVAILABLE='+('true' if token_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT='+dispatcher_last_cycle_at)
+          print('CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH='+('true' if dispatcher_log_fresh else 'false'))
           print('CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN='+('true' if dispatcher_log_seen else 'false'))
           print('CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS='+latest)
           INNER
@@ -1333,6 +1356,8 @@ jobs:
               'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
               'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
               'CHATGPT_CONTINUITY_TOKEN_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT',
+              'CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH',
               'CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN',
               'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS',
               'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE',
@@ -1440,6 +1465,7 @@ jobs:
                       'CHATGPT_CONTINUITY_LATEST_GENERATION_COMPLETED_AT',
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
                       'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT',
                   }:
                       if value != 'NONE' and not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', value):
                           raise RuntimeError('invalid task timestamp')
