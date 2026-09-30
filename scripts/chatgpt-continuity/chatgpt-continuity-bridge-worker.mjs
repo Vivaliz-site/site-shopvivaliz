@@ -60,6 +60,7 @@ const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
+const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -141,6 +142,52 @@ async function connectFirstUsableChatgptTab(tabs, connector) {
   return null;
 }
 
+function conversationIdFromTab(tab) {
+  if (chatgptTabRank(tab) !== 0) return '';
+  try {
+    return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
+  } catch {
+    return '';
+  }
+}
+
+async function resolveAmbiguousConversationTabs(
+  tabs,
+  connector,
+  probeLatest = latestConversationProbe,
+  nowMs = Date.now(),
+  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+) {
+  const sourceTabs = Array.isArray(tabs) ? tabs : [];
+  const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
+  if (conversationIds.size <= 1) return sourceTabs;
+
+  let discoveryCdp;
+  try {
+    discoveryCdp = await connectFirstUsableChatgptTab(sourceTabs, connector);
+    if (!discoveryCdp) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const latest = normalizeLatestConversationMeta(await probeLatest(discoveryCdp));
+    if (!latest) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const updatedAtMs = Number(latest.update_time) * 1000;
+    const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
+    const ageLimitMs = Math.max(60_000, Number(maxAgeMs || RECENT_CONVERSATION_MAX_AGE_MS));
+    if (!Number.isFinite(ageMs) || ageMs > ageLimitMs) {
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+
+    const latestTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
+    if (latestTabs.length === 0) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    return latestTabs;
+  } catch (error) {
+    if (text(error?.message) === AMBIGUOUS_CONVERSATION_ERROR) throw error;
+    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+  } finally {
+    try { discoveryCdp?.close(); } catch {}
+  }
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -155,7 +202,7 @@ class Cdp {
     });
   }
 
-  static async connectToChatgptTab() {
+  static async connectToChatgptTab({ allowLatestDisambiguation = false } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
         `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
@@ -165,46 +212,14 @@ class Cdp {
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
     const conversationIds = new Set(
-      (Array.isArray(tabs) ? tabs : [])
-        .filter(tab => chatgptTabRank(tab) === 0)
-        .map(tab => {
-          try {
-            return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
-          } catch {
-            return '';
-          }
-        })
-        .filter(Boolean),
+      (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
+    let candidateTabs = tabs;
     if (conversationIds.size > 1) {
-      throw new Error(
-        'multiple open ChatGPT conversation tabs found; continuity target is ambiguous'
-      );
+      if (!allowLatestDisambiguation) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      candidateTabs = await resolveAmbiguousConversationTabs(tabs, connectCdpTarget);
     }
-    const connected = await connectFirstUsableChatgptTab(tabs, async page => {
-      let ws;
-      let cdp;
-      try {
-        ws = new WebSocket(page.webSocketDebuggerUrl);
-        await Promise.race([
-          new Promise((resolve, reject) => {
-            ws.addEventListener('open', resolve, { once: true });
-            ws.addEventListener('error', reject, { once: true });
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target open timeout')), 3000)),
-        ]);
-        cdp = new Cdp(ws);
-        await Promise.race([
-          cdp.evaluate('true'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target liveness timeout')), 3000)),
-        ]);
-        return cdp;
-      } catch (error) {
-        try { cdp?.close(); } catch {}
-        try { ws?.close(); } catch {}
-        throw error;
-      }
-    });
+    const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget);
     if (!connected) {
       throw new Error('no usable open chatgpt.com tab found in the attached browser');
     }
@@ -232,6 +247,31 @@ class Cdp {
 
   close() {
     try { this.ws.close(); } catch {}
+  }
+}
+
+async function connectCdpTarget(page) {
+  let ws;
+  let cdp;
+  try {
+    ws = new WebSocket(page.webSocketDebuggerUrl);
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        ws.addEventListener('open', resolve, { once: true });
+        ws.addEventListener('error', reject, { once: true });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target open timeout')), 3000)),
+    ]);
+    cdp = new Cdp(ws);
+    await Promise.race([
+      cdp.evaluate('true'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target liveness timeout')), 3000)),
+    ]);
+    return cdp;
+  } catch (error) {
+    try { cdp?.close(); } catch {}
+    try { ws?.close(); } catch {}
+    throw error;
   }
 }
 
@@ -543,7 +583,7 @@ async function sendContinueMessage(cdp) {
 
 async function attemptNudge(
   taskId,
-  connect = () => Cdp.connectToChatgptTab(),
+  connect = () => Cdp.connectToChatgptTab({ allowLatestDisambiguation: true }),
   confirmProgress = confirmAssistantProgress,
 ) {
   let cdp;
@@ -824,6 +864,7 @@ export {
   Cdp,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,

@@ -17,6 +17,7 @@ import {
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  resolveAmbiguousConversationTabs,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -164,6 +165,72 @@ async function run() {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    let discoveryConnections = 0;
+    let discoveryCloses = 0;
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => {
+        discoveryConnections += 1;
+        return { close() { discoveryCloses += 1; } };
+      },
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-thread',
+        update_time: Math.floor(now / 1000),
+      }),
+      now,
+    );
+    assert.equal(discoveryConnections, 1, 'ambiguous tabs need exactly one read-only discovery connection');
+    assert.equal(discoveryCloses, 1, 'the temporary discovery connection must always close');
+    assert.equal(candidates.length, 2, 'duplicate targets for the same latest conversation remain valid');
+    assert.ok(
+      candidates.every(tab => tab.url.includes('/c/latest-thread')),
+      'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({ http_status: 429, source: 'filtered', item_present: false }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      '429/latest-unavailable must remain fail-closed instead of guessing a target',
+    );
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-thread',
+          update_time: Math.floor((now - 20 * 60 * 1000) / 1000),
+        }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'a stale latest conversation must remain fail-closed',
+    );
   }
 
   // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only
