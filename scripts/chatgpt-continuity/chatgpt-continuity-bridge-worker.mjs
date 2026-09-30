@@ -823,6 +823,18 @@ async function alignLatestForReinforcement(
   return { ...alignment, http_status: httpStatus };
 }
 
+async function transmissionErrorPresent(cdp) {
+  const state = await cdp.pageState(6000);
+  const haystack = String(state.text || '').toLowerCase();
+  return (
+    haystack.includes('erro na transmissão')
+    || haystack.includes('erro na transmissao')
+    || haystack.includes('error sending message')
+    || haystack.includes('error in message transmission')
+    || haystack.includes('message transmission error')
+  );
+}
+
 async function errorBannerPresent(cdp) {
   // ChatGPT surfaces an explicit banner on a genuine stream failure -- this
   // is the one unambiguous, well-known DOM signal available to a script
@@ -964,7 +976,48 @@ async function attemptNudge(
     const sent = await sendContinueMessage(cdp);
     if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed' };
 
-    const progressed = await confirmProgress(cdp, baseline);
+    let progressed = await confirmProgress(cdp, baseline);
+    if (!progressed && await transmissionErrorPresent(cdp)) {
+      // A real iOS capture shows an explicit "Erro na transmissão de mensagem".
+      // Treat this as a transport failure, not as an ambiguous unconfirmed send:
+      // reload/reattach once and retry only after the UI still reports the error.
+      const retryBaseline = await assistantSnapshot(cdp);
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+      if (await confirmProgress(cdp, retryBaseline, PASSIVE_REATTACH_CONFIRM_MS, PROGRESS_POLL_MS)) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'transmission error recovered during passive reattach without duplicate continuation',
+        };
+      }
+      if (!(await waitComposer(cdp))) {
+        return {
+          result_status: 'ERROR',
+          detail: 'transmission error persisted and composer was unavailable after reattach',
+        };
+      }
+      const retryAfterReattachBaseline = await assistantSnapshot(cdp);
+      const retrySent = await sendContinueMessage(cdp);
+      if (!retrySent) {
+        return {
+          result_status: 'ERROR',
+          detail: 'transmission error persisted and retry send failed',
+        };
+      }
+      progressed = await confirmProgress(cdp, retryAfterReattachBaseline);
+      if (progressed) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'transmission error recovered by one bounded reattach and retry',
+        };
+      }
+      if (await transmissionErrorPresent(cdp)) {
+        return {
+          result_status: 'ERROR',
+          detail: 'transmission error persisted after bounded recovery retry',
+        };
+      }
+    }
     if (!progressed) {
       return {
         result_status: 'SENT_UNCONFIRMED',
@@ -1202,6 +1255,7 @@ export {
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
+  transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
   latestConversationMeta,
