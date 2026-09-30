@@ -599,12 +599,16 @@ jobs:
               }
               trap cleanup_continuity_repair RETURN
 
+              sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
               if ! sudo -n test -s "$token_file"; then
                 umask 077
                 python3 -c 'import secrets; print(secrets.token_hex(32))' > "$local_tmp"
-                sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
                 sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
               fi
+              # Normalize metadata even for a pre-existing token. The site
+              # dispatcher runs as ubuntu:ubuntu while PHP owns the token.
+              sudo -n chown www-data:ubuntu "$token_file"
+              sudo -n chmod 640 "$token_file"
               sudo -n python3 - "$token_file" <<'PY'
           import pathlib, sys
           value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
