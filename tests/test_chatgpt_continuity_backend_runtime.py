@@ -205,23 +205,23 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             def executable(name: str, body: str) -> None:
                 path = fake_bin / name
-                path.write_text("#!/usr/bin/env bash\\nset -Eeuo pipefail\\n" + body, encoding="utf-8")
+                path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\n" + body, encoding="utf-8")
                 path.chmod(0o755)
 
-            executable("curl", "printf '{\\\"webSocketDebuggerUrl\\\":\\\"ws://127.0.0.1/test\\\"}'\\n")
+            executable("curl", "printf '{\\\"webSocketDebuggerUrl\\\":\\\"ws://127.0.0.1/test\\\"}'\n")
             executable(
                 "node",
                 'count=0; [[ -f "$GUARDIAN_NODE_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_NODE_COUNT_FILE")"; '
                 'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_NODE_COUNT_FILE"; '
-                'if [[ "$count" -ge 3 ]]; then exit 0; fi; exit 1\\n',
+                'if [[ "$count" -ge 3 ]]; then exit 0; fi; exit 1\n',
             )
-            executable("pgrep", "exit 0\\n")
+            executable("pgrep", "exit 0\n")
             executable(
                 "systemctl",
                 'printf "%s\\\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
-                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\\n',
+                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\n',
             )
-            executable("sleep", "exit 0\\n")
+            executable("sleep", "exit 0\n")
 
             env = os.environ.copy()
             env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
