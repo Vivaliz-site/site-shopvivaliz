@@ -64,21 +64,19 @@ report_disk() {
 last_marker_time() {
   local log_file="$1"
   local marker="$2"
-  local candidate
   if [[ ! -f "$log_file" ]]; then
     printf 'NONE'
     return 0
   fi
-  candidate="$(
-    { grep -F "$marker" "$log_file" 2>/dev/null || true; } \
-      | tail -n 1 \
-      | sed -n 's/^\[\([^]]*\)\].*/\1/p'
-  )"
-  if [[ "$candidate" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
-    printf '%s' "$candidate"
-  else
-    printf 'NONE'
-  fi
+  awk -v marker="$marker" '
+    index($0, marker) && $0 ~ /^\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\]/ {
+      line=$0
+      sub(/^\[/, "", line)
+      sub(/\].*$/, "", line)
+      value=line
+    }
+    END { print (value == "" ? "NONE" : value) }
+  ' "$log_file"
 }
 
 last_json_number() {
