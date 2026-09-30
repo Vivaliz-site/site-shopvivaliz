@@ -863,7 +863,11 @@ async function errorBannerPresent(cdp) {
   );
 }
 
-async function sendContinueMessage(cdp) {
+async function sendContinueMessage(
+  cdp,
+  keyboardConfirmTimeoutMs = 2000,
+  keyboardConfirmPollMs = 100,
+) {
   const typed = await cdp.evaluate(`(()=>{
     const el = document.querySelector('[data-testid="prompt-textarea"]')
       || document.querySelector('[role="textbox"][contenteditable="true"]');
@@ -881,7 +885,8 @@ async function sendContinueMessage(cdp) {
   })()`);
   if (!typed) return false;
   await sleep(300);
-  return cdp.evaluate(`(()=>{
+
+  const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
       'button[aria-label="Send"]',
@@ -912,6 +917,62 @@ async function sendContinueMessage(cdp) {
     b.click();
     return true;
   })()`);
+  if (clicked) return true;
+
+  if (!cdp || typeof cdp.send !== 'function') return false;
+  try {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Enter',
+      code: 'Enter',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+      text: '\r',
+      unmodifiedText: '\r',
+    });
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Enter',
+      code: 'Enter',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+    });
+  } catch {
+    return false;
+  }
+
+  const requestedTimeout = Number(keyboardConfirmTimeoutMs);
+  const requestedPoll = Number(keyboardConfirmPollMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+    ? Math.max(10, requestedTimeout)
+    : 2000;
+  const boundedPollMs = Number.isFinite(requestedPoll)
+    ? Math.max(10, requestedPoll)
+    : 100;
+  const deadline = Date.now() + boundedTimeoutMs;
+  while (true) {
+    let submitted = false;
+    try {
+      submitted = Boolean(await cdp.evaluate(`(()=>{
+        /* continuation-keyboard-submit-check */
+        const composer=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        const raw=composer
+          ? (composer.getAttribute('contenteditable') === 'true'
+            ? String(composer.innerText||composer.textContent||'')
+            : String(composer.value||''))
+          : '';
+        const generating=Boolean(document.querySelector('[data-testid="stop-button"]'));
+        return generating || raw.trim() === '';
+      })()`));
+    } catch {
+      return false;
+    }
+    if (submitted) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(boundedPollMs, remaining));
+  }
 }
 
 async function attemptNudge(
