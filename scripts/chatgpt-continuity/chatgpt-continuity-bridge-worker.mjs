@@ -672,6 +672,10 @@ async function confirmAssistantProgress(
     const current = await assistantSnapshot(cdp);
     if (assistantProgressed(baseline, current)) return true;
 
+    // An explicit transmission failure is terminal for this send attempt;
+    // do not burn the full progress-confirmation window before recovery.
+    if (await transmissionErrorPresent(cdp)) return false;
+
     // If ChatGPT has already finalized the stream and no assistant content
     // advanced, waiting longer cannot turn a click into a successful resume.
     const generating = await conversationIsGenerating(cdp);
