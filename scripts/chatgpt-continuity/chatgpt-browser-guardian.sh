@@ -68,10 +68,20 @@ wait_for_cdp() {
   return 1
 }
 
+pid_is_live() {
+  local pid="$1"
+  kill -0 "$pid" 2>/dev/null || return 1
+  local state
+  state="$(ps -o stat= -p "$pid" 2>/dev/null | awk '{print $1}')"
+  [[ -n "$state" && "$state" != Z* ]]
+}
+
+mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
+
 status=0
 if cdp_ready; then
   echo "CHATGPT_BROWSER_GUARDIAN=HEALTHY"
-elif pgrep -u fredrdp -f "$browser_pattern" >/dev/null 2>&1; then
+elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
   if systemctl is-active --quiet "$browser_unit"; then
     sleep 5
     if cdp_ready; then
@@ -85,8 +95,42 @@ elif pgrep -u fredrdp -f "$browser_pattern" >/dev/null 2>&1; then
         status=1
       fi
     fi
+  elif [[ "${#canonical_pids[@]}" -eq 1 ]]; then
+    canonical_pid="${canonical_pids[0]}"
+    if [[ ! "$canonical_pid" =~ ^[0-9]+$ ]]; then
+      echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_INVALID_CANONICAL_PID" >&2
+      status=1
+    elif ! systemctl is-enabled --quiet "$browser_unit"; then
+      echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_UNIT_NOT_ENABLED" >&2
+      status=1
+    else
+      # The process matched the fully anchored canonical browser command and
+      # there is exactly one candidate. Terminate only that PID, never a broad
+      # process class, then relaunch the same profile under systemd supervision.
+      kill -TERM "$canonical_pid" 2>/dev/null || true
+      terminated=false
+      for _ in $(seq 1 10); do
+        if ! pid_is_live "$canonical_pid"; then
+          terminated=true
+          break
+        fi
+        sleep 1
+      done
+      if [[ "$terminated" != true ]]; then
+        echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_TIMEOUT" >&2
+        status=1
+      else
+        systemctl start "$browser_unit"
+        if wait_for_cdp; then
+          echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED_UNMANAGED_TAKEOVER"
+        else
+          echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+          status=1
+        fi
+      fi
+    fi
   else
-    echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_PROCESS_PRESENT_CDP_UNAVAILABLE" >&2
+    echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_MULTIPLE_CANONICAL_PROCESSES" >&2
     status=1
   fi
 else

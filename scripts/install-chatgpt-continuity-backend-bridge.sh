@@ -19,6 +19,7 @@ browser_guardian_service_target="/etc/systemd/system/$browser_guardian_service"
 browser_guardian_timer_source="$repo_root/ops/systemd/$browser_guardian_timer"
 browser_guardian_timer_target="/etc/systemd/system/$browser_guardian_timer"
 install_root='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity'
+restart_pending="$install_root/.continuity-restart-required"
 config_root='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity'
 worker="$install_root/chatgpt-continuity-bridge-worker.mjs"
 token_file='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
@@ -144,6 +145,13 @@ if install_if_changed "$continuity_unit_tmp" "$HOME/.config/systemd/user/$unit" 
   continuity_unit_changed=true
 fi
 
+# Persist restart intent before any later prerequisite can fail. A retry after
+# a partial install must still reload the worker/unit bytes already copied.
+if [[ "$worker_changed" = true || "$continuity_unit_changed" = true ]]; then
+  : > "$restart_pending"
+  chmod 600 "$restart_pending"
+fi
+
 sudo -n install -d -m 755 /usr/local/libexec
 system_units_changed=false
 browser_unit_changed=false
@@ -189,11 +197,14 @@ done
 systemctl --user is-active --quiet "$tunnel_unit" || fail 'private A1 continuity tunnel is not active'
 
 systemctl --user enable --now "$unit" >/dev/null
-if [[ "$worker_changed" = true || "$continuity_unit_changed" = true ]]; then
+if [[ -f "$restart_pending" ]]; then
   systemctl --user try-restart "$unit"
 fi
 systemctl --user is-enabled --quiet "$unit" || fail 'continuity service is not enabled'
 systemctl --user is-active --quiet "$unit" || fail 'continuity service is not active'
+if [[ -f "$restart_pending" ]]; then
+  rm -f "$restart_pending"
+fi
 
 curl -fsS --connect-timeout 3 --max-time 5 "$cdp_url/json/version" >/dev/null \
   || fail "canonical ChatGPT CDP endpoint is unavailable at $cdp_url"

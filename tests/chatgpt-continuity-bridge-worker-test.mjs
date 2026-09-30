@@ -3,6 +3,7 @@ import {
   Cdp,
   conversationIsGenerating,
   composerIsUsable,
+  waitForComposerUsable,
   errorBannerPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -17,6 +18,7 @@ import {
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  resolveAmbiguousConversationTabs,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -166,6 +168,97 @@ async function run() {
     }
   }
 
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    let discoveryConnections = 0;
+    let discoveryCloses = 0;
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => {
+        discoveryConnections += 1;
+        return { close() { discoveryCloses += 1; } };
+      },
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-thread',
+        update_time: Math.floor(now / 1000),
+      }),
+      now,
+    );
+    assert.equal(discoveryConnections, 1, 'ambiguous tabs need exactly one read-only discovery connection');
+    assert.equal(discoveryCloses, 1, 'the temporary discovery connection must always close');
+    assert.equal(candidates.length, 2, 'duplicate targets for the same latest conversation remain valid');
+    assert.ok(
+      candidates.every(tab => tab.url.includes('/c/latest-thread')),
+      'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
+    ];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-thread',
+        update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+      }),
+      now,
+    );
+    assert.equal(
+      candidates.length,
+      2,
+      'checkpoint-driven disambiguation must tolerate the live 14-minute latest age without weakening reinforcement recency',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({ http_status: 429, source: 'filtered', item_present: false }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      '429/latest-unavailable must remain fail-closed instead of guessing a target',
+    );
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-thread',
+          update_time: Math.floor((now - 31 * 60 * 1000) / 1000),
+        }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'a latest conversation outside the bounded 30-minute checkpoint window must remain fail-closed',
+    );
+  }
+
   // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only
   // through data-message-author-role. Progress confirmation must also see the
   // virtualized data-turn-key/data-conversation-role structure, without
@@ -211,6 +304,31 @@ async function run() {
       true,
       'current ChatGPT contenteditable role=textbox composer must be accepted without legacy data-testid',
     );
+  }
+
+  {
+    let checks = 0;
+    const cdp = {
+      async evaluate(expression) {
+        if (
+          expression.includes('prompt-textarea')
+          && expression.includes('[role="textbox"][contenteditable="true"]')
+          && !expression.includes('insertText')
+          && !expression.includes('proto.value')
+          && !expression.includes('b.click()')
+        ) {
+          checks += 1;
+          return checks >= 3;
+        }
+        return false;
+      },
+    };
+    assert.equal(
+      await waitForComposerUsable(cdp, 50, 1),
+      true,
+      'transient post-reattach composer absence must recover within a bounded wait',
+    );
+    assert.equal(checks, 3);
   }
 
   {
@@ -381,6 +499,31 @@ async function run() {
 
   console.log('cross-device latest-conversation alignment: PASS');
 
+  // Live canonical reproduction 2026-09-30: stream_status can be COMPLETE
+  // while current_node ends in assistant end_turn=false with no child and the
+  // UI exposes no Stop button. A silent stall must therefore receive the same
+  // passive reattach/reload before any continuation send.
+  {
+    const silentCdp = fakeCdp({ generating: false, sendSucceeds: true });
+    const recoveredSilent = await attemptNudge(
+      'task-silent-stall-passive-reattach',
+      async () => silentCdp,
+      async () => true,
+    );
+    assert.equal(recoveredSilent.result_status, 'PROGRESS_CONFIRMED');
+    assert.match(recoveredSilent.detail, /passive reattach/i);
+    assert.equal(
+      silentCdp.calls.some(call => call.includes('location.reload')),
+      true,
+      'silent stalls without Stop must still attempt passive reattach',
+    );
+    assert.equal(
+      silentCdp.calls.some(call => call.includes('b.click()')),
+      false,
+      'passive reattach progress must suppress continuation send',
+    );
+  }
+
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
   // disabling Web turn submission.
@@ -459,17 +602,61 @@ async function run() {
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
 
-  const noComposer = await attemptNudge('task-1', async () => fakeCdp({ composerUsable: false }));
+  const noComposer = await attemptNudge(
+    'task-1',
+    async () => fakeCdp({ composerUsable: false }),
+    async () => false,
+    async () => false,
+  );
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
 
-  const sentOk = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: true }), async () => true);
+  {
+    let waitCalls = 0;
+    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true });
+    const transientComposer = await attemptNudge(
+      'task-transient-composer-after-reattach',
+      async () => transientComposerCdp,
+      async () => false,
+      async () => {
+        waitCalls += 1;
+        return true;
+      },
+    );
+    assert.equal(waitCalls, 1, 'attemptNudge must use the bounded composer wait exactly once');
+    assert.notEqual(
+      transientComposer.result_status,
+      'CONVERSATION_NOT_FOUND',
+      'a composer that becomes usable after reattach must not be reported missing',
+    );
+  }
+
+  let sentOkConfirmCalls = 0;
+  const sentOkCdp = fakeCdp({ sendSucceeds: true });
+  const sentOk = await attemptNudge(
+    'task-1',
+    async () => sentOkCdp,
+    async () => {
+      sentOkConfirmCalls += 1;
+      return sentOkConfirmCalls > 1;
+    },
+  );
   assert.equal(sentOk.result_status, 'PROGRESS_CONFIRMED');
+  assert.ok(sentOkCdp.calls.findIndex(call => call.includes('location.reload')) >= 0);
+  assert.ok(
+    sentOkCdp.calls.findIndex(call => call.includes('b.click()'))
+      > sentOkCdp.calls.findIndex(call => call.includes('location.reload')),
+    'send path must remain available after passive reattach found no progress',
+  );
 
   const sentButNoProgress = await attemptNudge('task-no-progress', async () => fakeCdp({ sendSucceeds: true }), async () => false);
   assert.equal(sentButNoProgress.result_status, 'SENT_UNCONFIRMED');
   assert.match(sentButNoProgress.detail, /no assistant progress/i);
 
-  const sendFailed = await attemptNudge('task-1', async () => fakeCdp({ sendSucceeds: false }), async () => true);
+  const sendFailed = await attemptNudge(
+    'task-1',
+    async () => fakeCdp({ sendSucceeds: false }),
+    async () => false,
+  );
   assert.equal(sendFailed.result_status, 'ERROR');
 
   const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); });

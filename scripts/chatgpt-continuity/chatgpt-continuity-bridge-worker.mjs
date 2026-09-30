@@ -48,9 +48,21 @@ const PASSIVE_REATTACH_CONFIRM_MS = Math.max(
   3000,
   Number(process.env.CHATGPT_CONTINUITY_PASSIVE_REATTACH_CONFIRM_MS || 15000),
 );
+const COMPOSER_READY_TIMEOUT_MS = Math.max(
+  2000,
+  Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_TIMEOUT_MS || 15000),
+);
+const COMPOSER_READY_POLL_MS = Math.max(
+  250,
+  Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_POLL_MS || 500),
+);
 const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
+);
+const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
+  RECENT_CONVERSATION_MAX_AGE_MS,
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
 );
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
@@ -60,6 +72,7 @@ const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
+const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -141,6 +154,52 @@ async function connectFirstUsableChatgptTab(tabs, connector) {
   return null;
 }
 
+function conversationIdFromTab(tab) {
+  if (chatgptTabRank(tab) !== 0) return '';
+  try {
+    return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
+  } catch {
+    return '';
+  }
+}
+
+async function resolveAmbiguousConversationTabs(
+  tabs,
+  connector,
+  probeLatest = latestConversationProbe,
+  nowMs = Date.now(),
+  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+) {
+  const sourceTabs = Array.isArray(tabs) ? tabs : [];
+  const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
+  if (conversationIds.size <= 1) return sourceTabs;
+
+  let discoveryCdp;
+  try {
+    discoveryCdp = await connectFirstUsableChatgptTab(sourceTabs, connector);
+    if (!discoveryCdp) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const latest = normalizeLatestConversationMeta(await probeLatest(discoveryCdp));
+    if (!latest) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const updatedAtMs = Number(latest.update_time) * 1000;
+    const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
+    const ageLimitMs = Math.max(60_000, Number(maxAgeMs || CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS));
+    if (!Number.isFinite(ageMs) || ageMs > ageLimitMs) {
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+
+    const latestTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
+    if (latestTabs.length === 0) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    return latestTabs;
+  } catch (error) {
+    if (text(error?.message) === AMBIGUOUS_CONVERSATION_ERROR) throw error;
+    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+  } finally {
+    try { discoveryCdp?.close(); } catch {}
+  }
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -155,7 +214,7 @@ class Cdp {
     });
   }
 
-  static async connectToChatgptTab() {
+  static async connectToChatgptTab({ allowLatestDisambiguation = false } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
         `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
@@ -165,46 +224,14 @@ class Cdp {
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
     const conversationIds = new Set(
-      (Array.isArray(tabs) ? tabs : [])
-        .filter(tab => chatgptTabRank(tab) === 0)
-        .map(tab => {
-          try {
-            return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
-          } catch {
-            return '';
-          }
-        })
-        .filter(Boolean),
+      (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
+    let candidateTabs = tabs;
     if (conversationIds.size > 1) {
-      throw new Error(
-        'multiple open ChatGPT conversation tabs found; continuity target is ambiguous'
-      );
+      if (!allowLatestDisambiguation) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      candidateTabs = await resolveAmbiguousConversationTabs(tabs, connectCdpTarget);
     }
-    const connected = await connectFirstUsableChatgptTab(tabs, async page => {
-      let ws;
-      let cdp;
-      try {
-        ws = new WebSocket(page.webSocketDebuggerUrl);
-        await Promise.race([
-          new Promise((resolve, reject) => {
-            ws.addEventListener('open', resolve, { once: true });
-            ws.addEventListener('error', reject, { once: true });
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target open timeout')), 3000)),
-        ]);
-        cdp = new Cdp(ws);
-        await Promise.race([
-          cdp.evaluate('true'),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target liveness timeout')), 3000)),
-        ]);
-        return cdp;
-      } catch (error) {
-        try { cdp?.close(); } catch {}
-        try { ws?.close(); } catch {}
-        throw error;
-      }
-    });
+    const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget);
     if (!connected) {
       throw new Error('no usable open chatgpt.com tab found in the attached browser');
     }
@@ -232,6 +259,31 @@ class Cdp {
 
   close() {
     try { this.ws.close(); } catch {}
+  }
+}
+
+async function connectCdpTarget(page) {
+  let ws;
+  let cdp;
+  try {
+    ws = new WebSocket(page.webSocketDebuggerUrl);
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        ws.addEventListener('open', resolve, { once: true });
+        ws.addEventListener('error', reject, { once: true });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target open timeout')), 3000)),
+    ]);
+    cdp = new Cdp(ws);
+    await Promise.race([
+      cdp.evaluate('true'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('CDP target liveness timeout')), 3000)),
+    ]);
+    return cdp;
+  } catch (error) {
+    try { cdp?.close(); } catch {}
+    try { ws?.close(); } catch {}
+    throw error;
   }
 }
 
@@ -278,6 +330,28 @@ async function composerIsUsable(cdp) {
     if(!el) return false;
     return !Boolean(el.disabled) && el.getAttribute('aria-disabled') !== 'true';
   })()`);
+}
+
+async function waitForComposerUsable(
+  cdp,
+  timeoutMs = COMPOSER_READY_TIMEOUT_MS,
+  pollMs = COMPOSER_READY_POLL_MS,
+) {
+  const requestedTimeout = Number(timeoutMs);
+  const requestedPoll = Number(pollMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+    ? Math.max(10, requestedTimeout)
+    : COMPOSER_READY_TIMEOUT_MS;
+  const boundedPollMs = Number.isFinite(requestedPoll)
+    ? Math.max(10, requestedPoll)
+    : COMPOSER_READY_POLL_MS;
+  const deadline = Date.now() + boundedTimeoutMs;
+  while (true) {
+    if (await composerIsUsable(cdp)) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(boundedPollMs, remaining));
+  }
 }
 
 async function assistantSnapshot(cdp) {
@@ -543,34 +617,39 @@ async function sendContinueMessage(cdp) {
 
 async function attemptNudge(
   taskId,
-  connect = () => Cdp.connectToChatgptTab(),
+  connect = () => Cdp.connectToChatgptTab({ allowLatestDisambiguation: true }),
   confirmProgress = confirmAssistantProgress,
+  waitComposer = waitForComposerUsable,
 ) {
   let cdp;
   try {
     cdp = await connect();
     let recoveredStaleComplete = false;
-    if (await conversationIsGenerating(cdp)) {
-      // Never treat transport bookkeeping as semantic completion. Independent
-      // 2026-09 captures show stream/message COMPLETE can coexist with an
-      // unfinished assistant/tool branch. Every apparent active turn therefore
-      // gets one passive reattach before any Stop clear or continuation send.
-      const baseline = await assistantSnapshot(cdp);
-      await cdp.evaluate(`(()=>{location.reload();return true})()`);
-      await sleep(1200);
-      const progressed = await confirmProgress(
-        cdp,
-        baseline,
-        PASSIVE_REATTACH_CONFIRM_MS,
-        PROGRESS_POLL_MS,
-      );
-      if (progressed) {
-        return {
-          result_status: 'PROGRESS_CONFIRMED',
-          detail: 'passive reattach restored assistant progress without sending continuation',
-        };
-      }
 
+    // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
+    // Stop button while the canonical current_node still ends in an assistant
+    // tool/thought branch with end_turn=false. Therefore every checkpoint
+    // resume gets exactly one passive reattach before any continuation send,
+    // not only turns whose DOM still looks generating.
+    const wasGenerating = await conversationIsGenerating(cdp);
+    const passiveBaseline = await assistantSnapshot(cdp);
+    await cdp.evaluate(`(()=>{location.reload();return true})()`);
+    await sleep(1200);
+    const passiveProgressed = await confirmProgress(
+      cdp,
+      passiveBaseline,
+      PASSIVE_REATTACH_CONFIRM_MS,
+      PROGRESS_POLL_MS,
+    );
+    if (passiveProgressed) {
+      return {
+        result_status: 'PROGRESS_CONFIRMED',
+        detail: 'passive reattach restored assistant progress without sending continuation',
+      };
+    }
+
+    const generatingAfterReattach = await conversationIsGenerating(cdp);
+    if (wasGenerating || generatingAfterReattach) {
       // Re-read server bookkeeping only after the passive recovery window.
       // Anything other than a confirmed COMPLETE remains potentially active
       // and must not receive a duplicate continuation.
@@ -585,15 +664,18 @@ async function attemptNudge(
       // If Stop survived the reattach while server bookkeeping says COMPLETE,
       // clear only that stale UI state before sending the checkpoint-driven
       // continuation. If Stop disappeared naturally, continue without a click.
-      if (await conversationIsGenerating(cdp)) {
+      if (generatingAfterReattach) {
         if (!(await clearStaleCompleteGeneration(cdp))) {
           return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
         }
       }
       recoveredStaleComplete = true;
     }
-    if (!(await composerIsUsable(cdp))) {
-      return { result_status: 'CONVERSATION_NOT_FOUND', detail: 'composer/send-button selector not found (possible UI drift)' };
+    if (!(await waitComposer(cdp))) {
+      return {
+        result_status: 'CONVERSATION_NOT_FOUND',
+        detail: 'composer/send-button selector not found after bounded post-reattach wait (possible UI drift)',
+      };
     }
     const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
@@ -820,8 +902,10 @@ export {
   Cdp,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   composerIsUsable,
+  waitForComposerUsable,
   errorBannerPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
