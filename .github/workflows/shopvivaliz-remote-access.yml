@@ -367,7 +367,23 @@ jobs:
             chatgpt_freeze_task_state)
               state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
               state_file="$RUNNER_TEMP/chatgpt-freeze-task-state.json"
-              canonical_task_id="chatgpt-freeze-root-cause-20260928-g2"
+              canonical_task_id="$(python3 - "$state_dir" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          pattern = re.compile(r"chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)")
+          candidates = []
+          for candidate in root.glob("chatgpt-freeze-root-cause-20260928-g*.json"):
+              match = pattern.fullmatch(candidate.stem)
+              if match and candidate.is_file() and not candidate.is_symlink():
+                  candidates.append((int(match.group(1)), candidate.stem))
+          if not candidates:
+              raise SystemExit("no generational freeze checkpoint found")
+          print(max(candidates)[1])
+          PY
+              )"
               trap 'rm -f "$state_file"' EXIT
               test -f "$state_dir/$canonical_task_id.json"
               SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" \
