@@ -215,6 +215,53 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(rows[-1]["send_attempt_count"], 1)
 
+    def test_sent_unconfirmed_can_be_passively_promoted_to_confirmed_progress(self) -> None:
+        self._stale_checkpoint_and_request()
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(
+            json.dumps(
+                {
+                    "fingerprint": fingerprint,
+                    "task_id": "task-1",
+                    "repository": state.DEFAULT_REPOSITORY,
+                    "dispatched_at": "2020-01-01T00:00:00Z",
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "SENT_UNCONFIRMED",
+                    "attempt_count": 3,
+                    "send_attempt_count": 2,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        status_calls: list[dict] = []
+        def confirmed_status(**kwargs):
+            status_calls.append(kwargs)
+            return {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {"status": "PROGRESS_CONFIRMED"}},
+            }
+
+        observed = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+            query_status=confirmed_status,
+        )
+        self.assertEqual(len(status_calls), 1)
+        self.assertEqual(observed["dispatched"], 0)
+        self.assertEqual(observed["skipped_attempt_limit"], 0)
+        self.assertEqual(len(self.calls), 0, "passive promotion must never enqueue another Web turn")
+
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual(rows[-1]["worker_status"], "PROGRESS_CONFIRMED")
+        self.assertEqual(rows[-1]["send_attempt_count"], 2)
+
     def test_unconfirmed_resume_stops_after_bounded_attempt_limit(self) -> None:
         self._stale_checkpoint_and_request()
         self.dispatcher.run_once(
