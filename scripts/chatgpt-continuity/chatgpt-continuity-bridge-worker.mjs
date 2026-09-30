@@ -309,7 +309,7 @@ async function navigateNeutralTabToConversation(
       await sleep(intervalMs);
       try {
         const pathname = await cdp.evaluate('location.pathname');
-        const currentId = String(pathname || '').match(/^\\/c\\/([^/?#]+)/)?.[1] || '';
+        const currentId = String(pathname || '').match(/^\/c\/([^/?#]+)/)?.[1] || '';
         if (currentId === id) return true;
       } catch {
         // Navigation can transiently detach the execution context. Keep the
