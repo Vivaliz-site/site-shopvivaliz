@@ -13,6 +13,23 @@ function safeTag(value) {
   return String(value || 'auth_failed').replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 100);
 }
 
+function classifyLocation(url) {
+  const value = String(url || '');
+  if (/\/login(?:[/?#]|$)/i.test(value)) return 'login';
+  if (/accounts\.google\.com/i.test(value)) return 'google';
+  if (/auth\.openai\.com/i.test(value)) return 'openai_auth';
+  if (/platform\.openai\.com/i.test(value)) return 'platform';
+  return 'other';
+}
+
+async function authenticationBlocker(page) {
+  const location = classifyLocation(page.url());
+  if (location !== 'platform') return location;
+  const password = await page.locator('input[type="password"]').count().catch(() => 0);
+  if (password > 0) return 'password_field';
+  return 'none';
+}
+
 async function isAuthenticated(page) {
   const url = page.url();
   const password = await page.locator('input[type="password"]').count();
@@ -57,6 +74,9 @@ let accountChooserPresent = false;
 let returnedToPlatform = false;
 let googlePopupUsed = false;
 let mfaWaitResult = 'not_needed';
+let postGoogleLocation = 'not_observed';
+let finalLocation = 'not_observed';
+let authBlocker = 'not_observed';
 try {
   let chromium = null;
   for (const candidate of playwrightCandidates) {
@@ -107,6 +127,7 @@ try {
       }
 
       await authPage.waitForTimeout(2500);
+      postGoogleLocation = classifyLocation(authPage.url());
       if (/accounts\.google\.com/i.test(authPage.url())) {
         authStage = 'google_account_chooser';
         const identifierCount = await authPage.locator('[data-identifier]').count();
@@ -153,17 +174,24 @@ try {
         }
       }
       authenticated = await isAuthenticated(page);
+      finalLocation = classifyLocation(page.url());
+      authBlocker = authenticated ? 'none' : await authenticationBlocker(page);
       if (challenge && authStage !== 'challenge_timeout') authStage = 'challenge_required';
       else if (authenticated) authStage = 'authenticated';
     }
   }
 
+  if (finalLocation === 'not_observed') finalLocation = classifyLocation(page.url());
+  if (authBlocker === 'not_observed') authBlocker = authenticated ? 'none' : await authenticationBlocker(page);
   const manage = authenticated ? await tunnelManageAvailable(page) : false;
   console.log('OPENAI_PLATFORM_AUTH_STAGE=' + safeTag(authStage));
   console.log('OPENAI_PLATFORM_ACCOUNT_CHOOSER_PRESENT=' + String(accountChooserPresent));
   console.log('OPENAI_PLATFORM_AUTH_RETURNED_TO_PLATFORM=' + String(returnedToPlatform));
   console.log('OPENAI_PLATFORM_GOOGLE_POPUP_USED=' + String(googlePopupUsed));
   console.log('OPENAI_PLATFORM_MFA_WAIT_RESULT=' + safeTag(mfaWaitResult));
+  console.log('OPENAI_PLATFORM_POST_GOOGLE_LOCATION=' + safeTag(postGoogleLocation));
+  console.log('OPENAI_PLATFORM_FINAL_LOCATION=' + safeTag(finalLocation));
+  console.log('OPENAI_PLATFORM_AUTH_BLOCKER=' + safeTag(authBlocker));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=' + String(authenticated));
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=' + String(manage));
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=' + String(challenge));
@@ -182,6 +210,9 @@ try {
   console.log('OPENAI_PLATFORM_AUTH_RETURNED_TO_PLATFORM=' + String(returnedToPlatform));
   console.log('OPENAI_PLATFORM_GOOGLE_POPUP_USED=' + String(googlePopupUsed));
   console.log('OPENAI_PLATFORM_MFA_WAIT_RESULT=' + safeTag(mfaWaitResult));
+  console.log('OPENAI_PLATFORM_POST_GOOGLE_LOCATION=' + safeTag(postGoogleLocation));
+  console.log('OPENAI_PLATFORM_FINAL_LOCATION=' + safeTag(finalLocation));
+  console.log('OPENAI_PLATFORM_AUTH_BLOCKER=' + safeTag(authBlocker));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=false');
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false');
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=false');
