@@ -7,6 +7,8 @@ workflow="$root/.github/workflows/chatgpt-business-model-settings-probe.yml"
 test -f "$script"
 test -f "$workflow"
 
+node --check "$script"
+
 grep -Fq "const CDP_URL = 'http://127.0.0.1:9555';" "$script"
 grep -Fq "/json/new?" "$script"
 grep -Fq "new WebSocket(target.webSocketDebuggerUrl)" "$script"
