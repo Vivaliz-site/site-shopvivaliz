@@ -43,7 +43,6 @@ function fakeCdp({
     calls,
     async evaluate(expression) {
       calls.push(expression);
-      if (expression.includes('location.pathname')) return '/c/fake';
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
