@@ -490,7 +490,7 @@ $statusText = $products
 $searchContext = sv_catalog_search_context($query);
 $catalogEyebrow = $category !== '' ? $category : $searchContext['eyebrow'];
 $catalogHeading = $query !== '' ? $searchContext['heading'] : 'Produtos Vivaliz';
-$catalogLead = $query !== '' ? $searchContext['lead'] : $statusText;
+$catalogLead = $query !== '' && $products ? $searchContext['lead'] : $statusText;
 
 function sv_catalog_page_url(int $page, string $query, string $category): string
 {
