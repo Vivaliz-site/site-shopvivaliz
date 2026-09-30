@@ -875,7 +875,9 @@ class BootstrapContractTests(unittest.TestCase):
             "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         ):
             self.assertIn(staged, repair)
-        self.assertIn("install -d -m 700 '$remote_dir/scripts/chatgpt-continuity' '$remote_dir/ops/systemd'", repair)
+        self.assertIn("'$remote_dir/scripts/chatgpt-continuity'", repair)
+        self.assertIn("'$remote_dir/ops/systemd'", repair)
+        self.assertIn("bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'", repair)
         self.assertNotIn("bash '$remote_dir/install-chatgpt-continuity-backend-bridge.sh'", repair)
 
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
