@@ -19,6 +19,18 @@ fail() {
   exit 2
 }
 
+install_if_changed() {
+  local source="$1"
+  local target="$2"
+  local mode="$3"
+  if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+    chmod "$mode" "$target"
+    return 1
+  fi
+  install -m "$mode" "$source" "$target"
+  return 0
+}
+
 [[ "$(id -u)" -ne 0 ]] || fail 'run as ubuntu, not root'
 node_bin="$(command -v node || true)"
 ssh_bin="$(command -v ssh || true)"
@@ -26,6 +38,7 @@ ssh_bin="$(command -v ssh || true)"
 [[ -n "$ssh_bin" ]] || fail 'ssh is required'
 command -v systemctl >/dev/null || fail 'systemctl is required'
 command -v curl >/dev/null || fail 'curl is required'
+command -v cmp >/dev/null || fail 'cmp is required'
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
 [[ -s "$token_file" ]] || fail "protected bridge token missing: $token_file"
 [[ -s "$tunnel_key" ]] || fail "private A1 tunnel key missing: $tunnel_key"
@@ -36,10 +49,17 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${runtime
 [[ -S "${runtime_dir}/bus" ]] || fail 'user systemd bus unavailable; linger/user manager must be active'
 
 install -d -m 700 "$install_root" "$config_root" "$HOME/.config/systemd/user"
-install -m 700 "$worker_source" "$worker"
+worker_changed=false
+if install_if_changed "$worker_source" "$worker" 700; then
+  worker_changed=true
+fi
 chmod 600 "$token_file" "$tunnel_key"
 
-cat > "$HOME/.config/systemd/user/$tunnel_unit" <<UNIT
+tunnel_unit_tmp="$(mktemp)"
+continuity_unit_tmp="$(mktemp)"
+trap 'rm -f "$tunnel_unit_tmp" "$continuity_unit_tmp"' EXIT
+
+cat > "$tunnel_unit_tmp" <<UNIT
 [Unit]
 Description=ShopVivaliz ChatGPT continuity private tunnel to A1 loopback origin
 After=network-online.target
@@ -56,7 +76,7 @@ NoNewPrivileges=true
 WantedBy=default.target
 UNIT
 
-cat > "$HOME/.config/systemd/user/$unit" <<UNIT
+cat > "$continuity_unit_tmp" <<UNIT
 [Unit]
 Description=ShopVivaliz ChatGPT continuity bridge on canonical backend browser
 After=network-online.target $tunnel_unit
@@ -84,9 +104,22 @@ ReadWritePaths=$install_root $config_root
 WantedBy=default.target
 UNIT
 
-systemctl --user daemon-reload
+tunnel_unit_changed=false
+if install_if_changed "$tunnel_unit_tmp" "$HOME/.config/systemd/user/$tunnel_unit" 644; then
+  tunnel_unit_changed=true
+fi
+continuity_unit_changed=false
+if install_if_changed "$continuity_unit_tmp" "$HOME/.config/systemd/user/$unit" 644; then
+  continuity_unit_changed=true
+fi
+
+if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true ]]; then
+  systemctl --user daemon-reload
+fi
 systemctl --user enable --now "$tunnel_unit" >/dev/null
-systemctl --user restart "$tunnel_unit"
+if [[ "$tunnel_unit_changed" = true ]]; then
+  systemctl --user try-restart "$tunnel_unit"
+fi
 tunnel_ready=false
 for _ in $(seq 1 12); do
   if timeout 1 bash -c 'true </dev/tcp/127.0.0.1/18081' 2>/dev/null; then
@@ -99,7 +132,9 @@ done
 systemctl --user is-active --quiet "$tunnel_unit" || fail 'private A1 continuity tunnel is not active'
 
 systemctl --user enable --now "$unit" >/dev/null
-systemctl --user restart "$unit"
+if [[ "$worker_changed" = true || "$continuity_unit_changed" = true ]]; then
+  systemctl --user try-restart "$unit"
+fi
 systemctl --user is-enabled --quiet "$unit" || fail 'continuity service is not enabled'
 systemctl --user is-active --quiet "$unit" || fail 'continuity service is not active'
 

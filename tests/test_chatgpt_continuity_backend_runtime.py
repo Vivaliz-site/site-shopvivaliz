@@ -86,6 +86,18 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("systemctl --user enable --now", body)
         self.assertNotIn("C:\\ShopVivaliz", body)
 
+    def test_backend_installer_restarts_only_when_runtime_changes(self) -> None:
+        installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
+        body = installer.read_text(encoding="utf-8")
+        self.assertIn("install_if_changed()", body)
+        self.assertIn("worker_changed=false", body)
+        self.assertIn("tunnel_unit_changed=false", body)
+        self.assertIn("continuity_unit_changed=false", body)
+        self.assertIn('if [[ "$tunnel_unit_changed" = true ]]', body)
+        self.assertIn('if [[ "$worker_changed" = true || "$continuity_unit_changed" = true ]]', body)
+        self.assertNotIn('systemctl --user restart "$tunnel_unit"\n', body)
+        self.assertNotIn('systemctl --user restart "$unit"\n', body)
+
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", bridge)
