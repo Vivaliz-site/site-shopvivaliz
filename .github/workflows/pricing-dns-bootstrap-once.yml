@@ -12,11 +12,11 @@ permissions:
 
 jobs:
   ensure-pricing-dns:
-    if: \${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && github.ref == 'refs/heads/ops/pricing-dns-bootstrap-20260930' }}
+    if: ${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && github.ref == 'refs/heads/ops/pricing-dns-bootstrap-20260930' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 5
     env:
-      CF_TOKEN: \${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
       RECORD_NAME: pricing.shopvivaliz.com.br
       TARGET_IP: 137.131.149.55
     steps:
@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "\${CF_TOKEN:-}" ]; then
+          if [ -z "${CF_TOKEN:-}" ]; then
             echo 'CLOUDFLARE_DNS_EDIT_TOKEN_MISSING'
             exit 1
           fi
@@ -59,7 +59,7 @@ jobs:
 
           success="$(printf '%s' "$response" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("success") else "false")')"
           test "$success" = "true"
-          echo "DNS_RECORD_\${action^^} name=$RECORD_NAME target=$TARGET_IP proxied=true"
+          echo "DNS_RECORD_${action^^} name=$RECORD_NAME target=$TARGET_IP proxied=true"
 
       - name: Verify authoritative DNS and public health
         shell: bash
