@@ -3,6 +3,7 @@ import {
   Cdp,
   conversationIsGenerating,
   composerIsUsable,
+  waitForComposerUsable,
   errorBannerPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -306,6 +307,31 @@ async function run() {
   }
 
   {
+    let checks = 0;
+    const cdp = {
+      async evaluate(expression) {
+        if (
+          expression.includes('prompt-textarea')
+          && expression.includes('[role="textbox"][contenteditable="true"]')
+          && !expression.includes('insertText')
+          && !expression.includes('proto.value')
+          && !expression.includes('b.click()')
+        ) {
+          checks += 1;
+          return checks >= 3;
+        }
+        return false;
+      },
+    };
+    assert.equal(
+      await waitForComposerUsable(cdp, 50, 1),
+      true,
+      'transient post-reattach composer absence must recover within a bounded wait',
+    );
+    assert.equal(checks, 3);
+  }
+
+  {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
@@ -580,8 +606,29 @@ async function run() {
     'task-1',
     async () => fakeCdp({ composerUsable: false }),
     async () => false,
+    async () => false,
   );
   assert.equal(noComposer.result_status, 'CONVERSATION_NOT_FOUND');
+
+  {
+    let waitCalls = 0;
+    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true });
+    const transientComposer = await attemptNudge(
+      'task-transient-composer-after-reattach',
+      async () => transientComposerCdp,
+      async () => false,
+      async () => {
+        waitCalls += 1;
+        return true;
+      },
+    );
+    assert.equal(waitCalls, 1, 'attemptNudge must use the bounded composer wait exactly once');
+    assert.notEqual(
+      transientComposer.result_status,
+      'CONVERSATION_NOT_FOUND',
+      'a composer that becomes usable after reattach must not be reported missing',
+    );
+  }
 
   let sentOkConfirmCalls = 0;
   const sentOkCdp = fakeCdp({ sendSucceeds: true });
