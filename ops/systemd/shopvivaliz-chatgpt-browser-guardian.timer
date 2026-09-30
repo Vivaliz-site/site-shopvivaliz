@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ShopVivaliz ChatGPT browser health every 30 seconds
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=1s
+Unit=shopvivaliz-chatgpt-browser-guardian.service
+
+[Install]
+WantedBy=timers.target
