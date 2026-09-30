@@ -15,6 +15,7 @@ import {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
@@ -903,6 +904,28 @@ async function run() {
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
+  // When the account-scoped latest-conversation endpoint is rate-limited,
+  // the already-synchronized sidebar may safely identify the newest visible
+  // conversation without another backend-api request. The fallback is only
+  // valid from the single neutral home tab selected by the connector.
+  {
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      if (String(expression).includes('sidebar-latest-conversation')) return '/c/sidebar-latest';
+      if (String(expression).trim() === 'location.pathname') return '/';
+      if (String(expression).includes('location.assign')) return true;
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 429);
+    assert.equal(result.sidebar_fallback, true);
+  }
+
   // The default reinforcement discovery path must preserve a 429 status so
   // the scheduler can back off for minutes instead of self-amplifying.
   {
@@ -920,7 +943,7 @@ async function run() {
       cross_device_discovery: true,
     });
     const rateLimitedDelay = reinforcementDiscoveryDelayMs({
-      action: 'latest_unavailable',
+      action: 'navigated_sidebar_fallback',
       http_status: 429,
       cross_device_discovery: true,
     });
@@ -928,6 +951,31 @@ async function run() {
     assert.ok(rateLimitedDelay >= 60_000, '429 backoff must be measured in minutes');
     assert.ok(rateLimitedDelay > normalDelay, '429 must back off longer than the normal discovery window');
     assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
+  }
+
+  // The reinforcement scheduler must call its check with exactly the public
+  // five-argument contract. Extra positional arguments can silently replace
+  // the options object in JavaScript and disable the 429 discovery backoff.
+  {
+    let receivedArgs = null;
+    const stop = new Error('stop-after-one-reinforcement-iteration');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async (...args) => {
+          receivedArgs = args;
+          return { action: 'no_banner', cross_device_discovery: false };
+        },
+        () => 0,
+        async () => { throw stop; },
+      ),
+      error => error === stop,
+    );
+    assert.equal(receivedArgs?.length, 5, 'reinforcement check contract must remain exactly five positional arguments');
+    assert.deepEqual(
+      receivedArgs?.[4],
+      { allowCrossDeviceDiscovery: true },
+      'the fifth argument must remain the options object, not a helper function',
+    );
   }
 
   // The checkpoint-driven bridge loop and the reinforcement loop must start
