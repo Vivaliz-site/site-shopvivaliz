@@ -601,11 +601,14 @@ reconcile_chatgpt_continuity_dispatcher_token_access() {
   # The continuity bridge is optional until provisioned. Once the token
   # exists, deploys must preserve the least-privilege contract needed by
   # Apache (owner) and the ubuntu dispatcher (group).
-  if [ ! -e "$token_file" ]; then
+  if ! sudo test -e "$token_file"; then
     log INFO "ChatGPT continuity token ausente; reconciliacao de acesso dispensada"
     return 0
   fi
-  if [ ! -d "$token_dir" ] || [ -L "$token_dir" ] || [ ! -f "$token_file" ] || [ -L "$token_file" ]; then
+  if ! sudo test -d "$token_dir" \
+    || sudo test -L "$token_dir" \
+    || ! sudo test -f "$token_file" \
+    || sudo test -L "$token_file"; then
     log ERROR "ChatGPT continuity token path invalido"
     return 1
   fi
