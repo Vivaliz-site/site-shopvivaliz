@@ -7,6 +7,7 @@ import {
   latestConversationProbe,
   latestConversationMeta,
   alignToLatestConversation,
+  sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
   selectChatgptTab,
@@ -37,6 +38,7 @@ function fakeCdp({
         return staleStopClearSucceeds;
       }
       if (expression.includes('stop-button')) return currentGenerating;
+      if (expression.includes('prompt-textarea') && expression.includes('[role=\"textbox\"]') && !expression.includes('insertText') && !expression.includes('proto.value') && !expression.includes('b.click()')) return composerUsable;
       if (expression.includes('send-button') && expression.includes('!b.disabled')) return composerUsable;
       if (expression.includes('insertText') || expression.includes('proto.value')) return true;
       if (expression.includes('b.click()')) return sendSucceeds;
@@ -121,6 +123,42 @@ async function run() {
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: false })), false);
   assert.equal(await composerIsUsable(fakeCdp({ composerUsable: false })), false);
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (expression.includes('[role="textbox"][contenteditable="true"]')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await composerIsUsable(cdp),
+      true,
+      'current ChatGPT contenteditable role=textbox composer must be accepted without legacy data-testid',
+    );
+  }
+
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(expression);
+        if (expression.includes('insertText') || expression.includes('proto.value')) {
+          return expression.includes('[role="textbox"][contenteditable="true"]');
+        }
+        if (expression.includes('b.click()')) {
+          return /Send prompt|Send message|Enviar prompt|Enviar mensagem/.test(expression);
+        }
+        return false;
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'fallback composer and aria-labelled send button must support the current ChatGPT DOM',
+    );
+    assert.ok(calls.length >= 2);
+  }
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
