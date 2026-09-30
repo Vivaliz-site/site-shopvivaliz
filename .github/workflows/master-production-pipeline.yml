@@ -240,7 +240,6 @@ jobs:
           ai_squad_runtime_changed_between_releases() {
             local previous_release="$1"
             local next_release="$2"
-            local bootstrap="docs/knowledge/claude-vm-bootstrap.md"
 
             # First/bootstrap deployment has no trustworthy baseline.
             if [ ! -d "$previous_release/ops/ai-squad" ] || [ ! -d "$next_release/ops/ai-squad" ]; then
@@ -249,13 +248,6 @@ jobs:
             if ! diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad" >/dev/null 2>&1; then
               return 0
             fi
-            if [ ! -f "$previous_release/$bootstrap" ] || [ ! -f "$next_release/$bootstrap" ]; then
-              return 0
-            fi
-            if ! cmp -s -- "$previous_release/$bootstrap" "$next_release/$bootstrap"; then
-              return 0
-            fi
-
             # Predicate convention: 0 means changed, 1 means unchanged.
             return 1
           }
