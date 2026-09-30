@@ -381,6 +381,31 @@ async function run() {
 
   console.log('cross-device latest-conversation alignment: PASS');
 
+  // Live canonical reproduction 2026-09-30: stream_status can be COMPLETE
+  // while current_node ends in assistant end_turn=false with no child and the
+  // UI exposes no Stop button. A silent stall must therefore receive the same
+  // passive reattach/reload before any continuation send.
+  {
+    const silentCdp = fakeCdp({ generating: false, sendSucceeds: true });
+    const recoveredSilent = await attemptNudge(
+      'task-silent-stall-passive-reattach',
+      async () => silentCdp,
+      async () => true,
+    );
+    assert.equal(recoveredSilent.result_status, 'PROGRESS_CONFIRMED');
+    assert.match(recoveredSilent.detail, /passive reattach/i);
+    assert.equal(
+      silentCdp.calls.some(call => call.includes('location.reload')),
+      true,
+      'silent stalls without Stop must still attempt passive reattach',
+    );
+    assert.equal(
+      silentCdp.calls.some(call => call.includes('b.click()')),
+      false,
+      'passive reattach progress must suppress continuation send',
+    );
+  }
+
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
   // disabling Web turn submission.
