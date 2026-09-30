@@ -76,8 +76,10 @@ async function bridge(operation, payload = {}) {
 async function cdpReady() {
   try {
     const response = await fetch(`${CDP_BASE}/json/version`, { signal: AbortSignal.timeout(2500) });
+    if (!response.ok) return false;
     const data = await response.json();
-    return Boolean(data.webSocketDebuggerUrl || true);
+    return typeof data?.webSocketDebuggerUrl === 'string'
+      && /^wss?:\/\//.test(data.webSocketDebuggerUrl);
   } catch {
     return false;
   }
