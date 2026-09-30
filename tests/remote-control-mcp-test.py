@@ -997,6 +997,17 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(needle, workflow)
 
+    def test_freeze_state_readers_follow_latest_generation_not_terminal_g2(self):
+        helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
+        remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        helper_body = helper.split("def freeze_state", 1)[1].split("def main", 1)[0]
+        remote_body = remote.split("chatgpt_freeze_task_state)", 1)[1].split("chatgpt_freeze_state_owner_repair)", 1)[0]
+
+        for body in (helper_body, remote_body):
+            self.assertIn("chatgpt-freeze-root-cause-20260928-g*.json", body)
+            self.assertIn("max(candidates)", body)
+            self.assertNotIn("chatgpt-freeze-root-cause-20260928-g2", body)
+
     def test_oci_bastion_can_validate_claude_stage7_via_remote_control_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
@@ -1141,7 +1152,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('"claude_not_logged_in"', helper)
         self.assertIn('"claude_auth_status_invalid"', helper)
 
-    def test_oci_bastion_reads_canonical_g2_freeze_state_via_remote_control_mcp(self):
+    def test_oci_bastion_reads_latest_freeze_generation_via_remote_control_mcp(self):
 
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         helper = (ROOT / "scripts" / "oci-mcp-stage7-action.py").read_text(encoding="utf-8")
@@ -1149,11 +1160,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("freeze-state", workflow)
         self.assertIn("admin_command_run", helper)
         self.assertIn('SITE = "shopvivaliz-free-a1"', helper)
-        self.assertIn("chatgpt-freeze-root-cause-20260928-g2", helper)
+        self.assertIn("chatgpt-freeze-root-cause-20260928-g*.json", helper)
+        self.assertIn("max(candidates)", helper)
+        self.assertNotIn("canonical_task_id = 'chatgpt-freeze-root-cause-20260928-g2'", helper)
         self.assertIn("CHATGPT_FREEZE_CANONICAL_STATE=", helper)
         self.assertIn("TASK_TERMINAL_GATE=", helper)
         self.assertIn("sudo -u ubuntu -H python3", helper)
-        self.assertNotIn("glob('chatgpt-freeze-root-cause-20260928-g*.json')", helper)
         self.assertNotIn("cat /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/", helper)
 
 
