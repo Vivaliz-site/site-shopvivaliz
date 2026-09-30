@@ -142,10 +142,35 @@ function gm_optional(array $product, array $fields, int $max = 100): string
     return '';
 }
 
+/** @return array<string,array<string,mixed>> */
+function gm_shipping_source_map(string $root): array
+{
+    $path = $root . '/api/catalog/fallback-products.json';
+    if (!is_file($path) || !is_readable($path)) return [];
+    $payload = json_decode((string)file_get_contents($path), true);
+    if (!is_array($payload)) return [];
+    $rows = isset($payload['products']) && is_array($payload['products']) ? $payload['products'] : $payload;
+
+    $map = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) continue;
+        $sku = trim((string)($row['sku'] ?? ''));
+        if ($sku === '') continue;
+        $source = strtolower(trim((string)($row['sync_source'] ?? '')));
+        if ($source !== '' && $source !== 'tiny_v3') continue;
+        $map[$sku] = $row;
+    }
+    return $map;
+}
+
 /** @return array{weight:float,length:float,width:float,height:float} */
-function gm_shipping_package(array $product): array
+function gm_shipping_package(array $product, array $erpFallback = []): array
 {
     $dimensions = is_array($product['dimensions'] ?? null) ? $product['dimensions'] : [];
+    if ($dimensions === [] && is_array($erpFallback['dimensions'] ?? null)) {
+        $dimensions = $erpFallback['dimensions'];
+    }
+
     $weight = (float)($dimensions['gross_weight'] ?? $dimensions['net_weight'] ?? $product['shipping_weight'] ?? $product['weight'] ?? $product['peso'] ?? 0);
     $length = (float)($dimensions['length'] ?? $product['shipping_length'] ?? $product['length'] ?? $product['comprimento'] ?? 0);
     $width = (float)($dimensions['width'] ?? $product['shipping_width'] ?? $product['width'] ?? $product['largura'] ?? 0);
@@ -165,6 +190,7 @@ function gm_measure(float $value): string
 }
 
 $merchantIdMap = gm_unique_id_map($products);
+$shippingSourceMap = gm_shipping_source_map(__DIR__);
 $emittedProductIdentities = [];
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
@@ -233,7 +259,7 @@ foreach ($products as $product) {
     $material = gm_optional($product, ['material']);
     $size = gm_optional($product, ['size', 'tamanho']);
     $itemGroupId = gm_optional($product, ['item_group_id', 'variant_group_id'], 50);
-    $shippingPackage = gm_shipping_package($product);
+    $shippingPackage = gm_shipping_package($product, $shippingSourceMap[$rawSku] ?? []);
 
     echo '<item>' . PHP_EOL;
     echo '<g:id>' . gm_xml($id) . '</g:id>' . PHP_EOL;
