@@ -591,6 +591,51 @@ PY
   return 1
 }
 
+reconcile_chatgpt_continuity_dispatcher_token_access() {
+  local token_dir="$SHARED_DIR/storage/private/chatgpt-continuity"
+  local token_file="$token_dir/bridge.token"
+  local before after
+
+  # The continuity bridge is optional until provisioned. Once the token
+  # exists, deploys must preserve the least-privilege contract needed by
+  # Apache (owner) and the ubuntu dispatcher (group).
+  if [ ! -e "$token_file" ]; then
+    log INFO "ChatGPT continuity token ausente; reconciliacao de acesso dispensada"
+    return 0
+  fi
+  if [ ! -d "$token_dir" ] || [ -L "$token_dir" ] || [ ! -f "$token_file" ] || [ -L "$token_file" ]; then
+    log ERROR "ChatGPT continuity token path invalido"
+    return 1
+  fi
+
+  if ! before="$(sudo sha256sum -- "$token_file" | awk '{print $1}')" || [ -z "$before" ]; then
+    log ERROR "Nao foi possivel calcular SHA do token de continuidade antes da reconciliacao"
+    return 1
+  fi
+
+  if ! sudo chown www-data:ubuntu "$token_dir" "$token_file" \
+    || ! sudo chmod 0750 "$token_dir" \
+    || ! sudo chmod 0640 "$token_file"; then
+    log ERROR "Nao foi possivel restaurar metadata do token de continuidade"
+    return 1
+  fi
+
+  if ! after="$(sudo sha256sum -- "$token_file" | awk '{print $1}')" || [ -z "$after" ]; then
+    log ERROR "Nao foi possivel calcular SHA do token de continuidade depois da reconciliacao"
+    return 1
+  fi
+  if [ "$before" != "$after" ]; then
+    log ERROR "Conteudo do token de continuidade mudou durante reconciliacao de metadata"
+    return 1
+  fi
+  if ! sudo -u ubuntu test -r "$token_file"; then
+    log ERROR "Dispatcher ubuntu nao consegue ler o token de continuidade apos reconciliacao"
+    return 1
+  fi
+
+  log INFO "Acesso do dispatcher ao token de continuidade reconciliado sem alterar conteudo"
+}
+
 reconcile_shared_runtime_permissions() {
   local -a runtime_dirs=("uploads" "logs" "cache" "sessions" "storage")
   local name shared_path
@@ -747,6 +792,7 @@ fi
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
   if ! reconcile_runtime_secrets "$CURRENT_LINK" \
     || ! reconcile_ai_squad_bridges "$CURRENT_LINK" \
+    || ! reconcile_chatgpt_continuity_dispatcher_token_access \
     || ! verify_runtime_health; then
     write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado/AI Squad invalido"
     exit 1
@@ -811,6 +857,10 @@ done
 
 if ! reconcile_shared_runtime_permissions; then
   log ERROR "Falha ao reconciliar permissoes dos caminhos compartilhados de runtime"
+  exit 1
+fi
+if ! reconcile_chatgpt_continuity_dispatcher_token_access; then
+  log ERROR "Falha ao restaurar acesso do dispatcher ao token de continuidade"
   exit 1
 fi
 
