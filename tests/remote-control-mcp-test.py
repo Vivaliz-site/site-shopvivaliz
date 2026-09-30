@@ -460,6 +460,13 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, auth_text)
         self.assertIn("classifyLocation(", auth_text)
+        for needle in (
+            "waitForOAuthHandoff(",
+            "waitForOAuthCompletion(",
+            "OPENAI_PLATFORM_OAUTH_HANDOFF_RESULT=",
+        ):
+            self.assertIn(needle, auth_text)
+        self.assertNotIn("waitForURL(/platform\\.openai\\.com|auth\\.openai\\.com/", auth_text)
         self.assertNotIn("OPENAI_PLATFORM_AUTH_RAW_OUTPUT=", auth_text)
         self.assertNotIn("OPENAI_PLATFORM_CURRENT_URL=", auth_text)
 
