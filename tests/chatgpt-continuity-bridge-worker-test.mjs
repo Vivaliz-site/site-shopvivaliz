@@ -245,6 +245,32 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
     ];
+    let navigated = 0;
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+      }),
+      now,
+      undefined,
+      async () => { navigated += 1; return true; },
+    );
+    assert.equal(navigated, 1, '14-minute latest-not-open metadata must remain inside the bounded navigation window');
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0]?.webSocketDebuggerUrl, 'ws://home');
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
     await assert.rejects(
       () => resolveAmbiguousConversationTabs(
         tabs,
@@ -253,14 +279,14 @@ async function run() {
           http_status: 200,
           source: 'filtered',
           id: 'latest-not-open',
-          update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+          update_time: Math.floor((now - 16 * 60 * 1000) / 1000),
         }),
         now,
         undefined,
         async () => true,
       ),
       /multiple open ChatGPT conversation tabs/i,
-      'latest-not-open navigation must use the stricter recent-conversation window',
+      'latest-not-open navigation older than 15 minutes must remain fail-closed',
     );
   }
 
