@@ -108,6 +108,13 @@ jobs:
     uses: ./.github/workflows/shopvivaliz-remote-access.yml
     secrets: inherit
 
+  secure-mcp-runtime-recovery:
+    needs: classify
+    if: needs.classify.outputs.route == 'secure_mcp_runtime_recovery'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/secure-mcp-runtime-recovery.yml
+
   codex-remote-control:
     needs: classify
     if: needs.classify.outputs.route == 'codex_remote_control'

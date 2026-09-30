@@ -35,7 +35,8 @@
             const rect = mainBtn.getBoundingClientRect();
             const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
             const outsideViewport = rect.bottom <= 0 || rect.top >= viewportHeight;
-            const shouldShow = outsideViewport && window.scrollY > STICKY_REVEAL_SCROLL_Y;
+            const isMobileViewport = window.matchMedia('(max-width: 820px)').matches;
+            const shouldShow = outsideViewport && (isMobileViewport || window.scrollY > STICKY_REVEAL_SCROLL_Y);
             stickyBtn.classList.toggle('visible', shouldShow);
         }
 

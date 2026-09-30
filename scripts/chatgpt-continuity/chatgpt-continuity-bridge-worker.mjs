@@ -64,6 +64,18 @@ const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
   Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
 );
+const requestedLatestNotOpenMaxAgeMs = Number(
+  process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS || 15 * 60_000,
+);
+const CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS = Math.min(
+  CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  Math.max(
+    RECENT_CONVERSATION_MAX_AGE_MS,
+    Number.isFinite(requestedLatestNotOpenMaxAgeMs)
+      ? requestedLatestNotOpenMaxAgeMs
+      : 15 * 60_000,
+  ),
+);
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
@@ -169,6 +181,7 @@ async function resolveAmbiguousConversationTabs(
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
   maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  navigateLatest = navigateNeutralTabToConversation,
 ) {
   const sourceTabs = Array.isArray(tabs) ? tabs : [];
   const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
@@ -190,8 +203,25 @@ async function resolveAmbiguousConversationTabs(
     }
 
     const latestTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
-    if (latestTabs.length === 0) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
-    return latestTabs;
+    if (latestTabs.length > 0) return latestTabs;
+
+    // Cross-device or another-client activity can make the server-confirmed
+    // latest conversation newer than every conversation currently open in
+    // this persistent Chromium. Never guess among those older conversation
+    // tabs. The navigation fallback is deliberately stricter than matching an
+    // already-open conversation: the latest item must still be within the
+    // normal recent-conversation window and there must be exactly one neutral
+    // ChatGPT home tab available to repurpose.
+    if (ageMs > CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS) {
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+    const neutralHomeTabs = sourceTabs.filter(tab => chatgptTabRank(tab) === 1);
+    if (neutralHomeTabs.length !== 1) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    const [neutralHomeTab] = neutralHomeTabs;
+
+    const navigated = await navigateLatest(neutralHomeTab, latest.id, connector);
+    if (!navigated) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    return [neutralHomeTab];
   } catch (error) {
     if (text(error?.message) === AMBIGUOUS_CONVERSATION_ERROR) throw error;
     throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
@@ -259,6 +289,164 @@ class Cdp {
 
   close() {
     try { this.ws.close(); } catch {}
+  }
+}
+
+async function connectReinforcementChatgptTab({
+  allowCrossDeviceDiscovery = false,
+  tabs: providedTabs = null,
+  connector = connectCdpTarget,
+  probeBanner = errorBannerPresent,
+} = {}) {
+  let tabs = providedTabs;
+  if (!Array.isArray(tabs)) {
+    if (!(await cdpReady())) {
+      throw new Error(
+        `CDP endpoint unreachable at ${CDP_BASE}. This worker only attaches to the canonical authenticated browser.`,
+      );
+    }
+    tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+  }
+
+  const ranked = (Array.isArray(tabs) ? tabs : [])
+    .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
+    .filter(row => row.rank === 0 || row.rank === 1)
+    .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  const opened = [];
+  for (const row of ranked) {
+    let cdp;
+    try {
+      cdp = await connector(row.tab);
+      if (!cdp) continue;
+      const banner = Boolean(await probeBanner(cdp));
+      opened.push({ ...row, cdp, banner });
+    } catch {
+      try { cdp?.close(); } catch {}
+    }
+  }
+
+  if (opened.length === 0) {
+    throw new Error('no usable open chatgpt.com tab found in the attached browser');
+  }
+
+  const interrupted = opened.filter(row => row.banner);
+  if (interrupted.length === 1) {
+    const selected = interrupted[0];
+    for (const row of opened) {
+      if (row !== selected) {
+        try { row.cdp.close(); } catch {}
+      }
+    }
+    return selected.cdp;
+  }
+
+  if (interrupted.length > 1) {
+    for (const row of opened) {
+      try { row.cdp.close(); } catch {}
+    }
+    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+  }
+
+  let selected = opened[0];
+  if (allowCrossDeviceDiscovery) {
+    const neutralHomes = opened.filter(row => row.rank === 1);
+    const conversationRows = opened.filter(row => row.rank === 0);
+    if (neutralHomes.length === 1) {
+      selected = neutralHomes[0];
+    } else if (conversationRows.length > 1) {
+      for (const row of opened) {
+        try { row.cdp.close(); } catch {}
+      }
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+  }
+  for (const row of opened) {
+    if (row !== selected) {
+      try { row.cdp.close(); } catch {}
+    }
+  }
+  return selected.cdp;
+}
+
+async function sidebarLatestConversationId(cdp) {
+  const href = await cdp.evaluate(`(()=>{
+    // sidebar-latest-conversation: local, already-synchronized fallback only.
+    const unique=[];
+    const seen=new Set();
+    for(const anchor of document.querySelectorAll('a[href^="/c/"]')){
+      const value=String(anchor.getAttribute('href')||'').trim();
+      if(!/^\\/c\\/[A-Za-z0-9_-]{8,160}$/.test(value) || seen.has(value)) continue;
+      seen.add(value);
+      unique.push(value);
+    }
+    return unique[0]||'';
+  })()`);
+  const match = String(href || '').match(/^\/c\/([A-Za-z0-9_-]{8,160})$/);
+  return match?.[1] || '';
+}
+
+async function alignToSidebarLatestConversation(cdp) {
+  const currentPath = String(await cdp.evaluate('location.pathname') || '');
+  if (currentPath !== '/') return { action: 'sidebar_unavailable', sidebar_fallback: false };
+
+  const id = await sidebarLatestConversationId(cdp);
+  if (!id) return { action: 'sidebar_unavailable', sidebar_fallback: false };
+
+  const target = '/c/' + id;
+  const navigated = await cdp.evaluate(`(()=>{location.assign(${JSON.stringify(target)});return true})()`);
+  if (!navigated) return { action: 'navigation_failed', sidebar_fallback: true };
+  await sleep(1500);
+  return { action: 'navigated_sidebar_fallback', sidebar_fallback: true };
+}
+
+async function navigateNeutralTabToConversation(
+  tab,
+  conversationId,
+  connector = connectCdpTarget,
+  timeoutMs = 12000,
+  pollMs = 250,
+) {
+  if (chatgptTabRank(tab) !== 1) return false;
+  const id = text(conversationId);
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) return false;
+
+  let cdp;
+  try {
+    cdp = await connector(tab);
+    if (!cdp) return false;
+
+    const target = '/c/' + id;
+    const navigated = await cdp.evaluate(
+      `(()=>{location.assign(${JSON.stringify(target)});return true})()`,
+    );
+    if (!navigated) return false;
+
+    const requestedTimeout = Number(timeoutMs);
+    const requestedPoll = Number(pollMs);
+    const deadline = Date.now() + (Number.isFinite(requestedTimeout)
+      ? Math.max(500, requestedTimeout)
+      : 12000);
+    const intervalMs = Number.isFinite(requestedPoll)
+      ? Math.max(50, requestedPoll)
+      : 250;
+
+    while (Date.now() < deadline) {
+      await sleep(intervalMs);
+      try {
+        const pathname = await cdp.evaluate('location.pathname');
+        const currentId = String(pathname || '').match(/^\/c\/([^/?#]+)/)?.[1] || '';
+        if (currentId === id) return true;
+      } catch {
+        // Navigation can transiently detach the execution context. Keep the
+        // check bounded and fail closed if the target never becomes readable.
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  } finally {
+    try { cdp?.close(); } catch {}
   }
 }
 
@@ -530,7 +718,15 @@ async function alignLatestForReinforcement(
     ? Math.max(0, Math.min(599, Math.trunc(rawStatus)))
     : 0;
   const latest = normalizeLatestConversationMeta(probe);
-  if (!latest) return { action: 'latest_unavailable', http_status: httpStatus };
+  if (!latest) {
+    if (httpStatus === 429) {
+      const sidebar = await alignToSidebarLatestConversation(cdp);
+      if (sidebar.action === 'navigated_sidebar_fallback') {
+        return { ...sidebar, http_status: httpStatus };
+      }
+    }
+    return { action: 'latest_unavailable', http_status: httpStatus };
+  }
   const alignment = await alignToLatestConversation(
     cdp,
     async () => latest,
@@ -828,7 +1024,7 @@ async function reinforcementCheckOnce(
 
 function reinforcementDiscoveryDelayMs(result) {
   if (result?.cross_device_discovery !== true) return 0;
-  if (result?.action === 'latest_unavailable' && Number(result?.http_status) === 429) {
+  if (Number(result?.http_status) === 429) {
     return REINFORCEMENT_429_BACKOFF_MS;
   }
   return REINFORCEMENT_DISCOVERY_INTERVAL_MS;
@@ -859,7 +1055,7 @@ async function reinforcementLoop(
     let outcome;
     try {
       outcome = await check(
-        () => Cdp.connectToChatgptTab(),
+        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
         alignLatestForReinforcement,
@@ -876,8 +1072,10 @@ async function reinforcementLoop(
     const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
     if (discoveryDelayMs > 0) {
       nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
-      if (outcome?.action === 'latest_unavailable' && Number(outcome?.http_status) === 429) {
-        console.log(`chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs}`);
+      if (Number(outcome?.http_status) === 429) {
+        console.log(
+          `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)}`,
+        );
       }
     }
     await wait(REINFORCEMENT_POLL_MS);
@@ -902,6 +1100,7 @@ export {
   Cdp,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
   conversationIsGenerating,
   composerIsUsable,

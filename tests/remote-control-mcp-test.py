@@ -313,6 +313,7 @@ class BootstrapContractTests(unittest.TestCase):
             "action=runtime-proof-submit",
             "action=runtime-proof-verify",
             "action=secure-mcp-tunnel-probe",
+            "action=secure-mcp-runtime-recover",
             "action=secure-mcp-platform-ui-probe",
         ):
             self.assertIn(action, text)
@@ -335,6 +336,18 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
         self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
         self.assertIn("RUNTIME_GITHUB_DEPENDENCY=false", text)
+
+    def test_oci_bastion_secure_tunnel_recovery_uses_canonical_runtime_script(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        start = text.index("- name: Recover Secure MCP Tunnel runtime through OCI Bastion")
+        end = text.index("- name:", start + 10)
+        block = text[start:end]
+        self.assertIn("action=secure-mcp-runtime-recover", block)
+        self.assertIn("scripts/setup-secure-mcp-tunnel-runtime.sh", block)
+        self.assertIn("deploy/systemd/shopvivaliz-secure-mcp-tunnel.service", block)
+        self.assertIn("SECURE_MCP_BASTION_RECOVERY=PASS", block)
+        self.assertIn("sudo -n bash", block)
+        self.assertNotIn("mcp-token", block)
 
     def test_oci_bastion_stage7_storage_recovery_is_guarded(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")

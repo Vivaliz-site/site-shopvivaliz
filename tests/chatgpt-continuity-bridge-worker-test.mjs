@@ -15,9 +15,11 @@ import {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
@@ -198,6 +200,118 @@ async function run() {
     assert.ok(
       candidates.every(tab => tab.url.includes('/c/latest-thread')),
       'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const navigations = [];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor(now / 1000),
+      }),
+      now,
+      undefined,
+      async (tab, conversationId) => {
+        navigations.push({ tab: tab.webSocketDebuggerUrl, conversationId });
+        return true;
+      },
+    );
+    assert.deepEqual(
+      navigations,
+      [{ tab: 'ws://home', conversationId: 'latest-not-open' }],
+      'server-confirmed latest conversation that is not open must use the neutral ChatGPT home tab',
+    );
+    assert.equal(candidates.length, 1);
+    assert.equal(
+      candidates[0]?.webSocketDebuggerUrl,
+      'ws://home',
+      'the neutral tab becomes the only eligible continuation target after navigation',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    let navigated = 0;
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-not-open',
+        update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+      }),
+      now,
+      undefined,
+      async () => { navigated += 1; return true; },
+    );
+    assert.equal(navigated, 1, '14-minute latest-not-open metadata must remain inside the bounded navigation window');
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0]?.webSocketDebuggerUrl, 'ws://home');
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor((now - 16 * 60 * 1000) / 1000),
+        }),
+        now,
+        undefined,
+        async () => true,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open navigation older than 15 minutes must remain fail-closed',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor(now / 1000),
+        }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open must remain fail-closed when no neutral ChatGPT home tab exists',
     );
   }
 
@@ -665,6 +779,74 @@ async function run() {
 
   console.log('attemptNudge branches: PASS');
 
+  // Multiple open conversations must not block the reinforcement monitor before
+  // it can preserve a 429 and schedule the wider discovery backoff. The local
+  // connector first scans for exactly one interrupted tab; with no banner it
+  // uses the single neutral home tab only as a read-only discovery context.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(selected.marker, 'ws://home', 'cross-device discovery must prefer the single neutral home tab');
+    selected.close();
+
+    const result = await reinforcementCheckOnce(
+      async () => connectReinforcementChatgptTab({
+        tabs,
+        connector,
+        probeBanner: async () => false,
+        allowCrossDeviceDiscovery: true,
+      }),
+      1,
+      async () => true,
+      async () => ({ action: 'latest_unavailable', http_status: 429 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 429);
+    assert.equal(result.cross_device_discovery, true);
+  }
+
+  // If one and only one open tab carries the interruption banner, local
+  // evidence wins and no account-scoped latest-conversation request is needed.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/healthy', webSocketDebuggerUrl: 'ws://healthy' },
+      { type: 'page', url: 'https://chatgpt.com/c/interrupted', webSocketDebuggerUrl: 'ws://interrupted' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: tab.webSocketDebuggerUrl === 'ws://interrupted'
+        ? 'Streaming interrupted. Waiting for the complete message...'
+        : 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async cdp => cdp.marker === 'ws://interrupted',
+      allowCrossDeviceDiscovery: false,
+    });
+    assert.equal(selected.marker, 'ws://interrupted', 'the unique locally interrupted tab must be selected without guessing');
+    selected.close();
+  }
+
   // Reinforcement must inspect the currently open conversation first.
   // A visible failure banner must be handled without any account-scoped
   // latest-conversation discovery.
@@ -722,6 +904,28 @@ async function run() {
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
+  // When the account-scoped latest-conversation endpoint is rate-limited,
+  // the already-synchronized sidebar may safely identify the newest visible
+  // conversation without another backend-api request. The fallback is only
+  // valid from the single neutral home tab selected by the connector.
+  {
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      if (String(expression).includes('sidebar-latest-conversation')) return '/c/sidebar-latest';
+      if (String(expression).trim() === 'location.pathname') return '/';
+      if (String(expression).includes('location.assign')) return true;
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 429);
+    assert.equal(result.sidebar_fallback, true);
+  }
+
   // The default reinforcement discovery path must preserve a 429 status so
   // the scheduler can back off for minutes instead of self-amplifying.
   {
@@ -739,7 +943,7 @@ async function run() {
       cross_device_discovery: true,
     });
     const rateLimitedDelay = reinforcementDiscoveryDelayMs({
-      action: 'latest_unavailable',
+      action: 'navigated_sidebar_fallback',
       http_status: 429,
       cross_device_discovery: true,
     });
@@ -747,6 +951,31 @@ async function run() {
     assert.ok(rateLimitedDelay >= 60_000, '429 backoff must be measured in minutes');
     assert.ok(rateLimitedDelay > normalDelay, '429 must back off longer than the normal discovery window');
     assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
+  }
+
+  // The reinforcement scheduler must call its check with exactly the public
+  // five-argument contract. Extra positional arguments can silently replace
+  // the options object in JavaScript and disable the 429 discovery backoff.
+  {
+    let receivedArgs = null;
+    const stop = new Error('stop-after-one-reinforcement-iteration');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async (...args) => {
+          receivedArgs = args;
+          return { action: 'no_banner', cross_device_discovery: false };
+        },
+        () => 0,
+        async () => { throw stop; },
+      ),
+      error => error === stop,
+    );
+    assert.equal(receivedArgs?.length, 5, 'reinforcement check contract must remain exactly five positional arguments');
+    assert.deepEqual(
+      receivedArgs?.[4],
+      { allowCrossDeviceDiscovery: true },
+      'the fifth argument must remain the options object, not a helper function',
+    );
   }
 
   // The checkpoint-driven bridge loop and the reinforcement loop must start
