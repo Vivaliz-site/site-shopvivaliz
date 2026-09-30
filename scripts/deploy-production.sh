@@ -253,17 +253,6 @@ ai_squad_runtime_changed_between_releases() {
     return 0
   fi
 
-  # Claude Code reads this global bootstrap through a managed symlink.
-  # Reinstall/restart when its content changes so every bridge process observes
-  # one coherent runtime revision.
-  local bootstrap="docs/knowledge/claude-vm-bootstrap.md"
-  if [ ! -f "$previous_release/$bootstrap" ] || [ ! -f "$next_release/$bootstrap" ]; then
-    return 0
-  fi
-  if ! cmp -s -- "$previous_release/$bootstrap" "$next_release/$bootstrap"; then
-    return 0
-  fi
-
   # Predicate convention: 0 means changed, 1 means unchanged.
   return 1
 }
@@ -444,6 +433,10 @@ remove_release_tree() {
 
 rollback_to() {
   local previous_release="$1"
+  local current_before_rollback
+  if ! current_before_rollback="$(readlink -f "$CURRENT_LINK" 2>/dev/null)"; then
+    current_before_rollback=''
+  fi
   if [ -z "$previous_release" ] || [ ! -d "$RELEASES_DIR/$previous_release" ]; then
     log ERROR "Rollback indisponivel: release anterior ausente"
     return 1
@@ -465,9 +458,15 @@ rollback_to() {
       return 1
     fi
   fi
-  if ! reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"; then
-    log ERROR "Rollback nao conseguiu reconciliar os bridges AI Squad sem interromper ciclos"
-    return 1
+  if [ -z "$current_before_rollback" ] \
+    || ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$previous_release" "$current_before_rollback"; then
+    if ! reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"; then
+      log ERROR "Rollback nao conseguiu reconciliar os bridges AI Squad sem interromper ciclos"
+      return 1
+    fi
+  else
+    log INFO "ai_squad_runtime_unchanged=true"
+    log INFO "ai_squad_rollback_reconcile_skipped=true"
   fi
   if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.timer" ]; then
     if ! reconcile_abandoned_cart_recovery_units "$RELEASES_DIR/$previous_release"; then
@@ -925,16 +924,6 @@ if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$ACTIVE_RELEASE" "$N
       log ERROR "Rollback apos falha ao reconciliar bridges AI Squad tambem falhou"
     fi
     write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao dos bridges AI Squad falhou"
-    exit 1
-  fi
-elif ! verify_ai_squad_bridges_health; then
-  log INFO "ai_squad_runtime_unchanged=true"
-  log WARN "AI Squad runtime inalterado, mas health exige reparo; reconciliando bridges"
-  if ! reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"; then
-    if ! rollback_to "$ACTIVE_RELEASE"; then
-      log ERROR "Rollback apos falha ao reparar bridges AI Squad tambem falhou"
-    fi
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "health/reparo dos bridges AI Squad falhou"
     exit 1
   fi
 else
