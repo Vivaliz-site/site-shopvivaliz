@@ -65,6 +65,49 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("before", result["stdout"])
         self.assertIn("after", result["stdout"])
 
+    def test_inline_command_cancels_entire_process_group_when_client_disconnects(self):
+        marker = Path(self.tmp.name) / "orphan-child-wrote"
+        started = time.monotonic()
+
+        def disconnected():
+            return time.monotonic() - started >= 0.15
+
+        command = f"(sleep 1; printf leaked > '{marker}') & wait"
+        with self.assertRaises(m.ClientDisconnected):
+            m.run_host_command(
+                "always-free-arm-1787907847-26",
+                command,
+                timeout=10,
+                cancel_check=disconnected,
+            )
+
+        self.assertLess(time.monotonic() - started, 2.0)
+        time.sleep(1.1)
+        self.assertFalse(marker.exists(), "disconnect must terminate descendants, not just the parent shell")
+
+    def test_execute_tool_propagates_inline_disconnect_but_durable_submit_stays_persistent(self):
+        with self.assertRaises(m.ClientDisconnected):
+            m.execute_tool(
+                "admin_command_run",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "command": "sleep 30",
+                    "timeout": 30,
+                },
+                cancel_check=lambda: True,
+            )
+
+        durable = m.execute_tool(
+            "task_submit",
+            {
+                "host": "always-free-arm-1787907847-26",
+                "command": "printf durable",
+                "timeout": 30,
+            },
+            cancel_check=lambda: True,
+        )
+        self.assertEqual(durable["state"], "queued")
+
     def test_task_worker_tolerates_non_utf8_output(self):
         submitted = m.execute_tool("task_submit", {
             "host": "always-free-arm-1787907847-26",
