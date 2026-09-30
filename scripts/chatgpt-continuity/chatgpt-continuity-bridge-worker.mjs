@@ -29,6 +29,18 @@ const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
 const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
+const REINFORCEMENT_POLL_MS = Math.max(
+  15_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_POLL_MS || 30_000),
+);
+const REINFORCEMENT_DISCOVERY_INTERVAL_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_DISCOVERY_MS || 2 * 60_000),
+);
+const REINFORCEMENT_429_BACKOFF_MS = Math.max(
+  REINFORCEMENT_DISCOVERY_INTERVAL_MS + 60_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_429_BACKOFF_MS || 5 * 60_000),
+);
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
@@ -399,6 +411,28 @@ async function alignToLatestConversation(
   return { action: 'navigated' };
 }
 
+async function alignLatestForReinforcement(
+  cdp,
+  probeLatest = latestConversationProbe,
+  nowMs = Date.now(),
+  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+) {
+  const probe = await probeLatest(cdp);
+  const rawStatus = Number(probe?.http_status || 0);
+  const httpStatus = Number.isFinite(rawStatus)
+    ? Math.max(0, Math.min(599, Math.trunc(rawStatus)))
+    : 0;
+  const latest = normalizeLatestConversationMeta(probe);
+  if (!latest) return { action: 'latest_unavailable', http_status: httpStatus };
+  const alignment = await alignToLatestConversation(
+    cdp,
+    async () => latest,
+    nowMs,
+    maxAgeMs,
+  );
+  return { ...alignment, http_status: httpStatus };
+}
+
 async function errorBannerPresent(cdp) {
   // ChatGPT surfaces an explicit banner on a genuine stream failure -- this
   // is the one unambiguous, well-known DOM signal available to a script
@@ -577,58 +611,172 @@ async function reinforcementCheckOnce(
   connect = () => Cdp.connectToChatgptTab(),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
   confirmProgress = confirmAssistantProgress,
-  alignLatest = alignToLatestConversation,
+  alignLatest = alignLatestForReinforcement,
+  { allowCrossDeviceDiscovery = true } = {},
 ) {
   let cdp;
+  let crossDeviceDiscovery = false;
+  let alignmentHttpStatus = 0;
   try {
     cdp = await connect();
-    const alignment = await alignLatest(cdp);
-    if (alignment.action === 'latest_unavailable' || alignment.action === 'stale_latest' || alignment.action === 'navigation_failed') {
-      return alignment;
+
+    // Cheap, local signal first. Do not hit the account-scoped conversation
+    // listing when the currently open conversation already exposes a failure.
+    let bannerPresent = await errorBannerPresent(cdp);
+    if (!bannerPresent) {
+      if (!allowCrossDeviceDiscovery) {
+        return { action: 'no_banner', cross_device_discovery: false };
+      }
+
+      // Cross-device discovery is deliberately gated by reinforcementLoop().
+      // It may trigger account-scoped requests, so mark the attempt before
+      // awaiting it to ensure errors also consume the wider discovery window.
+      crossDeviceDiscovery = true;
+      const alignment = await alignLatest(cdp);
+      alignmentHttpStatus = Number.isFinite(Number(alignment?.http_status))
+        ? Math.max(0, Math.min(599, Math.trunc(Number(alignment.http_status))))
+        : 0;
+      if (
+        alignment.action === 'latest_unavailable'
+        || alignment.action === 'stale_latest'
+        || alignment.action === 'navigation_failed'
+      ) {
+        return {
+          ...alignment,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: true,
+        };
+      }
+      if (alignment.action === 'already_latest') {
+        return {
+          action: 'no_banner',
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: true,
+        };
+      }
+      bannerPresent = await errorBannerPresent(cdp);
+      if (!bannerPresent) {
+        return {
+          action: 'no_banner',
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: true,
+        };
+      }
     }
-    if (!(await errorBannerPresent(cdp))) return { action: 'no_banner' };
+
     await sleep(confirmDelayMs);
     cdp.close();
     cdp = await connect();
     if (!(await errorBannerPresent(cdp))) {
       console.log('chatgpt_continuity_reinforcement error_banner_self_resolved');
-      return { action: 'self_resolved' };
+      return {
+        action: 'self_resolved',
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
     }
     const baseline = await assistantSnapshot(cdp);
     const sent = await sendContinueMessage(cdp);
     if (!sent) {
       console.log('chatgpt_continuity_reinforcement error_banner_confirmed sent=false');
-      return { action: 'send_failed', sent: false, progress_confirmed: false };
+      return {
+        action: 'send_failed',
+        sent: false,
+        progress_confirmed: false,
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
     }
     const progressed = await confirmProgress(cdp, baseline);
     const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
     console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=true progress=${progressed}`);
-    return { action, sent: true, progress_confirmed: progressed };
+    return {
+      action,
+      sent: true,
+      progress_confirmed: progressed,
+      http_status: alignmentHttpStatus,
+      cross_device_discovery: crossDeviceDiscovery,
+    };
   } catch (error) {
     // The reinforcement monitor is best-effort: the checkpoint-driven path
     // above is the primary trigger and already surfaces real failures.
-    return { action: 'error', detail: text(error?.message) };
+    return {
+      action: 'error',
+      detail: text(error?.message),
+      http_status: alignmentHttpStatus,
+      cross_device_discovery: crossDeviceDiscovery,
+    };
   } finally {
     cdp?.close();
   }
 }
 
-async function mainLoop() {
+function reinforcementDiscoveryDelayMs(result) {
+  if (result?.cross_device_discovery !== true) return 0;
+  if (result?.action === 'latest_unavailable' && Number(result?.http_status) === 429) {
+    return REINFORCEMENT_429_BACKOFF_MS;
+  }
+  return REINFORCEMENT_DISCOVERY_INTERVAL_MS;
+}
+
+async function bridgeLoop(
+  poll = pollBridgeOnce,
+  wait = sleep,
+) {
   for (;;) {
     try {
-      await pollBridgeOnce();
+      await poll();
     } catch (error) {
       console.error(`chatgpt_continuity_bridge_poll_error ${text(error?.message)}`);
     }
-    if (STALL_REINFORCEMENT_ENABLED) {
-      try {
-        await reinforcementCheckOnce();
-      } catch (error) {
-        console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
+    await wait(POLL_MS);
+  }
+}
+
+async function reinforcementLoop(
+  check = reinforcementCheckOnce,
+  now = () => Date.now(),
+  wait = sleep,
+) {
+  let nextCrossDeviceDiscoveryAt = 0;
+  for (;;) {
+    const allowCrossDeviceDiscovery = now() >= nextCrossDeviceDiscoveryAt;
+    let outcome;
+    try {
+      outcome = await check(
+        () => Cdp.connectToChatgptTab(),
+        REINFORCEMENT_CONFIRM_DELAY_MS,
+        confirmAssistantProgress,
+        alignLatestForReinforcement,
+        { allowCrossDeviceDiscovery },
+      );
+    } catch (error) {
+      console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
+      outcome = {
+        action: 'error',
+        cross_device_discovery: allowCrossDeviceDiscovery,
+      };
+    }
+
+    const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
+    if (discoveryDelayMs > 0) {
+      nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
+      if (outcome?.action === 'latest_unavailable' && Number(outcome?.http_status) === 429) {
+        console.log(`chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs}`);
       }
     }
-    await sleep(POLL_MS);
+    await wait(REINFORCEMENT_POLL_MS);
   }
+}
+
+async function mainLoop(
+  runBridgeLoop = bridgeLoop,
+  runReinforcementLoop = reinforcementLoop,
+  reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
+) {
+  const loops = [runBridgeLoop()];
+  if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  await Promise.all(loops);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -646,10 +794,15 @@ export {
   normalizeLatestConversationMeta,
   latestConversationMeta,
   alignToLatestConversation,
+  alignLatestForReinforcement,
   assistantSnapshot,
   assistantProgressed,
   confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
+  reinforcementDiscoveryDelayMs,
+  bridgeLoop,
+  reinforcementLoop,
+  mainLoop,
 };

@@ -7,9 +7,12 @@ import {
   latestConversationProbe,
   latestConversationMeta,
   alignToLatestConversation,
+  alignLatestForReinforcement,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
+  reinforcementDiscoveryDelayMs,
+  mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
@@ -403,8 +406,48 @@ async function run() {
 
   console.log('attemptNudge branches: PASS');
 
-  // The reinforcement path must align to the latest cross-device thread
-  // before inspecting the banner.
+  // Reinforcement must inspect the currently open conversation first.
+  // A visible failure banner must be handled without any account-scoped
+  // latest-conversation discovery.
+  {
+    const events = [];
+    let connectCalls = 0;
+    const result = await reinforcementCheckOnce(
+      async () => {
+        connectCalls += 1;
+        events.push('connect');
+        return fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' });
+      },
+      1,
+      async () => true,
+      async () => { events.push('align'); return { action: 'already_latest' }; },
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(events.includes('align'), false, 'current-tab banner must win before cross-device discovery');
+    assert.equal(connectCalls, 2, 'confirmed banner still receives exactly one delayed re-check');
+  }
+
+  // Clean current tab + discovery window closed -> cheap no-op. This keeps
+  // account-scoped discovery out of the fast reinforcement cadence.
+  {
+    let connectCalls = 0;
+    let alignCalls = 0;
+    const result = await reinforcementCheckOnce(
+      async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); },
+      1,
+      async () => true,
+      async () => { alignCalls += 1; return { action: 'already_latest' }; },
+      { allowCrossDeviceDiscovery: false },
+    );
+    assert.equal(result.action, 'no_banner');
+    assert.equal(result.cross_device_discovery, false);
+    assert.equal(connectCalls, 1);
+    assert.equal(alignCalls, 0, 'closed discovery window must not query latest conversations');
+  }
+
+  // When the wider discovery window opens, a clean current tab may inspect
+  // the latest cross-device conversation once.
   {
     const events = [];
     const cdp = fakeCdp({ pageText: 'normal reply' });
@@ -412,23 +455,57 @@ async function run() {
       async () => { events.push('connect'); return cdp; },
       1,
       async () => true,
-      async () => { events.push('align'); return { action: 'already_latest' }; },
+      async () => { events.push('align'); return { action: 'already_latest', http_status: 200 }; },
+      { allowCrossDeviceDiscovery: true },
     );
     assert.equal(result.action, 'no_banner');
+    assert.equal(result.cross_device_discovery, true);
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
-  // reinforcementCheckOnce: no banner at all -> no-op, no second connect.
+  // The default reinforcement discovery path must preserve a 429 status so
+  // the scheduler can back off for minutes instead of self-amplifying.
   {
-    let connectCalls = 0;
-    const result = await reinforcementCheckOnce(
-      async () => { connectCalls += 1; return fakeCdp({ pageText: 'normal reply' }); },
-      1,
-      async () => true,
-      async () => ({ action: 'already_latest' }),
+    const result = await alignLatestForReinforcement(
+      fakeCdp({ pageText: 'normal reply' }),
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
     );
-    assert.equal(result.action, 'no_banner');
-    assert.equal(connectCalls, 1, 'a clean page must not trigger the confirm re-check');
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 429);
+  }
+
+  {
+    const normalDelay = reinforcementDiscoveryDelayMs({
+      action: 'no_banner',
+      cross_device_discovery: true,
+    });
+    const rateLimitedDelay = reinforcementDiscoveryDelayMs({
+      action: 'latest_unavailable',
+      http_status: 429,
+      cross_device_discovery: true,
+    });
+    assert.ok(normalDelay >= 60_000, 'cross-device discovery cadence must be measured in minutes');
+    assert.ok(rateLimitedDelay >= 60_000, '429 backoff must be measured in minutes');
+    assert.ok(rateLimitedDelay > normalDelay, '429 must back off longer than the normal discovery window');
+    assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
+  }
+
+  // The checkpoint-driven bridge loop and the reinforcement loop must start
+  // independently. A slow reinforcement iteration cannot serialize the next
+  // pollBridgeOnce cycle.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      true,
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['bridge', 'reinforcement']);
+    release();
+    await running;
   }
 
   // Banner flashes then clears by the confirm re-check (client's own retry
