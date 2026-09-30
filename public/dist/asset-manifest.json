@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-24T02:28:31.055Z",
+  "generated_at": "2026-09-30T16:23:08.214Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -92,9 +92,9 @@
       "source_bytes": 5327
     },
     "/js/cro-interactions.js": {
-      "file": "/public/dist/js/cro-interactions.b4fea6b8bf.min.js",
-      "bytes": 4318,
-      "source_bytes": 6763
+      "file": "/public/dist/js/cro-interactions.1a86d9efcf.min.js",
+      "bytes": 4414,
+      "source_bytes": 6871
     },
     "/js/first-purchase-popup-v1.js": {
       "file": "/public/dist/js/first-purchase-popup-v1.0805dde65a.min.js",
@@ -306,6 +306,11 @@
       "bytes": 342,
       "source_bytes": 342
     },
+    "/css/paid-mobile-funnel-v1.css": {
+      "file": "/public/dist/css/paid-mobile-funnel-v1.b873d4053d.min.css",
+      "bytes": 1904,
+      "source_bytes": 3017
+    },
     "/css/premium-theme.css": {
       "file": "/public/dist/css/premium-theme.2a8a8ba3ab.min.css",
       "bytes": 6477,
@@ -322,9 +327,9 @@
       "source_bytes": 592
     },
     "/css/privacy-consent-v1.css": {
-      "file": "/public/dist/css/privacy-consent-v1.ff7cfe9e26.min.css",
-      "bytes": 2014,
-      "source_bytes": 2431
+      "file": "/public/dist/css/privacy-consent-v1.9baba6608b.min.css",
+      "bytes": 2521,
+      "source_bytes": 3268
     },
     "/css/product-conversion-v5.css": {
       "file": "/public/dist/css/product-conversion-v5.b8eece7cfd.min.css",
@@ -392,9 +397,9 @@
       "source_bytes": 29746
     },
     "/css/visual-audit-v1.css": {
-      "file": "/public/dist/css/visual-audit-v1.d023aa2164.min.css",
-      "bytes": 10380,
-      "source_bytes": 16183
+      "file": "/public/dist/css/visual-audit-v1.7bc6019b19.min.css",
+      "bytes": 10938,
+      "source_bytes": 17230
     },
     "/css/visual-polish-v4.css": {
       "file": "/public/dist/css/visual-polish-v4.6c7fa3255d.min.css",
