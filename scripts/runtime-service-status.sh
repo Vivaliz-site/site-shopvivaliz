@@ -70,7 +70,9 @@ last_marker_time() {
     return 0
   fi
   candidate="$(
-    grep -F "$marker" "$log_file" 2>/dev/null       | tail -n 1       | sed -n 's/^\[\([^]]*\)\].*/\1/p'
+    { grep -F "$marker" "$log_file" 2>/dev/null || true; } \
+      | tail -n 1 \
+      | sed -n 's/^\[\([^]]*\)\].*/\1/p'
   )"
   if [[ "$candidate" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
     printf '%s' "$candidate"
