@@ -164,6 +164,23 @@ class Cdp {
       );
     }
     const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+    const conversationIds = new Set(
+      (Array.isArray(tabs) ? tabs : [])
+        .filter(tab => chatgptTabRank(tab) === 0)
+        .map(tab => {
+          try {
+            return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
+          } catch {
+            return '';
+          }
+        })
+        .filter(Boolean),
+    );
+    if (conversationIds.size > 1) {
+      throw new Error(
+        'multiple open ChatGPT conversation tabs found; continuity target is ambiguous'
+      );
+    }
     const connected = await connectFirstUsableChatgptTab(tabs, async page => {
       let ws;
       let cdp;
