@@ -237,6 +237,10 @@ PY
 )"
     if [ "$running" = "true" ]; then
       run_as_tunnel_user "$client" runtimes stop "$ALIAS" >/dev/null
+      for _ in $(seq 1 20); do
+        [ "$(count_tunnel_processes)" = "0" ] && break
+        sleep 1
+      done
     elif [ "$running" = "unknown" ]; then
       die runtime_state_unknown_before_cutover 41
     fi
@@ -266,7 +270,9 @@ install_runtime() {
 
   stop_managed_runtime "$client"
 
-  install -m 0755 -o root -g root "$client" "$CANONICAL_BIN"
+  if [ "$client" != "$CANONICAL_BIN" ]; then
+    install -m 0755 -o root -g root "$client" "$CANONICAL_BIN"
+  fi
   "$CANONICAL_BIN" version >/dev/null 2>&1 || die canonical_binary_invalid 33
   install -m 0644 -o root -g root "$UNIT_SOURCE" "$UNIT_TARGET"
   systemctl daemon-reload
