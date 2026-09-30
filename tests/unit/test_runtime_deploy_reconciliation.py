@@ -106,6 +106,21 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
         self.assertIn('17657/health', helper)
 
+    def test_master_pipeline_skips_unchanged_ai_squad_runtime_on_activate_and_rollback(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+
+        self.assertIn("ai_squad_runtime_changed_between_releases()", activation)
+        self.assertIn('ai_squad_runtime_changed=false', activation)
+        self.assertIn('if ai_squad_runtime_changed_between_releases "$previous" "$release"; then', activation)
+        self.assertIn('ai_squad_runtime_changed=true', activation)
+        self.assertIn('if [ "$ai_squad_runtime_changed" = true ]; then', activation)
+        self.assertIn('ai_squad_runtime_reconcile_skipped=true', activation)
+        self.assertIn('ai_squad_runtime_rollback_reconcile_skipped=true', activation)
+
+        rollback = activation.split('if [ "$fail" -ne 0 ]; then', 1)[1]
+        self.assertIn('if [ "$ai_squad_runtime_changed" = true ]; then', rollback)
+
     def test_safe_sync_skips_redundant_ai_squad_restart_when_runtime_is_unchanged(self) -> None:
         text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
         self.assertIn("ai_squad_runtime_changed_between_releases()", text)

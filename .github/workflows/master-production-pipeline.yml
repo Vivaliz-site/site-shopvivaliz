@@ -237,8 +237,39 @@ jobs:
             fi
           }
 
+          ai_squad_runtime_changed_between_releases() {
+            local previous_release="$1"
+            local next_release="$2"
+            local bootstrap="docs/knowledge/claude-vm-bootstrap.md"
+
+            # First/bootstrap deployment has no trustworthy baseline.
+            if [ ! -d "$previous_release/ops/ai-squad" ] || [ ! -d "$next_release/ops/ai-squad" ]; then
+              return 0
+            fi
+            if ! diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad" >/dev/null 2>&1; then
+              return 0
+            fi
+            if [ ! -f "$previous_release/$bootstrap" ] || [ ! -f "$next_release/$bootstrap" ]; then
+              return 0
+            fi
+            if ! cmp -s -- "$previous_release/$bootstrap" "$next_release/$bootstrap"; then
+              return 0
+            fi
+
+            # Predicate convention: 0 means changed, 1 means unchanged.
+            return 1
+          }
+
           if ! previous="$(readlink -f "$current" 2>/dev/null)"; then
             previous=''
+          fi
+          ai_squad_runtime_changed=true
+          if [ -n "$previous" ] && [ -d "$previous" ]; then
+            if ai_squad_runtime_changed_between_releases "$previous" "$release"; then
+              ai_squad_runtime_changed=true
+            else
+              ai_squad_runtime_changed=false
+            fi
           fi
           case "$release" in
             "$releases"/*) ;;
@@ -317,9 +348,14 @@ jobs:
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
           fail=0
-          if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
-            echo 'ai_squad_runtime_reconcile_failed=true' >&2
-            fail=1
+          if [ "$ai_squad_runtime_changed" = true ]; then
+            if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
+              echo 'ai_squad_runtime_reconcile_failed=true' >&2
+              fail=1
+            fi
+          else
+            echo 'ai_squad_runtime_unchanged=true'
+            echo 'ai_squad_runtime_reconcile_skipped=true'
           fi
           if ! sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"; then
             echo 'abandoned_cart_recovery_install_failed=true' >&2
@@ -402,9 +438,13 @@ jobs:
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
-              if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
-                echo 'ai_squad_runtime_rollback_reconcile_failed=true' >&2
-                fail=1
+              if [ "$ai_squad_runtime_changed" = true ]; then
+                if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
+                  echo 'ai_squad_runtime_rollback_reconcile_failed=true' >&2
+                  fail=1
+                fi
+              else
+                echo 'ai_squad_runtime_rollback_reconcile_skipped=true'
               fi
               if [ -f "$current/scripts/install-abandoned-cart-recovery-service.sh" ]; then
                 sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"
