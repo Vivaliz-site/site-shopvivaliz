@@ -469,6 +469,34 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(needle, direct_text)
 
+    def test_remote_access_runtime_status_uses_current_policy_inventory(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        policy = ROOT / "scripts" / "runtime-status-policy.sh"
+        self.assertTrue(policy.exists(), "policy-aware runtime status script missing")
+        text = policy.read_text(encoding="utf-8")
+
+        self.assertNotIn("scripts/runtime-service-status.sh", workflow)
+        self.assertNotIn("shopvivaliz-desktop-commander", text)
+        self.assertNotIn("shopvivaliz-desktop-commander", workflow)
+
+        self.assertIn("bash scripts/runtime-status-policy.sh site", workflow)
+        self.assertIn("< scripts/runtime-status-policy.sh", workflow)
+        self.assertIn("bash -s -- backend", workflow)
+
+        for needle in (
+            "shopvivaliz-agent.service",
+            "shopvivaliz-catalog-reconcile.timer",
+            "shopvivaliz-sync-safe.timer",
+            "shopvivaliz-abandoned-cart-recovery.timer",
+            "shopvivaliz-remote-control-mcp.service",
+            "shopvivaliz-chatgpt-continuity.service",
+            "mei-mg-email-worker.service",
+            "sender_blocked.pause",
+            "EXPECTED=inactive-sender-block",
+            "RUNTIME_HEALTH=",
+        ):
+            self.assertIn(needle, text)
+
     def test_remote_access_can_probe_platform_tunnel_on_backend(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
         for needle in (
