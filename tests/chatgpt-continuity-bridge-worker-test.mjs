@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   Cdp,
   conversationIsGenerating,
+  conversationStreamStatus,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
@@ -61,6 +62,18 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const started = Date.now();
+    const result = await conversationStreamStatus(
+      { evaluate: async () => new Promise(() => {}) },
+      25,
+    );
+    const elapsed = Date.now() - started;
+    assert.equal(result.http_status, 0);
+    assert.equal(result.status, 'FETCH_TIMEOUT');
+    assert.ok(elapsed < 500, `stream-status timeout must stay bounded, elapsed=${elapsed}ms`);
+  }
+
   {
     const originalFetch = globalThis.fetch;
     let calls = 0;
