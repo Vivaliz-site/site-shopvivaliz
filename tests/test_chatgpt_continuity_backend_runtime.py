@@ -160,6 +160,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 'if [[ "$count" -ge 3 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
             )
             executable("pgrep", "exit 0\n")
+            executable("node", "exit 0\n")
             executable(
                 "systemctl",
                 'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
@@ -184,6 +185,54 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+
+    def test_chatgpt_browser_guardian_recovers_live_cdp_with_hung_targets(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            node_count = root / "node-count"
+            systemctl_log = root / "systemctl.log"
+
+            def executable(name: str, body: str) -> None:
+                path = fake_bin / name
+                path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\n" + body, encoding="utf-8")
+                path.chmod(0o755)
+
+            executable("curl", "printf '{\"webSocketDebuggerUrl\":\"ws://127.0.0.1/test\"}'\n")
+            executable("pgrep", "exit 0\n")
+            executable(
+                "node",
+                'count=0; [[ -f "$GUARDIAN_NODE_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_NODE_COUNT_FILE")"; '
+                'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_NODE_COUNT_FILE"; '
+                'if [[ "$count" -ge 3 ]]; then exit 0; fi; exit 1\n',
+            )
+            executable(
+                "systemctl",
+                'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
+                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\n',
+            )
+            executable("sleep", "exit 0\n")
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
+            env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            result = subprocess.run(
+                ["bash", str(guardian)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+            self.assertGreaterEqual(int(node_count.read_text(encoding="utf-8")), 3)
 
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
