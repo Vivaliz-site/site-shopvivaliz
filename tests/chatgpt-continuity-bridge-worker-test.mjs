@@ -15,6 +15,7 @@ import {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
@@ -950,6 +951,31 @@ async function run() {
     assert.ok(rateLimitedDelay >= 60_000, '429 backoff must be measured in minutes');
     assert.ok(rateLimitedDelay > normalDelay, '429 must back off longer than the normal discovery window');
     assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
+  }
+
+  // The reinforcement scheduler must call its check with exactly the public
+  // five-argument contract. Extra positional arguments can silently replace
+  // the options object in JavaScript and disable the 429 discovery backoff.
+  {
+    let receivedArgs = null;
+    const stop = new Error('stop-after-one-reinforcement-iteration');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async (...args) => {
+          receivedArgs = args;
+          return { action: 'no_banner', cross_device_discovery: false };
+        },
+        () => 0,
+        async () => { throw stop; },
+      ),
+      error => error === stop,
+    );
+    assert.equal(receivedArgs?.length, 5, 'reinforcement check contract must remain exactly five positional arguments');
+    assert.deepEqual(
+      receivedArgs?.[4],
+      { allowCrossDeviceDiscovery: true },
+      'the fifth argument must remain the options object, not a helper function',
+    );
   }
 
   // The checkpoint-driven bridge loop and the reinforcement loop must start
