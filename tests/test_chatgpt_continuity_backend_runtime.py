@@ -87,15 +87,23 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("systemctl --user enable --now", body)
         self.assertNotIn("C:\\ShopVivaliz", body)
 
-    def test_backend_installer_restarts_only_when_runtime_changes(self) -> None:
+    def test_backend_installer_persists_restart_intent_across_partial_failures(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
         body = installer.read_text(encoding="utf-8")
         self.assertIn("install_if_changed()", body)
         self.assertIn("worker_changed=false", body)
         self.assertIn("tunnel_unit_changed=false", body)
         self.assertIn("continuity_unit_changed=false", body)
+        self.assertIn('restart_pending="$install_root/.continuity-restart-required"', body)
         self.assertIn('if [[ "$tunnel_unit_changed" = true ]]', body)
         self.assertIn('if [[ "$worker_changed" = true || "$continuity_unit_changed" = true ]]', body)
+        self.assertIn(': > "$restart_pending"', body)
+        self.assertIn('if [[ -f "$restart_pending" ]]; then', body)
+        self.assertIn('systemctl --user try-restart "$unit"', body)
+        self.assertIn('rm -f "$restart_pending"', body)
+        self.assertLess(body.index(': > "$restart_pending"'), body.index('sudo -n systemctl start "$browser_guardian_service"'))
+        self.assertLess(body.index('systemctl --user try-restart "$unit"'), body.index("continuity service is not active"))
+        self.assertLess(body.index("continuity service is not active"), body.index('rm -f "$restart_pending"'))
         self.assertNotIn('systemctl --user restart "$tunnel_unit"\n', body)
         self.assertNotIn('systemctl --user restart "$unit"\n', body)
 
