@@ -243,6 +243,32 @@ async function run() {
     const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
       { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+        }),
+        now,
+        undefined,
+        async () => true,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open navigation must use the stricter recent-conversation window',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
     ];
     await assert.rejects(
       () => resolveAmbiguousConversationTabs(
