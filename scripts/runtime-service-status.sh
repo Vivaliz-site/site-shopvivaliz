@@ -224,14 +224,23 @@ report_backend_continuity() {
   runtime_dir="/run/user/$(id -u)"
   user_bus="unix:path=$runtime_dir/bus"
 
-  local user_active=false
+  local worker_active=false
   if XDG_RUNTIME_DIR="$runtime_dir" DBUS_SESSION_BUS_ADDRESS="$user_bus" \
       systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service 2>/dev/null; then
-    user_active=true
+    worker_active=true
   else
     degrade
   fi
-  printf 'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=%s\n' "$user_active"
+  printf 'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=%s\n' "$worker_active"
+
+  local tunnel_active=false
+  if XDG_RUNTIME_DIR="$runtime_dir" DBUS_SESSION_BUS_ADDRESS="$user_bus" \
+      systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity-a1-tunnel.service 2>/dev/null; then
+    tunnel_active=true
+  else
+    degrade
+  fi
+  printf 'CHATGPT_CONTINUITY_A1_TUNNEL_ACTIVE=%s\n' "$tunnel_active"
 
   local cdp_reachable=false
   if curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null 2>&1; then
@@ -240,6 +249,41 @@ report_backend_continuity() {
     degrade
   fi
   printf 'CHATGPT_CONTINUITY_CDP_REACHABLE=%s\n' "$cdp_reachable"
+}
+
+report_backend_mei_policy() {
+  local worker="mei-mg-email-worker.service"
+  local sender_block="/var/lib/mei-mg-email/sender_blocked.pause"
+  local load active
+  load="$(unit_value "$worker" LoadState)"
+  active="$(unit_value "$worker" ActiveState)"
+
+  # The MEI worker is unrelated to ChatGPT, but its sender-block sentinel is
+  # an explicit stop-line. An intentional inactive worker must not be
+  # misclassified as a broken runtime.
+  if [[ -f "$sender_block" ]]; then
+    echo "MEI_SENDER_BLOCK=active"
+    printf 'UNIT=%s LOAD=%s ACTIVE=%s EXPECTED=inactive-sender-block\n' \
+      "$worker" "$load" "${active:-unknown}"
+    if [[ "$load" == "loaded" && "$active" != "inactive" ]]; then
+      degrade
+    elif [[ "$load" == "loaded" ]]; then
+      attention
+    fi
+    return 0
+  fi
+
+  echo "MEI_SENDER_BLOCK=absent"
+  if [[ "$load" == "loaded" ]]; then
+    printf 'UNIT=%s LOAD=%s ACTIVE=%s EXPECTED=active-no-sender-block\n' \
+      "$worker" "$load" "${active:-unknown}"
+    if [[ "$active" != "active" ]]; then
+      degrade
+    fi
+  else
+    printf 'UNIT=%s LOAD=%s ACTIVE=%s EXPECTED=not-managed-by-this-runtime\n' \
+      "$worker" "$load" "${active:-unknown}"
+  fi
 }
 
 echo "RUNTIME_STATUS_BEGIN"
@@ -260,6 +304,7 @@ case "$role" in
     ;;
   backend)
     report_backend_continuity
+    report_backend_mei_policy
     ;;
   *)
     echo "ERROR=unsupported-role"
