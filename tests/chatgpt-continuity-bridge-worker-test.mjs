@@ -17,6 +17,7 @@ import {
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
+  connectUniqueVisibleChatgptConversation,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -57,6 +58,39 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const closed = [];
+    const selected = await connectUniqueVisibleChatgptConversation([
+      { type: 'page', url: 'https://chatgpt.com/c/background-thread', webSocketDebuggerUrl: 'ws://background' },
+      { type: 'page', url: 'https://chatgpt.com/c/visible-thread', webSocketDebuggerUrl: 'ws://visible' },
+    ], async tab => ({
+      marker: tab.webSocketDebuggerUrl,
+      async evaluate(expression) {
+        assert.equal(expression, 'document.visibilityState');
+        return tab.webSocketDebuggerUrl === 'ws://visible' ? 'visible' : 'hidden';
+      },
+      close() { closed.push(tab.webSocketDebuggerUrl); },
+    }));
+    assert.equal(selected?.marker, 'ws://visible', 'multiple conversations must select only the uniquely visible tab');
+    assert.deepEqual(closed, ['ws://background'], 'non-visible candidate must be closed after disambiguation');
+  }
+
+  {
+    const closed = [];
+    await assert.rejects(
+      () => connectUniqueVisibleChatgptConversation([
+        { type: 'page', url: 'https://chatgpt.com/c/window-one', webSocketDebuggerUrl: 'ws://one' },
+        { type: 'page', url: 'https://chatgpt.com/c/window-two', webSocketDebuggerUrl: 'ws://two' },
+      ], async tab => ({
+        async evaluate() { return 'visible'; },
+        close() { closed.push(tab.webSocketDebuggerUrl); },
+      })),
+      /multiple visible ChatGPT conversation tabs/i,
+      'multiple visible conversations must remain fail-closed',
+    );
+    assert.deepEqual(closed.sort(), ['ws://one', 'ws://two']);
+  }
+
   {
     const originalFetch = globalThis.fetch;
     let calls = 0;
