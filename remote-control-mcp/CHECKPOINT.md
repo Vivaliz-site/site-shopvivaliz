@@ -193,3 +193,42 @@ STATUS=RUNNING
 - Cloudflare Access is BLOCKED_EXTERNAL: API probe `36473749120` proved the protected token cannot read Access Apps or Service Tokens. Dashboard fallback run `36492154682` was unauthenticated and required an interactive challenge. Managed OAuth cannot be safely created until a Cloudflare administrator completes login and grants Access Apps/Policies permission or creates the application manually.
 - Claude server-side bridge work is complete: post-merge run `36493201912` proved bridge install, non-secret MCP configuration, and `tools/list` through the root-only local adapter. Workspace trust for the canonical prepared repository is authorized. PRs #2162/#2163 added a bounded allowlisted PTY confirmation and persistence window, but live install runs `36505458895`, `36505902804` and `36506225110` still failed in the trust substep. Claude remains RUNNING; next is safe diagnostic refinement, then install/status and real cloud-session validation.
 - No `.mcp.json` remote configuration was committed because no secure public OAuth MCP endpoint exists. The controller remains loopback-only and its bearer never reaches Claude config, Cloudflare, or source control.
+
+
+### ACTION STAGE 7A — OpenAI Platform auth repaired; Secure MCP Tunnel now gated at Manage/enablement
+STATUS=RUNNING
+DATE_UTC=2026-09-30
+
+- A ausência de mensagem no celular foi explicada por evidência live, não por suposição. Antes do fix final, o fluxo nunca alcançava Google MFA.
+- PR #2365 (merge `8fbcabeca387cc0820b784d716d79f41a9988868`) adicionou suporte a popup Google e espera humana limitada para MFA. RED run `36656882195`; PR gates verdes.
+- PR #2371 (merge `e017f58bf37fdaa4d5bf8c3d515195302d324330`) adicionou diagnóstico sanitizado de localização/classe do bloqueio. Run `36657522330` mostrou:
+  ```
+  OPENAI_PLATFORM_POST_GOOGLE_LOCATION=openai_auth
+  OPENAI_PLATFORM_FINAL_LOCATION=login
+  OPENAI_PLATFORM_AUTH_BLOCKER=login
+  OPENAI_PLATFORM_AUTHENTICATED=false
+  ```
+  Isso provou que o helper interrompia o OAuth no OpenAI Auth e voltava ao target cedo demais.
+- PR #2376 (merge `1fde558a614c28bab21e1565fdd552dcc162e6cc`) substituiu esse retorno prematuro por waits limitados de handoff/conclusão OAuth. RED run `36657671418` falhou exatamente pela ausência desses waits; Remote Control MCP CI e gates do PR passaram após o GREEN.
+- Fresh auth run `36657864181`, current-main:
+  ```
+  OPENAI_PLATFORM_AUTH_STAGE=already_authenticated
+  OPENAI_PLATFORM_AUTHENTICATED=true
+  OPENAI_PLATFORM_AUTH_BLOCKER=none
+  OPENAI_PLATFORM_AUTH_RESULT=PASS
+  SECURE_MCP_PLATFORM_AUTH=PASS
+  ```
+  Nenhum MFA foi solicitado porque a sessão já estava autenticada.
+- Fresh tunnel UI probe `36657955719`:
+  ```
+  OPENAI_TUNNEL_UI_AUTHENTICATED=true
+  OPENAI_TUNNEL_UI_MANAGE_AVAILABLE=false
+  OPENAI_TUNNEL_UI_ACCESS_REQUIRED=false
+  OPENAI_TUNNEL_UI_EXISTING_COUNT=0
+  OPENAI_TUNNEL_UI_PROBE=PASS
+  SECURE_MCP_PLATFORM_DIRECT_PROBE=PASS
+  ```
+- Interpretação conservadora: autenticação OpenAI não é mais blocker. O gate atual é a capacidade de criar/gerenciar o primeiro Secure MCP Tunnel (RBAC `Manage` e/ou habilitação da superfície). Como `ACCESS_REQUIRED=false`, não declarar ausência total de Read; como `MANAGE_AVAILABLE=false`, não declarar Manage.
+- Evidência oficial vigente: criação/edição exige `Tunnels Read + Manage`; execução/seleção exige `Tunnels Read + Use`; permissões são da organização Platform e podem ser concedidas por owner/RBAC admin. Não usar endpoint público bearer-only como atalho.
+- Claude avançou em paralelo: run `36654114288` / job `109694566519` emitiu `CLAUDE_REMOTE_CONTROL_INSTALL=PASS` e `OCI_MCP_CLAUDE_INSTALL=PASS`. Isso não substitui a exigência de STATUS + prova real da sessão cloud.
+- Completion gate da Stage 7 permanece: (a) Secure MCP Tunnel criado/associado, client privado saudável e `initialize/tools/list` provados pelo caminho OpenAI; (b) ChatGPT workspace consegue descobrir/usar o tunnel; (c) Claude STATUS PASS e sessão Remote Control cloud real comprovada.
