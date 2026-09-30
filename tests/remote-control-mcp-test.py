@@ -863,6 +863,21 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, repair)
 
+        # The backend installer resolves browser supervision assets relative
+        # to its repository-shaped staging tree. Recovery must stage every
+        # dependency added by the canonical installer, not flatten two files.
+        for staged in (
+            "$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
+            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
+            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
+        ):
+            self.assertIn(staged, repair)
+        self.assertIn("install -d -m 700 '$remote_dir/scripts/chatgpt-continuity' '$remote_dir/ops/systemd'", repair)
+        self.assertNotIn("bash '$remote_dir/install-chatgpt-continuity-backend-bridge.sh'", repair)
+
     def test_oci_bastion_can_diagnose_chatgpt_continuity_via_mcp(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         for needle in (
