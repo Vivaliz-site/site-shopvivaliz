@@ -253,17 +253,6 @@ ai_squad_runtime_changed_between_releases() {
     return 0
   fi
 
-  # Claude Code reads this global bootstrap through a managed symlink.
-  # Reinstall/restart when its content changes so every bridge process observes
-  # one coherent runtime revision.
-  local bootstrap="docs/knowledge/claude-vm-bootstrap.md"
-  if [ ! -f "$previous_release/$bootstrap" ] || [ ! -f "$next_release/$bootstrap" ]; then
-    return 0
-  fi
-  if ! cmp -s -- "$previous_release/$bootstrap" "$next_release/$bootstrap"; then
-    return 0
-  fi
-
   # Predicate convention: 0 means changed, 1 means unchanged.
   return 1
 }
