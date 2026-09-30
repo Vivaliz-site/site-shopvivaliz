@@ -48,12 +48,20 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, body)
 
-    def test_backend_policy_tracks_only_current_chatgpt_runtime(self) -> None:
+    def test_backend_policy_tracks_current_chatgpt_runtime_and_stop_line(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("shopvivaliz-chatgpt-continuity.service", body)
-        self.assertIn("CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=", body)
-        self.assertIn("CHATGPT_CONTINUITY_CDP_REACHABLE=", body)
-        self.assertIn("http://127.0.0.1:9555/json/version", body)
+        for marker in (
+            "shopvivaliz-chatgpt-continuity.service",
+            "shopvivaliz-chatgpt-continuity-a1-tunnel.service",
+            "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=",
+            "CHATGPT_CONTINUITY_A1_TUNNEL_ACTIVE=",
+            "CHATGPT_CONTINUITY_CDP_REACHABLE=",
+            "http://127.0.0.1:9555/json/version",
+            "/var/lib/mei-mg-email/sender_blocked.pause",
+            "EXPECTED=inactive-sender-block",
+            "EXPECTED=active-no-sender-block",
+        ):
+            self.assertIn(marker, body)
 
     def test_missing_log_marker_is_safe_under_pipefail(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
