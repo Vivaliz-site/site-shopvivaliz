@@ -453,7 +453,15 @@ class BootstrapContractTests(unittest.TestCase):
             "OPENAI_PLATFORM_MFA_WAIT_RESULT=",
         ):
             self.assertIn(needle, auth_text)
+        for marker in (
+            "OPENAI_PLATFORM_POST_GOOGLE_LOCATION=",
+            "OPENAI_PLATFORM_FINAL_LOCATION=",
+            "OPENAI_PLATFORM_AUTH_BLOCKER=",
+        ):
+            self.assertIn(marker, auth_text)
+        self.assertIn("classifyLocation(", auth_text)
         self.assertNotIn("OPENAI_PLATFORM_AUTH_RAW_OUTPUT=", auth_text)
+        self.assertNotIn("OPENAI_PLATFORM_CURRENT_URL=", auth_text)
 
         auth_flow = ROOT / ".github" / "workflows" / "secure-mcp-platform-auth.yml"
         self.assertTrue(auth_flow.exists(), "Secure MCP Platform auth workflow missing")
