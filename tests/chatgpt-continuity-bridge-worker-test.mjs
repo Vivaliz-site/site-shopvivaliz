@@ -22,6 +22,7 @@ import {
   selectChatgptTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
+  ensureConversationTarget,
   resolveAmbiguousConversationTabs,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
@@ -43,6 +44,7 @@ function fakeCdp({
     calls,
     async evaluate(expression) {
       calls.push(expression);
+      if (expression.includes('location.pathname')) return '/c/fake';
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
@@ -495,6 +497,25 @@ async function run() {
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
+
+  {
+    let currentPath = '/';
+    let assigned = '';
+    const homeCdp = fakeCdp();
+    homeCdp.evaluate = async expression => {
+      homeCdp.calls.push(expression);
+      if (expression.includes('location.pathname')) return currentPath;
+      if (expression.includes('location.assign')) {
+        assigned = expression;
+        currentPath = '/c/sidebar-latest';
+        return true;
+      }
+      return null;
+    };
+    const safeTarget = await ensureConversationTarget(homeCdp);
+    assert.equal(safeTarget, true);
+    assert.match(assigned, /sidebar-latest/, 'home recovery must navigate into an existing conversation');
+  }
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
 
