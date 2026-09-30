@@ -11,6 +11,8 @@ $checks = [
     'mobile paid landing may reveal sticky CTA before scroll threshold' =>
         str_contains($cro, "window.matchMedia('(max-width: 820px)').matches")
         && str_contains($cro, 'isMobileViewport || window.scrollY > STICKY_REVEAL_SCROLL_Y'),
+    'product sticky CTA clears mobile bottom navigation' =>
+        preg_match('/\.sticky-buy-wrapper\s*\{[^}]*bottom:\s*calc\(84px \+ env\(safe-area-inset-bottom, 0px\)\)/s', $visualCss) === 1,
     'product sticky CTA can move above consent banner' =>
         str_contains($privacyCss, 'body:has(#sv-privacy-consent) .sticky-buy-wrapper.visible')
         && str_contains($privacyCss, 'var(--sv-privacy-consent-space'),
