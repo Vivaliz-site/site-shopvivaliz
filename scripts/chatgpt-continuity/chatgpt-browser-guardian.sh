@@ -3,12 +3,59 @@ set -Eeuo pipefail
 
 browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
 cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
+cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
+worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
+
+runtime_eval_ready() {
+  CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
+    timeout 8s node --input-type=module -e '
+      const { Cdp, connectFirstUsableChatgptTab } = await import(
+        "file://" + process.env.CHATGPT_CONTINUITY_WORKER_MODULE
+      );
+      const base = String(process.env.CHATGPT_BROWSER_CDP_BASE || "").replace(/\/$/, "");
+      const response = await fetch(base + "/json", { signal: AbortSignal.timeout(2500) });
+      if (!response.ok) process.exit(1);
+      const tabs = await response.json();
+      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+        let ws;
+        let candidate;
+        try {
+          ws = new WebSocket(page.webSocketDebuggerUrl);
+          await Promise.race([
+            new Promise((resolve, reject) => {
+              ws.addEventListener("open", resolve, { once: true });
+              ws.addEventListener("error", reject, { once: true });
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
+          ]);
+          candidate = new Cdp(ws);
+          await Promise.race([
+            candidate.evaluate("true"),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("evaluate timeout")), 2500)),
+          ]);
+          return candidate;
+        } catch (error) {
+          try { candidate?.close(); } catch {}
+          try { ws?.close(); } catch {}
+          throw error;
+        }
+      });
+      if (!c) process.exit(1);
+      try {
+        const value = await c.evaluate("(()=>42)()");
+        if (value !== 42) process.exitCode = 1;
+      } finally {
+        c.close();
+      }
+    ' >/dev/null 2>&1
+}
 
 cdp_ready() {
   curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if isinstance(d.get("webSocketDebuggerUrl"), str) and d["webSocketDebuggerUrl"].startswith(("ws://","wss://")) else 1)' \
-    >/dev/null 2>&1
+    >/dev/null 2>&1 \
+    && runtime_eval_ready
 }
 
 wait_for_cdp() {
