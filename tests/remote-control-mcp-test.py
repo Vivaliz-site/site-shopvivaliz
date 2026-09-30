@@ -414,8 +414,14 @@ class BootstrapContractTests(unittest.TestCase):
             "OPENAI_TUNNEL_UI_MANAGE_AVAILABLE=",
             "OPENAI_TUNNEL_UI_ACCESS_REQUIRED=",
             "OPENAI_TUNNEL_UI_EXISTING_COUNT=",
+            "OPENAI_TUNNEL_UI_GENERIC_CREATE_CONTROL=",
+            "OPENAI_TUNNEL_UI_ORG_OWNER_SURFACE_AVAILABLE=",
+            "OPENAI_TUNNEL_UI_ADMIN_KEYS_ACCESS_DENIED=",
+            "OPENAI_TUNNEL_UI_RBAC_DIAG=",
         ):
             self.assertIn(marker, text)
+        self.assertIn("https://platform.openai.com/settings/organization/admin-keys", text)
+        self.assertNotIn("CREATE_ADMIN_KEY", text)
         self.assertIn("process.exit(process.exitCode || 0)", text)
         self.assertNotIn("browser.close(", text)
 
