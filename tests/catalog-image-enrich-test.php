@@ -28,6 +28,18 @@ $products = [
         'price' => 50.00,
         'stock' => 3,
     ],
+    [
+        'sku' => 'TINYV3',
+        'sync_source' => 'tiny_v3',
+        'image_url' => 'https://erp.example/tiny-primary.jpg',
+        'images' => [
+            'https://erp.example/tiny-primary.jpg',
+            'https://erp.example/tiny-secondary.jpg',
+        ],
+        'images_count' => 2,
+        'price' => 58.50,
+        'stock' => 3,
+    ],
 ];
 
 $result = svcie_apply_image_map($products, [
@@ -35,6 +47,9 @@ $result = svcie_apply_image_map($products, [
     'KEEP' => [
         'https://erp.example/keep-primary.jpg',
         'https://erp.example/keep-secondary.jpg',
+    ],
+    'TINYV3' => [
+        'https://erp.example/tiny-primary.jpg',
     ],
 ]);
 
@@ -61,6 +76,13 @@ svcie_test_assert(
         'https://erp.example/keep-secondary.jpg',
     ],
     'ERP product media map must preserve the synchronized gallery order.'
+);
+svcie_test_assert(
+    ($result[2]['images'] ?? []) === [
+        'https://erp.example/tiny-primary.jpg',
+        'https://erp.example/tiny-secondary.jpg',
+    ],
+    'Tiny v3 ERP gallery must not lose authoritative additional images when the local image mirror is partial.'
 );
 
 fwrite(STDOUT, "PASS: catalog image enrichment tests.\n");
