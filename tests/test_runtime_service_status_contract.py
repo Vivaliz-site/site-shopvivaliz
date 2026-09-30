@@ -65,11 +65,11 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
 
     def test_missing_log_marker_is_safe_under_pipefail(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('{ grep -F "$marker" "$log_file" 2>/dev/null || true; }', body)
-        self.assertIn(
-            '[[ "$candidate" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]',
-            body,
-        )
+        marker_body = body.split("last_marker_time() {", 1)[1].split("last_json_number()", 1)[0]
+        self.assertIn('awk -v marker="$marker"', marker_body)
+        self.assertIn('END { print (value == "" ? "NONE" : value) }', marker_body)
+        self.assertIn(r'^\\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\\]', marker_body)
+        self.assertNotIn("|| true", marker_body)
 
     def test_runtime_status_does_not_restore_legacy_control_plane_dependencies(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8").lower()
