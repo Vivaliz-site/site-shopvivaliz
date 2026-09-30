@@ -76,6 +76,12 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('sudo -u ubuntu test -r "$continuity_token_file"', text)
         self.assertIn('sha256sum -- "$continuity_token_file"', text)
         self.assertIn('CHATGPT_CONTINUITY_DEPLOY_TOKEN_METADATA=PASS', text)
+        self.assertIn('if sudo test -e "$continuity_token_file"; then', text)
+        self.assertIn('sudo test -d "$continuity_token_dir"', text)
+        self.assertIn('sudo test -L "$continuity_token_dir"', text)
+        self.assertIn('sudo test -f "$continuity_token_file"', text)
+        self.assertIn('sudo test -L "$continuity_token_file"', text)
+        self.assertNotIn('if [ -e "$continuity_token_file" ]; then', text)
         self.assertLess(text.index(recursive), text.index(token_dir))
         self.assertNotIn('cat "$continuity_token_file"', text)
 
@@ -120,6 +126,15 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
 
         rollback = activation.split('if [ "$fail" -ne 0 ]; then', 1)[1]
         self.assertIn('if [ "$ai_squad_runtime_changed" = true ]; then', rollback)
+
+    def test_manual_deploy_checks_continuity_token_with_privilege_after_storage_chgrp(self) -> None:
+        text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        self.assertIn('if ! sudo test -e "$token_file"; then', text)
+        self.assertIn('sudo test -d "$token_dir"', text)
+        self.assertIn('sudo test -L "$token_dir"', text)
+        self.assertIn('sudo test -f "$token_file"', text)
+        self.assertIn('sudo test -L "$token_file"', text)
+        self.assertNotIn('if [ ! -e "$token_file" ]; then', text)
 
     def test_safe_sync_skips_redundant_ai_squad_restart_when_runtime_is_unchanged(self) -> None:
         text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
