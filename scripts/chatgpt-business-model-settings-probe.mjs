@@ -83,9 +83,22 @@ try {
       currentUrl = page.url();
       bodyText = await page.locator('body').innerText({ timeout: 8000 }).catch(() => '');
 
+      if (/admin/i.test(currentUrl)) {
+        const modelsNav = page
+          .getByRole('link', { name: /^(models?|modelos)$/i })
+          .or(page.getByRole('button', { name: /^(models?|modelos)$/i }))
+          .first();
+        if ((await modelsNav.count().catch(() => 0)) > 0) {
+          await modelsNav.click().catch(() => {});
+          await page.waitForTimeout(2500);
+          currentUrl = page.url();
+          bodyText = await page.locator('body').innerText({ timeout: 8000 }).catch(() => '');
+        }
+      }
+
       const looksLikeModels =
         /admin/i.test(currentUrl) &&
-        /models?|model settings|recommended|reasoning|thinking|effort|intelligence|intelig[eê]ncia/i.test(bodyText);
+        /models?|modelos|model settings|recommended|recomendad|reasoning|thinking|effort|intelligence|intelig[eê]ncia/i.test(bodyText);
 
       if (looksLikeModels) {
         modelsPageReached = true;
