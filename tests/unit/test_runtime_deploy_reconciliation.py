@@ -124,7 +124,6 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
     def test_safe_sync_skips_redundant_ai_squad_restart_when_runtime_is_unchanged(self) -> None:
         text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
         self.assertIn("ai_squad_runtime_changed_between_releases()", text)
-        self.assertIn("verify_ai_squad_bridges_health()", text)
 
         activate = text.split('ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"', 1)[1]
         activate = activate.split("if ! reconcile_abandoned_cart_recovery_units", 1)[0]
@@ -135,10 +134,18 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"', activate)
         self.assertIn("ai_squad_runtime_unchanged=true", activate)
         self.assertIn("ai_squad_bridge_restart_skipped=true", activate)
-        self.assertIn("elif ! verify_ai_squad_bridges_health; then", activate)
+        self.assertNotIn("elif ! verify_ai_squad_bridges_health; then", activate)
+        self.assertEqual(activate.count('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"'), 1)
 
         rollback = text.split("rollback_to() {", 1)[1].split("restore_runner_bootstrap_if_needed()", 1)[0]
+        self.assertIn("rollback_from_release=", rollback)
+        self.assertIn(
+            'if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$rollback_from_release" "$RELEASES_DIR/$previous_release"; then',
+            rollback,
+        )
         self.assertIn('reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"', rollback)
+        self.assertIn("rollback_ai_squad_runtime_unchanged=true", rollback)
+        self.assertIn("rollback_ai_squad_bridge_restart_skipped=true", rollback)
 
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
         reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
