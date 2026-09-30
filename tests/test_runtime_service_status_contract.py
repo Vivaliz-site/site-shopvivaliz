@@ -55,6 +55,14 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
         self.assertIn("CHATGPT_CONTINUITY_CDP_REACHABLE=", body)
         self.assertIn("http://127.0.0.1:9555/json/version", body)
 
+    def test_missing_log_marker_is_safe_under_pipefail(self) -> None:
+        body = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('{ grep -F "$marker" "$log_file" 2>/dev/null || true; }', body)
+        self.assertIn(
+            '[[ "$candidate" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]',
+            body,
+        )
+
     def test_runtime_status_does_not_restore_legacy_control_plane_dependencies(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8").lower()
         for forbidden in (
