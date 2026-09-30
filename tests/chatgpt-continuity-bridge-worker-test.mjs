@@ -204,6 +204,31 @@ async function run() {
     const now = Date.now();
     const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
+    ];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        id: 'latest-thread',
+        update_time: Math.floor((now - 14 * 60 * 1000) / 1000),
+      }),
+      now,
+    );
+    assert.equal(
+      candidates.length,
+      2,
+      'checkpoint-driven disambiguation must tolerate the live 14-minute latest age without weakening reinforcement recency',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest' },
     ];
     await assert.rejects(
@@ -224,12 +249,12 @@ async function run() {
           http_status: 200,
           source: 'filtered',
           id: 'latest-thread',
-          update_time: Math.floor((now - 20 * 60 * 1000) / 1000),
+          update_time: Math.floor((now - 31 * 60 * 1000) / 1000),
         }),
         now,
       ),
       /multiple open ChatGPT conversation tabs/i,
-      'a stale latest conversation must remain fail-closed',
+      'a latest conversation outside the bounded 30-minute checkpoint window must remain fail-closed',
     );
   }
 
