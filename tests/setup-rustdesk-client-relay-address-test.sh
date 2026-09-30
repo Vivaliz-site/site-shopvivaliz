@@ -14,7 +14,7 @@ required = [
     "CLIENT_RELAY_SERVER=",
     "RUSTDESK_RELAY_SERVER",
     "SERVER_TAILSCALE_IP",
-    "local relay_server=\"$4\"",
+    "relay_server=\"$4\"",
     "relay-server = '$relay_server'",
 ]
 missing = [x for x in required if x not in text]
