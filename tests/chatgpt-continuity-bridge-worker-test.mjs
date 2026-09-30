@@ -44,7 +44,7 @@ function fakeCdp({
     calls,
     async evaluate(expression) {
       calls.push(expression);
-      if (expression.includes('location.pathname')) return '/c/fake';
+      if (expression.includes('location.pathname')) return '/c/fake-thread';
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
@@ -58,7 +58,7 @@ function fakeCdp({
       return null;
     },
     async pageState() {
-      return { href: 'https://chatgpt.com/c/fake', title: 'ChatGPT', text: pageText };
+      return { href: 'https://chatgpt.com/c/fake-thread', title: 'ChatGPT', text: pageText };
     },
     close() {},
   };
