@@ -31,12 +31,17 @@ class SecureMcpTunnelStabilityTests(unittest.TestCase):
             "SECURE_MCP_RUNTIME_STALE=",
             "SECURE_MCP_RUNTIME_DOCTOR=",
             "SECURE_MCP_RUNTIME_INITIALIZATION_ERRORS=",
+            "SECURE_MCP_RUNTIME_HEALTHZ=",
+            "SECURE_MCP_RUNTIME_READYZ=",
             "SECURE_MCP_RUNTIME_REPAIR=",
             "SECURE_MCP_RUNTIME_FINAL=PASS",
         ):
             self.assertIn(marker, text)
         self.assertIn("MCP_STDIO_SEND_INITIALIZED_NOTIFICATION=true", text)
         self.assertIn("MCP_CONNECTION_MAX_TTL=30m", text)
+        self.assertIn("HEALTH_LISTEN_ADDR=127.0.0.1:8080", text)
+        self.assertIn("/healthz", setup)
+        self.assertIn("/readyz", setup)
         self.assertIn("Restart=always", text)
         self.assertNotIn("set +e", text)
 
