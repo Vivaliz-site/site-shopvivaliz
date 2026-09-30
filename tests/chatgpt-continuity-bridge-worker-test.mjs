@@ -121,6 +121,49 @@ async function run() {
     assert.equal(connected?.marker, 'ws://live');
   }
 
+  {
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async url => {
+        if (String(url).endsWith('/json/version')) {
+          return {
+            ok: true,
+            async json() {
+              return { webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/browser/test' };
+            },
+          };
+        }
+        if (String(url).endsWith('/json')) {
+          return {
+            ok: true,
+            async json() {
+              return [
+                {
+                  type: 'page',
+                  url: 'https://chatgpt.com/c/conversation-one',
+                  webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/page/one',
+                },
+                {
+                  type: 'page',
+                  url: 'https://chatgpt.com/c/conversation-two',
+                  webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/page/two',
+                },
+              ];
+            },
+          };
+        }
+        throw new Error(`unexpected URL ${url}`);
+      };
+      await assert.rejects(
+        () => Cdp.connectToChatgptTab(),
+        /multiple open ChatGPT conversation tabs/i,
+        'distinct open conversations must fail closed instead of selecting one arbitrarily',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
