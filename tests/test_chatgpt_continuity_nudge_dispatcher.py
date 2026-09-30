@@ -197,7 +197,7 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
                     "send_attempt_count": 1,
                 }
             )
-            + "\\n",
+            + "\n",
             encoding="utf-8",
         )
 
