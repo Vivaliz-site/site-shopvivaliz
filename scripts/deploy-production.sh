@@ -818,6 +818,20 @@ if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_
 fi
 printf '%s\n' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
 
+# docs/ is export-ignored from git archive, but Claude Code consumes this
+# single bootstrap file as runtime configuration. Materialize it from the
+# exact release SHA without reintroducing the rest of the documentation tree.
+runtime_bootstrap="docs/knowledge/claude-vm-bootstrap.md"
+mkdir -p "$(dirname "$NEW_RELEASE_PATH/$runtime_bootstrap")"
+if ! git -C "$REPO_DIR" show "$REMOTE_SHA:$runtime_bootstrap" > "$NEW_RELEASE_PATH/$runtime_bootstrap"; then
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos bootstrap Claude ausente"
+  fi
+  log ERROR "Bootstrap Claude obrigatorio ausente no SHA da release"
+  exit 1
+fi
+chmod 0644 "$NEW_RELEASE_PATH/$runtime_bootstrap"
+
 declare -a SYMLINKS=(
   ".env"
   "uploads"
