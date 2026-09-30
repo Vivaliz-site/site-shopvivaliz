@@ -580,8 +580,13 @@ jobs:
           }
           trap cleanup_continuity_repair EXIT
 
-          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
-          "${BACKEND_SCP[@]}"             scripts/install-chatgpt-continuity-backend-bridge.sh             scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs             "ubuntu@127.0.0.1:$remote_dir/"
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir' '$remote_dir/scripts' '$remote_dir/scripts/chatgpt-continuity' '$remote_dir/ops' '$remote_dir/ops/systemd' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+          "${BACKEND_SCP[@]}" scripts/install-chatgpt-continuity-backend-bridge.sh "ubuntu@127.0.0.1:$remote_dir/scripts/"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-guardian.sh "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
             token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
@@ -601,7 +606,7 @@ jobs:
           "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
           install_output=''
           install_rc=0
-          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
+          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
           then
             install_rc=0
           else
