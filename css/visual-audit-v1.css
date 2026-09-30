@@ -332,7 +332,7 @@ body {
     .sticky-buy-wrapper {
         left: 10px !important;
         right: 10px !important;
-        bottom: 10px !important;
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
         width: auto !important;
         border-radius: 18px !important;
         padding: 10px 12px !important;
