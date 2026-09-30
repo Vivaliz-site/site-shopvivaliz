@@ -43,6 +43,7 @@ if ($svCatalogPublicCache) {
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/ml-ranking.php';
+require_once __DIR__ . '/includes/catalog-search-context.php';
 
 function sv_catalog_root(): string
 {
@@ -486,6 +487,11 @@ $statusText = $products
     ? $totalStr . ($category !== '' ? " em \"{$category}\"" : '') . '.'
     : ($query !== '' ? 'Nenhum produto encontrado para essa busca.' : 'Explore nossas categorias ou fale com a equipe para localizar o item ideal.');
 
+$searchContext = sv_catalog_search_context($query);
+$catalogEyebrow = $category !== '' ? $category : $searchContext['eyebrow'];
+$catalogHeading = $query !== '' ? $searchContext['heading'] : 'Produtos Vivaliz';
+$catalogLead = $query !== '' && $products ? $searchContext['lead'] : $statusText;
+
 function sv_catalog_page_url(int $page, string $query, string $category): string
 {
     $params = [];
@@ -558,9 +564,9 @@ $svNavCurrent = 'catalogo';
         <section class="catalog-header">
             <div class="container catalog-header-inner">
                 <div>
-                    <p class="eyebrow"><?= $category !== '' ? sv_catalog_esc($category) : 'Todos os produtos' ?></p>
-                    <h1>Produtos Vivaliz</h1>
-                    <p class="muted"><?= $statusText ?></p>
+                    <p class="eyebrow"><?= sv_catalog_esc($catalogEyebrow) ?></p>
+                    <h1><?= sv_catalog_esc($catalogHeading) ?></h1>
+                    <p class="muted"><?= sv_catalog_esc($catalogLead) ?></p>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
                     <input id="catalog-search" name="q" type="search" aria-label="Buscar no catálogo" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
