@@ -505,6 +505,7 @@ async function run() {
     homeCdp.evaluate = async expression => {
       homeCdp.calls.push(expression);
       if (expression.includes('location.pathname')) return currentPath;
+      if (expression.includes('sidebar-latest-conversation')) return '/c/sidebar-latest';
       if (expression.includes('location.assign')) {
         assigned = expression;
         currentPath = '/c/sidebar-latest';
