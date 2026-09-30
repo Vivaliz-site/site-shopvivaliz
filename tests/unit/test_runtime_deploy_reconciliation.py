@@ -135,7 +135,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"', activate)
         self.assertIn("ai_squad_runtime_unchanged=true", activate)
         self.assertIn("ai_squad_bridge_restart_skipped=true", activate)
-        self.assertIn("elif ! verify_ai_squad_bridges_health; then", activate)
+        self.assertNotIn("elif ! verify_ai_squad_bridges_health; then", activate)
 
         rollback = text.split("rollback_to() {", 1)[1].split("restore_runner_bootstrap_if_needed()", 1)[0]
         self.assertIn('reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"', rollback)
