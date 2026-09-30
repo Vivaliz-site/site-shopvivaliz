@@ -926,6 +926,104 @@ async function run() {
     assert.equal(result.sidebar_fallback, true);
   }
 
+  // Live post-deploy state can contain exactly one conversation tab and no
+  // neutral home tab. That tab is safe to use as temporary discovery context,
+  // but only because connectReinforcementChatgptTab proved it is unique.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/original-thread', webSocketDebuggerUrl: 'ws://only' },
+    ];
+    let currentPath = '/c/original-thread';
+    const assignments = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.evaluate = async expression => {
+        const source = String(expression);
+        if (source.includes('sidebar-latest-conversation')) return '/c/mobile-latest';
+        if (source.trim() === 'location.pathname') return currentPath;
+        if (source.includes('location.assign')) {
+          assignments.push(source);
+          currentPath = '/c/mobile-latest';
+          return true;
+        }
+        return originalEvaluate(expression);
+      };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    const result = await alignLatestForReinforcement(
+      selected,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.sidebar_fallback, true);
+    assert.equal(result.restore_path, '/c/original-thread');
+    assert.equal(assignments.length, 1, 'unique conversation tab may navigate once to the synced sidebar target');
+    selected.close();
+  }
+
+  // A raw conversation CDP that was not proven unique must remain fail-closed.
+  {
+    let currentPath = '/c/unproven-thread';
+    const cdp = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/mobile-latest';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/mobile-latest';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      cdp,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(currentPath, '/c/unproven-thread', 'unproven conversation context must never be repurposed');
+  }
+
+  // Any temporary sidebar navigation must restore the original safe path even
+  // when the discovered conversation has no interruption banner.
+  {
+    let currentPath = '/c/mobile-latest';
+    const cdp = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign') && source.includes('/c/original-thread')) {
+        currentPath = '/c/original-thread';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await reinforcementCheckOnce(
+      async () => cdp,
+      1,
+      async () => true,
+      async () => ({
+        action: 'navigated_sidebar_fallback',
+        sidebar_fallback: true,
+        restore_path: '/c/original-thread',
+        http_status: 429,
+      }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'no_banner');
+    assert.equal(result.http_status, 429);
+    assert.equal(currentPath, '/c/original-thread', 'temporary cross-device navigation must restore the original tab');
+  }
+
   // The default reinforcement discovery path must preserve a 429 status so
   // the scheduler can back off for minutes instead of self-amplifying.
   {
