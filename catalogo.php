@@ -42,7 +42,8 @@ if ($svCatalogPublicCache) {
 
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
-require_once __DIR__ . '/includes/ml-ranking.php';\nrequire_once __DIR__ . '/includes/catalog-search-context.php';
+require_once __DIR__ . '/includes/ml-ranking.php';
+require_once __DIR__ . '/includes/catalog-search-context.php';
 
 function sv_catalog_root(): string
 {
