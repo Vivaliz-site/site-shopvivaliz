@@ -1,7 +1,7 @@
 # Remote Control MCP — Plano de Ação
 
 TASK_ID=private-remote-control-mcp-4hosts-20260927
-STATUS=RUNNING
+STATUS=CONCLUIDO
 
 ## Regra de execução
 Executar uma etapa por vez. Ao concluir cada etapa, persistir evidência em `remote-control-mcp/CHECKPOINT.md` antes de avançar.
@@ -111,18 +111,30 @@ STATUS=PASS
 - GitHub Actions permanece somente como shell auditável de bootstrap/observação; não participa do transporte de comandos, fila, heartbeat, execução nem estado do runtime.
 
 ## Etapa 7 — Integrar MCP com ChatGPT e encerrar
-STATUS=RUNNING
+STATUS=PASS
 
-### Evidência e subpassos concluídos
-- O controller permanece somente em `127.0.0.1:5580`; o bearer continua root-only no backend e não foi publicado.
-- OpenAI: run `36472954776` autenticou a Platform, mas retornou `OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false`. A nova tentativa `36491312473` retornou `OPENAI_PLATFORM_AUTHENTICATED=false`, portanto a sessão atual não pode criar ou administrar um Secure MCP Tunnel. A documentação oficial exige Secure MCP Tunnel para um MCP privado em ChatGPT.
-- Cloudflare: o probe de API `36473749120` retornou `CLOUDFLARE_ACCESS_APPS_READ=false`, `CLOUDFLARE_ACCESS_SERVICE_TOKENS_READ=false` e `CLOUDFLARE_ACCESS_MANAGED_OAUTH_CAPABLE=false`. O fallback autenticado no dashboard foi esgotado no run `36492154682`: `CLOUDFLARE_UI_AUTHENTICATED=false` e `CLOUDFLARE_UI_AUTH_CHALLENGE_REQUIRED=true`. Sem Access Apps/Policies não é seguro criar o caminho Managed OAuth para um cliente cloud.
-- Claude: o probe `36492159339` confirmou CLI autenticado e `remote-control` disponível. A instalação pós-merge `36493201912` comprovou `CLAUDE_MCP_BRIDGE_INSTALL=PASS`, `CLAUDE_MCP_CONFIG=PASS` e `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`; a configuração usa somente o adaptador stdio root-only que injeta o bearer localmente. A confiança do workspace canônico foi explicitamente autorizada e o bootstrap PTY suportado foi corrigido e mesclado em PRs #2162/#2163. As validações live `36505458895`, `36505902804` e `36506225110` ainda falharam no subpasso de confiança; portanto isto é implementação em andamento, não bloqueio externo.
+### Evidência terminal — 2026-09-30
+- O controller continua privado e loopback-only em `127.0.0.1:5580`; o bearer do controller permanece root-only no backend e nunca foi publicado no ChatGPT, em Git ou em configuração de plugin.
+- Stage 5 permanece comprovada por `REMOTE_CONTROL_FOUR_HOST_E2E=PASS` no run `36449123839`, incluindo root nos dois Linux, Administrator nos dois Windows e tarefas duráveis nos quatro hosts.
+- Stage 6 permanece comprovada por `runtime_github_dependency=false` no run `36449123839` e por `DURABLE_AFTER_DISCONNECT=PASS` / `RUNTIME_GITHUB_DEPENDENCY=false` nas issues #2045/#2046.
+- Claude Remote Control concluiu instalação real no run `36654114288`: `CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS`, `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`, `CLAUDE_REMOTE_CONTROL_CONSENT=PASS`, `CLAUDE_REMOTE_CONTROL_SERVICE=PASS`, `CLAUDE_REMOTE_CONTROL_INSTALL=PASS` e `OCI_MCP_CLAUDE_INSTALL=PASS`.
+- Claude Remote Control concluiu status real no run `36654821456`: `CLAUDE_REMOTE_CONTROL_STATUS=PASS` e `OCI_MCP_CLAUDE_STATUS=PASS`. RDC confirmou unit enabled+active, MCP configurado, login válido, estado de sessão Remote Control persistido e conexão real do processo com Claude/Anthropic.
+- A autenticação OpenAI Platform foi concluída com MFA aprovado pelo usuário. Na organização `ShopVivaliz ltda`, foi criado o Secure MCP Tunnel `tunnel_6abc7096b85c8191b938b5a47b8dccff`, associado ao workspace ChatGPT `Espaço de trabalho de Frederico Mourao`.
+- O `tunnel-client` oficial v0.0.15 Linux ARM64 foi baixado do release oficial e validado contra `SHA256SUMS.txt`. O profile `shopvivaliz-remote-control` aponta para `sudo -n /usr/local/sbin/shopvivaliz-claude-mcp-stdio`, preservando o bearer root-only.
+- `tunnel-client doctor --profile shopvivaliz-remote-control --explain` retornou `RESULT ok`. O runtime gerenciado alias `shopvivaliz-private-mcp` retornou `running=true`, `process_running=true`, `healthy=true`, `ready=true`, `runtime_state=ready`, `stale=false` e lookup remoto do tunnel sem erro.
+- No ChatGPT foi criado e conectado o MCP App privado `ShopVivaliz Remote Control` (plugin `plugin_asdk_app_6abc74328d708191a5393445675bf62f`) usando Connection=Tunnel e Authentication=None. A UI confirmou `ShopVivaliz Remote Control is now connected`.
+- O log do `tunnel-client` provou tráfego MCP real no canal `main`, incluindo discovery/initialize e encaminhamento de comandos ao MCP privado.
+- Prova E2E final pelo cliente ChatGPT: em chat novo com o plugin anexado, foi solicitado apenas o tool read-only `host_health` para `always-free-arm-1787907847-26`. A resposta do ChatGPT foi: host saudável (`ok=true`), contexto `root`, `UID 0`. Isso prova ChatGPT -> Secure MCP Tunnel -> stdio adapter root-only -> controller privado -> resposta real.
+- Os artefatos RSA temporários usados apenas para transportar a runtime API key criptografada foram removidos após o provisionamento. A runtime key permanece somente no backend em arquivo modo `0600`.
+- A rota Cloudflare/Managed OAuth deixou de ser necessária para o caminho ChatGPT porque o Secure MCP Tunnel oficial foi provisionado e validado.
 
-### Resume condition
-1. Um administrador deve restaurar uma sessão OpenAI Platform com capacidade de gerenciar Secure MCP Tunnels, ou habilitar essa capacidade para a organização/conta; então provisionar o cliente de tunnel no backend e validar `initialize`/`tools/list` pelo caminho suportado do ChatGPT.
-2. Para a rota pública alternativa Claude, um administrador Cloudflare deve concluir o desafio de login e conceder ao runtime protegido `Access: Apps and Policies Write` (ou criar manualmente a aplicação Access Managed OAuth). Não usar service token estático em repositório.
-3. Corrigir o subpasso PTY de confiança do workspace canônico com marcadores sanitizados suficientes para distinguir prompt ausente, persistência e confirmação Remote Control; então repetir `claude_remote_control_install`, `claude_remote_control_status` e validar a sessão cloud real.
+### Resultado
+- ChatGPT Secure MCP: PASS.
+- Claude Remote Control: PASS.
+- Runtime independente de GitHub: PASS.
+- Four-host privileged E2E: PASS.
+- Etapa 7: PASS.
+- TASK_ID `private-remote-control-mcp-4hosts-20260927`: CONCLUIDO.
 
 ## Atualização — 2026-09-28 (sessão atual): SSH real + auth resolvidos nos dois Windows; novo bloqueio é do controller
 
