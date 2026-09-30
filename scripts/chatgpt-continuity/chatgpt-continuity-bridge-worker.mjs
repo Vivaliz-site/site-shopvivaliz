@@ -550,27 +550,31 @@ async function attemptNudge(
   try {
     cdp = await connect();
     let recoveredStaleComplete = false;
-    if (await conversationIsGenerating(cdp)) {
-      // Never treat transport bookkeeping as semantic completion. Independent
-      // 2026-09 captures show stream/message COMPLETE can coexist with an
-      // unfinished assistant/tool branch. Every apparent active turn therefore
-      // gets one passive reattach before any Stop clear or continuation send.
-      const baseline = await assistantSnapshot(cdp);
-      await cdp.evaluate(`(()=>{location.reload();return true})()`);
-      await sleep(1200);
-      const progressed = await confirmProgress(
-        cdp,
-        baseline,
-        PASSIVE_REATTACH_CONFIRM_MS,
-        PROGRESS_POLL_MS,
-      );
-      if (progressed) {
-        return {
-          result_status: 'PROGRESS_CONFIRMED',
-          detail: 'passive reattach restored assistant progress without sending continuation',
-        };
-      }
 
+    // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
+    // Stop button while the canonical current_node still ends in an assistant
+    // tool/thought branch with end_turn=false. Therefore every checkpoint
+    // resume gets exactly one passive reattach before any continuation send,
+    // not only turns whose DOM still looks generating.
+    const wasGenerating = await conversationIsGenerating(cdp);
+    const passiveBaseline = await assistantSnapshot(cdp);
+    await cdp.evaluate(`(()=>{location.reload();return true})()`);
+    await sleep(1200);
+    const passiveProgressed = await confirmProgress(
+      cdp,
+      passiveBaseline,
+      PASSIVE_REATTACH_CONFIRM_MS,
+      PROGRESS_POLL_MS,
+    );
+    if (passiveProgressed) {
+      return {
+        result_status: 'PROGRESS_CONFIRMED',
+        detail: 'passive reattach restored assistant progress without sending continuation',
+      };
+    }
+
+    const generatingAfterReattach = await conversationIsGenerating(cdp);
+    if (wasGenerating || generatingAfterReattach) {
       // Re-read server bookkeeping only after the passive recovery window.
       // Anything other than a confirmed COMPLETE remains potentially active
       // and must not receive a duplicate continuation.
@@ -585,7 +589,7 @@ async function attemptNudge(
       // If Stop survived the reattach while server bookkeeping says COMPLETE,
       // clear only that stale UI state before sending the checkpoint-driven
       // continuation. If Stop disappeared naturally, continue without a click.
-      if (await conversationIsGenerating(cdp)) {
+      if (generatingAfterReattach) {
         if (!(await clearStaleCompleteGeneration(cdp))) {
           return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
         }
