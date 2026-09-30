@@ -19,7 +19,10 @@ class SecureMcpTunnelStabilityTests(unittest.TestCase):
         self.assertIn("uses: ./.github/workflows/secure-mcp-runtime-recovery.yml", dispatcher)
 
     def test_recovery_requires_live_runtime_and_lifecycle_evidence(self):
-        text = (ROOT / ".github" / "workflows" / "secure-mcp-runtime-recovery.yml").read_text(encoding="utf-8")
+        workflow = (ROOT / ".github" / "workflows" / "secure-mcp-runtime-recovery.yml").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-secure-mcp-tunnel-runtime.sh").read_text(encoding="utf-8")
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-secure-mcp-tunnel.service").read_text(encoding="utf-8")
+        text = workflow + setup + unit
         for marker in (
             "SECURE_MCP_RUNTIME_CLIENT=",
             "SECURE_MCP_RUNTIME_STATUS=",
