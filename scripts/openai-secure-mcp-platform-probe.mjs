@@ -15,6 +15,16 @@ function safeTag(value) {
     .slice(0, 100);
 }
 
+function classifyAdminKeysLocation(url) {
+  const value = String(url || '');
+  if (/auth\.openai\.com|\/login(?:[/?#]|$)/i.test(value)) return 'login';
+  if (!/platform\.openai\.com/i.test(value)) return 'external';
+  if (/\/settings\/organization\/admin-keys(?:[/?#]|$)/i.test(value)) return 'admin_keys';
+  if (/\/settings\/organization(?:[/?#]|$)/i.test(value)) return 'organization_settings';
+  if (/\/settings\/project(?:[/?#]|$)/i.test(value)) return 'project_settings';
+  return 'platform_other';
+}
+
 let page = null;
 try {
   let chromium = null;
@@ -59,25 +69,36 @@ try {
   const ids = bodyText.match(/tunnel_[0-9a-f]{32}/gi) || [];
   const existingCount = new Set(ids.map(value => value.toLowerCase())).size;
 
+  const targetOrgVisibleOnTunnels = /ShopVivaliz ltda/i.test(bodyText);
   let orgOwnerSurfaceAvailable = false;
   let adminKeysAccessDenied = false;
+  let adminKeysNavAvailable = false;
+  let adminKeysLocation = 'not_checked';
+  let adminKeysTextPresent = false;
+  let targetOrgVisible = targetOrgVisibleOnTunnels;
   if (authenticated) {
     await page.goto(ADMIN_KEYS_URL, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
     await page.waitForTimeout(2500);
     const adminUrl = page.url();
+    adminKeysLocation = classifyAdminKeysLocation(adminUrl);
     const adminPasswordInput = await page.locator('input[type="password"]').count();
     const adminAuthenticated = !/auth\.openai\.com|\/login(?:[/?#]|$)/i.test(adminUrl) && adminPasswordInput === 0;
     const adminText = adminAuthenticated
       ? await page.locator('body').innerText({ timeout: 8000 }).catch(() => '')
       : '';
+    adminKeysTextPresent = /admin api keys?|admin keys?/i.test(adminText);
+    targetOrgVisible = targetOrgVisible || /ShopVivaliz ltda/i.test(adminText);
     adminKeysAccessDenied = /access denied|not authorized|not permitted|permission required|insufficient permissions?|(?:^|\s)404(?:\s|$)|page not found/i.test(adminText);
     const adminHeading = page.getByRole('heading', { name: /admin api keys?|admin keys?/i }).first();
     const adminKeyButton = page.getByRole('button', { name: /(?:create|new|add).*admin.*key/i }).first();
     const adminKeyLink = page.getByRole('link', { name: /(?:create|new|add).*admin.*key/i }).first();
+    const adminNavLink = page.getByRole('link', { name: /admin api keys?|admin keys?/i }).first();
+    adminKeysNavAvailable = (await adminNavLink.count()) > 0;
     orgOwnerSurfaceAvailable = adminAuthenticated && !adminKeysAccessDenied && (
       (await adminHeading.count()) > 0 ||
       (await adminKeyButton.count()) > 0 ||
-      (await adminKeyLink.count()) > 0
+      (await adminKeyLink.count()) > 0 ||
+      adminKeysTextPresent
     );
   }
 
@@ -95,6 +116,10 @@ try {
   console.log('OPENAI_TUNNEL_UI_GENERIC_CREATE_CONTROL=' + String(genericCreateControl));
   console.log('OPENAI_TUNNEL_UI_ORG_OWNER_SURFACE_AVAILABLE=' + String(orgOwnerSurfaceAvailable));
   console.log('OPENAI_TUNNEL_UI_ADMIN_KEYS_ACCESS_DENIED=' + String(adminKeysAccessDenied));
+  console.log('OPENAI_TUNNEL_UI_TARGET_ORG_VISIBLE=' + String(targetOrgVisible));
+  console.log('OPENAI_TUNNEL_UI_ADMIN_KEYS_NAV_AVAILABLE=' + String(adminKeysNavAvailable));
+  console.log('OPENAI_TUNNEL_UI_ADMIN_KEYS_LOCATION=' + safeTag(adminKeysLocation));
+  console.log('OPENAI_TUNNEL_UI_ADMIN_KEYS_TEXT_PRESENT=' + String(adminKeysTextPresent));
   console.log('OPENAI_TUNNEL_UI_RBAC_DIAG=' + safeTag(rbacDiag));
   console.log('OPENAI_TUNNEL_UI_PROBE=PASS');
 } catch (error) {
