@@ -443,6 +443,18 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, auth_text)
 
+        # Google OAuth may open a popup/new tab. The helper must follow that
+        # popup and keep any human MFA challenge alive for a bounded window,
+        # while exposing only sanitized state markers.
+        for needle in (
+            "waitForEvent('popup'",
+            "MFA_WAIT_TIMEOUT_MS",
+            "OPENAI_PLATFORM_GOOGLE_POPUP_USED=",
+            "OPENAI_PLATFORM_MFA_WAIT_RESULT=",
+        ):
+            self.assertIn(needle, auth_text)
+        self.assertNotIn("OPENAI_PLATFORM_AUTH_RAW_OUTPUT=", auth_text)
+
         auth_flow = ROOT / ".github" / "workflows" / "secure-mcp-platform-auth.yml"
         self.assertTrue(auth_flow.exists(), "Secure MCP Platform auth workflow missing")
         auth_flow_text = auth_flow.read_text(encoding="utf-8")
