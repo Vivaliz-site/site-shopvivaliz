@@ -241,6 +241,29 @@ async function run() {
   {
     const now = Date.now();
     const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://older-one' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
+    ];
+    await assert.rejects(
+      () => resolveAmbiguousConversationTabs(
+        tabs,
+        async () => ({ close() {} }),
+        async () => ({
+          http_status: 200,
+          source: 'filtered',
+          id: 'latest-not-open',
+          update_time: Math.floor(now / 1000),
+        }),
+        now,
+      ),
+      /multiple open ChatGPT conversation tabs/i,
+      'latest-not-open must remain fail-closed when no neutral ChatGPT home tab exists',
+    );
+  }
+
+  {
+    const now = Date.now();
+    const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/older-thread', webSocketDebuggerUrl: 'ws://older' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-a' },
       { type: 'page', url: 'https://chatgpt.com/c/latest-thread', webSocketDebuggerUrl: 'ws://latest-b' },
