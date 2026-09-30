@@ -22,6 +22,7 @@ on:
       - 'tests/remote-control-mcp-test.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
       - 'tests/test_chatgpt_freeze_successor.py'
+      - 'tests/ai-squad-claude-bastion-diagnostic-test.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
       - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
@@ -47,6 +48,7 @@ on:
       - 'tests/remote-control-mcp-test.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
       - 'tests/test_chatgpt_freeze_successor.py'
+      - 'tests/ai-squad-claude-bastion-diagnostic-test.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
       - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
@@ -68,6 +70,7 @@ jobs:
           python3 tests/remote-control-mcp-test.py
           python3 tests/iphone-private-ssh-relay-contract-test.py
           python3 tests/test_chatgpt_freeze_successor.py
+          python3 tests/ai-squad-claude-bastion-diagnostic-test.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax
