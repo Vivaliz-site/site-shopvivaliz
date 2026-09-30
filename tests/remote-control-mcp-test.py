@@ -804,6 +804,27 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('cat "$token_file"', repair_block)
         self.assertIn('dd if="$token_file" status=none', repair_block)
 
+    def test_chatgpt_continuity_repairs_normalize_site_token_metadata_without_changing_secret(self):
+        remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        remote_repair = remote.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
+        oci_repair = oci.split("- name: ChatGPT continuity repair through OCI Bastion", 1)[1].split("- name:", 1)[0]
+
+        for block in (remote_repair, oci_repair):
+            for needle in (
+                "sudo -n chown www-data:ubuntu",
+                "sudo -n chmod 750",
+                "sudo -n chmod 640",
+                'sudo -u ubuntu test -r "$token_file"',
+                'sha256sum -- "$token_file"',
+                "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS",
+            ):
+                self.assertIn(needle, block)
+            self.assertIn("before=", block)
+            self.assertIn("after=", block)
+            self.assertIn('if [ "$before" != "$after" ]; then', block)
+            self.assertNotIn('cat "$token_file"', block)
+
     def test_chatgpt_continuity_repair_uses_private_loopback_bridge_tunnel(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
         repair = workflow.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]

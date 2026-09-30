@@ -589,8 +589,25 @@ jobs:
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
-            token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
+            token_dir=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity
+            token_file="$token_dir/bridge.token"
             sudo -n test -s "$token_file"
+            before="$(sudo -n sha256sum -- "$token_file")"
+            before="${before%% *}"
+            test -n "$before"
+            sudo -n chown www-data:ubuntu "$token_dir"
+            sudo -n chmod 750 "$token_dir"
+            sudo -n chown www-data:ubuntu "$token_file"
+            sudo -n chmod 640 "$token_file"
+            after="$(sudo -n sha256sum -- "$token_file")"
+            after="${after%% *}"
+            test -n "$after"
+            if [ "$before" != "$after" ]; then
+              echo "::error::Continuity bridge token content changed during metadata repair" >&2
+              exit 32
+            fi
+            sudo -u ubuntu test -r "$token_file"
+            echo "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS" >&2
             sudo -n dd if="$token_file" status=none
           ' | "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
             install -d -m 700 /home/ubuntu/.config/shopvivaliz-chatgpt-continuity

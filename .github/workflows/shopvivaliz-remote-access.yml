@@ -605,6 +605,22 @@ jobs:
                 sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
                 sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
               fi
+
+              before="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
+              test -n "$before"
+              sudo -n chown www-data:ubuntu "$token_dir"
+              sudo -n chmod 750 "$token_dir"
+              sudo -n chown www-data:ubuntu "$token_file"
+              sudo -n chmod 640 "$token_file"
+              after="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
+              test -n "$after"
+              if [ "$before" != "$after" ]; then
+                echo "::error::Continuity bridge token content changed during metadata repair"
+                exit 32
+              fi
+              sudo -u ubuntu test -r "$token_file"
+              echo "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS"
+
               sudo -n python3 - "$token_file" <<'PY'
           import pathlib, sys
           value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
