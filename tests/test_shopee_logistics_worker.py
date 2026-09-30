@@ -175,3 +175,67 @@ class ShopeeLogisticsWorkerSafetyCycleTests(unittest.TestCase):
             summary = m.run(apply=True, now=now, client=client, shared_root=Path(tmp), sender=_FakeSender())
         self.assertEqual(summary['arranged'], 0)
         self.assertEqual(client.ship_calls, [])
+
+class ShopeeAlertSenderTests(unittest.TestCase):
+    def test_brevo_configuration_is_sufficient_without_smtp(self):
+        import os
+        from unittest.mock import patch
+        m = load_module()
+        env = {
+            'BREVO_API_KEY': 'test-key',
+            'EMAIL_FROM': 'sender@example.com',
+            'EMAIL_TO': 'seller@example.com',
+        }
+        with patch.dict(os.environ, env, clear=True):
+            sender = m.AlertSender()
+        self.assertTrue(sender.configured)
+        self.assertTrue(sender.brevo_configured)
+        self.assertFalse(sender.smtp_configured)
+
+    def test_send_prefers_brevo_and_does_not_touch_smtp(self):
+        import os
+        from unittest.mock import patch
+        m = load_module()
+        env = {
+            'BREVO_API_KEY': 'test-key',
+            'EMAIL_FROM': 'sender@example.com',
+            'EMAIL_TO': 'seller@example.com',
+            'EMAIL_SMTP_HOST': 'smtp.example.com',
+            'EMAIL_USER': 'smtp-user',
+            'EMAIL_PASSWORD': 'smtp-pass',
+        }
+        with patch.dict(os.environ, env, clear=True):
+            sender = m.AlertSender()
+        with patch.object(sender, '_send_brevo', return_value=True) as brevo, patch.object(sender, '_send_smtp', side_effect=AssertionError('smtp should not be used')):
+            self.assertTrue(sender.send('subject', 'body'))
+        brevo.assert_called_once()
+
+    def test_brevo_payload_contains_pdf_attachment(self):
+        import base64
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+        m = load_module()
+        env = {
+            'BREVO_API_KEY': 'test-key',
+            'EMAIL_FROM': 'sender@example.com',
+            'EMAIL_TO': 'seller@example.com',
+        }
+        captured = {}
+        class FakeResponse:
+            status = 201
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{}'
+        def fake_urlopen(request, timeout=0):
+            captured['payload'] = json.loads(request.data.decode('utf-8'))
+            return FakeResponse()
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True), patch('urllib.request.urlopen', fake_urlopen):
+            pdf = Path(tmp) / 'label.pdf'
+            pdf.write_bytes(b'%PDF-test')
+            sender = m.AlertSender()
+            self.assertTrue(sender._send_brevo('subject', 'body', pdf))
+        payload = captured['payload']
+        self.assertEqual(payload['attachment'][0]['name'], 'label.pdf')
+        self.assertEqual(base64.b64decode(payload['attachment'][0]['content']), b'%PDF-test')
