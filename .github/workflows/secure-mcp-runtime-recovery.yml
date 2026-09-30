@@ -1,0 +1,35 @@
+name: Secure MCP Runtime Recovery
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Declare bounded recovery action
+        run: echo "action=diagnose-and-repair"
+
+      - name: Diagnose current Secure MCP runtime
+        shell: bash
+        run: sudo -n bash scripts/setup-secure-mcp-tunnel-runtime.sh diagnose
+
+      - name: Install supervised Secure MCP runtime
+        shell: bash
+        run: sudo -n bash scripts/setup-secure-mcp-tunnel-runtime.sh install deploy/systemd/shopvivaliz-secure-mcp-tunnel.service
+
+      - name: Validate supervised Secure MCP runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sleep 8
+          sudo -n bash scripts/setup-secure-mcp-tunnel-runtime.sh status
