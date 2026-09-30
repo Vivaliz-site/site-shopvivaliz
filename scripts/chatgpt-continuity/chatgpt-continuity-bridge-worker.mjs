@@ -443,26 +443,6 @@ function safeReinforcementRestorePath(value) {
   return /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
 }
 
-async function ensureConversationTarget(cdp) {
-  const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  if (/^\/c\/[A-Za-z0-9_-]{8,160}$/.test(currentPath)) return true;
-
-  // Never type a continuation into ChatGPT home or a GPT landing page. When
-  // cross-device discovery selected a neutral home tab, use the already
-  // synchronized sidebar to enter a real conversation first. If that cannot
-  // be resolved safely, fail closed instead of creating a new chat.
-  if (currentPath === '/' || currentPath === '') {
-    const aligned = await alignToSidebarLatestConversation(cdp);
-    if (
-      aligned.action === 'navigated_sidebar_fallback'
-      || aligned.action === 'already_latest_sidebar_fallback'
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 async function restoreReinforcementPath(cdp, requestedPath) {
   const path = safeReinforcementRestorePath(requestedPath);
   if (!cdp || !path) return false;
@@ -943,12 +923,6 @@ async function attemptNudge(
   let cdp;
   try {
     cdp = await connect();
-    if (!(await ensureConversationTarget(cdp))) {
-      return {
-        result_status: 'CONVERSATION_NOT_FOUND',
-        detail: 'continuation target is not an existing ChatGPT conversation; refusing to send into home/new chat',
-      };
-    }
     let recoveredStaleComplete = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
@@ -1286,7 +1260,6 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   transmissionErrorPresent,
-  ensureConversationTarget,
   latestConversationProbe,
   normalizeLatestConversationMeta,
   latestConversationMeta,
