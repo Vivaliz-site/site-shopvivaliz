@@ -1111,6 +1111,11 @@ jobs:
           queue_actionable_rows=0
           queue_nonactionable_rows=0
           queue_archive_present=False
+          dispatcher_requests_scanned=0
+          dispatcher_chatgpt_common_rows=0
+          dispatcher_explicit_repository_rows=0
+          dispatcher_current_checkpoint_rows=0
+          dispatcher_eligible_rows=0
           try:
               scripts_dir=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/scripts')
               certifier=scripts_dir/'task_resume_queue.py'
@@ -1129,7 +1134,31 @@ jobs:
                       queue_archive_present=(root/'_resume-requests-archive.jsonl').is_file()
                       pending=queue_actionable_rows
                       matching=queue_actionable_rows
-          except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError):
+
+              if str(scripts_dir) not in sys.path:
+                  sys.path.insert(0,str(scripts_dir))
+              import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
+              for request in nudge_dispatcher.read_requests(root):
+                  if not isinstance(request,dict):
+                      continue
+                  dispatcher_requests_scanned+=1
+                  if str(request.get('preferred_executor','')).strip()!='chatgpt_common':
+                      continue
+                  dispatcher_chatgpt_common_rows+=1
+                  if str(request.get('status','')).strip()!='queued':
+                      continue
+                  repository=str(request.get('repository','')).strip()
+                  if repository:
+                      dispatcher_explicit_repository_rows+=1
+                  fingerprint=str(request.get('fingerprint','')).strip()
+                  task_id=str(request.get('task_id','')).strip()
+                  if not fingerprint or not task_id or not repository:
+                      continue
+                  if not nudge_dispatcher._request_matches_current_checkpoint(root,request):
+                      continue
+                  dispatcher_current_checkpoint_rows+=1
+                  dispatcher_eligible_rows+=1
+          except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError,ImportError):
               queue_certifier_available=False
 
           bridge_queue_total=0
@@ -1179,6 +1208,13 @@ jobs:
           dispatcher_log_seen=False
           dispatcher_last_cycle_at='NONE'
           dispatcher_log_fresh=False
+          dispatcher_last_summary_available=False
+          dispatcher_last_scanned=0
+          dispatcher_last_eligible=0
+          dispatcher_last_dispatched=0
+          dispatcher_last_skipped_no_token=0
+          dispatcher_last_skipped_stale_checkpoint=0
+          dispatcher_last_skipped_attempt_limit=0
           dispatcher_event_suffix='] ChatGPT continuity nudge dispatcher completed.'
           log_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/logs/autonomous-agent.log')
           try:
@@ -1205,7 +1241,35 @@ jobs:
                       and dispatcher_last_cycle_at>=latest_generation_updated_at
                   )
                   dispatcher_log_seen=dispatcher_log_fresh
-          except OSError:
+
+                  tail_lines=tail.splitlines()
+                  marker_indexes=[
+                      index for index,line in enumerate(tail_lines)
+                      if line.strip().startswith('[') and line.strip().endswith(dispatcher_event_suffix)
+                  ]
+                  if marker_indexes:
+                      marker_index=marker_indexes[-1]
+                      for start in range(marker_index-1,max(-1,marker_index-80),-1):
+                          if tail_lines[start].strip()!='{':
+                              continue
+                          try:
+                              summary=json.loads('\n'.join(tail_lines[start:marker_index]))
+                          except json.JSONDecodeError:
+                              continue
+                          if not isinstance(summary,dict):
+                              continue
+                          required={'scanned','eligible','dispatched','skipped_no_token','skipped_stale_checkpoint','skipped_attempt_limit'}
+                          if not required.issubset(summary):
+                              continue
+                          dispatcher_last_summary_available=True
+                          dispatcher_last_scanned=min(max(int(summary.get('scanned',0)),0),999999)
+                          dispatcher_last_eligible=min(max(int(summary.get('eligible',0)),0),999999)
+                          dispatcher_last_dispatched=min(max(int(summary.get('dispatched',0)),0),999999)
+                          dispatcher_last_skipped_no_token=min(max(int(summary.get('skipped_no_token',0)),0),999999)
+                          dispatcher_last_skipped_stale_checkpoint=min(max(int(summary.get('skipped_stale_checkpoint',0)),0),999999)
+                          dispatcher_last_skipped_attempt_limit=min(max(int(summary.get('skipped_attempt_limit',0)),0),999999)
+                          break
+          except (OSError,ValueError):
               dispatcher_log_seen=False
               dispatcher_last_cycle_at='NONE'
               dispatcher_log_fresh=False
@@ -1242,6 +1306,18 @@ jobs:
           print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED='+str(bridge_queue_resolved))
           print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
           print('CHATGPT_CONTINUITY_TOKEN_AVAILABLE='+('true' if token_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED='+str(dispatcher_requests_scanned))
+          print('CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS='+str(dispatcher_chatgpt_common_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS='+str(dispatcher_explicit_repository_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS='+str(dispatcher_current_checkpoint_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS='+str(dispatcher_eligible_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SUMMARY_AVAILABLE='+('true' if dispatcher_last_summary_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED='+str(dispatcher_last_scanned))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE='+str(dispatcher_last_eligible))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED='+str(dispatcher_last_dispatched))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN='+str(dispatcher_last_skipped_no_token))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT='+str(dispatcher_last_skipped_stale_checkpoint))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT='+str(dispatcher_last_skipped_attempt_limit))
           print('CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT='+dispatcher_last_cycle_at)
           print('CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH='+('true' if dispatcher_log_fresh else 'false'))
           print('CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN='+('true' if dispatcher_log_seen else 'false'))
@@ -1361,6 +1437,18 @@ jobs:
               'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
               'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
               'CHATGPT_CONTINUITY_TOKEN_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED',
+              'CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SUMMARY_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT',
               'CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT',
               'CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH',
               'CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN',
@@ -1434,6 +1522,17 @@ jobs:
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
                       'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT',
                   }:
                       if not re.fullmatch(r'\d+', value):
                           raise RuntimeError('invalid diagnostic count')

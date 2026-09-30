@@ -1005,6 +1005,27 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, workflow)
 
+    def test_oci_continuity_diagnostic_surfaces_dispatcher_decision_counts(self):
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
+        for marker in (
+            "CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED=",
+            "CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS=",
+            "CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS=",
+            "CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS=",
+            "CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_SUMMARY_AVAILABLE=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT=",
+            "CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT=",
+        ):
+            self.assertIn(marker, diagnostic)
+        self.assertNotIn("CHATGPT_CONTINUITY_DISPATCHER_REQUEST_TASK_ID=", diagnostic)
+        self.assertNotIn("CHATGPT_CONTINUITY_DISPATCHER_REQUEST_FINGERPRINT=", diagnostic)
+
     def test_oci_continuity_diagnostic_requires_fresh_dispatcher_cycle(self):
         workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         diagnostic = workflow.split("- name: ChatGPT continuity diagnostic through Remote Control MCP", 1)[1].split("- name: Probe Secure MCP Tunnel prerequisites", 1)[0]
