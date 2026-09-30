@@ -1,0 +1,58 @@
+name: Cancel Stuck DC Reauth 36509058993
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cancel-stuck-dc-reauth-36509058993.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_RUN_ID: "36509058993"
+    steps:
+      - name: Cancel only the proven stuck KOCEPSV reauth run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+          status="$(jq -r '.status' <<<"$run_json")"
+          name="$(jq -r '.name' <<<"$run_json")"
+          event="$(jq -r '.event' <<<"$run_json")"
+          test "$name" = "Issue Comment Dispatcher"
+          test "$event" = "issue_comment"
+          case "$status" in
+            queued|pending|in_progress|waiting|requested)
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/force-cancel" >/dev/null 2>&1 \
+                || gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/cancel" >/dev/null
+              ;;
+            completed)
+              echo "TARGET_ALREADY_TERMINAL=true"
+              exit 0
+              ;;
+            *)
+              echo "unexpected target status=$status" >&2
+              exit 2
+              ;;
+          esac
+
+          terminal=false
+          for _ in $(seq 1 30); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+            status="$(jq -r '.status' <<<"$state")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$state")"
+            if [ "$status" = completed ]; then
+              terminal=true
+              echo "STUCK_DC_REAUTH_CANCELLED=true conclusion=$conclusion"
+              break
+            fi
+            sleep 2
+          done
+          test "$terminal" = true

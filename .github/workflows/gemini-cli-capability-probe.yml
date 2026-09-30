@@ -1,0 +1,53 @@
+name: Gemini CLI Capability Probe
+
+# Manual-only, read-only diagnostic. Confirms the exact Gemini CLI version
+# and tool/approval flag surface actually installed on the production A1
+# host, without SSH and without ever touching a credential: only
+# `--version`/`--help` are invoked, never a prompt or API call. Used to
+# ground scripts/run_background_gemini.py's settings.json schema in the
+# real installed CLI instead of assuming upstream `main` docs apply to the
+# pinned version.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gemini-cli-capability-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Inspect installed Gemini CLI (read-only, no credentials)
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Locate and inspect the Gemini CLI binary
+        run: |
+          set -Eeuo pipefail
+          bin="${SHOPVIVALIZ_GEMINI_BIN:-/home/ubuntu/.local/bin/gemini}"
+          {
+            echo "## resolved_binary_path"
+            echo "$bin"
+            echo
+            echo "## command -v gemini"
+            command -v gemini || echo "(not on PATH)"
+            echo
+            echo "## file existence/permissions"
+            test -f "$bin" && ls -l "$bin" || echo "(binary not found at expected path)"
+            echo
+            echo "## gemini --version"
+            "$bin" --version 2>&1 || echo "(--version failed, exit $?)"
+            echo
+            echo "## gemini --help"
+            "$bin" --help 2>&1 || echo "(--help failed, exit $?)"
+          } | tee gemini-cli-capability-report.txt
+
+      - name: Upload capability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-cli-capability-report
+          path: gemini-cli-capability-report.txt
+          retention-days: 1

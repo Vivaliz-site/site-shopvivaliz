@@ -205,6 +205,143 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
 
+    def test_recent_successful_chatgpt_nudge_defers_detached_executor(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        now = dispatcher.utc_now()
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": now,
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "PROGRESS_CONFIRMED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = dispatcher.run_once(
+            runtime_dir=self.runtime,
+            project_dir=self.project,
+            executor=self._executor(advance=True),
+            timeout_seconds=30,
+            max_requests=1,
+        )
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result.get("deferred_chatgpt"), 1)
+        self.assertFalse(self.capture.exists(), "detached executor must not run while ChatGPT gets first recovery window")
+
+    def test_recent_unconfirmed_chatgpt_send_releases_detached_fallback(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": dispatcher.utc_now(),
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "SENT_UNCONFIRMED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
+    def test_old_or_failed_chatgpt_nudge_does_not_block_detached_fallback_forever(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "fingerprint": "fingerprint-v1",
+                            "task_id": "resume-e2e",
+                            "repository": "Vivaliz-site/site-shopvivaliz",
+                            "dispatched_at": "2020-01-01T00:00:00Z",
+                            "bridge_ok": True,
+                            "http_status": 200,
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "fingerprint": "fingerprint-v1",
+                            "task_id": "resume-e2e",
+                            "repository": "Vivaliz-site/site-shopvivaliz",
+                            "dispatched_at": dispatcher.utc_now(),
+                            "bridge_ok": False,
+                            "http_status": 0,
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
+    def test_detached_prompt_requires_safe_git_push_wrapper(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        request = {
+            "id": "resume-safe-push",
+            "task_id": state["task_id"],
+            "repository": state.get("repository", "Vivaliz-site/site-shopvivaliz"),
+            "next_action": state["next_action"],
+            "checkpoint_updated_at": state["updated_at"],
+            "fingerprint": "fingerprint-safe-push",
+        }
+        prompt = dispatcher._build_prompt(request, state)
+        self.assertIn("python3 scripts/safe_git_push.py", prompt)
+        self.assertIn("Never run git push directly", prompt)
+
     def test_detached_prompt_names_the_headless_approved_task_state_command(self) -> None:
         dispatcher = (SCRIPTS / "task_resume_dispatcher.py").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/agent_task_state.py ready", dispatcher)
@@ -264,6 +401,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             "background_paid_fallback_forbidden=true\n"
             "background_gemini_error=tool_denied\n"
             "background_gemini_exit_code=75\n"
+            "background_gemini_model=gemini-flash-latest\n"
         )
         (logs / "autonomous-provider-output.txt").write_text(raw, encoding="utf-8")
         (logs / "autonomous-provider-attempts.jsonl").write_text(
@@ -286,12 +424,31 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(diagnostic["provider_attempt_exit_code"], 0)
         self.assertEqual(diagnostic["background_gemini_error"], "tool_denied")
         self.assertEqual(diagnostic["background_gemini_exit_code"], 75)
+        self.assertEqual(diagnostic["background_gemini_model"], "gemini-flash-latest")
         self.assertTrue(diagnostic["background_paid_fallback_forbidden"])
         self.assertGreater(diagnostic["provider_output_bytes"], 0)
         self.assertEqual(len(diagnostic["provider_output_sha256"]), 64)
         serialized = json.dumps(diagnostic, sort_keys=True)
         self.assertNotIn("super-secret-value", serialized)
         self.assertNotIn("prompt body", serialized)
+
+    def test_executor_artifact_summary_extracts_sanitized_failure_reason(self) -> None:
+        dispatcher = load_dispatcher()
+        workspace = self.root / "workspace-reason"
+        logs = workspace / "logs"
+        logs.mkdir(parents=True)
+        raw = (
+            "Waiting for user confirmation to run this command\n"
+            "background_gemini_reason=approval_required\n"
+            "background_gemini_exit_code=1\n"
+        )
+        (logs / "autonomous-provider-output.txt").write_text(raw, encoding="utf-8")
+
+        diagnostic = dispatcher._summarize_executor_artifacts(workspace)
+
+        self.assertEqual(diagnostic["background_gemini_reason"], "approval_required")
+        serialized = json.dumps(diagnostic, sort_keys=True)
+        self.assertNotIn("Waiting for user confirmation", serialized)
         self.assertNotIn("SECRET_TOKEN", serialized)
 
     def test_run_once_persists_structured_diagnostic_in_ledger(self) -> None:

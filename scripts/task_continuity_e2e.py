@@ -32,6 +32,7 @@ TERMINAL_OK = "CONCLUIDO"
 EXPECTED_VERIFICATION = "continuity_e2e_pass"
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_POLL_INTERVAL_SECONDS = 15
+DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 
 
 def utc_now() -> str:
@@ -90,6 +91,7 @@ def create_synthetic_task(
     *,
     runtime_dir: Path,
     task_id: str,
+    repository: str,
     agent_task_state_script: Path,
     runner: Any = subprocess.run,
 ) -> None:
@@ -105,6 +107,8 @@ def create_synthetic_task(
             "Prove the detached continuity recovery pipeline end-to-end",
             "--agent",
             "chatgpt-common",
+            "--repository",
+            repository,
         ],
         check=True,
         env=env,
@@ -132,6 +136,7 @@ def poll_for_terminal_evidence(
     *,
     runtime_dir: Path,
     task_id: str,
+    repository: str,
     timeout_seconds: int,
     poll_interval_seconds: int,
     sleep: Any = time.sleep,
@@ -150,12 +155,12 @@ def poll_for_terminal_evidence(
         state = _read_json(state_path)
         if not observed_request:
             for row in _read_jsonl(requests_path):
-                if str(row.get("task_id", "")) == task_id:
+                if str(row.get("task_id", "")) == task_id and str(row.get("repository", DEFAULT_REPOSITORY)) == repository:
                     observed_request = True
                     break
 
         for row in _read_jsonl(ledger_path):
-            if str(row.get("task_id", "")) == task_id:
+            if str(row.get("task_id", "")) == task_id and str(row.get("repository", DEFAULT_REPOSITORY)) == repository:
                 matching_execution = row
 
         done = (
@@ -170,16 +175,27 @@ def poll_for_terminal_evidence(
 
     return {
         "task_id": task_id,
+        "repository": repository,
         "observed_request": observed_request,
         "execution": matching_execution,
         "final_state": state,
     }
 
 
+def write_report(report: dict[str, Any], report_path: str = "") -> str:
+    text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    if report_path:
+        destination = Path(report_path).expanduser()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(text + "\n", encoding="utf-8")
+    return text
+
+
 def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     state = observation.get("final_state") or {}
     execution = observation.get("execution")
+    repository = str(observation.get("repository", DEFAULT_REPOSITORY))
 
     if not observation.get("observed_request"):
         reasons.append("no resume request observed for this task_id")
@@ -196,6 +212,12 @@ def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
         diagnostic = execution.get("diagnostic") or {}
         if diagnostic.get("background_paid_fallback_forbidden") is not True:
             reasons.append("diagnostic missing background_paid_fallback_forbidden=true")
+
+    if str(state.get("repository", DEFAULT_REPOSITORY)) != repository:
+        reasons.append("checkpoint repository does not match requested repository")
+
+    if execution is not None and str(execution.get("repository", DEFAULT_REPOSITORY)) != repository:
+        reasons.append("execution repository does not match requested repository")
 
     if str(state.get("status", "")) != TERMINAL_OK:
         reasons.append(f"checkpoint status is not {TERMINAL_OK}: {state.get('status')!r}")
@@ -215,22 +237,31 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--poll-interval-seconds", type=int, default=DEFAULT_POLL_INTERVAL_SECONDS)
     parser.add_argument("--task-id", default="")
+    parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
+    parser.add_argument(
+        "--report-path",
+        default="",
+        help="Optional path for the final single JSON report, separate from stdout.",
+    )
     args = parser.parse_args()
 
     runtime_dir = Path(args.runtime_dir).expanduser()
     runtime_dir.mkdir(parents=True, exist_ok=True)
     task_id = args.task_id.strip() or f"continuity-e2e-{uuid.uuid4()}"
+    repository = args.repository.strip() or DEFAULT_REPOSITORY
     agent_task_state_script = ROOT / "scripts" / "agent_task_state.py"
 
     create_synthetic_task(
         runtime_dir=runtime_dir,
         task_id=task_id,
+        repository=repository,
         agent_task_state_script=agent_task_state_script,
     )
 
     observation = poll_for_terminal_evidence(
         runtime_dir=runtime_dir,
         task_id=task_id,
+        repository=repository,
         timeout_seconds=args.timeout_seconds,
         poll_interval_seconds=args.poll_interval_seconds,
     )
@@ -238,6 +269,7 @@ def main() -> int:
 
     report = {
         "task_id": task_id,
+        "repository": repository,
         "pass": ok,
         "reasons": reasons,
         "observed_request": observation.get("observed_request"),
@@ -246,7 +278,7 @@ def main() -> int:
         "final_verification": (observation.get("final_state") or {}).get("verification"),
         "generated_at": utc_now(),
     }
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    print(write_report(report, args.report_path))
     return 0 if ok else 1
 
 

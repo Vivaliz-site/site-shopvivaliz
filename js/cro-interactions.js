@@ -29,26 +29,22 @@
 
         if (!mainBtn || !stickyBtn) return;
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (!entry.isIntersecting && window.scrollY > 300) {
-                    stickyBtn.classList.add('visible');
-                } else {
-                    stickyBtn.classList.remove('visible');
-                }
-            });
-        }, { threshold: 0 });
+        const STICKY_REVEAL_SCROLL_Y = 80;
 
+        function syncStickyVisibility() {
+            const rect = mainBtn.getBoundingClientRect();
+            const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+            const outsideViewport = rect.bottom <= 0 || rect.top >= viewportHeight;
+            const shouldShow = outsideViewport && window.scrollY > STICKY_REVEAL_SCROLL_Y;
+            stickyBtn.classList.toggle('visible', shouldShow);
+        }
+
+        const observer = new IntersectionObserver(syncStickyVisibility, { threshold: 0 });
         observer.observe(mainBtn);
 
-        window.addEventListener('scroll', () => {
-            const rect = mainBtn.getBoundingClientRect();
-            if (rect.top < 0 && window.scrollY > 300) {
-                stickyBtn.classList.add('visible');
-            } else {
-                stickyBtn.classList.remove('visible');
-            }
-        }, { passive: true });
+        window.addEventListener('scroll', syncStickyVisibility, { passive: true });
+        window.addEventListener('resize', syncStickyVisibility, { passive: true });
+        syncStickyVisibility();
     }
 
     /**

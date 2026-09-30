@@ -1,8 +1,7 @@
 name: Amazon Support Reply OCI Breakglass
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
 
 permissions:
   contents: read

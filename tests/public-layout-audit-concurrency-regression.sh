@@ -6,9 +6,14 @@ script=scripts/public-layout-audit.mjs
 grep -Fq 'group: public-layout-audit' "$workflow"
 grep -Fq 'cancel-in-progress: true' "$workflow"
 grep -Fq 'timeout-minutes: 35' "$workflow"
-grep -Fq "cron: '17 */6 * * *'" "$workflow"
+grep -Fq "cron: '59 7 * * *'" "$workflow"
 grep -Fq 'retention-days: 1' "$workflow"
 grep -Fq 'compression-level: 0' "$workflow"
+grep -Fq 'NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache' "$workflow"
+if grep -Fq 'cache: npm' "$workflow"; then
+  echo 'public-layout-audit-concurrency-regression: persistent setup-node npm cache is forbidden on the backend browser runner' >&2
+  exit 1
+fi
 grep -Fq "import { mapWithConcurrency, resolveAuditConcurrency } from './lib/audit-concurrency.mjs';" "$script"
 grep -Fq 'const auditConcurrency = resolveAuditConcurrency();' "$script"
 grep -Fq 'await mapWithConcurrency(routes, auditConcurrency' "$script"

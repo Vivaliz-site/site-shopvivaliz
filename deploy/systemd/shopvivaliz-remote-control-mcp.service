@@ -1,0 +1,26 @@
+[Unit]
+Description=ShopVivaliz Private Remote Control MCP
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/shopvivaliz-remote-control
+Environment=PYTHONUNBUFFERED=1
+Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
+Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
+Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=false
+PrivateTmp=false
+ProtectSystem=false
+ReadWritePaths=/var/lib/shopvivaliz-remote-control
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

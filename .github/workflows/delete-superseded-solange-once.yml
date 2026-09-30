@@ -1,0 +1,59 @@
+name: Delete Superseded Solange Legacy Once
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delete-superseded-solange-legacy-once
+  cancel-in-progress: false
+
+jobs:
+  delete-legacy:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      github.event.comment.body == '/delete-superseded-solange-v1 CONFIRM'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    env:
+      TARGET_REPO: fredmourao-ai/solange-rolla
+      CANONICAL_REPO: fredmourao-ai/solange-rolla-consultorio
+    steps:
+      - name: Verify native GitHub authentication and immutable targets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$TARGET_REPO" = "fredmourao-ai/solange-rolla"
+          test "$CANONICAL_REPO" = "fredmourao-ai/solange-rolla-consultorio"
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null
+          canonical="$(env -u GH_TOKEN -u GITHUB_TOKEN gh repo view "$CANONICAL_REPO" --json nameWithOwner --jq .nameWithOwner)"
+          test "$canonical" = "$CANONICAL_REPO"
+          target="$(env -u GH_TOKEN -u GITHUB_TOKEN gh repo view "$TARGET_REPO" --json nameWithOwner --jq .nameWithOwner)"
+          test "$target" = "$TARGET_REPO"
+
+      - name: Prove target is explicitly superseded
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          readme="$(env -u GH_TOKEN -u GITHUB_TOKEN gh api "repos/$TARGET_REPO/readme" -H 'Accept: application/vnd.github.raw+json')"
+          grep -Fq 'REPOSITÓRIO HISTÓRICO / SUPERSEDIDO' <<<"$readme"
+          grep -Fq 'fredmourao-ai/solange-rolla-consultorio' <<<"$readme"
+
+      - name: Delete only the superseded repository
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          env -u GH_TOKEN -u GITHUB_TOKEN gh repo delete "$TARGET_REPO" --yes
+          if env -u GH_TOKEN -u GITHUB_TOKEN gh repo view "$TARGET_REPO" >/dev/null 2>&1; then
+            echo "ERROR legacy repository still resolves after delete" >&2
+            exit 1
+          fi
+          canonical="$(env -u GH_TOKEN -u GITHUB_TOKEN gh repo view "$CANONICAL_REPO" --json nameWithOwner --jq .nameWithOwner)"
+          test "$canonical" = "$CANONICAL_REPO"
+          echo "LEGACY_SOLANGE_REPOSITORY_DELETE=PASS"

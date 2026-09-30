@@ -143,6 +143,18 @@ run_cycle() {
     log "Task continuation watchdog completed."
   fi
 
+  if [ -f "scripts/chatgpt_continuity_nudge_dispatcher.py" ]; then
+    if python3 scripts/chatgpt_continuity_nudge_dispatcher.py; then
+      log "ChatGPT continuity nudge dispatcher completed."
+    else
+      # Best-effort: an unreachable production bridge or a missing token
+      # (CHATGPT_CONTINUITY_BRIDGE_TOKEN) must never abort the autonomous
+      # cycle -- the chatgpt_common tier was previously always inert, so a
+      # failure here regresses nothing that worked before.
+      log "WARN ChatGPT continuity nudge dispatcher did not complete cleanly; continuing."
+    fi
+  fi
+
   if [ -f "scripts/task_resume_dispatcher.py" ]; then
     if python3 scripts/task_resume_dispatcher.py \
       --timeout-seconds "${SHOPVIVALIZ_RESUME_TIMEOUT_SECONDS:-900}" \

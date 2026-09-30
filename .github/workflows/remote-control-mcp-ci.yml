@@ -1,0 +1,78 @@
+name: Remote Control MCP CI
+
+on:
+  pull_request:
+    paths:
+      - 'remote-control-mcp/**'
+      - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-iphone-private-ssh-relay.sh'
+      - 'scripts/ensure-chatgpt-freeze-successor.py'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
+      - 'scripts/runtime-status-policy.sh'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
+      - 'scripts/setup-remote-control-windows.ps1'
+      - 'scripts/windows-openssh-recovery.ps1'
+      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
+      - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/remote-control-mcp-test.py'
+      - 'tests/iphone-private-ssh-relay-contract-test.py'
+      - 'tests/test_chatgpt_freeze_successor.py'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
+      - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
+  push:
+    paths:
+      - 'remote-control-mcp/**'
+      - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-iphone-private-ssh-relay.sh'
+      - 'scripts/ensure-chatgpt-freeze-successor.py'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
+      - 'scripts/runtime-status-policy.sh'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
+      - 'scripts/setup-remote-control-windows.ps1'
+      - 'scripts/windows-openssh-recovery.ps1'
+      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
+      - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
+      - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/remote-control-mcp-test.py'
+      - 'tests/iphone-private-ssh-relay-contract-test.py'
+      - 'tests/test_chatgpt_freeze_successor.py'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
+      - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and unit tests
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py
+          python3 tests/remote-control-mcp-test.py
+          python3 tests/iphone-private-ssh-relay-contract-test.py
+          python3 tests/test_chatgpt_freeze_successor.py
+      - name: KOCEPSV reverse relay contract
+        run: php tests/desktopkocepsv-private-relay-contract-test.php
+      - name: Shell syntax
+        run: |
+          bash -n scripts/setup-remote-control-access.sh
+          bash -n scripts/setup-iphone-private-ssh-relay.sh
+          bash -n scripts/setup-claude-remote-control.sh
+          bash -n scripts/runtime-status-policy.sh

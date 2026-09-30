@@ -62,6 +62,26 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn("extension_loaded(\"pdo_sqlite\")", text)
         self.assertNotIn("php -m | grep -Fxq pdo_sqlite", text)
 
+    def test_master_pipeline_preserves_chatgpt_dispatcher_token_access(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        recursive = 'sudo chgrp -R www-data "$shared/$name"'
+        token_dir = 'continuity_token_dir="$shared/storage/private/chatgpt-continuity"'
+        token_file = 'continuity_token_file="$continuity_token_dir/bridge.token"'
+        self.assertIn(recursive, text)
+        self.assertIn(token_dir, text)
+        self.assertIn(token_file, text)
+        self.assertIn('sudo chown www-data:ubuntu "$continuity_token_dir" "$continuity_token_file"', text)
+        self.assertIn('sudo chmod 0750 "$continuity_token_dir"', text)
+        self.assertIn('sudo chmod 0640 "$continuity_token_file"', text)
+        self.assertIn('sudo -u ubuntu test -r "$continuity_token_file"', text)
+        self.assertIn('sudo test -e "$continuity_token_file"', text)
+        self.assertIn('sudo test -d "$continuity_token_dir"', text)
+        self.assertNotIn('if [ -e "$continuity_token_file" ]; then', text)
+        self.assertIn('sha256sum -- "$continuity_token_file"', text)
+        self.assertIn('CHATGPT_CONTINUITY_DEPLOY_TOKEN_METADATA=PASS', text)
+        self.assertLess(text.index(recursive), text.index(token_dir))
+        self.assertNotIn('cat "$continuity_token_file"', text)
+
     def test_master_pipeline_rolls_back_a_failed_release(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('previous="$(readlink -f "$current" 2>/dev/null)"', text)
@@ -89,10 +109,24 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
         self.assertIn('17657/health', helper)
 
+    def test_master_pipeline_skips_unchanged_ai_squad_runtime_on_activate_and_rollback(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+
+        self.assertIn("ai_squad_runtime_changed_between_releases()", activation)
+        self.assertIn('ai_squad_runtime_changed=false', activation)
+        self.assertIn('if ai_squad_runtime_changed_between_releases "$previous" "$release"; then', activation)
+        self.assertIn('ai_squad_runtime_changed=true', activation)
+        self.assertIn('if [ "$ai_squad_runtime_changed" = true ]; then', activation)
+        self.assertIn('ai_squad_runtime_reconcile_skipped=true', activation)
+        self.assertIn('ai_squad_runtime_rollback_reconcile_skipped=true', activation)
+
+        rollback = activation.split('if [ "$fail" -ne 0 ]; then', 1)[1]
+        self.assertIn('if [ "$ai_squad_runtime_changed" = true ]; then', rollback)
+
     def test_safe_sync_skips_redundant_ai_squad_restart_when_runtime_is_unchanged(self) -> None:
         text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
         self.assertIn("ai_squad_runtime_changed_between_releases()", text)
-        self.assertIn("verify_ai_squad_bridges_health()", text)
 
         activate = text.split('ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"', 1)[1]
         activate = activate.split("if ! reconcile_abandoned_cart_recovery_units", 1)[0]
@@ -103,10 +137,30 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"', activate)
         self.assertIn("ai_squad_runtime_unchanged=true", activate)
         self.assertIn("ai_squad_bridge_restart_skipped=true", activate)
-        self.assertIn("elif ! verify_ai_squad_bridges_health; then", activate)
+        self.assertNotIn("elif ! verify_ai_squad_bridges_health; then", activate)
+        self.assertEqual(activate.count('reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"'), 1)
 
         rollback = text.split("rollback_to() {", 1)[1].split("restore_runner_bootstrap_if_needed()", 1)[0]
+        self.assertIn("rollback_from_release=", rollback)
+        self.assertIn(
+            'if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$rollback_from_release" "$RELEASES_DIR/$previous_release"; then',
+            rollback,
+        )
         self.assertIn('reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"', rollback)
+        self.assertIn("rollback_ai_squad_runtime_unchanged=true", rollback)
+        self.assertIn("rollback_ai_squad_bridge_restart_skipped=true", rollback)
+
+    def test_ai_squad_documentation_drift_is_not_a_runtime_change(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+        workflow_predicate = activation.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split('if ! previous=', 1)[0]
+        self.assertNotIn("claude-vm-bootstrap.md", workflow_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', workflow_predicate)
+
+        deploy = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        deploy_predicate = deploy.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split("reconcile_ai_squad_bridges() {", 1)[0]
+        self.assertNotIn("claude-vm-bootstrap.md", deploy_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', deploy_predicate)
 
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
         reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
