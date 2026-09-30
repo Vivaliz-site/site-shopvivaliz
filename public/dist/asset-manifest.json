@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T16:23:08.214Z",
+  "generated_at": "2026-09-30T16:27:16.943Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -397,9 +397,9 @@
       "source_bytes": 29746
     },
     "/css/visual-audit-v1.css": {
-      "file": "/public/dist/css/visual-audit-v1.7bc6019b19.min.css",
-      "bytes": 10938,
-      "source_bytes": 17230
+      "file": "/public/dist/css/visual-audit-v1.0dd2c35c7c.min.css",
+      "bytes": 10976,
+      "source_bytes": 17271
     },
     "/css/visual-polish-v4.css": {
       "file": "/public/dist/css/visual-polish-v4.6c7fa3255d.min.css",
