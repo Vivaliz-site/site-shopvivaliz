@@ -235,10 +235,18 @@ sudo -u ubuntu -H python3 - <<'INNER'
 import json
 from pathlib import Path
 
-canonical_task_id = 'chatgpt-freeze-root-cause-20260928-g2'
-path = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state') / f'{canonical_task_id}.json'
-if not path.is_file():
+root = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state')
+pattern = re.compile(r'chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)')
+candidates = {}
+for candidate in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
+    match = pattern.fullmatch(candidate.stem)
+    if match and candidate.is_file() and not candidate.is_symlink():
+        candidates[int(match.group(1))] = candidate
+if not candidates:
     raise SystemExit('canonical freeze generation missing')
+canonical_generation = max(candidates)
+path = candidates[canonical_generation]
+canonical_task_id = path.stem
 try:
     payload = json.loads(path.read_text(encoding='utf-8'))
 except Exception as exc:
