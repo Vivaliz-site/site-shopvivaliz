@@ -933,8 +933,9 @@ class BootstrapContractTests(unittest.TestCase):
         for needle in (
             "dispatcher_last_cycle_at='NONE'",
             "dispatcher_log_fresh=False",
-            "dispatcher_event_re=re.compile",
-            "latest_generation_updated_at",
+            "dispatcher_event_suffix='] ChatGPT continuity nudge dispatcher completed.'",
+            "timestamp_re.fullmatch(candidate)",
+            "dispatcher_last_cycle_at>=latest_generation_updated_at",
             "CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT=",
             "CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH=",
         ):
