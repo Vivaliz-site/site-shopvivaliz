@@ -55,6 +55,8 @@ PY
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=logged_in"
   run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help"
+  rm -f "$tmp"
+  trap - RETURN
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
 
