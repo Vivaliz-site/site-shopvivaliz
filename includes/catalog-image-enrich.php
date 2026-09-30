@@ -17,6 +17,16 @@ function svcie_apply_image_map(array $products, array $imagesBySku): array
         $images = array_values(array_unique(array_filter($imagesBySku[$sku], static fn($url): bool => is_string($url) && preg_match('~^https?://~i', $url) === 1)));
         if ($images === []) continue;
 
+        // O snapshot canonico Tiny v3 tambem e' uma fonte ERP valida. Nao deixe
+        // um espelho local de midia parcialmente sincronizado reduzir a galeria
+        // autoritativa que veio diretamente do detalhe do produto no ERP.
+        if (strtolower(trim((string)($product['sync_source'] ?? ''))) === 'tiny_v3') {
+            foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $erpImage) {
+                if (!is_string($erpImage) || preg_match('~^https?://~i', $erpImage) !== 1) continue;
+                if (!in_array($erpImage, $images, true)) $images[] = $erpImage;
+            }
+        }
+
         // Regra de mídia pública: a imagem da vitrine deve vir do produto no ERP.
         // Não usar fallback manual, storage local ou imagem da tabela products.
         $products[$index]['image_url'] = $images[0];
