@@ -26,6 +26,15 @@ run_as_tunnel_user() {
   sudo -u "$TUNNEL_USER" -H env     HOME="$TUNNEL_HOME"     XDG_CONFIG_HOME="$TUNNEL_HOME/.config"     "$@"
 }
 
+count_tunnel_processes() {
+  local pids=""
+  if pids="$(pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null)"; then
+    printf '%s\n' "$pids" | sed '/^$/d' | wc -l | tr -d '[:space:]'
+  else
+    echo 0
+  fi
+}
+
 find_client() {
   local candidate=""
   if candidate="$(run_as_tunnel_user bash -lc 'command -v tunnel-client 2>/dev/null')" && [ -x "$candidate" ]; then
@@ -237,7 +246,7 @@ PY
   trap - RETURN
 
   local count
-  count="$(pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null | wc -l | tr -d '[:space:]')"
+  count="$(count_tunnel_processes)"
   if [ "$count" != "0" ]; then
     die duplicate_tunnel_client_before_cutover 42
   fi
@@ -278,7 +287,7 @@ install_runtime() {
   [ "$active" = true ] || die service_not_active 34
 
   local count
-  count="$(pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null | wc -l | tr -d '[:space:]')"
+  count="$(count_tunnel_processes)"
   [ "$count" = "1" ] || die tunnel_client_process_count 35
 
   doctor_ok "$CANONICAL_BIN" || die post_install_doctor_failed 36
@@ -301,7 +310,7 @@ validate_runtime() {
   doctor_ok "$CANONICAL_BIN" || die profile_doctor_failed 53
 
   local count
-  count="$(pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null | wc -l | tr -d '[:space:]')"
+  count="$(count_tunnel_processes)"
   [ "$count" = "1" ] || die tunnel_client_process_count 54
 
   systemctl is-active --quiet shopvivaliz-remote-control-mcp.service || die controller_inactive 55
