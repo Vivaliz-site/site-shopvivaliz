@@ -6,6 +6,7 @@ import {
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
+  transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
   alignToLatestConversation,
@@ -492,8 +493,10 @@ async function run() {
   // with an explicit "Parou de pensar" state instead of the stream banner.
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
+  assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
+  assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
 
-  console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent: PASS');
+  console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
 
   // Cross-device continuity: a mobile/iOS interruption may belong to a
   // different thread than the backend browser currently has open. Discovery
@@ -778,6 +781,56 @@ async function run() {
   const sentButNoProgress = await attemptNudge('task-no-progress', async () => fakeCdp({ sendSucceeds: true }), async () => false);
   assert.equal(sentButNoProgress.result_status, 'SENT_UNCONFIRMED');
   assert.match(sentButNoProgress.detail, /no assistant progress/i);
+
+  {
+    let sendCalls = 0;
+    let pageText = 'Erro na transmissão de mensagem';
+    const transmissionCdp = fakeCdp({ sendSucceeds: true });
+    const originalEvaluate = transmissionCdp.evaluate.bind(transmissionCdp);
+    transmissionCdp.evaluate = async expression => {
+      if (expression.includes('insertText') || expression.includes('proto.value')) {
+        sendCalls += 1;
+      }
+      if (expression.includes('b.click()')) {
+        sendCalls += 1;
+      }
+      if (expression.includes('location.reload')) {
+        pageText = 'normal';
+      }
+      return originalEvaluate(expression);
+    };
+    transmissionCdp.pageState = async () => ({
+      href: 'https://chatgpt.com/c/fake',
+      title: 'ChatGPT',
+      text: pageText,
+    });
+    let confirmCalls = 0;
+    const recovered = await attemptNudge(
+      'task-transmission-error-recovery',
+      async () => transmissionCdp,
+      async () => {
+        confirmCalls += 1;
+        return confirmCalls >= 3;
+      },
+    );
+    assert.equal(recovered.result_status, 'PROGRESS_CONFIRMED');
+    assert.match(recovered.detail, /transmission error recovered/i);
+    assert.ok(sendCalls >= 2, 'explicit transmission error must get one bounded retry');
+
+    const persistent = fakeCdp({ sendSucceeds: true });
+    persistent.pageState = async () => ({
+      href: 'https://chatgpt.com/c/fake',
+      title: 'ChatGPT',
+      text: 'Erro na transmissão de mensagem',
+    });
+    const failed = await attemptNudge(
+      'task-transmission-error-persistent',
+      async () => persistent,
+      async () => false,
+    );
+    assert.equal(failed.result_status, 'ERROR');
+    assert.match(failed.detail, /transmission error persisted/i);
+  }
 
   const sendFailed = await attemptNudge(
     'task-1',
