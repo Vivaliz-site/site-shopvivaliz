@@ -147,6 +147,18 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn("rollback_ai_squad_runtime_unchanged=true", rollback)
         self.assertIn("rollback_ai_squad_bridge_restart_skipped=true", rollback)
 
+    def test_ai_squad_documentation_drift_is_not_a_runtime_change(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+        workflow_predicate = activation.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split('if ! previous=', 1)[0]
+        self.assertNotIn("claude-vm-bootstrap.md", workflow_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', workflow_predicate)
+
+        deploy = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        deploy_predicate = deploy.split("ai_squad_runtime_changed_between_releases() {", 1)[1].split("reconcile_ai_squad_bridges() {", 1)[0]
+        self.assertNotIn("claude-vm-bootstrap.md", deploy_predicate)
+        self.assertIn('diff -qr -- "$previous_release/ops/ai-squad" "$next_release/ops/ai-squad"', deploy_predicate)
+
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
         reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_call:", reusable)
