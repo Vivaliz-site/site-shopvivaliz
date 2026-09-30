@@ -591,6 +591,7 @@ if ($notFound) {
     </script>
     <?php endif; ?>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
+    <link rel="stylesheet" href="/css/paid-mobile-funnel-v1.css?v=<?= filemtime(__DIR__ . '/css/paid-mobile-funnel-v1.css') ?: '1' ?>">
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
@@ -614,6 +615,24 @@ if ($notFound) {
         </section>
         <?php else: ?>
         <div class="product-detail" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
+            <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
+            <section class="sv-paid-mobile-offer" aria-label="Compra rápida do produto">
+                <div class="sv-paid-mobile-offer-top">
+                    <p class="sv-paid-mobile-offer-name"><?= sv_esc($name) ?></p>
+                    <span class="sv-paid-mobile-offer-stock">Em estoque</span>
+                </div>
+                <div class="sv-paid-mobile-offer-price"><?= sv_esc($priceLabel) ?></div>
+                <?php if (is_array($svPrimaryCoupon ?? null) && trim((string)($svPrimaryCoupon['code'] ?? '')) !== ''): ?>
+                    <div class="sv-paid-mobile-offer-coupon">
+                        <?= sv_esc((string)($svPrimaryCoupon['label'] ?? 'Oferta ativa')) ?>
+                        · cupom <strong><?= sv_esc((string)$svPrimaryCoupon['code']) ?></strong>
+                    </div>
+                <?php endif; ?>
+                <button class="sv-paid-mobile-offer-buy" type="button" onclick="document.getElementById('buy-now').click()">Comprar agora</button>
+                <div class="sv-paid-mobile-offer-note">Frete e prazo calculados pelo CEP antes do pagamento.</div>
+            </section>
+            <?php endif; ?>
+
             <!-- Coluna da Esquerda: Galeria de Imagens -->
             <div class="product-gallery-column">
                 <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
