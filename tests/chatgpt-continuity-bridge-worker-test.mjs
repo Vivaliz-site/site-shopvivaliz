@@ -34,6 +34,9 @@ function fakeCdp({
   sendSucceeds = true,
   streamStatus = 'IN_PROGRESS',
   staleStopClearSucceeds = true,
+  assistantPresent = true,
+  assistantText = 'partial assistant reply',
+  completionControls = true,
 } = {}) {
   const calls = [];
   let currentGenerating = generating;
@@ -42,6 +45,14 @@ function fakeCdp({
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('completed-response-action-probe')) {
+        return {
+          assistant_present: assistantPresent,
+          has_text: assistantPresent && Boolean(assistantText),
+          completed: assistantPresent && completionControls,
+        };
+      }
+      if (expression.includes('location.reload')) return true;
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
@@ -902,6 +913,65 @@ async function run() {
     assert.equal(result.action, 'no_banner');
     assert.equal(result.cross_device_discovery, true);
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
+  }
+
+  // Cross-device discovery must recover a silent stall even when the mobile
+  // interruption banner never appears in the VM. A completed response remains
+  // fail-closed because ChatGPT renders completed-response action controls.
+  {
+    const completed = fakeCdp({
+      pageText: 'normal reply',
+      assistantPresent: true,
+      assistantText: 'complete reply',
+      completionControls: true,
+    });
+    const completedResult = await reinforcementCheckOnce(
+      async () => completed,
+      1,
+      async () => false,
+      async () => ({ action: 'navigated', http_status: 200 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(completedResult.action, 'no_banner');
+    assert.equal(
+      completed.calls.some(call => call.includes('b.click()')),
+      false,
+      'completed cross-device replies must never receive an automatic continuation',
+    );
+  }
+
+  {
+    let progressChecks = 0;
+    const silent = fakeCdp({
+      pageText: 'normal reply',
+      assistantPresent: true,
+      assistantText: 'unfinished reply',
+      completionControls: false,
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+    });
+    const result = await reinforcementCheckOnce(
+      async () => silent,
+      1,
+      async () => {
+        progressChecks += 1;
+        return progressChecks > 1;
+      },
+      async () => ({ action: 'navigated_sidebar_fallback', http_status: 429 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.sent, true);
+    assert.equal(result.silent_stall, true);
+    assert.ok(
+      silent.calls.some(call => call.includes('location.reload')),
+      'silent cross-device stall must attempt one passive reattach before sending',
+    );
+    assert.ok(
+      silent.calls.some(call => call.includes('b.click()')),
+      'silent cross-device stall must send one continuation only after passive reattach did not progress',
+    );
   }
 
   // When the account-scoped latest-conversation endpoint is rate-limited,
