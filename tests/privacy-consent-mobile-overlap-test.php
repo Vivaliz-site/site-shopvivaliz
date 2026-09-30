@@ -11,6 +11,10 @@ $checks = [
     'consent script measures rendered banner' => str_contains($js, 'getBoundingClientRect().height'),
     'consent script publishes dynamic spacing' => str_contains($js, '--sv-privacy-consent-space'),
     'consent removal clears dynamic spacing' => str_contains($js, "removeProperty('--sv-privacy-consent-space')"),
+    'mobile product CTA clears consent overlay' => str_contains($css, 'body:has(#sv-privacy-consent) .sticky-buy-wrapper.visible')
+        && str_contains($css, 'var(--sv-privacy-consent-space'),
+    'mobile nav does not sit behind consent overlay' => str_contains($css, 'body:has(#sv-privacy-consent) .sv-mobile-nav-bar')
+        && str_contains($css, 'pointer-events: none !important'),
 ];
 
 foreach ($checks as $label => $ok) {

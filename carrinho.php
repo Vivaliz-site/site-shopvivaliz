@@ -74,6 +74,7 @@ header('Content-Type: text/html; charset=UTF-8');
         @media(max-width:560px){.cart-page{padding-top:24px}.cart-card{padding:18px}.cart-item{grid-template-columns:70px minmax(0,1fr);gap:12px}.cart-item img{width:70px!important;height:70px!important}.cart-title{font-size:24px}.btn-remove{width:100%;margin-left:0}.cart-item-controls{align-items:center}}
     </style>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
+    <link rel="stylesheet" href="/css/paid-mobile-funnel-v1.css?v=<?= filemtime(__DIR__ . '/css/paid-mobile-funnel-v1.css') ?: '1' ?>">
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>

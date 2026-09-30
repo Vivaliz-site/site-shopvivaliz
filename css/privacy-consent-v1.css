@@ -92,3 +92,25 @@
 @media (max-width: 340px) {
   .sv-consent-actions { grid-template-columns: 1fr; }
 }
+
+/* Paid-mobile conversion safety:
+ * the first-visit consent banner previously covered both the bottom navigation
+ * and sticky commerce CTAs. Keep the privacy choice authoritative while leaving
+ * the actual purchase action reachable above the banner.
+ */
+@media (max-width: 760px) {
+  body:has(#sv-privacy-consent) .sv-mobile-nav-bar,
+  body:has(#sv-privacy-consent) .sv-mobile-bottom-nav {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  body:has(#sv-privacy-consent) .sticky-buy-wrapper.visible {
+    bottom: calc(var(--sv-privacy-consent-space, 0px) + 16px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body:has(#sv-privacy-consent) #btn-checkout {
+    bottom: calc(var(--sv-privacy-consent-space, 0px) + 16px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

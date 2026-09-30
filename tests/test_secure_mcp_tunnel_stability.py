@@ -45,6 +45,11 @@ class SecureMcpTunnelStabilityTests(unittest.TestCase):
         self.assertIn("Restart=always", text)
         self.assertNotIn("set +e", text)
 
+    def test_canonical_binary_version_probe_uses_supported_flag(self):
+        text = (ROOT / "scripts" / "setup-secure-mcp-tunnel-runtime.sh").read_text(encoding="utf-8")
+        self.assertIn('"$CANONICAL_BIN" --version', text)
+        self.assertNotIn('"$CANONICAL_BIN" version', text)
+
     def test_process_count_is_pipefail_safe(self):
         text = (ROOT / "scripts" / "setup-secure-mcp-tunnel-runtime.sh").read_text(encoding="utf-8")
         self.assertIn("count_tunnel_processes()", text)
