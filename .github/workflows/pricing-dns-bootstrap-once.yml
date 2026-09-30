@@ -1,0 +1,86 @@
+name: Pricing DNS Bootstrap Once
+
+on:
+  push:
+    branches:
+      - ops/pricing-dns-bootstrap-20260930
+    paths:
+      - .github/workflows/pricing-dns-bootstrap-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  ensure-pricing-dns:
+    if: \${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && github.ref == 'refs/heads/ops/pricing-dns-bootstrap-20260930' }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    env:
+      CF_TOKEN: \${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+      RECORD_NAME: pricing.shopvivaliz.com.br
+      TARGET_IP: 137.131.149.55
+    steps:
+      - name: Ensure proxied pricing A record
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "\${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_DNS_EDIT_TOKEN_MISSING'
+            exit 1
+          fi
+
+          zones="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br")"
+          zone_id="$(printf '%s' "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if len(r)==1 else "")')"
+          if [ -z "$zone_id" ]; then
+            echo 'CLOUDFLARE_ZONE_LOOKUP_FAILED'
+            exit 1
+          fi
+
+          records="$(curl -fsS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?type=A&name=$RECORD_NAME&per_page=100")"
+          count="$(printf '%s' "$records" | python3 -c 'import json,sys,os; d=json.load(sys.stdin); n=os.environ["RECORD_NAME"]; print(len([r for r in d.get("result",[]) if r.get("name")==n]))')"
+          payload="$(python3 -c 'import json,os; print(json.dumps({"type":"A","name":os.environ["RECORD_NAME"],"content":os.environ["TARGET_IP"],"ttl":1,"proxied":True}))')"
+
+          if [ "$count" = "0" ]; then
+            response="$(curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "$payload")"
+            action=created
+          elif [ "$count" = "1" ]; then
+            rid="$(printf '%s' "$records" | python3 -c 'import json,sys,os; d=json.load(sys.stdin); n=os.environ["RECORD_NAME"]; print([r for r in d.get("result",[]) if r.get("name")==n][0]["id"])')"
+            current="$(printf '%s' "$records" | python3 -c 'import json,sys,os; d=json.load(sys.stdin); n=os.environ["RECORD_NAME"]; r=[r for r in d.get("result",[]) if r.get("name")==n][0]; print((r.get("content") or "")+"|"+str(bool(r.get("proxied"))).lower())')"
+            if [ "$current" = "$TARGET_IP|true" ]; then
+              echo "DNS_RECORD_ALREADY_CORRECT name=$RECORD_NAME"
+              exit 0
+            fi
+            response="$(curl -fsS -X PUT "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$rid" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "$payload")"
+            action=updated
+          else
+            echo "ABORT_UNEXPECTED_RECORD_COUNT=$count"
+            exit 1
+          fi
+
+          success="$(printf '%s' "$response" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("success") else "false")')"
+          test "$success" = "true"
+          echo "DNS_RECORD_\${action^^} name=$RECORD_NAME target=$TARGET_IP proxied=true"
+
+      - name: Verify authoritative DNS and public health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            answer="$(curl -fsS -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=$RECORD_NAME&type=A" || true)"
+            count="$(printf '%s' "$answer" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("Answer") or []))' 2>/dev/null || echo 0)"
+            if [ "$count" -gt 0 ]; then
+              break
+            fi
+            sleep 3
+          done
+
+          for attempt in $(seq 1 20); do
+            body="$(curl -fsS --max-time 15 "https://$RECORD_NAME/v1/health" 2>/dev/null || true)"
+            if printf '%s' "$body" | grep -q '"ok":true'; then
+              echo "PRICING_PUBLIC_HEALTH=PASS"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'PRICING_PUBLIC_HEALTH=FAIL'
+          exit 1
