@@ -784,7 +784,8 @@ async function run() {
 
   {
     let sendCalls = 0;
-    let pageText = 'Erro na transmissão de mensagem';
+    let reloads = 0;
+    let pageText = 'normal';
     const transmissionCdp = fakeCdp({ sendSucceeds: true });
     const originalEvaluate = transmissionCdp.evaluate.bind(transmissionCdp);
     transmissionCdp.evaluate = async expression => {
@@ -793,9 +794,11 @@ async function run() {
       }
       if (expression.includes('b.click()')) {
         sendCalls += 1;
+        pageText = 'Erro na transmissão de mensagem';
       }
       if (expression.includes('location.reload')) {
-        pageText = 'normal';
+        reloads += 1;
+        if (reloads >= 2) pageText = 'normal';
       }
       return originalEvaluate(expression);
     };
