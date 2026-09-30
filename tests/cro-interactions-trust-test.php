@@ -30,6 +30,9 @@ $required = [
     "initSkeletonLoaders();",
     "initImageHoverZoom();",
     "initFreeShippingProgress();",
+    "const STICKY_REVEAL_SCROLL_Y = 80;",
+    "const outsideViewport = rect.bottom <= 0 || rect.top >= viewportHeight;",
+    "window.addEventListener('resize', syncStickyVisibility, { passive: true });",
 ];
 foreach ($required as $snippet) {
     if (!str_contains($source, $snippet)) {
