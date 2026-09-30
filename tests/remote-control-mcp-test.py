@@ -866,15 +866,21 @@ class BootstrapContractTests(unittest.TestCase):
         # The backend installer resolves browser supervision assets relative
         # to its repository-shaped staging tree. Recovery must stage every
         # dependency added by the canonical installer, not flatten two files.
-        for staged in (
-            "$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh",
-            "$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
-            "$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service",
-            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
-            "$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
+        for source in (
+            "scripts/install-chatgpt-continuity-backend-bridge.sh",
+            "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
+            "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
+            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         ):
-            self.assertIn(staged, repair)
+            self.assertIn(source, repair)
+        for destination in (
+            "$remote_dir/scripts/",
+            "$remote_dir/scripts/chatgpt-continuity/",
+            "$remote_dir/ops/systemd/",
+        ):
+            self.assertIn(destination, repair)
         self.assertIn("'$remote_dir/scripts/chatgpt-continuity'", repair)
         self.assertIn("'$remote_dir/ops/systemd'", repair)
         self.assertIn("bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'", repair)
