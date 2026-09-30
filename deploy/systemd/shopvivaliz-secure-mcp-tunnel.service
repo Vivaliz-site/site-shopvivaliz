@@ -12,6 +12,8 @@ Environment=HOME=/home/ubuntu
 Environment=XDG_CONFIG_HOME=/home/ubuntu/.config
 Environment=MCP_STDIO_SEND_INITIALIZED_NOTIFICATION=true
 Environment=MCP_CONNECTION_MAX_TTL=30m
+Environment=HEALTH_LISTEN_ADDR=127.0.0.1:8080
+Environment=OPEN_WEB_UI=false
 ExecStart=/usr/local/bin/tunnel-client run --profile shopvivaliz-remote-control
 Restart=always
 RestartSec=3
