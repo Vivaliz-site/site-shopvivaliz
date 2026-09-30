@@ -39,6 +39,17 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('--exclude=docs/***', text)
         self.assertNotIn('--exclude=docs \\n', text)
 
+    def test_manual_deploy_packages_required_claude_bootstrap_doc(self) -> None:
+        text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        self.assertIn('runtime_bootstrap="docs/knowledge/claude-vm-bootstrap.md"', text)
+        self.assertIn('mkdir -p "$(dirname "$NEW_RELEASE_PATH/$runtime_bootstrap")"', text)
+        self.assertIn(
+            'git -C "$REPO_DIR" show "$REMOTE_SHA:$runtime_bootstrap" > "$NEW_RELEASE_PATH/$runtime_bootstrap"',
+            text,
+        )
+        self.assertIn('chmod 0644 "$NEW_RELEASE_PATH/$runtime_bootstrap"', text)
+        self.assertNotIn('cp -R "$REPO_DIR/docs"', text)
+
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('printf \'%s\\n\' "$sha" > "$release/.release-sha"', text)
