@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const CDP_URL = 'http://127.0.0.1:9555';
 const TARGET_URL = 'https://platform.openai.com/settings/organization/tunnels';
+const MFA_WAIT_TIMEOUT_MS = 60000;
 const playwrightCandidates = [
   '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
   '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
@@ -25,6 +26,21 @@ async function challengeRequired(page) {
   return /2-Step Verification|Verify it.?s you|Enter (?:the )?(?:verification )?code|Try another way|captcha|security key/i.test(text);
 }
 
+async function waitForHumanMfa(primaryPage, authPage, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (authPage && authPage !== primaryPage && authPage.isClosed()) return 'completed';
+    if (await isAuthenticated(primaryPage).catch(() => false)) return 'completed';
+    if (authPage && !authPage.isClosed()) {
+      const stillRequired = await challengeRequired(authPage).catch(() => false);
+      const authUrl = authPage.url();
+      if (!stillRequired && !/accounts\.google\.com/i.test(authUrl)) return 'completed';
+    }
+    await primaryPage.waitForTimeout(1000).catch(() => {});
+  }
+  return 'timeout';
+}
+
 async function tunnelManageAvailable(page) {
   const text = await page.locator('body').innerText({ timeout: 8000 }).catch(() => '');
   if (/tunnels? access required|access to tunnels? is required|insufficient permissions?|permission required/i.test(text)) return false;
@@ -34,9 +50,13 @@ async function tunnelManageAvailable(page) {
 }
 
 let page = null;
+let authPage = null;
+let popupPage = null;
 let authStage = 'initial';
 let accountChooserPresent = false;
 let returnedToPlatform = false;
+let googlePopupUsed = false;
+let mfaWaitResult = 'not_needed';
 try {
   let chromium = null;
   for (const candidate of playwrightCandidates) {
@@ -66,6 +86,7 @@ try {
     if (!challenge) {
       const googleButton = page.getByRole('button', { name: /Continue with Google|Google/i }).first();
       const googleLink = page.getByRole('link', { name: /Continue with Google|Google/i }).first();
+      const popupPromise = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
       if ((await googleButton.count()) > 0) {
         await googleButton.click();
         authStage = 'google_clicked';
@@ -76,31 +97,54 @@ try {
         throw new Error('google_login_option_missing');
       }
 
-      await page.waitForTimeout(2500);
-      if (/accounts\.google\.com/i.test(page.url())) {
+      popupPage = await popupPromise;
+      authPage = popupPage || page;
+      googlePopupUsed = Boolean(popupPage);
+      if (popupPage) {
+        authStage = 'google_popup';
+        popupPage.setDefaultTimeout(15000);
+        await popupPage.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+      }
+
+      await authPage.waitForTimeout(2500);
+      if (/accounts\.google\.com/i.test(authPage.url())) {
         authStage = 'google_account_chooser';
-        const identifierCount = await page.locator('[data-identifier]').count();
-        const anotherAccountCount = await page.getByText(/Use another account/i).count().catch(() => 0);
+        const identifierCount = await authPage.locator('[data-identifier]').count();
+        const anotherAccountCount = await authPage.getByText(/Use another account/i).count().catch(() => 0);
         accountChooserPresent = identifierCount > 0 || anotherAccountCount > 0;
-        challenge = await challengeRequired(page);
+        challenge = await challengeRequired(authPage);
         if (!challenge) {
-          const account = page
+          const account = authPage
             .locator('[data-identifier], [role="link"], [role="button"]')
             .filter({ hasText: /fredmourao|Fred/i })
             .first();
           if ((await account.count()) > 0) {
             await account.click();
             authStage = 'google_account_selected';
-            await page.waitForTimeout(3500);
+            await authPage.waitForTimeout(3500).catch(() => {});
           } else {
             authStage = accountChooserPresent ? 'account_match_missing' : 'account_chooser_missing';
           }
         }
       }
 
-      challenge = challenge || await challengeRequired(page);
+      if (authPage && !authPage.isClosed()) {
+        challenge = challenge || await challengeRequired(authPage).catch(() => false);
+      }
+      if (challenge && !['account_match_missing', 'account_chooser_missing'].includes(authStage)) {
+        authStage = 'challenge_required';
+        console.log('OPENAI_PLATFORM_MFA_WAIT_ACTIVE=true');
+        mfaWaitResult = await waitForHumanMfa(page, authPage, MFA_WAIT_TIMEOUT_MS);
+        if (mfaWaitResult === 'completed') {
+          challenge = false;
+          authStage = 'mfa_completed';
+        } else {
+          authStage = 'challenge_timeout';
+        }
+      }
+
       if (!challenge) {
-        await page.waitForURL(/platform\.openai\.com|auth\.openai\.com/, { timeout: 30000 }).catch(() => {});
+        await page.waitForURL(/platform\.openai\.com|auth\.openai\.com/, { timeout: 15000 }).catch(() => {});
         await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
         await page.waitForTimeout(3000);
         returnedToPlatform = /platform\.openai\.com/i.test(page.url());
@@ -109,7 +153,7 @@ try {
         }
       }
       authenticated = await isAuthenticated(page);
-      if (challenge) authStage = 'challenge_required';
+      if (challenge && authStage !== 'challenge_timeout') authStage = 'challenge_required';
       else if (authenticated) authStage = 'authenticated';
     }
   }
@@ -118,6 +162,8 @@ try {
   console.log('OPENAI_PLATFORM_AUTH_STAGE=' + safeTag(authStage));
   console.log('OPENAI_PLATFORM_ACCOUNT_CHOOSER_PRESENT=' + String(accountChooserPresent));
   console.log('OPENAI_PLATFORM_AUTH_RETURNED_TO_PLATFORM=' + String(returnedToPlatform));
+  console.log('OPENAI_PLATFORM_GOOGLE_POPUP_USED=' + String(googlePopupUsed));
+  console.log('OPENAI_PLATFORM_MFA_WAIT_RESULT=' + safeTag(mfaWaitResult));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=' + String(authenticated));
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=' + String(manage));
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=' + String(challenge));
@@ -134,6 +180,8 @@ try {
   console.log('OPENAI_PLATFORM_AUTH_STAGE=' + safeTag(authStage));
   console.log('OPENAI_PLATFORM_ACCOUNT_CHOOSER_PRESENT=' + String(accountChooserPresent));
   console.log('OPENAI_PLATFORM_AUTH_RETURNED_TO_PLATFORM=' + String(returnedToPlatform));
+  console.log('OPENAI_PLATFORM_GOOGLE_POPUP_USED=' + String(googlePopupUsed));
+  console.log('OPENAI_PLATFORM_MFA_WAIT_RESULT=' + safeTag(mfaWaitResult));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=false');
   console.log('OPENAI_PLATFORM_TUNNEL_MANAGE_AVAILABLE=false');
   console.log('OPENAI_PLATFORM_AUTH_CHALLENGE_REQUIRED=false');
@@ -142,6 +190,7 @@ try {
   console.log('OPENAI_PLATFORM_AUTH_RESULT=FAIL blocker=' + safeTag(error?.message));
   process.exitCode = 2;
 } finally {
+  if (popupPage && !popupPage.isClosed()) await popupPage.close().catch(() => {});
   if (page) await page.close().catch(() => {});
   process.exit(process.exitCode || 0);
 }
