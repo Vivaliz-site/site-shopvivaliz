@@ -893,6 +893,39 @@ async function run() {
     assert.equal(result.cross_device_discovery, true);
   }
 
+  // Live backend topology 2026-09-30: one conversation plus two neutral
+  // ChatGPT home tabs. Multiple home tabs are equivalent safe discovery
+  // contexts; choose the first deterministically instead of falling back to
+  // the conversation and making the 429 sidebar fallback unavailable.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/only-conversation', webSocketDebuggerUrl: 'ws://conversation' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-a' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-b' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(
+      selected.marker,
+      'ws://home-a',
+      'multiple neutral home tabs must select the first home deterministically for cross-device discovery',
+    );
+    assert.ok(closed.includes('ws://conversation'), 'conversation CDP must not remain selected when neutral home context exists');
+    assert.ok(closed.includes('ws://home-b'), 'unused neutral home CDP must be closed');
+    selected.close();
+  }
+
   // If one and only one open tab carries the interruption banner, local
   // evidence wins and no account-scoped latest-conversation request is needed.
   {
