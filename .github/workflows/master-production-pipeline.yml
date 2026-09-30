@@ -269,6 +269,31 @@ jobs:
             sudo chmod -R g+rwX "$shared/$name"
             sudo find "$shared/$name" -type d -exec chmod g+s {} +
           done
+
+          # The recursive storage reconciliation above changes the continuity
+          # token group back to www-data. The dispatcher runs as ubuntu, so
+          # restore only this token's least-privilege metadata immediately.
+          continuity_token_dir="$shared/storage/private/chatgpt-continuity"
+          continuity_token_file="$continuity_token_dir/bridge.token"
+          if [ -e "$continuity_token_file" ]; then
+            test -d "$continuity_token_dir"
+            test ! -L "$continuity_token_dir"
+            test -f "$continuity_token_file"
+            test ! -L "$continuity_token_file"
+            continuity_token_before="$(sudo sha256sum -- "$continuity_token_file" | awk '{print $1}')"
+            test -n "$continuity_token_before"
+            sudo chown www-data:ubuntu "$continuity_token_dir" "$continuity_token_file"
+            sudo chmod 0750 "$continuity_token_dir"
+            sudo chmod 0640 "$continuity_token_file"
+            continuity_token_after="$(sudo sha256sum -- "$continuity_token_file" | awk '{print $1}')"
+            test -n "$continuity_token_after"
+            test "$continuity_token_before" = "$continuity_token_after"
+            sudo -u ubuntu test -r "$continuity_token_file"
+            echo 'CHATGPT_CONTINUITY_DEPLOY_TOKEN_METADATA=PASS'
+          else
+            echo 'CHATGPT_CONTINUITY_DEPLOY_TOKEN_METADATA=NOT_PROVISIONED'
+          fi
+
           sudo chgrp www-data "$shared/tasks-queue.json"
           sudo chmod g+rw "$shared/tasks-queue.json"
 
