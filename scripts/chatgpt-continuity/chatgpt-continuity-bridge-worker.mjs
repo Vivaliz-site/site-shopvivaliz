@@ -85,6 +85,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
+const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -366,6 +367,15 @@ async function connectReinforcementChatgptTab({
       try { row.cdp.close(); } catch {}
     }
   }
+  if (
+    allowCrossDeviceDiscovery
+    && opened.length === 1
+    && selected.rank === 0
+    && selected.cdp
+    && typeof selected.cdp === 'object'
+  ) {
+    SINGLE_SAFE_REINFORCEMENT_CDPS.add(selected.cdp);
+  }
   return selected.cdp;
 }
 
@@ -388,16 +398,59 @@ async function sidebarLatestConversationId(cdp) {
 
 async function alignToSidebarLatestConversation(cdp) {
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  if (currentPath !== '/') return { action: 'sidebar_unavailable', sidebar_fallback: false };
+  const currentConversation = /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
+  const homeContext = currentPath === '/';
+  const uniqueConversationContext = currentConversation && SINGLE_SAFE_REINFORCEMENT_CDPS.has(cdp);
+  if (!homeContext && !uniqueConversationContext) {
+    return { action: 'sidebar_unavailable', sidebar_fallback: false };
+  }
 
   const id = await sidebarLatestConversationId(cdp);
   if (!id) return { action: 'sidebar_unavailable', sidebar_fallback: false };
 
   const target = '/c/' + id;
+  if (currentPath === target) {
+    return {
+      action: 'already_latest_sidebar_fallback',
+      sidebar_fallback: true,
+      restore_path: '',
+    };
+  }
+
   const navigated = await cdp.evaluate(`(()=>{location.assign(${JSON.stringify(target)});return true})()`);
-  if (!navigated) return { action: 'navigation_failed', sidebar_fallback: true };
+  if (!navigated) {
+    return {
+      action: 'navigation_failed',
+      sidebar_fallback: true,
+      restore_path: '',
+    };
+  }
   await sleep(1500);
-  return { action: 'navigated_sidebar_fallback', sidebar_fallback: true };
+  return {
+    action: 'navigated_sidebar_fallback',
+    sidebar_fallback: true,
+    restore_path: currentPath,
+  };
+}
+
+function safeReinforcementRestorePath(value) {
+  const path = String(value || '');
+  if (path === '/') return path;
+  return /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
+}
+
+async function restoreReinforcementPath(cdp, requestedPath) {
+  const path = safeReinforcementRestorePath(requestedPath);
+  if (!cdp || !path) return false;
+  try {
+    const currentPath = String(await cdp.evaluate('location.pathname') || '');
+    if (currentPath === path) return true;
+    return Boolean(await cdp.evaluate(
+      `(()=>{location.assign(${JSON.stringify(path)});return true})()`,
+    ));
+  } catch {
+    return false;
+  }
 }
 
 async function navigateNeutralTabToConversation(
@@ -721,7 +774,10 @@ async function alignLatestForReinforcement(
   if (!latest) {
     if (httpStatus === 429) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
-      if (sidebar.action === 'navigated_sidebar_fallback') {
+      if (
+        sidebar.action === 'navigated_sidebar_fallback'
+        || sidebar.action === 'already_latest_sidebar_fallback'
+      ) {
         return { ...sidebar, http_status: httpStatus };
       }
     }
@@ -928,6 +984,7 @@ async function reinforcementCheckOnce(
   let cdp;
   let crossDeviceDiscovery = false;
   let alignmentHttpStatus = 0;
+  let restorePath = '';
   try {
     cdp = await connect();
 
@@ -947,6 +1004,7 @@ async function reinforcementCheckOnce(
       alignmentHttpStatus = Number.isFinite(Number(alignment?.http_status))
         ? Math.max(0, Math.min(599, Math.trunc(Number(alignment.http_status))))
         : 0;
+      restorePath = safeReinforcementRestorePath(alignment?.restore_path);
       if (
         alignment.action === 'latest_unavailable'
         || alignment.action === 'stale_latest'
@@ -958,7 +1016,10 @@ async function reinforcementCheckOnce(
           cross_device_discovery: true,
         };
       }
-      if (alignment.action === 'already_latest') {
+      if (
+        alignment.action === 'already_latest'
+        || alignment.action === 'already_latest_sidebar_fallback'
+      ) {
         return {
           action: 'no_banner',
           http_status: alignmentHttpStatus,
@@ -1018,6 +1079,9 @@ async function reinforcementCheckOnce(
       cross_device_discovery: crossDeviceDiscovery,
     };
   } finally {
+    if (restorePath) {
+      await restoreReinforcementPath(cdp, restorePath);
+    }
     cdp?.close();
   }
 }
