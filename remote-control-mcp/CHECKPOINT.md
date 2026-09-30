@@ -1,9 +1,9 @@
 # CHECKPOINT — Private Remote Control MCP
 
 TASK_ID=private-remote-control-mcp-4hosts-20260927
-STATUS=RUNNING
+STATUS=CONCLUIDO
 REPOSITORY=Vivaliz-site/site-shopvivaliz
-BRANCH=main (REMOTE_CONTROL_FOUR_HOST_E2E=PASS achieved live for the first time — see ACTION STAGE 6 below; Stage 6 runtime independence is also PASS; remaining work is Stage 7 cloud-client integration.)
+BRANCH=main (Stages 5, 6 e 7 comprovadas ao vivo; ChatGPT Secure MCP e Claude Remote Control PASS.)
 
 ## Goal
 Ativar o ShopVivaliz Remote Control MCP independente de GitHub em runtime nos quatro hosts canônicos.
@@ -43,11 +43,12 @@ Do not mark CONCLUIDO until the merged bootstrap proves, through the new MCP:
 
 
 ## Current continuation
-- PR #1969 merged to main at `82e9a10aff512cfaa40a0bafc7155947e6a128f0`.
-- Post-merge review found the bootstrap workflow structurally corrupted before execution; no four-host bootstrap run was registered for that merge.
-- Current branch repairs the host-key pinning heredoc, removes duplicated E2E/evidence/cleanup blocks, and adds a regression test for workflow integrity.
-- STATUS remains RUNNING until live bootstrap plus non-GitHub runtime proof pass.
-
+- Estado terminal reconciliado em 2026-09-30.
+- Stage 5: `REMOTE_CONTROL_FOUR_HOST_E2E=PASS` no run `36449123839`.
+- Stage 6: `runtime_github_dependency=false` e `DURABLE_AFTER_DISCONNECT=PASS`; GitHub permanece somente bootstrap/recovery.
+- Stage 7: Claude INSTALL/STATUS PASS; Secure MCP Tunnel OpenAI criado, runtime healthy+ready, MCP App ChatGPT conectado e `host_health` executado E2E pelo cliente ChatGPT com resposta `ok=true`, `root`, `UID 0`.
+- Nenhum bearer do controller foi publicado; o controller permanece loopback-only.
+- STATUS terminal: CONCLUIDO.
 
 ## Stage checkpoints
 
@@ -186,10 +187,27 @@ STATUS=PASS
 - STATUS remains RUNNING at the task level (not CONCLUIDO) because `remote-control-mcp/ACTION_PLAN.md` Etapa 6 (formal proof/documentation of the non-GitHub-runtime property, distinct from the architectural fact already evidenced above) and Etapa 7 (ChatGPT integration) are still PENDING with no work done.
 - Next authorized stage: ACTION STAGE 7 — scope and execute Etapa 6 (decide what additional evidence, if any, is needed beyond the `runtime_github_dependency=false` artifact field already produced) and Etapa 7 (ChatGPT integration — blocked from this session by a platform-level "External Ingress Tunnel" denial when attempting to build a public Cloudflare Tunnel + Access in front of the loopback-only controller; requires either the user provisioning the public endpoint themselves, or a ChatGPT client running on the same private network as the backend). Per the task's standing evidence rule, PR #2038 being merged is not itself proof the fix works in practice — a fresh live run is still required.
 
-### ACTION STAGE 7 — Runtime independence formally reconciled; cloud-client work remains live-gated
-STATUS=RUNNING
-- **Stage 6 is PASS.** Run `36449123839` persisted `runtime_github_dependency=false` while calling the backend controller through `127.0.0.1:5580`. Independent disconnected-client evidence in issues #2045/#2046 recorded `DURABLE_AFTER_DISCONNECT=PASS` and `RUNTIME_GITHUB_DEPENDENCY=false`. These prove GitHub is neither transport, queue, heartbeat, executor nor state store at runtime.
-- ChatGPT is BLOCKED_EXTERNAL: OpenAI Platform authentication was proven in run `36472954776`, but tunnel management was unavailable; the later `36491312473` retry found the current Platform browser session unauthenticated. Secure MCP Tunnel is the supported OpenAI path for a private MCP server, so no bearer-only publication was attempted.
-- Cloudflare Access is BLOCKED_EXTERNAL: API probe `36473749120` proved the protected token cannot read Access Apps or Service Tokens. Dashboard fallback run `36492154682` was unauthenticated and required an interactive challenge. Managed OAuth cannot be safely created until a Cloudflare administrator completes login and grants Access Apps/Policies permission or creates the application manually.
-- Claude server-side bridge work is complete: post-merge run `36493201912` proved bridge install, non-secret MCP configuration, and `tools/list` through the root-only local adapter. Workspace trust for the canonical prepared repository is authorized. PRs #2162/#2163 added a bounded allowlisted PTY confirmation and persistence window, but live install runs `36505458895`, `36505902804` and `36506225110` still failed in the trust substep. Claude remains RUNNING; next is safe diagnostic refinement, then install/status and real cloud-session validation.
-- No `.mcp.json` remote configuration was committed because no secure public OAuth MCP endpoint exists. The controller remains loopback-only and its bearer never reaches Claude config, Cloudflare, or source control.
+### ACTION STAGE 7 — Cloud-client integration complete
+STATUS=PASS
+- Stage 6 permanece PASS: run `36449123839` persistiu `runtime_github_dependency=false`; issues #2045/#2046 registraram `DURABLE_AFTER_DISCONNECT=PASS` e `RUNTIME_GITHUB_DEPENDENCY=false`.
+- Claude INSTALL live: OCI Bastion run `36654114288` = SUCCESS com `CLAUDE_REMOTE_CONTROL_INSTALL=PASS`, `CLAUDE_PRIVATE_MCP_BRIDGE=PASS`, consent e service PASS.
+- Claude STATUS live: run `36654821456` = SUCCESS com `CLAUDE_REMOTE_CONTROL_STATUS=PASS` e `OCI_MCP_CLAUDE_STATUS=PASS`. RDC confirmou unit enabled+active e sessão Remote Control real.
+- OpenAI Platform: MFA concluído pelo usuário e Tunnels management acessível na organização `ShopVivaliz ltda`.
+- Secure MCP Tunnel criado: `tunnel_6abc7096b85c8191b938b5a47b8dccff`, associado ao workspace `Espaço de trabalho de Frederico Mourao`.
+- Runtime oficial: `tunnel-client` v0.0.15 Linux ARM64 validado por SHA256; profile `shopvivaliz-remote-control`; alias gerenciado `shopvivaliz-private-mcp`; target stdio `sudo -n /usr/local/sbin/shopvivaliz-claude-mcp-stdio`.
+- `tunnel-client doctor --explain` = `RESULT ok`; `runtimes status --json` = `running=true`, `process_running=true`, `healthy=true`, `ready=true`, `runtime_state=ready`, `stale=false`, remote lookup sem erro.
+- MCP App privado criado no ChatGPT: `ShopVivaliz Remote Control`, plugin `plugin_asdk_app_6abc74328d708191a5393445675bf62f`, Connection=Tunnel, Authentication=None; UI confirmou Connected.
+- Logs do tunnel-client registraram discovery/initialize e comandos encaminhados no canal `main` para o MCP privado.
+- Prova E2E final do cliente ChatGPT: chamada read-only `host_health` para `always-free-arm-1787907847-26` retornou `ok=true`, privilege context `root`, `UID 0`.
+- Segurança final: controller continua `127.0.0.1:5580` loopback-only; bearer root-only; runtime key OpenAI modo `0600`; RSA/JWK/blob criptografado temporários removidos; nenhum segredo foi commitado.
+- PR #2351 eliminou o falso-fail do RETURN trap no status Claude. PR #2358 tornou a instalação da continuidade ChatGPT idempotente, evitando reinícios desnecessários durante respostas em andamento.
+- Cloudflare Managed OAuth não é mais pré-requisito da Etapa 7 porque o caminho oficial OpenAI Secure MCP Tunnel foi concluído e validado.
+
+### TERMINAL
+STATUS=CONCLUIDO
+- Completion gate dos quatro hosts: PASS.
+- Runtime sem GitHub: PASS.
+- Claude cloud client: PASS.
+- ChatGPT Secure MCP client: PASS.
+- TASK_ID `private-remote-control-mcp-4hosts-20260927`: CONCLUIDO.
+
