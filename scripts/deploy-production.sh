@@ -444,8 +444,16 @@ remove_release_tree() {
 
 rollback_to() {
   local previous_release="$1"
+  local rollback_from_release=""
   if [ -z "$previous_release" ] || [ ! -d "$RELEASES_DIR/$previous_release" ]; then
     log ERROR "Rollback indisponivel: release anterior ausente"
+    return 1
+  fi
+  if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
+    rollback_from_release="$(basename "$(readlink -f "$CURRENT_LINK")")"
+  fi
+  if [ -z "$rollback_from_release" ] || [ ! -d "$RELEASES_DIR/$rollback_from_release" ]; then
+    log ERROR "Rollback indisponivel: release atual ausente para comparar runtime AI Squad"
     return 1
   fi
   if ! ln -sfn "releases/$previous_release" "$CURRENT_LINK.tmp"; then
@@ -465,9 +473,14 @@ rollback_to() {
       return 1
     fi
   fi
-  if ! reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"; then
-    log ERROR "Rollback nao conseguiu reconciliar os bridges AI Squad sem interromper ciclos"
-    return 1
+  if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$rollback_from_release" "$RELEASES_DIR/$previous_release"; then
+    if ! reconcile_ai_squad_bridges "$RELEASES_DIR/$previous_release"; then
+      log ERROR "Rollback nao conseguiu reconciliar os bridges AI Squad sem interromper ciclos"
+      return 1
+    fi
+  else
+    log INFO "rollback_ai_squad_runtime_unchanged=true"
+    log INFO "rollback_ai_squad_bridge_restart_skipped=true"
   fi
   if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.timer" ]; then
     if ! reconcile_abandoned_cart_recovery_units "$RELEASES_DIR/$previous_release"; then
@@ -927,17 +940,10 @@ if ai_squad_runtime_changed_between_releases "$RELEASES_DIR/$ACTIVE_RELEASE" "$N
     write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao dos bridges AI Squad falhou"
     exit 1
   fi
-elif ! verify_ai_squad_bridges_health; then
-  log INFO "ai_squad_runtime_unchanged=true"
-  log WARN "AI Squad runtime inalterado, mas health exige reparo; reconciliando bridges"
-  if ! reconcile_ai_squad_bridges "$NEW_RELEASE_PATH"; then
-    if ! rollback_to "$ACTIVE_RELEASE"; then
-      log ERROR "Rollback apos falha ao reparar bridges AI Squad tambem falhou"
-    fi
-    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "health/reparo dos bridges AI Squad falhou"
-    exit 1
-  fi
 else
+  # Component-scoped deploy policy: a pre-existing provider health problem
+  # must not make an unrelated release mutate/restart AI Squad. Runtime
+  # changes remain fail-closed in the branch above.
   log INFO "ai_squad_runtime_unchanged=true"
   log INFO "ai_squad_bridge_restart_skipped=true"
 fi
