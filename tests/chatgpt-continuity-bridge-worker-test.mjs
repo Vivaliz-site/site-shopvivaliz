@@ -789,10 +789,12 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
     ];
     const closed = [];
-    const connector = async tab => ({
-      marker: tab.webSocketDebuggerUrl,
-      close() { closed.push(tab.webSocketDebuggerUrl); },
-    });
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
     const selected = await connectReinforcementChatgptTab({
       tabs,
       connector,
@@ -827,7 +829,13 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/c/interrupted', webSocketDebuggerUrl: 'ws://interrupted' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
     ];
-    const connector = async tab => ({ marker: tab.webSocketDebuggerUrl, close() {} });
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: tab.webSocketDebuggerUrl === 'ws://interrupted'
+        ? 'Streaming interrupted. Waiting for the complete message...'
+        : 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      return cdp;
+    };
     const selected = await connectReinforcementChatgptTab({
       tabs,
       connector,
