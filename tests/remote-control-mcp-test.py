@@ -922,7 +922,7 @@ class BootstrapContractTests(unittest.TestCase):
         # Existing files must be normalized too; keeping chown/chmod only in
         # the token-creation branch reproduces skipped_no_token for the
         # ubuntu:ubuntu site agent when stale metadata survives a repair.
-        remote_after_creation = remote_repair.split('if ! sudo -n test -s "$token_file"; then', 1)[1].split("fi", 1)[1]
+        remote_after_creation = remote_repair.split('if ! sudo -n test -s "$token_file"; then', 1)[1].split("\n              fi\n", 1)[1]
         self.assertIn('sudo -n chown www-data:ubuntu "$token_file"', remote_after_creation)
         self.assertIn('sudo -n chmod 640 "$token_file"', remote_after_creation)
         self.assertNotIn("cat $token_file", remote_repair)
