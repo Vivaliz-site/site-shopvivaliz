@@ -1059,8 +1059,6 @@ async function reinforcementLoop(
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
         alignLatestForReinforcement,
-  sidebarLatestConversationId,
-  alignToSidebarLatestConversation,
         { allowCrossDeviceDiscovery },
       );
     } catch (error) {
@@ -1074,8 +1072,10 @@ async function reinforcementLoop(
     const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
     if (discoveryDelayMs > 0) {
       nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
-      if (outcome?.action === 'latest_unavailable' && Number(outcome?.http_status) === 429) {
-        console.log(`chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs}`);
+      if (Number(outcome?.http_status) === 429) {
+        console.log(
+          `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)}`,
+        );
       }
     }
     await wait(REINFORCEMENT_POLL_MS);
