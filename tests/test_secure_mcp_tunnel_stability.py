@@ -37,6 +37,12 @@ class SecureMcpTunnelStabilityTests(unittest.TestCase):
         self.assertIn("Restart=always", text)
         self.assertNotIn("set +e", text)
 
+    def test_process_count_is_pipefail_safe(self):
+        text = (ROOT / "scripts" / "setup-secure-mcp-tunnel-runtime.sh").read_text(encoding="utf-8")
+        self.assertIn("count_tunnel_processes()", text)
+        self.assertIn('if pids="$(pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null)"; then', text)
+        self.assertNotIn('pgrep -u "$TUNNEL_USER" -x tunnel-client 2>/dev/null | wc -l', text)
+
     def test_recovery_never_logs_tunnel_credentials(self):
         text = (ROOT / ".github" / "workflows" / "secure-mcp-runtime-recovery.yml").read_text(encoding="utf-8")
         forbidden = (
