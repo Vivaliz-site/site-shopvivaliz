@@ -196,10 +196,16 @@ async function resolveAmbiguousConversationTabs(
     // Cross-device or another-client activity can make the server-confirmed
     // latest conversation newer than every conversation currently open in
     // this persistent Chromium. Never guess among those older conversation
-    // tabs. Reuse only a neutral ChatGPT home tab, navigate it to the
-    // server-confirmed recent conversation, and make that one target eligible.
-    const neutralHomeTab = sourceTabs.find(tab => chatgptTabRank(tab) === 1);
-    if (!neutralHomeTab) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    // tabs. The navigation fallback is deliberately stricter than matching an
+    // already-open conversation: the latest item must still be within the
+    // normal recent-conversation window and there must be exactly one neutral
+    // ChatGPT home tab available to repurpose.
+    if (ageMs > RECENT_CONVERSATION_MAX_AGE_MS) {
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+    const neutralHomeTabs = sourceTabs.filter(tab => chatgptTabRank(tab) === 1);
+    if (neutralHomeTabs.length !== 1) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    const [neutralHomeTab] = neutralHomeTabs;
 
     const navigated = await navigateLatest(neutralHomeTab, latest.id, connector);
     if (!navigated) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
