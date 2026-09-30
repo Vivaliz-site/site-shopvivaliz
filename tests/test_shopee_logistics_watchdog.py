@@ -105,3 +105,33 @@ class WatchdogRunTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class WatchdogRecoveryStateTests(unittest.TestCase):
+    def test_healthy_cycle_clears_failure_fingerprint_so_recurrence_alerts(self):
+        m = load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_dir = root / 'storage/shopee-logistics-watchdog'
+            state_dir.mkdir(parents=True)
+            state_path = state_dir / 'state.json'
+            state_path.write_text(json.dumps({'last_fingerprint':'timer_inactive','last_alert_at':1_000}))
+            with patch.object(m, 'systemctl_state', side_effect=['enabled','active']), \
+                 patch.object(m, 'read_last_cycle', return_value={'kind':'cycle','at':'1970-01-01T00:18:20+00:00','errors':0}), \
+                 patch.object(m, 'repair_worker') as repair, \
+                 patch.object(m, 'send_alert') as alert:
+                first = m.run_watchdog(shared_root=root, now=1_100, stale_after=720, alert_cooldown=900)
+            self.assertTrue(first['healthy'])
+            repair.assert_not_called()
+            alert.assert_not_called()
+            state = json.loads(state_path.read_text())
+            self.assertEqual(state.get('last_fingerprint'), '')
+            self.assertEqual(state.get('last_check_at'), 1_100)
+
+            with patch.object(m, 'systemctl_state', side_effect=['enabled','inactive','enabled','inactive']), \
+                 patch.object(m, 'read_last_cycle', return_value={'kind':'cycle','at':'1970-01-01T00:18:20+00:00','errors':0}), \
+                 patch.object(m, 'repair_worker', return_value=False), \
+                 patch.object(m, 'send_alert', return_value=True) as alert2:
+                second = m.run_watchdog(shared_root=root, now=1_150, stale_after=720, alert_cooldown=900)
+            self.assertFalse(second['healthy_after_repair'])
+            self.assertFalse(second['alert_throttled'])
+            alert2.assert_called_once()
