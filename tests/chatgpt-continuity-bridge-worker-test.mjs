@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  Cdp,
   conversationIsGenerating,
   composerIsUsable,
   errorBannerPresent,
@@ -49,6 +50,31 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    try {
+      globalThis.fetch = async url => {
+        calls += 1;
+        if (String(url).endsWith('/json/version')) {
+          return { ok: true, async json() { return {}; } };
+        }
+        if (String(url).endsWith('/json')) {
+          return { ok: true, async json() { return []; } };
+        }
+        throw new Error(`unexpected URL ${url}`);
+      };
+      await assert.rejects(
+        () => Cdp.connectToChatgptTab(),
+        /CDP endpoint unreachable/,
+        'a version response without webSocketDebuggerUrl must fail the readiness gate',
+      );
+      assert.equal(calls, 1, 'invalid /json/version must not proceed to the targets endpoint');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+
   {
     const selected = selectChatgptTab([
       { type: 'page', url: 'https://chatgpt.com/auth/login', webSocketDebuggerUrl: 'ws://auth' },
