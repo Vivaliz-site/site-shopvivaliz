@@ -333,6 +333,34 @@ disable_abandoned_cart_recovery_timer() {
   fi
 }
 
+reconcile_shopee_logistics_units() {
+  local release_path="$1"
+  local installer="$release_path/scripts/install-shopee-logistics-worker.sh"
+
+  if [ ! -f "$installer" ]; then
+    log ERROR "Instalador do worker de logistica Shopee ausente na release"
+    return 1
+  fi
+  if ! sudo bash "$installer" "$release_path" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao reconciliar worker de logistica Shopee"
+    return 1
+  fi
+}
+
+disable_shopee_logistics_timer() {
+  local timer="shopvivaliz-shopee-logistics-worker.timer"
+  local service="shopvivaliz-shopee-logistics-worker.service"
+  if sudo systemctl cat "$timer" >/dev/null 2>&1; then
+    if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao desabilitar timer de logistica Shopee no rollback"
+      return 1
+    fi
+  fi
+  if sudo systemctl cat "$service" >/dev/null 2>&1; then
+    sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+  fi
+}
+
 assert_managed_release_path() {
   local release_path="$1"
   local releases_root canonical_path current_target
@@ -477,6 +505,14 @@ rollback_to() {
       return 1
     fi
   elif ! disable_abandoned_cart_recovery_timer; then
+    return 1
+  fi
+  if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-shopee-logistics-worker.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-shopee-logistics-worker.timer" ]; then
+    if ! reconcile_shopee_logistics_units "$RELEASES_DIR/$previous_release"; then
+      log ERROR "Rollback nao conseguiu reconciliar worker de logistica Shopee"
+      return 1
+    fi
+  elif ! disable_shopee_logistics_timer; then
     return 1
   fi
   if ! restart_runtime_services; then
@@ -795,6 +831,7 @@ fi
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
   if ! reconcile_runtime_secrets "$CURRENT_LINK" \
     || ! reconcile_ai_squad_bridges "$CURRENT_LINK" \
+    || ! reconcile_shopee_logistics_units "$CURRENT_LINK" \
     || ! reconcile_chatgpt_continuity_dispatcher_token_access \
     || ! verify_runtime_health; then
     write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado/AI Squad invalido"
@@ -943,6 +980,14 @@ if ! reconcile_abandoned_cart_recovery_units "$NEW_RELEASE_PATH"; then
     log ERROR "Rollback apos falha ao instalar recuperacao de carrinho tambem falhou"
   fi
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da recuperacao de carrinho falhou"
+  exit 1
+fi
+
+if ! reconcile_shopee_logistics_units "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar worker de logistica Shopee tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do worker de logistica Shopee falhou"
   exit 1
 fi
 
