@@ -25,6 +25,7 @@ jobs:
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
+          github.event.issue.body == 'action=secure-mcp-runtime-recover' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
           github.event.issue.body == 'action=chatgpt-continuity-repair' ||
           github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
@@ -1674,6 +1675,24 @@ jobs:
           echo 'TUNNEL_OUTBOUND_HTTPS=PASS'
           echo 'SECURE_MCP_TUNNEL_PROBE=PASS'
           REMOTE
+
+      - name: Recover Secure MCP Tunnel runtime through OCI Bastion
+        if: github.event.issue.body == 'action=secure-mcp-runtime-recover'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_root="/home/ubuntu/.local/state/shopvivaliz/secure-mcp-runtime-recovery"
+          remote_script="$remote_root/setup-secure-mcp-tunnel-runtime.sh"
+          remote_unit="$remote_root/shopvivaliz-secure-mcp-tunnel.service"
+
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_root'"
+          "${BACKEND_SCP[@]}" scripts/setup-secure-mcp-tunnel-runtime.sh ubuntu@127.0.0.1:"$remote_script"
+          "${BACKEND_SCP[@]}" deploy/systemd/shopvivaliz-secure-mcp-tunnel.service ubuntu@127.0.0.1:"$remote_unit"
+          "${BACKEND_SSH[@]}" "chmod 700 '$remote_script'; chmod 600 '$remote_unit'; sudo -n bash '$remote_script' diagnose; sudo -n bash '$remote_script' install '$remote_unit'; sudo -n bash '$remote_script' status"
+          echo "SECURE_MCP_BASTION_RECOVERY=PASS"
 
       - name: Probe OpenAI Platform tunnel settings through canonical backend browser
         if: github.event.issue.body == 'action=secure-mcp-platform-ui-probe'
