@@ -343,7 +343,10 @@ disable_shopee_logistics_watchdog() {
     fi
   fi
   if sudo systemctl cat "$service" >/dev/null 2>&1; then
-    sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+    if ! sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao parar watchdog de logistica Shopee no rollback"
+      return 1
+    fi
   fi
 }
 
@@ -378,7 +381,10 @@ disable_shopee_logistics_timer() {
     fi
   fi
   if sudo systemctl cat "$service" >/dev/null 2>&1; then
-    sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+    if ! sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao parar worker de logistica Shopee no rollback"
+      return 1
+    fi
   fi
 }
 
@@ -814,6 +820,15 @@ PY
 
 if ! git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   log FATAL "Clone Git nao existe ou e invalido: $REPO_DIR"
+  exit 1
+fi
+
+# Normalize the caller working directory before GNU find audits. Remote-control
+# invocations may start inside a root-only directory; when deploy runs as
+# ubuntu, find can traverse the target successfully but still exit non-zero
+# while restoring that inaccessible initial cwd.
+if ! cd -- "$REPO_DIR"; then
+  log FATAL "Nao foi possivel entrar no clone de deploy: $REPO_DIR"
   exit 1
 fi
 
