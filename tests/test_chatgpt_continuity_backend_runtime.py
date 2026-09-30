@@ -166,6 +166,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\n',
             )
             executable("sleep", "exit 0\n")
+            # Forward-compatible with the runtime-evaluate health probe: once
+            # the endpoint recovers, the browser target must also execute JS.
+            executable("node", "exit 0\n")
 
             env = os.environ.copy()
             env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
@@ -181,6 +184,59 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             calls = systemctl_log.read_text(encoding="utf-8")
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+
+    def test_chatgpt_browser_guardian_requires_runtime_evaluate_health(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        self.assertIn("Cdp.connectToChatgptTab", body)
+        self.assertIn("c.evaluate", body)
+
+    def test_chatgpt_browser_guardian_restarts_managed_browser_when_runtime_evaluate_fails(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            node_count = root / "node-count"
+            systemctl_log = root / "systemctl.log"
+
+            def executable(name: str, body: str) -> None:
+                path = fake_bin / name
+                path.write_text("#!/usr/bin/env bash\\nset -Eeuo pipefail\\n" + body, encoding="utf-8")
+                path.chmod(0o755)
+
+            executable("curl", "printf '{\\\"webSocketDebuggerUrl\\\":\\\"ws://127.0.0.1/test\\\"}'\\n")
+            executable(
+                "node",
+                'count=0; [[ -f "$GUARDIAN_NODE_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_NODE_COUNT_FILE")"; '
+                'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_NODE_COUNT_FILE"; '
+                'if [[ "$count" -ge 3 ]]; then exit 0; fi; exit 1\\n',
+            )
+            executable("pgrep", "exit 0\\n")
+            executable(
+                "systemctl",
+                'printf "%s\\\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
+                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\\n',
+            )
+            executable("sleep", "exit 0\\n")
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
+            env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            result = subprocess.run(
+                ["bash", str(guardian)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
