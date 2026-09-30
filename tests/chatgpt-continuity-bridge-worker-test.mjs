@@ -480,6 +480,50 @@ async function run() {
     );
     assert.ok(calls.length >= 2);
   }
+  {
+    let submitted = false;
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(expression);
+        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
+        if (expression.includes('b.click()')) return false;
+        if (expression.includes('continuation-keyboard-submit-check')) return submitted;
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(`CDP:${method}:${String(params.type || '')}:${String(params.key || '')}`);
+        if (method === 'Input.dispatchKeyEvent' && params.type === 'keyDown' && params.key === 'Enter') {
+          submitted = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp, 50, 1),
+      true,
+      'missing send control must fall back to Enter and confirm the composer was submitted',
+    );
+    assert.ok(calls.some(call => String(call).includes('CDP:Input.dispatchKeyEvent:keyDown:Enter')));
+  }
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
+        if (expression.includes('b.click()')) return false;
+        if (expression.includes('continuation-keyboard-submit-check')) return false;
+        return false;
+      },
+      async send() { return {}; },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp, 25, 1),
+      false,
+      'keyboard fallback must not report success without submission evidence',
+    );
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
