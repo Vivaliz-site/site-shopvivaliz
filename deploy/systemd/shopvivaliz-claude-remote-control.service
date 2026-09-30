@@ -1,0 +1,27 @@
+[Unit]
+Description=ShopVivaliz Claude Code Remote Control
+Documentation=https://code.claude.com/docs/en/remote-control
+After=network-online.target shopvivaliz-remote-control-mcp.service
+Wants=network-online.target
+Requires=shopvivaliz-remote-control-mcp.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+Environment=DISABLE_AUTOUPDATER=1
+UnsetEnvironment=ANTHROPIC_BASE_URL CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC DISABLE_GROWTHBOOK DISABLE_TELEMETRY DO_NOT_TRACK
+WorkingDirectory=/home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz
+ExecStart=/home/ubuntu/.local/bin/claude remote-control --name ShopVivaliz-Backend --spawn worktree --capacity 4 --no-create-session-in-dir --permission-mode default
+Restart=always
+RestartSec=10
+TimeoutStopSec=20
+KillSignal=SIGINT
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

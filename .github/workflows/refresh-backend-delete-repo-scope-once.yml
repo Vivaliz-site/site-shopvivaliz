@@ -1,0 +1,33 @@
+name: Refresh Backend Delete Repo Scope Once
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-backend-delete-repo-scope-once
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: >-
+      github.event.issue.number == 1586 &&
+      github.event.comment.user.login == 'fredmourao-ai' &&
+      github.event.comment.body == '/refresh-backend-delete-repo-scope-v1 CONFIRM'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Refresh scope through authenticated backend browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          node --check scripts/github-device-auth-delete-repo.mjs
+          node --check scripts/refresh-backend-delete-repo-scope.mjs
+          node scripts/refresh-backend-delete-repo-scope.mjs

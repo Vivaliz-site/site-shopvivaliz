@@ -26,6 +26,11 @@ assert 'SAFE_SYNC_RUN_ON_INSTALL="${SAFE_SYNC_RUN_ON_INSTALL:-true}"' in systemd
 assert 'if [[ "$SAFE_SYNC_RUN_ON_INSTALL" == \'true\' ]]' in systemd_installer
 assert "SAFE_SYNC_INITIAL_RUN=DEFERRED" in systemd_installer
 assert 'systemctl reset-failed "$SERVICE_NAME"' in systemd_installer
+assert 'safe_sync_repo_sha="$(git -C "$root/sync-repo" rev-parse HEAD' in workflow
+assert 'git -C "$root/sync-repo" merge-base --is-ancestor "$sha" "$safe_sync_repo_sha"' in workflow
+assert 'SAFE_SYNC_POSTDEPLOY=DEFERRED_NEWER_MAIN' in workflow
+assert 'SAFE_SYNC_POSTDEPLOY=RUN_MATCHING_SHA' in workflow
+assert 'SAFE_SYNC_POSTDEPLOY=UNEXPECTED_DIVERGENCE' in workflow
 assert 'sudo systemctl start shopvivaliz-sync-safe.service' in workflow
 assert 'systemctl show --property=Result --value shopvivaliz-sync-safe.service' in workflow
 assert 'sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer' in workflow

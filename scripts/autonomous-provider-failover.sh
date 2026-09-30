@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 PROMPT_FILE="${1:?prompt file required}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SHOPVIVALIZ_TASK_ID="${SHOPVIVALIZ_TASK_ID:-}"
 SHOPVIVALIZ_RESUME_STAGE="${SHOPVIVALIZ_RESUME_STAGE:-}"
 SHOPVIVALIZ_RESUME_RESULT_MODE="${SHOPVIVALIZ_RESUME_RESULT_MODE:-git_diff}"
@@ -10,7 +11,7 @@ LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
 CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6}}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-flash}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
 mkdir -p "$LOG_DIR"
@@ -121,7 +122,7 @@ for provider in "${ORDER[@]}"; do
     gemini)
       if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
         try_provider gemini \
-          python3 scripts/run_background_gemini.py \
+          python3 "$SCRIPT_DIR/run_background_gemini.py" \
             --model "$GEMINI_MODEL" \
             --prompt-file "$PROMPT_FILE" && exit 0
         continue

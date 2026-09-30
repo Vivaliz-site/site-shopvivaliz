@@ -1,0 +1,22 @@
+[Unit]
+Description=ShopVivaliz canonical authenticated ChatGPT browser
+After=network-online.target display-manager.service
+Wants=network-online.target display-manager.service
+
+[Service]
+Type=simple
+User=fredrdp
+Group=fredrdp
+Environment=HOME=/home/fredrdp
+Environment=DISPLAY=:0
+ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X0
+ExecStart=/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium --remote-debugging-address=127.0.0.1 --remote-debugging-port=9555 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu https://chatgpt.com/
+Restart=always
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

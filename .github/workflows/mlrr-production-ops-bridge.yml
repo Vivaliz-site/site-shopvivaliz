@@ -1,8 +1,7 @@
 name: MLRR Production Operations Bridge
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
   workflow_dispatch:
     inputs:
       operation:

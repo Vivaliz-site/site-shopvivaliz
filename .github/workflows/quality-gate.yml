@@ -12,6 +12,21 @@ on:
       - 'tests/google-indexing-canonical-regression-test.php'
       - 'tests/asset-source-dist-parity-test.php'
       - 'tests/claude-workflow-cost-guard-test.php'
+      - 'tests/desktop-commander-reauth-independent-transport-test.php'
+      - 'tests/desktop-commander-reauth-hosted-contract-test.php'
+      - 'tests/dc-backend-space-windows-diagnostic-test.php'
+      - 'tests/desktop-commander-three-host-auth-diagnostics-test.php'
+      - 'tests/desktop-commander-per-host-links-clean-test.php'
+      - 'tests/desktop-commander-reauth-windows-reverse-first-test.php'
+      - 'tests/dc-backend-auth-safe-diagnostic-test.php'
+      - 'tests/dc-backend-auth-stage-diagnostic-test.php'
+      - 'tests/dc-partial-links-primary-evidence-test.php'
+      - '.github/workflows/dc-four-host-login-once.yml'
+      - 'tests/dc-four-host-login-single-bastion-test.php'
+      - '.github/workflows/dc-four-host-login-once.yml'
+      - 'scripts/desktop-commander-reauth-linux-once.sh'
+      - 'scripts/desktop-commander-reauth-windows.ps1'
+      - '.github/workflows/desktop-commander-reauth-runner.yml'
       - 'tests/nondeploy-release-wait-cost-guard-test.php'
       - 'package.json'
       - 'package-lock.json'
@@ -21,9 +36,11 @@ on:
       - '.github/workflows/public-layout-audit.yml'
       - '.github/workflows/shopvivaliz-remote-access.yml'
       - 'scripts/public-layout-audit.mjs'
+      - 'scripts/chatgpt-account-diagnostic.mjs'
       - 'scripts/production-runtime-parity.mjs'
       - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
       - 'tests/public-layout-*.sh'
+      - 'tests/chatgpt-account-diagnostic-contract-test.sh'
   workflow_dispatch:
 
 permissions:
@@ -72,6 +89,16 @@ jobs:
           php tests/google-indexing-canonical-regression-test.php
           php tests/asset-source-dist-parity-test.php
           php tests/claude-workflow-cost-guard-test.php
+          php tests/desktop-commander-reauth-independent-transport-test.php
+          php tests/desktop-commander-reauth-hosted-contract-test.php
+          php tests/dc-backend-space-windows-diagnostic-test.php
+          php tests/desktop-commander-three-host-auth-diagnostics-test.php
+          php tests/desktop-commander-per-host-links-clean-test.php
+          php tests/desktop-commander-reauth-windows-reverse-first-test.php
+          php tests/dc-backend-auth-safe-diagnostic-test.php
+          php tests/dc-backend-auth-stage-diagnostic-test.php
+          php tests/dc-partial-links-primary-evidence-test.php
+          php tests/dc-four-host-login-single-bastion-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
           php tests/fredwin-runtime-audit-action-test.php
@@ -84,6 +111,7 @@ jobs:
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
           node --check scripts/public-layout-audit.mjs
+          node --check scripts/chatgpt-account-diagnostic.mjs
           node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js
@@ -109,7 +137,9 @@ jobs:
           bash tests/master-production-runtime-restart-regression.sh
           bash tests/catalog-single-mobile-nav-regression.sh
           bash tests/product-modal-image-regression.sh
+          bash tests/chatgpt-account-diagnostic-contract-test.sh
           bash -n scripts/deploy-production.sh
+          python3 tests/unit/test_runtime_deploy_reconciliation.py
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
           grep -q 'Release gate visual 2026-08-29' css/public-experience-v1.css

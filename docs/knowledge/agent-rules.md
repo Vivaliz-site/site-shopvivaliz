@@ -9,7 +9,7 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 
 - Antes de qualquer diagnóstico, alteração ou validação, ler `docs/knowledge/host-access.md`.
 - Identificar o host correto pelo papel atual; não assumir que IP/nome histórico ainda é produção.
-- Preferir SSH privado/Tailscale com usuario dedicado `shopvivaliz-agent` para operacao de agentes; usar RustDesk para tarefas graficas; Desktop Commander fica somente como fallback.
+- Usar **Remote Control MCP** como rota operacional primaria para host, servico, diagnostico, arquivos e tarefa duravel quando houver capacidade allowlisted. SSH privado/Tailscale com `shopvivaliz-agent` vem depois, apenas quando a operacao exigir shell direto ou o MCP estiver comprovadamente indisponivel; RustDesk permanece para GUI.
 - Confirmar acesso com evidência (`hostname`, `whoami`, diretório e estado Git quando aplicável).
 - Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
 
@@ -34,6 +34,8 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 ## Navegador e pesquisa técnica
 
 - Para tarefas ShopVivaliz, navegador de agente deve executar na VM de navegação. Não usar Opera Connector nem navegador dos hosts Windows como caminho operacional.
+- Para retomada de conversa ChatGPT interrompida, a rota canônica é `always-free-arm-1787907847-26` + `shopvivaliz-chatgpt-continuity.service` + CDP `127.0.0.1:9555`; o instalador Windows é legado/fallback, nunca o padrão operacional.
+- A retomada automática explicitamente autorizada pelo usuário deve permanecer habilitada. Investigação de suporte, por si só, não pode desativá-la. Probes sintéticos/repetitivos continuam separados e não devem ser usados como substituto da recuperação real.
 - Em programação, infraestrutura, APIs, bibliotecas, frameworks, cloud, segurança e integrações externas, consultar a web quando versão/comportamento atual puder alterar a solução.
 - Priorizar documentação oficial, especificações, release notes/changelogs e repositórios oficiais; complementar com issues/fóruns técnicos apenas quando necessário e deixando claro o nível de autoridade da fonte.
 - Não assumir flags CLI, endpoints, modelos, parâmetros, limites, deprecações ou comportamento de SDK/API sem verificar quando isso for material à implementação.
@@ -122,7 +124,7 @@ Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações 
 ## Codex como última opção de execução
 
 - Preservar cota do Codex para tarefas que realmente precisem dela. A ordem padrão de continuidade é: **rota determinística/controle remoto auditável → executor alternativo autenticado (Gemini/Claude conforme a tarefa) → Codex por último**.
-- Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
+- Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois usar SSH privado/Tailscale e, para bootstrap/recovery, GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Nenhuma dessas rotas deve consumir Codex por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
 - Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
@@ -145,3 +147,12 @@ Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
 Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 
+
+
+## GitHub issue comments: single dispatcher
+
+- Exactly one active workflow may subscribe directly to `issue_comment`: `.github/workflows/issue-comment-dispatcher.yml`.
+- Workflows that implement comment commands must expose `workflow_call` and be invoked only by the dispatcher. Do not add a second `on: issue_comment` listener.
+- The dispatcher must classify each authorized comment into at most one route. Explicit slash commands take precedence over generic mentions such as `@claude`.
+- Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
+- Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.

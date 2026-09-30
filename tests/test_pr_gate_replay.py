@@ -32,6 +32,7 @@ class PrGateReplayTest(unittest.TestCase):
                 "History Integrity",
                 "Ecommerce Excellence Audit",
                 "PR Policy Enforcement",
+                "Task Continuity Fast Gate",
             ],
         )
 
@@ -55,6 +56,10 @@ class PrGateReplayTest(unittest.TestCase):
             dict(governance.inputs),
             {"base_sha": "a" * 40, "head_sha": "b" * 40},
         )
+
+        continuity = build_dispatch_plan("Task Continuity Fast Gate", **self.common)
+        self.assertEqual(continuity.workflow, "task-continuity-fast-gate.yml")
+        self.assertEqual(dict(continuity.inputs), {})
 
         quality = build_command("Quality Gate", **self.common)
         self.assertEqual(
