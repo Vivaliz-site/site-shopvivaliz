@@ -14,6 +14,7 @@ import json
 import os
 import re
 import signal
+import socket
 import sqlite3
 import subprocess
 import threading
@@ -22,7 +23,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 VERSION = "1.0.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -69,6 +70,10 @@ SECRET_PATTERNS = (
 ACTIVE_PROCS: dict[str, subprocess.Popen[str]] = {}
 ACTIVE_LOCK = threading.Lock()
 STOP_EVENT = threading.Event()
+
+
+class ClientDisconnected(RuntimeError):
+    """Raised when an inline MCP caller disappears before its command finishes."""
 
 
 def now() -> str:
@@ -198,16 +203,87 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
-def run_host_command(host: str, command: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
+    """Terminate an inline command and every local descendant in its process group."""
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError:
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            return
+    try:
+        proc.wait(timeout=max(0.1, grace_seconds))
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    except OSError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            return
+    try:
+        proc.wait(timeout=max(0.1, grace_seconds))
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def run_host_command(
+    host: str,
+    command: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
     args = remote_invocation(host, command)
     started = time.monotonic()
-    cp = subprocess.run(args, capture_output=True, timeout=timeout)
+    deadline = started + timeout
+    proc = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    stdout = b""
+    stderr = b""
+    while True:
+        if cancel_check is not None and cancel_check():
+            terminate_process_group(proc)
+            try:
+                proc.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                terminate_process_group(proc, grace_seconds=0.2)
+            raise ClientDisconnected("client_disconnected")
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            terminate_process_group(proc)
+            try:
+                proc.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                terminate_process_group(proc, grace_seconds=0.2)
+            raise subprocess.TimeoutExpired(args, timeout)
+
+        try:
+            stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+            break
+        except subprocess.TimeoutExpired:
+            continue
+
     return {
         "host": host,
-        "exit_code": cp.returncode,
-        "stdout": redact_text(cp.stdout.decode("utf-8", errors="replace")),
-        "stderr": redact_text(cp.stderr.decode("utf-8", errors="replace")),
+        "exit_code": proc.returncode,
+        "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+        "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
 
@@ -272,7 +348,11 @@ def processes_command(platform: str) -> str:
     return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
 
 
-def execute_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+def execute_tool(
+    name: str,
+    args: dict[str, Any],
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
     host = args.get("host")
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
@@ -326,27 +406,27 @@ def execute_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     platform = str(cfg["platform"])
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
-        result = run_host_command(str(host), health_command(platform), timeout)
+        result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
     elif name == "processes_list":
-        result = run_host_command(str(host), processes_command(platform), timeout)
+        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
     elif name == "service_status":
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), "status"), timeout)
+        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), "status"), timeout, cancel_check)
     elif name == "service_action":
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
             raise ValueError("invalid_service_action")
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), action), timeout)
+        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), action), timeout, cancel_check)
     elif name == "file_read":
-        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout)
+        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
     elif name == "file_list":
-        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout)
+        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check)
     elif name == "logs_tail":
-        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout)
+        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check)
     elif name == "admin_command_run":
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
-        result = run_host_command(str(host), command, timeout)
+        result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
     result["ok"] = result["exit_code"] == 0
@@ -461,15 +541,29 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         return
 
-    def _json(self, status: int, payload: Any) -> None:
+    def _client_disconnected(self) -> bool:
+        try:
+            data = self.connection.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+            return data == b""
+        except BlockingIOError:
+            return False
+        except (ConnectionResetError, OSError):
+            return True
+
+    def _json(self, status: int, payload: Any) -> bool:
         raw = json.dumps(payload, ensure_ascii=False).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        self.wfile.write(raw)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(raw)
+            return True
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+            return False
 
     def do_GET(self) -> None:
         if self.path == "/health":
@@ -511,7 +605,7 @@ class Handler(BaseHTTPRequestHandler):
                 args = params.get("arguments") or {}
                 host = args.get("host")
                 try:
-                    output = execute_tool(name, args)
+                    output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     ok = not (isinstance(output, dict) and output.get("ok") is False)
                     aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
                     if isinstance(output, dict):
@@ -521,6 +615,9 @@ class Handler(BaseHTTPRequestHandler):
                         "structuredContent": output,
                         "isError": not ok,
                     }
+                except ClientDisconnected:
+                    audit(name, host, args, False, "client_disconnected_command_cancelled")
+                    raise
                 except Exception as exc:
                     aid = audit(name, host, args, False, str(exc))
                     output = {"error": str(exc), "audit_id": aid}
@@ -537,6 +634,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "Method not found"}})
                 return
             self._json(200, {"jsonrpc": "2.0", "id": rid, "result": result})
+        except ClientDisconnected:
+            self.close_connection = True
+            return
         except Exception as exc:
             self._json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": redact_text(str(exc))}})
 
