@@ -80,6 +80,10 @@ const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
 );
+const STREAM_STATUS_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.CHATGPT_CONTINUITY_STREAM_STATUS_TIMEOUT_MS || 5000),
+);
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -536,19 +540,46 @@ async function conversationIsGenerating(cdp) {
   return cdp.evaluate(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);
 }
 
-async function conversationStreamStatus(cdp) {
-  return cdp.evaluate(`(async()=>{
-    const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
-    if(!match) return {http_status:0,status:'NO_CONVERSATION'};
-    try{
-      const response=await fetch('/backend-api/conversation/'+encodeURIComponent(match[1])+'/stream_status',{credentials:'same-origin'});
-      let body=null;
-      try{body=await response.json();}catch{}
-      return {http_status:response.status,status:String(body?.status||'')};
-    }catch{
-      return {http_status:0,status:'FETCH_FAILED'};
-    }
-  })()`);
+async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
+  const requestedTimeout = Number(timeoutMs);
+  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
+    ? Math.max(10, requestedTimeout)
+    : STREAM_STATUS_TIMEOUT_MS;
+  let outerTimeoutHandle;
+  try {
+    return await Promise.race([
+      cdp.evaluate(`(async()=>{
+        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        if(!match) return {http_status:0,status:'NO_CONVERSATION'};
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        try{
+          const response=await fetch(
+            '/backend-api/conversation/'+encodeURIComponent(match[1])+'/stream_status',
+            {credentials:'same-origin',cache:'no-store',signal:controller.signal}
+          );
+          let body=null;
+          try{body=await response.json();}catch{}
+          return {http_status:response.status,status:String(body?.status||'')};
+        }catch(error){
+          return {
+            http_status:0,
+            status:String(error?.name||'')==='AbortError'?'FETCH_TIMEOUT':'FETCH_FAILED'
+          };
+        }finally{
+          clearTimeout(timer);
+        }
+      })()`),
+      new Promise(resolve => {
+        outerTimeoutHandle = setTimeout(
+          () => resolve({ http_status: 0, status: 'FETCH_TIMEOUT' }),
+          boundedTimeoutMs + 250,
+        );
+      }),
+    ]);
+  } finally {
+    if (outerTimeoutHandle) clearTimeout(outerTimeoutHandle);
+  }
 }
 
 async function clearStaleCompleteGeneration(cdp) {
@@ -1167,6 +1198,7 @@ export {
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
   conversationIsGenerating,
+  conversationStreamStatus,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
