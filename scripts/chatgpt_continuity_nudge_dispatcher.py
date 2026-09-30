@@ -315,18 +315,15 @@ def run_once(
             ):
                 previous_send_attempts = previous_attempts
 
-            if worker_status == "STALLED_NOT_CONFIRMED":
-                # This status proves no continuation message was injected.
-                # Keep the cooldown, but never spend the budget reserved for
-                # real Web turn submissions merely by observing a silent stall.
-                pass
-            elif worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+            if worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+                # The bounded Web budget is a send budget, not a generic
+                # transport/observation-attempt budget. Only statuses proving
+                # that a continuation message was actually submitted may
+                # exhaust it. ERROR, CONVERSATION_NOT_FOUND and
+                # STALLED_NOT_CONFIRMED remain retryable after the cooldown.
                 if previous_send_attempts >= max_web_attempts:
                     skipped_attempt_limit += 1
                     continue
-            elif previous_attempts >= max_web_attempts:
-                skipped_attempt_limit += 1
-                continue
             retry_attempted += 1
 
         eligible += 1
