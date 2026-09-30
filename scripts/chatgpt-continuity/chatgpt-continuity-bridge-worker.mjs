@@ -169,6 +169,7 @@ async function resolveAmbiguousConversationTabs(
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
   maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  navigateLatest = navigateNeutralTabToConversation,
 ) {
   const sourceTabs = Array.isArray(tabs) ? tabs : [];
   const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
@@ -190,8 +191,19 @@ async function resolveAmbiguousConversationTabs(
     }
 
     const latestTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
-    if (latestTabs.length === 0) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
-    return latestTabs;
+    if (latestTabs.length > 0) return latestTabs;
+
+    // Cross-device or another-client activity can make the server-confirmed
+    // latest conversation newer than every conversation currently open in
+    // this persistent Chromium. Never guess among those older conversation
+    // tabs. Reuse only a neutral ChatGPT home tab, navigate it to the
+    // server-confirmed recent conversation, and make that one target eligible.
+    const neutralHomeTab = sourceTabs.find(tab => chatgptTabRank(tab) === 1);
+    if (!neutralHomeTab) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const navigated = await navigateLatest(neutralHomeTab, latest.id, connector);
+    if (!navigated) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    return [neutralHomeTab];
   } catch (error) {
     if (text(error?.message) === AMBIGUOUS_CONVERSATION_ERROR) throw error;
     throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
@@ -259,6 +271,56 @@ class Cdp {
 
   close() {
     try { this.ws.close(); } catch {}
+  }
+}
+
+async function navigateNeutralTabToConversation(
+  tab,
+  conversationId,
+  connector = connectCdpTarget,
+  timeoutMs = 12000,
+  pollMs = 250,
+) {
+  if (chatgptTabRank(tab) !== 1) return false;
+  const id = text(conversationId);
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) return false;
+
+  let cdp;
+  try {
+    cdp = await connector(tab);
+    if (!cdp) return false;
+
+    const target = '/c/' + id;
+    const navigated = await cdp.evaluate(
+      `(()=>{location.assign(${JSON.stringify(target)});return true})()`,
+    );
+    if (!navigated) return false;
+
+    const requestedTimeout = Number(timeoutMs);
+    const requestedPoll = Number(pollMs);
+    const deadline = Date.now() + (Number.isFinite(requestedTimeout)
+      ? Math.max(500, requestedTimeout)
+      : 12000);
+    const intervalMs = Number.isFinite(requestedPoll)
+      ? Math.max(50, requestedPoll)
+      : 250;
+
+    while (Date.now() < deadline) {
+      await sleep(intervalMs);
+      try {
+        const pathname = await cdp.evaluate('location.pathname');
+        const currentId = String(pathname || '').match(/^\\/c\\/([^/?#]+)/)?.[1] || '';
+        if (currentId === id) return true;
+      } catch {
+        // Navigation can transiently detach the execution context. Keep the
+        // check bounded and fail closed if the target never becomes readable.
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  } finally {
+    try { cdp?.close(); } catch {}
   }
 }
 
