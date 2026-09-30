@@ -903,6 +903,28 @@ async function run() {
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
+  // When the account-scoped latest-conversation endpoint is rate-limited,
+  // the already-synchronized sidebar may safely identify the newest visible
+  // conversation without another backend-api request. The fallback is only
+  // valid from the single neutral home tab selected by the connector.
+  {
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      if (String(expression).includes('sidebar-latest-conversation')) return '/c/sidebar-latest';
+      if (String(expression).trim() === 'location.pathname') return '/';
+      if (String(expression).includes('location.assign')) return true;
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 429);
+    assert.equal(result.sidebar_fallback, true);
+  }
+
   // The default reinforcement discovery path must preserve a 429 status so
   // the scheduler can back off for minutes instead of self-amplifying.
   {
@@ -920,7 +942,7 @@ async function run() {
       cross_device_discovery: true,
     });
     const rateLimitedDelay = reinforcementDiscoveryDelayMs({
-      action: 'latest_unavailable',
+      action: 'navigated_sidebar_fallback',
       http_status: 429,
       cross_device_discovery: true,
     });
