@@ -928,6 +928,9 @@ async function run() {
       assert.ok(expression.includes('/backend-api/gizmos/'));
       assert.ok(expression.includes('g-p-'));
       assert.ok(expression.includes('/conversations'));
+      assert.ok(expression.includes('AbortSignal.timeout'), 'every discovery request must have a bounded timeout');
+      assert.ok(expression.includes('a[href*="g-p-"]'), 'Project ids must also be discovered from loaded sidebar links');
+      assert.ok(expression.includes('Promise.allSettled'), 'Project conversation requests must be bounded and batched instead of serial');
       return {
         http_status: 200,
         source: 'combined',
