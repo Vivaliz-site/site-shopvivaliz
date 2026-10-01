@@ -407,6 +407,9 @@ def update_heartbeat_and_progress(task_id: str, result_dir: Path) -> None:
 
 def run_task_entrypoint(task_id: str) -> int:
     row = load_task(task_id)
+    if row["state"] == "cancel_requested":
+        finalize_cancelled_without_result(task_id)
+        return 0
     if row["state"] not in ACTIVE_STATES:
         return 0
     if row["execution_unit"] and row["execution_unit"] != task_unit_name(task_id):
@@ -419,8 +422,24 @@ def run_task_entrypoint(task_id: str) -> int:
         os.chmod(stdout_path, 0o600)
         os.chmod(stderr_path, 0o600)
         with db_conn() as db:
-            db.execute("UPDATE tasks SET state=CASE WHEN state='starting' THEN 'running' ELSE state END,execution_started_at=COALESCE(execution_started_at,?),heartbeat_at=?,progress='executing' WHERE id=?", (now(), now(), task_id))
-        proc = subprocess.Popen(remote_invocation(str(row["host"]), str(row["command"])), stdout=out, stderr=err, start_new_session=True)
+            # Keep this claim and Popen in one SQLite write transaction.  A
+            # concurrent cancellation either wins before this point (and the
+            # conditional update changes no row), or waits until the process
+            # has physically started and can then terminate that process.
+            claimed = db.execute(
+                "UPDATE tasks SET state=CASE WHEN state='starting' THEN 'running' ELSE state END,"
+                "execution_started_at=COALESCE(execution_started_at,?),heartbeat_at=?,progress='executing' "
+                "WHERE id=? AND state IN ('starting','running')",
+                (now(), now(), task_id),
+            ).rowcount
+            if claimed:
+                proc = subprocess.Popen(
+                    remote_invocation(str(row["host"]), str(row["command"])),
+                    stdout=out, stderr=err, start_new_session=True,
+                )
+        if not claimed:
+            finalize_cancelled_without_result(task_id)
+            return 0
         deadline = time.monotonic() + int(row["timeout"])
         while proc.poll() is None:
             state = load_task(task_id)["state"]

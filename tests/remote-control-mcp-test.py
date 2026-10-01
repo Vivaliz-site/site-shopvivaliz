@@ -1774,6 +1774,19 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertIn("runner-output", status["stdout"])
         self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
 
+    def test_runner_cancel_requested_never_marks_execution_started_or_spawns(self):
+        task_id = self.submit(command="printf must-not-run") ["task_id"]
+        self.claim(task_id, state="cancel_requested")
+        completed_process = mock.Mock()
+        completed_process.poll.return_value = 0
+        completed_process.returncode = 0
+        with mock.patch.object(m.subprocess, "Popen", return_value=completed_process) as spawn:
+            self.assertEqual(m.run_task_entrypoint(task_id), 0)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "cancelled")
+        self.assertIsNone(status["execution_started_at"])
+        spawn.assert_not_called()
+
     def test_read_capped_text_seeks_and_reads_at_most_max_output(self):
         path = Path(self.tmp.name) / "large.log"
         payload = b"discard-" * (m.MAX_OUTPUT + 10) + b"TAIL-MARKER"
