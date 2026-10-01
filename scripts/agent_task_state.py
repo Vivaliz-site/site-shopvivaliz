@@ -10,10 +10,13 @@ All other states are non-terminal and must retain a concrete next action.
 from __future__ import annotations
 
 import argparse
+import fcntl
+import functools
 import json
 import os
 import re
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -44,6 +47,7 @@ DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
+STATE_LOCK_FILE = "_agent-task-state.lock"
 
 
 class TaskStateError(RuntimeError):
@@ -72,6 +76,45 @@ def _path(task_id: str) -> Path:
     return RUNTIME_DIR / f"{_safe_id(task_id, 'task_id')}.json"
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def _state_lock():
+    """Serialize all checkpoint transitions across interactive and detached writers."""
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNTIME_DIR / STATE_LOCK_FILE
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if os.geteuid() == 0:
+            parent = RUNTIME_DIR.stat()
+            os.chown(path, parent.st_uid, parent.st_gid)
+        os.fchmod(fd, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _serialized_transition(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        with _state_lock():
+            return func(*args, **kwargs)
+    return wrapped
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     runtime_owner: tuple[int, int] | None = None
@@ -91,6 +134,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
             os.chown(tmp, *runtime_owner)
         os.chmod(tmp, 0o600)
         os.replace(tmp, path)
+        _fsync_dir(path.parent)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -164,6 +208,7 @@ def _require_freeze_browser_progress(task_id: str) -> None:
         )
 
 
+@_serialized_transition
 def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
@@ -195,6 +240,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
     return payload
 
 
+@_serialized_transition
 def start_successor_task(
     task_id: str,
     *,
@@ -248,6 +294,7 @@ def start_successor_task(
     return payload
 
 
+@_serialized_transition
 def record_progress(task_id: str, *, next_action: str, evidence: str | None = None) -> dict[str, Any]:
     payload = _load(task_id)
     if is_terminal(payload):
@@ -264,6 +311,7 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     return payload
 
 
+@_serialized_transition
 def mark_ready(
     task_id: str,
     *,
@@ -289,6 +337,7 @@ def mark_ready(
     return payload
 
 
+@_serialized_transition
 def complete_task(task_id: str) -> dict[str, Any]:
     payload = _load(task_id)
     if payload.get("status") != "READY_TO_COMPLETE":
@@ -305,6 +354,7 @@ def complete_task(task_id: str) -> dict[str, Any]:
     return payload
 
 
+@_serialized_transition
 def block_task(
     task_id: str,
     *,
@@ -347,6 +397,7 @@ def block_task(
     return payload
 
 
+@_serialized_transition
 def resume_task(task_id: str, *, next_action: str) -> dict[str, Any]:
     payload = _load(task_id)
     if payload.get("status") != "BLOCKED_EXTERNAL":
