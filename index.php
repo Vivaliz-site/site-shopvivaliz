@@ -385,7 +385,7 @@ function sv_home_banners(): array
             'image' => '/public/assets/home-banners/banner-primeira-compra.webp',
             'tag' => 'DESCONTO AUTOMÁTICO',
             'title' => 'Leve mais e pague menos.',
-            'subtitle' => 'Compre 2 ou mais produtos diferentes e ganhe 3% OFF automático no carrinho.',
+            'subtitle' => 'Compre 2 ou mais produtos diferentes e ganhe 3% OFF automático no checkout.',
             'primary' => ['label' => 'Aproveitar 3% OFF', 'href' => '/catalogo'],
         ],
         [
