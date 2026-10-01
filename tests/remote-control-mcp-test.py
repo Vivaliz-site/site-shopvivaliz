@@ -465,6 +465,7 @@ class BootstrapContractTests(unittest.TestCase):
         for action in (
             "action=bootstrap-remote-control-mcp",
             "action=e2e-remote-control-mcp",
+            "action=durable-mcp-v2-production-e2e",
             "action=runtime-proof-submit",
             "action=runtime-proof-verify",
             "action=secure-mcp-tunnel-probe",
@@ -491,6 +492,18 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
         self.assertIn("DURABLE_AFTER_DISCONNECT=PASS", text)
         self.assertIn("RUNTIME_GITHUB_DEPENDENCY=false", text)
+
+    def test_oci_bastion_workflow_has_adversarial_durable_v2_production_e2e(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        for marker in (
+            "DURABLE_V2_SQLITE_BACKUP=PASS",
+            "DURABLE_V2_CONTROLLER_RESTART=PASS",
+            "DURABLE_V2_DEDUP=PASS",
+            "DURABLE_V2_TUNNEL_RESTART=PASS",
+            "DURABLE_V2_MARKERS=PASS",
+            "DURABLE_V2_FOUR_HOST_SMOKE=PASS",
+        ):
+            self.assertIn(marker, text)
 
     def test_oci_bastion_secure_tunnel_recovery_uses_canonical_runtime_script(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")

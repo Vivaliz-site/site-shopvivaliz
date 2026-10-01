@@ -22,6 +22,7 @@ jobs:
           github.event.issue.body == 'action=validate-rustdesk-via-fredwin' ||
           github.event.issue.body == 'action=bootstrap-remote-control-mcp' ||
           github.event.issue.body == 'action=e2e-remote-control-mcp' ||
+          github.event.issue.body == 'action=durable-mcp-v2-production-e2e' ||
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
@@ -512,6 +513,158 @@ jobs:
           if pending: raise RuntimeError('durable timeout '+','.join(sorted(pending)))
           print('REMOTE_CONTROL_FOUR_HOST_E2E=PASS')
           PY
+
+      - name: Durable MCP V2 backup, recovery, and adversarial restart E2E
+        if: github.event.issue.body == 'action=durable-mcp-v2-production-e2e'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          expected_server="$(sha256sum remote-control-mcp/server.py | awk '{print $1}')"
+          expected_unit="$(sha256sum deploy/systemd/shopvivaliz-remote-control-mcp.service | awk '{print $1}')"
+          "${BACKEND_SSH[@]}" "EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' sudo -n python3 -" <<'PY'
+          import json, os, sqlite3, subprocess, time, urllib.request, uuid
+          from pathlib import Path
+
+          state = Path('/var/lib/shopvivaliz-remote-control')
+          db_path = state / 'state.db'
+          backup_dir = state / 'backups'
+          backup_dir.mkdir(mode=0o700, exist_ok=True)
+          backup = backup_dir / ('state-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '.db')
+          source = sqlite3.connect(db_path)
+          destination = sqlite3.connect(backup)
+          try:
+              source.backup(destination)
+          finally:
+              destination.close(); source.close()
+          backup.chmod(0o600)
+          if backup.stat().st_size <= 0 or backup.stat().st_mode & 0o077:
+              raise RuntimeError('sqlite_backup_not_root_only')
+          print('DURABLE_V2_SQLITE_BACKUP=PASS')
+
+          with sqlite3.connect(db_path) as db:
+              states = dict(db.execute('SELECT state, COUNT(*) FROM tasks GROUP BY state').fetchall())
+          print('DURABLE_V2_TASK_INVENTORY=' + ','.join(f'{k}:{states[k]}' for k in sorted(states)))
+          legacy = subprocess.run(
+              ['systemctl', 'list-units', '--all', '--no-legend', 'shopvivaliz-remote-command-task-*.scope'],
+              check=True, text=True, capture_output=True,
+          ).stdout.strip()
+          if legacy:
+              raise RuntimeError('legacy_scope_present_before_recovery')
+          print('DURABLE_V2_LEGACY_SCOPES=0')
+
+          expected_server, expected_unit = os.environ['EXPECTED_SERVER'], os.environ['EXPECTED_UNIT']
+          installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+          installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              subprocess.run([
+                  'bash', '/tmp/setup-remote-control-access.sh', 'install-controller',
+                  '/tmp/server.py', '/tmp/shopvivaliz-remote-control-mcp.service',
+              ], check=True)
+              installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+              installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              raise RuntimeError('installed_artifact_parity_failed')
+          print('DURABLE_V2_PARITY=PASS')
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = (state / 'mcp-token').read_text(encoding='utf-8').strip()
+          def call(name, arguments):
+              body = json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':name,'arguments':arguments}}).encode()
+              request = urllib.request.Request(endpoint, data=body, headers={'Content-Type':'application/json','Authorization':'Bearer '+token}, method='POST')
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = json.load(response)
+              result = (payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('error'):
+                  raise RuntimeError(name + '_failed')
+              return result
+          def wait_health(url):
+              deadline = time.time() + 45
+              while time.time() < deadline:
+                  try:
+                      with urllib.request.urlopen(url, timeout=3) as response:
+                          if response.status == 200: return
+                  except OSError: pass
+                  time.sleep(1)
+              raise RuntimeError('health_timeout')
+
+          run = uuid.uuid4().hex
+          marker_dir = state / 'e2e' / run
+          request_id = 'durable-v2-' + run
+          command = "mkdir -p {d}; printf 'START\\n' >> {d}/count.log; printf 'TASK_START\\n'; sleep 35; printf 'DONE\\n' >> {d}/count.log; printf 'TASK_DONE\\n'".format(d=marker_dir)
+          submitted = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          task_id = submitted.get('task_id')
+          if not task_id: raise RuntimeError('missing_task_id')
+          deadline = time.time() + 35
+          status = {}
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'running' and status.get('execution_unit'):
+                  subprocess.run(['systemctl', 'is-active', '--quiet', status['execution_unit']], check=True)
+                  break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_not_running_before_restart')
+              time.sleep(1)
+          else: raise RuntimeError('task_start_timeout')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-remote-control-mcp.service'], check=True)
+          wait_health('http://127.0.0.1:5580/health')
+          after_controller = call('task_status', {'task_id':task_id})
+          if after_controller.get('task_id') != task_id or after_controller.get('state') not in {'running','starting'}:
+              raise RuntimeError('controller_restart_task_continuity_failed')
+          print('DURABLE_V2_CONTROLLER_RESTART=PASS')
+
+          duplicate = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          if duplicate.get('task_id') != task_id:
+              raise RuntimeError('request_id_dedup_failed')
+          print('DURABLE_V2_DEDUP=PASS')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-secure-mcp-tunnel.service'], check=True)
+          wait_health('http://127.0.0.1:8080/healthz'); wait_health('http://127.0.0.1:8080/readyz')
+          after_tunnel = call('task_status', {'task_id':task_id})
+          if after_tunnel.get('task_id') != task_id or after_tunnel.get('state') not in {'running','starting'}:
+              raise RuntimeError('tunnel_restart_task_continuity_failed')
+          print('DURABLE_V2_TUNNEL_RESTART=PASS')
+
+          deadline = time.time() + 100
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'succeeded': break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_terminal_failure')
+              time.sleep(1)
+          else: raise RuntimeError('task_completion_timeout')
+          if status.get('exit_code') != 0 or 'TASK_START' not in str(status.get('stdout')) or 'TASK_DONE' not in str(status.get('stdout')) or not isinstance(status.get('stderr'), str):
+              raise RuntimeError('persisted_result_fields_failed')
+          result_path = Path(status['result_dir']) / 'result.json'
+          result = json.loads(result_path.read_text(encoding='utf-8'))
+          if result.get('state') != 'succeeded' or result.get('exit_code') != 0:
+              raise RuntimeError('persisted_result_json_failed')
+          counts = (marker_dir / 'count.log').read_text(encoding='utf-8').splitlines()
+          if counts.count('START') != 1 or counts.count('DONE') != 1:
+              raise RuntimeError('physical_marker_count_failed')
+          print('DURABLE_V2_MARKERS=PASS')
+
+          for path in ('/health',): wait_health('http://127.0.0.1:5580' + path)
+          for path in ('/healthz','/readyz'): wait_health('http://127.0.0.1:8080' + path)
+          tunnel_pids = [p for p in subprocess.run(['pgrep','-u','ubuntu','-x','tunnel-client'], text=True, capture_output=True).stdout.splitlines() if p]
+          if len(tunnel_pids) != 1: raise RuntimeError('tunnel_client_count_failed')
+          remaining_legacy = subprocess.run(['systemctl','list-units','--all','--no-legend','shopvivaliz-remote-command-task-*.scope'], text=True, capture_output=True, check=True).stdout.strip()
+          if remaining_legacy: raise RuntimeError('legacy_scope_remained')
+          with sqlite3.connect(db_path) as db:
+              request_count = db.execute('SELECT COUNT(*) FROM tasks WHERE request_id=?', (request_id,)).fetchone()[0]
+              active = db.execute("SELECT COUNT(*) FROM tasks WHERE id=? AND state IN ('queued','starting','running','cancel_requested')", (task_id,)).fetchone()[0]
+          if request_count != 1 or active != 0: raise RuntimeError('lost_or_duplicate_task_detected')
+          for host in ['always-free-arm-1787907847-26','shopvivaliz-free-a1','Fred-Win','KOCEPSV']:
+              health = call('host_health', {'host':host,'timeout':45})
+              if health.get('ok') is False: raise RuntimeError('four_host_smoke_failed')
+          print('DURABLE_V2_FOUR_HOST_SMOKE=PASS')
+          print('DURABLE_V2_PRODUCTION_E2E=PASS')
+          PY
+          "${BACKEND_SSH[@]}" 'rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
 
       - name: Submit disconnected runtime proof
         if: github.event.issue.body == 'action=runtime-proof-submit'
