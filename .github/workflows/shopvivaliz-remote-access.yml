@@ -602,7 +602,10 @@ jobs:
               "${SSH[@]}" "dd of='$remote_dir/AGENTS.md' status=none" < AGENTS.md
               "${SSH[@]}" "dd of='$remote_dir/docs/knowledge/task-continuity.md' status=none" < docs/knowledge/task-continuity.md
               "${SSH[@]}" "dd of='$remote_dir/deploy/systemd/shopvivaliz-gemini-24x7-controller.service' status=none" < deploy/systemd/shopvivaliz-gemini-24x7-controller.service
-              "${SSH[@]}" "bash '$remote_dir/scripts/install-gemini-24x7-controller.sh' '$remote_dir' '$GITHUB_SHA'"
+              if ! "${SSH[@]}" "bash '$remote_dir/scripts/install-gemini-24x7-controller.sh' '$remote_dir' '$GITHUB_SHA'"; then
+                "${SSH[@]}" "sudo -n journalctl -u shopvivaliz-gemini-24x7-controller.service -n 40 --no-pager | sed -E 's/(GEMINI_API_KEY|GOOGLE_API_KEY|GOOGLE_GEMINI_API_KEY)=([^[:space:]]+)/\\1=***/g'"
+                exit 1
+              fi
               "${SSH[@]}" 'systemctl is-enabled --quiet shopvivaliz-gemini-24x7-controller.service && systemctl is-active --quiet shopvivaliz-gemini-24x7-controller.service'
               echo GEMINI_24X7_CONTROLLER_INSTALL=PASS
               ;;
