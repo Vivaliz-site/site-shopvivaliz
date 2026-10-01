@@ -91,7 +91,7 @@ function sv_emit_prepaint_page_state(string $pageName): void
     echo "      root.className+=(root.className?' ':'')+" . json_encode($pageClass) . ";\n";
     if ($emptyClass !== '') {
         echo "      var empty=false;var cartCount=0;\n";
-        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');cartCount=Array.isArray(cart)?cart.length:0;empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;cartCount=0;}\n";
+        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');cartCount=Array.isArray(cart)?cart.length:0;empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;}\n";
         echo "      root.classList.toggle(" . json_encode($emptyClass) . ",empty);\n";
         if ($pageName === 'carrinho') {
             echo "      var reservedHeight=cartCount===0?210:(Math.min(Math.max(cartCount,1),8)*130);\n";
