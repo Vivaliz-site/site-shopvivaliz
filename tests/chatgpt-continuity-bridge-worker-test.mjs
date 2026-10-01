@@ -1469,7 +1469,7 @@ async function run() {
           { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
           { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
         ],
-        connector: async () => fakeCdp({ pageText: 'normal reply' }),
+        connector: async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
         probeBanner: async () => true,
         allowCrossDeviceDiscovery: true,
       }),
@@ -1478,7 +1478,8 @@ async function run() {
       async () => ({ action: 'navigated', http_status: 200 }),
       { allowCrossDeviceDiscovery: true },
     );
-    assert.equal(result.action, 'self_resolved');
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.progress_confirmed, true);
   }
 
   console.log('reinforcementCheckOnce branches: PASS');
