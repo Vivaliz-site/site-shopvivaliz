@@ -33,6 +33,7 @@ import {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -230,6 +231,60 @@ async function run() {
     assert.ok(
       candidates.every(tab => tab.url.includes('/c/latest-thread')),
       'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const checkpointAt = Date.now() - 8 * 60 * 1000;
+    const selected = selectCheckpointConversationCandidate(
+      [
+        { id: 'task-target', update_time: (checkpointAt + 15_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        { id: 'other-recent', update_time: (checkpointAt + 4 * 60_000) / 1000, source: 'global' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(selected?.id, 'task-target', 'checkpoint timestamp must bind a task to its own closest conversation');
+
+    const ambiguous = selectCheckpointConversationCandidate(
+      [
+        { id: 'near-a', update_time: (checkpointAt + 20_000) / 1000, source: 'global' },
+        { id: 'near-b', update_time: (checkpointAt + 40_000) / 1000, source: 'project', project_id: 'g-p-two' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(ambiguous, null, 'near-tied conversations must fail closed instead of guessing');
+  }
+
+  {
+    const now = Date.now();
+    const checkpointAt = now - 20 * 60 * 1000;
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/task-target', webSocketDebuggerUrl: 'ws://target' },
+      { type: 'page', url: 'https://chatgpt.com/c/newer-unrelated', webSocketDebuggerUrl: 'ws://newer' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        id: 'newer-unrelated',
+        update_time: now / 1000,
+        candidates: [
+          { id: 'newer-unrelated', update_time: now / 1000, source: 'global' },
+          { id: 'task-target', update_time: (checkpointAt + 10_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        ],
+      }),
+      now,
+      undefined,
+      undefined,
+      checkpointAt,
+    );
+    assert.deepEqual(
+      candidates.map(tab => tab.webSocketDebuggerUrl),
+      ['ws://target'],
+      'task-specific checkpoint time must override an unrelated globally latest conversation',
     );
   }
 
