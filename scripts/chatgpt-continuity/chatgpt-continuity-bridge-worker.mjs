@@ -789,12 +789,22 @@ async function localIncompleteTurnPresent(cdp) {
 
 async function silentStallPresent(cdp) {
   const stream = await conversationStreamStatus(cdp);
-  if (
-    Number(stream?.http_status || 0) !== 200
-    || String(stream?.status || '').toUpperCase() !== 'COMPLETE'
-  ) {
-    return false;
+  if (Number(stream?.http_status || 0) !== 200) return false;
+
+  const streamStatus = String(stream?.status || '').toUpperCase();
+
+  // Live reproduction 2026-09-30 23:22 BRT:
+  // backend stream_status=IS_STREAMING while the canonical web client shows
+  // neither a Stop/generating signal nor an enabled composer. Treat this as a
+  // candidate orphaned stream. reinforcementCheckOnce requires the same state
+  // to persist across its confirmation window before recovery proceeds.
+  if (['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus)) {
+    const generating = await conversationIsGenerating(cdp);
+    if (generating) return false;
+    return !(await composerIsUsable(cdp));
   }
+
+  if (streamStatus !== 'COMPLETE') return false;
 
   const turn = await conversationTurnState(cdp);
   if (Number(turn?.http_status || 0) === 200) {
@@ -1089,6 +1099,22 @@ async function alignToLatestConversation(
   if (!navigated) return { action: 'navigation_failed', restore_path: '' };
   await sleep(1500);
   return { action: 'navigated', restore_path: currentPath };
+}
+
+async function alignLocalSidebarForReinforcement(cdp) {
+  const sidebar = await alignToSidebarLatestConversation(cdp);
+  if (sidebar.action === 'sidebar_unavailable') {
+    return {
+      action: 'latest_unavailable',
+      http_status: 0,
+      local_sidebar_only: true,
+    };
+  }
+  return {
+    ...sidebar,
+    http_status: 0,
+    local_sidebar_only: true,
+  };
 }
 
 async function alignLatestForReinforcement(
@@ -1875,35 +1901,42 @@ async function reinforcementLoop(
   now = () => Date.now(),
   wait = sleep,
 ) {
-  let nextCrossDeviceDiscoveryAt = 0;
+  let nextAccountDiscoveryAt = 0;
   for (;;) {
-    const allowCrossDeviceDiscovery = now() >= nextCrossDeviceDiscoveryAt;
+    const allowAccountDiscovery = now() >= nextAccountDiscoveryAt;
+    const alignLatest = allowAccountDiscovery
+      ? alignLatestForReinforcement
+      : alignLocalSidebarForReinforcement;
+
     let outcome;
     try {
       outcome = await check(
-        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery }),
+        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
-        alignLatestForReinforcement,
-        { allowCrossDeviceDiscovery },
+        alignLatest,
+        { allowCrossDeviceDiscovery: true },
       );
     } catch (error) {
       console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
       outcome = {
         action: 'error',
-        cross_device_discovery: allowCrossDeviceDiscovery,
+        cross_device_discovery: true,
       };
     }
 
-    const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
-    if (discoveryDelayMs > 0) {
-      nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
-      if (Number(outcome?.http_status) === 429) {
-        console.log(
-          `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)}`,
-        );
+    if (allowAccountDiscovery) {
+      const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
+      if (discoveryDelayMs > 0) {
+        nextAccountDiscoveryAt = now() + discoveryDelayMs;
+        if (Number(outcome?.http_status) === 429) {
+          console.log(
+            `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)} local_sidebar_continues=true`,
+          );
+        }
       }
     }
+
     await wait(REINFORCEMENT_POLL_MS);
   }
 }
@@ -1941,6 +1974,7 @@ export {
   latestConversationMeta,
   alignToLatestConversation,
   alignLatestForReinforcement,
+  alignLocalSidebarForReinforcement,
   assistantSnapshot,
   assistantProgressed,
   confirmAssistantProgress,
