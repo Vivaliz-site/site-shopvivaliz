@@ -131,6 +131,7 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('transmission error persisted and composer was unavailable after reattach')) return 'TRANSMISSION_COMPOSER_UNAVAILABLE';
   if (normalized.includes('transmission error persisted and retry send failed')) return 'TRANSMISSION_RETRY_SEND_FAILED';
   if (normalized.includes('transmission error persisted after bounded recovery retry')) return 'TRANSMISSION_PERSISTED_AFTER_RETRY';
+  if (normalized.includes('conversation changed during recovery')) return 'CONVERSATION_CHANGED_DURING_RECOVERY';
   if (normalized.includes('multiple open chatgpt conversation tabs found')) return 'AMBIGUOUS_CONVERSATION_TARGET';
   if (normalized.includes('cdp endpoint unreachable')) return 'CDP_ENDPOINT_UNREACHABLE';
   if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
@@ -1099,7 +1100,7 @@ async function waitForComposerUsable(
 }
 
 async function assistantSnapshot(cdp) {
-  return cdp.evaluate(`(()=>{
+  const snapshot = await cdp.evaluate(`(()=>{
     const candidates=[
       ...document.querySelectorAll('[data-message-author-role="assistant"]'),
       ...document.querySelectorAll('[data-conversation-role="assistant"]')
@@ -1154,12 +1155,31 @@ async function assistantSnapshot(cdp) {
       lastKey,
       surfaceText,
       surfaceLength:surfaceText.length,
+      conversationPath:String(globalThis.location?.pathname||''),
       snapshotSource:legacyNodes.length?'legacy':(actionNodes.length?'action-controls':'main')
     };
   })()`);
+  if (snapshot && Object.hasOwn(snapshot, 'conversationPath')) {
+    const { conversationPath, ...content } = snapshot;
+    const path = String(conversationPath || '').match(/^\/c\/[^/]+/)?.[0] || '';
+    return { ...content, conversationFingerprint: path ? sha(path) : '' };
+  }
+  // Older injected adapters may lack route metadata; live snapshots always
+  // include it, and an empty route cannot certify conversation progress.
+  return snapshot;
+}
+
+function sameConversationSnapshot(before, after) {
+  const priorBound = Boolean(before && Object.hasOwn(before, 'conversationFingerprint'));
+  const currentBound = Boolean(after && Object.hasOwn(after, 'conversationFingerprint'));
+  if (!priorBound && !currentBound) return true;
+  return priorBound && currentBound
+    && Boolean(before.conversationFingerprint)
+    && before.conversationFingerprint === after.conversationFingerprint;
 }
 
 function assistantProgressed(before, after) {
+  if (!sameConversationSnapshot(before, after)) return false;
   const prior = before || { count: 0, lastText: '', lastLength: 0, lastKey: '' };
   const current = after || { count: 0, lastText: '', lastLength: 0, lastKey: '' };
   if (Number(current.count || 0) > Number(prior.count || 0)) return true;
@@ -1172,6 +1192,7 @@ function assistantProgressed(before, after) {
 }
 
 function assistantSurfaceProgressed(before, after) {
+  if (!sameConversationSnapshot(before, after)) return false;
   const priorText=String(before?.surfaceText||'');
   const currentText=String(after?.surfaceText||'');
   if(!priorText || !currentText) return false;
@@ -1193,6 +1214,7 @@ async function confirmAfterSend(
   confirmProgress = confirmAssistantProgress,
 ) {
   const settled = await postSendConfirmationBaseline(cdp, beforeSend);
+  if (!sameConversationSnapshot(beforeSend, settled.baseline)) return false;
   if (settled.progressed) return true;
   return confirmProgress(cdp, settled.baseline);
 }
@@ -1207,6 +1229,7 @@ async function confirmAssistantProgress(
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
+    if (!sameConversationSnapshot(baseline, current)) return false;
     if (assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current)) return true;
 
     // An explicit transmission failure is terminal for this send attempt;
@@ -1708,7 +1731,16 @@ async function recoverableFailureReason(cdp) {
   return 'generation_error';
 }
 
-async function clickTrustedSendButton(cdp) {
+async function conversationMatchesFingerprint(cdp, expectedFingerprint) {
+  if (!expectedFingerprint) return true;
+  const path = await cdp.evaluate(`(()=>{
+    /* continuity-conversation-identity-probe */
+    return String(location.pathname||'').match(/^\\/c\\/[^/]+/)?.[0]||'';
+  })()`);
+  return Boolean(path) && sha(path) === expectedFingerprint;
+}
+
+async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
   for (let attempt=0; attempt<8; attempt += 1) {
     const submitTarget = await cdp.evaluate(`(()=>{
       /* continuity-send-button-target */
@@ -1745,6 +1777,7 @@ async function clickTrustedSendButton(cdp) {
     })()`);
 
     if (submitTarget?.state === 'ready') {
+      if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
       try {
         const x=Number(submitTarget.x);
         const y=Number(submitTarget.y);
@@ -1772,7 +1805,8 @@ async function clickTrustedSendButton(cdp) {
   return false;
 }
 
-async function sendContinueMessage(cdp) {
+async function sendContinueMessage(cdp, expectedFingerprint = '') {
+  if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
         /* continuity-composer-draft-probe */
@@ -1846,7 +1880,7 @@ async function sendContinueMessage(cdp) {
       // document.activeElement on BODY. If the only draft present is exactly
       // our own bounded continuation and Send is already enabled, submitting
       // that safe draft is preferable to treating the editor as unusable.
-      if (existing === expected && await clickTrustedSendButton(cdp)) return true;
+      if (existing === expected && await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
       return false;
     }
 
@@ -1924,8 +1958,9 @@ async function sendContinueMessage(cdp) {
     // ChatGPT's internal editor state. Submit it with a trusted CDP pointer
     // click; a synthetic HTMLElement.click() did not reproduce the successful
     // live interaction on the current editor.
-    if (await clickTrustedSendButton(cdp)) return true;
+    if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
 
+    if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
     try {
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2104,7 +2139,8 @@ async function attemptNudge(
       };
     }
     let baseline = await assistantSnapshot(cdp);
-    let sent = await sendContinueMessage(cdp);
+    if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
+    let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
     continuationSent = Boolean(sent);
     if (!sent) {
       // Live production evidence 2026-10-01: the error banner can be visible
@@ -2121,7 +2157,8 @@ async function attemptNudge(
         };
       }
       baseline = await assistantSnapshot(cdp);
-      sent = await sendContinueMessage(cdp);
+      if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
+      sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
         return {
@@ -2155,7 +2192,8 @@ async function attemptNudge(
         };
       }
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
-      const retrySent = await sendContinueMessage(cdp);
+      if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
+      const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       if (!retrySent) {
         return {
           result_status: 'ERROR',
@@ -2384,7 +2422,7 @@ async function reinforcementCheckOnce(
       }
 
       const baseline = await assistantSnapshot(cdp);
-      const sent = await sendContinueMessage(cdp);
+      const sent = await sendContinueMessage(cdp, baseline?.conversationFingerprint);
       if (!sent) {
         console.log('chatgpt_continuity_reinforcement silent_stall_confirmed sent=false');
         return {
@@ -2615,6 +2653,7 @@ export {
   alignLocalSidebarForReinforcement,
   assistantSnapshot,
   assistantProgressed,
+  sameConversationSnapshot,
   confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
