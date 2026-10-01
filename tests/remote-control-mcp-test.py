@@ -40,7 +40,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         for required in {
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
-            "admin_command_run", "task_submit", "task_status", "task_cancel", "audit_recent",
+            "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
         }:
             self.assertIn(required, names)
 
@@ -209,6 +209,21 @@ class RemoteControlMcpTests(unittest.TestCase):
             row = db.execute("SELECT state,command_sha256 FROM tasks WHERE id=?", (result["task_id"],)).fetchone()
         self.assertEqual(row["state"], "queued")
         self.assertTrue(row["command_sha256"])
+
+    def test_task_submit_deduplicates_active_identical_work(self):
+        first = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"sleep 1","timeout":30})
+        second = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"sleep 1","timeout":30})
+        self.assertEqual(first["task_id"], second["task_id"])
+        self.assertTrue(second["deduplicated"])
+
+    def test_task_wait_is_bounded_and_returns_terminal_task(self):
+        submitted = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"printf waited","timeout":30})
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True); worker.start()
+        result = m.execute_tool("task_wait", {"task_id":submitted["task_id"],"wait_seconds":5})
+        m.STOP_EVENT.set(); worker.join(timeout=5)
+        self.assertEqual(result["state"], "succeeded")
+        self.assertIn("waited", result["stdout"])
 
     def test_invalid_host_is_rejected(self):
         with self.assertRaises(ValueError):

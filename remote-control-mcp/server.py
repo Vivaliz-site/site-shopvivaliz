@@ -37,6 +37,7 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
+TASK_WAIT_MAX_SECONDS = 25
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
 SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
@@ -398,6 +399,22 @@ def execute_tool(
         if not row:
             raise ValueError("task_not_found")
         return dict(row)
+    if name == "task_wait":
+        tid = str(args.get("task_id") or "")
+        wait_seconds = max(0, min(int(args.get("wait_seconds", 20)), TASK_WAIT_MAX_SECONDS))
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with db_conn() as db:
+                row = db.execute(
+                    "SELECT id,host,state,created_at,started_at,finished_at,heartbeat_at,timeout,exit_code,stdout,stderr,command_sha256 FROM tasks WHERE id=?",
+                    (tid,),
+                ).fetchone()
+            if not row:
+                raise ValueError("task_not_found")
+            result = dict(row)
+            if result["state"] in {"succeeded", "failed", "cancelled", "expired"} or time.monotonic() >= deadline:
+                return result
+            time.sleep(0.25)
     if name == "task_cancel":
         tid = str(args.get("task_id") or "")
         with db_conn() as db:
@@ -418,13 +435,20 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         timeout = validate_timeout(args.get("timeout", 300))
-        tid = str(uuid.uuid4())
+        digest = hashlib.sha256(command.encode()).hexdigest()
         with db_conn() as db:
+            existing = db.execute(
+                "SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1",
+                (host, digest, timeout),
+            ).fetchone()
+            if existing:
+                return {"task_id": existing["id"], "host": host, "state": existing["state"], "platform": cfg["platform"], "deduplicated": True}
+            tid = str(uuid.uuid4())
             db.execute(
                 "INSERT INTO tasks(id,host,command,command_sha256,state,created_at,timeout) VALUES(?,?,?,?,?,?,?)",
-                (tid, host, command, hashlib.sha256(command.encode()).hexdigest(), "queued", now(), timeout),
+                (tid, host, command, digest, "queued", now(), timeout),
             )
-        return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"]}
+        return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"], "deduplicated": False}
 
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
@@ -469,6 +493,7 @@ TOOLS = [
     ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Fully audited.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
     ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
+    ("task_wait", "Wait briefly for a durable task without coupling its lifetime to the MCP connection.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
 ]
@@ -482,7 +507,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "wait_seconds"}],
                 "additionalProperties": False,
             },
             "annotations": {
