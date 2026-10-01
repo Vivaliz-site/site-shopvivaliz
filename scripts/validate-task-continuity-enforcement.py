@@ -122,6 +122,10 @@ else:
         "_state_lock",
         "fcntl.LOCK_EX",
         "_fsync_dir(path.parent)",
+        "_require_current_resume",
+        "SHOPVIVALIZ_RESUME_FINGERPRINT",
+        "completion_checks_receipt",
+        "shell=False",
     ):
         if token not in state_text:
             errors.append(f"scripts/agent_task_state.py: missing {token}")
@@ -182,6 +186,7 @@ else:
         "ALLOWED_REPOSITORIES",
         "\"repo\"",
         "\"clone\"",
+        "SHOPVIVALIZ_RESUME_FINGERPRINT",
     ):
         if token not in dispatcher_text:
             errors.append(f"scripts/task_resume_dispatcher.py: missing {token}")
