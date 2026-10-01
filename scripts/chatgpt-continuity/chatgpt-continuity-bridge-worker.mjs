@@ -1155,9 +1155,22 @@ async function attemptNudge(
         detail: 'composer/send-button selector not found after bounded post-reattach wait (possible UI drift)',
       };
     }
-    const baseline = await assistantSnapshot(cdp);
-    const sent = await sendContinueMessage(cdp);
-    if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed' };
+    let baseline = await assistantSnapshot(cdp);
+    let sent = await sendContinueMessage(cdp);
+    if (!sent) {
+      // Live production evidence 2026-10-01: the error banner can be visible
+      // while the composer remains temporarily disabled. Reattach once before
+      // declaring send failure; otherwise the watchdog loses the conversation
+      // exactly when "Parou de pensar" is displayed.
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+      if (!(await waitComposer(cdp))) {
+        return { result_status: 'ERROR', detail: 'composer/send-button remained unavailable after bounded reattach' };
+      }
+      baseline = await assistantSnapshot(cdp);
+      sent = await sendContinueMessage(cdp);
+      if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed after bounded reattach' };
+    }
 
     let progressed = await confirmProgress(cdp, baseline);
     if (!progressed && await transmissionErrorPresent(cdp)) {
