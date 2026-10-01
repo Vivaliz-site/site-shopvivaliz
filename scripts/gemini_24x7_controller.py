@@ -58,6 +58,57 @@ def _parse_utc(value: object) -> datetime | None:
         return None
 
 
+def _boot_id() -> str:
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _process_start_ticks(pid: int) -> str:
+    try:
+        fields = Path(f"/proc/{int(pid)}/stat").read_text(encoding="utf-8").split()
+    except (OSError, ValueError):
+        return ""
+    return fields[21] if len(fields) > 21 else ""
+
+
+def _current_process_identity() -> dict[str, Any]:
+    pid = os.getpid()
+    return {
+        "pid": pid,
+        "pid_start_ticks": _process_start_ticks(pid),
+        "boot_id": _boot_id(),
+    }
+
+
+def _lease_owner_alive(payload: dict[str, Any]) -> bool | None:
+    """Return True/False when a Linux owner identity can be verified.
+
+    Legacy leases without process identity remain TTL-governed (None) rather
+    than being guessed dead.
+    """
+    try:
+        pid = int(payload.get("pid"))
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+
+    expected_boot = str(payload.get("boot_id", "")).strip()
+    current_boot = _boot_id()
+    if expected_boot and current_boot and expected_boot != current_boot:
+        return False
+
+    actual_start = _process_start_ticks(pid)
+    if not actual_start:
+        return False
+    expected_start = str(payload.get("pid_start_ticks", "")).strip()
+    if expected_start and expected_start != actual_start:
+        return False
+    return True
+
+
 def _fsync_dir(path: Path) -> None:
     try:
         fd = os.open(path, os.O_RDONLY)
@@ -98,11 +149,14 @@ def _append_event(root: Path, event: str, **fields: Any) -> None:
     row = {"at": utc_now(), "event": event}
     row.update({key: value for key, value in fields.items() if value not in (None, "", {}, [])})
     path = root / EVENTS_FILE
+    created = not path.exists()
     with path.open("a", encoding="utf-8") as handle:
         os.chmod(path, 0o600)
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+    if created:
+        _fsync_dir(root)
 
 
 @dataclass(frozen=True)
@@ -128,18 +182,32 @@ def acquire_lease(runtime_dir: Path, *, owner_id: str, ttl_seconds: int = DEFAUL
         existing = _read_json(root / LEASE_FILE)
         expires = _parse_utc(existing.get("expires_at"))
         now = datetime.now(timezone.utc)
-        if expires is not None and expires > now and existing.get("owner_id") != owner_id:
+        owner_changed = bool(existing) and existing.get("owner_id") != owner_id
+        owner_alive = _lease_owner_alive(existing) if owner_changed else None
+        if (
+            expires is not None
+            and expires > now
+            and owner_changed
+            and owner_alive is not False
+        ):
             return LeaseResult(False, reason="lease_held")
-        recovered = bool(existing) and existing.get("owner_id") != owner_id
+        recovered = owner_changed
+        recovery_reason = "owner_dead" if recovered and owner_alive is False else "lease_expired"
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "owner_id": owner_id,
+            **_current_process_identity(),
             "acquired_at": utc_now(),
             "expires_at": (now + timedelta(seconds=max(1, int(ttl_seconds)))).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
         _atomic_json(root / LEASE_FILE, payload)
         if recovered:
-            _append_event(root, "lease_recovered", previous_owner_id=str(existing.get("owner_id", "")))
+            _append_event(
+                root,
+                "lease_recovered",
+                previous_owner_id=str(existing.get("owner_id", "")),
+                reason=recovery_reason,
+            )
         return LeaseResult(True, recovered=recovered)
 
 
@@ -152,6 +220,7 @@ def release_lease(runtime_dir: Path, *, owner_id: str) -> None:
         existing = _read_json(lease_path)
         if existing.get("owner_id") == owner_id:
             lease_path.unlink(missing_ok=True)
+            _fsync_dir(root)
 
 
 @contextmanager
