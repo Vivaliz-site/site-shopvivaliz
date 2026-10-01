@@ -1222,7 +1222,7 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       const discovered=[];
       const statuses=[];
       const addItems=(items,source,projectId='')=>{
-        for(const item of (Array.isArray(items)?items:[]).slice(0,12)){
+        for(const item of (Array.isArray(items)?items:[]).slice(0,24)){
           const id=String(item?.id||item?.conversation_id||'').trim();
           const update_time=item?.update_time??item?.updateTime??item?.updated_at??item?.updatedAt??null;
           if(!id) continue;
@@ -1268,7 +1268,7 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       const seenProjects=new Set();
       const addProjectId=raw=>{
         const match=String(raw||'').match(/(g-p-[A-Za-z0-9_-]{8,160})/);
-        if(!match||seenProjects.has(match[1])||projectIds.length>=8) return;
+        if(!match||seenProjects.has(match[1])||projectIds.length>=16) return;
         seenProjects.add(match[1]);
         projectIds.push(match[1]);
       };
