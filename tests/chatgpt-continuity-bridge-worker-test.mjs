@@ -5,6 +5,7 @@ import {
   conversationStreamStatus,
   conversationTurnState,
   silentStallPresent,
+  orphanedStreamPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
@@ -1771,6 +1772,62 @@ async function run() {
     assert.equal(localFallbackCalled, false, 'canonical 200 result must suppress the local heuristic');
   }
 
+  // Live reproduction 2026-10-01 from the canonical VM:
+  // stream_status=IS_STREAMING while the DOM has no active generation and no
+  // usable composer. This is an orphaned server stream, not healthy activity.
+  {
+    const orphaned = fakeCdp({
+      streamStatus: 'IS_STREAMING',
+      generating: false,
+      composerUsable: false,
+      pageText: 'normal reply',
+    });
+    assert.equal(
+      await orphanedStreamPresent(orphaned),
+      true,
+      'IS_STREAMING + no DOM generation + no composer must be detected as an orphaned stream',
+    );
+  }
+
+  {
+    const healthyStreaming = fakeCdp({
+      streamStatus: 'IS_STREAMING',
+      generating: true,
+      composerUsable: false,
+    });
+    assert.equal(
+      await orphanedStreamPresent(healthyStreaming),
+      false,
+      'visible active generation must never be classified as orphaned',
+    );
+  }
+
+  {
+    const composerReturned = fakeCdp({
+      streamStatus: 'IS_STREAMING',
+      generating: false,
+      composerUsable: true,
+    });
+    assert.equal(
+      await orphanedStreamPresent(composerReturned),
+      false,
+      'a usable composer means the page is interactable and must not be classified as orphaned',
+    );
+  }
+
+  {
+    const completeIdle = fakeCdp({
+      streamStatus: 'COMPLETE',
+      generating: false,
+      composerUsable: false,
+    });
+    assert.equal(
+      await orphanedStreamPresent(completeIdle),
+      false,
+      'COMPLETE transport is handled by silent-stall logic, not orphaned-stream logic',
+    );
+  }
+
   // Cross-device/iOS failures may not mirror the orange interruption banner
   // into the canonical VM browser. Use only canonical conversation metadata
   // to classify a silent stall: transport COMPLETE, current assistant node
@@ -1937,29 +1994,17 @@ async function run() {
       () => reinforcementLoop(
         async (...args) => {
           calls.push(args);
-          if (calls.length === 1) {
-            assert.equal(args[3], alignLatestForReinforcement, 'first cycle may use the account-scoped API');
-            return {
-              action: 'no_banner',
-              http_status: 429,
-              cross_device_discovery: true,
-            };
-          }
-          assert.notEqual(
-            args[3],
-            alignLatestForReinforcement,
-            'cycle inside API backoff must switch to local sidebar alignment',
-          );
-          assert.deepEqual(
-            args[4],
-            { allowCrossDeviceDiscovery: true },
-            'local sidebar discovery must stay enabled while API discovery is backed off',
-          );
-          return {
-            action: 'no_banner',
-            http_status: 0,
-            cross_device_discovery: true,
-          };
+          return calls.length === 1
+            ? {
+                action: 'no_banner',
+                http_status: 429,
+                cross_device_discovery: true,
+              }
+            : {
+                action: 'no_banner',
+                http_status: 0,
+                cross_device_discovery: true,
+              };
         },
         () => 0,
         async () => {
@@ -1970,6 +2015,17 @@ async function run() {
       error => error === stop,
     );
     assert.equal(calls.length, 2, 'second reinforcement cycle must still run during API backoff');
+    assert.equal(calls[0]?.[3], alignLatestForReinforcement, 'first cycle may use the account-scoped API');
+    assert.notEqual(
+      calls[1]?.[3],
+      alignLatestForReinforcement,
+      'cycle inside API backoff must switch to local sidebar alignment',
+    );
+    assert.deepEqual(
+      calls[1]?.[4],
+      { allowCrossDeviceDiscovery: true },
+      'local sidebar discovery must stay enabled while API discovery is backed off',
+    );
   }
 
   // The checkpoint-driven bridge loop and the reinforcement loop must start
