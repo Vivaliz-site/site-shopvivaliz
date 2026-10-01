@@ -482,6 +482,30 @@ async function run() {
     );
     assert.ok(calls.length >= 2);
   }
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(['evaluate', expression]);
+        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
+        if (expression.includes('b.click()')) return false;
+        return false;
+      },
+      async send(method, params) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'missing send button after typing must fall back to a real Enter key dispatch',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.key === 'Enter'),
+      'Enter fallback must use CDP Input.dispatchKeyEvent',
+    );
+  }
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual

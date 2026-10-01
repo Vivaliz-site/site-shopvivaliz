@@ -1063,7 +1063,7 @@ async function sendContinueMessage(cdp) {
   })()`);
   if (!typed) return false;
   await sleep(300);
-  return cdp.evaluate(`(()=>{
+  const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
       'button[aria-label="Send"]',
@@ -1094,6 +1094,24 @@ async function sendContinueMessage(cdp) {
     b.click();
     return true;
   })()`);
+  if (clicked) return true;
+
+  // ChatGPT can expose a usable composer without rendering a send button.
+  // Use a real Enter key through CDP only after typing succeeded and the
+  // normal button path was unavailable.
+  try {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown', key: 'Enter', code: 'Enter',
+      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+    });
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp', key: 'Enter', code: 'Enter',
+      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function attemptNudge(
