@@ -26,3 +26,8 @@ def test_dimension_fields_survive_public_projection():
     assert row["dimensoes"]["largura"] == 15.0
     assert row["dimensoes"]["altura"] == 10.0
     assert row["dimensoes"]["comprimento"] == 20.0
+
+
+if __name__ == "__main__":
+    test_dimension_fields_survive_public_projection()
+    print("DAEMON_SHIPPING_FIELDS_OK")
