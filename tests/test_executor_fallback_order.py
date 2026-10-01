@@ -20,7 +20,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
         self.assertIn("--sandbox danger-full-access", script)
         self.assertIn("--ask-for-approval never", script)
-        self.assertNotIn("--approve-for-me", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])\n        self.assertNotIn("--sandbox workspace-write", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
+        self.assertNotIn("--approve-for-me", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
+        self.assertNotIn("--sandbox workspace-write", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
         codex_auto_block = script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0]
         self.assertLess(codex_auto_block.index("--ask-for-approval never"), codex_auto_block.index("exec -"))
 
