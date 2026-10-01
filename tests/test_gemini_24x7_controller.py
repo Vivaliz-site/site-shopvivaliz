@@ -143,6 +143,11 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(rows[-1]["event"], "cycle_completed")
         self.assertEqual(rows[-1]["watchdog"]["dispatched"], 1)
 
+    def test_controller_atomic_json_fsyncs_parent_directory(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("os.replace(temp, path)", source)
+        self.assertIn("_fsync_dir(path.parent)", source)
+
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
