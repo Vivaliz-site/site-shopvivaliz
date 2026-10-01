@@ -47,6 +47,12 @@ function fakeCdp({
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('continuity-error-banner-probe')) {
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
