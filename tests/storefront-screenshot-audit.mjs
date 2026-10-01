@@ -244,8 +244,13 @@ async function collectInitialMetrics(page) {
       0
     );
 
+    const paintEntries = performance.getEntriesByType('paint').reduce((acc, entry) => {
+      acc[entry.name] = Math.round(Number(entry.startTime || 0) * 10) / 10;
+      return acc;
+    }, {});
     return {
       cls: Number(window.__svCls || 0),
+      paintEntries,
       longestTaskMs: Number(window.__svLongestTask || 0),
       layoutShiftSources: Array.from(window.__svLayoutShiftSources || []).sort((a, b) => b.value - a.value).slice(0, 12),
       metricSetupError: String(window.__svMetricSetupError || ''),
@@ -361,6 +366,7 @@ for (const profile of profiles) {
       status,
       title: metrics.title,
       initial_cls: metrics.cls,
+      paint_entries_ms: metrics.paintEntries,
       longest_task_ms: metrics.longestTaskMs,
       layout_shift_sources: metrics.layoutShiftSources,
       metric_setup_error: metrics.metricSetupError,
