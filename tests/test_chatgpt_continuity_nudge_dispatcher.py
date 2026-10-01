@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -55,6 +57,17 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
     def _fake_enqueue_ok(self, **kwargs):
         self.calls.append(kwargs)
         return {"ok": True, "http_status": 200, "body": {"status": "OK", "enqueued": True}}
+
+    def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
+        self.assertEqual(
+            self.dispatcher.DEFAULT_BRIDGE_URL,
+            "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php",
+        )
+        self.assertEqual(
+            self.dispatcher.DEFAULT_TOKEN_FILE,
+            Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token"),
+        )
+        self.assertNotEqual(self.dispatcher.DEFAULT_TOKEN_FILE, self.dispatcher.LEGACY_TOKEN_FILE)
 
     def test_dispatches_new_chatgpt_common_request_to_the_bridge(self) -> None:
         self._stale_checkpoint_and_request()
@@ -329,10 +342,22 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_missing_token_skips_without_crashing_and_never_marks_the_ledger(self) -> None:
         self._stale_checkpoint_and_request()
-        result = self.dispatcher.run_once(
-            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
-            token="", enqueue=self._fake_enqueue_ok,
-        )
+        missing_token_file = self.runtime / "deliberately-missing-bridge.token"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_CONTINUITY_BRIDGE_TOKEN": "",
+                    "CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE": str(missing_token_file),
+                },
+                clear=False,
+            ),
+            patch.object(self.dispatcher, "DEFAULT_TOKEN_FILE", missing_token_file),
+        ):
+            result = self.dispatcher.run_once(
+                runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                token="", enqueue=self._fake_enqueue_ok,
+            )
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(result["skipped_no_token"], 1)
         self.assertEqual(len(self.calls), 0)

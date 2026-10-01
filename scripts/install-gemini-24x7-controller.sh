@@ -36,13 +36,17 @@ if [ ! -d "$target_dir" ]; then
   done
   sudo install -o root -g root -m 0644 "$release_dir/AGENTS.md" "$stage_dir/AGENTS.md"
   sudo install -o root -g root -m 0644 "$release_dir/docs/knowledge/task-continuity.md" "$stage_dir/README"
+  # The systemd process runs as ubuntu and must traverse this immutable code
+  # directory; runtime state remains under the separately protected shared
+  # directory and is not copied into the release.
+  sudo chmod 0755 "$stage_dir" "$stage_dir/scripts"
   sudo mv "$stage_dir" "$target_dir"
   trap - EXIT
 fi
 
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
-printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\n' "$target_dir/scripts/gemini_24x7_controller.py" > "$environment_temp"
+printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' "$target_dir/scripts/gemini_24x7_controller.py" > "$environment_temp"
 sudo install -o root -g root -m 0640 "$environment_temp" "$environment_target"
 rm -f "$environment_temp"
 trap - EXIT

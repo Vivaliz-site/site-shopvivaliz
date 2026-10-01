@@ -36,6 +36,7 @@ class IssueCommentRouterTest(unittest.TestCase):
             "/remote target=fred-win action=health reason=test": "remote_access",
             "/mlrr operation=validate reason=test": "mlrr",
             "/continuity-e2e": "continuity_e2e",
+            "/backend-continuity-recover-v1": "backend_continuity_recovery",
             "/provision-governed-backend-ci-runners-v1": "provision_backend_runners",
             "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_delete_scope",
             "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
