@@ -812,6 +812,23 @@ async function silentStallPresent(cdp) {
   return Boolean(await localIncompleteTurnPresent(cdp));
 }
 
+async function orphanedStreamPresent(cdp) {
+  const stream = await conversationStreamStatus(cdp);
+  if (
+    Number(stream?.http_status || 0) !== 200
+    || String(stream?.status || '').toUpperCase() !== 'IS_STREAMING'
+  ) {
+    return false;
+  }
+
+  // Live reproduction 2026-10-01: the server remained IS_STREAMING while
+  // ChatGPT Web exposed neither an active-generation control nor a usable
+  // composer. That combination is not healthy streaming; it is an orphaned
+  // transport that must be reattached before any continuation is attempted.
+  if (await conversationIsGenerating(cdp)) return false;
+  return !(await composerIsUsable(cdp));
+}
+
 async function clearStaleCompleteGeneration(cdp) {
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
@@ -1122,6 +1139,27 @@ async function alignLatestForReinforcement(
     maxAgeMs,
   );
   return { ...alignment, http_status: httpStatus };
+}
+
+async function alignLatestLocallyForReinforcement(cdp) {
+  // During account-scoped 429 backoff we must not call the conversations API,
+  // but the already-synchronized ChatGPT sidebar is still a valid local signal.
+  const sidebar = await alignToSidebarLatestConversation(cdp);
+  if (
+    sidebar.action === 'navigated_sidebar_fallback'
+    || sidebar.action === 'already_latest_sidebar_fallback'
+  ) {
+    return {
+      ...sidebar,
+      http_status: 0,
+      local_only: true,
+    };
+  }
+  return {
+    action: 'latest_unavailable',
+    http_status: 0,
+    local_only: true,
+  };
 }
 
 async function currentConversationSurfaceContains(cdp, markers, probeToken) {
@@ -1707,6 +1745,10 @@ async function reinforcementCheckOnce(
         // latest conversation has no banner in the canonical VM. Only the
         // canonical unfinished-turn shape below is accepted as equivalent.
         failureSignal = 'silent_stall';
+      } else if (await orphanedStreamPresent(cdp)) {
+        // Live VM reproduction: /stream_status remained IS_STREAMING while
+        // the DOM exposed neither generation nor a usable composer.
+        failureSignal = 'orphaned_stream';
       } else {
         return {
           action: 'no_banner',
@@ -1728,12 +1770,91 @@ async function reinforcementCheckOnce(
       if (silentStillPresent) {
         failureSignal = 'silent_stall';
         failureStillPresent = true;
+      } else if (await orphanedStreamPresent(cdp)) {
+        failureSignal = 'orphaned_stream';
+        failureStillPresent = true;
       }
     }
     if (!failureStillPresent) {
       console.log(`chatgpt_continuity_reinforcement ${failureSignal || 'failure'}_self_resolved`);
       return {
         action: 'self_resolved',
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
+    }
+
+    if (failureSignal === 'orphaned_stream') {
+      const passiveBaseline = await assistantSnapshot(cdp);
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+
+      const passiveProgressed = await confirmProgress(
+        cdp,
+        passiveBaseline,
+        PASSIVE_REATTACH_CONFIRM_MS,
+        PROGRESS_POLL_MS,
+      );
+      if (passiveProgressed) {
+        console.log('chatgpt_continuity_reinforcement orphaned_stream_passive_reattach_progress=true');
+        return {
+          action: 'self_resolved',
+          sent: false,
+          progress_confirmed: true,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      // If normal generation reappeared, the stream is alive again. Never
+      // collide with it by sending a duplicate continuation.
+      if (await conversationIsGenerating(cdp)) {
+        console.log('chatgpt_continuity_reinforcement orphaned_stream_generation_resumed=true');
+        return {
+          action: 'self_resolved',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      // The only safe send gate for an orphaned stream is the user's own
+      // composer becoming usable again. This bounded wait also covers the case
+      // where server bookkeeping leaves IS_STREAMING shortly after reattach.
+      if (!(await waitForComposerUsable(cdp))) {
+        console.log('chatgpt_continuity_reinforcement orphaned_stream_confirmed composer=false');
+        return {
+          action: 'send_failed',
+          sent: false,
+          progress_confirmed: false,
+          detail: 'orphaned stream persisted after passive reattach; composer remained unavailable',
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      const baseline = await assistantSnapshot(cdp);
+      const sent = await sendContinueMessage(cdp);
+      if (!sent) {
+        console.log('chatgpt_continuity_reinforcement orphaned_stream_confirmed sent=false');
+        return {
+          action: 'send_failed',
+          sent: false,
+          progress_confirmed: false,
+          detail: 'orphaned stream released composer but continuation send failed',
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
+      const progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
+      const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
+      console.log(`chatgpt_continuity_reinforcement orphaned_stream_confirmed sent=true progress=${progressed}`);
+      return {
+        action,
+        sent: true,
+        progress_confirmed: progressed,
         http_status: alignmentHttpStatus,
         cross_device_discovery: crossDeviceDiscovery,
       };
@@ -1875,33 +1996,41 @@ async function reinforcementLoop(
   now = () => Date.now(),
   wait = sleep,
 ) {
-  let nextCrossDeviceDiscoveryAt = 0;
+  let nextAccountScopedDiscoveryAt = 0;
   for (;;) {
-    const allowCrossDeviceDiscovery = now() >= nextCrossDeviceDiscoveryAt;
+    const allowAccountScopedDiscovery = now() >= nextAccountScopedDiscoveryAt;
+    const alignLatest = allowAccountScopedDiscovery
+      ? alignLatestForReinforcement
+      : alignLatestLocallyForReinforcement;
     let outcome;
     try {
       outcome = await check(
-        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery }),
+        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
-        alignLatestForReinforcement,
-        { allowCrossDeviceDiscovery },
+        alignLatest,
+        { allowCrossDeviceDiscovery: true },
       );
     } catch (error) {
       console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
       outcome = {
         action: 'error',
-        cross_device_discovery: allowCrossDeviceDiscovery,
+        cross_device_discovery: true,
       };
     }
 
-    const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
-    if (discoveryDelayMs > 0) {
-      nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
-      if (Number(outcome?.http_status) === 429) {
-        console.log(
-          `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)}`,
-        );
+    // Only account-scoped attempts advance the API discovery clock. Local
+    // sidebar checks remain active every reinforcement cycle, including while
+    // the conversations endpoint is backed off after a 429.
+    if (allowAccountScopedDiscovery) {
+      const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
+      if (discoveryDelayMs > 0) {
+        nextAccountScopedDiscoveryAt = now() + discoveryDelayMs;
+        if (Number(outcome?.http_status) === 429) {
+          console.log(
+            `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)} local_sidebar=active`,
+          );
+        }
       }
     }
     await wait(REINFORCEMENT_POLL_MS);
@@ -1932,6 +2061,7 @@ export {
   conversationStreamStatus,
   conversationTurnState,
   silentStallPresent,
+  orphanedStreamPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
@@ -1941,6 +2071,7 @@ export {
   latestConversationMeta,
   alignToLatestConversation,
   alignLatestForReinforcement,
+  alignLatestLocallyForReinforcement,
   assistantSnapshot,
   assistantProgressed,
   confirmAssistantProgress,
