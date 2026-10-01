@@ -1608,10 +1608,27 @@ async function transmissionErrorPresent(cdp) {
   );
 }
 
+async function providerVerificationPending(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'nossos sistemas estão fazendo verificações adicionais antes de responder',
+      'nossos sistemas estao fazendo verificacoes adicionais antes de responder',
+      'additional checks before responding',
+    ],
+    'continuity-provider-verification-probe',
+  );
+}
+
 async function errorBannerPresent(cdp) {
   // Query only the current turn surface / live error regions. A truncated
   // pageState prefix misses bottom-of-thread failures in long conversations,
   // while scanning the whole history would falsely retrigger old failures.
+  //
+  // Do NOT classify the generic reasoning label "Parou de pensar" /
+  // "Stopped thinking" as an error. The current ChatGPT UI also renders that
+  // label for normal completed reasoning blocks. Recovery instead relies on
+  // explicit transport/error banners or the semantic unfinished-turn state.
   return currentConversationSurfaceContains(
     cdp,
     [
@@ -1622,8 +1639,6 @@ async function errorBannerPresent(cdp) {
       'streaming interrupted',
       'transmissão interrompida',
       'transmissao interrompida',
-      'stopped thinking',
-      'parou de pensar',
     ],
     'continuity-error-banner-probe',
   );
@@ -1944,6 +1959,17 @@ async function attemptNudge(
     cdp = await connector();
     let recoveredStaleComplete = false;
 
+    // Live iOS reproduction 2026-10-01: ChatGPT may show "verificações
+    // adicionais" while the Stop button is still active. That is provider-side
+    // processing, not a dead turn. Never reload, click Stop, or inject
+    // "continue" while that explicit active-verification state is present.
+    if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'provider verification pending with active generation; continuation intentionally deferred',
+      };
+    }
+
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
     // tool/thought branch with end_turn=false. Therefore every checkpoint
@@ -2109,6 +2135,19 @@ async function reinforcementCheckOnce(
   try {
     cdp = await connect();
 
+    // "Verificações adicionais" with a live Stop button means the provider is
+    // still processing the request. Do not navigate away, reload, click Stop,
+    // or send a duplicate continuation. The checkpoint pipeline remains free
+    // to fall back to detached execution after its own bounded nudge window.
+    if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+      return {
+        action: 'provider_verification_pending',
+        sent: false,
+        progress_confirmed: false,
+        cross_device_discovery: false,
+      };
+    }
+
     // Cheap, local signal first. Do not hit the account-scoped conversation
     // listing when the currently open conversation already exposes a failure.
     let bannerPresent = await errorBannerPresent(cdp);
@@ -2135,6 +2174,16 @@ async function reinforcementCheckOnce(
       ) {
         return {
           ...alignment,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: true,
+        };
+      }
+
+      if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+        return {
+          action: 'provider_verification_pending',
+          sent: false,
+          progress_confirmed: false,
           http_status: alignmentHttpStatus,
           cross_device_discovery: true,
         };
@@ -2434,6 +2483,7 @@ export {
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
+  providerVerificationPending,
   errorBannerPresent,
   transmissionErrorPresent,
   latestConversationProbe,
