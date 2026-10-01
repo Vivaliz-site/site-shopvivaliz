@@ -220,6 +220,18 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         or os.getenv("GITHUB_REPOSITORY", "")
         or DEFAULT_REPOSITORY
     )
+    path = _path(task)
+    if path.is_file():
+        existing = _load(task)
+        if (
+            str(existing.get("goal", "")).strip() == goal_text
+            and str(existing.get("repository", "")).strip() == repository_name
+        ):
+            return existing
+        raise TaskStateError(
+            "task state already exists with different identity; use successor or explicit resume"
+        )
+
     now = utc_now()
     payload = {
         "schema_version": SCHEMA_VERSION,
@@ -236,7 +248,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "updated_at": now,
         "history": [{"at": now, "event": "started"}],
     }
-    _atomic_write(_path(task), payload)
+    _atomic_write(path, payload)
     return payload
 
 
