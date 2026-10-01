@@ -47,6 +47,7 @@ TASK_UNIT_PREFIX = "shopvivaliz-remote-task-"
 TASKS_DIR = STATE_DIR / "tasks"
 TERMINAL_STATES = {"succeeded", "failed", "expired", "cancelled", "indeterminate"}
 ACTIVE_STATES = {"starting", "running", "cancel_requested"}
+STARTING_UNIT_VISIBILITY_GRACE_SECONDS = 15
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -310,6 +311,15 @@ def finalize_cancelled_without_result(task_id: str) -> None:
     finalize_task(task_id, "cancelled", None, result_dir)
 
 
+def timestamp_age_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return max(0.0, (datetime.now(timezone.utc) - datetime.fromisoformat(value)).total_seconds())
+    except ValueError:
+        return None
+
+
 def reconcile_task(row: sqlite3.Row) -> str:
     task_id = str(row["id"])
     unit = str(row["execution_unit"] or task_unit_name(task_id))
@@ -333,6 +343,19 @@ def reconcile_task(row: sqlite3.Row) -> str:
         mark_indeterminate(task_id, "legacy_running_without_execution_unit")
         return "indeterminate"
     if row["execution_started_at"] is None:
+        launch_age = timestamp_age_seconds(row["started_at"])
+        if (
+            row["state"] == "starting"
+            and row["execution_unit"]
+            and launch_age is not None
+            and launch_age < STARTING_UNIT_VISIBILITY_GRACE_SECONDS
+        ):
+            with db_conn() as db:
+                db.execute(
+                    "UPDATE tasks SET reconciled_at=?,recovery_note='awaiting_unit_visibility' WHERE id=? AND state='starting'",
+                    (now(), task_id),
+                )
+            return "starting"
         with db_conn() as db:
             db.execute(
                 "UPDATE tasks SET state='queued',execution_unit=NULL,reconciled_at=?,"
@@ -363,6 +386,17 @@ def launch_task_service(task_id: str, timeout: int) -> None:
     completed = subprocess.run(args, text=True, capture_output=True, check=False)
     if completed.returncode != 0 and not systemd_unit_is_active(unit):
         raise RuntimeError(redact_text(completed.stderr or "task_service_launch_failed"))
+
+
+def launch_claimed_task(task_id: str, timeout: int) -> bool:
+    row = load_task(task_id)
+    if row["state"] == "cancel_requested":
+        finalize_cancelled_without_result(task_id)
+        return False
+    if row["state"] != "starting":
+        return False
+    launch_task_service(task_id, timeout)
+    return True
 
 
 def update_heartbeat_and_progress(task_id: str, result_dir: Path) -> None:
@@ -796,8 +830,8 @@ def task_worker() -> None:
             if not changed:
                 continue
             tid = str(row["id"])
-            launch_task_service(tid, int(row["timeout"]))
-            audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
+            if launch_claimed_task(tid, int(row["timeout"])):
+                audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
         except Exception as exc:
             try:
                 if tid:

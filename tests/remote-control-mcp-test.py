@@ -1700,6 +1700,46 @@ class DurableExecutorV2Tests(unittest.TestCase):
             self.assertEqual(m.reconcile_task(m.load_task(task_id)), "queued")
         self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "queued")
 
+    def test_starting_task_waits_for_unit_visibility_before_safe_requeue(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id)
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET started_at=?,progress='launching' WHERE id=?",
+                (m.now(), task_id),
+            )
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "starting")
+        with m.db_conn() as db:
+            self.assertEqual(db.execute("SELECT state FROM tasks WHERE id=?", (task_id,)).fetchone()["state"], "starting")
+        with m.db_conn() as db:
+            db.execute("UPDATE tasks SET started_at=? WHERE id=?", ("1970-01-01T00:00:00+00:00", task_id))
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "queued")
+
+    def test_cancel_before_physical_spawn_prevents_launcher(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id)
+        with mock.patch.object(m, "stop_task_unit", return_value=True):
+            self.assertEqual(m.execute_tool("task_cancel", {"task_id": task_id})["state"], "cancel_requested")
+        with mock.patch.object(m, "launch_task_service") as launch:
+            self.assertFalse(m.launch_claimed_task(task_id, 30))
+        launch.assert_not_called()
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "cancelled")
+
+    def test_controller_restart_after_cancel_before_spawn_never_launches_task(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id)
+        with mock.patch.object(m, "stop_task_unit", return_value=True):
+            m.execute_tool("task_cancel", {"task_id": task_id})
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"), \
+             mock.patch.object(m, "launch_task_service") as launch:
+            m.reconcile_tasks()
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start(); time.sleep(0.2); m.STOP_EVENT.set(); worker.join(timeout=2)
+        launch.assert_not_called()
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "cancelled")
+
     def test_reconcile_started_missing_unit_marks_indeterminate(self):
         task_id = self.submit()["task_id"]
         self.claim(task_id, state="running", started=True)
