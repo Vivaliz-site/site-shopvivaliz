@@ -97,6 +97,14 @@ header('Content-Type: text/html; charset=UTF-8');
 </div>
 
 <main class="container cart-page">
+    <section class="sv-mixed-promo" data-sv-mixed-promo-cart="1" aria-label="Promoção compre junto">
+        <div class="sv-mixed-promo__icon" aria-hidden="true">✨</div>
+        <div class="sv-mixed-promo__body">
+            <strong class="sv-mixed-promo__title">3% OFF com 2+ produtos diferentes</strong>
+            <p class="sv-mixed-promo__copy">Desconto automático em todos os itens, aplicado no checkout.</p>
+        </div>
+        <span class="sv-mixed-promo__badge">3% OFF</span>
+    </section>
     <div class="cart-layout">
         <div class="cart-card">
             <h1 class="cart-title">Meu Carrinho</h1>
