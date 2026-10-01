@@ -622,11 +622,23 @@ if ($notFound) {
                     <span class="sv-paid-mobile-offer-stock">Em estoque</span>
                 </div>
                 <div class="sv-paid-mobile-offer-price"><?= sv_esc($priceLabel) ?></div>
+                <?php
+                    $svPaidCouponPreview = is_array($svPrimaryCoupon ?? null)
+                        ? sv_active_coupon_preview_price($priceRaw, $svPrimaryCoupon)
+                        : null;
+                ?>
                 <?php if (is_array($svPrimaryCoupon ?? null) && trim((string)($svPrimaryCoupon['code'] ?? '')) !== ''): ?>
                     <div class="sv-paid-mobile-offer-coupon">
                         <?= sv_esc((string)($svPrimaryCoupon['label'] ?? 'Oferta ativa')) ?>
                         · cupom <strong><?= sv_esc((string)$svPrimaryCoupon['code']) ?></strong>
                     </div>
+                    <?php if ($svPaidCouponPreview !== null): ?>
+                        <div class="sv-paid-mobile-offer-effective-price">
+                            Preço com cupom:
+                            <strong>R$ <?= sv_esc(number_format($svPaidCouponPreview, 2, ',', '.')) ?></strong>
+                            <span>após validação no checkout</span>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
                 <button class="sv-paid-mobile-offer-buy" type="button" onclick="document.getElementById('buy-now').click()">Comprar agora</button>
                 <div class="sv-paid-mobile-offer-note">Frete e prazo calculados pelo CEP antes do pagamento.</div>
