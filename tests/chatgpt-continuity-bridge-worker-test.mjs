@@ -15,6 +15,7 @@ import {
   alignLatestForReinforcement,
   assistantSnapshot,
   assistantProgressed,
+  confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
