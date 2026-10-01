@@ -926,6 +926,105 @@ async function run() {
     selected.close();
   }
 
+  // Live backend topology 2026-09-30: multiple conversation tabs, no neutral
+  // home, and stale sidebars that disagree. A unique modal first sidebar item
+  // (2-1-1) is sufficient local evidence to choose one idle voter as a
+  // temporary discovery context. A tie remains fail-closed.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/open-a', webSocketDebuggerUrl: 'ws://a' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-b', webSocketDebuggerUrl: 'ws://b' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-c', webSocketDebuggerUrl: 'ws://c' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-d', webSocketDebuggerUrl: 'ws://d' },
+    ];
+    const sidebarLatestByMarker = new Map([
+      ['ws://a', '/c/mobile-latest'],
+      ['ws://b', '/c/mobile-latest'],
+      ['ws://c', '/c/stale-c'],
+      ['ws://d', '/c/stale-d'],
+    ]);
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.evaluate = async expression => {
+        if (String(expression).includes('sidebar-latest-conversation')) {
+          return sidebarLatestByMarker.get(cdp.marker) || '';
+        }
+        return originalEvaluate(expression);
+      };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.ok(
+      selected.marker === 'ws://a' || selected.marker === 'ws://b',
+      'unique sidebar mode must select an idle tab that voted for the modal latest conversation',
+    );
+
+    let currentPath = selected.marker === 'ws://a' ? '/c/open-a' : '/c/open-b';
+    const selectedEvaluate = selected.evaluate.bind(selected);
+    selected.evaluate = async expression => {
+      const source = String(expression);
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('sidebar-latest-conversation')) return '/c/mobile-latest';
+      if (source.includes('location.assign')) {
+        currentPath = '/c/mobile-latest';
+        return true;
+      }
+      return selectedEvaluate(expression);
+    };
+    const aligned = await alignLatestForReinforcement(
+      selected,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(aligned.action, 'navigated_sidebar_fallback');
+    assert.equal(aligned.sidebar_fallback, true);
+    assert.equal(currentPath, '/c/mobile-latest');
+    selected.close();
+  }
+
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/open-a', webSocketDebuggerUrl: 'ws://a' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-b', webSocketDebuggerUrl: 'ws://b' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-c', webSocketDebuggerUrl: 'ws://c' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-d', webSocketDebuggerUrl: 'ws://d' },
+    ];
+    const sidebarLatestByMarker = new Map([
+      ['ws://a', '/c/latest-x'],
+      ['ws://b', '/c/latest-x'],
+      ['ws://c', '/c/latest-y'],
+      ['ws://d', '/c/latest-y'],
+    ]);
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.evaluate = async expression => {
+        if (String(expression).includes('sidebar-latest-conversation')) {
+          return sidebarLatestByMarker.get(cdp.marker) || '';
+        }
+        return originalEvaluate(expression);
+      };
+      return cdp;
+    };
+    await assert.rejects(
+      () => connectReinforcementChatgptTab({
+        tabs,
+        connector,
+        probeBanner: async () => false,
+        allowCrossDeviceDiscovery: true,
+      }),
+      /continuity target is ambiguous/,
+      '2-2 sidebar split must remain fail-closed',
+    );
+  }
+
   // If one and only one open tab carries the interruption banner, local
   // evidence wins and no account-scoped latest-conversation request is needed.
   {
