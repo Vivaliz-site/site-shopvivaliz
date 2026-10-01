@@ -1925,6 +1925,53 @@ async function run() {
     );
   }
 
+  // A 429 must back off only the account-scoped API, not the local sidebar
+  // inspection. The live iPhone failure on 2026-09-30 appeared ~3 minutes
+  // after a no_banner+429 cycle; suppressing all cross-device inspection for
+  // five minutes created a blind window.
+  {
+    const calls = [];
+    let waits = 0;
+    const stop = new Error('stop-after-two-reinforcement-iterations');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async (...args) => {
+          calls.push(args);
+          if (calls.length === 1) {
+            assert.equal(args[3], alignLatestForReinforcement, 'first cycle may use the account-scoped API');
+            return {
+              action: 'no_banner',
+              http_status: 429,
+              cross_device_discovery: true,
+            };
+          }
+          assert.notEqual(
+            args[3],
+            alignLatestForReinforcement,
+            'cycle inside API backoff must switch to local sidebar alignment',
+          );
+          assert.deepEqual(
+            args[4],
+            { allowCrossDeviceDiscovery: true },
+            'local sidebar discovery must stay enabled while API discovery is backed off',
+          );
+          return {
+            action: 'no_banner',
+            http_status: 0,
+            cross_device_discovery: true,
+          };
+        },
+        () => 0,
+        async () => {
+          waits += 1;
+          if (waits >= 2) throw stop;
+        },
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 2, 'second reinforcement cycle must still run during API backoff');
+  }
+
   // The checkpoint-driven bridge loop and the reinforcement loop must start
   // independently. A slow reinforcement iteration cannot serialize the next
   // pollBridgeOnce cycle.
