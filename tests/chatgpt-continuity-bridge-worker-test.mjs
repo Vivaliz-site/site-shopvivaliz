@@ -911,10 +911,65 @@ async function run() {
   // with an explicit "Parou de pensar" state instead of the stream banner.
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
+  {
+    const marker = 'nossos sistemas estão fazendo verificações adicionais';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression).toLowerCase();
+        return source.includes('continuity-error-banner-probe') && source.includes(marker);
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      true,
+      'the explicit additional-checks terminal state must be classified as a recoverable ChatGPT failure',
+    );
+  }
+  {
+    const marker = 'try again with a faster model';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression).toLowerCase();
+        return source.includes('continuity-error-banner-probe') && source.includes(marker);
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      true,
+      'the faster-model fallback copy must be recognized without switching models automatically',
+    );
+  }
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
+
+  {
+    let connects = 0;
+    const failed = fakeCdp({ pageText: 'Parou de pensar', generating: false });
+    const clearedWithoutProgress = fakeCdp({
+      pageText: '',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const outcome = await reinforcementCheckOnce(
+      async () => {
+        connects += 1;
+        return connects === 1 ? failed : clearedWithoutProgress;
+      },
+      0,
+      async () => false,
+      async () => ({ action: 'unused' }),
+      { allowCrossDeviceDiscovery: false },
+    );
+    assert.notEqual(
+      outcome.action,
+      'self_resolved',
+      'a recoverable failure that disappears from the DOM without assistant progress must never be declared self-resolved',
+    );
+  }
 
   // Cross-device continuity: a mobile/iOS interruption may belong to a
   // different thread than the backend browser currently has open. Discovery
