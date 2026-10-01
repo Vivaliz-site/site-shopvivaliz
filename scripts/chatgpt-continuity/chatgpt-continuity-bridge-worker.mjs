@@ -763,6 +763,30 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
   }
 }
 
+async function localIncompleteTurnPresent(cdp) {
+  return cdp.evaluate(`(()=>{
+    /* local-incomplete-turn */
+    const turns=[...document.querySelectorAll('[data-turn-key]')];
+    const last=turns.length ? turns[turns.length-1] : null;
+    if(!last) return false;
+
+    const hasAssistantNode=Boolean(
+      last.querySelector('[data-message-author-role="assistant"],[data-conversation-role="assistant"]')
+    );
+    const labels=[...last.querySelectorAll('button[aria-label]')]
+      .map(button=>String(button.getAttribute('aria-label')||'').trim().toLowerCase())
+      .filter(Boolean);
+    const hasUserControls=labels.some(label=>
+      /^(copy message|edit message|copiar mensagem|editar mensagem)$/.test(label)
+    ) || Boolean(last.querySelector('[class*="group/user-message"]'));
+    const hasAssistantControls=labels.some(label=>
+      /^(rate response|read aloud|regenerate response|avaliar resposta|ler em voz alta|regenerar resposta)$/.test(label)
+    );
+
+    return Boolean(hasUserControls && !hasAssistantNode && !hasAssistantControls);
+  })()`);
+}
+
 async function silentStallPresent(cdp) {
   const stream = await conversationStreamStatus(cdp);
   if (
@@ -773,12 +797,19 @@ async function silentStallPresent(cdp) {
   }
 
   const turn = await conversationTurnState(cdp);
-  return (
-    Number(turn?.http_status || 0) === 200
-    && String(turn?.role || '').toLowerCase() === 'assistant'
-    && turn?.end_turn === false
-    && Number(turn?.child_count) === 0
-  );
+  if (Number(turn?.http_status || 0) === 200) {
+    return (
+      String(turn?.role || '').toLowerCase() === 'assistant'
+      && turn?.end_turn === false
+      && Number(turn?.child_count) === 0
+    );
+  }
+
+  // The account-scoped metadata endpoint can be rate-limited or temporarily
+  // unavailable while the conversation itself remains fully rendered in the
+  // authenticated browser. Fall back only to an unambiguous local shape:
+  // COMPLETE transport + a last user turn with no assistant node/actions.
+  return Boolean(await localIncompleteTurnPresent(cdp));
 }
 
 async function clearStaleCompleteGeneration(cdp) {
