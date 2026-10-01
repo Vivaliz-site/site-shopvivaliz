@@ -298,6 +298,8 @@ class Cdp {
   }
 }
 
+async function reinforcementSendReady(cdp) { return Boolean(await cdp.evaluate(`(()=>{const c=document.querySelector('[data-testid="prompt-textarea"]')||document.querySelector('[role="textbox"][contenteditable="true"]');if(!c||c.disabled||c.getAttribute('aria-disabled')==='true')return false;return [...document.querySelectorAll('button')].some(b=>/^(send|enviar)$/i.test(b.getAttribute('aria-label')||'')&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')})()`)); }
+
 async function connectReinforcementChatgptTab({
   allowCrossDeviceDiscovery = false,
   tabs: providedTabs = null,
@@ -343,7 +345,8 @@ async function connectReinforcementChatgptTab({
     // deduplicate by conversation id before applying the ambiguity guard.
     const interruptedConversationIds = new Set(interrupted.map(row => conversationIdFromTab(row.tab)).filter(Boolean));
     if (interruptedConversationIds.size === 1) {
-      const selected = interrupted[0];
+      let selected = interrupted[0];
+      for (const row of interrupted) { if (await reinforcementSendReady(row.cdp)) { selected = row; break; } }
       for (const row of opened) {
         if (row !== selected) {
           try { row.cdp.close(); } catch {}
