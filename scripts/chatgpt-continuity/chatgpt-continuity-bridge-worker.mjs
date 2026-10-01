@@ -40,7 +40,7 @@ const REINFORCEMENT_POLL_MS = Math.max(
 );
 const REINFORCEMENT_DISCOVERY_INTERVAL_MS = Math.max(
   60_000,
-  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_DISCOVERY_MS || 2 * 60_000),
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_DISCOVERY_MS || 60_000),
 );
 const REINFORCEMENT_429_BACKOFF_MS = Math.max(
   REINFORCEMENT_DISCOVERY_INTERVAL_MS + 60_000,
@@ -1487,7 +1487,7 @@ async function alignLatestForReinforcement(
   cdp,
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
-  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
 ) {
   const probe = await probeLatest(cdp);
   const rawStatus = Number(probe?.http_status || 0);
@@ -1505,6 +1505,11 @@ async function alignLatestForReinforcement(
     REINFORCEMENT_LATEST_ID = discoveredCandidates[0].id;
   }
   const latest = discoveredCandidates[0] || normalizeLatestConversationMeta(probe);
+  const projectCount = Math.max(0, Number(probe?.project_count || 0));
+  const candidateCount = discoveredCandidates.length;
+  const latestAgeSeconds = latest
+    ? Math.max(0, Math.round((Number(nowMs) - Number(latest.update_time) * 1000) / 1000))
+    : null;
   if (!latest) {
     if (httpStatus === 429) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
@@ -1512,10 +1517,22 @@ async function alignLatestForReinforcement(
         sidebar.action === 'navigated_sidebar_fallback'
         || sidebar.action === 'already_latest_sidebar_fallback'
       ) {
-        return { ...sidebar, http_status: httpStatus };
+        return {
+          ...sidebar,
+          http_status: httpStatus,
+          candidate_count: candidateCount,
+          project_count: projectCount,
+          latest_age_seconds: latestAgeSeconds,
+        };
       }
     }
-    return { action: 'latest_unavailable', http_status: httpStatus };
+    return {
+      action: 'latest_unavailable',
+      http_status: httpStatus,
+      candidate_count: candidateCount,
+      project_count: projectCount,
+      latest_age_seconds: latestAgeSeconds,
+    };
   }
   const alignment = await alignToLatestConversation(
     cdp,
@@ -1523,7 +1540,13 @@ async function alignLatestForReinforcement(
     nowMs,
     maxAgeMs,
   );
-  return { ...alignment, http_status: httpStatus };
+  return {
+    ...alignment,
+    http_status: httpStatus,
+    candidate_count: candidateCount,
+    project_count: projectCount,
+    latest_age_seconds: latestAgeSeconds,
+  };
 }
 
 async function currentConversationSurfaceContains(cdp, markers, probeToken) {
@@ -2306,6 +2329,18 @@ async function reinforcementLoop(
     }
 
     if (allowAccountDiscovery) {
+      console.log(
+        'chatgpt_continuity_reinforcement_discovery'
+        + ' action=' + text(outcome?.action)
+        + ' http_status=' + String(Number(outcome?.http_status || 0))
+        + ' candidate_count=' + String(Number(outcome?.candidate_count || 0))
+        + ' project_count=' + String(Number(outcome?.project_count || 0))
+        + ' latest_age_seconds=' + String(
+          outcome?.latest_age_seconds === null || outcome?.latest_age_seconds === undefined
+            ? -1
+            : Math.max(0, Number(outcome.latest_age_seconds) || 0),
+        ),
+      );
       const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
       if (discoveryDelayMs > 0) {
         nextAccountDiscoveryAt = now() + discoveryDelayMs;
