@@ -980,6 +980,9 @@ async function run() {
         reloads += 1;
         if (reloads >= 2) pageText = 'normal';
       }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /erro na transmissão de mensagem/i.test(pageText);
+      }
       return originalEvaluate(expression);
     };
     transmissionCdp.pageState = async () => ({
@@ -1001,6 +1004,11 @@ async function run() {
     assert.ok(sendCalls >= 2, 'explicit transmission error must get one bounded retry');
 
     const persistent = fakeCdp({ sendSucceeds: true });
+    const persistentEvaluate = persistent.evaluate.bind(persistent);
+    persistent.evaluate = async expression => {
+      if (expression.includes('continuity-transmission-error-probe')) return true;
+      return persistentEvaluate(expression);
+    };
     persistent.pageState = async () => ({
       href: 'https://chatgpt.com/c/fake',
       title: 'ChatGPT',
