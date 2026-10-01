@@ -580,6 +580,46 @@ async function run() {
       'Enter fallback must use CDP Input.dispatchKeyEvent',
     );
   }
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-error-banner-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      true,
+      'error detection must not depend on the first 6000 pageState characters in long conversations',
+    );
+    assert.ok(evaluateCalls > 0, 'error detection must use a targeted DOM boolean probe');
+  }
+
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-transmission-error-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      true,
+      'transmission-error detection must survive long conversations without pageState truncation',
+    );
+    assert.ok(evaluateCalls > 0, 'transmission detection must use a targeted DOM boolean probe');
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
