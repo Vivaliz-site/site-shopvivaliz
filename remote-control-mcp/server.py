@@ -17,6 +17,7 @@ import signal
 import socket
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -41,6 +42,11 @@ TASK_WAIT_MAX_SECONDS = 25
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
 SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
+SYSTEMCTL = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMCTL", "/usr/bin/systemctl")
+TASK_UNIT_PREFIX = "shopvivaliz-remote-task-"
+TASKS_DIR = STATE_DIR / "tasks"
+TERMINAL_STATES = {"succeeded", "failed", "expired", "cancelled", "indeterminate"}
+ACTIVE_STATES = {"starting", "running", "cancel_requested"}
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -71,8 +77,6 @@ SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----", re.S),
 )
-ACTIVE_PROCS: dict[str, subprocess.Popen[str]] = {}
-ACTIVE_LOCK = threading.Lock()
 STOP_EVENT = threading.Event()
 
 
@@ -162,14 +166,235 @@ def init_db() -> None:
           stderr TEXT NOT NULL DEFAULT ''
         );
         """)
-        cols = {row[1] for row in db.execute("PRAGMA table_info(tasks)").fetchall()}
-        if "request_id" not in cols:
-            db.execute("ALTER TABLE tasks ADD COLUMN request_id TEXT")
+        ensure_column(db, "tasks", "request_id", "TEXT")
+        ensure_column(db, "tasks", "execution_unit", "TEXT")
+        ensure_column(db, "tasks", "execution_started_at", "TEXT")
+        ensure_column(db, "tasks", "runner_started_at", "TEXT")
+        ensure_column(db, "tasks", "reconciled_at", "TEXT")
+        ensure_column(db, "tasks", "progress", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "result_dir", "TEXT")
+        ensure_column(db, "tasks", "attempt", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(db, "tasks", "recovery_note", "TEXT NOT NULL DEFAULT ''")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_state_created ON tasks(state,created_at)")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_execution_unit ON tasks(execution_unit) WHERE execution_unit IS NOT NULL")
+
+
+def ensure_column(db: sqlite3.Connection, table: str, name: str, ddl: str) -> None:
+    cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    if name not in cols:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
+
+def task_unit_name(task_id: str) -> str:
+    compact = task_id.replace("-", "")
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", compact):
+        raise ValueError("invalid_task_id")
+    return f"{TASK_UNIT_PREFIX}{compact.lower()}.service"
+
+
+def task_result_dir(task_id: str) -> Path:
+    return STATE_DIR / "tasks" / task_id
+
+
+def ensure_task_result_dir(task_id: str) -> Path:
+    path = task_result_dir(task_id)
+    path.mkdir(parents=True, exist_ok=True)
+    os.chmod(path, 0o700)
+    return path
+
+
+def atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
+    os.chmod(path, 0o600)
+
+
+def load_task(task_id: str) -> sqlite3.Row:
+    with db_conn() as db:
+        row = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+    if not row:
+        raise ValueError("task_not_found")
+    return row
+
+
+def systemd_unit_state(unit: str) -> str:
+    completed = subprocess.run(
+        [SYSTEMCTL, "is-active", unit], text=True, capture_output=True, check=False,
+    )
+    state = (completed.stdout or "").strip().lower()
+    return state if state else "inactive"
+
+
+def systemd_unit_is_active(unit: str) -> bool:
+    return systemd_unit_state(unit) in {"active", "activating", "reloading"}
+
+
+def stop_task_unit(unit: str) -> bool:
+    completed = subprocess.run(
+        [SYSTEMCTL, "stop", unit], text=True, capture_output=True, check=False,
+    )
+    return completed.returncode == 0
+
+
+def read_capped_text(path: Path) -> str:
+    try:
+        return redact_text(path.read_bytes()[-MAX_OUTPUT:].decode("utf-8", errors="replace"))
+    except OSError:
+        return ""
+
+
+def load_persisted_result(task_id: str) -> dict[str, Any] | None:
+    path = task_result_dir(task_id) / "result.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("state") not in TERMINAL_STATES:
+        return None
+    return payload
+
+
+def import_result_into_db(task_id: str, result: dict[str, Any]) -> None:
+    state = str(result["state"])
+    if state not in TERMINAL_STATES:
+        raise ValueError("invalid_terminal_result")
+    finished = str(result.get("finished_at") or now())
+    with db_conn() as db:
+        existing = db.execute("SELECT state FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not existing:
+            raise ValueError("task_not_found")
+        if existing["state"] in TERMINAL_STATES and existing["state"] != state:
+            return
         db.execute(
-            "UPDATE tasks SET state='queued', started_at=NULL, heartbeat_at=NULL "
-            "WHERE state='running'"
+            "UPDATE tasks SET state=?,finished_at=?,heartbeat_at=?,exit_code=?,stdout=?,stderr=?,"
+            "progress=?,recovery_note=COALESCE(recovery_note,'') WHERE id=?",
+            (state, finished, now(), result.get("exit_code"), redact_text(str(result.get("stdout") or "")),
+             redact_text(str(result.get("stderr") or "")), "terminal", task_id),
         )
+
+
+def finalize_task(task_id: str, state: str, exit_code: int | None, result_dir: Path) -> int:
+    if state not in TERMINAL_STATES:
+        raise ValueError("invalid_terminal_state")
+    stdout = read_capped_text(result_dir / "stdout.log")
+    stderr = read_capped_text(result_dir / "stderr.log")
+    payload = {
+        "task_id": task_id, "state": state, "exit_code": exit_code,
+        "stdout": stdout, "stderr": stderr, "finished_at": now(),
+    }
+    atomic_json(result_dir / "result.json", payload)
+    import_result_into_db(task_id, payload)
+    return 0 if state == "succeeded" else 1
+
+
+def mark_indeterminate(task_id: str, note: str) -> None:
+    with db_conn() as db:
+        db.execute(
+            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=? "
+            "WHERE id=? AND state NOT IN ('succeeded','failed','expired','cancelled','indeterminate')",
+            (now(), now(), note, task_id),
+        )
+
+
+def finalize_cancelled_without_result(task_id: str) -> None:
+    result_dir = ensure_task_result_dir(task_id)
+    finalize_task(task_id, "cancelled", None, result_dir)
+
+
+def reconcile_task(row: sqlite3.Row) -> str:
+    task_id = str(row["id"])
+    unit = str(row["execution_unit"] or task_unit_name(task_id))
+    result = load_persisted_result(task_id)
+    if result:
+        import_result_into_db(task_id, result)
+        return str(result["state"])
+    unit_state = systemd_unit_state(unit)
+    if unit_state in {"active", "activating", "reloading"}:
+        with db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state=CASE WHEN state='starting' THEN 'running' ELSE state END,"
+                "execution_unit=?,reconciled_at=?,recovery_note='adopted_live_unit' WHERE id=?",
+                (unit, now(), task_id),
+            )
+        return "running"
+    if row["state"] == "cancel_requested":
+        finalize_cancelled_without_result(task_id)
+        return "cancelled"
+    if row["state"] == "running" and not row["execution_unit"] and row["started_at"]:
+        mark_indeterminate(task_id, "legacy_running_without_execution_unit")
+        return "indeterminate"
+    if row["execution_started_at"] is None:
+        with db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='queued',execution_unit=NULL,reconciled_at=?,"
+                "recovery_note='safe_requeue_before_execution' WHERE id=? AND state IN ('starting','running')",
+                (now(), task_id),
+            )
+        return "queued"
+    mark_indeterminate(task_id, "execution_started_but_no_live_unit_or_result")
+    return "indeterminate"
+
+
+def reconcile_tasks() -> list[str]:
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT * FROM tasks WHERE state IN ('starting','running','cancel_requested') ORDER BY created_at"
+        ).fetchall()
+    return [reconcile_task(row) for row in rows]
+
+
+def launch_task_service(task_id: str, timeout: int) -> None:
+    unit = task_unit_name(task_id)
+    args = [
+        SYSTEMD_RUN, f"--unit={unit[:-8]}", "--collect", "--quiet", "--service-type=exec",
+        "--property=CPUWeight=50", "--property=IOWeight=50", "--property=KillMode=control-group",
+        "--property=Restart=no", f"--property=RuntimeMaxSec={int(timeout) + 30}s", "--",
+        "/usr/bin/python3", "/opt/shopvivaliz-remote-control/server.py", "--run-task", task_id,
+    ]
+    completed = subprocess.run(args, text=True, capture_output=True, check=False)
+    if completed.returncode != 0 and not systemd_unit_is_active(unit):
+        raise RuntimeError(redact_text(completed.stderr or "task_service_launch_failed"))
+
+
+def update_heartbeat_and_progress(task_id: str, result_dir: Path) -> None:
+    progress = f"stdout_bytes={(result_dir / 'stdout.log').stat().st_size if (result_dir / 'stdout.log').exists() else 0}"
+    with db_conn() as db:
+        db.execute("UPDATE tasks SET heartbeat_at=?,progress=? WHERE id=?", (now(), progress, task_id))
+
+
+def run_task_entrypoint(task_id: str) -> int:
+    row = load_task(task_id)
+    if row["state"] not in ACTIVE_STATES:
+        return 0
+    if row["execution_unit"] and row["execution_unit"] != task_unit_name(task_id):
+        raise ValueError("execution_unit_mismatch")
+    result_dir = ensure_task_result_dir(task_id)
+    with db_conn() as db:
+        db.execute("UPDATE tasks SET runner_started_at=?,result_dir=?,heartbeat_at=?,progress='runner_started' WHERE id=?", (now(), str(result_dir), now(), task_id))
+    stdout_path, stderr_path = result_dir / "stdout.log", result_dir / "stderr.log"
+    with open(stdout_path, "ab", buffering=0) as out, open(stderr_path, "ab", buffering=0) as err:
+        os.chmod(stdout_path, 0o600)
+        os.chmod(stderr_path, 0o600)
+        with db_conn() as db:
+            db.execute("UPDATE tasks SET state=CASE WHEN state='starting' THEN 'running' ELSE state END,execution_started_at=COALESCE(execution_started_at,?),heartbeat_at=?,progress='executing' WHERE id=?", (now(), now(), task_id))
+        proc = subprocess.Popen(remote_invocation(str(row["host"]), str(row["command"])), stdout=out, stderr=err, start_new_session=True)
+        deadline = time.monotonic() + int(row["timeout"])
+        while proc.poll() is None:
+            state = load_task(task_id)["state"]
+            if state == "cancel_requested":
+                terminate_process_group(proc)
+                return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
+            if time.monotonic() >= deadline:
+                terminate_process_group(proc)
+                return finalize_task(task_id, "expired", proc.poll(), result_dir)
+            update_heartbeat_and_progress(task_id, result_dir)
+            time.sleep(0.2)
+        return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
@@ -396,28 +621,32 @@ def execute_tool(
         return {"events": [dict(r) for r in rows]}
     if name == "task_status":
         tid = str(args.get("task_id") or "")
-        with db_conn() as db:
-            row = db.execute(
-                "SELECT id,host,state,created_at,started_at,finished_at,heartbeat_at,timeout,exit_code,stdout,stderr,command_sha256 FROM tasks WHERE id=?",
-                (tid,),
-            ).fetchone()
-        if not row:
-            raise ValueError("task_not_found")
-        return dict(row)
+        row = load_task(tid)
+        if row["state"] in ACTIVE_STATES:
+            reconcile_task(row)
+            row = load_task(tid)
+        result = dict(row)
+        heartbeat = result.get("heartbeat_at")
+        if heartbeat:
+            try:
+                result["heartbeat_age_seconds"] = max(0.0, (datetime.now(timezone.utc) - datetime.fromisoformat(heartbeat)).total_seconds())
+            except ValueError:
+                result["heartbeat_age_seconds"] = None
+        else:
+            result["heartbeat_age_seconds"] = None
+        result_dir = result.get("result_dir")
+        if result_dir and result["state"] in ACTIVE_STATES:
+            path = Path(result_dir)
+            result["stdout"] = read_capped_text(path / "stdout.log") or result.get("stdout", "")
+            result["stderr"] = read_capped_text(path / "stderr.log") or result.get("stderr", "")
+        return result
     if name == "task_wait":
         tid = str(args.get("task_id") or "")
         wait_seconds = max(0, min(int(args.get("wait_seconds", 20)), TASK_WAIT_MAX_SECONDS))
         deadline = time.monotonic() + wait_seconds
         while True:
-            with db_conn() as db:
-                row = db.execute(
-                    "SELECT id,host,state,created_at,started_at,finished_at,heartbeat_at,timeout,exit_code,stdout,stderr,command_sha256 FROM tasks WHERE id=?",
-                    (tid,),
-                ).fetchone()
-            if not row:
-                raise ValueError("task_not_found")
-            result = dict(row)
-            if result["state"] in {"succeeded", "failed", "cancelled", "expired"} or time.monotonic() >= deadline:
+            result = execute_tool("task_status", {"task_id": tid})
+            if result["state"] in TERMINAL_STATES or time.monotonic() >= deadline:
                 return result
             if cancel_check and cancel_check():
                 return {"id": tid, "state": result["state"], "detached": True}
@@ -425,17 +654,18 @@ def execute_tool(
     if name == "task_cancel":
         tid = str(args.get("task_id") or "")
         with db_conn() as db:
-            row = db.execute("SELECT state FROM tasks WHERE id=?", (tid,)).fetchone()
+            row = db.execute("SELECT state,execution_unit FROM tasks WHERE id=?", (tid,)).fetchone()
             if not row:
                 raise ValueError("task_not_found")
-            if row["state"] in {"succeeded", "failed", "cancelled", "expired"}:
+            if row["state"] in TERMINAL_STATES:
                 return {"task_id": tid, "state": row["state"]}
-            db.execute("UPDATE tasks SET state='cancelled',finished_at=? WHERE id=?", (now(), tid))
-        with ACTIVE_LOCK:
-            proc = ACTIVE_PROCS.get(tid)
-            if proc and proc.poll() is None:
-                proc.terminate()
-        return {"task_id": tid, "state": "cancelled"}
+            if row["state"] == "queued":
+                db.execute("UPDATE tasks SET state='cancelled',finished_at=?,heartbeat_at=?,progress='cancelled_before_start' WHERE id=?", (now(), now(), tid))
+                return {"task_id": tid, "state": "cancelled"}
+            db.execute("UPDATE tasks SET state='cancel_requested',heartbeat_at=?,progress='cancellation_requested' WHERE id=?", (now(), tid))
+        unit = str(row["execution_unit"] or task_unit_name(tid))
+        stop_task_unit(unit)
+        return {"task_id": tid, "state": "cancel_requested"}
     if name == "task_submit":
         cfg = validate_host(str(host))
         command = str(args.get("command") or "")
@@ -448,12 +678,12 @@ def execute_tool(
             raise ValueError("request_id_too_long")
         with db_conn() as db:
             if request_id:
-                row = db.execute("SELECT id,host,state FROM tasks WHERE request_id=?", (request_id,)).fetchone()
+                row = db.execute("SELECT id,host,command_sha256,timeout,state FROM tasks WHERE request_id=?", (request_id,)).fetchone()
                 if row:
-                    if row["host"] != host:
+                    if row["host"] != host or row["command_sha256"] != digest or int(row["timeout"]) != timeout:
                         raise ValueError("request_id_conflict")
                     return {"task_id": row["id"], "host": row["host"], "state": row["state"], "platform": cfg["platform"], "deduplicated": True}
-            existing = db.execute("SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1", (host, digest, timeout)).fetchone()
+            existing = db.execute("SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','starting','running','cancel_requested') ORDER BY created_at DESC LIMIT 1", (host, digest, timeout)).fetchone()
             if existing:
                 return {"task_id": existing["id"], "host": host, "state": existing["state"], "platform": cfg["platform"], "deduplicated": True}
             tid = str(uuid.uuid4())
@@ -537,69 +767,64 @@ def tool_specs() -> list[dict[str, Any]]:
 
 
 def task_worker() -> None:
-    while not STOP_EVENT.wait(1):
+    while not STOP_EVENT.wait(0.2):
         tid = None
         try:
+            reconcile_tasks()
             with db_conn() as db:
+                active = db.execute(
+                    "SELECT 1 FROM tasks WHERE state IN ('starting','running','cancel_requested') LIMIT 1"
+                ).fetchone()
+                if active:
+                    continue
                 row = db.execute(
-                    "SELECT id,host,command,timeout FROM tasks WHERE state='queued' ORDER BY created_at LIMIT 1"
+                    "SELECT id,timeout FROM tasks WHERE state='queued' ORDER BY created_at LIMIT 1"
                 ).fetchone()
                 if not row:
                     continue
+                result_dir = str(ensure_task_result_dir(str(row["id"])))
+                unit = task_unit_name(str(row["id"]))
                 changed = db.execute(
-                    "UPDATE tasks SET state='running',started_at=?,heartbeat_at=? WHERE id=? AND state='queued'",
-                    (now(), now(), row["id"]),
+                    "UPDATE tasks SET state='starting',execution_unit=?,started_at=COALESCE(started_at,?),"
+                    "heartbeat_at=?,progress='launching',attempt=attempt+1,result_dir=? WHERE id=? AND state='queued'",
+                    (unit, now(), now(), result_dir, row["id"]),
                 ).rowcount
             if not changed:
                 continue
-            tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
-            proc = subprocess.Popen(
-                isolated_invocation(remote_invocation(host, command), label="task"),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, errors="replace", start_new_session=True
-            )
-            with ACTIVE_LOCK:
-                ACTIVE_PROCS[tid] = proc
-            deadline = time.monotonic() + timeout
-            state = "running"
-            while proc.poll() is None:
-                with db_conn() as db:
-                    current = db.execute("SELECT state FROM tasks WHERE id=?", (tid,)).fetchone()
-                    if current and current["state"] == "cancelled":
-                        proc.terminate()
-                        state = "cancelled"
-                        break
-                    db.execute("UPDATE tasks SET heartbeat_at=? WHERE id=?", (now(), tid))
-                if time.monotonic() >= deadline:
-                    proc.kill()
-                    state = "expired"
-                    break
-                time.sleep(2)
-            stdout, stderr = proc.communicate(timeout=10)
-            rc = proc.returncode
-            if state == "running":
-                state = "succeeded" if rc == 0 else "failed"
-            with db_conn() as db:
-                db.execute(
-                    "UPDATE tasks SET state=?,finished_at=?,heartbeat_at=?,exit_code=?,stdout=?,stderr=? WHERE id=?",
-                    (state, now(), now(), rc, redact_text(stdout), redact_text(stderr), tid),
-                )
-            audit("task_worker", host, {"task_id": tid}, state == "succeeded", f"task {state} rc={rc}")
+            tid = str(row["id"])
+            launch_task_service(tid, int(row["timeout"]))
+            audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
         except Exception as exc:
-            time.sleep(1)
             try:
                 if tid:
                     with db_conn() as db:
                         db.execute(
-                            "UPDATE tasks SET state='failed',finished_at=?,stderr=? WHERE id=?",
-                            (now(), redact_text(str(exc)), tid),
+                            "UPDATE tasks SET recovery_note=?,reconciled_at=? WHERE id=? AND state='starting'",
+                            (redact_text(str(exc)), now(), tid),
                         )
             except Exception:
                 pass
-        finally:
-            if tid:
-                with ACTIVE_LOCK:
-                    ACTIVE_PROCS.pop(tid, None)
+
+
+def durable_health_summary() -> dict[str, Any]:
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT state,COUNT(*) AS count FROM tasks WHERE state IN ('queued','starting','running','cancel_requested','indeterminate') GROUP BY state"
+        ).fetchall()
+        heartbeat = db.execute(
+            "SELECT heartbeat_at FROM tasks WHERE state IN ('starting','running','cancel_requested') AND heartbeat_at IS NOT NULL ORDER BY heartbeat_at LIMIT 1"
+        ).fetchone()
+    summary = {state: 0 for state in ("queued", "starting", "running", "cancel_requested", "indeterminate")}
+    summary.update({str(row["state"]): int(row["count"]) for row in rows})
+    age: float | None = None
+    if heartbeat:
+        try:
+            age = max(0.0, (datetime.now(timezone.utc) - datetime.fromisoformat(heartbeat["heartbeat_at"])).total_seconds())
+        except ValueError:
+            age = None
+    summary["oldest_heartbeat_age_seconds"] = age
+    summary["degraded"] = age is not None and age > 10
+    return summary
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -636,7 +861,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200, {
                 "ok": True, "endpoint": "shopvivaliz-remote-control-mcp",
-                "version": VERSION, "hosts": list(HOSTS), "timestamp": now()
+                "version": VERSION, "hosts": list(HOSTS), "timestamp": now(),
+                "durable": durable_health_summary(),
             })
             return
         self._json(405, {"error": "method_not_allowed"})
@@ -711,6 +937,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+    reconcile_tasks()
     worker = threading.Thread(target=task_worker, name="task-worker", daemon=True)
     worker.start()
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
@@ -722,4 +949,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--run-task":
+        raise SystemExit(run_task_entrypoint(sys.argv[2]))
     main()

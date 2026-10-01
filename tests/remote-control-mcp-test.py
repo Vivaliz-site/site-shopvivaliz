@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,9 +25,25 @@ class RemoteControlMcpTests(unittest.TestCase):
         m.DB_PATH = m.STATE_DIR / "state.db"
         m.SSH_KEY = m.STATE_DIR / "id_ed25519"
         m.KNOWN_HOSTS = m.STATE_DIR / "known_hosts"
+        self._original_launch_task_service = m.launch_task_service
+        self._original_systemd_unit_state = m.systemd_unit_state
+        self._runner_threads = []
+
+        def launch_in_test(task_id, _timeout):
+            runner = threading.Thread(target=m.run_task_entrypoint, args=(task_id,), daemon=True)
+            self._runner_threads.append(runner)
+            runner.start()
+
+        m.launch_task_service = launch_in_test
+        m.systemd_unit_state = lambda _unit: "active"
         m.init_db()
 
     def tearDown(self):
+        m.STOP_EVENT.set()
+        for runner in self._runner_threads:
+            runner.join(timeout=2)
+        m.launch_task_service = self._original_launch_task_service
+        m.systemd_unit_state = self._original_systemd_unit_state
         self.tmp.cleanup()
 
     def test_four_canonical_hosts(self):
@@ -213,7 +230,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
         self.assertIn("openssl rand -hex 32", setup)
         self.assertIn("mcp-token", setup)
-        self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", setup)
+        self.assertIn('UNIT_SOURCE="${3:-}"', setup)
+        self.assertIn('install -m 0644 -o root -g root "$UNIT_SOURCE" "/etc/systemd/system/$SERVICE"', setup)
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", unit)
 
     def test_sensitive_file_paths_are_denied(self):
@@ -305,17 +323,17 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("PasswordAuthentication no", text)
 
     def test_controller_is_loopback_only(self):
-        text = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
+        text = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1", text)
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_PORT=5580", text)
 
     def test_controller_admin_runtime_is_not_filesystem_sandboxed(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
         setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
-        for text in (unit, setup):
-            self.assertNotIn("ProtectSystem=full", text)
-            self.assertNotIn("ProtectHome=read-only", text)
-            self.assertNotIn("PrivateTmp=true", text)
+        self.assertNotIn("ProtectSystem=full", unit)
+        self.assertNotIn("ProtectHome=read-only", unit)
+        self.assertNotIn("PrivateTmp=true", unit)
+        self.assertIn("UNIT_SOURCE", setup)
 
     def test_windows_bootstrap_requires_administrator(self):
         text = (ROOT / "scripts" / "setup-remote-control-windows.ps1").read_text(encoding="utf-8")
@@ -1575,6 +1593,171 @@ class BootstrapContractTests(unittest.TestCase):
             "Error: Workspace not trusted. Please run claude in /tmp/example first to review and accept the workspace trust dialog."
         ))
         self.assertFalse(module.workspace_not_trusted_visible("Enable Remote Control? (y/n)"))
+
+
+class DurableExecutorV2Tests(unittest.TestCase):
+    """Regression contract for durable work that outlives the HTTP controller."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        m.STATE_DIR = Path(self.tmp.name)
+        m.DB_PATH = m.STATE_DIR / "state.db"
+        m.SSH_KEY = m.STATE_DIR / "id_ed25519"
+        m.KNOWN_HOSTS = m.STATE_DIR / "known_hosts"
+        self._real_launch_task_service = m.launch_task_service
+        self._original_systemd_unit_state = m.systemd_unit_state
+        m.systemd_unit_state = lambda _unit: "active"
+        m.STOP_EVENT.clear()
+        m.init_db()
+
+    def tearDown(self):
+        m.STOP_EVENT.set()
+        m.systemd_unit_state = self._original_systemd_unit_state
+        self.tmp.cleanup()
+
+    def submit(self, command="printf durable", request_id=None, timeout=30):
+        return m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26", "command": command,
+            "timeout": timeout, "request_id": request_id,
+        })
+
+    def claim(self, task_id, *, state="starting", started=False):
+        unit = m.task_unit_name(task_id)
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state=?,execution_unit=?,execution_started_at=?,result_dir=? WHERE id=?",
+                (state, unit, m.now() if started else None, str(m.task_result_dir(task_id)), task_id),
+            )
+        return unit
+
+    def test_init_db_does_not_requeue_running_task(self):
+        task_id = self.submit()["task_id"]
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='running',started_at=?,heartbeat_at=? WHERE id=?",
+                (m.now(), m.now(), task_id),
+            )
+        m.init_db()
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "running")
+
+    def test_task_unit_name_is_deterministic_from_task_id(self):
+        task_id = "123e4567-e89b-12d3-a456-426614174000"
+        self.assertEqual(
+            m.task_unit_name(task_id),
+            "shopvivaliz-remote-task-123e4567e89b12d3a456426614174000.service",
+        )
+        with self.assertRaises(ValueError):
+            m.task_unit_name("not-a-task-id")
+
+    def test_request_id_conflicts_if_command_or_timeout_differs(self):
+        self.submit(request_id="immutable-request")
+        with self.assertRaisesRegex(ValueError, "request_id_conflict"):
+            self.submit(command="printf changed", request_id="immutable-request")
+        with self.assertRaisesRegex(ValueError, "request_id_conflict"):
+            self.submit(request_id="immutable-request", timeout=31)
+
+    def test_worker_does_not_launch_duplicate_when_live_unit_exists(self):
+        task_id = self.submit()["task_id"]
+        unit = self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="active"), \
+             mock.patch.object(m, "launch_task_service") as launch:
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start(); time.sleep(0.2); m.STOP_EVENT.set(); worker.join(timeout=2)
+        launch.assert_not_called()
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["execution_unit"], unit)
+
+    def test_reconcile_live_unit_adopts_running_task(self):
+        task_id = self.submit()["task_id"]
+        unit = self.claim(task_id)
+        with mock.patch.object(m, "systemd_unit_state", return_value="active"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "running")
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["execution_unit"], unit)
+
+    def test_reconcile_persisted_result_finalizes_task(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        m.atomic_json(result_dir / "result.json", {"state": "succeeded", "exit_code": 0, "stdout": "ok", "stderr": ""})
+        self.assertEqual(m.reconcile_task(m.load_task(task_id)), "succeeded")
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "succeeded")
+        self.assertEqual(status["stdout"], "ok")
+
+    def test_reconcile_never_started_task_can_requeue(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id)
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "queued")
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "queued")
+
+    def test_reconcile_started_missing_unit_marks_indeterminate(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+        self.assertEqual(m.execute_tool("task_status", {"task_id": task_id})["state"], "indeterminate")
+
+    def test_controller_restart_with_surviving_unit_does_not_spawn_second_execution(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="active"), \
+             mock.patch.object(m, "launch_task_service") as launch:
+            m.reconcile_tasks()
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start(); time.sleep(0.2); m.STOP_EVENT.set(); worker.join(timeout=2)
+        launch.assert_not_called()
+
+    def test_task_cancel_uses_persisted_unit_not_only_active_procs(self):
+        task_id = self.submit()["task_id"]
+        unit = self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "stop_task_unit", return_value=True) as stop:
+            result = m.execute_tool("task_cancel", {"task_id": task_id})
+        self.assertEqual(result["state"], "cancel_requested")
+        stop.assert_called_once_with(unit)
+
+    def test_runner_persists_stdout_stderr_exit_code_and_result_json(self):
+        task_id = self.submit(command="printf runner-output") ["task_id"]
+        self.claim(task_id)
+        self.assertEqual(m.run_task_entrypoint(task_id), 0)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "succeeded")
+        self.assertIn("runner-output", status["stdout"])
+        self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
+
+    def test_runner_heartbeat_advances_without_http_controller(self):
+        task_id = self.submit(command="sleep 0.3") ["task_id"]
+        self.claim(task_id)
+        with m.db_conn() as db:
+            db.execute("UPDATE tasks SET heartbeat_at=? WHERE id=?", ("1970-01-01T00:00:00+00:00", task_id))
+        runner = threading.Thread(target=m.run_task_entrypoint, args=(task_id,), daemon=True)
+        runner.start(); time.sleep(0.1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        runner.join(timeout=2)
+        self.assertNotEqual(status["heartbeat_at"], "1970-01-01T00:00:00+00:00")
+        self.assertIsNotNone(status["execution_started_at"])
+
+    def test_task_wait_treats_indeterminate_as_terminal(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            result = m.execute_tool("task_wait", {"task_id": task_id, "wait_seconds": 1})
+        self.assertEqual(result["state"], "indeterminate")
+
+    def test_systemd_command_does_not_include_raw_task_command(self):
+        task_id = self.submit(command="echo forbidden-payload") ["task_id"]
+        with mock.patch.object(m, "launch_task_service", self._real_launch_task_service), \
+             mock.patch.object(m.subprocess, "run", return_value=mock.Mock(returncode=0, stderr="")) as run:
+            m.launch_task_service(task_id, 30)
+        argv = run.call_args.args[0]
+        self.assertNotIn("forbidden-payload", " ".join(argv))
+        self.assertEqual(argv[-2:], ["--run-task", task_id])
+
+    def test_tunnel_unit_does_not_require_controller_hard_dependency(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-secure-mcp-tunnel.service").read_text(encoding="utf-8")
+        self.assertIn("Wants=shopvivaliz-remote-control-mcp.service", unit)
+        self.assertNotIn("Requires=shopvivaliz-remote-control-mcp.service", unit)
 
 
 if __name__ == "__main__":
