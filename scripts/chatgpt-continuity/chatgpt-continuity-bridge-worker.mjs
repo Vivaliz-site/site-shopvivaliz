@@ -1395,25 +1395,26 @@ async function reinforcementCheckOnce(
       };
     }
 
-    const baseline = await assistantSnapshot(cdp);
-    const sent = await sendContinueMessage(cdp);
-    if (!sent) {
-      console.log('chatgpt_continuity_reinforcement error_banner_confirmed sent=false');
-      return {
-        action: 'send_failed',
-        sent: false,
-        progress_confirmed: false,
-        http_status: alignmentHttpStatus,
-        cross_device_discovery: crossDeviceDiscovery,
-      };
-    }
-    const progressed = await confirmProgress(cdp, baseline);
-    const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
-    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=true progress=${progressed}`);
+    // Reuse the same hardened recovery path as checkpoint-driven nudges.
+    // The live VM reproduced a selector mismatch here even though attemptNudge
+    // could successfully reattach and confirm progress on the same conversation.
+    const outcome = await attemptNudge(
+      'reinforcement-live',
+      async () => cdp,
+    );
+    const action = outcome.result_status === 'PROGRESS_CONFIRMED'
+      ? 'confirmed_progress'
+      : outcome.result_status === 'SENT_UNCONFIRMED'
+        ? 'sent_unconfirmed'
+        : outcome.result_status === 'ERROR'
+          ? 'send_failed'
+          : 'send_failed';
+    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed result=${outcome.result_status}`);
     return {
       action,
-      sent: true,
-      progress_confirmed: progressed,
+      sent: outcome.result_status !== 'CONVERSATION_NOT_FOUND',
+      progress_confirmed: outcome.result_status === 'PROGRESS_CONFIRMED',
+      detail: outcome.detail,
       http_status: alignmentHttpStatus,
       cross_device_discovery: crossDeviceDiscovery,
     };
