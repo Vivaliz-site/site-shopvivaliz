@@ -1401,6 +1401,7 @@ async function reinforcementCheckOnce(
     const outcome = await attemptNudge(
       'reinforcement-live',
       async () => cdp,
+      confirmProgress,
     );
     const action = outcome.result_status === 'PROGRESS_CONFIRMED'
       ? 'confirmed_progress'
