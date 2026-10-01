@@ -14,6 +14,9 @@ DISPATCHER_PATH = SCRIPTS / "task_resume_dispatcher.py"
 sys.path.insert(0, str(SCRIPTS))
 
 
+import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher  # noqa: E402
+
+
 def load_dispatcher():
     spec = importlib.util.spec_from_file_location("task_resume_dispatcher_test", DISPATCHER_PATH)
     if spec is None or spec.loader is None:
@@ -204,6 +207,27 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         )
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
+
+    def test_chatgpt_nudge_and_detached_fallback_share_execution_lock(self) -> None:
+        dispatcher = load_dispatcher()
+        self.assertEqual(dispatcher.LOCK_FILE, nudge_dispatcher.LOCK_FILE)
+        self.assertEqual(dispatcher.LOCK_FILE, "_continuity-execution.lock")
+        state = self._state()
+        self._request(state)
+
+        with nudge_dispatcher._dispatcher_lock(self.runtime) as acquired:
+            self.assertTrue(acquired)
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+
+        self.assertTrue(result.get("locked"))
+        self.assertEqual(result["executed"], 0)
+        self.assertFalse(self.capture.exists())
 
     def test_recent_successful_chatgpt_nudge_defers_detached_executor(self) -> None:
         dispatcher = load_dispatcher()

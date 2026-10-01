@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 
 # Install from an immutable release path; callers must never edit current or a
-# release in place.  The service follows the atomically switched current link.
+# release in place. The service environment points directly at the copied,
+# immutable release selected by this installer.
 release_dir="${1:?immutable release directory required}"
 release_id="${2:-}"
 unit_name="shopvivaliz-gemini-24x7-controller.service"

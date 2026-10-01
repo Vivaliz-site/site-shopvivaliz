@@ -246,13 +246,33 @@ O controlador `scripts/gemini_24x7_controller.py` supervisiona a pilha já
 existente, sem substituí-la: watchdog determinístico → nudge de ChatGPT comum
 → dispatcher finito com Gemini primário e fallback `codex-auto` explicitamente autorizado. Ele mantém um lease atômico no runtime
 compartilhado, registra apenas metadados sanitizados e recusa propriedade
-duplicada enquanto o lease estiver vivo. Após interrupção/crash, lease vencido
-é recuperado e registrado antes de novo ciclo.
+duplicada enquanto o lease estiver vivo. Além do lease por ciclo, o modo
+`--daemon` mantém um lock exclusivo durante toda a vida do processo; um segundo
+daemon falha fechado antes de executar watchdog, nudge ou dispatcher. O nudge
+ChatGPT possui um lock transacional próprio cobrindo leitura do ledger, decisão,
+chamada ao bridge e persistência do resultado, impedindo duplo envio por TOCTOU.
+Após interrupção/crash, lease vencido é recuperado e registrado antes de novo ciclo.
+
+Os checkpoints em `agent_task_state.py` serializam toda transição
+`load -> mutate -> atomic write` com um lock compartilhado entre processos.
+A gravação faz `fsync` no arquivo, `os.replace` e `fsync` no diretório pai;
+`start` repetido para a mesma identidade é idempotente e uma colisão de
+`task_id` com objetivo/repositório diferentes falha fechado, sem sobrescrever
+histórico. O estado-resumo do controlador continua sendo atualizado a cada ciclo,
+mas o ledger de eventos só cresce quando existe atividade material, recuperação
+de lease ou anomalia, evitando crescimento ocioso a cada 30 segundos.
 
 A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
 `always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
 `KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
-PID, exit code ou resposta HTTP. A instalação só pode partir de uma release
+PID, exit code ou resposta HTTP. O daemon mantém
+`_gemini-24x7-controller-daemon.lock` durante toda a vida do processo, portanto
+dois daemons não podem alternar ownership entre ciclos. O nudge ChatGPT e o
+fallback detached compartilham `_continuity-execution.lock`: enquanto um efeito
+externo de retomada estiver em voo, o outro tier fica suprimido. O lease durável
+registra PID, boot id e start ticks; se o processo proprietário morrer, o restart
+recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
+continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
@@ -271,8 +291,8 @@ executa e conclui uma tarefa sintética por conta própria.
   daí, **somente observa** arquivos de estado/ledger em disco. É proibido o
   probe importar ou chamar `task_continuation_watchdog`/
   `task_resume_dispatcher` ou invocar diretamente qualquer `run_once`; toda
-  detecção/execução deve vir do daemon `shopvivaliz-agent.service` já
-  rodando no host de produção, no ciclo dele.
+  detecção/execução deve vir do daemon `shopvivaliz-gemini-24x7-controller.service` já
+  rodando no backend de produção, no ciclo dele.
 - `next_action` da tarefa sintética usa apenas comandos já permitidos na
   política headless do executor (`agent_task_state.py ready`/`complete`),
   para que o resultado do probe nunca dependa de uma política de aprovação

@@ -20,11 +20,13 @@ prints the bridge token.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import urllib.error
 import urllib.request
 import urllib.parse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -37,6 +39,7 @@ except ImportError:  # direct CLI execution from repository root
     from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
+LOCK_FILE = "_continuity-execution.lock"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token")
@@ -125,11 +128,45 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
         return False
     return str(request.get("fingerprint", "")).strip() == checkpoint_fingerprint(payload)
 
+@contextmanager
+def _dispatcher_lock(runtime_dir: Path):
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    path = runtime_dir / LOCK_FILE
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
     runtime_dir.mkdir(parents=True, exist_ok=True)
     path = runtime_dir / LEDGER_FILE
     with path.open("a", encoding="utf-8") as handle:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    _fsync_dir(runtime_dir)
 
 
 def _bridge_host_header(bridge_url: str) -> str:
@@ -211,7 +248,7 @@ def query_nudge_status_via_bridge(
         return {"ok": False, "http_status": 0, "error": "transport_error"}
 
 
-def run_once(
+def _run_once_locked(
     *,
     runtime_dir: Path | None = None,
     bridge_url: str = "",
@@ -382,6 +419,39 @@ def run_once(
         "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
     }
+
+
+def run_once(
+    *,
+    runtime_dir: Path | None = None,
+    bridge_url: str = "",
+    token: str = "",
+    enqueue: Any = enqueue_nudge_via_bridge,
+    query_status: Any = query_nudge_status_via_bridge,
+) -> dict[str, Any]:
+    root = Path(runtime_dir or RUNTIME_DIR)
+    with _dispatcher_lock(root) as acquired:
+        if not acquired:
+            return {
+                "ok": True,
+                "runtime_dir": str(root),
+                "scanned": 0,
+                "eligible": 0,
+                "dispatched": 0,
+                "skipped_no_token": 0,
+                "skipped_stale_checkpoint": 0,
+                "retry_attempted": 0,
+                "skipped_attempt_limit": 0,
+                "locked": True,
+                "generated_at": utc_now(),
+            }
+        return _run_once_locked(
+            runtime_dir=root,
+            bridge_url=bridge_url,
+            token=token,
+            enqueue=enqueue,
+            query_status=query_status,
+        )
 
 
 def main() -> int:

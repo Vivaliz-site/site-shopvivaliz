@@ -75,6 +75,23 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(completed["status"], "CONCLUIDO")
         self.assertTrue(state.is_terminal(completed))
 
+    def test_repeated_start_is_idempotent_but_identity_collision_is_rejected(self) -> None:
+        state.start_task("stable-id", "original goal", "gpt")
+        state.record_progress("stable-id", next_action="keep state", evidence="must survive")
+
+        repeated = state.start_task("stable-id", "original goal", "another-agent")
+        self.assertEqual(repeated["goal"], "original goal")
+        self.assertIn("must survive", repeated["evidence"])
+        self.assertEqual(len(repeated["history"]), 2)
+
+        with self.assertRaises(state.TaskStateError):
+            state.start_task("stable-id", "different goal", "gpt")
+
+        preserved = state.load_task("stable-id")
+        self.assertEqual(preserved["goal"], "original goal")
+        self.assertIn("must survive", preserved["evidence"])
+        self.assertEqual(len(preserved["history"]), 2)
+
     def test_chatgpt_freeze_task_requires_browser_progress_before_ready(self) -> None:
         task_id = "chatgpt-freeze-root-cause-20260929-g4"
         state.start_task(task_id, "Prove natural ChatGPT continuity after a freeze", "gpt")

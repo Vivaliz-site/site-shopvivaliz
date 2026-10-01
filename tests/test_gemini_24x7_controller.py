@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,45 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         ]
         self.assertEqual(events[-1]["event"], "lease_recovered")
 
+    def test_live_ttl_lease_from_dead_process_is_recovered_immediately(self) -> None:
+        controller = load_controller()
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            pid = child.pid
+            start_ticks = controller._process_start_ticks(pid)
+            self.assertTrue(start_ticks)
+            boot_id = controller._boot_id()
+        finally:
+            child.terminate()
+            child.wait(timeout=5)
+
+        lease = self.runtime / controller.LEASE_FILE
+        lease.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "owner_id": "crashed-owner",
+                    "pid": pid,
+                    "pid_start_ticks": start_ticks,
+                    "boot_id": boot_id,
+                    "expires_at": "2999-01-01T00:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = controller.acquire_lease(self.runtime, owner_id="restarted-owner", ttl_seconds=60)
+
+        self.assertTrue(result.acquired)
+        self.assertTrue(result.recovered)
+        events = [
+            json.loads(line)
+            for line in (self.runtime / controller.EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(events[-1]["event"], "lease_recovered")
+        self.assertEqual(events[-1]["reason"], "owner_dead")
+
     def test_live_lease_blocks_duplicate_controller_ownership(self) -> None:
         controller = load_controller()
         first = controller.acquire_lease(self.runtime, owner_id="owner-one", ttl_seconds=300)
@@ -58,6 +99,94 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertTrue(first.acquired)
         self.assertFalse(second.acquired)
         self.assertEqual(second.reason, "lease_held")
+
+    def test_process_lifetime_daemon_guard_blocks_second_owner(self) -> None:
+        controller = load_controller()
+        with controller.daemon_guard(self.runtime) as first:
+            self.assertTrue(first)
+            with controller.daemon_guard(self.runtime) as second:
+                self.assertFalse(second)
+
+    def test_idle_cycle_does_not_spam_event_ledger(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 8, "eligible": 0, "dispatched": 0}),
+            patch.object(
+                controller.nudge_dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 0,
+                    "eligible": 0,
+                    "dispatched": 0,
+                    "skipped_no_token": 0,
+                    "skipped_stale_checkpoint": 0,
+                },
+            ),
+            patch.object(
+                controller.dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 0,
+                    "eligible": 0,
+                    "executed": 0,
+                    "progressed": 0,
+                    "terminal": 0,
+                    "no_progress": 0,
+                    "failed": 0,
+                    "deferred_chatgpt": 0,
+                },
+            ),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="idle-owner")
+
+        self.assertTrue(result["ok"])
+        events = self.runtime / controller.EVENTS_FILE
+        self.assertFalse(events.exists(), "idle 30-second cycles must not grow an unbounded event ledger")
+
+    def test_material_cycle_keeps_forensic_event(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 1, "dispatched": 1}),
+            patch.object(
+                controller.nudge_dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 0,
+                    "eligible": 0,
+                    "dispatched": 0,
+                    "skipped_no_token": 0,
+                    "skipped_stale_checkpoint": 0,
+                },
+            ),
+            patch.object(
+                controller.dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 0,
+                    "eligible": 0,
+                    "executed": 0,
+                    "progressed": 0,
+                    "terminal": 0,
+                    "no_progress": 0,
+                    "failed": 0,
+                    "deferred_chatgpt": 0,
+                },
+            ),
+        ):
+            controller.run_once(runtime_dir=self.runtime, owner_id="active-owner")
+
+        rows = [
+            json.loads(line)
+            for line in (self.runtime / controller.EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(rows[-1]["event"], "cycle_completed")
+        self.assertEqual(rows[-1]["watchdog"]["dispatched"], 1)
+
+    def test_controller_atomic_json_fsyncs_parent_directory(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("os.replace(temp, path)", source)
+        self.assertIn("_fsync_dir(path.parent)", source)
 
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")

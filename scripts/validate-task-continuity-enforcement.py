@@ -111,7 +111,18 @@ if not STATE.is_file():
     errors.append("missing scripts/agent_task_state.py")
 else:
     state_text = STATE.read_text(encoding="utf-8", errors="replace")
-    for token in ("READY_TO_COMPLETE", "BLOCKED_EXTERNAL", "alternatives_attempted", "next_action", "DEFAULT_REPOSITORY", "repository"):
+    for token in (
+        "READY_TO_COMPLETE",
+        "BLOCKED_EXTERNAL",
+        "alternatives_attempted",
+        "next_action",
+        "DEFAULT_REPOSITORY",
+        "repository",
+        "STATE_LOCK_FILE",
+        "_state_lock",
+        "fcntl.LOCK_EX",
+        "_fsync_dir(path.parent)",
+    ):
         if token not in state_text:
             errors.append(f"scripts/agent_task_state.py: missing {token}")
 
@@ -179,11 +190,24 @@ if not GEMINI_CONTROLLER.is_file():
     errors.append("missing scripts/gemini_24x7_controller.py")
 else:
     controller_text = GEMINI_CONTROLLER.read_text(encoding="utf-8", errors="replace")
-    for token in ("acquire_lease", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
+    for token in ("acquire_lease", "daemon_guard", "DAEMON_LOCK_FILE", "_lease_owner_alive", "pid_start_ticks", "boot_id", "_fsync_dir(path.parent)", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
         if token not in controller_text:
             errors.append(f"scripts/gemini_24x7_controller.py: missing {token}")
 if not GEMINI_CONTROLLER_TEST.is_file():
     errors.append("missing tests/test_gemini_24x7_controller.py")
+
+nudge_dispatcher = ROOT / "scripts" / "chatgpt_continuity_nudge_dispatcher.py"
+if not nudge_dispatcher.is_file():
+    errors.append("missing scripts/chatgpt_continuity_nudge_dispatcher.py")
+else:
+    nudge_text = nudge_dispatcher.read_text(encoding="utf-8", errors="replace")
+    for token in ("LOCK_FILE", "_continuity-execution.lock", "_dispatcher_lock", "LOCK_EX | fcntl.LOCK_NB", "os.fsync", "_fsync_dir(runtime_dir)"):
+        if token not in nudge_text:
+            errors.append(f"scripts/chatgpt_continuity_nudge_dispatcher.py: missing {token}")
+    if DISPATCHER.is_file():
+        detached_text = DISPATCHER.read_text(encoding="utf-8", errors="replace")
+        if "_continuity-execution.lock" not in detached_text:
+            errors.append("scripts/task_resume_dispatcher.py: missing shared continuity execution lock")
 
 if not DISPATCHER_TEST.is_file():
     errors.append("missing tests/test_task_resume_dispatcher.py")
