@@ -190,7 +190,7 @@ if not GEMINI_CONTROLLER.is_file():
     errors.append("missing scripts/gemini_24x7_controller.py")
 else:
     controller_text = GEMINI_CONTROLLER.read_text(encoding="utf-8", errors="replace")
-    for token in ("acquire_lease", "daemon_guard", "DAEMON_LOCK_FILE", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
+    for token in ("acquire_lease", "daemon_guard", "DAEMON_LOCK_FILE", "_fsync_dir(path.parent)", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
         if token not in controller_text:
             errors.append(f"scripts/gemini_24x7_controller.py: missing {token}")
 if not GEMINI_CONTROLLER_TEST.is_file():
@@ -201,7 +201,7 @@ if not nudge_dispatcher.is_file():
     errors.append("missing scripts/chatgpt_continuity_nudge_dispatcher.py")
 else:
     nudge_text = nudge_dispatcher.read_text(encoding="utf-8", errors="replace")
-    for token in ("LOCK_FILE", "_dispatcher_lock", "LOCK_EX | fcntl.LOCK_NB", "os.fsync"):
+    for token in ("LOCK_FILE", "_dispatcher_lock", "LOCK_EX | fcntl.LOCK_NB", "os.fsync", "_fsync_dir(runtime_dir)"):
         if token not in nudge_text:
             errors.append(f"scripts/chatgpt_continuity_nudge_dispatcher.py: missing {token}")
 
