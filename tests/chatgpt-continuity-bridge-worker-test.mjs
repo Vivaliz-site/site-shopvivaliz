@@ -945,6 +945,28 @@ async function run() {
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
 
   {
+    const cdp = fakeCdp({
+      pageText: 'Parou de pensar',
+      generating: true,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'IN_PROGRESS',
+      staleStopClearSucceeds: true,
+    });
+    const outcome = await attemptNudge(
+      'task-terminal-banner-with-stale-stop',
+      async () => cdp,
+      async () => false,
+      async () => true,
+    );
+    assert.notEqual(
+      outcome.result_status,
+      'STALLED_NOT_CONFIRMED',
+      'an explicit recoverable failure must outrank a stale Stop control / IN_PROGRESS bookkeeping signal',
+    );
+  }
+
+  {
     let connects = 0;
     const failed = fakeCdp({ pageText: 'Parou de pensar', generating: false });
     const clearedWithoutProgress = fakeCdp({
