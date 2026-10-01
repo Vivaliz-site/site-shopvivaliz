@@ -33,6 +33,7 @@ const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
 const AUTHORIZATION_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS || 3000));
+const AUTHORIZATION_TAB_TIMEOUT_MS = Math.max(250, Number(process.env.CHATGPT_CONTINUITY_AUTHORIZATION_TAB_TIMEOUT_MS || 3000));
 const REINFORCEMENT_POLL_MS = Math.max(
   15_000,
   Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_POLL_MS || 30_000),
@@ -451,6 +452,7 @@ async function authorizationCheckOnce(
     return response.ok ? await response.json() : [];
   },
   connector = connectCdpTarget,
+  tabTimeoutMs = AUTHORIZATION_TAB_TIMEOUT_MS,
 ) {
   if (!AUTO_ALLOW_ENABLED) return { action: 'disabled', scanned: 0 };
   const tabs = await listTabs();
@@ -464,7 +466,15 @@ async function authorizationCheckOnce(
       cdp=await connector(tab);
       if(!cdp) continue;
       scanned+=1;
-      const outcome=await clickAuthorizationIfPresent(cdp);
+      const timeoutMs=Math.max(25, Number(tabTimeoutMs||AUTHORIZATION_TAB_TIMEOUT_MS));
+      let timeoutHandle;
+      const outcome=await Promise.race([
+        clickAuthorizationIfPresent(cdp),
+        new Promise(resolve => {
+          timeoutHandle=setTimeout(() => resolve({action:'tab_timeout'}), timeoutMs);
+        }),
+      ]);
+      if(timeoutHandle) clearTimeout(timeoutHandle);
       if(outcome.action==='clicked'){
         return {...outcome,scanned};
       }

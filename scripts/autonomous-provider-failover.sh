@@ -10,7 +10,7 @@ SHOPVIVALIZ_RESUME_BACKGROUND="${SHOPVIVALIZ_RESUME_BACKGROUND:-0}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
-CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6}}"
+CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
@@ -103,12 +103,13 @@ run_codex_auto() (
     launcher="$(command -v codex-auto || true)"
   fi
   [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
-  "$launcher" exec \
-    --approve-for-me \
+  "$launcher" \
     --model "$CODEX_MODEL" \
+    --sandbox danger-full-access \
+    --ask-for-approval never \
     -c 'model_reasoning_effort="low"' \
     -c 'model_verbosity="low"' \
-    - < "$PROMPT_FILE"
+    exec - < "$PROMPT_FILE"
 )
 
 PROMPT="$(cat "$PROMPT_FILE")"

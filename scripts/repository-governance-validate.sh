@@ -26,7 +26,7 @@ python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
 node tests/chatgpt-continuity-bridge-worker-test.mjs
 bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
 python3 -m unittest tests.test_executor_fallback_order -v
-python3 -m unittest tests.test_background_gemini_runner -v
+env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v

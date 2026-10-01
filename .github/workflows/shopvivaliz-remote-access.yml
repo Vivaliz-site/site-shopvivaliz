@@ -753,6 +753,8 @@ jobs:
           bridge_queue_total = 0
           bridge_queue_pending = 0
           bridge_queue_claimed = 0
+          bridge_latest_error_code = "NONE"
+          bridge_latest_error_sha256 = ""
           bridge_store = pathlib.Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json")
           try:
               bridge_data = json.loads(bridge_store.read_text(encoding="utf-8")) if bridge_store.is_file() else {}
@@ -768,6 +770,20 @@ jobs:
                       bridge_queue_pending += 1
                   elif status == "CLAIMED":
                       bridge_queue_claimed += 1
+                  if status == "ERROR":
+                      raw_detail = str(item.get("detail") or "")
+                      normalized = raw_detail.lower()
+                      bridge_latest_error_code = str(item.get("detail_code") or (
+                          "COMPOSER_UNAVAILABLE_AFTER_REATTACH" if "composer/send-button remained unavailable after bounded reattach" in normalized else
+                          "SEND_FAILED_AFTER_REATTACH" if "composer found but send failed after bounded reattach" in normalized else
+                          "TRANSMISSION_COMPOSER_UNAVAILABLE" if "transmission error persisted and composer was unavailable after reattach" in normalized else
+                          "TRANSMISSION_RETRY_SEND_FAILED" if "transmission error persisted and retry send failed" in normalized else
+                          "TRANSMISSION_PERSISTED_AFTER_RETRY" if "transmission error persisted after bounded recovery retry" in normalized else
+                          "AMBIGUOUS_CONVERSATION_TARGET" if "multiple open chatgpt conversation tabs found" in normalized else
+                          "CDP_ENDPOINT_UNREACHABLE" if "cdp endpoint unreachable" in normalized else
+                          "UNCLASSIFIED_RUNTIME_ERROR"
+                      ))
+                      bridge_latest_error_sha256 = str(item.get("detail_sha256") or __import__("hashlib").sha256(raw_detail.encode()).hexdigest()) if raw_detail else ""
           except (OSError, UnicodeError, json.JSONDecodeError):
               pass
           bridge_queue_active = bridge_queue_pending + bridge_queue_claimed
@@ -805,6 +821,8 @@ jobs:
               "bridge_queue_total": bridge_queue_total,
               "bridge_queue_pending": bridge_queue_pending,
               "bridge_queue_claimed": bridge_queue_claimed,
+              "bridge_latest_error_code": bridge_latest_error_code,
+              "bridge_latest_error_sha256": bridge_latest_error_sha256,
               "bridge_queue_active": bridge_queue_active,
               "bridge_queue_resolved": bridge_queue_resolved,
           }, sort_keys=True))
@@ -821,6 +839,8 @@ jobs:
               bridge_queue_total="$(jq -r '.bridge_queue_total' "$diag_json")"
               bridge_queue_pending="$(jq -r '.bridge_queue_pending' "$diag_json")"
               bridge_queue_claimed="$(jq -r '.bridge_queue_claimed' "$diag_json")"
+              bridge_latest_error_code="$(jq -r '.bridge_latest_error_code' "$diag_json")"
+              bridge_latest_error_sha256="$(jq -r '.bridge_latest_error_sha256' "$diag_json")"
               bridge_queue_active="$(jq -r '.bridge_queue_active' "$diag_json")"
               bridge_queue_resolved="$(jq -r '.bridge_queue_resolved' "$diag_json")"
               rm -f "$diag_json"
@@ -895,6 +915,8 @@ jobs:
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL=$bridge_queue_total"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING=$bridge_queue_pending"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=$bridge_queue_claimed"
+              echo "CHATGPT_CONTINUITY_LATEST_ERROR_CODE=$bridge_latest_error_code"
+              echo "CHATGPT_CONTINUITY_LATEST_ERROR_SHA256=${bridge_latest_error_sha256:-NONE}"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=$bridge_queue_active"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=$bridge_queue_resolved"
               echo "CHATGPT_CONTINUITY_BRIDGE_STORE_CERTIFIED=$bridge_store_certified"

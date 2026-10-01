@@ -37,6 +37,10 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
+TASK_WAIT_MAX_SECONDS = 25
+MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
+INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
+SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -146,6 +150,7 @@ def init_db() -> None:
           host TEXT NOT NULL,
           command TEXT NOT NULL,
           command_sha256 TEXT NOT NULL,
+          request_id TEXT,
           state TEXT NOT NULL,
           created_at TEXT NOT NULL,
           started_at TEXT,
@@ -157,6 +162,10 @@ def init_db() -> None:
           stderr TEXT NOT NULL DEFAULT ''
         );
         """)
+        cols = {row[1] for row in db.execute("PRAGMA table_info(tasks)").fetchall()}
+        if "request_id" not in cols:
+            db.execute("ALTER TABLE tasks ADD COLUMN request_id TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
         db.execute(
             "UPDATE tasks SET state='queued', started_at=NULL, heartbeat_at=NULL "
             "WHERE state='running'"
@@ -203,6 +212,21 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
+def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
+    """Run command payload outside the controller cgroup when systemd is available."""
+    if os.geteuid() != 0 or not Path(SYSTEMD_RUN).is_file():
+        return args
+    unit = f"shopvivaliz-remote-command-{label}-{uuid.uuid4().hex[:12]}"
+    return [
+        SYSTEMD_RUN, "--scope", "--quiet",
+        "--unit", unit,
+        "--property", "CPUWeight=50",
+        "--property", "IOWeight=50",
+        "--",
+        *args,
+    ]
+
+
 def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
     """Terminate an inline command and every local descendant in its process group."""
     if proc.poll() is not None:
@@ -244,48 +268,54 @@ def run_host_command(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    args = remote_invocation(host, command)
+    args = isolated_invocation(remote_invocation(host, command))
     started = time.monotonic()
     deadline = started + timeout
-    proc = subprocess.Popen(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
-    stdout = b""
-    stderr = b""
-    while True:
-        if cancel_check is not None and cancel_check():
-            terminate_process_group(proc)
+    if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
+        raise RuntimeError("controller_busy_retry_or_use_task_submit")
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        stdout = b""
+        stderr = b""
+        while True:
+            if cancel_check is not None and cancel_check():
+                terminate_process_group(proc)
+                try:
+                    proc.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc, grace_seconds=0.2)
+                raise ClientDisconnected("client_disconnected")
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                terminate_process_group(proc)
+                try:
+                    proc.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc, grace_seconds=0.2)
+                raise subprocess.TimeoutExpired(args, timeout)
+
             try:
-                proc.communicate(timeout=1)
+                stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+                break
             except subprocess.TimeoutExpired:
-                terminate_process_group(proc, grace_seconds=0.2)
-            raise ClientDisconnected("client_disconnected")
+                continue
 
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            terminate_process_group(proc)
-            try:
-                proc.communicate(timeout=1)
-            except subprocess.TimeoutExpired:
-                terminate_process_group(proc, grace_seconds=0.2)
-            raise subprocess.TimeoutExpired(args, timeout)
-
-        try:
-            stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
-            break
-        except subprocess.TimeoutExpired:
-            continue
-
-    return {
-        "host": host,
-        "exit_code": proc.returncode,
-        "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
-        "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
-        "duration_ms": int((time.monotonic() - started) * 1000),
-    }
+        return {
+            "host": host,
+            "exit_code": proc.returncode,
+            "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+            "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
+            "duration_ms": int((time.monotonic() - started) * 1000),
+        }
+    finally:
+        INLINE_COMMAND_SLOTS.release()
 
 
 def health_command(platform: str) -> str:
@@ -374,6 +404,24 @@ def execute_tool(
         if not row:
             raise ValueError("task_not_found")
         return dict(row)
+    if name == "task_wait":
+        tid = str(args.get("task_id") or "")
+        wait_seconds = max(0, min(int(args.get("wait_seconds", 20)), TASK_WAIT_MAX_SECONDS))
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with db_conn() as db:
+                row = db.execute(
+                    "SELECT id,host,state,created_at,started_at,finished_at,heartbeat_at,timeout,exit_code,stdout,stderr,command_sha256 FROM tasks WHERE id=?",
+                    (tid,),
+                ).fetchone()
+            if not row:
+                raise ValueError("task_not_found")
+            result = dict(row)
+            if result["state"] in {"succeeded", "failed", "cancelled", "expired"} or time.monotonic() >= deadline:
+                return result
+            if cancel_check and cancel_check():
+                return {"id": tid, "state": result["state"], "detached": True}
+            time.sleep(0.25)
     if name == "task_cancel":
         tid = str(args.get("task_id") or "")
         with db_conn() as db:
@@ -394,13 +442,26 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         timeout = validate_timeout(args.get("timeout", 300))
-        tid = str(uuid.uuid4())
+        digest = hashlib.sha256(command.encode()).hexdigest()
+        request_id = str(args.get("request_id") or "").strip() or None
+        if request_id and len(request_id) > 200:
+            raise ValueError("request_id_too_long")
         with db_conn() as db:
+            if request_id:
+                row = db.execute("SELECT id,host,state FROM tasks WHERE request_id=?", (request_id,)).fetchone()
+                if row:
+                    if row["host"] != host:
+                        raise ValueError("request_id_conflict")
+                    return {"task_id": row["id"], "host": row["host"], "state": row["state"], "platform": cfg["platform"], "deduplicated": True}
+            existing = db.execute("SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1", (host, digest, timeout)).fetchone()
+            if existing:
+                return {"task_id": existing["id"], "host": host, "state": existing["state"], "platform": cfg["platform"], "deduplicated": True}
+            tid = str(uuid.uuid4())
             db.execute(
-                "INSERT INTO tasks(id,host,command,command_sha256,state,created_at,timeout) VALUES(?,?,?,?,?,?,?)",
-                (tid, host, command, hashlib.sha256(command.encode()).hexdigest(), "queued", now(), timeout),
+                "INSERT INTO tasks(id,host,command,command_sha256,request_id,state,created_at,timeout) VALUES(?,?,?,?,?,?,?,?)",
+                (tid, host, command, digest, request_id, "queued", now(), timeout),
             )
-        return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"]}
+        return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"], "deduplicated": False}
 
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
@@ -426,6 +487,10 @@ def execute_tool(
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
+        if bool(args.get("durable", False)):
+            durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
+            durable["durable"] = True
+            return durable
         result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
@@ -442,8 +507,9 @@ TOOLS = [
     ("file_read", "Read a non-sensitive file from a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 262144}}, True, False),
     ("file_list", "List a non-sensitive directory on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}}, True, False),
     ("logs_tail", "Tail a non-sensitive log file on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "lines": {"type": "integer", "minimum": 1, "maximum": 1000}}, True, False),
-    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Fully audited.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
-    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Use durable=true for work that must survive client disconnects.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
@@ -458,7 +524,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable"}],
                 "additionalProperties": False,
             },
             "annotations": {
@@ -488,7 +554,8 @@ def task_worker() -> None:
                 continue
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
             proc = subprocess.Popen(
-                remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                isolated_invocation(remote_invocation(host, command), label="task"),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, errors="replace", start_new_session=True
             )
             with ACTIVE_LOCK:
