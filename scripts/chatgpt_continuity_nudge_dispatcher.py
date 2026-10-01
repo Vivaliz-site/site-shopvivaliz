@@ -39,7 +39,7 @@ except ImportError:  # direct CLI execution from repository root
     from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
-LOCK_FILE = "_chatgpt-continuity-nudge-dispatch.lock"
+LOCK_FILE = "_continuity-execution.lock"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
 DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token")
