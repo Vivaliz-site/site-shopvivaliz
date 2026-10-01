@@ -240,6 +240,23 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   mudança material do checkpoint) é evidência.
 <!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
 
+<!-- GEMINI_24X7_CONTROLLER_V1 -->
+## Controlador Gemini 24x7 no backend
+
+O controlador `scripts/gemini_24x7_controller.py` supervisiona a pilha já
+existente, sem substituí-la: watchdog determinístico → nudge de ChatGPT comum
+→ dispatcher finito Gemini-only. Ele mantém um lease atômico no runtime
+compartilhado, registra apenas metadados sanitizados e recusa propriedade
+duplicada enquanto o lease estiver vivo. Após interrupção/crash, lease vencido
+é recuperado e registrado antes de novo ciclo.
+
+A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
+`always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
+`KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
+PID, exit code ou resposta HTTP. A instalação só pode partir de uma release
+imutável já publicada; nunca editar `current/` ou a release ativa.
+<!-- /GEMINI_24X7_CONTROLLER_V1 -->
+
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
 ## Prova de ponta a ponta da retomada desacoplada em produção
 
