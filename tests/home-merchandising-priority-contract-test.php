@@ -37,6 +37,15 @@ home_merch_assert(str_contains($index, '<h1>Procure, compare e escolha <span cla
 home_merch_assert(str_contains($index, 'Busque por produto, marca ou categoria e confira preço, disponibilidade e frete antes de finalizar.'), 'Hero de busca deve explicar a proxima acao com informacao verificavel.');
 home_merch_assert(str_contains($index, 'placeholder="Busque por produto, marca ou categoria"'), 'Busca deve ter placeholder curto e orientado a tarefa.');
 
+$loader = file_get_contents($root . '/includes/load-custom-css.php');
+$merchCss = file_get_contents($root . '/css/home-merchandising-v1.css');
+home_merch_assert(is_string($loader) && str_contains($loader, 'home-merchandising-v1.css'), 'Camada visual banner-first deve ser carregada na home.');
+home_merch_assert(is_string($merchCss) && str_contains($merchCss, '.homepage-primary-merchandising'), 'CSS deve neutralizar a margem historica do carrossel no topo.');
+home_merch_assert(str_contains($index, "prefers-reduced-motion: reduce"), 'Carrossel deve respeitar preferencia de movimento reduzido.');
+home_merch_assert(str_contains($index, "document.addEventListener('visibilitychange', restart)"), 'Carrossel deve pausar quando a aba nao esta visivel.');
+home_merch_assert(str_contains($index, "root.addEventListener('mouseenter'"), 'Carrossel deve pausar durante interacao do mouse.');
+home_merch_assert(str_contains($index, "slide.setAttribute('aria-hidden'"), 'Estado dos slides deve ser exposto para tecnologias assistivas.');
+
 foreach ([
     'Seu projeto começa com',
     'COLEÇÃO 2026',
