@@ -210,8 +210,14 @@ def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
             reasons.append(f"unexpected execution ledger result: {result!r}")
 
         diagnostic = execution.get("diagnostic") or {}
-        if diagnostic.get("background_paid_fallback_forbidden") is not True:
-            reasons.append("diagnostic missing background_paid_fallback_forbidden=true")
+        background_safe = diagnostic.get("background_paid_fallback_forbidden") is True
+        background_codex = diagnostic.get("background_codex_fallback_authorized") is True
+        if not (background_safe or background_codex):
+            reasons.append(
+                "diagnostic missing authorized background execution marker "
+                "(background_paid_fallback_forbidden=true or "
+                "background_codex_fallback_authorized=true)"
+            )
 
     if str(state.get("repository", DEFAULT_REPOSITORY)) != repository:
         reasons.append("checkpoint repository does not match requested repository")
