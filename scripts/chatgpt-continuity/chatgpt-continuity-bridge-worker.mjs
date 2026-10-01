@@ -685,12 +685,27 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
             message_status:'NO_CONVERSATION'
           };
         }
+        let accountId='';
+        let accessToken='';
+        try{
+          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+          if(sessionResponse.ok){
+            let session=null;
+            try{session=await sessionResponse.json();}catch{}
+            accountId=String(session?.account?.id||'').trim();
+            accessToken=String(session?.accessToken||session?.access_token||'').trim();
+          }
+        }catch{}
+        const headers={Accept:'application/json'};
+        if(accessToken) headers.Authorization='Bearer '+accessToken;
+        if(accountId) headers['ChatGPT-Account-Id']=accountId;
+
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
         try{
           const response=await fetch(
             '/backend-api/conversation/'+encodeURIComponent(match[1]),
-            {credentials:'same-origin',cache:'no-store',signal:controller.signal}
+            {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
           let body=null;
           try{body=await response.json();}catch{}
