@@ -1875,29 +1875,37 @@ async function reinforcementLoop(
   now = () => Date.now(),
   wait = sleep,
 ) {
-  let nextCrossDeviceDiscoveryAt = 0;
+  // Rate-limit only the account-scoped latest-conversation API. Local CDP /
+  // sidebar inspection must keep running during that backoff window; otherwise
+  // a mobile interruption can remain invisible for the full 429 delay.
+  let nextApiDiscoveryAt = 0;
   for (;;) {
-    const allowCrossDeviceDiscovery = now() >= nextCrossDeviceDiscoveryAt;
+    const allowApiDiscovery = now() >= nextApiDiscoveryAt;
+    const alignLatest = allowApiDiscovery
+      ? alignLatestForReinforcement
+      : alignToSidebarLatestConversation;
     let outcome;
     try {
       outcome = await check(
-        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery }),
+        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
-        alignLatestForReinforcement,
-        { allowCrossDeviceDiscovery },
+        alignLatest,
+        { allowCrossDeviceDiscovery: true },
       );
     } catch (error) {
       console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
       outcome = {
         action: 'error',
-        cross_device_discovery: allowCrossDeviceDiscovery,
+        cross_device_discovery: true,
       };
     }
 
     const discoveryDelayMs = reinforcementDiscoveryDelayMs(outcome);
-    if (discoveryDelayMs > 0) {
-      nextCrossDeviceDiscoveryAt = now() + discoveryDelayMs;
+    // A local-only cycle must never extend the API backoff. Only a cycle that
+    // was actually allowed to call the account-scoped API can move this gate.
+    if (allowApiDiscovery && discoveryDelayMs > 0) {
+      nextApiDiscoveryAt = now() + discoveryDelayMs;
       if (Number(outcome?.http_status) === 429) {
         console.log(
           `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)}`,
