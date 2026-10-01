@@ -328,7 +328,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("-L 127.0.0.1:18081:127.0.0.1:8080", installer)
         self.assertIn("ubuntu@10.0.1.112", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", installer)
-        self.assertIn("http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php", dispatcher)
+        self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", dispatcher)
         self.assertIn("Host", dispatcher)
         self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", worker)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", worker)
