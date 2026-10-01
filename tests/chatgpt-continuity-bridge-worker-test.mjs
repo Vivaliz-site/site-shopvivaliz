@@ -574,7 +574,11 @@ async function run() {
         if (source.includes('continuity-composer-draft-probe')) {
           return { usable: true, text: draft };
         }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
         if (source.includes('continuity-composer-focus')) return true;
+        if (source.includes('continuity-send-button-target')) {
+          return sendEnabled ? { state: 'ready', x: 700, y: 640 } : { state: 'disabled' };
+        }
         if (source.includes('continuity-send-button-click')) return sendEnabled;
         return false;
       },
@@ -608,9 +612,33 @@ async function run() {
       calls.some(call => call[0] === 'send' && call[2]?.type === 'rawKeyDown' && call[2]?.key === 'Backspace'),
       'trusted path must clear stale untrusted continuation text before retyping',
     );
+    const firstCharIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchKeyEvent'
+        && call[2]?.type === 'char',
+    );
+    const composerMousePressIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    const sendMousePressIndex = calls.findIndex(
+      (call, index) => index > firstCharIndex
+        && call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
     assert.ok(
-      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-click')),
-      'trusted path must submit only after the editor state enables the real Send control',
+      composerMousePressIndex >= 0 && composerMousePressIndex < firstCharIndex,
+      'production path must use a trusted CDP mouse click in the composer before typing',
+    );
+    assert.ok(
+      sendMousePressIndex > firstCharIndex,
+      'production path must use a trusted CDP mouse click on the enabled Send control',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-target')),
+      'trusted path must resolve the real enabled Send geometry before submitting',
     );
   }
 
