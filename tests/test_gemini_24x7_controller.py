@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,45 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             if line.strip()
         ]
         self.assertEqual(events[-1]["event"], "lease_recovered")
+
+    def test_live_ttl_lease_from_dead_process_is_recovered_immediately(self) -> None:
+        controller = load_controller()
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            pid = child.pid
+            start_ticks = controller._process_start_ticks(pid)
+            self.assertTrue(start_ticks)
+            boot_id = controller._boot_id()
+        finally:
+            child.terminate()
+            child.wait(timeout=5)
+
+        lease = self.runtime / controller.LEASE_FILE
+        lease.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "owner_id": "crashed-owner",
+                    "pid": pid,
+                    "pid_start_ticks": start_ticks,
+                    "boot_id": boot_id,
+                    "expires_at": "2999-01-01T00:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = controller.acquire_lease(self.runtime, owner_id="restarted-owner", ttl_seconds=60)
+
+        self.assertTrue(result.acquired)
+        self.assertTrue(result.recovered)
+        events = [
+            json.loads(line)
+            for line in (self.runtime / controller.EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(events[-1]["event"], "lease_recovered")
+        self.assertEqual(events[-1]["reason"], "owner_dead")
 
     def test_live_lease_blocks_duplicate_controller_ownership(self) -> None:
         controller = load_controller()
