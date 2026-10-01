@@ -287,6 +287,7 @@ def _prepare_workspace(task_id: str, repository: str) -> Path:
 
 _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
+    "background_codex_fallback_authorized",
     "background_gemini_error",
     "background_gemini_exit_code",
     "background_gemini_reason",
@@ -313,6 +314,9 @@ def _summarize_executor_artifacts(workspace: Path) -> dict[str, Any]:
             entry = line.strip()
             if entry == "background_paid_fallback_forbidden=true":
                 diagnostic["background_paid_fallback_forbidden"] = True
+                continue
+            if entry == "background_codex_fallback_authorized=true":
+                diagnostic["background_codex_fallback_authorized"] = True
                 continue
             if entry.startswith("background_gemini_error="):
                 diagnostic["background_gemini_error"] = entry.split("=", 1)[1].strip()
