@@ -88,6 +88,15 @@ const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_STREAM_STATUS_TIMEOUT_MS || 5000),
 );
+const REINFORCEMENT_SWEEP_BATCH_SIZE = Math.max(
+  1,
+  Math.min(6, Number(process.env.CHATGPT_CONTINUITY_SWEEP_BATCH_SIZE || 3)),
+);
+const REINFORCEMENT_SWEEP_MAX_CANDIDATES = Math.max(
+  REINFORCEMENT_SWEEP_BATCH_SIZE,
+  Math.min(48, Number(process.env.CHATGPT_CONTINUITY_SWEEP_MAX_CANDIDATES || 24)),
+);
+
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -95,6 +104,10 @@ const sha = value => createHash('sha256').update(String(value ?? '')).digest('he
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
+let REINFORCEMENT_RECENT_CANDIDATES = [];
+let REINFORCEMENT_RECENT_CURSOR = 0;
+let REINFORCEMENT_LATEST_ID = '';
+
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -1011,33 +1024,118 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
           let session=null; try{session=await sessionResponse.json();}catch{}
           accessToken=String(session?.accessToken||session?.access_token||'').trim();
           accountId=String(session?.account?.id||'').trim();
-          accessToken=String(session?.accessToken||session?.access_token||'').trim();
         }
       }catch{}
       const headers={Accept:'application/json'};
       if(accessToken) headers.Authorization='Bearer '+accessToken;
       if(accountId) headers['ChatGPT-Account-Id']=accountId;
+
+      const discovered=[];
+      const statuses=[];
+      const addItems=(items,source,projectId='')=>{
+        for(const item of (Array.isArray(items)?items:[]).slice(0,12)){
+          const id=String(item?.id||item?.conversation_id||'').trim();
+          const update_time=item?.update_time??item?.updateTime??item?.updated_at??item?.updatedAt??null;
+          if(!id) continue;
+          discovered.push({
+            id,
+            update_time,
+            source,
+            project_id:projectId||'',
+          });
+        }
+      };
+
+      // Regular account conversations.
       const candidates = [
-        {source:'filtered',url:'/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false'},
-        {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=1&order=updated'},
+        {source:'filtered',url:'/backend-api/conversations?offset=0&limit=12&order=updated&is_archived=false&is_starred=false'},
+        {source:'fallback_unfiltered',url:'/backend-api/conversations?offset=0&limit=12&order=updated'},
       ];
-      let last={http_status:0,source:'none',item_present:false,item_keys:[]};
+      let globalLast={http_status:0,source:'none',item_present:false,item_keys:[]};
       for(const candidate of candidates){
         try{
           const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store',headers});
           let body=null; try{body=await response.json();}catch{}
           const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
-          last={http_status:Number(response.status||0),source:candidate.source,item_present:items.length>0,item_keys:[]};
-          if(!response.ok||items.length===0) continue;
-          const item=items[0]||{};
-          const item_keys=Object.keys(item)
-            .map(key=>String(key).replace(/[^A-Za-z0-9_]/g,'').slice(0,64))
-            .filter(Boolean)
-            .slice(0,32);
-          return {...last,item_keys,id:String(item.id||item.conversation_id||''),update_time:item.update_time??item.updateTime??null,updated_at:item.updated_at??item.updatedAt??null};
-        }catch{last={http_status:0,source:candidate.source,item_present:false,item_keys:[]};}
+          const status=Number(response.status||0);
+          statuses.push(status);
+          globalLast={http_status:status,source:candidate.source,item_present:items.length>0,item_keys:[]};
+          if(response.ok&&items.length>0){
+            addItems(items,'global','');
+            break;
+          }
+        }catch{
+          globalLast={http_status:0,source:candidate.source,item_present:false,item_keys:[]};
+        }
       }
-      return last;
+
+      // Project chats have the same /c/<id> route, but are discovered from
+      // /backend-api/gizmos/g-p-.../conversations. Project ids are already
+      // present in the authenticated sidebar's loaded resource graph, so this
+      // adds no content scraping and avoids guessing from titles.
+      const projectIds=[];
+      const seenProjects=new Set();
+      try{
+        for(const entry of performance.getEntriesByType('resource')){
+          const raw=String(entry?.name||'');
+          const match=raw.match(/\/backend-api\/gizmos\/(g-p-[A-Za-z0-9_-]+)\/conversations/);
+          if(match&&!seenProjects.has(match[1])){
+            seenProjects.add(match[1]);
+            projectIds.push(match[1]);
+          }
+          if(projectIds.length>=16) break;
+        }
+      }catch{}
+
+      for(const projectId of projectIds){
+        try{
+          const response=await fetch(
+            '/backend-api/gizmos/'+encodeURIComponent(projectId)+'/conversations?limit=12&owned_only=false',
+            {credentials:'same-origin',cache:'no-store',headers},
+          );
+          let body=null; try{body=await response.json();}catch{}
+          const items=Array.isArray(body?.items)?body.items:(Array.isArray(body)?body:[]);
+          statuses.push(Number(response.status||0));
+          if(response.ok&&items.length>0) addItems(items,'project',projectId);
+        }catch{}
+      }
+
+      const byId=new Map();
+      const toEpoch=value=>{
+        let n=Number(value||0);
+        if(Number.isFinite(n)&&n>0) return n;
+        const parsed=Date.parse(String(value||''));
+        return Number.isFinite(parsed)?parsed/1000:0;
+      };
+      for(const item of discovered){
+        const update=toEpoch(item.update_time);
+        if(!/^[A-Za-z0-9_-]{8,160}$/.test(item.id)||update<=0) continue;
+        const normalized={...item,update_time:update};
+        const previous=byId.get(item.id);
+        if(!previous||update>Number(previous.update_time||0)) byId.set(item.id,normalized);
+      }
+      const combined=[...byId.values()]
+        .sort((a,b)=>Number(b.update_time||0)-Number(a.update_time||0))
+        .slice(0,24);
+      const top=combined[0]||null;
+      const item=top||{};
+      const any429=statuses.some(status=>status===429);
+      const anySuccess=statuses.some(status=>status>=200&&status<300);
+      const httpStatus=any429?429:(anySuccess?200:Number(globalLast.http_status||0));
+      const item_keys=top?Object.keys(item)
+        .map(key=>String(key).replace(/[^A-Za-z0-9_]/g,'').slice(0,64))
+        .filter(Boolean)
+        .slice(0,32):[];
+      return {
+        http_status:httpStatus,
+        source:'combined',
+        item_present:Boolean(top),
+        item_keys,
+        id:String(top?.id||''),
+        update_time:top?.update_time??null,
+        candidates:combined,
+        project_count:projectIds.length,
+      };
     })()`),
       new Promise((_, reject) => {
         timeoutHandle = setTimeout(
@@ -1048,9 +1146,9 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
     ]);
     return result && typeof result === 'object'
       ? result
-      : {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
+      : {http_status:0,source:'probe_failed',item_present:false,item_keys:[],candidates:[]};
   } catch {
-    return {http_status:0,source:'probe_failed',item_present:false,item_keys:[]};
+    return {http_status:0,source:'probe_failed',item_present:false,item_keys:[],candidates:[]};
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
   }
@@ -1068,6 +1166,73 @@ function normalizeLatestConversationMeta(result) {
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(id) || !Number.isFinite(updateTime) || updateTime <= 0) return null;
   return {id, update_time:updateTime};
 }
+function normalizeConversationCandidates(result) {
+  if (!result || typeof result !== 'object') return [];
+  const raw = Array.isArray(result.candidates) && result.candidates.length > 0
+    ? result.candidates
+    : [result];
+  const byId = new Map();
+  for (const item of raw) {
+    const meta = normalizeLatestConversationMeta(item);
+    if (!meta) continue;
+    const candidate = {
+      ...meta,
+      source: text(item?.source) || 'unknown',
+      project_id: text(item?.project_id),
+    };
+    const previous = byId.get(meta.id);
+    if (!previous || candidate.update_time > previous.update_time) {
+      byId.set(meta.id, candidate);
+    }
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.update_time - a.update_time)
+    .slice(0, REINFORCEMENT_SWEEP_MAX_CANDIDATES);
+}
+
+function mergeRecentConversationCandidates(
+  existing,
+  incoming,
+  nowMs = Date.now(),
+  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+) {
+  const byId = new Map();
+  for (const candidate of [...(Array.isArray(existing) ? existing : []), ...(Array.isArray(incoming) ? incoming : [])]) {
+    const normalized = normalizeConversationCandidates({ candidates: [candidate] })[0];
+    if (!normalized) continue;
+    const ageMs = Math.max(0, Number(nowMs) - normalized.update_time * 1000);
+    if (!Number.isFinite(ageMs) || ageMs > Math.max(60_000, Number(maxAgeMs || CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS))) {
+      continue;
+    }
+    const previous = byId.get(normalized.id);
+    if (!previous || normalized.update_time > previous.update_time) byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.update_time - a.update_time)
+    .slice(0, REINFORCEMENT_SWEEP_MAX_CANDIDATES);
+}
+
+function reinforcementSweepCandidates(
+  candidates,
+  latestId = '',
+  cursor = 0,
+  batchSize = REINFORCEMENT_SWEEP_BATCH_SIZE,
+) {
+  const pool = (Array.isArray(candidates) ? candidates : [])
+    .filter(candidate => candidate?.id && candidate.id !== latestId);
+  if (pool.length === 0) return { batch: [], next_cursor: 0 };
+  const start = ((Number(cursor) || 0) % pool.length + pool.length) % pool.length;
+  const count = Math.min(pool.length, Math.max(1, Number(batchSize) || 1));
+  const batch = [];
+  for (let index = 0; index < count; index += 1) {
+    batch.push(pool[(start + index) % pool.length]);
+  }
+  return {
+    batch,
+    next_cursor: (start + count) % pool.length,
+  };
+}
+
 
 async function latestConversationMeta(cdp) {
   return normalizeLatestConversationMeta(await latestConversationProbe(cdp));
@@ -1128,7 +1293,17 @@ async function alignLatestForReinforcement(
   const httpStatus = Number.isFinite(rawStatus)
     ? Math.max(0, Math.min(599, Math.trunc(rawStatus)))
     : 0;
-  const latest = normalizeLatestConversationMeta(probe);
+  const discoveredCandidates = normalizeConversationCandidates(probe);
+  if (discoveredCandidates.length > 0) {
+    REINFORCEMENT_RECENT_CANDIDATES = mergeRecentConversationCandidates(
+      REINFORCEMENT_RECENT_CANDIDATES,
+      discoveredCandidates,
+      nowMs,
+      CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+    );
+    REINFORCEMENT_LATEST_ID = discoveredCandidates[0].id;
+  }
+  const latest = discoveredCandidates[0] || normalizeLatestConversationMeta(probe);
   if (!latest) {
     if (httpStatus === 429) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
@@ -1937,6 +2112,41 @@ async function reinforcementLoop(
       }
     }
 
+    // Production default only: after the newest chat is checked, rotate through
+    // additional recent chats discovered from both the global account list and
+    // Project gizmo lists. Keep this inside the same loop so browser navigation
+    // stays serialized; tests that inject a custom check retain the historical
+    // single-call contract.
+    if (check === reinforcementCheckOnce && REINFORCEMENT_RECENT_CANDIDATES.length > 1) {
+      const sweep = reinforcementSweepCandidates(
+        REINFORCEMENT_RECENT_CANDIDATES,
+        REINFORCEMENT_LATEST_ID,
+        REINFORCEMENT_RECENT_CURSOR,
+        REINFORCEMENT_SWEEP_BATCH_SIZE,
+      );
+      REINFORCEMENT_RECENT_CURSOR = sweep.next_cursor;
+      for (const candidate of sweep.batch) {
+        try {
+          await check(
+            () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
+            REINFORCEMENT_CONFIRM_DELAY_MS,
+            confirmAssistantProgress,
+            cdp => alignToLatestConversation(
+              cdp,
+              async () => candidate,
+              now(),
+              CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+            ),
+            { allowCrossDeviceDiscovery: true },
+          );
+        } catch (error) {
+          console.error(
+            `chatgpt_continuity_reinforcement_sweep_error source=${text(candidate?.source)} project=${candidate?.project_id ? 'true' : 'false'} detail=${text(error?.message)}`,
+          );
+        }
+      }
+    }
+
     await wait(REINFORCEMENT_POLL_MS);
   }
 }
@@ -1971,6 +2181,9 @@ export {
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
+  normalizeConversationCandidates,
+  mergeRecentConversationCandidates,
+  reinforcementSweepCandidates,
   latestConversationMeta,
   alignToLatestConversation,
   alignLatestForReinforcement,
