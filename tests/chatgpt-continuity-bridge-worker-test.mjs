@@ -2265,6 +2265,51 @@ async function run() {
     assert.equal(result.action, 'no_request');
   }
 
+  // A hung Runtime.evaluate in one ChatGPT tab must never freeze the 24/7
+  // authorization watcher. Bound that tab, close it, and continue to the next.
+  {
+    let hungClosed = false;
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/hung-auth-tab', webSocketDebuggerUrl: 'ws://hung-auth' },
+      { type: 'page', url: 'https://chatgpt.com/c/healthy-auth-tab', webSocketDebuggerUrl: 'ws://healthy-auth' },
+    ];
+    const healthyCalls = [];
+    const started = Date.now();
+    const result = await authorizationCheckOnce(
+      async () => tabs,
+      async tab => {
+        if (tab.webSocketDebuggerUrl === 'ws://hung-auth') {
+          return {
+            async evaluate() { return new Promise(() => {}); },
+            async send() { return {}; },
+            close() { hungClosed = true; },
+          };
+        }
+        return {
+          async evaluate(expression) {
+            if (String(expression).includes('continuity-authorization-button-target')) {
+              return { x: 320, y: 240, kind: 'always_allow' };
+            }
+            return null;
+          },
+          async send(method, params) {
+            healthyCalls.push([method, params]);
+            return {};
+          },
+          close() {},
+        };
+      },
+      25,
+    );
+    const elapsed = Date.now() - started;
+    assert.equal(result.action, 'clicked');
+    assert.equal(result.kind, 'always_allow');
+    assert.equal(result.scanned, 2);
+    assert.equal(hungClosed, true);
+    assert.ok(elapsed < 500, `hung authorization tab must stay bounded, elapsed=${elapsed}ms`);
+    assert.ok(healthyCalls.some(([method, params]) => method === 'Input.dispatchMouseEvent' && params?.type === 'mousePressed'));
+  }
+
   // The checkpoint-driven bridge loop and the reinforcement loop must start
   // independently. A slow reinforcement iteration cannot serialize the next
   // pollBridgeOnce cycle.

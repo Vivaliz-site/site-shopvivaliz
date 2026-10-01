@@ -40,7 +40,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         for required in {
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
-            "admin_command_run", "task_submit", "task_status", "task_cancel", "audit_recent",
+            "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
         }:
             self.assertIn(required, names)
 
@@ -64,6 +64,32 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertIn("before", result["stdout"])
         self.assertIn("after", result["stdout"])
+
+    def test_root_runtime_wraps_commands_in_transient_systemd_scope(self):
+        original_geteuid = m.os.geteuid
+        original_systemd_run = m.SYSTEMD_RUN
+        try:
+            m.os.geteuid = lambda: 0
+            m.SYSTEMD_RUN = "/bin/true"
+            wrapped = m.isolated_invocation(["bash", "-lc", "printf ok"])
+        finally:
+            m.os.geteuid = original_geteuid
+            m.SYSTEMD_RUN = original_systemd_run
+        self.assertIn("--scope", wrapped)
+        self.assertIn("CPUWeight=50", wrapped)
+        self.assertIn("IOWeight=50", wrapped)
+        self.assertEqual(wrapped[-3:], ["bash", "-lc", "printf ok"])
+
+    def test_inline_concurrency_limit_fails_fast(self):
+        original_slots = m.INLINE_COMMAND_SLOTS
+        m.INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(1)
+        self.assertTrue(m.INLINE_COMMAND_SLOTS.acquire(blocking=False))
+        try:
+            with self.assertRaisesRegex(RuntimeError, "controller_busy_retry_or_use_task_submit"):
+                m.run_host_command("always-free-arm-1787907847-26", "printf never")
+        finally:
+            m.INLINE_COMMAND_SLOTS.release()
+            m.INLINE_COMMAND_SLOTS = original_slots
 
     def test_inline_command_cancels_entire_process_group_when_client_disconnects(self):
         marker = Path(self.tmp.name) / "orphan-child-wrote"
@@ -108,6 +134,39 @@ class RemoteControlMcpTests(unittest.TestCase):
         )
         self.assertEqual(durable["state"], "queued")
 
+    def test_task_submit_is_idempotent_with_request_id(self):
+        first = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26", "command": "printf durable",
+            "timeout": 30, "request_id": "same-request",
+        })
+        second = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26", "command": "printf durable",
+            "timeout": 30, "request_id": "same-request",
+        })
+        self.assertEqual(first["task_id"], second["task_id"])
+
+    def test_task_wait_returns_terminal_result(self):
+        submitted = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26", "command": "printf waited", "timeout": 30,
+        })
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        try:
+            result = m.execute_tool("task_wait", {"task_id": submitted["task_id"], "wait_seconds": 5})
+        finally:
+            m.STOP_EVENT.set(); worker.join(timeout=5)
+        self.assertEqual(result["state"], "succeeded")
+        self.assertIn("waited", result["stdout"])
+
+    def test_admin_command_can_be_explicitly_durable(self):
+        result = m.execute_tool("admin_command_run", {
+            "host": "always-free-arm-1787907847-26", "command": "sleep 30",
+            "timeout": 30, "durable": True, "request_id": "admin-durable-1",
+        }, cancel_check=lambda: True)
+        self.assertEqual(result["state"], "queued")
+        self.assertTrue(result["durable"])
+
     def test_task_worker_tolerates_non_utf8_output(self):
         submitted = m.execute_tool("task_submit", {
             "host": "always-free-arm-1787907847-26",
@@ -136,6 +195,18 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(m.is_authorized("", "test-token"))
         self.assertFalse(m.is_authorized("Bearer wrong-token", "test-token"))
         self.assertFalse(m.is_authorized("Bearer test-token", ""))
+
+    def test_governance_sanitizes_parent_git_hook_context_for_nested_git_tests(self):
+        governance = (ROOT / "scripts" / "repository-governance-validate.sh").read_text(encoding="utf-8")
+        line = next(
+            row for row in governance.splitlines()
+            if "tests.test_background_gemini_runner" in row
+        )
+        for name in (
+            "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX",
+            "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        ):
+            self.assertIn(f"-u {name}", line)
 
     def test_controller_bootstrap_generates_root_only_mcp_token(self):
         setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
@@ -171,6 +242,21 @@ class RemoteControlMcpTests(unittest.TestCase):
             row = db.execute("SELECT state,command_sha256 FROM tasks WHERE id=?", (result["task_id"],)).fetchone()
         self.assertEqual(row["state"], "queued")
         self.assertTrue(row["command_sha256"])
+
+    def test_task_submit_deduplicates_active_identical_work(self):
+        first = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"sleep 1","timeout":30})
+        second = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"sleep 1","timeout":30})
+        self.assertEqual(first["task_id"], second["task_id"])
+        self.assertTrue(second["deduplicated"])
+
+    def test_task_wait_is_bounded_and_returns_terminal_task(self):
+        submitted = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"printf waited","timeout":30})
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True); worker.start()
+        result = m.execute_tool("task_wait", {"task_id":submitted["task_id"],"wait_seconds":5})
+        m.STOP_EVENT.set(); worker.join(timeout=5)
+        self.assertEqual(result["state"], "succeeded")
+        self.assertIn("waited", result["stdout"])
 
     def test_invalid_host_is_rejected(self):
         with self.assertRaises(ValueError):
