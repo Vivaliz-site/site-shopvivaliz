@@ -205,6 +205,15 @@ function load_custom_css(): void
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 
+    if ($pageName === 'index') {
+        $homeMerchandisingCss = $root . '/css/home-merchandising-v1.css';
+        if (is_file($homeMerchandisingCss) && is_readable($homeMerchandisingCss)) {
+            $homeMerchandisingVersion = (string)filemtime($homeMerchandisingCss);
+            echo "    <link rel=\"stylesheet\" href=\"/css/home-merchandising-v1.css?v="
+                . htmlspecialchars($homeMerchandisingVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+        }
+    }
+
     // Regras transversais de acessibilidade do main sao preservadas antes do
     // hotfix de geometria, que deve permanecer como a ultima camada visual.
     $accessibilityCss = $root . '/css/accessibility-hardening-v1.css';
