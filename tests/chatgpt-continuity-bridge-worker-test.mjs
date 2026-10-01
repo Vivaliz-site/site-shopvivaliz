@@ -921,9 +921,9 @@ async function run() {
     const cdp = fakeCdp();
     cdp.evaluate = async expression => {
       cdp.calls.push(expression);
-      assert.match(expression, /backend-api\\/gizmos/);
-      assert.match(expression, /g-p-/);
-      assert.match(expression, /conversations/);
+      assert.ok(expression.includes('/backend-api/gizmos/'));
+      assert.ok(expression.includes('g-p-'));
+      assert.ok(expression.includes('/conversations'));
       return {
         http_status: 200,
         source: 'combined',
