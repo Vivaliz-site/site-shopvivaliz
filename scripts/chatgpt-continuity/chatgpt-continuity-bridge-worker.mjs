@@ -119,6 +119,20 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
+
+function outcomeDetailCode(detail) {
+  const normalized = text(detail).toLowerCase();
+  if (!normalized) return 'NONE';
+  if (normalized.includes('composer/send-button remained unavailable after bounded reattach')) return 'COMPOSER_UNAVAILABLE_AFTER_REATTACH';
+  if (normalized.includes('composer found but send failed after bounded reattach')) return 'SEND_FAILED_AFTER_REATTACH';
+  if (normalized.includes('transmission error persisted and composer was unavailable after reattach')) return 'TRANSMISSION_COMPOSER_UNAVAILABLE';
+  if (normalized.includes('transmission error persisted and retry send failed')) return 'TRANSMISSION_RETRY_SEND_FAILED';
+  if (normalized.includes('transmission error persisted after bounded recovery retry')) return 'TRANSMISSION_PERSISTED_AFTER_RETRY';
+  if (normalized.includes('multiple open chatgpt conversation tabs found')) return 'AMBIGUOUS_CONVERSATION_TARGET';
+  if (normalized.includes('cdp endpoint unreachable')) return 'CDP_ENDPOINT_UNREACHABLE';
+  if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
+  return 'UNCLASSIFIED_RUNTIME_ERROR';
+}
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 let REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -263,7 +277,7 @@ async function resolveAmbiguousConversationTabs(
 ) {
   const sourceTabs = Array.isArray(tabs) ? tabs : [];
   const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
-  if (conversationIds.size <= 1) return sourceTabs;
+  if (conversationIds.size <= 1 && Number(targetUpdatedAtMs || 0) <= 0) return sourceTabs;
 
   let discoveryCdp;
   try {
@@ -353,7 +367,22 @@ class Cdp {
       (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
     let candidateTabs = tabs;
-    if (conversationIds.size > 1) {
+    const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
+    if (allowLatestDisambiguation && checkpointTargetMs > 0) {
+      // Checkpoint-driven recovery must bind to the intended conversation
+      // even when the persistent browser currently has only a neutral home
+      // tab. Otherwise "continue" can be typed into a new chat instead of the
+      // interrupted thread.
+      candidateTabs = await resolveAmbiguousConversationTabs(
+        tabs,
+        connectCdpTarget,
+        latestConversationProbe,
+        Date.now(),
+        CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+        navigateNeutralTabToConversation,
+        checkpointTargetMs,
+      );
+    } else if (conversationIds.size > 1) {
       if (!allowLatestDisambiguation) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
       candidateTabs = await resolveAmbiguousConversationTabs(
         tabs,
@@ -362,7 +391,7 @@ class Cdp {
         Date.now(),
         CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
         navigateNeutralTabToConversation,
-        targetUpdatedAtMs,
+        0,
       );
     }
     const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget);
@@ -2082,7 +2111,7 @@ async function pollBridgeOnce() {
   if (!taskId) return;
   const outcome = await attemptNudge(taskId);
   await bridge('result', { task_id: taskId, ...outcome });
-  console.log(`chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status}`);
+  console.log(`chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeDetailCode(outcome.detail)}`);
 }
 
 // "Streaming interrupted, waiting for the complete message" is shown while
