@@ -31,6 +31,15 @@ cart_cls_assert(
 );
 
 cart_cls_assert(
+    str_contains($cart, 'data-sv-mixed-promo-cart="1"'),
+    'Banner promocional do carrinho deve existir no HTML inicial para nao deslocar o layout no DOMContentLoaded.'
+);
+cart_cls_assert(
+    strpos($cart, 'data-sv-mixed-promo-cart="1"') < strpos($cart, 'class="cart-layout"'),
+    'Banner promocional deve ser renderizado antes do grid do carrinho.'
+);
+
+cart_cls_assert(
     str_contains($cart, 'data-sv-empty-state="initial"'),
     'Carrinho vazio deve existir no HTML inicial, antes do JS de fim da pagina.'
 );
