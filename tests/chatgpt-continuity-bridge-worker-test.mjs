@@ -7,6 +7,7 @@ import {
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
+  providerVerificationPending,
   errorBannerPresent,
   transmissionErrorPresent,
   latestConversationProbe,
@@ -55,8 +56,11 @@ function fakeCdp({
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('continuity-provider-verification-probe')) {
+        return /(verificações adicionais antes de responder|verificacoes adicionais antes de responder|additional checks before responding)/i.test(pageText);
+      }
       if (expression.includes('continuity-error-banner-probe')) {
-        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar)/i.test(pageText);
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida)/i.test(pageText);
       }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
@@ -875,10 +879,23 @@ async function run() {
     true,
   );
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Streaming interrupted. Waiting for the complete message...' })), true);
-  // Confirmed live on ChatGPT iOS, 2026-09-28: the app can stop a turn
-  // with an explicit "Parou de pensar" state instead of the stream banner.
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), true);
-  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), true);
+  // Live iOS reproduction 2026-10-01 proved "Parou de pensar" is also the
+  // normal reasoning-section label, so text alone must never trigger recovery.
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Parou de pensar' })), false);
+  assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Stopped thinking' })), false);
+  assert.equal(
+    await providerVerificationPending(fakeCdp({
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+    })),
+    true,
+  );
+  assert.equal(
+    await providerVerificationPending(fakeCdp({
+      pageText: 'Our systems are performing additional checks before responding to this request.',
+    })),
+    true,
+  );
+  assert.equal(await providerVerificationPending(fakeCdp({ pageText: 'normal completed answer' })), false);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
 
