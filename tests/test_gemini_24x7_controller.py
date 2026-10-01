@@ -68,6 +68,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('base_dir="/opt/shopvivaliz-gemini-24x7-controller"', installer)
         self.assertIn('releases_dir="$base_dir/releases"', installer)
         self.assertNotIn("current/", installer)
+        self.assertIn('state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"', installer)
+        self.assertIn('sudo install -d -o ubuntu -g ubuntu -m 0700 "$state_dir"', installer)
+        self.assertIn('sudo chown ubuntu:ubuntu "$state_dir"', installer)
+        self.assertIn('sudo find "$state_dir" -maxdepth 1 -type f -exec chown ubuntu:ubuntu {} +', installer)
 
 
 if __name__ == "__main__":
