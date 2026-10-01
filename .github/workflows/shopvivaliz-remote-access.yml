@@ -62,6 +62,7 @@ on:
           - claude_remote_control_status
           - chatgpt_continuity_diagnostic
           - chatgpt_continuity_repair
+          - gemini_24x7_controller_install
           - chatgpt_freeze_task_state
           - chatgpt_freeze_state_owner_repair
           - chatgpt_freeze_task_successor
@@ -117,7 +118,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "gemini_24x7_controller_install", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -158,6 +159,8 @@ jobs:
               raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
           if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
               raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
+          if action == "gemini_24x7_controller_install" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Gemini controller install is restricted to the backend VM")
           if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
               raise SystemExit("ChatGPT freeze task actions are restricted to the site VM")
           if not reason:
@@ -587,6 +590,24 @@ jobs:
                   --jq ".runners[] | select(.name==\"shopvivaliz-backend-browser\") | select(.status==\"online\") | .name" \
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
+              ;;
+            gemini_24x7_controller_install)
+              remote_dir="/tmp/shopvivaliz-gemini-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_gemini_controller() { "${SSH[@]}" "rm -rf '$remote_dir'"; }
+              trap cleanup_gemini_controller RETURN
+              "${SSH[@]}" "install -d -m 700 '$remote_dir/scripts' '$remote_dir/deploy/systemd' '$remote_dir/docs/knowledge'"
+              for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
+                "${SSH[@]}" "dd of='$remote_dir/scripts/$source' status=none && chmod 700 '$remote_dir/scripts/$source'" < "scripts/$source"
+              done
+              "${SSH[@]}" "dd of='$remote_dir/AGENTS.md' status=none" < AGENTS.md
+              "${SSH[@]}" "dd of='$remote_dir/docs/knowledge/task-continuity.md' status=none" < docs/knowledge/task-continuity.md
+              "${SSH[@]}" "dd of='$remote_dir/deploy/systemd/shopvivaliz-gemini-24x7-controller.service' status=none" < deploy/systemd/shopvivaliz-gemini-24x7-controller.service
+              if ! "${SSH[@]}" "bash '$remote_dir/scripts/install-gemini-24x7-controller.sh' '$remote_dir' '$GITHUB_SHA'"; then
+                "${SSH[@]}" "sudo -n journalctl -u shopvivaliz-gemini-24x7-controller.service -n 40 --no-pager | sed -E 's/(GEMINI_API_KEY|GOOGLE_API_KEY|GOOGLE_GEMINI_API_KEY)=([^[:space:]]+)/\\1=***/g'"
+                exit 1
+              fi
+              "${SSH[@]}" 'systemctl is-enabled --quiet shopvivaliz-gemini-24x7-controller.service && systemctl is-active --quiet shopvivaliz-gemini-24x7-controller.service'
+              echo GEMINI_24X7_CONTROLLER_INSTALL=PASS
               ;;
             chatgpt_continuity_repair)
               token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"

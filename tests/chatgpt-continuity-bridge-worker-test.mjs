@@ -13,6 +13,9 @@ import {
   clickRequestRetry,
   latestConversationProbe,
   latestConversationMeta,
+  normalizeConversationCandidates,
+  mergeRecentConversationCandidates,
+  reinforcementSweepCandidates,
   alignToLatestConversation,
   alignLatestForReinforcement,
   assistantSnapshot,
@@ -928,6 +931,102 @@ async function run() {
       'latestConversationProbe must bound a CDP evaluation that never resolves',
     );
     assert.equal(probe.source, 'probe_failed');
+  }
+
+  // Project conversations use the same /c/<id> route but are discovered from
+  // /backend-api/gizmos/g-p-.../conversations. Continuity must aggregate both
+  // global and Project sources instead of assuming /backend-api/conversations
+  // is the complete account view.
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      assert.ok(expression.includes('/backend-api/gizmos/'));
+      assert.ok(expression.includes('g-p-'));
+      assert.ok(expression.includes('/conversations'));
+      return {
+        http_status: 200,
+        source: 'combined',
+        item_present: true,
+        item_keys: ['id', 'update_time'],
+        id: 'project-latest-thread',
+        update_time: now,
+        candidates: [
+          { id: 'global-older-thread', update_time: now - 30, source: 'global' },
+          { id: 'project-latest-thread', update_time: now, source: 'project', project_id: 'g-p-project-one' },
+        ],
+      };
+    };
+    const probe = await latestConversationProbe(cdp);
+    assert.equal(probe.candidates.length, 2);
+  }
+
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const normalized = normalizeConversationCandidates({
+      candidates: [
+        { id: 'global-older-thread', update_time: now - 40, source: 'global' },
+        { id: 'project-newer-thread', update_time: now - 5, source: 'project', project_id: 'g-p-project-one' },
+        { id: 'project-newer-thread', update_time: now - 10, source: 'project', project_id: 'g-p-project-one' },
+      ],
+    });
+    assert.deepEqual(
+      normalized.map(x => x.id),
+      ['project-newer-thread', 'global-older-thread'],
+      'candidate normalization must deduplicate and sort Project/global chats by recency',
+    );
+  }
+
+  {
+    const nowMs = Date.now();
+    let currentPath = '/c/original-thread';
+    const cdp = fakeCdp();
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        if (source.includes('project-newer-thread')) currentPath = '/c/project-newer-thread';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        candidates: [
+          { id: 'global-older-thread', update_time: (nowMs - 30_000) / 1000, source: 'global' },
+          { id: 'project-newer-thread', update_time: (nowMs - 2_000) / 1000, source: 'project', project_id: 'g-p-project-one' },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(result.action, 'navigated');
+    assert.equal(currentPath, '/c/project-newer-thread');
+  }
+
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const merged = mergeRecentConversationCandidates(
+      [
+        { id: 'global-latest', update_time: now, source: 'global' },
+        { id: 'project-a', update_time: now - 10, source: 'project', project_id: 'g-p-a' },
+      ],
+      [
+        { id: 'project-b', update_time: now - 20, source: 'project', project_id: 'g-p-b' },
+        { id: 'project-a', update_time: now - 5, source: 'project', project_id: 'g-p-a' },
+      ],
+      now * 1000,
+      30 * 60 * 1000,
+    );
+    assert.deepEqual(merged.map(x => x.id), ['global-latest', 'project-a', 'project-b']);
+
+    const first = reinforcementSweepCandidates(merged, 'global-latest', 0, 2);
+    assert.deepEqual(first.batch.map(x => x.id), ['project-a', 'project-b']);
+    assert.equal(first.next_cursor, 0, 'two-item non-latest sweep should wrap cleanly');
   }
 
   console.log('cross-device latest-conversation alignment: PASS');
