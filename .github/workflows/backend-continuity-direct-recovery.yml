@@ -1,0 +1,120 @@
+name: Backend Continuity Direct Recovery
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-continuity-direct-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout canonical source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify canonical backend identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(id -un)" = "ubuntu"
+          test "$(uname -m)" = "aarch64"
+          test -d /home/ubuntu
+          test -S "/run/user/$(id -u)/bus"
+          echo "BACKEND_CONTINUITY_IDENTITY=PASS"
+
+      - name: Run continuity browser regression
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node tests/chatgpt-continuity-bridge-worker-test.mjs
+          node --check scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+          echo "BACKEND_CONTINUITY_WORKER_TEST=PASS"
+
+      - name: Repair canonical browser and bridge locally
+        shell: bash
+        env:
+          CHATGPT_CONTINUITY_WORKER_SOURCE: ${{ github.workspace }}/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+          CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER: shopvivaliz.com.br
+          CHATGPT_CONTINUITY_CDP_URL: http://127.0.0.1:9555
+        run: |
+          set -Eeuo pipefail
+          output=''
+          rc=0
+          if output="$(bash scripts/install-chatgpt-continuity-backend-bridge.sh 2>&1)"; then
+            rc=0
+          else
+            rc=$?
+          fi
+          safe="$(printf '%s\n' "$output" | awk '/^CHATGPT_CONTINUITY_(BRIDGE_HEARTBEAT|BACKEND_SERVICE)=PASS$/{print}')"
+          [ -z "$safe" ] || printf '%s\n' "$safe"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Direct backend continuity installer failed rc=$rc"
+            exit "$rc"
+          fi
+          printf '%s\n' "$safe" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
+          printf '%s\n' "$safe" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+          echo "BACKEND_CONTINUITY_DIRECT_REPAIR=PASS"
+
+      - name: Verify auto-allow and runtime health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          runtime="/run/user/$(id -u)"
+          export XDG_RUNTIME_DIR="$runtime"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
+
+          systemctl --user is-enabled --quiet shopvivaliz-chatgpt-continuity.service
+          systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service
+          systemctl --user cat shopvivaliz-chatgpt-continuity.service             | grep -Fxq 'Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1'
+          systemctl --user cat shopvivaliz-chatgpt-continuity.service             | grep -Fxq 'Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000'
+
+          worker=/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+          test -s "$worker"
+          grep -Fq 'continuity-authorization-button-target' "$worker"
+          grep -Fq 'authorizationLoop' "$worker"
+
+          curl -fsS --connect-timeout 3 --max-time 5             http://127.0.0.1:9555/json/version >/dev/null
+
+          token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
+          test -s "$token_file"
+          token="$(cat "$token_file")"
+          trap 'unset token' EXIT
+          heartbeat="$(curl -fsS --connect-timeout 4 --max-time 10             -H 'Host: shopvivaliz.com.br'             -H "Authorization: Bearer $token"             -H 'Content-Type: application/json'             --data '{"operation":"heartbeat"}'             http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php)"
+          python3 - "$heartbeat" <<'PY'
+          import json
+          import sys
+          payload = json.loads(sys.argv[1])
+          if payload.get("status") != "OK":
+              raise SystemExit("bridge heartbeat is not OK")
+          PY
+          unset token
+          trap - EXIT
+          echo "CHATGPT_CONTINUITY_AUTO_ALLOW_RUNTIME=PASS"
+          echo "CHATGPT_CONTINUITY_CDP_RUNTIME=PASS"
+          echo "CHATGPT_CONTINUITY_BRIDGE_RUNTIME=PASS"
+
+      - name: Verify Gemini controller and codex-auto fallback capability
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          systemctl is-enabled --quiet shopvivaliz-gemini-24x7-controller.service
+          systemctl is-active --quiet shopvivaliz-gemini-24x7-controller.service
+          sudo -n grep -Fxq 'SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1'             /etc/shopvivaliz-gemini-24x7-controller.env
+          sudo -n grep -Fxq 'CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto'             /etc/shopvivaliz-gemini-24x7-controller.env
+
+          test -x /home/ubuntu/.local/bin/codex-auto
+          env -u OPENAI_API_KEY -u CODEX_API_KEY             /home/ubuntu/.local/bin/codex-auto exec --help 2>&1             | grep -F -- '--approve-for-me' >/dev/null
+
+          controller_pid="$(systemctl show -p MainPID --value shopvivaliz-gemini-24x7-controller.service)"
+          test "$controller_pid" -gt 0
+          echo "GEMINI_24X7_CONTROLLER_RUNTIME=PASS"
+          echo "CODEX_AUTO_APPROVE_FOR_ME_CAPABILITY=PASS"
