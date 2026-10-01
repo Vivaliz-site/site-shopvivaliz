@@ -1402,7 +1402,20 @@ async function sendContinueMessage(cdp) {
     return true;
   })()`);
   if (clicked) return true;
-  return false;
+  if (typeof cdp?.send !== 'function') return false;
+  try {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown', key: 'Enter', code: 'Enter',
+      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+    });
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp', key: 'Enter', code: 'Enter',
+      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function attemptNudge(
