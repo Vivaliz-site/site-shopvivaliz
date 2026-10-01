@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -97,6 +99,45 @@ class ZeroWindowDurabilityTests(unittest.TestCase):
             payload = json.loads(tmp.read_text(encoding="utf-8"))
             self.assertEqual(payload["status"], "RUNNING")
 
+    def test_concurrent_progress_writers_do_not_lose_history(self) -> None:
+        state.start_task("task-concurrent", "preserve every progress write", "gpt")
+        env = os.environ.copy()
+        env["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = str(state.RUNTIME_DIR)
+        script = ROOT / "scripts" / "agent_task_state.py"
+        processes = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(script),
+                    "progress",
+                    "--task",
+                    "task-concurrent",
+                    "--next-action",
+                    f"step-{index}",
+                    "--evidence",
+                    f"evidence-{index}",
+                ],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for index in range(16)
+        ]
+        failures = []
+        for process in processes:
+            _, stderr = process.communicate(timeout=10)
+            if process.returncode != 0:
+                failures.append((process.returncode, stderr))
+        self.assertEqual(failures, [])
+
+        payload = state.load_task("task-concurrent")
+        evidence = [row for row in payload["evidence"] if row.startswith("evidence-")]
+        history = [row for row in payload["history"] if row.get("event") == "progress"]
+        self.assertEqual(len(evidence), 16)
+        self.assertEqual(len(set(evidence)), 16)
+        self.assertEqual(len(history), 16)
+
     def test_start_task_performs_no_network_or_slow_io_before_the_write(self) -> None:
         """The pre-write path must be pure local computation. Any network
         call, subprocess, or blocking I/O between task invocation and the
@@ -148,6 +189,9 @@ class CheckpointFirstMarkerIsDocumentationOnlyTests(unittest.TestCase):
         source = (ROOT / "scripts" / "agent_task_state.py").read_text(encoding="utf-8")
         self.assertIn("os.fsync(handle.fileno())", source)
         self.assertIn("os.replace(tmp, path)", source)
+        self.assertIn("_fsync_dir(path.parent)", source)
+        self.assertIn("STATE_LOCK_FILE", source)
+        self.assertIn("fcntl.LOCK_EX", source)
 
 
 if __name__ == "__main__":
