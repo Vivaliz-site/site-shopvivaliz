@@ -870,8 +870,8 @@ async function run() {
       allowCrossDeviceDiscovery: true,
     });
     assert.ok(selected);
-    selected.close();
     assert.equal(closed.length, 1, 'duplicate same-conversation tab must be deduplicated');
+    selected.close();
   }
 
   // Multiple open conversations must not block the reinforcement monitor before
