@@ -1196,6 +1196,33 @@ async function run() {
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
+  // Once cross-device discovery has aligned an exact target, the delayed
+  // confirmation must stay on that same CDP. Re-running tab selection here can
+  // jump to a different conversation before the failure is confirmed.
+  {
+    let connectCalls = 0;
+    let pageText = 'normal reply';
+    const cdp = fakeCdp({ pageText: '' });
+    cdp.pageState = async () => ({ href: 'https://chatgpt.com/c/mobile-latest-123', title: 'ChatGPT', text: pageText });
+    const result = await reinforcementCheckOnce(
+      async () => {
+        connectCalls += 1;
+        return cdp;
+      },
+      1,
+      async () => true,
+      async () => {
+        pageText = 'Streaming interrupted. Waiting for the complete message...';
+        return { action: 'navigated', http_status: 200, restore_path: '/c/original-thread' };
+      },
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, true);
+    assert.equal(connectCalls, 1, 'cross-device aligned target must remain on the same CDP through delayed confirmation');
+  }
+
   // When the account-scoped latest-conversation endpoint is rate-limited,
   // the already-synchronized sidebar may safely identify the newest visible
   // conversation without another backend-api request. The fallback is only
