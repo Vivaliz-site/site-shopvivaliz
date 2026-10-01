@@ -613,7 +613,7 @@ jobs:
           subprocess.run(['systemctl', 'restart', 'shopvivaliz-remote-control-mcp.service'], check=True)
           wait_health('http://127.0.0.1:5580/health')
           after_controller = call('task_status', {'task_id':task_id})
-          if after_controller.get('task_id') != task_id or after_controller.get('state') not in {'running','starting'}:
+          if after_controller.get('id') != task_id or after_controller.get('state') not in {'running','starting'}:
               raise RuntimeError('controller_restart_task_continuity_failed')
           print('DURABLE_V2_CONTROLLER_RESTART=PASS')
 
@@ -625,7 +625,7 @@ jobs:
           subprocess.run(['systemctl', 'restart', 'shopvivaliz-secure-mcp-tunnel.service'], check=True)
           wait_health('http://127.0.0.1:8080/healthz'); wait_health('http://127.0.0.1:8080/readyz')
           after_tunnel = call('task_status', {'task_id':task_id})
-          if after_tunnel.get('task_id') != task_id or after_tunnel.get('state') not in {'running','starting'}:
+          if after_tunnel.get('id') != task_id or after_tunnel.get('state') not in {'running','starting'}:
               raise RuntimeError('tunnel_restart_task_continuity_failed')
           print('DURABLE_V2_TUNNEL_RESTART=PASS')
 
