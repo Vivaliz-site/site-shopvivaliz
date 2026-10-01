@@ -737,6 +737,48 @@ async function run() {
   }
 
   {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: 'continue' };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus')) return false;
+        if (source.includes('continuity-send-button-target')) {
+          return { state: 'ready', x: 700, y: 640 };
+        }
+        if (source.includes('continuity-submit-observed')) return true;
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'a safe stale continue draft with enabled Send must remain submit-capable even when ProseMirror refuses activeElement focus',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-target')),
+      'stale safe draft must resolve Send geometry before giving up on focus',
+    );
+    const mousePresses = calls.filter(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    assert.ok(
+      mousePresses.length >= 2,
+      'worker must attempt composer click and then trusted Send click for the already-safe continuation draft',
+    );
+  }
+
+  {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
