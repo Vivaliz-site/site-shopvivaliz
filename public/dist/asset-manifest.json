@@ -450,6 +450,11 @@
       "file": "/public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js",
       "bytes": 423,
       "source_bytes": 438
+    },
+    "/css/home-merchandising-v1.css": {
+      "file": "/public/dist/css/home-merchandising-v1.fadef70d8d.min.css",
+      "bytes": 2497,
+      "source_bytes": 3333
     }
   }
 }
