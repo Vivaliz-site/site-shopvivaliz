@@ -12,6 +12,7 @@ class ShopeeLogisticsSystemdTests(unittest.TestCase):
         self.assertIn('EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/.env', text)
         self.assertIn('/home/ubuntu/shopvivaliz-deploy/current/scripts/shopee_logistics_worker.py --apply', text)
         self.assertIn('ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared', text)
+        self.assertIn('SupplementaryGroups=ubuntu', text)
 
     def test_timer_is_frequent_enough_for_turbo_sla(self):
         text = (ROOT / 'deploy/systemd/shopvivaliz-shopee-logistics-worker.timer').read_text()
