@@ -48,6 +48,18 @@ header('Content-Type: text/html; charset=UTF-8');
         .btn-continue:hover { border-color: var(--brand); color: var(--brand); }
         @media (max-width: 700px) { .cart-layout { grid-template-columns: 1fr; } }
 
+        /*
+         * Reserva a geometria antes de o JS ler/renderizar o carrinho local.
+         * O valor nasce no <head> a partir do mesmo localStorage usado pelo
+         * carrinho; assim a lista nao nasce com altura zero em redes lentas.
+         */
+        html.sv-cart-page #cart-items-list {
+            min-height: var(--sv-cart-reserved-height, 210px);
+        }
+        html.sv-cart-page:not(.sv-cart-empty) [data-sv-empty-state="initial"] {
+            visibility: hidden;
+        }
+
         /* Repair 2026-08-21: carrinho mais limpo, sem sobreposicao e responsivo */
         .cart-page{padding:44px 0 72px;background:linear-gradient(180deg,#f6fbff 0,#fff 100%);}
         .cart-layout{grid-template-columns:minmax(0,1fr) 360px;gap:28px;align-items:start;}
@@ -84,7 +96,14 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="cart-layout">
         <div class="cart-card">
             <h1 class="cart-title">Meu Carrinho</h1>
-            <div id="cart-items-list"></div>
+            <div id="cart-items-list">
+                <div class="cart-empty sv-empty-cart-state" data-sv-empty-state="initial">
+                    <div class="sv-empty-state-icon" aria-hidden="true">🛒</div>
+                    <h2>Seu carrinho está vazio</h2>
+                    <p>Adicione produtos ao carrinho para continuar a compra.</p>
+                    <a href="/catalogo/" class="btn btn-primary sv-empty-state-action">Ver produtos</a>
+                </div>
+            </div>
         </div>
 
         <aside class="cart-card" id="cart-summary">
@@ -235,7 +254,9 @@ header('Content-Type: text/html; charset=UTF-8');
 
         if (!items.length) {
             clearShippingQuote();
-            list.innerHTML = '<div class="cart-empty"><div style="font-size:48px">🛒</div><p>Seu carrinho está vazio.</p><a href="/catalogo" class="btn btn-primary">Ver catálogo</a></div>';
+            if (!list.querySelector('[data-sv-empty-state]')) {
+                list.innerHTML = '<div class="cart-empty sv-empty-cart-state" data-sv-empty-state="rendered"><div class="sv-empty-state-icon" aria-hidden="true">🛒</div><h2>Seu carrinho está vazio</h2><p>Adicione produtos ao carrinho para continuar a compra.</p><a href="/catalogo/" class="btn btn-primary sv-empty-state-action">Ver produtos</a></div>';
+            }
             if (subtotalEl) subtotalEl.textContent = 'R$ 0,00';
             if (totalEl) totalEl.textContent = 'R$ 0,00';
             setCheckoutAvailability(btnCheckout, false);
