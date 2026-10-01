@@ -58,6 +58,17 @@ def _parse_utc(value: object) -> datetime | None:
         return None
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -70,6 +81,7 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.chmod(temp, 0o600)
         os.replace(temp, path)
+        _fsync_dir(path.parent)
     finally:
         temp.unlink(missing_ok=True)
 
