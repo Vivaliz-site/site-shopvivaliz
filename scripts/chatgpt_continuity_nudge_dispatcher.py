@@ -37,9 +37,10 @@ except ImportError:  # direct CLI execution from repository root
     from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
-DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
+DEFAULT_BRIDGE_URL = "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
-DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
+DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token")
+LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
 
@@ -50,8 +51,13 @@ def resolve_bridge_token(explicit_token: str = "") -> str:
 
     configured = os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", "").strip()
     candidates = [Path(configured).expanduser()] if configured else []
-    candidates.append(DEFAULT_TOKEN_FILE)
+    candidates.extend((DEFAULT_TOKEN_FILE, LEGACY_TOKEN_FILE))
+    seen: set[Path] = set()
     for token_path in candidates:
+        token_path = token_path.expanduser()
+        if token_path in seen:
+            continue
+        seen.add(token_path)
         try:
             if not token_path.is_file():
                 continue
