@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -45,6 +46,12 @@ class RemoteControlMcpTests(unittest.TestCase):
         m.launch_task_service = self._original_launch_task_service
         m.systemd_unit_state = self._original_systemd_unit_state
         self.tmp.cleanup()
+
+    def test_db_conn_closes_connection_after_context(self):
+        with m.db_conn() as db:
+            self.assertEqual(db.execute("SELECT 1").fetchone()[0], 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            db.execute("SELECT 1")
 
     def test_four_canonical_hosts(self):
         self.assertEqual(
