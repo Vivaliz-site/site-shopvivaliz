@@ -9,6 +9,8 @@ import {
   waitForComposerUsable,
   errorBannerPresent,
   transmissionErrorPresent,
+  requestTimeoutPresent,
+  clickRequestRetry,
   latestConversationProbe,
   latestConversationMeta,
   alignToLatestConversation,
@@ -53,6 +55,9 @@ function fakeCdp({
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
+      if (expression.includes('continuity-request-timeout-probe')) {
+        return /(a reflexão falhou|a reflexao falhou|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout|reflection failed|reasoning failed|thinking failed)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
@@ -72,6 +77,22 @@ function fakeCdp({
 }
 
 async function run() {
+  // Live iOS captures 2026-09-30 23:37-23:41: a failed reasoning
+  // request exposes an explicit retry control. Detect it as a current-turn
+  // failure so reinforcement can preserve the original request.
+  {
+    const timedOut = fakeCdp({
+      pageText: 'A reflexão falhou\nEsgotou-se o tempo limite da solicitação.\nRepetir',
+    });
+    assert.equal(await requestTimeoutPresent(timedOut), true);
+    assert.equal(await errorBannerPresent(timedOut), true);
+  }
+
+  {
+    const historicalOnly = fakeCdp({ pageText: 'normal reply' });
+    assert.equal(await requestTimeoutPresent(historicalOnly), false);
+  }
+
   {
     const started = Date.now();
     const result = await conversationStreamStatus(
@@ -1454,6 +1475,36 @@ async function run() {
       allowCrossDeviceDiscovery: false,
     });
     assert.equal(selected.marker, 'ws://interrupted', 'the unique locally interrupted tab must be selected without guessing');
+    selected.close();
+  }
+
+  // Multiple distinct open conversations can fail at the same time. This is
+  // not an ambiguous write target: each tab already carries local failure
+  // evidence. Process exactly one deterministically; the next poll gets the
+  // remaining failed conversation.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/failed-alpha', webSocketDebuggerUrl: 'ws://failed-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/failed-bravo', webSocketDebuggerUrl: 'ws://failed-b' },
+      { type: 'page', url: 'https://chatgpt.com/c/healthy', webSocketDebuggerUrl: 'ws://healthy' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const failed = tab.webSocketDebuggerUrl.startsWith('ws://failed-');
+      const cdp = fakeCdp({ pageText: failed ? 'Esgotou-se o tempo limite da solicitação. Repetir' : 'normal reply' });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(cdp.marker); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async cdp => cdp.marker.startsWith('ws://failed-'),
+      allowCrossDeviceDiscovery: false,
+    });
+    assert.equal(selected.marker, 'ws://failed-a', 'first failed tab must be processed deterministically');
+    assert.ok(closed.includes('ws://failed-b'), 'second failed tab must be left for the next reinforcement poll');
+    assert.ok(closed.includes('ws://healthy'), 'healthy tab must not be selected while a local failed tab exists');
     selected.close();
   }
 
