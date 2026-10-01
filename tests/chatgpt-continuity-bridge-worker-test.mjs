@@ -1029,12 +1029,77 @@ async function run() {
       const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
       cdp.marker = tab.webSocketDebuggerUrl;
       const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.currentPath = ({
+        'ws://a': '/c/open-alpha',
+        'ws://b': '/c/open-bravo',
+        'ws://c': '/c/open-charlie',
+        'ws://d': '/c/open-delta',
+      })[cdp.marker] || '/';
       cdp.evaluate = async expression => {
-        if (String(expression).includes('sidebar-latest-conversation')) {
+        const source = String(expression);
+        if (source.trim() === 'location.pathname') return cdp.currentPath;
+        if (source.includes('sidebar-latest-conversation')) {
           return sidebarLatestByMarker.get(cdp.marker) || '';
+        }
+        if (source.includes('location.assign')) {
+          const match = source.match(/location\.assign\(("[^"]+")\)/);
+          if (match) cdp.currentPath = JSON.parse(match[1]);
+          return true;
         }
         return originalEvaluate(expression);
       };
+      return cdp;
+    };
+
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(
+      selected.marker,
+      'ws://a',
+      'sidebar disagreement must not block account-scoped discovery; choose the first idle context deterministically',
+    );
+
+    const apiAligned = await alignLatestForReinforcement(
+      selected,
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        item_present: true,
+        id: 'mobile-latest-123',
+        update_time: Date.now() / 1000,
+      }),
+      Date.now(),
+    );
+    assert.equal(apiAligned.action, 'navigated');
+    assert.equal(apiAligned.http_status, 200);
+    assert.equal(apiAligned.restore_path, '/c/open-alpha');
+    assert.equal(selected.currentPath, '/c/mobile-latest-123');
+
+    // The same 2-2 sidebar split must still fail closed under 429: the
+    // deterministic idle context is safe for account-scoped discovery, but
+    // not automatically trusted as a sidebar fallback.
+    selected.currentPath = '/c/open-alpha';
+    const rateLimited = await alignLatestForReinforcement(
+      selected,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(rateLimited.action, 'latest_unavailable');
+    assert.equal(rateLimited.http_status, 429);
+    selected.close();
+  }
+
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/busy-alpha', webSocketDebuggerUrl: 'ws://busy-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/busy-bravo', webSocketDebuggerUrl: 'ws://busy-b' },
+    ];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply', generating: true });
+      cdp.marker = tab.webSocketDebuggerUrl;
       return cdp;
     };
     await assert.rejects(
@@ -1045,7 +1110,7 @@ async function run() {
         allowCrossDeviceDiscovery: true,
       }),
       /continuity target is ambiguous/,
-      '2-2 sidebar split must remain fail-closed',
+      'all active conversation tabs must remain fail-closed because none is safe to repurpose as a discovery context',
     );
   }
 
@@ -1129,6 +1194,33 @@ async function run() {
     assert.equal(result.action, 'no_banner');
     assert.equal(result.cross_device_discovery, true);
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
+  }
+
+  // Once cross-device discovery has aligned an exact target, the delayed
+  // confirmation must stay on that same CDP. Re-running tab selection here can
+  // jump to a different conversation before the failure is confirmed.
+  {
+    let connectCalls = 0;
+    let pageText = 'normal reply';
+    const cdp = fakeCdp({ pageText: '' });
+    cdp.pageState = async () => ({ href: 'https://chatgpt.com/c/mobile-latest-123', title: 'ChatGPT', text: pageText });
+    const result = await reinforcementCheckOnce(
+      async () => {
+        connectCalls += 1;
+        return cdp;
+      },
+      1,
+      async () => true,
+      async () => {
+        pageText = 'Streaming interrupted. Waiting for the complete message...';
+        return { action: 'navigated', http_status: 200, restore_path: '/c/original-thread' };
+      },
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, true);
+    assert.equal(connectCalls, 1, 'cross-device aligned target must remain on the same CDP through delayed confirmation');
   }
 
   // When the account-scoped latest-conversation endpoint is rate-limited,
