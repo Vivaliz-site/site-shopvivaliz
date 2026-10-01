@@ -232,6 +232,9 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("mcp-token", setup)
         self.assertIn('UNIT_SOURCE="${3:-}"', setup)
         self.assertIn('install -m 0644 -o root -g root "$UNIT_SOURCE" "/etc/systemd/system/$SERVICE"', setup)
+        self.assertIn('systemctl enable "$SERVICE"', setup)
+        self.assertIn('systemctl restart "$SERVICE"', setup)
+        self.assertNotIn('systemctl enable --now "$SERVICE"', setup)
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", unit)
 
     def test_sensitive_file_paths_are_denied(self):
@@ -367,9 +370,14 @@ class BootstrapContractTests(unittest.TestCase):
     def test_bootstrap_runs_on_controller_backend(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", text)
-        self.assertIn("sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py", text)
+        self.assertIn("sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service", text)
         self.assertNotIn("ubuntu@10.0.1.38)", text)
         self.assertIn("ubuntu@10.0.1.112", text)
+
+    def test_oci_bastion_bootstrap_copies_and_passes_canonical_controller_unit(self):
+        text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn('"${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/', text)
+        self.assertIn('install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service', text)
 
     def test_bootstrap_uses_reverse_ssh_for_windows(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
@@ -1725,6 +1733,15 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(status["state"], "succeeded")
         self.assertIn("runner-output", status["stdout"])
         self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
+
+    def test_read_capped_text_seeks_and_reads_at_most_max_output(self):
+        path = Path(self.tmp.name) / "large.log"
+        payload = b"discard-" * (m.MAX_OUTPUT + 10) + b"TAIL-MARKER"
+        path.write_bytes(payload)
+        with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("must_not_read_whole_file")):
+            result = m.read_capped_text(path)
+        self.assertLessEqual(len(result.encode("utf-8")), m.MAX_OUTPUT)
+        self.assertTrue(result.endswith("TAIL-MARKER"))
 
     def test_runner_heartbeat_advances_without_http_controller(self):
         task_id = self.submit(command="sleep 0.3") ["task_id"]

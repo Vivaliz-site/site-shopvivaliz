@@ -50,7 +50,8 @@ install_controller() {
   install -m 0644 -o root -g root "$UNIT_SOURCE" "/etc/systemd/system/$SERVICE"
 
   systemctl daemon-reload
-  systemctl enable --now "$SERVICE"
+  systemctl enable "$SERVICE"
+  systemctl restart "$SERVICE"
   sleep 2
   systemctl is-active --quiet "$SERVICE"
   curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
