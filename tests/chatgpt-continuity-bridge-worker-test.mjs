@@ -564,6 +564,80 @@ async function run() {
   }
   {
     const calls = [];
+    let draft = 'continue';
+    let selectedAll = false;
+    let sendEnabled = false;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-focus')) return true;
+        if (source.includes('continuity-send-button-click')) return sendEnabled;
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method !== 'Input.dispatchKeyEvent') return {};
+        if (params.type === 'rawKeyDown' && params.key === 'a' && Number(params.modifiers || 0) === 2) {
+          selectedAll = true;
+        } else if (params.type === 'rawKeyDown' && params.key === 'Backspace' && selectedAll) {
+          draft = '';
+          selectedAll = false;
+          sendEnabled = false;
+        } else if (params.type === 'char' && typeof params.text === 'string') {
+          draft += params.text;
+          if (draft.trim() === 'continue') sendEnabled = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'production CDP path must clear stale continuation text and retype it with trusted key events',
+    );
+    const typedChars = calls
+      .filter(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.type === 'char')
+      .map(call => String(call[2]?.text || ''))
+      .join('');
+    assert.equal(typedChars, 'continue');
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[2]?.type === 'rawKeyDown' && call[2]?.key === 'Backspace'),
+      'trusted path must clear stale untrusted continuation text before retyping',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-click')),
+      'trusted path must submit only after the editor state enables the real Send control',
+    );
+  }
+
+  {
+    let sendCalls = 0;
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: 'unsent customer draft' };
+        }
+        return false;
+      },
+      async send() {
+        sendCalls += 1;
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      false,
+      'continuity worker must never overwrite a non-continuation user draft',
+    );
+    assert.equal(sendCalls, 0);
+  }
+
+  {
+    const calls = [];
     const cdp = {
       async evaluate(expression) {
         calls.push(['evaluate', expression]);
