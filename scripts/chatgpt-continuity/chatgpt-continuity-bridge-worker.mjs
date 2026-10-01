@@ -1205,6 +1205,154 @@ async function errorBannerPresent(cdp) {
 }
 
 async function sendContinueMessage(cdp) {
+  const trustedProbe = typeof cdp?.send === 'function'
+    ? await cdp.evaluate(`(()=>{
+        /* continuity-composer-draft-probe */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        if(!el) return {usable:false,text:''};
+        const usable=!Boolean(el.disabled) && el.getAttribute('aria-disabled') !== 'true';
+        return {usable,text:String(el.innerText||el.value||el.textContent||'')};
+      })()`)
+    : null;
+
+  if (trustedProbe && typeof trustedProbe === 'object') {
+    if (!trustedProbe.usable) return false;
+
+    const existing = String(trustedProbe.text || '').trim();
+    const expected = String(CONTINUE_MESSAGE || '').trim();
+    if (!expected) return false;
+
+    // Never overwrite a real draft. The only non-empty value safe to replace
+    // is our own stale continuation left by a previous failed DOM-only send.
+    if (existing && existing !== expected) return false;
+
+    const focused = await cdp.evaluate(`(()=>{
+      /* continuity-composer-focus */
+      const el=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      if(!el) return false;
+      el.focus();
+      return document.activeElement===el || el.contains(document.activeElement);
+    })()`);
+    if (!focused) return false;
+
+    // Reset stale DOM/editor state using trusted keyboard events. This is
+    // important because DOM text can be visible while ChatGPT's internal
+    // editor state still considers the composer empty and keeps Send disabled.
+    try {
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'a', code: 'KeyA',
+        windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'a', code: 'KeyA',
+        windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'Backspace', code: 'Backspace',
+        windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Backspace', code: 'Backspace',
+        windowsVirtualKeyCode: 8, nativeVirtualKeyCode: 8,
+      });
+
+      for (const ch of expected) {
+        let key=ch;
+        let code='Unidentified';
+        let vk=0;
+        if (/^[a-z]$/i.test(ch)) {
+          const upper=ch.toUpperCase();
+          code='Key'+upper;
+          vk=upper.charCodeAt(0);
+        } else if (/^[0-9]$/.test(ch)) {
+          code='Digit'+ch;
+          vk=ch.charCodeAt(0);
+        } else if (ch === ' ') {
+          key=' ';
+          code='Space';
+          vk=32;
+        }
+
+        if (vk > 0) {
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'rawKeyDown', key, code,
+            windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
+          });
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'char', key, code,
+            windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
+            text: ch, unmodifiedText: ch,
+          });
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'keyUp', key, code,
+            windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk,
+          });
+        } else {
+          await cdp.send('Input.insertText', {text: ch});
+        }
+      }
+    } catch {
+      return false;
+    }
+
+    await sleep(300);
+
+    // Prefer the real enabled submit control once trusted input has updated
+    // ChatGPT's internal editor state. If this UI variant omits the button,
+    // fall back to a trusted Enter key.
+    for (let attempt=0; attempt<8; attempt += 1) {
+      const submitState = await cdp.evaluate(`(()=>{
+        /* continuity-send-button-click */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        const form=el?.closest('form')||null;
+        const exactSelectors=[
+          '[data-testid="send-button"]',
+          'button[aria-label="Send"]',
+          'button[aria-label="Send prompt"]',
+          'button[aria-label="Send message"]',
+          'button[aria-label="Enviar"]',
+          'button[aria-label="Enviar prompt"]',
+          'button[aria-label="Enviar mensagem"]',
+          'button[type="submit"]'
+        ];
+        let button=null;
+        for(const selector of exactSelectors){
+          const candidate=(form||document).querySelector(selector);
+          if(candidate){button=candidate;break;}
+        }
+        if(!button) return 'absent';
+        if(button.disabled || button.getAttribute('aria-disabled') === 'true') return 'disabled';
+        button.click();
+        return 'clicked';
+      })()`);
+      if (submitState === 'clicked' || submitState === true) return true;
+      if (submitState === 'disabled') {
+        await sleep(150);
+        continue;
+      }
+      break;
+    }
+
+    try {
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'Enter', code: 'Enter',
+        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Enter', code: 'Enter',
+        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Legacy/mock compatibility path. Production Cdp instances expose send()
+  // and therefore use the trusted keyboard path above.
   const typed = await cdp.evaluate(`(()=>{
     const el = document.querySelector('[data-testid="prompt-textarea"]')
       || document.querySelector('[role="textbox"][contenteditable="true"]');
@@ -1254,23 +1402,7 @@ async function sendContinueMessage(cdp) {
     return true;
   })()`);
   if (clicked) return true;
-
-  // ChatGPT can expose a usable composer without rendering a send button.
-  // Use a real Enter key through CDP only after typing succeeded and the
-  // normal button path was unavailable.
-  try {
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyDown', key: 'Enter', code: 'Enter',
-      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-    });
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyUp', key: 'Enter', code: 'Enter',
-      windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 async function attemptNudge(
