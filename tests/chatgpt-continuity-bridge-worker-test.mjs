@@ -261,6 +261,38 @@ async function run() {
 
   {
     const now = Date.now();
+    const checkpointAt = now - 6 * 60 * 1000;
+    const home = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' };
+    let navigatedId = '';
+    const candidates = await resolveAmbiguousConversationTabs(
+      [home],
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        id: 'newest-unrelated',
+        update_time: now / 1000,
+        candidates: [
+          { id: 'newest-unrelated', update_time: now / 1000, source: 'global' },
+          { id: 'checkpoint-target', update_time: (checkpointAt + 12_000) / 1000, source: 'project', project_id: 'g-p-target' },
+        ],
+      }),
+      now,
+      undefined,
+      async (tab, id) => {
+        navigatedId = id;
+        tab.url = `https://chatgpt.com/c/${id}`;
+        return true;
+      },
+      checkpointAt,
+    );
+    assert.equal(navigatedId, 'checkpoint-target', 'checkpoint recovery from a lone home tab must navigate to the intended thread');
+    assert.equal(candidates.length, 1);
+    assert.ok(candidates[0].url.endsWith('/c/checkpoint-target'));
+  }
+
+  {
+    const now = Date.now();
     const checkpointAt = now - 20 * 60 * 1000;
     const tabs = [
       { type: 'page', url: 'https://chatgpt.com/c/task-target', webSocketDebuggerUrl: 'ws://target' },
