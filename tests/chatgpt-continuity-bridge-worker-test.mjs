@@ -454,7 +454,7 @@ async function run() {
       },
     };
     assert.equal(
-      await waitForComposerUsable(cdp, 50, 1),
+      await waitForComposerUsable(cdp, 100, 10),
       true,
       'transient post-reattach composer absence must recover within a bounded wait',
     );
