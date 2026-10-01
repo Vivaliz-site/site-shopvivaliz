@@ -144,6 +144,17 @@ def _dispatcher_lock(runtime_dir: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
     runtime_dir.mkdir(parents=True, exist_ok=True)
     path = runtime_dir / LEDGER_FILE
@@ -155,6 +166,7 @@ def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+    _fsync_dir(runtime_dir)
 
 
 def _bridge_host_header(bridge_url: str) -> str:
