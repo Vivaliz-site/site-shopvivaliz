@@ -265,7 +265,14 @@ de lease ou anomalia, evitando crescimento ocioso a cada 30 segundos.
 A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
 `always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
 `KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
-PID, exit code ou resposta HTTP. A instalação só pode partir de uma release
+PID, exit code ou resposta HTTP. O daemon mantém
+`_gemini-24x7-controller-daemon.lock` durante toda a vida do processo, portanto
+dois daemons não podem alternar ownership entre ciclos. O nudge ChatGPT e o
+fallback detached compartilham `_continuity-execution.lock`: enquanto um efeito
+externo de retomada estiver em voo, o outro tier fica suprimido. O lease durável
+registra PID, boot id e start ticks; se o processo proprietário morrer, o restart
+recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
+continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
