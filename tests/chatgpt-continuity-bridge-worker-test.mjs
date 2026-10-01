@@ -620,6 +620,40 @@ async function run() {
     assert.ok(evaluateCalls > 0, 'transmission detection must use a targeted DOM boolean probe');
   }
 
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Parou de pensar\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-error-banner-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      false,
+      'historical stopped-thinking text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Erro na transmissão de mensagem\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-transmission-error-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      false,
+      'historical transmission-error text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
