@@ -93,7 +93,7 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
@@ -209,18 +209,14 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1` e
-  só pode usar provedores permitidos para automação recorrente; atualmente,
-  `Gemini` é a rota automática. **Claude/GPT/Codex não podem ser fallback
-  silencioso de daemon/cron.**
+- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1`. `Gemini` é sempre a rota primária. Quando `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`, autorização explícita vigente desde 2026-10-01 permite um único fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso; lease, deduplicação e cooldown continuam obrigatórios. Claude/GPT permanecem proibidos como fallback silencioso de daemon/cron.
 - Em execução finita/interativa fora do background permanece a ordem
   `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
   login ChatGPT, sem `OPENAI_API_KEY`.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
-- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; como
-  o recovery de background não usa IA paga, o mesmo checkpoint pode ser tentado
+- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; o mesmo checkpoint pode ser tentado
   novamente após cooldown (900 s padrão, configurável por
   `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
   ciclo. A tarefa continua `RUNNING` até progresso real ou terminal válido.
@@ -230,15 +226,34 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   é estritamente alocado por allowlist (`provider`, `provider_status`,
   `provider_attempt_exit_code`, `background_gemini_error`,
   `background_gemini_exit_code`, `background_paid_fallback_forbidden`,
-  `provider_output_bytes`, `provider_output_sha256`) — nunca prompt bruto,
+  `background_codex_fallback_authorized`, `provider_output_bytes`,
+  `provider_output_sha256`) — nunca prompt bruto,
   stdout/stderr bruto, tokens ou segredos.
 - ACK de fila (`agent-operations-worker.py` reconhecendo um pedido
   `auto_resume` para o painel/timeline interno) **não é execução**. O evento
   correspondente usa `kind=auto-resume-queued`/`auto-resume-ack` e a mensagem
   deixa explícito que aquilo não comprova execução real. Só a cadeia real
-  (watchdog → dispatcher → `autonomous-provider-failover.sh` → Gemini →
-  mudança material do checkpoint) é evidência.
+  (watchdog → dispatcher → `autonomous-provider-failover.sh` → Gemini primário
+  [→ `codex-auto` apenas se explicitamente autorizado e necessário] → mudança
+  material do checkpoint) é evidência.
 <!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
+
+<!-- GEMINI_24X7_CONTROLLER_V1 -->
+## Controlador Gemini 24x7 no backend
+
+O controlador `scripts/gemini_24x7_controller.py` supervisiona a pilha já
+existente, sem substituí-la: watchdog determinístico → nudge de ChatGPT comum
+→ dispatcher finito com Gemini primário e fallback `codex-auto` explicitamente autorizado. Ele mantém um lease atômico no runtime
+compartilhado, registra apenas metadados sanitizados e recusa propriedade
+duplicada enquanto o lease estiver vivo. Após interrupção/crash, lease vencido
+é recuperado e registrado antes de novo ciclo.
+
+A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
+`always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
+`KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
+PID, exit code ou resposta HTTP. A instalação só pode partir de uma release
+imutável já publicada; nunca editar `current/` ou a release ativa.
+<!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
 ## Prova de ponta a ponta da retomada desacoplada em produção
@@ -264,8 +279,7 @@ executa e conclui uma tarefa sintética por conta própria.
 - PASS exige, tudo correlacionado pelo mesmo `task_id`/`fingerprint`:
   pedido em `_resume-requests.jsonl`; linha correspondente em
   `_resume-executions.jsonl` com `result` igual a `progress` ou `terminal`
-  (nunca `no_progress`); `diagnostic.background_paid_fallback_forbidden`
-  igual a `true`; checkpoint final com `status=CONCLUIDO` e
+  (nunca `no_progress`); o diagnóstico deve provar um modo autorizado de background: `diagnostic.background_paid_fallback_forbidden=true` quando não houve fallback pago, ou `diagnostic.background_codex_fallback_authorized=true` quando o fallback finito `codex-auto` foi usado; checkpoint final com `status=CONCLUIDO` e
   `verification=continuity_e2e_pass`.
 - `.github/workflows/task-continuity-production-e2e.yml` roda manualmente
   (`workflow_dispatch`) no runner `shopvivaliz-a1-deploy`, único lugar onde
@@ -380,15 +394,13 @@ a mitigação instalada/armada, não “continuidade E2E comprovada”.
 
 ### Resiliência de quota Gemini no background
 
-O recovery automático continua estritamente **Gemini-only**. O modelo padrão
-é o alias estável `gemini-flash-latest`; em `quota_exhausted` ou
+O recovery automático usa **Gemini como primário**. O modelo padrão é o alias estável `gemini-flash-latest`; em `quota_exhausted` ou
 `model_unavailable`, o wrapper protegido pode tentar
 `gemini-flash-lite-latest` e, se o runtime possuir mais de uma credencial
 Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
 2026-09-27 um probe funcional sanitizado no A1 confirmou
 `gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
-`*-latest`. Isso não autoriza Claude, Codex ou qualquer fallback
-pago/silencioso no daemon.
+`*-latest`. Claude/GPT continuam proibidos como fallback silencioso. O `codex-auto` só é permitido na exceção explícita e finita do controlador 24/7 (`SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`), sempre depois de Gemini falhar em produzir progresso.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.

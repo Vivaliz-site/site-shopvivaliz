@@ -15,6 +15,7 @@ EXACT_CONTROL_ROUTES = {
     "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_delete_scope",
     "/delete-superseded-solange-v1 CONFIRM": "delete_superseded_solange",
     "/continuity-e2e": "continuity_e2e",
+    "/backend-continuity-recover-v1": "backend_continuity_recovery",
     "/provision-governed-backend-ci-runners-v1": "provision_backend_runners",
     "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
     "/codex-remote-control-mcp-run": "codex_remote_control",

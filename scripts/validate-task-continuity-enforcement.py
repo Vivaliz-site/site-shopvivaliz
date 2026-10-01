@@ -40,6 +40,8 @@ WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
 FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
 DISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"
+GEMINI_CONTROLLER = ROOT / "scripts" / "gemini_24x7_controller.py"
+GEMINI_CONTROLLER_TEST = ROOT / "tests" / "test_gemini_24x7_controller.py"
 DISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"
 QUEUE = ROOT / "scripts" / "task_resume_queue.py"
 QUEUE_TEST = ROOT / "tests" / "test_task_resume_queue.py"
@@ -172,6 +174,16 @@ else:
     ):
         if token not in dispatcher_text:
             errors.append(f"scripts/task_resume_dispatcher.py: missing {token}")
+
+if not GEMINI_CONTROLLER.is_file():
+    errors.append("missing scripts/gemini_24x7_controller.py")
+else:
+    controller_text = GEMINI_CONTROLLER.read_text(encoding="utf-8", errors="replace")
+    for token in ("acquire_lease", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
+        if token not in controller_text:
+            errors.append(f"scripts/gemini_24x7_controller.py: missing {token}")
+if not GEMINI_CONTROLLER_TEST.is_file():
+    errors.append("missing tests/test_gemini_24x7_controller.py")
 
 if not DISPATCHER_TEST.is_file():
     errors.append("missing tests/test_task_resume_dispatcher.py")

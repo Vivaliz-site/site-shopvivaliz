@@ -11,20 +11,29 @@ import {
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
+  normalizeConversationCandidates,
+  mergeRecentConversationCandidates,
+  reinforcementSweepCandidates,
   alignToLatestConversation,
   alignLatestForReinforcement,
   assistantSnapshot,
   assistantProgressed,
+  confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementLoop,
+  authorizationButtonTarget,
+  clickAuthorizationIfPresent,
+  authorizationCheckOnce,
+  authorizationLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -46,6 +55,12 @@ function fakeCdp({
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('continuity-error-banner-probe')) {
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
@@ -216,6 +231,60 @@ async function run() {
     assert.ok(
       candidates.every(tab => tab.url.includes('/c/latest-thread')),
       'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const checkpointAt = Date.now() - 8 * 60 * 1000;
+    const selected = selectCheckpointConversationCandidate(
+      [
+        { id: 'task-target', update_time: (checkpointAt + 15_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        { id: 'other-recent', update_time: (checkpointAt + 4 * 60_000) / 1000, source: 'global' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(selected?.id, 'task-target', 'checkpoint timestamp must bind a task to its own closest conversation');
+
+    const ambiguous = selectCheckpointConversationCandidate(
+      [
+        { id: 'near-a', update_time: (checkpointAt + 20_000) / 1000, source: 'global' },
+        { id: 'near-b', update_time: (checkpointAt + 40_000) / 1000, source: 'project', project_id: 'g-p-two' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(ambiguous, null, 'near-tied conversations must fail closed instead of guessing');
+  }
+
+  {
+    const now = Date.now();
+    const checkpointAt = now - 20 * 60 * 1000;
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/task-target', webSocketDebuggerUrl: 'ws://target' },
+      { type: 'page', url: 'https://chatgpt.com/c/newer-unrelated', webSocketDebuggerUrl: 'ws://newer' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        id: 'newer-unrelated',
+        update_time: now / 1000,
+        candidates: [
+          { id: 'newer-unrelated', update_time: now / 1000, source: 'global' },
+          { id: 'task-target', update_time: (checkpointAt + 10_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        ],
+      }),
+      now,
+      undefined,
+      undefined,
+      checkpointAt,
+    );
+    assert.deepEqual(
+      candidates.map(tab => tab.webSocketDebuggerUrl),
+      ['ws://target'],
+      'task-specific checkpoint time must override an unrelated globally latest conversation',
     );
   }
 
@@ -406,6 +475,8 @@ async function run() {
     assert.match(expressionSeen, /data-message-author-role/);
     assert.match(expressionSeen, /data-conversation-role/);
     assert.match(expressionSeen, /data-turn-key/);
+    assert.match(expressionSeen, /turn-action-controls/, 'current UI assistant actions must be a semantic fallback');
+    assert.match(expressionSeen, /querySelector\(['"]main['"]\)/, 'current UI main surface must be captured for progress fallback');
   }
   assert.equal(
     assistantProgressed(
@@ -415,6 +486,77 @@ async function run() {
     true,
     'a new assistant turn key must confirm progress even when virtualization keeps count stable and the new answer is shorter',
   );
+
+  {
+    let snapshots = 0;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        if (source.includes('data-message-author-role')) {
+          snapshots += 1;
+          return {
+            count: 0,
+            lastText: '',
+            lastLength: 0,
+            lastKey: '',
+            surfaceText: snapshots >= 1 ? 'tool activity advanced' : 'tool activity',
+            surfaceLength: snapshots >= 1 ? 22 : 13,
+          };
+        }
+        if (source.includes('stop-button')) return true;
+        return null;
+      },
+    };
+    assert.equal(
+      await confirmAssistantProgress(
+        cdp,
+        { count: 0, lastText: '', lastLength: 0, lastKey: '', surfaceText: 'tool activity', surfaceLength: 13 },
+        1100,
+        10,
+      ),
+      true,
+      'current UI main-surface growth must confirm assistant/tool progress when legacy turn selectors are absent',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({ generating: false, sendSucceeds: true });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let snapshotNumber = 0;
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('data-message-author-role')) {
+        snapshotNumber += 1;
+        return {
+          count: 0,
+          lastText: '',
+          lastLength: 0,
+          lastKey: '',
+          surfaceText: snapshotNumber >= 3 ? 'after-own-continue' : (snapshotNumber === 2 ? 'before-send' : 'before-reattach'),
+          surfaceLength: snapshotNumber >= 3 ? 18 : (snapshotNumber === 2 ? 11 : 15),
+        };
+      }
+      return originalEvaluate(expression);
+    };
+    let confirmCalls = 0;
+    const result = await attemptNudge(
+      'task-post-send-baseline',
+      async () => cdp,
+      async (_connected, baseline) => {
+        confirmCalls += 1;
+        if (confirmCalls === 1) return false;
+        assert.equal(
+          baseline?.surfaceText,
+          'after-own-continue',
+          'progress confirmation must start from a post-send snapshot so the continue message itself is not counted',
+        );
+        return true;
+      },
+      async () => true,
+    );
+    assert.equal(result.result_status, 'PROGRESS_CONFIRMED');
+    assert.ok(snapshotNumber >= 3, 'attemptNudge must capture a post-send confirmation baseline');
+  }
 
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
@@ -454,7 +596,7 @@ async function run() {
       },
     };
     assert.equal(
-      await waitForComposerUsable(cdp, 50, 1),
+      await waitForComposerUsable(cdp, 100, 10),
       true,
       'transient post-reattach composer absence must recover within a bounded wait',
     );
@@ -482,6 +624,206 @@ async function run() {
     );
     assert.ok(calls.length >= 2);
   }
+  {
+    const calls = [];
+    let draft = 'continue';
+    let selectedAll = false;
+    let sendEnabled = false;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus')) return true;
+        if (source.includes('continuity-send-button-target')) {
+          return sendEnabled ? { state: 'ready', x: 700, y: 640 } : { state: 'disabled' };
+        }
+        if (source.includes('continuity-send-button-click')) return sendEnabled;
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method !== 'Input.dispatchKeyEvent') return {};
+        if (params.type === 'rawKeyDown' && params.key === 'a' && Number(params.modifiers || 0) === 2) {
+          selectedAll = true;
+        } else if (params.type === 'rawKeyDown' && params.key === 'Backspace' && selectedAll) {
+          draft = '';
+          selectedAll = false;
+          sendEnabled = false;
+        } else if (params.type === 'char' && typeof params.text === 'string') {
+          draft += params.text;
+          if (draft.trim() === 'continue') sendEnabled = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'production CDP path must clear stale continuation text and retype it with trusted key events',
+    );
+    const typedChars = calls
+      .filter(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.type === 'char')
+      .map(call => String(call[2]?.text || ''))
+      .join('');
+    assert.equal(typedChars, 'continue');
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[2]?.type === 'rawKeyDown' && call[2]?.key === 'Backspace'),
+      'trusted path must clear stale untrusted continuation text before retyping',
+    );
+    const firstCharIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchKeyEvent'
+        && call[2]?.type === 'char',
+    );
+    const composerMousePressIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    const sendMousePressIndex = calls.findIndex(
+      (call, index) => index > firstCharIndex
+        && call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    assert.ok(
+      composerMousePressIndex >= 0 && composerMousePressIndex < firstCharIndex,
+      'production path must use a trusted CDP mouse click in the composer before typing',
+    );
+    assert.ok(
+      sendMousePressIndex > firstCharIndex,
+      'production path must use a trusted CDP mouse click on the enabled Send control',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-target')),
+      'trusted path must resolve the real enabled Send geometry before submitting',
+    );
+  }
+
+  {
+    let sendCalls = 0;
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: 'unsent customer draft' };
+        }
+        return false;
+      },
+      async send() {
+        sendCalls += 1;
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      false,
+      'continuity worker must never overwrite a non-continuation user draft',
+    );
+    assert.equal(sendCalls, 0);
+  }
+
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(['evaluate', expression]);
+        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
+        if (expression.includes('b.click()')) return false;
+        return false;
+      },
+      async send(method, params) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'missing send button after typing must fall back to a real Enter key dispatch',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.key === 'Enter'),
+      'Enter fallback must use CDP Input.dispatchKeyEvent',
+    );
+  }
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-error-banner-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      true,
+      'error detection must not depend on the first 6000 pageState characters in long conversations',
+    );
+    assert.ok(evaluateCalls > 0, 'error detection must use a targeted DOM boolean probe');
+  }
+
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-transmission-error-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      true,
+      'transmission-error detection must survive long conversations without pageState truncation',
+    );
+    assert.ok(evaluateCalls > 0, 'transmission detection must use a targeted DOM boolean probe');
+  }
+
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Parou de pensar\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-error-banner-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      false,
+      'historical stopped-thinking text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Erro na transmissão de mensagem\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-transmission-error-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      false,
+      'historical transmission-error text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
@@ -627,6 +969,105 @@ async function run() {
       'latestConversationProbe must bound a CDP evaluation that never resolves',
     );
     assert.equal(probe.source, 'probe_failed');
+  }
+
+  // Project conversations use the same /c/<id> route but are discovered from
+  // /backend-api/gizmos/g-p-.../conversations. Continuity must aggregate both
+  // global and Project sources instead of assuming /backend-api/conversations
+  // is the complete account view.
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const cdp = fakeCdp();
+    cdp.evaluate = async expression => {
+      cdp.calls.push(expression);
+      assert.ok(expression.includes('/backend-api/gizmos/'));
+      assert.ok(expression.includes('g-p-'));
+      assert.ok(expression.includes('/conversations'));
+      assert.ok(expression.includes('AbortSignal.timeout'), 'every discovery request must have a bounded timeout');
+      assert.ok(expression.includes('a[href*="g-p-"]'), 'Project ids must also be discovered from loaded sidebar links');
+      assert.ok(expression.includes('Promise.allSettled'), 'Project conversation requests must be bounded and batched instead of serial');
+      return {
+        http_status: 200,
+        source: 'combined',
+        item_present: true,
+        item_keys: ['id', 'update_time'],
+        id: 'project-latest-thread',
+        update_time: now,
+        candidates: [
+          { id: 'global-older-thread', update_time: now - 30, source: 'global' },
+          { id: 'project-latest-thread', update_time: now, source: 'project', project_id: 'g-p-project-one' },
+        ],
+      };
+    };
+    const probe = await latestConversationProbe(cdp);
+    assert.equal(probe.candidates.length, 2);
+  }
+
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const normalized = normalizeConversationCandidates({
+      candidates: [
+        { id: 'global-older-thread', update_time: now - 40, source: 'global' },
+        { id: 'project-newer-thread', update_time: now - 5, source: 'project', project_id: 'g-p-project-one' },
+        { id: 'project-newer-thread', update_time: now - 10, source: 'project', project_id: 'g-p-project-one' },
+      ],
+    });
+    assert.deepEqual(
+      normalized.map(x => x.id),
+      ['project-newer-thread', 'global-older-thread'],
+      'candidate normalization must deduplicate and sort Project/global chats by recency',
+    );
+  }
+
+  {
+    const nowMs = Date.now();
+    let currentPath = '/c/original-thread';
+    const cdp = fakeCdp();
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        if (source.includes('project-newer-thread')) currentPath = '/c/project-newer-thread';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        candidates: [
+          { id: 'global-older-thread', update_time: (nowMs - 30_000) / 1000, source: 'global' },
+          { id: 'project-newer-thread', update_time: (nowMs - 2_000) / 1000, source: 'project', project_id: 'g-p-project-one' },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(result.action, 'navigated');
+    assert.equal(currentPath, '/c/project-newer-thread');
+  }
+
+  {
+    const now = Math.floor(Date.now() / 1000);
+    const merged = mergeRecentConversationCandidates(
+      [
+        { id: 'global-latest', update_time: now, source: 'global' },
+        { id: 'project-a', update_time: now - 10, source: 'project', project_id: 'g-p-a' },
+      ],
+      [
+        { id: 'project-b', update_time: now - 20, source: 'project', project_id: 'g-p-b' },
+        { id: 'project-a', update_time: now - 5, source: 'project', project_id: 'g-p-a' },
+      ],
+      now * 1000,
+      30 * 60 * 1000,
+    );
+    assert.deepEqual(merged.map(x => x.id), ['global-latest', 'project-a', 'project-b']);
+
+    const first = reinforcementSweepCandidates(merged, 'global-latest', 0, 2);
+    assert.deepEqual(first.batch.map(x => x.id), ['project-a', 'project-b']);
+    assert.equal(first.next_cursor, 0, 'two-item non-latest sweep should wrap cleanly');
   }
 
   console.log('cross-device latest-conversation alignment: PASS');
@@ -802,6 +1243,9 @@ async function run() {
         reloads += 1;
         if (reloads >= 2) pageText = 'normal';
       }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /erro na transmissão de mensagem/i.test(pageText);
+      }
       return originalEvaluate(expression);
     };
     transmissionCdp.pageState = async () => ({
@@ -823,6 +1267,11 @@ async function run() {
     assert.ok(sendCalls >= 2, 'explicit transmission error must get one bounded retry');
 
     const persistent = fakeCdp({ sendSucceeds: true });
+    const persistentEvaluate = persistent.evaluate.bind(persistent);
+    persistent.evaluate = async expression => {
+      if (expression.includes('continuity-transmission-error-probe')) return true;
+      return persistentEvaluate(expression);
+    };
     persistent.pageState = async () => ({
       href: 'https://chatgpt.com/c/fake',
       title: 'ChatGPT',
@@ -837,6 +1286,36 @@ async function run() {
     assert.match(failed.detail, /transmission error persisted/i);
   }
 
+  {
+    let reloads = 0;
+    let composerReady = false;
+    const recoverSendCdp = fakeCdp({ sendSucceeds: true });
+    const originalEvaluate = recoverSendCdp.evaluate.bind(recoverSendCdp);
+    recoverSendCdp.evaluate = async expression => {
+      if (expression.includes('prompt-textarea') && !expression.includes('insertText') && !expression.includes('b.click()')) {
+        return composerReady;
+      }
+      if (expression.includes('location.reload')) {
+        reloads += 1;
+        composerReady = true;
+      }
+      if (expression.includes('insertText') || expression.includes('proto.value')) {
+        return true;
+      }
+      if (expression.includes('b.click()')) return true;
+      return originalEvaluate(expression);
+    };
+    let confirms = 0;
+    const recoveredSend = await attemptNudge(
+      'task-send-false-recovery',
+      async () => recoverSendCdp,
+      async () => ++confirms >= 2,
+      async () => composerReady,
+    );
+    assert.equal(recoveredSend.result_status, 'PROGRESS_CONFIRMED');
+    assert.ok(reloads >= 1, 'send=false must trigger bounded reattach');
+  }
+
   const sendFailed = await attemptNudge(
     'task-1',
     async () => fakeCdp({ sendSucceeds: false }),
@@ -849,6 +1328,30 @@ async function run() {
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
 
   console.log('attemptNudge branches: PASS');
+
+  // Duplicate tabs for the same interrupted conversation are one target,
+  // not an ambiguity. This reproduces the live VM state observed on 2026-10-01.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'Erro na transmissão de mensagem' });
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => true,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.ok(selected);
+    assert.equal(closed.length, 1, 'duplicate same-conversation tab must be deduplicated');
+    selected.close();
+  }
 
   // Multiple open conversations must not block the reinforcement monitor before
   // it can preserve a 429 and schedule the wider discovery backoff. The local
@@ -1005,12 +1508,77 @@ async function run() {
       const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
       cdp.marker = tab.webSocketDebuggerUrl;
       const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.currentPath = ({
+        'ws://a': '/c/open-alpha',
+        'ws://b': '/c/open-bravo',
+        'ws://c': '/c/open-charlie',
+        'ws://d': '/c/open-delta',
+      })[cdp.marker] || '/';
       cdp.evaluate = async expression => {
-        if (String(expression).includes('sidebar-latest-conversation')) {
+        const source = String(expression);
+        if (source.trim() === 'location.pathname') return cdp.currentPath;
+        if (source.includes('sidebar-latest-conversation')) {
           return sidebarLatestByMarker.get(cdp.marker) || '';
+        }
+        if (source.includes('location.assign')) {
+          const match = source.match(/location\.assign\(("[^"]+")\)/);
+          if (match) cdp.currentPath = JSON.parse(match[1]);
+          return true;
         }
         return originalEvaluate(expression);
       };
+      return cdp;
+    };
+
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(
+      selected.marker,
+      'ws://a',
+      'sidebar disagreement must not block account-scoped discovery; choose the first idle context deterministically',
+    );
+
+    const apiAligned = await alignLatestForReinforcement(
+      selected,
+      async () => ({
+        http_status: 200,
+        source: 'filtered',
+        item_present: true,
+        id: 'mobile-latest-123',
+        update_time: Date.now() / 1000,
+      }),
+      Date.now(),
+    );
+    assert.equal(apiAligned.action, 'navigated');
+    assert.equal(apiAligned.http_status, 200);
+    assert.equal(apiAligned.restore_path, '/c/open-alpha');
+    assert.equal(selected.currentPath, '/c/mobile-latest-123');
+
+    // The same 2-2 sidebar split must still fail closed under 429: the
+    // deterministic idle context is safe for account-scoped discovery, but
+    // not automatically trusted as a sidebar fallback.
+    selected.currentPath = '/c/open-alpha';
+    const rateLimited = await alignLatestForReinforcement(
+      selected,
+      async () => ({ http_status: 429, source: 'filtered', item_present: false, item_keys: [] }),
+    );
+    assert.equal(rateLimited.action, 'latest_unavailable');
+    assert.equal(rateLimited.http_status, 429);
+    selected.close();
+  }
+
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/busy-alpha', webSocketDebuggerUrl: 'ws://busy-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/busy-bravo', webSocketDebuggerUrl: 'ws://busy-b' },
+    ];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply', generating: true });
+      cdp.marker = tab.webSocketDebuggerUrl;
       return cdp;
     };
     await assert.rejects(
@@ -1021,7 +1589,7 @@ async function run() {
         allowCrossDeviceDiscovery: true,
       }),
       /continuity target is ambiguous/,
-      '2-2 sidebar split must remain fail-closed',
+      'all active conversation tabs must remain fail-closed because none is safe to repurpose as a discovery context',
     );
   }
 
@@ -1105,6 +1673,40 @@ async function run() {
     assert.equal(result.action, 'no_banner');
     assert.equal(result.cross_device_discovery, true);
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
+  }
+
+  // Once cross-device discovery has aligned an exact target, the delayed
+  // confirmation must stay on that same CDP. Re-running tab selection here can
+  // jump to a different conversation before the failure is confirmed.
+  {
+    let connectCalls = 0;
+    let pageText = 'normal reply';
+    const cdp = fakeCdp({ pageText: '' });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-error-banner-probe')) {
+        return /streaming interrupted/i.test(pageText);
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.pageState = async () => ({ href: 'https://chatgpt.com/c/mobile-latest-123', title: 'ChatGPT', text: pageText });
+    const result = await reinforcementCheckOnce(
+      async () => {
+        connectCalls += 1;
+        return cdp;
+      },
+      1,
+      async () => true,
+      async () => {
+        pageText = 'Streaming interrupted. Waiting for the complete message...';
+        return { action: 'navigated', http_status: 200, restore_path: '/c/original-thread' };
+      },
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.sent, true);
+    assert.equal(result.progress_confirmed, true);
+    assert.equal(connectCalls, 1, 'cross-device aligned target must remain on the same CDP through delayed confirmation');
   }
 
   // When the account-scoped latest-conversation endpoint is rate-limited,
@@ -1225,6 +1827,109 @@ async function run() {
     assert.equal(result.action, 'no_banner');
     assert.equal(result.http_status, 429);
     assert.equal(currentPath, '/c/original-thread', 'temporary cross-device navigation must restore the original tab');
+  }
+
+  // Live reproduction 2026-09-30: /stream_status returns 200 while the
+  // conversation metadata endpoint returns 404 when the account context is
+  // omitted. The turn-state probe must use the same authenticated account
+  // headers as latestConversationProbe.
+  {
+    let expression = '';
+    const cdp = {
+      async evaluate(source) {
+        expression = String(source);
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: false,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      },
+    };
+    const state = await conversationTurnState(cdp, 25);
+    assert.equal(state.http_status, 200);
+    assert.match(expression, /\/api\/auth\/session/, 'turn-state probe must load the authenticated ChatGPT session');
+    assert.match(expression, /Authorization/, 'turn-state probe must forward the bearer token when available');
+    assert.match(expression, /ChatGPT-Account-Id/, 'turn-state probe must bind the request to the active ChatGPT account');
+  }
+
+  // Current UI fallback when the canonical conversation metadata endpoint is
+  // rate-limited/unavailable: a COMPLETE transport whose last data-turn-key
+  // contains user-message controls but no assistant node/action controls is a
+  // locally observable unfinished turn. This fallback is never used when the
+  // canonical turn-state request succeeds.
+  {
+    const fallback = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = fallback.evaluate.bind(fallback);
+    fallback.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 429,
+          role: '',
+          end_turn: null,
+          child_count: -1,
+          message_status: 'HTTP_ERROR',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) return true;
+      return originalEvaluate(expression);
+    };
+    assert.equal(
+      await silentStallPresent(fallback),
+      true,
+      'rate-limited canonical metadata must fall back to a locally unfinished last turn',
+    );
+  }
+
+  {
+    const completedLocal = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = completedLocal.evaluate.bind(completedLocal);
+    completedLocal.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 429,
+          role: '',
+          end_turn: null,
+          child_count: -1,
+          message_status: 'HTTP_ERROR',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) return false;
+      return originalEvaluate(expression);
+    };
+    assert.equal(
+      await silentStallPresent(completedLocal),
+      false,
+      'completed local turn must remain fail-closed while canonical metadata is unavailable',
+    );
+  }
+
+  {
+    const canonicalComplete = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = canonicalComplete.evaluate.bind(canonicalComplete);
+    let localFallbackCalled = false;
+    canonicalComplete.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: true,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) {
+        localFallbackCalled = true;
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    assert.equal(await silentStallPresent(canonicalComplete), false);
+    assert.equal(localFallbackCalled, false, 'canonical 200 result must suppress the local heuristic');
   }
 
   // Cross-device/iOS failures may not mirror the orange interruption banner
@@ -1381,6 +2086,131 @@ async function run() {
     );
   }
 
+  // A 429 must back off only the account-scoped API, not the local sidebar
+  // inspection. The live iPhone failure on 2026-09-30 appeared ~3 minutes
+  // after a no_banner+429 cycle; suppressing all cross-device inspection for
+  // five minutes created a blind window.
+  {
+    const calls = [];
+    let waits = 0;
+    const stop = new Error('stop-after-two-reinforcement-iterations');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async (...args) => {
+          calls.push(args);
+          return calls.length === 1
+            ? {
+                action: 'no_banner',
+                http_status: 429,
+                cross_device_discovery: true,
+              }
+            : {
+                action: 'no_banner',
+                http_status: 0,
+                cross_device_discovery: true,
+              };
+        },
+        () => 0,
+        async () => {
+          waits += 1;
+          if (waits >= 2) throw stop;
+        },
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 2, 'second reinforcement cycle must still run during API backoff');
+    assert.equal(calls[0]?.[3], alignLatestForReinforcement, 'first cycle may use the account-scoped API');
+    assert.notEqual(
+      calls[1]?.[3],
+      alignLatestForReinforcement,
+      'cycle inside API backoff must switch to local sidebar alignment',
+    );
+    assert.deepEqual(
+      calls[1]?.[4],
+      { allowCrossDeviceDiscovery: true },
+      'local sidebar discovery must stay enabled while API discovery is backed off',
+    );
+  }
+
+  // Live reproduction 2026-09-30 23:22 BRT: server-side stream state can
+  // remain IS_STREAMING while the canonical browser has neither a Stop/
+  // generating signal nor a usable composer. That detached shape is a stall
+  // candidate; active DOM generation or a usable composer must stay fail-closed.
+  {
+    const orphaned = fakeCdp({
+      generating: false,
+      composerUsable: false,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'normal reply',
+    });
+    assert.equal(
+      await silentStallPresent(orphaned),
+      true,
+      'IS_STREAMING without DOM generation or composer must be a stall candidate',
+    );
+
+    const active = fakeCdp({
+      generating: true,
+      composerUsable: false,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'normal reply',
+    });
+    assert.equal(
+      await silentStallPresent(active),
+      false,
+      'an actively generating DOM must never be classified as orphaned',
+    );
+
+    const usableComposer = fakeCdp({
+      generating: false,
+      composerUsable: true,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'normal reply',
+    });
+    assert.equal(
+      await silentStallPresent(usableComposer),
+      false,
+      'a usable composer means the stream is not the detached no-input state',
+    );
+  }
+
+  // Operational authorization requests must be accepted with trusted CDP
+  // pointer events, preferring Always allow/Sempre permitir when present.
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(['evaluate', String(expression)]);
+        if (String(expression).includes('continuity-authorization-button-target')) {
+          return { x: 640, y: 480, kind: 'always_allow' };
+        }
+        return null;
+      },
+      async send(method, params) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'clicked');
+    assert.equal(result.kind, 'always_allow');
+    assert.ok(calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'));
+  }
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-authorization-button-target')) return null;
+        return null;
+      },
+      async send() { throw new Error('must not click without authorization'); },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'no_request');
+  }
+
   // The checkpoint-driven bridge loop and the reinforcement loop must start
   // independently. A slow reinforcement iteration cannot serialize the next
   // pollBridgeOnce cycle.
@@ -1392,9 +2222,11 @@ async function run() {
       async () => { events.push('bridge'); await blocked; },
       async () => { events.push('reinforcement'); await blocked; },
       true,
+      async () => { events.push('authorization'); await blocked; },
+      true,
     );
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.deepEqual(events.sort(), ['bridge', 'reinforcement']);
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'reinforcement']);
     release();
     await running;
   }
@@ -1436,6 +2268,26 @@ async function run() {
     assert.equal(result.action, 'sent_unconfirmed');
     assert.equal(result.sent, true);
     assert.equal(result.progress_confirmed, false);
+  }
+
+  {
+    const result = await reinforcementCheckOnce(
+      async () => connectReinforcementChatgptTab({
+        tabs: [
+          { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
+          { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
+        ],
+        connector: async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
+        probeBanner: async () => true,
+        allowCrossDeviceDiscovery: true,
+      }),
+      1,
+      async () => true,
+      async () => ({ action: 'navigated', http_status: 200 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.progress_confirmed, true);
   }
 
   console.log('reinforcementCheckOnce branches: PASS');
