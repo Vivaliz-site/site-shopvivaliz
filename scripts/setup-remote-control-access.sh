@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 ACTION="${1:-status}"
 SERVER_SOURCE="${2:-}"
+UNIT_SOURCE="${3:-}"
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
 SITE_HOST="shopvivaliz-free-a1"
@@ -19,6 +20,7 @@ install_controller() {
   require_root
   [ "$HOST" = "$BACKEND_HOST" ] || die controller_host_mismatch 21
   [ -n "$SERVER_SOURCE" ] && [ -f "$SERVER_SOURCE" ] || die server_source_required 22
+  [ -n "$UNIT_SOURCE" ] && [ -f "$UNIT_SOURCE" ] || die unit_source_required 23
 
   install -d -m 700 -o root -g root "$STATE_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR"
@@ -45,34 +47,7 @@ install_controller() {
   } > "$env_file"
   chmod 600 "$env_file"
 
-  cat >"/etc/systemd/system/$SERVICE" <<'UNIT'
-[Unit]
-Description=ShopVivaliz Private Remote Control MCP
-After=network-online.target tailscaled.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-Group=root
-WorkingDirectory=/opt/shopvivaliz-remote-control
-Environment=PYTHONUNBUFFERED=1
-Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
-Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
-Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
-EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
-ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
-Restart=always
-RestartSec=3
-NoNewPrivileges=false
-PrivateTmp=false
-ProtectSystem=false
-ReadWritePaths=/var/lib/shopvivaliz-remote-control
-ProtectHome=false
-
-[Install]
-WantedBy=multi-user.target
-UNIT
+  install -m 0644 -o root -g root "$UNIT_SOURCE" "/etc/systemd/system/$SERVICE"
 
   systemctl daemon-reload
   systemctl enable --now "$SERVICE"

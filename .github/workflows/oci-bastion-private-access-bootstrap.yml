@@ -322,8 +322,8 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh ubuntu@127.0.0.1:/tmp/
-          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh'
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
           PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
           test -n "$PUBKEY"
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
