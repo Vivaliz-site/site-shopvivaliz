@@ -58,6 +58,17 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.calls.append(kwargs)
         return {"ok": True, "http_status": 200, "body": {"status": "OK", "enqueued": True}}
 
+    def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
+        self.assertEqual(
+            self.dispatcher.DEFAULT_BRIDGE_URL,
+            "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php",
+        )
+        self.assertEqual(
+            self.dispatcher.DEFAULT_TOKEN_FILE,
+            Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token"),
+        )
+        self.assertNotEqual(self.dispatcher.DEFAULT_TOKEN_FILE, self.dispatcher.LEGACY_TOKEN_FILE)
+
     def test_dispatches_new_chatgpt_common_request_to_the_bridge(self) -> None:
         self._stale_checkpoint_and_request()
         result = self.dispatcher.run_once(
