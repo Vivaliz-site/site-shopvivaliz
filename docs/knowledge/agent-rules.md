@@ -127,7 +127,7 @@ Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações 
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois usar SSH privado/Tailscale e, para bootstrap/recovery, GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Nenhuma dessas rotas deve consumir Codex por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->

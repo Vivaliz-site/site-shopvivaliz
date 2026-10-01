@@ -181,13 +181,24 @@ class ProbeEvaluationTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("continuity_e2e_pass" in reason for reason in reasons))
 
-    def test_fails_when_diagnostic_does_not_prove_gemini_only_background(self) -> None:
+    def test_explicit_codex_auto_background_authorization_is_accepted(self) -> None:
         probe = load_probe()
         observation = self._base_observation()
         observation["execution"]["diagnostic"]["background_paid_fallback_forbidden"] = False
+        observation["execution"]["diagnostic"]["background_codex_fallback_authorized"] = True
+        observation["execution"]["diagnostic"]["provider"] = "codex_auto"
+        ok, reasons = probe.evaluate(observation)
+        self.assertTrue(ok)
+        self.assertEqual(reasons, [])
+
+    def test_fails_when_diagnostic_proves_neither_safe_mode(self) -> None:
+        probe = load_probe()
+        observation = self._base_observation()
+        observation["execution"]["diagnostic"]["background_paid_fallback_forbidden"] = False
+        observation["execution"]["diagnostic"]["background_codex_fallback_authorized"] = False
         ok, reasons = probe.evaluate(observation)
         self.assertFalse(ok)
-        self.assertTrue(any("background_paid_fallback_forbidden" in reason for reason in reasons))
+        self.assertTrue(any("authorized background execution marker" in reason for reason in reasons))
 
     def test_ledger_row_belonging_to_a_different_task_is_not_matched(self) -> None:
         probe = load_probe()

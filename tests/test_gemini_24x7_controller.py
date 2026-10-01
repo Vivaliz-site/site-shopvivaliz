@@ -68,6 +68,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('base_dir="/opt/shopvivaliz-gemini-24x7-controller"', installer)
         self.assertIn('releases_dir="$base_dir/releases"', installer)
         self.assertNotIn("current/", installer)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081", installer)
+        self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1", installer)
+        self.assertIn("CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto", installer)
 
 
 if __name__ == "__main__":

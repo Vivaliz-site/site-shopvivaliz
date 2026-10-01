@@ -124,6 +124,8 @@ Environment=CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=$bridge_host_header
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
+Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
+Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
 ExecStart=$node_bin $worker
 Restart=always
 RestartSec=5

@@ -29,6 +29,8 @@ const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
 const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
+const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
+const AUTHORIZATION_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS || 3000));
 const REINFORCEMENT_POLL_MS = Math.max(
   15_000,
   Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_POLL_MS || 30_000),
@@ -316,6 +318,103 @@ class Cdp {
 }
 
 async function reinforcementSendReady(cdp) { return Boolean(await cdp.evaluate(`(()=>{const c=document.querySelector('[data-testid="prompt-textarea"]')||document.querySelector('[role="textbox"][contenteditable="true"]');if(!c||c.disabled||c.getAttribute('aria-disabled')==='true')return false;return [...document.querySelectorAll('button')].some(b=>/^(send|enviar)$/i.test(b.getAttribute('aria-label')||'')&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')})()`)); }
+
+async function authorizationButtonTarget(cdp) {
+  return cdp.evaluate(`(()=>{
+    /* continuity-authorization-button-target */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const preferred=[
+      'sempre permitir','always allow',
+      'permitir uma vez','allow once',
+      'permitir','allow','autorizar','authorize'
+    ];
+    const rank=new Map(preferred.map((value,index)=>[value,index]));
+    const candidates=[];
+    for(const button of document.querySelectorAll('button')){
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      if(!rank.has(label)) continue;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) continue;
+      const style=getComputedStyle(button);
+      if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
+      candidates.push({
+        rank:rank.get(label),
+        kind:label.includes('sempre')||label.includes('always')?'always_allow':'allow',
+        x:rect.left+rect.width/2,
+        y:rect.top+rect.height/2
+      });
+    }
+    candidates.sort((a,b)=>a.rank-b.rank);
+    return candidates[0]||null;
+  })()`);
+}
+
+async function clickAuthorizationIfPresent(cdp) {
+  if (!AUTO_ALLOW_ENABLED) return { action: 'disabled' };
+  if (!cdp || typeof cdp.send !== 'function') return { action: 'unsupported' };
+  const target = await authorizationButtonTarget(cdp);
+  if (!target) return { action: 'no_request' };
+  const x=Number(target.x);
+  const y=Number(target.y);
+  if(!Number.isFinite(x)||!Number.isFinite(y)) return { action: 'invalid_target' };
+  await cdp.send('Input.dispatchMouseEvent', {type:'mouseMoved',x,y,button:'none'});
+  await cdp.send('Input.dispatchMouseEvent', {type:'mousePressed',x,y,button:'left',clickCount:1});
+  await cdp.send('Input.dispatchMouseEvent', {type:'mouseReleased',x,y,button:'left',clickCount:1});
+  return { action: 'clicked', kind: String(target.kind||'allow') };
+}
+
+async function authorizationCheckOnce(
+  listTabs = async () => {
+    if (!(await cdpReady())) return [];
+    const response = await fetch(`${CDP_BASE}/json`, { signal: AbortSignal.timeout(3000) });
+    return response.ok ? await response.json() : [];
+  },
+  connector = connectCdpTarget,
+) {
+  if (!AUTO_ALLOW_ENABLED) return { action: 'disabled', scanned: 0 };
+  const tabs = await listTabs();
+  const candidates=(Array.isArray(tabs)?tabs:[])
+    .filter(tab=>Number.isFinite(chatgptTabRank(tab)))
+    .sort((a,b)=>chatgptTabRank(a)-chatgptTabRank(b));
+  let scanned=0;
+  for(const tab of candidates){
+    let cdp;
+    try{
+      cdp=await connector(tab);
+      if(!cdp) continue;
+      scanned+=1;
+      const outcome=await clickAuthorizationIfPresent(cdp);
+      if(outcome.action==='clicked'){
+        return {...outcome,scanned};
+      }
+    }catch{
+      // A transient tab detach must not terminate the always-on watcher.
+    }finally{
+      try{cdp?.close();}catch{}
+    }
+  }
+  return { action: 'no_request', scanned };
+}
+
+async function authorizationLoop(
+  check = authorizationCheckOnce,
+  wait = sleep,
+) {
+  for (;;) {
+    try {
+      const outcome = await check();
+      if (outcome?.action === 'clicked') {
+        console.log(`chatgpt_continuity_authorization action=clicked kind=${text(outcome.kind)}`);
+      }
+    } catch (error) {
+      console.error(`chatgpt_continuity_authorization_error ${text(error?.message)}`);
+    }
+    await wait(AUTHORIZATION_POLL_MS);
+  }
+}
 
 async function connectReinforcementChatgptTab({
   allowCrossDeviceDiscovery = false,
@@ -2155,9 +2254,12 @@ async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
+  runAuthorizationLoop = authorizationLoop,
+  autoAllowEnabled = AUTO_ALLOW_ENABLED,
 ) {
   const loops = [runBridgeLoop()];
   if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
 
@@ -2197,5 +2299,9 @@ export {
   reinforcementDiscoveryDelayMs,
   bridgeLoop,
   reinforcementLoop,
+  authorizationButtonTarget,
+  clickAuthorizationIfPresent,
+  authorizationCheckOnce,
+  authorizationLoop,
   mainLoop,
 };
