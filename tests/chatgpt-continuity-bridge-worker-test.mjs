@@ -1722,11 +1722,23 @@ async function run() {
       async () => { events.push('connect'); return cdp; },
       1,
       async () => true,
-      async () => { events.push('align'); return { action: 'already_latest', http_status: 200 }; },
+      async () => {
+        events.push('align');
+        return {
+          action: 'already_latest',
+          http_status: 200,
+          candidate_count: 7,
+          project_count: 2,
+          latest_age_seconds: 780,
+        };
+      },
       { allowCrossDeviceDiscovery: true },
     );
     assert.equal(result.action, 'no_banner');
     assert.equal(result.cross_device_discovery, true);
+    assert.equal(result.candidate_count, 7, 'alignment candidate count must survive the no-banner result');
+    assert.equal(result.project_count, 2, 'alignment Project count must survive the no-banner result');
+    assert.equal(result.latest_age_seconds, 780, 'alignment age must survive the no-banner result');
     assert.deepEqual(events.slice(0, 2), ['connect', 'align']);
   }
 
