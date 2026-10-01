@@ -1468,7 +1468,6 @@ async function run() {
         tabs: [
           { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
           { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
-          { type: 'page', url: 'https://chatgpt.com/c/other-thread', webSocketDebuggerUrl: 'ws://other' },
         ],
         connector: async () => fakeCdp({ pageText: 'normal reply' }),
         probeBanner: async () => true,
