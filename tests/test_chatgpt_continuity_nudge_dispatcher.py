@@ -95,6 +95,30 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1, "the bridge must be called exactly once for the same fingerprint")
 
+    def test_live_dispatch_lock_blocks_parallel_nudge_effect(self) -> None:
+        self._stale_checkpoint_and_request()
+        with self.dispatcher._dispatcher_lock(self.runtime) as acquired:
+            self.assertTrue(acquired)
+            blocked = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+
+        self.assertTrue(blocked["locked"])
+        self.assertEqual(blocked["dispatched"], 0)
+        self.assertEqual(len(self.calls), 0)
+
+        recovered = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(recovered["dispatched"], 1)
+        self.assertEqual(len(self.calls), 1)
+
     def test_confirmed_progress_is_the_only_terminal_success_for_same_fingerprint(self) -> None:
         self._stale_checkpoint_and_request()
         self.dispatcher.run_once(
