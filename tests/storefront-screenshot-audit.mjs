@@ -87,16 +87,55 @@ async function installMetrics(page) {
         for (const entry of list.getEntries()) {
           if (entry.hadRecentInput) continue;
           window.__svCls += entry.value;
-          const sources = Array.from(entry.sources || []).map((source) => {
+          const details = Array.from(entry.sources || []).map((source) => {
             const node = source.node;
-            if (!(node instanceof Element)) return 'unknown';
-            const id = node.id ? `#${node.id}` : '';
-            const classes = node.classList && node.classList.length
-              ? `.${Array.from(node.classList).slice(0, 3).join('.')}`
-              : '';
-            return `${node.tagName.toLowerCase()}${id}${classes}`;
+            let selector = 'unknown';
+            if (node instanceof Element) {
+              const id = node.id ? `#${node.id}` : '';
+              const classes = node.classList && node.classList.length
+                ? `.${Array.from(node.classList).slice(0, 3).join('.')}`
+                : '';
+              selector = `${node.tagName.toLowerCase()}${id}${classes}`;
+            }
+            const rect = (value) => value ? {
+              x: Math.round(Number(value.x || 0) * 10) / 10,
+              y: Math.round(Number(value.y || 0) * 10) / 10,
+              width: Math.round(Number(value.width || 0) * 10) / 10,
+              height: Math.round(Number(value.height || 0) * 10) / 10
+            } : null;
+            return {
+              selector,
+              previous_rect: rect(source.previousRect),
+              current_rect: rect(source.currentRect)
+            };
           });
-          window.__svLayoutShiftSources.push({ value: entry.value, sources });
+          const sources = details.map((detail) => detail.selector);
+          const contextRect = (selector) => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof Element)) return null;
+            const box = element.getBoundingClientRect();
+            return {
+              selector,
+              x: Math.round(box.x * 10) / 10,
+              y: Math.round(box.y * 10) / 10,
+              width: Math.round(box.width * 10) / 10,
+              height: Math.round(box.height * 10) / 10,
+              display: getComputedStyle(element).display,
+              position: getComputedStyle(element).position
+            };
+          };
+          window.__svLayoutShiftSources.push({
+            value: entry.value,
+            start_time_ms: Math.round(Number(entry.startTime || 0) * 10) / 10,
+            sources,
+            details,
+            context_rects: [
+              contextRect('.sv-announcement-bar'),
+              contextRect('header.sv-navbar'),
+              contextRect('main.cart-page'),
+              contextRect('.cart-layout')
+            ].filter(Boolean)
+          });
         }
       }).observe({ type: 'layout-shift', buffered: true });
       new PerformanceObserver((list) => {
@@ -205,8 +244,13 @@ async function collectInitialMetrics(page) {
       0
     );
 
+    const paintEntries = performance.getEntriesByType('paint').reduce((acc, entry) => {
+      acc[entry.name] = Math.round(Number(entry.startTime || 0) * 10) / 10;
+      return acc;
+    }, {});
     return {
       cls: Number(window.__svCls || 0),
+      paintEntries,
       longestTaskMs: Number(window.__svLongestTask || 0),
       layoutShiftSources: Array.from(window.__svLayoutShiftSources || []).sort((a, b) => b.value - a.value).slice(0, 12),
       metricSetupError: String(window.__svMetricSetupError || ''),
@@ -322,6 +366,7 @@ for (const profile of profiles) {
       status,
       title: metrics.title,
       initial_cls: metrics.cls,
+      paint_entries_ms: metrics.paintEntries,
       longest_task_ms: metrics.longestTaskMs,
       layout_shift_sources: metrics.layoutShiftSources,
       metric_setup_error: metrics.metricSetupError,
