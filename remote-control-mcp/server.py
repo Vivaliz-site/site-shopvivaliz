@@ -488,7 +488,7 @@ def remote_invocation(host: str, command: str) -> list[str]:
     cfg = validate_host(host)
     platform = cfg["platform"]
     if cfg["transport"] == "local":
-        return ["bash", "-lc", command]
+        return ["/usr/bin/env", "HOME=/root", "USER=root", "LOGNAME=root", "bash", "-lc", command]
     address = str(cfg["address"])
     port = int(cfg.get("port", 22))
     base = ssh_base(address, str(cfg["user"]), port)

@@ -290,6 +290,11 @@ class RemoteControlMcpTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             m.validate_host("legacy-host")
 
+    def test_local_target_has_root_home_environment(self):
+        inv = m.remote_invocation("always-free-arm-1787907847-26", "printf test")
+        self.assertEqual(inv[:4], ["/usr/bin/env", "HOME=/root", "USER=root", "LOGNAME=root"])
+        self.assertEqual(inv[4:6], ["bash", "-lc"])
+
     def test_linux_target_uses_privileged_sudo(self):
         m.SSH_KEY.write_text("x")
         m.KNOWN_HOSTS.write_text("x")
