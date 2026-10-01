@@ -123,6 +123,9 @@ const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs fo
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
+  if (normalized.includes('failure_reason=additional_checks')) return 'RECOVERABLE_ADDITIONAL_CHECKS';
+  if (normalized.includes('failure_reason=stopped_thinking')) return 'RECOVERABLE_STOPPED_THINKING';
+  if (normalized.includes('failure_reason=streaming_interrupted')) return 'RECOVERABLE_STREAMING_INTERRUPTED';
   if (normalized.includes('composer/send-button remained unavailable after bounded reattach')) return 'COMPOSER_UNAVAILABLE_AFTER_REATTACH';
   if (normalized.includes('composer found but send failed after bounded reattach')) return 'SEND_FAILED_AFTER_REATTACH';
   if (normalized.includes('transmission error persisted and composer was unavailable after reattach')) return 'TRANSMISSION_COMPOSER_UNAVAILABLE';
@@ -1653,9 +1656,56 @@ async function errorBannerPresent(cdp) {
       'transmissao interrompida',
       'stopped thinking',
       'parou de pensar',
+      'nossos sistemas estão fazendo verificações adicionais',
+      'nossos sistemas estao fazendo verificacoes adicionais',
+      'verificações adicionais antes de responder',
+      'verificacoes adicionais antes de responder',
+      'tentar novamente com um modelo mais rápido',
+      'tentar novamente com um modelo mais rapido',
+      'our systems are performing additional checks',
+      'our systems are doing additional checks',
+      'additional checks before responding',
+      'try again with a faster model',
+      'try again using a faster model',
     ],
     'continuity-error-banner-probe',
   );
+}
+
+async function recoverableFailureReason(cdp) {
+  if (!(await errorBannerPresent(cdp))) return '';
+
+  if (await currentConversationSurfaceContains(
+    cdp,
+    [
+      'nossos sistemas estão fazendo verificações adicionais',
+      'nossos sistemas estao fazendo verificacoes adicionais',
+      'verificações adicionais antes de responder',
+      'verificacoes adicionais antes de responder',
+      'tentar novamente com um modelo mais rápido',
+      'tentar novamente com um modelo mais rapido',
+      'our systems are performing additional checks',
+      'our systems are doing additional checks',
+      'additional checks before responding',
+      'try again with a faster model',
+      'try again using a faster model',
+    ],
+    'continuity-additional-checks-probe',
+  )) return 'additional_checks';
+
+  if (await currentConversationSurfaceContains(
+    cdp,
+    ['stopped thinking', 'parou de pensar'],
+    'continuity-stopped-thinking-probe',
+  )) return 'stopped_thinking';
+
+  if (await currentConversationSurfaceContains(
+    cdp,
+    ['streaming interrupted', 'transmissão interrompida', 'transmissao interrompida'],
+    'continuity-streaming-interrupted-probe',
+  )) return 'streaming_interrupted';
+
+  return 'generation_error';
 }
 
 async function clickTrustedSendButton(cdp) {
@@ -1964,6 +2014,16 @@ async function attemptNudge(
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
 ) {
+  const recoveryStartedAtMs = Date.now();
+  let detectedFailureReason = '';
+  const recoveryMetadata = () => detectedFailureReason
+    ? {
+        failure_class: 'RECOVERABLE_CHAT_FAILURE',
+        failure_reason: detectedFailureReason,
+        recovery_attempt: 1,
+        recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+      }
+    : {};
   let cdp;
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
@@ -1971,7 +2031,9 @@ async function attemptNudge(
       targetUpdatedAtMs: checkpointUpdatedAtMs(taskId),
     }));
     cdp = await connector();
+    detectedFailureReason = await recoverableFailureReason(cdp);
     let recoveredStaleComplete = false;
+    let recoveredTerminalFailure = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
@@ -1992,8 +2054,12 @@ async function attemptNudge(
       return {
         result_status: 'PROGRESS_CONFIRMED',
         detail: 'passive reattach restored assistant progress without sending continuation',
+        ...recoveryMetadata(),
       };
     }
+
+    const postReattachFailureReason = await recoverableFailureReason(cdp);
+    if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
@@ -2001,27 +2067,38 @@ async function attemptNudge(
       // Anything other than a confirmed COMPLETE remains potentially active
       // and must not receive a duplicate continuation.
       const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status !== 200 || stream?.status !== 'COMPLETE') {
+      const streamComplete = stream?.http_status === 200 && stream?.status === 'COMPLETE';
+      if (!streamComplete && !detectedFailureReason) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
           detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
         };
       }
 
-      // If Stop survived the reattach while server bookkeeping says COMPLETE,
-      // clear only that stale UI state before sending the checkpoint-driven
-      // continuation. If Stop disappeared naturally, continue without a click.
+      // A persisted terminal/degraded failure is stronger evidence than a
+      // stale Stop control or server-side IN_PROGRESS bookkeeping. The
+      // reinforcement path already gives ChatGPT its own retry grace window;
+      // after no progress, clear only that stale UI control and resume the
+      // checkpoint on the same model.
       if (generatingAfterReattach) {
         if (!(await clearStaleCompleteGeneration(cdp))) {
-          return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'stale COMPLETE stream detected but Stop state did not clear' };
+          return {
+            result_status: 'STALLED_NOT_CONFIRMED',
+            detail: detectedFailureReason
+              ? 'recoverable failure detected but stale Stop state did not clear'
+              : 'stale COMPLETE stream detected but Stop state did not clear',
+            ...recoveryMetadata(),
+          };
         }
       }
-      recoveredStaleComplete = true;
+      recoveredStaleComplete = streamComplete;
+      recoveredTerminalFailure = !streamComplete && Boolean(detectedFailureReason);
     }
     if (!(await waitComposer(cdp))) {
       return {
         result_status: 'CONVERSATION_NOT_FOUND',
         detail: 'composer/send-button selector not found after bounded post-reattach wait (possible UI drift)',
+        ...recoveryMetadata(),
       };
     }
     let baseline = await assistantSnapshot(cdp);
@@ -2034,11 +2111,21 @@ async function attemptNudge(
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
       if (!(await waitComposer(cdp))) {
-        return { result_status: 'ERROR', detail: 'composer/send-button remained unavailable after bounded reattach' };
+        return {
+          result_status: 'ERROR',
+          detail: 'composer/send-button remained unavailable after bounded reattach',
+          ...recoveryMetadata(),
+        };
       }
       baseline = await assistantSnapshot(cdp);
       sent = await sendContinueMessage(cdp);
-      if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed after bounded reattach' };
+      if (!sent) {
+        return {
+          result_status: 'ERROR',
+          detail: 'composer found but send failed after bounded reattach',
+          ...recoveryMetadata(),
+        };
+      }
     }
 
     let progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
@@ -2053,12 +2140,14 @@ async function attemptNudge(
         return {
           result_status: 'PROGRESS_CONFIRMED',
           detail: 'transmission error recovered during passive reattach without duplicate continuation',
+          ...recoveryMetadata(),
         };
       }
       if (!(await waitComposer(cdp))) {
         return {
           result_status: 'ERROR',
           detail: 'transmission error persisted and composer was unavailable after reattach',
+          ...recoveryMetadata(),
         };
       }
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
@@ -2067,6 +2156,7 @@ async function attemptNudge(
         return {
           result_status: 'ERROR',
           detail: 'transmission error persisted and retry send failed',
+          ...recoveryMetadata(),
         };
       }
       progressed = await confirmAfterSend(cdp, retryAfterReattachBaseline, confirmProgress);
@@ -2074,12 +2164,14 @@ async function attemptNudge(
         return {
           result_status: 'PROGRESS_CONFIRMED',
           detail: 'transmission error recovered by one bounded reattach and retry',
+          ...recoveryMetadata(),
         };
       }
       if (await transmissionErrorPresent(cdp)) {
         return {
           result_status: 'ERROR',
           detail: 'transmission error persisted after bounded recovery retry',
+          ...recoveryMetadata(),
         };
       }
     }
@@ -2088,14 +2180,20 @@ async function attemptNudge(
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
           ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
-          : 'sent continuation, but no assistant progress was observed',
+          : recoveredTerminalFailure
+            ? 'recovered terminal generation state and sent continuation, but no assistant progress was observed'
+            : 'sent continuation, but no assistant progress was observed',
+        ...recoveryMetadata(),
       };
     }
     return {
       result_status: 'PROGRESS_CONFIRMED',
       detail: recoveredStaleComplete
         ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
-        : 'continuation produced assistant progress',
+        : recoveredTerminalFailure
+          ? 'recovered terminal generation state; continuation produced assistant progress'
+          : 'continuation produced assistant progress',
+      ...recoveryMetadata(),
     };
   } catch (error) {
     return { result_status: 'ERROR', detail: text(error?.message).slice(0, 400) };
@@ -2110,8 +2208,14 @@ async function pollBridgeOnce() {
   const taskId = response.nudge?.task_id;
   if (!taskId) return;
   const outcome = await attemptNudge(taskId);
-  await bridge('result', { task_id: taskId, ...outcome });
-  console.log(`chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeDetailCode(outcome.detail)}`);
+  const failureReason = text(outcome.failure_reason);
+  const persistedDetail = failureReason
+    ? `failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=${failureReason};recovery_attempt=${Number(outcome.recovery_attempt || 1)};recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}; ${text(outcome.detail).slice(0, 360)}`
+    : outcome.detail;
+  await bridge('result', { task_id: taskId, ...outcome, detail: persistedDetail });
+  console.log(
+    `chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeDetailCode(persistedDetail)} failure_class=${failureReason ? 'RECOVERABLE_CHAT_FAILURE' : 'none'} failure_reason=${failureReason || 'none'} recovery_attempt=${Number(outcome.recovery_attempt || 0)} recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}`,
+  );
 }
 
 // "Streaming interrupted, waiting for the complete message" is shown while
@@ -2135,6 +2239,9 @@ async function reinforcementCheckOnce(
   let alignmentHttpStatus = 0;
   let restorePath = '';
   let failureSignal = '';
+  let failureReason = '';
+  let failureBaseline = null;
+  const recoveryStartedAtMs = Date.now();
   try {
     cdp = await connect();
 
@@ -2143,6 +2250,8 @@ async function reinforcementCheckOnce(
     let bannerPresent = await errorBannerPresent(cdp);
     if (bannerPresent) {
       failureSignal = 'banner';
+      failureReason = await recoverableFailureReason(cdp) || 'generation_error';
+      failureBaseline = await assistantSnapshot(cdp);
     } else {
       if (!allowCrossDeviceDiscovery) {
         return { action: 'no_banner', cross_device_discovery: false };
@@ -2172,11 +2281,15 @@ async function reinforcementCheckOnce(
       bannerPresent = await errorBannerPresent(cdp);
       if (bannerPresent) {
         failureSignal = 'banner';
+        failureReason = await recoverableFailureReason(cdp) || 'generation_error';
+        failureBaseline = await assistantSnapshot(cdp);
       } else if (await silentStallPresent(cdp)) {
         // The iOS client can show "Transmissão interrompida" while the same
         // latest conversation has no banner in the canonical VM. Only the
         // canonical unfinished-turn shape below is accepted as equivalent.
         failureSignal = 'silent_stall';
+        failureReason = 'silent_stall';
+        failureBaseline = await assistantSnapshot(cdp);
       } else {
         return {
           action: 'no_banner',
@@ -2201,15 +2314,34 @@ async function reinforcementCheckOnce(
       }
     }
     if (!failureStillPresent) {
-      console.log(`chatgpt_continuity_reinforcement ${failureSignal || 'failure'}_self_resolved`);
-      return {
-        action: 'self_resolved',
-        http_status: alignmentHttpStatus,
-        cross_device_discovery: crossDeviceDiscovery,
-      };
+      const selfRecoveryProgressed = await confirmProgress(
+        cdp,
+        failureBaseline,
+        PASSIVE_REATTACH_CONFIRM_MS,
+        PROGRESS_POLL_MS,
+      );
+      if (selfRecoveryProgressed) {
+        console.log(
+          `chatgpt_continuity_reinforcement ${failureSignal || 'failure'}_self_resolved progress_confirmed=true failure_reason=${failureReason || 'unknown'}`,
+        );
+        return {
+          action: 'self_resolved',
+          sent: false,
+          progress_confirmed: true,
+          failure_class: 'RECOVERABLE_CHAT_FAILURE',
+          failure_reason: failureReason || 'unknown',
+          recovery_attempt: 0,
+          recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+      console.log(
+        `chatgpt_continuity_reinforcement ${failureSignal || 'failure'}_cleared_without_progress recovery_continues=true failure_reason=${failureReason || 'unknown'}`,
+      );
     }
 
-    if (failureSignal === 'silent_stall') {
+    if (failureSignal === 'silent_stall' && failureStillPresent) {
       const passiveBaseline = await assistantSnapshot(cdp);
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
@@ -2231,14 +2363,9 @@ async function reinforcementCheckOnce(
       }
 
       if (!(await silentStallPresent(cdp))) {
-        console.log('chatgpt_continuity_reinforcement silent_stall_state_cleared_after_reattach');
-        return {
-          action: 'self_resolved',
-          sent: false,
-          progress_confirmed: false,
-          http_status: alignmentHttpStatus,
-          cross_device_discovery: crossDeviceDiscovery,
-        };
+        console.log(
+          'chatgpt_continuity_reinforcement silent_stall_state_cleared_after_reattach recovery_continues=true',
+        );
       }
 
       if (!(await waitForComposerUsable(cdp))) {
@@ -2292,12 +2419,19 @@ async function reinforcementCheckOnce(
         : outcome.result_status === 'ERROR'
           ? 'send_failed'
           : 'send_failed';
-    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed result=${outcome.result_status}`);
+    const normalizedFailureReason = text(outcome.failure_reason || failureReason || 'generation_error');
+    console.log(
+      `chatgpt_continuity_reinforcement error_banner_confirmed result=${outcome.result_status} failure_class=RECOVERABLE_CHAT_FAILURE failure_reason=${normalizedFailureReason} recovery_attempt=${Number(outcome.recovery_attempt || 1)} recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || (Date.now() - recoveryStartedAtMs)))}`,
+    );
     return {
       action,
       sent: outcome.result_status !== 'CONVERSATION_NOT_FOUND',
       progress_confirmed: outcome.result_status === 'PROGRESS_CONFIRMED',
       detail: outcome.detail,
+      failure_class: 'RECOVERABLE_CHAT_FAILURE',
+      failure_reason: normalizedFailureReason,
+      recovery_attempt: Number(outcome.recovery_attempt || 1),
+      recovery_latency_ms: Math.max(0, Number(outcome.recovery_latency_ms || (Date.now() - recoveryStartedAtMs))),
       http_status: alignmentHttpStatus,
       cross_device_discovery: crossDeviceDiscovery,
     };
@@ -2464,6 +2598,7 @@ export {
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
+  recoverableFailureReason,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
