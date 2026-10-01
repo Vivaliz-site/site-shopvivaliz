@@ -541,7 +541,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertIn("background_codex_fallback_authorized=true", failover)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", failover)
         self.assertIn("codex_auto", failover)
-        self.assertIn("--sandbox workspace-write", failover)
+        self.assertIn("--sandbox danger-full-access", failover)
         self.assertIn("--ask-for-approval never", failover)
         self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', failover)
         self.assertIn('GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"', failover)
