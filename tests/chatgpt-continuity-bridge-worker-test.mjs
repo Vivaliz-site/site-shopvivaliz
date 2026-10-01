@@ -19,6 +19,7 @@ import {
   alignLatestForReinforcement,
   assistantSnapshot,
   assistantProgressed,
+  sameConversationSnapshot,
   confirmAssistantProgress,
   sendContinueMessage,
   attemptNudge,
@@ -489,6 +490,71 @@ async function run() {
       /multiple open ChatGPT conversation tabs/i,
       'a latest conversation outside the bounded 30-minute checkpoint window must remain fail-closed',
     );
+  }
+
+  // A shared browser target can navigate while a recovery is confirming.
+  // Growth on another thread, or loss of route identity, is never progress.
+  {
+    const baseline = { count: 1, lastText: 'old', conversationFingerprint: 'thread-a' };
+    assert.equal(assistantProgressed(baseline,
+      { count: 3, lastText: 'another answer', conversationFingerprint: 'thread-b' }), false);
+    assert.equal(assistantProgressed(baseline,
+      { count: 3, lastText: 'another answer' }), false);
+    assert.equal(assistantProgressed(baseline,
+      { count: 2, lastText: 'new answer', conversationFingerprint: 'thread-a' }), true);
+    assert.equal(sameConversationSnapshot({ conversationFingerprint: '' },
+      { conversationFingerprint: '' }), false, 'a home/login route cannot certify progress');
+    const snapshot = await assistantSnapshot({ async evaluate() {
+      return { count: 1, lastText: 'answer', conversationPath: '/c/synthetic-thread' };
+    }});
+    assert.match(snapshot.conversationFingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(Object.hasOwn(snapshot, 'conversationPath'), false, 'route identifiers stay out of snapshot metadata');
+    const changedThread = { async evaluate() {
+      return { count: 5, lastText: 'other', surfaceText: 'unrelated tool activity', conversationFingerprint: 'thread-b' };
+    }};
+    assert.equal(await confirmAssistantProgress(changedThread,
+      { ...baseline, surfaceText: 'tool' }, 1100, 10), false,
+      'neither assistant growth nor surface growth on another thread can confirm recovery');
+  }
+
+  {
+    const cdp = fakeCdp({ generating: false });
+    const evaluate = cdp.evaluate.bind(cdp);
+    let snapshots = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('conversationPath:String')) {
+        snapshots += 1;
+        return { count: 1, lastText: 'answer', conversationPath: snapshots === 1 ? '/c/thread-a' : '/c/thread-b' };
+      }
+      return evaluate(expression);
+    };
+    const result = await attemptNudge('thread-change', async () => cdp, async () => false);
+    assert.equal(result.result_status, 'ERROR');
+    assert.match(result.detail, /conversation changed during recovery/);
+    assert.equal(result.sent, false, 'a route change during reattach must abort before continuation');
+    assert.equal(cdp.calls.some(source => source.includes('proto.value') || source.includes('b.click()')), false);
+  }
+  {
+    let probes = 0;
+    const cdp = { async evaluate(source) {
+      probes += 1;
+      assert.match(String(source), /continuity-conversation-identity-probe/);
+      return '/c/other-thread';
+    }};
+    assert.equal(await sendContinueMessage(cdp, 'expected-thread-hash'), false);
+    assert.equal(probes, 1, 'mismatched identity must reject before any composer/input probe');
+    const expected = await assistantSnapshot({ async evaluate() {
+      return { conversationPath: '/c/thread-a' };
+    }});
+    let composerProbes = 0;
+    await sendContinueMessage({ async evaluate(source) {
+      if (String(source).includes('continuity-conversation-identity-probe')) {
+        return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
+      }
+      composerProbes += 1;
+      return false;
+    }}, expected.conversationFingerprint);
+    assert.equal(composerProbes, 1, 'matching identity expression must parse and permit the composer probe');
   }
 
   // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only

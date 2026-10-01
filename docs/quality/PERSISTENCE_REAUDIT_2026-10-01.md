@@ -27,3 +27,13 @@ ESC-2026-002 permanece OPEN. Checkpoints de probes nao tem identidade explicita 
 Probe observe-only `continuity-e2e-proof-20261001-2252` foi iniciado em 22:50 UTC, com timeout 480 s e sem chamar watchdog/dispatcher diretamente. Relatorio operacional: `/home/ubuntu/audit-preservation/persistence-proof-e2e-221221.json`. O relatorio final em 22:55:46 UTC confirmou PASS, observed_request=true, executor_exit_code=0, provider=gemini, final_status=CONCLUIDO e final_verification=continuity_e2e_pass. O ledger registrou recuperacao terminal em 22:55:42 UTC, sem invocar diretamente watchdog/dispatcher.
 
 Houve drift concorrente antes de 22:50:29 UTC: worker antigo voltou a executar apos a primeira instalacao. O deploy foi reconciliado; quatro hashes foram reconferidos apos o PASS detached em 22:56 UTC, sem drift nesse intervalo. Essa observacao nao prova estabilidade indefinida ou retomada da conversa na interface. Nenhuma certificacao anterior foi reativada. Conclusoes textuais indevidas foram preservadas como evidencia, sem reescrever seu historico.
+
+## Contraditorio adicional: identidade da conversa
+
+O journal do worker implantado registrou PROGRESS_CONFIRMED para silent_stall em 22:53:01 UTC (latencia 22882 ms) e para um nudge em 22:53:25 UTC. Esses logs sao evidencia positiva de atividade; a auditoria nao os converteu em certificacao global.
+
+Um teste negativo adicional reproduziu que assistantProgressed aceitava count/text maior com conversationFingerprint diferente. A confirmacao anterior nao vinculava o snapshot a rota da conversa; um alvo de navegador compartilhado podia mudar durante o periodo de confirmacao.
+
+A prevencao adiciona fingerprint SHA256 da rota no snapshot e remove a rota bruta do objeto retornado. Progresso de assistant, surface, baseline apos envio e polling recusam identidade diferente, ausente ou rota home/login. Reattach/retry compara com o alvo inicial e aborta antes de continuar quando a mudanca e observada; input, click de envio e fallback Enter conferem o alvo fixado. Adapters de teste legados sem metadados mantem seu contrato; snapshots reais sempre incluem identidade.
+
+Regressao: outra conversa com conteudo maior nao confirma progresso; mesma conversa continua confirmando; perda de identidade nao confirma; home nao confirma; troca durante reattach retorna ERROR e sent=false; alvo diferente recusa antes do input; expressao real de identidade e exercitada com rota ficticia. Suite Node completa PASS em execucao supervisionada. ESC-2026-002 continua OPEN ate prova E2E correlacionada da conversa real e cobertura equivalente completa; os checks de identidade nao sao promessa de ausencia de toda concorrencia possivel no navegador.
