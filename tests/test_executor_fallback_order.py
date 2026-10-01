@@ -17,7 +17,12 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
         self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
-        self.assertIn("--approve-for-me", script)
+        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
+        self.assertIn("--sandbox workspace-write", script)
+        self.assertIn("--ask-for-approval never", script)
+        self.assertNotIn("--approve-for-me", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
+        codex_auto_block = script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0]
+        self.assertLess(codex_auto_block.index("--ask-for-approval never"), codex_auto_block.index("exec -"))
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"

@@ -353,6 +353,7 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
                 clear=False,
             ),
             patch.object(self.dispatcher, "DEFAULT_TOKEN_FILE", missing_token_file),
+            patch.object(self.dispatcher, "LEGACY_TOKEN_FILE", missing_token_file),
         ):
             result = self.dispatcher.run_once(
                 runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
