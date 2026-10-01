@@ -384,12 +384,12 @@ async function connectReinforcementChatgptTab({
       // ambiguity only applies to conversation targets, never to /.
       selected = neutralHomes[0];
     } else if (conversationRows.length > 1) {
-      // With no neutral home tab, multiple conversation tabs are ambiguous
-      // unless their already-synchronized sidebars provide a unique local
-      // mode. This stays entirely inside the attached browser and therefore
-      // still works while the account-scoped latest-conversation endpoint is
-      // rate-limited. Require at least two identical votes and a strict lead
-      // over the runner-up; ties remain fail-closed.
+      // Cross-device discovery should resolve the *target* from the account
+      // endpoint, not from whichever conversations happen to be open in the
+      // canonical browser. Prefer a strict sidebar consensus when available
+      // because that also enables the 429 fallback; otherwise choose the first
+      // idle conversation only as a temporary discovery context. A context
+      // that lacks consensus is deliberately NOT trusted for sidebar fallback.
       const sidebarRows = [];
       for (const row of conversationRows) {
         try {
@@ -406,32 +406,41 @@ async function connectReinforcementChatgptTab({
         .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
       const top = rankedSidebarIds[0] || ['', 0];
       const secondCount = rankedSidebarIds[1]?.[1] || 0;
-      if (top[1] < 2 || top[1] <= secondCount) {
-        for (const row of opened) {
-          try { row.cdp.close(); } catch {}
-        }
-        throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
-      }
 
       let consensusRow = null;
-      for (const item of sidebarRows) {
-        if (item.sidebarId !== top[0]) continue;
-        try {
-          if (!(await conversationIsGenerating(item.row.cdp))) {
-            consensusRow = item.row;
-            break;
-          }
-        } catch {}
-      }
-      if (!consensusRow) {
-        for (const row of opened) {
-          try { row.cdp.close(); } catch {}
+      if (top[1] >= 2 && top[1] > secondCount) {
+        for (const item of sidebarRows) {
+          if (item.sidebarId !== top[0]) continue;
+          try {
+            if (!(await conversationIsGenerating(item.row.cdp))) {
+              consensusRow = item.row;
+              break;
+            }
+          } catch {}
         }
-        throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
       }
 
-      selected = consensusRow;
-      SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS.add(selected.cdp);
+      if (consensusRow) {
+        selected = consensusRow;
+        SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS.add(selected.cdp);
+      } else {
+        let idleRow = null;
+        for (const row of conversationRows) {
+          try {
+            if (!(await conversationIsGenerating(row.cdp))) {
+              idleRow = row;
+              break;
+            }
+          } catch {}
+        }
+        if (!idleRow) {
+          for (const row of opened) {
+            try { row.cdp.close(); } catch {}
+          }
+          throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+        }
+        selected = idleRow;
+      }
     }
   }
   for (const row of opened) {
@@ -951,15 +960,17 @@ async function alignToLatestConversation(
     return { action: 'stale_latest' };
   }
 
-  const currentPath = await cdp.evaluate('location.pathname');
-  const currentMatch = String(currentPath || '').match(/^\/c\/([^/?#]+)/);
-  if (currentMatch && currentMatch[1] === latest.id) return { action: 'already_latest' };
+  const currentPath = String(await cdp.evaluate('location.pathname') || '');
+  const currentMatch = currentPath.match(/^\/c\/([^/?#]+)/);
+  if (currentMatch && currentMatch[1] === latest.id) {
+    return { action: 'already_latest', restore_path: '' };
+  }
 
   const target = '/c/' + latest.id;
   const navigated = await cdp.evaluate(`(()=>{location.assign(${JSON.stringify(target)});return true})()`);
-  if (!navigated) return { action: 'navigation_failed' };
+  if (!navigated) return { action: 'navigation_failed', restore_path: '' };
   await sleep(1500);
-  return { action: 'navigated' };
+  return { action: 'navigated', restore_path: currentPath };
 }
 
 async function alignLatestForReinforcement(
@@ -1294,8 +1305,10 @@ async function reinforcementCheckOnce(
     }
 
     await sleep(confirmDelayMs);
-    cdp.close();
-    cdp = await connect();
+    if (!crossDeviceDiscovery) {
+      cdp.close();
+      cdp = await connect();
+    }
 
     let failureStillPresent = await errorBannerPresent(cdp);
     if (!failureStillPresent && crossDeviceDiscovery) {
