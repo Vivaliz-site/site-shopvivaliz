@@ -1487,7 +1487,7 @@ async function alignLatestForReinforcement(
   cdp,
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
-  maxAgeMs = RECENT_CONVERSATION_MAX_AGE_MS,
+  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
 ) {
   const probe = await probeLatest(cdp);
   const rawStatus = Number(probe?.http_status || 0);
