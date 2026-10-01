@@ -111,7 +111,18 @@ if not STATE.is_file():
     errors.append("missing scripts/agent_task_state.py")
 else:
     state_text = STATE.read_text(encoding="utf-8", errors="replace")
-    for token in ("READY_TO_COMPLETE", "BLOCKED_EXTERNAL", "alternatives_attempted", "next_action", "DEFAULT_REPOSITORY", "repository"):
+    for token in (
+        "READY_TO_COMPLETE",
+        "BLOCKED_EXTERNAL",
+        "alternatives_attempted",
+        "next_action",
+        "DEFAULT_REPOSITORY",
+        "repository",
+        "STATE_LOCK_FILE",
+        "_state_lock",
+        "fcntl.LOCK_EX",
+        "_fsync_dir(path.parent)",
+    ):
         if token not in state_text:
             errors.append(f"scripts/agent_task_state.py: missing {token}")
 
