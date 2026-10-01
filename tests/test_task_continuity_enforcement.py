@@ -35,6 +35,65 @@ class AgentTaskStateTests(unittest.TestCase):
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
 
+    def test_stale_background_cannot_complete_after_foreground_progress(self) -> None:
+        state.start_task("race-proof", "verify deployment", "work")
+        initial = state.load_task("race-proof")
+        state.record_progress("race-proof", next_action="deployment still missing")
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_REQUEST_ID": "resume-old",
+            "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": str(len(initial["history"])),
+        }):
+            with self.assertRaisesRegex(state.TaskStateError, "stale resume"):
+                state.mark_ready("race-proof", evidence=["claimed PASS"], verification="claimed done")
+        self.assertEqual(state.load_task("race-proof")["status"], "RUNNING")
+        self.assertEqual(state.load_task("race-proof")["next_action"], "deployment still missing")
+
+    def test_background_own_progress_can_complete_but_not_overwrite_newer_owner(self) -> None:
+        state.start_task("owned-proof", "verify", "work")
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_REQUEST_ID": "resume-current",
+            "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": "1",
+        }):
+            state.record_progress("owned-proof", next_action="verify next")
+            state.mark_ready("owned-proof", evidence=["observed PASS"], verification="fresh")
+            self.assertEqual(state.complete_task("owned-proof")["status"], "CONCLUIDO")
+
+    def test_stale_background_progress_cannot_replace_foreground_action(self) -> None:
+        state.start_task("stale-write", "verify", "work")
+        state.record_progress("stale-write", next_action="foreground deployment")
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_REQUEST_ID": "old",
+            "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": "1",
+        }):
+            with self.assertRaisesRegex(state.TaskStateError, "stale resume"):
+                state.record_progress("stale-write", next_action="claimed done")
+        self.assertEqual(state.load_task("stale-write")["next_action"], "foreground deployment")
+
+    def test_completion_checks_do_not_create_arbitrary_execution_capability(self) -> None:
+        with self.assertRaisesRegex(state.TaskStateError, "bounded read-only"):
+            state.start_task("unsafe-proof", "verify", completion_checks=[[sys.executable, "-c", "print('PASS')"]])
+        self.assertFalse(state._path("unsafe-proof").exists())
+
+    def test_pinned_completion_check_rejects_unverified_claim_and_rechecks(self) -> None:
+        artifact = Path(self.temp.name) / "deployed"
+        command = ["/usr/bin/test", "-f", str(artifact)]
+        created = state.start_task("proof-command", "verify deployment", "work", completion_checks=[command])
+        self.assertEqual(created["schema_version"], 2, "older clients must reject proof-bearing tasks rather than ignore pinned checks")
+        with self.assertRaisesRegex(state.TaskStateError, "completion check"):
+            state.mark_ready("proof-command", evidence=["claimed PASS"], verification="claimed done")
+        self.assertEqual(state.load_task("proof-command")["status"], "RUNNING")
+        artifact.touch()
+        ready = state.mark_ready("proof-command", evidence=["observed deploy"], verification="fresh check")
+        self.assertEqual(ready["completion_check_receipts"][0]["exit_code"], 0)
+        artifact.unlink()
+        with self.assertRaisesRegex(state.TaskStateError, "completion check"):
+            state.complete_task("proof-command")
+        artifact.touch()
+        self.assertEqual(state.complete_task("proof-command")["status"], "CONCLUIDO")
+
     def test_privileged_atomic_write_inherits_runtime_directory_owner(self) -> None:
         runtime = Path(self.temp.name)
         target = runtime / "root-created.json"

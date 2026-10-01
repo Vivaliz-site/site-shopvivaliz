@@ -1009,6 +1009,18 @@ async function run() {
     );
   }
 
+  {
+    const passive = await attemptNudge('passive-send-proof', async () => fakeCdp(), async () => true);
+    assert.equal(passive.sent, false, 'passive recovery cannot claim a continuation send');
+    const active = await attemptNudge('active-send-proof', async () => fakeCdp({generating: true}), async () => false);
+    assert.equal(active.sent, false, 'deferred active generation cannot claim a send');
+    const failed = await attemptNudge('failed-send-proof', async () => fakeCdp({sendSucceeds: false}), async () => false);
+    assert.equal(failed.sent, false, 'failed composer submission cannot claim a send');
+    let progressChecks = 0;
+    const sent = await attemptNudge('successful-send-proof', async () => fakeCdp(), async () => ++progressChecks > 1);
+    assert.equal(sent.sent, true, 'successful trusted send records the actual effect');
+  }
+
   // Cross-device continuity: a mobile/iOS interruption may belong to a
   // different thread than the backend browser currently has open. Discovery
   // must use only conversation id/update metadata, never title/content.
@@ -1902,6 +1914,7 @@ async function run() {
   // jump to a different conversation before the failure is confirmed.
   {
     let connectCalls = 0;
+    let confirmChecks = 0;
     let pageText = 'normal reply';
     const cdp = fakeCdp({ pageText: '' });
     const originalEvaluate = cdp.evaluate.bind(cdp);
@@ -1918,7 +1931,7 @@ async function run() {
         return cdp;
       },
       1,
-      async () => true,
+      async () => ++confirmChecks > 1,
       async () => {
         pageText = 'Streaming interrupted. Waiting for the complete message...';
         return { action: 'navigated', http_status: 200, restore_path: '/c/original-thread' };
@@ -2512,10 +2525,11 @@ async function run() {
 
   // Banner still present on the confirm re-check -> must send.
   {
+    let confirmChecks = 0;
     const result = await reinforcementCheckOnce(
       async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
       1,
-      async () => true,
+      async () => ++confirmChecks > 1,
       async () => ({ action: 'already_latest' }),
     );
     assert.equal(result.action, 'confirmed_progress');

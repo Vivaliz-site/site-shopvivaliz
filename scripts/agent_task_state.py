@@ -12,9 +12,11 @@ from __future__ import annotations
 import argparse
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import re
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -43,6 +45,7 @@ RUNTIME_DIR = resolve_runtime_dir(ROOT, os.getenv("SHOPVIVALIZ_AGENT_TASK_STATE_
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
+PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
@@ -147,13 +150,15 @@ def _load(task_id: str) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise TaskStateError(f"task state is unreadable: {task_id}") from exc
-    if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
+    if not isinstance(payload, dict) or payload.get("schema_version") not in {SCHEMA_VERSION, PROOF_SCHEMA_VERSION}:
         raise TaskStateError(f"unsupported task state schema: {task_id}")
     return payload
 
 
 def _history(payload: dict[str, Any], event: str, **extra: Any) -> None:
     row = {"at": utc_now(), "event": event}
+    if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        row["resume_request_id"] = os.getenv("SHOPVIVALIZ_RESUME_REQUEST_ID", "")
     row.update({key: value for key, value in extra.items() if value not in (None, "", [])})
     payload.setdefault("history", []).append(row)
     payload["updated_at"] = row["at"]
@@ -208,8 +213,61 @@ def _require_freeze_browser_progress(task_id: str) -> None:
         )
 
 
+def _require_current_resume(payload: dict[str, Any]) -> None:
+    if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
+        return
+    expected = os.getenv("SHOPVIVALIZ_RESUME_HISTORY_LENGTH", "")
+    request_id = os.getenv("SHOPVIVALIZ_RESUME_REQUEST_ID", "")
+    history = payload.get("history", [])
+    # Legacy invocations remain compatible; the dispatcher supplies the version
+    # on every new run. Our own writes advance history without stealing ownership.
+    if not expected:
+        return
+    latest_owner = history[-1].get("resume_request_id", "") if history else ""
+    if len(history) != int(expected) and (not request_id or latest_owner != request_id):
+        raise TaskStateError("stale resume cannot certify a newer checkpoint; reload and continue current work")
+
+
+def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
+    normalized = []
+    for command in checks:
+        try:
+            argv = json.loads(command) if isinstance(command, str) else command
+        except json.JSONDecodeError as exc:
+            raise TaskStateError("completion check must be valid JSON argv") from exc
+        if not isinstance(argv, list) or not argv or not all(isinstance(arg, str) and arg for arg in argv):
+            raise TaskStateError("completion check must be a nonempty JSON argv array")
+        file_probe = len(argv) == 3 and argv[0] == "/usr/bin/test" and argv[1] in {"-f", "-s", "-d"}
+        hash_probe = len(argv) == 3 and argv[:2] == ["/usr/bin/sha256sum", "--check"]
+        service_probe = len(argv) == 4 and argv[:3] == ["/usr/bin/systemctl", "is-active", "--quiet"] and argv[3] in {
+            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-chatgpt-browser.service",
+        }
+        if not (file_probe or hash_probe or service_probe):
+            raise TaskStateError("completion check must use a bounded read-only file/hash/service probe")
+        normalized.append(argv)
+    if len(normalized) > 4:
+        raise TaskStateError("at most four bounded completion checks are supported")
+    return normalized
+
+
+def _run_completion_checks(payload: dict[str, Any]) -> None:
+    receipts = []
+    for index, argv in enumerate(_normalize_completion_checks(payload.get("completion_checks", []))):
+        try:
+            result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise TaskStateError(f"completion check {index} unavailable: {type(exc).__name__}") from exc
+        if result.returncode != 0:
+            raise TaskStateError(f"completion check {index} failed with exit {result.returncode}; keep working")
+        receipts.append({"index": index, "exit_code": 0, "checked_at": utc_now(),
+                         "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest()})
+    if receipts:
+        payload["completion_check_receipts"] = receipts
+
+
 @_serialized_transition
-def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "") -> dict[str, Any]:
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = ()) -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
@@ -220,12 +278,14 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         or os.getenv("GITHUB_REPOSITORY", "")
         or DEFAULT_REPOSITORY
     )
+    checks = _normalize_completion_checks(completion_checks)
     path = _path(task)
     if path.is_file():
         existing = _load(task)
         if (
             str(existing.get("goal", "")).strip() == goal_text
             and str(existing.get("repository", "")).strip() == repository_name
+            and (not checks or existing.get("completion_checks", []) == checks)
         ):
             return existing
         raise TaskStateError(
@@ -248,6 +308,9 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "updated_at": now,
         "history": [{"at": now, "event": "started"}],
     }
+    if checks:
+        payload["schema_version"] = PROOF_SCHEMA_VERSION
+        payload["completion_checks"] = checks
     _atomic_write(path, payload)
     return payload
 
@@ -311,6 +374,7 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     payload = _load(task_id)
     if is_terminal(payload):
         raise TaskStateError("terminal task cannot record progress; resume a blocked task explicitly")
+    _require_current_resume(payload)
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
@@ -340,6 +404,8 @@ def mark_ready(
     if not verification_text:
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+    _require_current_resume(payload)
+    _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
     payload["status"] = "READY_TO_COMPLETE"
@@ -359,6 +425,8 @@ def complete_task(task_id: str) -> dict[str, Any]:
     if not payload.get("evidence") or not payload.get("verification"):
         raise TaskStateError("completion rejected: verification evidence is missing")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+    _require_current_resume(payload)
+    _run_completion_checks(payload)
     payload["status"] = "CONCLUIDO"
     payload["completed_at"] = utc_now()
     _history(payload, "completed")
@@ -438,6 +506,7 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--goal", required=True)
     start.add_argument("--agent", default="")
     start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
+    start.add_argument("--completion-check", action="append", default=[], help="Pinned JSON argv check, rerun at ready and complete; never include secrets")
 
     successor = sub.add_parser("successor")
     successor.add_argument("--task", required=True)
@@ -482,7 +551,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent, args.repository)
+            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check)
         elif args.command == "successor":
             payload = start_successor_task(
                 args.task,
