@@ -482,6 +482,35 @@ async function run() {
     );
     assert.ok(calls.length >= 2);
   }
+  {
+    const evalCalls = [];
+    const inputCalls = [];
+    const cdp = {
+      async evaluate(expression) {
+        evalCalls.push(expression);
+        if (expression.includes('insertText') || expression.includes('proto.value')) return true;
+        if (expression.includes('b.click()')) return false;
+        return false;
+      },
+      async send(method, params) {
+        inputCalls.push({ method, params });
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'usable composer without a visible Send button must submit via trusted CDP Enter fallback',
+    );
+    assert.equal(inputCalls.length, 2, 'Enter fallback must emit one keyDown/keyUp pair');
+    assert.equal(inputCalls[0]?.method, 'Input.dispatchKeyEvent');
+    assert.equal(inputCalls[0]?.params?.type, 'keyDown');
+    assert.equal(inputCalls[0]?.params?.key, 'Enter');
+    assert.equal(inputCalls[1]?.params?.type, 'keyUp');
+    assert.equal(inputCalls[1]?.params?.key, 'Enter');
+    assert.ok(evalCalls.some(call => call.includes('insertText') || call.includes('proto.value')));
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
