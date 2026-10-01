@@ -33,6 +33,14 @@ cgnAssert($store->recordResult('task-1', 'SENT_UNCONFIRMED', 'typed continue; no
 $statusUnconfirmed = $store->status('task-1');
 cgnSame('SENT_UNCONFIRMED', $statusUnconfirmed['status'], 'A click without assistant progress must not be terminal success.');
 
+// Browser/CDP failures can contain unexpected runtime text. Persist only a
+// fixed diagnostic category and a non-reversible correlation hash.
+cgnAssert($store->recordResult('task-1', 'ERROR', 'composer found but send failed after bounded reattach unexpected-runtime-text'), 'Error result must be recordable.');
+$sanitizedError = $store->status('task-1');
+cgnSame('SEND_FAILED_AFTER_REATTACH', $sanitizedError['detail_code'], 'Known browser failure must retain its safe diagnostic class.');
+cgnAssert(preg_match('/^[a-f0-9]{64}$/', (string)($sanitizedError['detail_sha256'] ?? '')) === 1, 'Error detail must retain only a SHA-256 correlation value.');
+cgnAssert(!isset($sanitizedError['detail']), 'Raw worker detail must never be returned from the durable queue.');
+
 cgnAssert($store->recordResult('task-1', 'PROGRESS_CONFIRMED', 'assistant output advanced'), 'Confirmed assistant progress must be a valid result.');
 cgnAssert(!$store->recordResult('task-does-not-exist', 'PROGRESS_CONFIRMED', null), 'Recording a result for an unknown task_id must fail.');
 
