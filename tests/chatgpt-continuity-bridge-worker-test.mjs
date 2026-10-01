@@ -1441,6 +1441,33 @@ async function run() {
   assert.equal(connectFailed.result_status, 'ERROR');
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
 
+  // Live iOS 2026-10-01: provider verification with a real Stop button is
+  // active processing. Checkpoint nudging must not reload or inject continue.
+  {
+    const cdp = fakeCdp({
+      generating: true,
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+      streamStatus: 'COMPLETE',
+    });
+    const result = await attemptNudge(
+      'task-provider-verification-pending',
+      async () => cdp,
+      async () => false,
+    );
+    assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.match(result.detail, /provider verification pending/i);
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('location.reload')),
+      false,
+      'provider verification must not reload an active checked turn',
+    );
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('b.click()') || String(call).includes('insertText')),
+      false,
+      'provider verification must not send a continuation',
+    );
+  }
+
   console.log('attemptNudge branches: PASS');
 
   // Duplicate tabs for the same interrupted conversation are one target,
@@ -1730,6 +1757,33 @@ async function run() {
     });
     assert.equal(selected.marker, 'ws://interrupted', 'the unique locally interrupted tab must be selected without guessing');
     selected.close();
+  }
+
+  // Live iOS 2026-10-01: the "verificações adicionais" notice plus an
+  // active Stop button is provider-side processing, not a dead turn.
+  {
+    const events = [];
+    const cdp = fakeCdp({
+      generating: true,
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+    });
+    const result = await reinforcementCheckOnce(
+      async () => { events.push('connect'); return cdp; },
+      1,
+      async () => false,
+      async () => { events.push('align'); return { action: 'already_latest', http_status: 200 }; },
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'provider_verification_pending');
+    assert.equal(result.sent, false);
+    assert.equal(result.progress_confirmed, false);
+    assert.equal(result.cross_device_discovery, false);
+    assert.deepEqual(events, ['connect'], 'active provider verification must not navigate away');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('location.reload')),
+      false,
+      'active provider verification must not reload',
+    );
   }
 
   // Reinforcement must inspect the currently open conversation first.
