@@ -837,6 +837,36 @@ async function run() {
     assert.match(failed.detail, /transmission error persisted/i);
   }
 
+  {
+    let reloads = 0;
+    let composerReady = false;
+    const recoverSendCdp = fakeCdp({ sendSucceeds: true });
+    const originalEvaluate = recoverSendCdp.evaluate.bind(recoverSendCdp);
+    recoverSendCdp.evaluate = async expression => {
+      if (expression.includes('prompt-textarea') && !expression.includes('insertText') && !expression.includes('b.click()')) {
+        return composerReady;
+      }
+      if (expression.includes('location.reload')) {
+        reloads += 1;
+        composerReady = true;
+      }
+      if (expression.includes('insertText') || expression.includes('proto.value')) {
+        return true;
+      }
+      if (expression.includes('b.click()')) return true;
+      return originalEvaluate(expression);
+    };
+    let confirms = 0;
+    const recoveredSend = await attemptNudge(
+      'task-send-false-recovery',
+      async () => recoverSendCdp,
+      async () => ++confirms >= 2,
+      async () => composerReady,
+    );
+    assert.equal(recoveredSend.result_status, 'PROGRESS_CONFIRMED');
+    assert.ok(reloads >= 1, 'send=false must trigger bounded reattach');
+  }
+
   const sendFailed = await attemptNudge(
     'task-1',
     async () => fakeCdp({ sendSucceeds: false }),
