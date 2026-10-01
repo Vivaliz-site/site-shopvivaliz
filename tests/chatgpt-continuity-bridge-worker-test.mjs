@@ -8,6 +8,7 @@ import {
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
+  recoverableFailureReason,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -937,6 +938,21 @@ async function run() {
       await errorBannerPresent(cdp),
       true,
       'the faster-model fallback copy must be recognized without switching models automatically',
+    );
+  }
+  {
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        if (source.includes('continuity-error-banner-probe')) return true;
+        if (source.includes('continuity-additional-checks-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await recoverableFailureReason(cdp),
+      'additional_checks',
+      'additional-checks UI must emit the sanitized failure_reason used by recovery telemetry',
     );
   }
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
