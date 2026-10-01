@@ -1118,10 +1118,11 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
         .sort((a,b)=>Number(b.update_time||0)-Number(a.update_time||0))
         .slice(0,24);
       const top=combined[0]||null;
+      const item=top||{};
       const any429=statuses.some(status=>status===429);
       const anySuccess=statuses.some(status=>status>=200&&status<300);
       const httpStatus=any429?429:(anySuccess?200:Number(globalLast.http_status||0));
-      const item_keys=top?Object.keys(top)
+      const item_keys=top?Object.keys(item)
         .map(key=>String(key).replace(/[^A-Za-z0-9_]/g,'').slice(0,64))
         .filter(Boolean)
         .slice(0,32):[];
