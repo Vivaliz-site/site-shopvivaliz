@@ -1156,7 +1156,8 @@ async function run() {
       async () => { events.push('align'); return { action: 'already_latest' }; },
       { allowCrossDeviceDiscovery: true },
     );
-    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.action, 'sent_unconfirmed');
+    assert.equal(result.progress_confirmed, false);
     assert.equal(events.includes('align'), false, 'current-tab banner must win before cross-device discovery');
     assert.equal(connectCalls, 2, 'confirmed banner still receives exactly one delayed re-check');
   }
