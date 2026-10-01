@@ -33,7 +33,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
-LOCK_FILE = "_resume-dispatch.lock"
+LOCK_FILE = "_continuity-execution.lock"
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
@@ -114,7 +114,13 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _recent_successful_chatgpt_nudge(
