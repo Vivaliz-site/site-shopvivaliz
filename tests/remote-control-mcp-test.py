@@ -65,6 +65,32 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("before", result["stdout"])
         self.assertIn("after", result["stdout"])
 
+    def test_root_runtime_wraps_commands_in_transient_systemd_scope(self):
+        original_geteuid = m.os.geteuid
+        original_systemd_run = m.SYSTEMD_RUN
+        try:
+            m.os.geteuid = lambda: 0
+            m.SYSTEMD_RUN = "/bin/true"
+            wrapped = m.isolated_invocation(["bash", "-lc", "printf ok"])
+        finally:
+            m.os.geteuid = original_geteuid
+            m.SYSTEMD_RUN = original_systemd_run
+        self.assertIn("--scope", wrapped)
+        self.assertIn("CPUWeight=50", wrapped)
+        self.assertIn("IOWeight=50", wrapped)
+        self.assertEqual(wrapped[-3:], ["bash", "-lc", "printf ok"])
+
+    def test_inline_concurrency_limit_fails_fast(self):
+        original_slots = m.INLINE_COMMAND_SLOTS
+        m.INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(1)
+        self.assertTrue(m.INLINE_COMMAND_SLOTS.acquire(blocking=False))
+        try:
+            with self.assertRaisesRegex(RuntimeError, "controller_busy_retry_or_use_task_submit"):
+                m.run_host_command("always-free-arm-1787907847-26", "printf never")
+        finally:
+            m.INLINE_COMMAND_SLOTS.release()
+            m.INLINE_COMMAND_SLOTS = original_slots
+
     def test_inline_command_cancels_entire_process_group_when_client_disconnects(self):
         marker = Path(self.tmp.name) / "orphan-child-wrote"
         started = time.monotonic()
@@ -136,6 +162,18 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(m.is_authorized("", "test-token"))
         self.assertFalse(m.is_authorized("Bearer wrong-token", "test-token"))
         self.assertFalse(m.is_authorized("Bearer test-token", ""))
+
+    def test_governance_sanitizes_parent_git_hook_context_for_nested_git_tests(self):
+        governance = (ROOT / "scripts" / "repository-governance-validate.sh").read_text(encoding="utf-8")
+        line = next(
+            row for row in governance.splitlines()
+            if "tests.test_background_gemini_runner" in row
+        )
+        for name in (
+            "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX",
+            "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        ):
+            self.assertIn(f"-u {name}", line)
 
     def test_controller_bootstrap_generates_root_only_mcp_token(self):
         setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
