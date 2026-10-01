@@ -12,9 +12,11 @@ from __future__ import annotations
 import argparse
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import re
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -48,6 +50,12 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 STATE_LOCK_FILE = "_agent-task-state.lock"
+COMPLETION_CHECK_MAX_COUNT = 8
+COMPLETION_CHECK_TIMEOUT_SECONDS = 20
+FORBIDDEN_COMPLETION_CHECK_EXECUTABLES = frozenset({
+    "bash", "sh", "dash", "zsh", "fish", "cmd", "cmd.exe",
+    "powershell", "powershell.exe", "pwsh", "pwsh.exe",
+})
 
 
 class TaskStateError(RuntimeError):
@@ -161,6 +169,132 @@ def _history(payload: dict[str, Any], event: str, **extra: Any) -> None:
 
 def is_terminal(payload: dict[str, Any]) -> bool:
     return str(payload.get("status", "")) in TERMINAL_STATES
+
+
+def _checkpoint_fingerprint(payload: dict[str, Any]) -> str:
+    basis = "\n".join(
+        [
+            str(payload.get("repository", DEFAULT_REPOSITORY)).strip(),
+            str(payload.get("task_id", "")).strip(),
+            str(payload.get("updated_at", "")).strip(),
+            str(payload.get("next_action", "")).strip(),
+        ]
+    )
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
+
+
+def _state_revision(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _resume_fingerprint() -> str:
+    background = str(os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND", "")).strip()
+    fingerprint = str(os.getenv("SHOPVIVALIZ_RESUME_FINGERPRINT", "")).strip()
+    if background != "1" and not fingerprint:
+        return ""
+    if not fingerprint:
+        raise TaskStateError("detached resume is missing SHOPVIVALIZ_RESUME_FINGERPRINT")
+    return fingerprint
+
+
+def _require_current_resume(payload: dict[str, Any]) -> str:
+    expected = _resume_fingerprint()
+    if not expected:
+        return ""
+    current = _checkpoint_fingerprint(payload)
+    if current != expected:
+        raise TaskStateError(
+            "stale detached resume rejected: checkpoint fingerprint changed after executor start"
+        )
+    return expected
+
+
+def _normalize_completion_checks(payload: dict[str, Any]) -> list[list[str]]:
+    raw = payload.get("completion_checks")
+    if raw in (None, []):
+        return []
+    if not isinstance(raw, list):
+        raise TaskStateError("completion_checks must be a list of argv lists")
+    if len(raw) > COMPLETION_CHECK_MAX_COUNT:
+        raise TaskStateError(
+            f"completion_checks supports at most {COMPLETION_CHECK_MAX_COUNT} checks"
+        )
+
+    normalized: list[list[str]] = []
+    for index, check in enumerate(raw, start=1):
+        if not isinstance(check, list) or not check:
+            raise TaskStateError(f"completion check {index} must be a non-empty argv list")
+        if len(check) > 64:
+            raise TaskStateError(f"completion check {index} has too many argv entries")
+        argv: list[str] = []
+        for value in check:
+            if not isinstance(value, str) or not value or "\x00" in value:
+                raise TaskStateError(f"completion check {index} contains an invalid argv value")
+            if len(value) > 32768:
+                raise TaskStateError(f"completion check {index} argv value is too long")
+            argv.append(value)
+        executable = Path(argv[0]).name.lower()
+        if executable in FORBIDDEN_COMPLETION_CHECK_EXECUTABLES:
+            raise TaskStateError(
+                f"completion check {index} rejects shell executable {executable}; use direct argv"
+            )
+        normalized.append(argv)
+    return normalized
+
+
+def _completion_checks_digest(checks: list[list[str]]) -> str:
+    encoded = json.dumps(checks, ensure_ascii=False, sort_keys=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _run_completion_checks(payload: dict[str, Any]) -> dict[str, Any] | None:
+    checks = _normalize_completion_checks(payload)
+    if not checks:
+        return None
+
+    for index, argv in enumerate(checks, start=1):
+        try:
+            completed = subprocess.run(
+                argv,
+                shell=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=COMPLETION_CHECK_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TaskStateError(
+                f"completion check {index} timed out after {COMPLETION_CHECK_TIMEOUT_SECONDS}s"
+            ) from exc
+        except OSError as exc:
+            raise TaskStateError(f"completion check {index} could not execute") from exc
+        if int(completed.returncode) != 0:
+            raise TaskStateError(
+                f"completion check {index} failed with exit code {int(completed.returncode)}"
+            )
+
+    return {
+        "digest": _completion_checks_digest(checks),
+        "count": len(checks),
+        "passed_at": utc_now(),
+    }
+
+
+def _validate_completion_receipt(payload: dict[str, Any]) -> None:
+    checks = _normalize_completion_checks(payload)
+    if not checks:
+        return
+    receipt = payload.get("completion_checks_receipt")
+    if not isinstance(receipt, dict):
+        raise TaskStateError("completion checks require a successful READY_TO_COMPLETE receipt")
+    if str(receipt.get("digest", "")).strip() != _completion_checks_digest(checks):
+        raise TaskStateError("completion checks receipt does not match the declared checks")
+    if int(receipt.get("count") or 0) != len(checks):
+        raise TaskStateError("completion checks receipt count does not match the declared checks")
+    if not str(receipt.get("passed_at", "")).strip():
+        raise TaskStateError("completion checks receipt is missing passed_at")
 
 
 def _freeze_generation_requires_browser_progress(task_id: str) -> bool:
@@ -311,11 +445,14 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     payload = _load(task_id)
     if is_terminal(payload):
         raise TaskStateError("terminal task cannot record progress; resume a blocked task explicitly")
+    _require_current_resume(payload)
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
     payload["status"] = "RUNNING"
     payload["next_action"] = action
+    payload.pop("ready_resume_fingerprint", None)
+    payload.pop("completion_checks_receipt", None)
     if evidence:
         payload.setdefault("evidence", []).append(str(evidence).strip())
     _history(payload, "progress", next_action=action, evidence=evidence)
@@ -323,47 +460,115 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     return payload
 
 
-@_serialized_transition
 def mark_ready(
     task_id: str,
     *,
     evidence: Iterable[str],
     verification: str,
 ) -> dict[str, Any]:
-    payload = _load(task_id)
-    if is_terminal(payload):
-        raise TaskStateError("terminal task cannot enter READY_TO_COMPLETE")
     evidence_rows = [str(item).strip() for item in evidence if str(item).strip()]
     verification_text = str(verification).strip()
     if not evidence_rows:
         raise TaskStateError("READY_TO_COMPLETE requires fresh evidence")
     if not verification_text:
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
-    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
-    payload.setdefault("evidence", []).extend(evidence_rows)
-    payload["verification"] = verification_text
-    payload["status"] = "READY_TO_COMPLETE"
-    payload["next_action"] = ""
-    _history(payload, "ready_to_complete", evidence=evidence_rows, verification=verification_text)
-    _atomic_write(_path(task_id), payload)
-    return payload
+
+    with _state_lock():
+        payload = _load(task_id)
+        if is_terminal(payload):
+            raise TaskStateError("terminal task cannot enter READY_TO_COMPLETE")
+        resume_fingerprint = _require_current_resume(payload)
+        _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+        expected_revision = _state_revision(payload)
+
+    receipt = _run_completion_checks(payload)
+
+    with _state_lock():
+        payload = _load(task_id)
+        if _state_revision(payload) != expected_revision:
+            raise TaskStateError("checkpoint changed while completion checks were running; retry verification")
+        if is_terminal(payload):
+            raise TaskStateError("terminal task cannot enter READY_TO_COMPLETE")
+        current_resume_fingerprint = _require_current_resume(payload)
+        if current_resume_fingerprint != resume_fingerprint:
+            raise TaskStateError("stale detached resume rejected during terminal readiness")
+        _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+
+        payload.setdefault("evidence", []).extend(evidence_rows)
+        payload["verification"] = verification_text
+        payload["status"] = "READY_TO_COMPLETE"
+        payload["next_action"] = ""
+        if receipt is not None:
+            payload["completion_checks_receipt"] = receipt
+        else:
+            payload.pop("completion_checks_receipt", None)
+        if resume_fingerprint:
+            payload["ready_resume_fingerprint"] = resume_fingerprint
+        else:
+            payload.pop("ready_resume_fingerprint", None)
+        _history(
+            payload,
+            "ready_to_complete",
+            evidence=evidence_rows,
+            verification=verification_text,
+            completion_checks=receipt,
+        )
+        _atomic_write(_path(task_id), payload)
+        return payload
 
 
-@_serialized_transition
 def complete_task(task_id: str) -> dict[str, Any]:
-    payload = _load(task_id)
-    if payload.get("status") != "READY_TO_COMPLETE":
-        raise TaskStateError("completion rejected: task must pass READY_TO_COMPLETE first")
-    if payload.get("next_action"):
-        raise TaskStateError("completion rejected: executable next_action still exists")
-    if not payload.get("evidence") or not payload.get("verification"):
-        raise TaskStateError("completion rejected: verification evidence is missing")
-    _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
-    payload["status"] = "CONCLUIDO"
-    payload["completed_at"] = utc_now()
-    _history(payload, "completed")
-    _atomic_write(_path(task_id), payload)
-    return payload
+    with _state_lock():
+        payload = _load(task_id)
+        if payload.get("status") != "READY_TO_COMPLETE":
+            raise TaskStateError("completion rejected: task must pass READY_TO_COMPLETE first")
+        if payload.get("next_action"):
+            raise TaskStateError("completion rejected: executable next_action still exists")
+        if not payload.get("evidence") or not payload.get("verification"):
+            raise TaskStateError("completion rejected: verification evidence is missing")
+        _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+
+        resume_fingerprint = _resume_fingerprint()
+        if resume_fingerprint:
+            ready_resume_fingerprint = str(payload.get("ready_resume_fingerprint", "")).strip()
+            if ready_resume_fingerprint != resume_fingerprint:
+                raise TaskStateError(
+                    "stale detached resume rejected: READY_TO_COMPLETE belongs to another checkpoint"
+                )
+
+        _validate_completion_receipt(payload)
+        expected_revision = _state_revision(payload)
+
+    receipt = _run_completion_checks(payload)
+
+    with _state_lock():
+        payload = _load(task_id)
+        if _state_revision(payload) != expected_revision:
+            raise TaskStateError("checkpoint changed while final completion checks were running")
+        if payload.get("status") != "READY_TO_COMPLETE":
+            raise TaskStateError("completion rejected: task must pass READY_TO_COMPLETE first")
+        if payload.get("next_action"):
+            raise TaskStateError("completion rejected: executable next_action still exists")
+        if not payload.get("evidence") or not payload.get("verification"):
+            raise TaskStateError("completion rejected: verification evidence is missing")
+        _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
+
+        current_resume_fingerprint = _resume_fingerprint()
+        if current_resume_fingerprint:
+            ready_resume_fingerprint = str(payload.get("ready_resume_fingerprint", "")).strip()
+            if ready_resume_fingerprint != current_resume_fingerprint:
+                raise TaskStateError(
+                    "stale detached resume rejected: READY_TO_COMPLETE belongs to another checkpoint"
+                )
+
+        _validate_completion_receipt(payload)
+        if receipt is not None:
+            payload["completion_checks_receipt"] = receipt
+        payload["status"] = "CONCLUIDO"
+        payload["completed_at"] = utc_now()
+        _history(payload, "completed", completion_checks=receipt)
+        _atomic_write(_path(task_id), payload)
+        return payload
 
 
 @_serialized_transition
@@ -378,6 +583,7 @@ def block_task(
     payload = _load(task_id)
     if payload.get("status") == "CONCLUIDO":
         raise TaskStateError("completed task cannot be blocked")
+    _require_current_resume(payload)
     description = str(blocker.get("description", "")).strip() if isinstance(blocker, dict) else ""
     external = blocker.get("external") is True if isinstance(blocker, dict) else False
     evidence_rows = [str(item).strip() for item in evidence if str(item).strip()]
