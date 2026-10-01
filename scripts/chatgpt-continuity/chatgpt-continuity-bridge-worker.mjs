@@ -1063,7 +1063,7 @@ async function sendContinueMessage(cdp) {
   })()`);
   if (!typed) return false;
   await sleep(300);
-  return cdp.evaluate(`(()=>{
+  const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
       'button[aria-label="Send"]',
@@ -1094,6 +1094,35 @@ async function sendContinueMessage(cdp) {
     b.click();
     return true;
   })()`);
+  if (clicked) return true;
+
+  // Live production DOM 2026-10-01 can expose a usable composer with no
+  // rendered Send button at all. A browser-trusted Enter key is the same
+  // submission gesture a user performs in that state and avoids depending on
+  // unstable button selectors. Progress confirmation still decides whether
+  // the resume actually succeeded.
+  if (typeof cdp?.send !== 'function') return false;
+  try {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Enter',
+      code: 'Enter',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+      text: '\r',
+      unmodifiedText: '\r',
+    });
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Enter',
+      code: 'Enter',
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function attemptNudge(
