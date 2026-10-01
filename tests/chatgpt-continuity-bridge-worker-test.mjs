@@ -47,6 +47,12 @@ function fakeCdp({
     async evaluate(expression) {
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
+      if (expression.includes('continuity-error-banner-probe')) {
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
@@ -580,6 +586,80 @@ async function run() {
       'Enter fallback must use CDP Input.dispatchKeyEvent',
     );
   }
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-error-banner-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      true,
+      'error detection must not depend on the first 6000 pageState characters in long conversations',
+    );
+    assert.ok(evaluateCalls > 0, 'error detection must use a targeted DOM boolean probe');
+  }
+
+  {
+    let evaluateCalls = 0;
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
+      },
+      async evaluate(expression) {
+        evaluateCalls += 1;
+        if (String(expression).includes('continuity-transmission-error-probe')) return true;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      true,
+      'transmission-error detection must survive long conversations without pageState truncation',
+    );
+    assert.ok(evaluateCalls > 0, 'transmission detection must use a targeted DOM boolean probe');
+  }
+
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Parou de pensar\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-error-banner-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await errorBannerPresent(cdp),
+      false,
+      'historical stopped-thinking text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
+  {
+    const cdp = {
+      async pageState() {
+        return { href: 'https://chatgpt.com/c/history', title: 'ChatGPT', text: 'Erro na transmissão de mensagem\nold historical turn\nhealthy current answer' };
+      },
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-transmission-error-probe')) return false;
+        return false;
+      },
+    };
+    assert.equal(
+      await transmissionErrorPresent(cdp),
+      false,
+      'historical transmission-error text outside the current DOM scope must not retrigger recovery',
+    );
+  }
+
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Something went wrong. Please try again.' })), true);
   assert.equal(await errorBannerPresent(fakeCdp({ pageText: 'Here is your normal completed answer.' })), false);
   // Confirmed live on ChatGPT Free (mobile app), 2026-09-27 -- the actual
@@ -900,6 +980,9 @@ async function run() {
         reloads += 1;
         if (reloads >= 2) pageText = 'normal';
       }
+      if (expression.includes('continuity-transmission-error-probe')) {
+        return /erro na transmissão de mensagem/i.test(pageText);
+      }
       return originalEvaluate(expression);
     };
     transmissionCdp.pageState = async () => ({
@@ -921,6 +1004,11 @@ async function run() {
     assert.ok(sendCalls >= 2, 'explicit transmission error must get one bounded retry');
 
     const persistent = fakeCdp({ sendSucceeds: true });
+    const persistentEvaluate = persistent.evaluate.bind(persistent);
+    persistent.evaluate = async expression => {
+      if (expression.includes('continuity-transmission-error-probe')) return true;
+      return persistentEvaluate(expression);
+    };
     persistent.pageState = async () => ({
       href: 'https://chatgpt.com/c/fake',
       title: 'ChatGPT',
@@ -1331,6 +1419,13 @@ async function run() {
     let connectCalls = 0;
     let pageText = 'normal reply';
     const cdp = fakeCdp({ pageText: '' });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-error-banner-probe')) {
+        return /streaming interrupted/i.test(pageText);
+      }
+      return originalEvaluate(expression);
+    };
     cdp.pageState = async () => ({ href: 'https://chatgpt.com/c/mobile-latest-123', title: 'ChatGPT', text: pageText });
     const result = await reinforcementCheckOnce(
       async () => {

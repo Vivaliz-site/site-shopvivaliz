@@ -1124,39 +1124,83 @@ async function alignLatestForReinforcement(
   return { ...alignment, http_status: httpStatus };
 }
 
+async function currentConversationSurfaceContains(cdp, markers, probeToken) {
+  const normalized = markers.map(marker => String(marker || '').toLowerCase()).filter(Boolean);
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* ${probeToken} */
+    const needles=${JSON.stringify(normalized)};
+    const body=document.body;
+    if(!body||needles.length===0) return false;
+
+    let scope='';
+    const messages=[...body.querySelectorAll('[data-message-author-role]')];
+    const lastMessage=messages[messages.length-1]||null;
+
+    if(lastMessage){
+      try{
+        const range=document.createRange();
+        range.selectNodeContents(body);
+        range.setStartAfter(lastMessage);
+        scope=range.toString();
+      }catch{
+        // If Range cannot be constructed for a transient React tree, collect
+        // only following siblings/ancestors rather than scanning old turns.
+        let node=lastMessage;
+        while(node&&node!==body){
+          for(let sibling=node.nextSibling;sibling;sibling=sibling.nextSibling){
+            scope+=' '+String(sibling.innerText||sibling.textContent||'');
+          }
+          node=node.parentElement;
+        }
+      }
+    }else{
+      // Some loading/virtualized ChatGPT surfaces do not expose role markers.
+      // Keep only the tail so historical failures near the top cannot retrigger.
+      scope=String(body.innerText||body.textContent||'').slice(-16000);
+    }
+
+    // Error/status UI often lives in a portal outside the turn subtree.
+    for(const el of body.querySelectorAll('[role="alert"],[aria-live],[data-testid*="error" i]')){
+      scope+=' '+String(el.innerText||el.textContent||'');
+    }
+
+    const haystack=scope.toLowerCase();
+    return needles.some(needle=>haystack.includes(needle));
+  })()`));
+}
+
 async function transmissionErrorPresent(cdp) {
-  const state = await cdp.pageState(6000);
-  const haystack = String(state.text || '').toLowerCase();
-  return (
-    haystack.includes('erro na transmissão')
-    || haystack.includes('erro na transmissao')
-    || haystack.includes('error sending message')
-    || haystack.includes('error in message transmission')
-    || haystack.includes('message transmission error')
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'erro na transmissão',
+      'erro na transmissao',
+      'error sending message',
+      'error in message transmission',
+      'message transmission error',
+    ],
+    'continuity-transmission-error-probe',
   );
 }
 
 async function errorBannerPresent(cdp) {
-  // ChatGPT surfaces an explicit banner on a genuine stream failure -- this
-  // is the one unambiguous, well-known DOM signal available to a script
-  // that has no semantic understanding of whether a "complete-looking"
-  // reply is actually incomplete. Anything short of that ambiguous case is
-  // deliberately left to the checkpoint-driven trigger, not guessed here.
-  const state = await cdp.pageState(6000);
-  const haystack = `${state.text || ''}`.toLowerCase();
-  return (
-    haystack.includes('something went wrong')
-    || haystack.includes('algo deu errado')
-    || haystack.includes('there was an error generating')
-    || haystack.includes('houve um erro ao gerar')
-    // Confirmed live on ChatGPT Free (mobile app), 2026-09-27: this is the
-    // actual banner text observed, not a guess -- "streaming interrupted,
-    // waiting for the complete message".
-    || haystack.includes('streaming interrupted')
-    || haystack.includes('transmissão interrompida')
-    || haystack.includes('transmissao interrompida')
-    || haystack.includes('stopped thinking')
-    || haystack.includes('parou de pensar')
+  // Query only the current turn surface / live error regions. A truncated
+  // pageState prefix misses bottom-of-thread failures in long conversations,
+  // while scanning the whole history would falsely retrigger old failures.
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'something went wrong',
+      'algo deu errado',
+      'there was an error generating',
+      'houve um erro ao gerar',
+      'streaming interrupted',
+      'transmissão interrompida',
+      'transmissao interrompida',
+      'stopped thinking',
+      'parou de pensar',
+    ],
+    'continuity-error-banner-probe',
   );
 }
 
