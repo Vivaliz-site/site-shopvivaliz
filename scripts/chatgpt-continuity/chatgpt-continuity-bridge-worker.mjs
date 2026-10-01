@@ -2016,14 +2016,15 @@ async function attemptNudge(
 ) {
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
-  const recoveryMetadata = () => detectedFailureReason
+  let continuationSent = false;
+  const recoveryMetadata = () => ({sent: continuationSent, ...(detectedFailureReason
     ? {
         failure_class: 'RECOVERABLE_CHAT_FAILURE',
         failure_reason: detectedFailureReason,
         recovery_attempt: 1,
         recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
       }
-    : {};
+    : {})});
   let cdp;
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
@@ -2072,6 +2073,7 @@ async function attemptNudge(
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
           detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+          ...recoveryMetadata(),
         };
       }
 
@@ -2103,6 +2105,7 @@ async function attemptNudge(
     }
     let baseline = await assistantSnapshot(cdp);
     let sent = await sendContinueMessage(cdp);
+    continuationSent = Boolean(sent);
     if (!sent) {
       // Live production evidence 2026-10-01: the error banner can be visible
       // while the composer remains temporarily disabled. Reattach once before
@@ -2119,6 +2122,7 @@ async function attemptNudge(
       }
       baseline = await assistantSnapshot(cdp);
       sent = await sendContinueMessage(cdp);
+      continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
         return {
           result_status: 'ERROR',
@@ -2196,7 +2200,7 @@ async function attemptNudge(
       ...recoveryMetadata(),
     };
   } catch (error) {
-    return { result_status: 'ERROR', detail: text(error?.message).slice(0, 400) };
+    return { result_status: 'ERROR', detail: text(error?.message).slice(0, 400), ...recoveryMetadata() };
   } finally {
     cdp?.close();
   }
@@ -2425,7 +2429,7 @@ async function reinforcementCheckOnce(
     );
     return {
       action,
-      sent: outcome.result_status !== 'CONVERSATION_NOT_FOUND',
+      sent: outcome.sent === true,
       progress_confirmed: outcome.result_status === 'PROGRESS_CONFIRMED',
       detail: outcome.detail,
       failure_class: 'RECOVERABLE_CHAT_FAILURE',

@@ -493,3 +493,25 @@ Mudancas em `api/chatgpt-continuity/**`,
 de Actions devem acionar o `Task Continuity Fast Gate`.
 Se `main` avancar enquanto o PR de continuidade estiver em validacao, os gates devem ser reexecutados contra a nova base antes do merge; verde calculado apenas contra base anterior nao certifica a integracao final.
 <!-- /CONTINUITY_QUEUE_CERTIFICATION_V13 -->
+
+### Prova de conclusão e concorrência de retomadas
+
+O dispatcher registra `SHOPVIVALIZ_RESUME_HISTORY_LENGTH` e a identidade do
+request no histórico. Um executor de checkpoint antigo não pode certificar
+`ready`/`complete` depois de avanço concorrente; ele deve reler o estado e
+continuar a ação atual. A retomada automática permanece habilitada.
+
+Tarefas críticas devem fixar verificações objetivas na criação, usando
+`agent_task_state.py start --completion-check '["/usr/bin/test","-f","/caminho/artefato"]'`.
+São aceitos apenas probes read-only limitados de arquivo, hash e serviços
+canônicos (no máximo quatro; timeout de 10s por probe). As verificações usam
+argv, sem shell, não podem conter secrets e executam de
+novo tanto em `ready` quanto em `complete`. Saída não é registrada; recibos
+contêm somente índice, hash do argv, timestamp e exit code. Uma frase PASS
+não substitui essas verificações. Checkpoints com checks usam schema 2: clientes
+antigos devem rejeitá-los em vez de ignorar o contrato de prova. Atualize o CLI
+antes de retomá-los. Tarefas legadas sem checks mantêm contrato
+compatível e sua conclusão textual não certifica aptidão por si só.
+
+O worker registra `sent` somente quando o envio efetivo ocorreu; progresso
+restaurado por reattach passivo e tentativa rejeitada não contam como envio.
