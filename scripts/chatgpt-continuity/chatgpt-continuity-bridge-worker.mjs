@@ -1637,6 +1637,18 @@ async function transmissionErrorPresent(cdp) {
   );
 }
 
+async function providerVerificationPending(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'nossos sistemas estão fazendo verificações adicionais antes de responder',
+      'nossos sistemas estao fazendo verificacoes adicionais antes de responder',
+      'additional checks before responding',
+    ],
+    'continuity-provider-verification-probe',
+  );
+}
+
 async function errorBannerPresent(cdp) {
   // Query only the current turn surface / live error regions. A truncated
   // pageState prefix misses bottom-of-thread failures in long conversations,
@@ -1973,6 +1985,18 @@ async function attemptNudge(
     cdp = await connector();
     let recoveredStaleComplete = false;
 
+    // Live iOS reproduction 2026-10-01: ChatGPT can remain in a
+    // provider-side "verificações adicionais" state while the Stop button is
+    // active. That is still an in-flight turn. Never reload, click Stop, or
+    // inject "continue"; report a retryable non-terminal state so the
+    // independent detached tier can carry continuity without mutating the UI.
+    if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'provider verification pending with active generation; continuation intentionally deferred',
+      };
+    }
+
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
     // tool/thought branch with end_turn=false. Therefore every checkpoint
@@ -2138,6 +2162,17 @@ async function reinforcementCheckOnce(
   try {
     cdp = await connect();
 
+    // Provider-side additional checks with a live Stop control are active
+    // processing, not a dead turn. Leave the browser untouched.
+    if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+      return {
+        action: 'provider_verification_pending',
+        sent: false,
+        progress_confirmed: false,
+        cross_device_discovery: false,
+      };
+    }
+
     // Cheap, local signal first. Do not hit the account-scoped conversation
     // listing when the currently open conversation already exposes a failure.
     let bannerPresent = await errorBannerPresent(cdp);
@@ -2169,6 +2204,16 @@ async function reinforcementCheckOnce(
         };
       }
 
+      if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+        return {
+          action: 'provider_verification_pending',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: true,
+        };
+      }
+
       bannerPresent = await errorBannerPresent(cdp);
       if (bannerPresent) {
         failureSignal = 'banner';
@@ -2190,6 +2235,16 @@ async function reinforcementCheckOnce(
     if (!crossDeviceDiscovery) {
       cdp.close();
       cdp = await connect();
+    }
+
+    if (await providerVerificationPending(cdp) && await conversationIsGenerating(cdp)) {
+      return {
+        action: 'provider_verification_pending',
+        sent: false,
+        progress_confirmed: false,
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
     }
 
     let failureStillPresent = await errorBannerPresent(cdp);
@@ -2463,6 +2518,7 @@ export {
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
+  providerVerificationPending,
   errorBannerPresent,
   transmissionErrorPresent,
   latestConversationProbe,
