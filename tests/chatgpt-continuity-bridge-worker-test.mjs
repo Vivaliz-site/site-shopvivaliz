@@ -1496,6 +1496,84 @@ async function run() {
     assert.match(expression, /ChatGPT-Account-Id/, 'turn-state probe must bind the request to the active ChatGPT account');
   }
 
+  // Current UI fallback when the canonical conversation metadata endpoint is
+  // rate-limited/unavailable: a COMPLETE transport whose last data-turn-key
+  // contains user-message controls but no assistant node/action controls is a
+  // locally observable unfinished turn. This fallback is never used when the
+  // canonical turn-state request succeeds.
+  {
+    const fallback = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = fallback.evaluate.bind(fallback);
+    fallback.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 429,
+          role: '',
+          end_turn: null,
+          child_count: -1,
+          message_status: 'HTTP_ERROR',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) return true;
+      return originalEvaluate(expression);
+    };
+    assert.equal(
+      await silentStallPresent(fallback),
+      true,
+      'rate-limited canonical metadata must fall back to a locally unfinished last turn',
+    );
+  }
+
+  {
+    const completedLocal = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = completedLocal.evaluate.bind(completedLocal);
+    completedLocal.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 429,
+          role: '',
+          end_turn: null,
+          child_count: -1,
+          message_status: 'HTTP_ERROR',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) return false;
+      return originalEvaluate(expression);
+    };
+    assert.equal(
+      await silentStallPresent(completedLocal),
+      false,
+      'completed local turn must remain fail-closed while canonical metadata is unavailable',
+    );
+  }
+
+  {
+    const canonicalComplete = fakeCdp({ streamStatus: 'COMPLETE', pageText: 'normal reply' });
+    const originalEvaluate = canonicalComplete.evaluate.bind(canonicalComplete);
+    let localFallbackCalled = false;
+    canonicalComplete.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: true,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      }
+      if (source.includes('local-incomplete-turn')) {
+        localFallbackCalled = true;
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    assert.equal(await silentStallPresent(canonicalComplete), false);
+    assert.equal(localFallbackCalled, false, 'canonical 200 result must suppress the local heuristic');
+  }
+
   // Cross-device/iOS failures may not mirror the orange interruption banner
   // into the canonical VM browser. Use only canonical conversation metadata
   // to classify a silent stall: transport COMPLETE, current assistant node
