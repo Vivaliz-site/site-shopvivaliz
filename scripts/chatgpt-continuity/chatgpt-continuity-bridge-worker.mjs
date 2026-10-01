@@ -1637,10 +1637,27 @@ async function transmissionErrorPresent(cdp) {
   );
 }
 
+async function providerVerificationPending(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'nossos sistemas estão fazendo verificações adicionais antes de responder',
+      'nossos sistemas estao fazendo verificacoes adicionais antes de responder',
+      'additional checks before responding',
+    ],
+    'continuity-provider-verification-probe',
+  );
+}
+
 async function errorBannerPresent(cdp) {
   // Query only the current turn surface / live error regions. A truncated
   // pageState prefix misses bottom-of-thread failures in long conversations,
   // while scanning the whole history would falsely retrigger old failures.
+  //
+  // "Parou de pensar" / "Stopped thinking" is also a normal reasoning-block
+  // label in the current ChatGPT UI, so text alone must never trigger
+  // recovery. Explicit transport/error banners or semantic unfinished-turn
+  // evidence remain the recovery signals.
   return currentConversationSurfaceContains(
     cdp,
     [
@@ -1651,8 +1668,6 @@ async function errorBannerPresent(cdp) {
       'streaming interrupted',
       'transmissão interrompida',
       'transmissao interrompida',
-      'stopped thinking',
-      'parou de pensar',
     ],
     'continuity-error-banner-probe',
   );
@@ -1973,12 +1988,35 @@ async function attemptNudge(
     cdp = await connector();
     let recoveredStaleComplete = false;
 
+    // A visible Stop button means the browser believes the turn is still
+    // generating. Never reload or inject a second turn unless server
+    // bookkeeping proves the stream is already COMPLETE. This avoids
+    // interrupting long reasoning/tool execution and the provider-side
+    // "verificações adicionais" state seen on iOS.
+    const initiallyGenerating = await conversationIsGenerating(cdp);
+    if (initiallyGenerating) {
+      if (await providerVerificationPending(cdp)) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'provider verification pending with active generation; detached fallback may proceed without browser mutation',
+        };
+      }
+      const activeStream = await conversationStreamStatus(cdp);
+      const activeStatus = String(activeStream?.status || '').toUpperCase();
+      if (Number(activeStream?.http_status || 0) !== 200 || activeStatus !== 'COMPLETE') {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'active generation remains in progress; detached fallback may proceed without browser mutation',
+        };
+      }
+    }
+
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
     // tool/thought branch with end_turn=false. Therefore every checkpoint
     // resume gets exactly one passive reattach before any continuation send,
     // not only turns whose DOM still looks generating.
-    const wasGenerating = await conversationIsGenerating(cdp);
+    const wasGenerating = initiallyGenerating;
     const passiveBaseline = await assistantSnapshot(cdp);
     await cdp.evaluate(`(()=>{location.reload();return true})()`);
     await sleep(1200);
@@ -2138,6 +2176,31 @@ async function reinforcementCheckOnce(
   try {
     cdp = await connect();
 
+    // Never navigate away from or mutate a turn that is still actively
+    // generating. If the server cannot prove COMPLETE, leave the browser
+    // untouched and let the independent detached tier carry continuity.
+    const localGenerating = await conversationIsGenerating(cdp);
+    if (localGenerating) {
+      if (await providerVerificationPending(cdp)) {
+        return {
+          action: 'provider_verification_pending',
+          sent: false,
+          progress_confirmed: false,
+          cross_device_discovery: false,
+        };
+      }
+      const activeStream = await conversationStreamStatus(cdp);
+      const activeStatus = String(activeStream?.status || '').toUpperCase();
+      if (Number(activeStream?.http_status || 0) !== 200 || activeStatus !== 'COMPLETE') {
+        return {
+          action: 'active_generation_pending',
+          sent: false,
+          progress_confirmed: false,
+          cross_device_discovery: false,
+        };
+      }
+    }
+
     // Cheap, local signal first. Do not hit the account-scoped conversation
     // listing when the currently open conversation already exposes a failure.
     let bannerPresent = await errorBannerPresent(cdp);
@@ -2169,6 +2232,29 @@ async function reinforcementCheckOnce(
         };
       }
 
+      if (await conversationIsGenerating(cdp)) {
+        if (await providerVerificationPending(cdp)) {
+          return {
+            action: 'provider_verification_pending',
+            sent: false,
+            progress_confirmed: false,
+            http_status: alignmentHttpStatus,
+            cross_device_discovery: true,
+          };
+        }
+        const activeStream = await conversationStreamStatus(cdp);
+        const activeStatus = String(activeStream?.status || '').toUpperCase();
+        if (Number(activeStream?.http_status || 0) !== 200 || activeStatus !== 'COMPLETE') {
+          return {
+            action: 'active_generation_pending',
+            sent: false,
+            progress_confirmed: false,
+            http_status: alignmentHttpStatus,
+            cross_device_discovery: true,
+          };
+        }
+      }
+
       bannerPresent = await errorBannerPresent(cdp);
       if (bannerPresent) {
         failureSignal = 'banner';
@@ -2190,6 +2276,29 @@ async function reinforcementCheckOnce(
     if (!crossDeviceDiscovery) {
       cdp.close();
       cdp = await connect();
+    }
+
+    if (await conversationIsGenerating(cdp)) {
+      if (await providerVerificationPending(cdp)) {
+        return {
+          action: 'provider_verification_pending',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+      const activeStream = await conversationStreamStatus(cdp);
+      const activeStatus = String(activeStream?.status || '').toUpperCase();
+      if (Number(activeStream?.http_status || 0) !== 200 || activeStatus !== 'COMPLETE') {
+        return {
+          action: 'active_generation_pending',
+          sent: false,
+          progress_confirmed: false,
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
     }
 
     let failureStillPresent = await errorBannerPresent(cdp);
@@ -2463,6 +2572,7 @@ export {
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
+  providerVerificationPending,
   errorBannerPresent,
   transmissionErrorPresent,
   latestConversationProbe,
