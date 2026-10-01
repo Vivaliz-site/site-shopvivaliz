@@ -26,11 +26,16 @@ import {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementLoop,
+  authorizationButtonTarget,
+  clickAuthorizationIfPresent,
+  authorizationCheckOnce,
+  authorizationLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -247,6 +252,60 @@ async function run() {
     assert.ok(
       candidates.every(tab => tab.url.includes('/c/latest-thread')),
       'only targets for the server-confirmed latest conversation may remain',
+    );
+  }
+
+  {
+    const checkpointAt = Date.now() - 8 * 60 * 1000;
+    const selected = selectCheckpointConversationCandidate(
+      [
+        { id: 'task-target', update_time: (checkpointAt + 15_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        { id: 'other-recent', update_time: (checkpointAt + 4 * 60_000) / 1000, source: 'global' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(selected?.id, 'task-target', 'checkpoint timestamp must bind a task to its own closest conversation');
+
+    const ambiguous = selectCheckpointConversationCandidate(
+      [
+        { id: 'near-a', update_time: (checkpointAt + 20_000) / 1000, source: 'global' },
+        { id: 'near-b', update_time: (checkpointAt + 40_000) / 1000, source: 'project', project_id: 'g-p-two' },
+      ],
+      checkpointAt,
+    );
+    assert.equal(ambiguous, null, 'near-tied conversations must fail closed instead of guessing');
+  }
+
+  {
+    const now = Date.now();
+    const checkpointAt = now - 20 * 60 * 1000;
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/task-target', webSocketDebuggerUrl: 'ws://target' },
+      { type: 'page', url: 'https://chatgpt.com/c/newer-unrelated', webSocketDebuggerUrl: 'ws://newer' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+    ];
+    const candidates = await resolveAmbiguousConversationTabs(
+      tabs,
+      async () => ({ close() {} }),
+      async () => ({
+        http_status: 200,
+        source: 'combined',
+        id: 'newer-unrelated',
+        update_time: now / 1000,
+        candidates: [
+          { id: 'newer-unrelated', update_time: now / 1000, source: 'global' },
+          { id: 'task-target', update_time: (checkpointAt + 10_000) / 1000, source: 'project', project_id: 'g-p-one' },
+        ],
+      }),
+      now,
+      undefined,
+      undefined,
+      checkpointAt,
+    );
+    assert.deepEqual(
+      candidates.map(tab => tab.webSocketDebuggerUrl),
+      ['ws://target'],
+      'task-specific checkpoint time must override an unrelated globally latest conversation',
     );
   }
 
@@ -945,6 +1004,9 @@ async function run() {
       assert.ok(expression.includes('/backend-api/gizmos/'));
       assert.ok(expression.includes('g-p-'));
       assert.ok(expression.includes('/conversations'));
+      assert.ok(expression.includes('AbortSignal.timeout'), 'every discovery request must have a bounded timeout');
+      assert.ok(expression.includes('a[href*="g-p-"]'), 'Project ids must also be discovered from loaded sidebar links');
+      assert.ok(expression.includes('Promise.allSettled'), 'Project conversation requests must be bounded and batched instead of serial');
       return {
         http_status: 200,
         source: 'combined',
@@ -2163,6 +2225,43 @@ async function run() {
     );
   }
 
+  // Operational authorization requests must be accepted with trusted CDP
+  // pointer events, preferring Always allow/Sempre permitir when present.
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(['evaluate', String(expression)]);
+        if (String(expression).includes('continuity-authorization-button-target')) {
+          return { x: 640, y: 480, kind: 'always_allow' };
+        }
+        return null;
+      },
+      async send(method, params) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'clicked');
+    assert.equal(result.kind, 'always_allow');
+    assert.ok(calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'));
+  }
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-authorization-button-target')) return null;
+        return null;
+      },
+      async send() { throw new Error('must not click without authorization'); },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'no_request');
+  }
+
   // The checkpoint-driven bridge loop and the reinforcement loop must start
   // independently. A slow reinforcement iteration cannot serialize the next
   // pollBridgeOnce cycle.
@@ -2174,9 +2273,11 @@ async function run() {
       async () => { events.push('bridge'); await blocked; },
       async () => { events.push('reinforcement'); await blocked; },
       true,
+      async () => { events.push('authorization'); await blocked; },
+      true,
     );
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.deepEqual(events.sort(), ['bridge', 'reinforcement']);
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'reinforcement']);
     release();
     await running;
   }

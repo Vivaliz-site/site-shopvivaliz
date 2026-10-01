@@ -58,6 +58,13 @@ jobs:
     uses: ./.github/workflows/task-continuity-production-e2e.yml
     secrets: inherit
 
+  backend-continuity-recovery:
+    needs: classify
+    if: needs.classify.outputs.route == 'backend_continuity_recovery'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/backend-continuity-direct-recovery.yml
+
   provision-backend-runners:
     needs: classify
     if: needs.classify.outputs.route == 'provision_backend_runners'

@@ -27,8 +27,12 @@ const BRIDGE_HOST_HEADER = process.env.CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER || 
 const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
   || '/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token';
 const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
+const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
+  || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
+const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
+const AUTHORIZATION_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS || 3000));
 const REINFORCEMENT_POLL_MS = Math.max(
   15_000,
   Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_POLL_MS || 30_000),
@@ -68,6 +72,14 @@ const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
   Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
 );
+const CHECKPOINT_TARGET_MAX_DELTA_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_TARGET_MAX_DELTA_MS || 15 * 60_000),
+);
+const CHECKPOINT_TARGET_MIN_SEPARATION_MS = Math.max(
+  10_000,
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_TARGET_MIN_SEPARATION_MS || 60_000),
+);
 const requestedLatestNotOpenMaxAgeMs = Number(
   process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS || 15 * 60_000,
 );
@@ -83,6 +95,10 @@ const CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS = Math.min(
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
+);
+const LATEST_CONVERSATION_FETCH_TIMEOUT_MS = Math.min(
+  LATEST_CONVERSATION_PROBE_TIMEOUT_MS,
+  Math.max(500, Number(process.env.CHATGPT_CONTINUITY_LATEST_FETCH_TIMEOUT_MS || 1500) || 1500),
 );
 const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
@@ -198,6 +214,43 @@ function conversationIdFromTab(tab) {
   }
 }
 
+function checkpointUpdatedAtMs(taskId, taskStateDir = TASK_STATE_DIR) {
+  const safeTaskId = text(taskId);
+  if (!/^[A-Za-z0-9._-]{1,200}$/.test(safeTaskId)) return 0;
+  try {
+    const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + safeTaskId + '.json', 'utf8'));
+    if (!payload || text(payload.status).toUpperCase() !== 'RUNNING') return 0;
+    const parsed = Date.parse(String(payload.updated_at || ''));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function selectCheckpointConversationCandidate(
+  candidates,
+  targetUpdatedAtMs,
+  maxDeltaMs = CHECKPOINT_TARGET_MAX_DELTA_MS,
+  minSeparationMs = CHECKPOINT_TARGET_MIN_SEPARATION_MS,
+) {
+  const target = Number(targetUpdatedAtMs || 0);
+  if (!Number.isFinite(target) || target <= 0) return null;
+  const ranked = normalizeConversationCandidates({ candidates })
+    .map(candidate => ({
+      candidate,
+      delta_ms: Math.abs(candidate.update_time * 1000 - target),
+    }))
+    .sort((a, b) => (a.delta_ms - b.delta_ms) || a.candidate.id.localeCompare(b.candidate.id));
+  if (ranked.length === 0 || ranked[0].delta_ms > Math.max(60_000, Number(maxDeltaMs || 0))) return null;
+  if (
+    ranked.length > 1
+    && (ranked[1].delta_ms - ranked[0].delta_ms) < Math.max(10_000, Number(minSeparationMs || 0))
+  ) {
+    return null;
+  }
+  return ranked[0].candidate;
+}
+
 async function resolveAmbiguousConversationTabs(
   tabs,
   connector,
@@ -205,6 +258,7 @@ async function resolveAmbiguousConversationTabs(
   nowMs = Date.now(),
   maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
   navigateLatest = navigateNeutralTabToConversation,
+  targetUpdatedAtMs = 0,
 ) {
   const sourceTabs = Array.isArray(tabs) ? tabs : [];
   const conversationIds = new Set(sourceTabs.map(conversationIdFromTab).filter(Boolean));
@@ -215,8 +269,27 @@ async function resolveAmbiguousConversationTabs(
     discoveryCdp = await connectFirstUsableChatgptTab(sourceTabs, connector);
     if (!discoveryCdp) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
 
-    const latest = normalizeLatestConversationMeta(await probeLatest(discoveryCdp));
+    const probe = await probeLatest(discoveryCdp);
+    const targetTimestamp = Number(targetUpdatedAtMs || 0);
+    const checkpointCandidate = targetTimestamp > 0
+      ? selectCheckpointConversationCandidate(normalizeConversationCandidates(probe), targetTimestamp)
+      : null;
+    if (targetTimestamp > 0 && !checkpointCandidate) {
+      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    }
+    const latest = checkpointCandidate || normalizeLatestConversationMeta(probe);
     if (!latest) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+    const targetTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
+    if (checkpointCandidate) {
+      if (targetTabs.length > 0) return targetTabs;
+      const neutralHomeTabs = sourceTabs.filter(tab => chatgptTabRank(tab) === 1);
+      if (neutralHomeTabs.length !== 1) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      const [neutralHomeTab] = neutralHomeTabs;
+      const navigated = await navigateLatest(neutralHomeTab, latest.id, connector);
+      if (!navigated) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      return [neutralHomeTab];
+    }
 
     const updatedAtMs = Number(latest.update_time) * 1000;
     const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
@@ -225,8 +298,7 @@ async function resolveAmbiguousConversationTabs(
       throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
     }
 
-    const latestTabs = sourceTabs.filter(tab => conversationIdFromTab(tab) === latest.id);
-    if (latestTabs.length > 0) return latestTabs;
+    if (targetTabs.length > 0) return targetTabs;
 
     // Cross-device or another-client activity can make the server-confirmed
     // latest conversation newer than every conversation currently open in
@@ -267,7 +339,7 @@ class Cdp {
     });
   }
 
-  static async connectToChatgptTab({ allowLatestDisambiguation = false } = {}) {
+  static async connectToChatgptTab({ allowLatestDisambiguation = false, targetUpdatedAtMs = 0 } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
         `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
@@ -282,7 +354,15 @@ class Cdp {
     let candidateTabs = tabs;
     if (conversationIds.size > 1) {
       if (!allowLatestDisambiguation) throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
-      candidateTabs = await resolveAmbiguousConversationTabs(tabs, connectCdpTarget);
+      candidateTabs = await resolveAmbiguousConversationTabs(
+        tabs,
+        connectCdpTarget,
+        latestConversationProbe,
+        Date.now(),
+        CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+        navigateNeutralTabToConversation,
+        targetUpdatedAtMs,
+      );
     }
     const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget);
     if (!connected) {
@@ -316,6 +396,103 @@ class Cdp {
 }
 
 async function reinforcementSendReady(cdp) { return Boolean(await cdp.evaluate(`(()=>{const c=document.querySelector('[data-testid="prompt-textarea"]')||document.querySelector('[role="textbox"][contenteditable="true"]');if(!c||c.disabled||c.getAttribute('aria-disabled')==='true')return false;return [...document.querySelectorAll('button')].some(b=>/^(send|enviar)$/i.test(b.getAttribute('aria-label')||'')&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')})()`)); }
+
+async function authorizationButtonTarget(cdp) {
+  return cdp.evaluate(`(()=>{
+    /* continuity-authorization-button-target */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const preferred=[
+      'sempre permitir','always allow',
+      'permitir uma vez','allow once',
+      'permitir','allow','autorizar','authorize'
+    ];
+    const rank=new Map(preferred.map((value,index)=>[value,index]));
+    const candidates=[];
+    for(const button of document.querySelectorAll('button')){
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      if(!rank.has(label)) continue;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) continue;
+      const style=getComputedStyle(button);
+      if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
+      candidates.push({
+        rank:rank.get(label),
+        kind:label.includes('sempre')||label.includes('always')?'always_allow':'allow',
+        x:rect.left+rect.width/2,
+        y:rect.top+rect.height/2
+      });
+    }
+    candidates.sort((a,b)=>a.rank-b.rank);
+    return candidates[0]||null;
+  })()`);
+}
+
+async function clickAuthorizationIfPresent(cdp) {
+  if (!AUTO_ALLOW_ENABLED) return { action: 'disabled' };
+  if (!cdp || typeof cdp.send !== 'function') return { action: 'unsupported' };
+  const target = await authorizationButtonTarget(cdp);
+  if (!target) return { action: 'no_request' };
+  const x=Number(target.x);
+  const y=Number(target.y);
+  if(!Number.isFinite(x)||!Number.isFinite(y)) return { action: 'invalid_target' };
+  await cdp.send('Input.dispatchMouseEvent', {type:'mouseMoved',x,y,button:'none'});
+  await cdp.send('Input.dispatchMouseEvent', {type:'mousePressed',x,y,button:'left',clickCount:1});
+  await cdp.send('Input.dispatchMouseEvent', {type:'mouseReleased',x,y,button:'left',clickCount:1});
+  return { action: 'clicked', kind: String(target.kind||'allow') };
+}
+
+async function authorizationCheckOnce(
+  listTabs = async () => {
+    if (!(await cdpReady())) return [];
+    const response = await fetch(`${CDP_BASE}/json`, { signal: AbortSignal.timeout(3000) });
+    return response.ok ? await response.json() : [];
+  },
+  connector = connectCdpTarget,
+) {
+  if (!AUTO_ALLOW_ENABLED) return { action: 'disabled', scanned: 0 };
+  const tabs = await listTabs();
+  const candidates=(Array.isArray(tabs)?tabs:[])
+    .filter(tab=>Number.isFinite(chatgptTabRank(tab)))
+    .sort((a,b)=>chatgptTabRank(a)-chatgptTabRank(b));
+  let scanned=0;
+  for(const tab of candidates){
+    let cdp;
+    try{
+      cdp=await connector(tab);
+      if(!cdp) continue;
+      scanned+=1;
+      const outcome=await clickAuthorizationIfPresent(cdp);
+      if(outcome.action==='clicked'){
+        return {...outcome,scanned};
+      }
+    }catch{
+      // A transient tab detach must not terminate the always-on watcher.
+    }finally{
+      try{cdp?.close();}catch{}
+    }
+  }
+  return { action: 'no_request', scanned };
+}
+
+async function authorizationLoop(
+  check = authorizationCheckOnce,
+  wait = sleep,
+) {
+  for (;;) {
+    try {
+      const outcome = await check();
+      if (outcome?.action === 'clicked') {
+        console.log(`chatgpt_continuity_authorization action=clicked kind=${text(outcome.kind)}`);
+      }
+    } catch (error) {
+      console.error(`chatgpt_continuity_authorization_error ${text(error?.message)}`);
+    }
+    await wait(AUTHORIZATION_POLL_MS);
+  }
+}
 
 async function connectReinforcementChatgptTab({
   allowCrossDeviceDiscovery = false,
@@ -704,7 +881,7 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         let accountId='';
         let accessToken='';
         try{
-          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
           if(sessionResponse.ok){
             let session=null;
             try{session=await sessionResponse.json();}catch{}
@@ -1018,7 +1195,7 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       let accountId='';
       let accessToken='';
       try{
-        const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+        const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
         if(sessionResponse.ok){
           let session=null; try{session=await sessionResponse.json();}catch{}
           accessToken=String(session?.accessToken||session?.access_token||'').trim();
@@ -1028,11 +1205,23 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       const headers={Accept:'application/json'};
       if(accessToken) headers.Authorization='Bearer '+accessToken;
       if(accountId) headers['ChatGPT-Account-Id']=accountId;
+      const fetchJson=async(url,options={})=>{
+        try{
+          const response=await fetch(url,{
+            ...options,
+            signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS}),
+          });
+          let body=null; try{body=await response.json();}catch{}
+          return {response,body};
+        }catch{
+          return {response:null,body:null};
+        }
+      };
 
       const discovered=[];
       const statuses=[];
       const addItems=(items,source,projectId='')=>{
-        for(const item of (Array.isArray(items)?items:[]).slice(0,12)){
+        for(const item of (Array.isArray(items)?items:[]).slice(0,24)){
           const id=String(item?.id||item?.conversation_id||'').trim();
           const update_time=item?.update_time??item?.updateTime??item?.updated_at??item?.updatedAt??null;
           if(!id) continue;
@@ -1052,19 +1241,21 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       ];
       let globalLast={http_status:0,source:'none',item_present:false,item_keys:[]};
       for(const candidate of candidates){
-        try{
-          const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store',headers});
-          let body=null; try{body=await response.json();}catch{}
-          const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
-          const status=Number(response.status||0);
-          statuses.push(status);
-          globalLast={http_status:status,source:candidate.source,item_present:items.length>0,item_keys:[]};
-          if(response.ok&&items.length>0){
-            addItems(items,'global','');
-            break;
-          }
-        }catch{
+        const {response,body}=await fetchJson(
+          candidate.url,
+          {credentials:'same-origin',cache:'no-store',headers},
+        );
+        if(!response){
           globalLast={http_status:0,source:candidate.source,item_present:false,item_keys:[]};
+          continue;
+        }
+        const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
+        const status=Number(response.status||0);
+        statuses.push(status);
+        globalLast={http_status:status,source:candidate.source,item_present:items.length>0,item_keys:[]};
+        if(response.ok&&items.length>0){
+          addItems(items,'global','');
+          break;
         }
       }
 
@@ -1074,29 +1265,29 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       // adds no content scraping and avoids guessing from titles.
       const projectIds=[];
       const seenProjects=new Set();
+      const addProjectId=raw=>{
+        const match=String(raw||'').match(/(g-p-[A-Za-z0-9_-]{8,160})/);
+        if(!match||seenProjects.has(match[1])||projectIds.length>=16) return;
+        seenProjects.add(match[1]);
+        projectIds.push(match[1]);
+      };
       try{
-        for(const entry of performance.getEntriesByType('resource')){
-          const raw=String(entry?.name||'');
-          const match=raw.match(/\/backend-api\/gizmos\/(g-p-[A-Za-z0-9_-]+)\/conversations/);
-          if(match&&!seenProjects.has(match[1])){
-            seenProjects.add(match[1]);
-            projectIds.push(match[1]);
-          }
-          if(projectIds.length>=16) break;
-        }
+        for(const entry of performance.getEntriesByType('resource')) addProjectId(entry?.name);
+        for(const anchor of document.querySelectorAll('a[href*="g-p-"]')) addProjectId(anchor.getAttribute('href'));
       }catch{}
 
-      for(const projectId of projectIds){
-        try{
-          const response=await fetch(
-            '/backend-api/gizmos/'+encodeURIComponent(projectId)+'/conversations?limit=12&owned_only=false',
+      for(let offset=0;offset<projectIds.length;offset+=4){
+        const batch=projectIds.slice(offset,offset+4);
+        await Promise.allSettled(batch.map(async projectId=>{
+          const {response,body}=await fetchJson(
+            '/backend-api/gizmos/'+encodeURIComponent(projectId)+'/conversations?limit=24&owned_only=false',
             {credentials:'same-origin',cache:'no-store',headers},
           );
-          let body=null; try{body=await response.json();}catch{}
+          if(!response) return;
           const items=Array.isArray(body?.items)?body.items:(Array.isArray(body)?body:[]);
           statuses.push(Number(response.status||0));
           if(response.ok&&items.length>0) addItems(items,'project',projectId);
-        }catch{}
+        }));
       }
 
       const byId=new Map();
@@ -1750,13 +1941,17 @@ async function sendContinueMessage(cdp) {
 
 async function attemptNudge(
   taskId,
-  connect = () => Cdp.connectToChatgptTab({ allowLatestDisambiguation: true }),
+  connect = null,
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
 ) {
   let cdp;
   try {
-    cdp = await connect();
+    const connector = connect || (() => Cdp.connectToChatgptTab({
+      allowLatestDisambiguation: true,
+      targetUpdatedAtMs: checkpointUpdatedAtMs(taskId),
+    }));
+    cdp = await connector();
     let recoveredStaleComplete = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
@@ -2243,9 +2438,12 @@ async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
+  runAuthorizationLoop = authorizationLoop,
+  autoAllowEnabled = AUTO_ALLOW_ENABLED,
 ) {
   const loops = [runBridgeLoop()];
   if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
 
@@ -2259,6 +2457,8 @@ export {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  checkpointUpdatedAtMs,
+  selectCheckpointConversationCandidate,
   conversationIsGenerating,
   conversationStreamStatus,
   conversationTurnState,
@@ -2287,5 +2487,9 @@ export {
   reinforcementDiscoveryDelayMs,
   bridgeLoop,
   reinforcementLoop,
+  authorizationButtonTarget,
+  clickAuthorizationIfPresent,
+  authorizationCheckOnce,
+  authorizationLoop,
   mainLoop,
 };
