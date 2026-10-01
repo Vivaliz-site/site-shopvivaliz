@@ -1606,6 +1606,70 @@ async function errorBannerPresent(cdp) {
   );
 }
 
+async function clickTrustedSendButton(cdp) {
+  for (let attempt=0; attempt<8; attempt += 1) {
+    const submitTarget = await cdp.evaluate(`(()=>{
+      /* continuity-send-button-target */
+      const el=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      const form=el?.closest('form')||null;
+      const exactSelectors=[
+        '[data-testid="send-button"]',
+        'button[aria-label="Send"]',
+        'button[aria-label="Send prompt"]',
+        'button[aria-label="Send message"]',
+        'button[aria-label="Enviar"]',
+        'button[aria-label="Enviar prompt"]',
+        'button[aria-label="Enviar mensagem"]',
+        'button[type="submit"]'
+      ];
+      let button=null;
+      for(const selector of exactSelectors){
+        const candidate=(form||document).querySelector(selector);
+        if(candidate){button=candidate;break;}
+      }
+      if(!button) return {state:'absent'};
+      if(button.disabled || button.getAttribute('aria-disabled') === 'true') {
+        return {state:'disabled'};
+      }
+      button.scrollIntoView({block:'nearest',inline:'nearest'});
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return {state:'unusable'};
+      return {
+        state:'ready',
+        x:rect.left+rect.width/2,
+        y:rect.top+rect.height/2
+      };
+    })()`);
+
+    if (submitTarget?.state === 'ready') {
+      try {
+        const x=Number(submitTarget.x);
+        const y=Number(submitTarget.y);
+        if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
+        await cdp.send('Input.dispatchMouseEvent', {
+          type:'mouseMoved', x, y, button:'none',
+        });
+        await cdp.send('Input.dispatchMouseEvent', {
+          type:'mousePressed', x, y, button:'left', clickCount:1,
+        });
+        await cdp.send('Input.dispatchMouseEvent', {
+          type:'mouseReleased', x, y, button:'left', clickCount:1,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    if (submitTarget?.state === 'disabled') {
+      await sleep(150);
+      continue;
+    }
+    break;
+  }
+  return false;
+}
+
 async function sendContinueMessage(cdp) {
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
@@ -1675,7 +1739,14 @@ async function sendContinueMessage(cdp) {
       if(!el) return false;
       return document.activeElement===el || el.contains(document.activeElement);
     })()`);
-    if (!focused) return false;
+    if (!focused) {
+      // Current ProseMirror can receive a trusted pointer event while leaving
+      // document.activeElement on BODY. If the only draft present is exactly
+      // our own bounded continuation and Send is already enabled, submitting
+      // that safe draft is preferable to treating the editor as unusable.
+      if (existing === expected && await clickTrustedSendButton(cdp)) return true;
+      return false;
+    }
 
     // Reset stale DOM/editor state using trusted keyboard events. This is
     // important because DOM text can be visible while ChatGPT's internal
@@ -1751,66 +1822,7 @@ async function sendContinueMessage(cdp) {
     // ChatGPT's internal editor state. Submit it with a trusted CDP pointer
     // click; a synthetic HTMLElement.click() did not reproduce the successful
     // live interaction on the current editor.
-    for (let attempt=0; attempt<8; attempt += 1) {
-      const submitTarget = await cdp.evaluate(`(()=>{
-        /* continuity-send-button-target */
-        const el=document.querySelector('[data-testid="prompt-textarea"]')
-          || document.querySelector('[role="textbox"][contenteditable="true"]');
-        const form=el?.closest('form')||null;
-        const exactSelectors=[
-          '[data-testid="send-button"]',
-          'button[aria-label="Send"]',
-          'button[aria-label="Send prompt"]',
-          'button[aria-label="Send message"]',
-          'button[aria-label="Enviar"]',
-          'button[aria-label="Enviar prompt"]',
-          'button[aria-label="Enviar mensagem"]',
-          'button[type="submit"]'
-        ];
-        let button=null;
-        for(const selector of exactSelectors){
-          const candidate=(form||document).querySelector(selector);
-          if(candidate){button=candidate;break;}
-        }
-        if(!button) return {state:'absent'};
-        if(button.disabled || button.getAttribute('aria-disabled') === 'true') {
-          return {state:'disabled'};
-        }
-        button.scrollIntoView({block:'nearest',inline:'nearest'});
-        const rect=button.getBoundingClientRect();
-        if(!(rect.width>0&&rect.height>0)) return {state:'unusable'};
-        return {
-          state:'ready',
-          x:rect.left+rect.width/2,
-          y:rect.top+rect.height/2
-        };
-      })()`);
-
-      if (submitTarget?.state === 'ready') {
-        try {
-          const x=Number(submitTarget.x);
-          const y=Number(submitTarget.y);
-          if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
-          await cdp.send('Input.dispatchMouseEvent', {
-            type:'mouseMoved', x, y, button:'none',
-          });
-          await cdp.send('Input.dispatchMouseEvent', {
-            type:'mousePressed', x, y, button:'left', clickCount:1,
-          });
-          await cdp.send('Input.dispatchMouseEvent', {
-            type:'mouseReleased', x, y, button:'left', clickCount:1,
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      }
-      if (submitTarget?.state === 'disabled') {
-        await sleep(150);
-        continue;
-      }
-      break;
-    }
+    if (await clickTrustedSendButton(cdp)) return true;
 
     try {
       await cdp.send('Input.dispatchKeyEvent', {
