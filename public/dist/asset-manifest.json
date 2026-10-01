@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T16:27:16.943Z",
+  "generated_at": "2026-10-01T00:18:35.707Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -307,9 +307,9 @@
       "source_bytes": 342
     },
     "/css/paid-mobile-funnel-v1.css": {
-      "file": "/public/dist/css/paid-mobile-funnel-v1.b873d4053d.min.css",
-      "bytes": 1904,
-      "source_bytes": 3017
+      "file": "/public/dist/css/paid-mobile-funnel-v1.237649b599.min.css",
+      "bytes": 2211,
+      "source_bytes": 3480
     },
     "/css/premium-theme.css": {
       "file": "/public/dist/css/premium-theme.2a8a8ba3ab.min.css",

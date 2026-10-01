@@ -70,6 +70,27 @@
         color: #0d6b4d;
     }
 
+    .sv-paid-mobile-offer-effective-price {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        flex-wrap: wrap;
+        color: #0d6b4d;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .sv-paid-mobile-offer-effective-price strong {
+        font-size: 19px;
+        font-weight: 900;
+    }
+
+    .sv-paid-mobile-offer-effective-price span {
+        color: #667085;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
     .sv-paid-mobile-offer-buy {
         width: 100%;
         min-height: 52px;
