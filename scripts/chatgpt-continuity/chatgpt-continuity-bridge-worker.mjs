@@ -2092,6 +2092,14 @@ async function reinforcementCheckOnce(
   let cdp;
   let crossDeviceDiscovery = false;
   let alignmentHttpStatus = 0;
+  let alignmentCandidateCount = 0;
+  let alignmentProjectCount = 0;
+  let alignmentLatestAgeSeconds = null;
+  const alignmentDiagnostics = () => ({
+    candidate_count: alignmentCandidateCount,
+    project_count: alignmentProjectCount,
+    latest_age_seconds: alignmentLatestAgeSeconds,
+  });
   let restorePath = '';
   let failureSignal = '';
   try {
@@ -2115,6 +2123,12 @@ async function reinforcementCheckOnce(
       alignmentHttpStatus = Number.isFinite(Number(alignment?.http_status))
         ? Math.max(0, Math.min(599, Math.trunc(Number(alignment.http_status))))
         : 0;
+      alignmentCandidateCount = Math.max(0, Number(alignment?.candidate_count || 0));
+      alignmentProjectCount = Math.max(0, Number(alignment?.project_count || 0));
+      alignmentLatestAgeSeconds = alignment?.latest_age_seconds === null
+        || alignment?.latest_age_seconds === undefined
+        ? null
+        : Math.max(0, Number(alignment.latest_age_seconds) || 0);
       restorePath = safeReinforcementRestorePath(alignment?.restore_path);
       if (
         alignment.action === 'latest_unavailable'
@@ -2124,6 +2138,7 @@ async function reinforcementCheckOnce(
         return {
           ...alignment,
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: true,
         };
       }
@@ -2140,6 +2155,7 @@ async function reinforcementCheckOnce(
         return {
           action: 'no_banner',
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: true,
         };
       }
@@ -2164,6 +2180,7 @@ async function reinforcementCheckOnce(
       return {
         action: 'self_resolved',
         http_status: alignmentHttpStatus,
+        ...alignmentDiagnostics(),
         cross_device_discovery: crossDeviceDiscovery,
       };
     }
@@ -2185,6 +2202,7 @@ async function reinforcementCheckOnce(
           sent: false,
           progress_confirmed: true,
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: crossDeviceDiscovery,
         };
       }
@@ -2196,6 +2214,7 @@ async function reinforcementCheckOnce(
           sent: false,
           progress_confirmed: false,
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: crossDeviceDiscovery,
         };
       }
@@ -2207,6 +2226,7 @@ async function reinforcementCheckOnce(
           sent: false,
           progress_confirmed: false,
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: crossDeviceDiscovery,
         };
       }
@@ -2220,6 +2240,7 @@ async function reinforcementCheckOnce(
           sent: false,
           progress_confirmed: false,
           http_status: alignmentHttpStatus,
+          ...alignmentDiagnostics(),
           cross_device_discovery: crossDeviceDiscovery,
         };
       }
@@ -2232,6 +2253,7 @@ async function reinforcementCheckOnce(
         sent: true,
         progress_confirmed: progressed,
         http_status: alignmentHttpStatus,
+        ...alignmentDiagnostics(),
         cross_device_discovery: crossDeviceDiscovery,
       };
     }
@@ -2258,6 +2280,7 @@ async function reinforcementCheckOnce(
       progress_confirmed: outcome.result_status === 'PROGRESS_CONFIRMED',
       detail: outcome.detail,
       http_status: alignmentHttpStatus,
+      ...alignmentDiagnostics(),
       cross_device_discovery: crossDeviceDiscovery,
     };
   } catch (error) {
@@ -2267,6 +2290,7 @@ async function reinforcementCheckOnce(
       action: 'error',
       detail: text(error?.message),
       http_status: alignmentHttpStatus,
+      ...alignmentDiagnostics(),
       cross_device_discovery: crossDeviceDiscovery,
     };
   } finally {
