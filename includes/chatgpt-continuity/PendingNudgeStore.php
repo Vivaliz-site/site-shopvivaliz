@@ -214,17 +214,47 @@ final class SvChatgptContinuityPendingNudgeStore
         });
     }
 
+    /**
+     * Runtime/CDP errors must remain diagnosable without persisting browser,
+     * prompt, cookie, or token text that an upstream error might include.
+     *
+     * @return array{code: string, sha256: string|null}
+     */
+    private static function safeDetailDiagnostic(?string $detail): array
+    {
+        $raw = trim((string)$detail);
+        if ($raw === '') {
+            return ['code' => 'NONE', 'sha256' => null];
+        }
+
+        $normalized = strtolower($raw);
+        $code = match (true) {
+            str_contains($normalized, 'composer/send-button remained unavailable after bounded reattach') => 'COMPOSER_UNAVAILABLE_AFTER_REATTACH',
+            str_contains($normalized, 'composer found but send failed after bounded reattach') => 'SEND_FAILED_AFTER_REATTACH',
+            str_contains($normalized, 'transmission error persisted and composer was unavailable after reattach') => 'TRANSMISSION_COMPOSER_UNAVAILABLE',
+            str_contains($normalized, 'transmission error persisted and retry send failed') => 'TRANSMISSION_RETRY_SEND_FAILED',
+            str_contains($normalized, 'transmission error persisted after bounded recovery retry') => 'TRANSMISSION_PERSISTED_AFTER_RETRY',
+            str_contains($normalized, 'multiple open chatgpt conversation tabs found') => 'AMBIGUOUS_CONVERSATION_TARGET',
+            str_contains($normalized, 'cdp endpoint unreachable') => 'CDP_ENDPOINT_UNREACHABLE',
+            default => 'UNCLASSIFIED_RUNTIME_ERROR',
+        };
+        return ['code' => $code, 'sha256' => hash('sha256', $raw)];
+    }
+
     public function recordResult(string $taskId, string $status, ?string $detail): bool
     {
         if (!in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('unsupported nudge result status');
         }
-        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $detail) {
+        $diagnostic = self::safeDetailDiagnostic($detail);
+        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] === $taskId) {
                     $nudges[$index]['status'] = $status;
                     $nudges[$index]['resolved_at'] = gmdate(DATE_ATOM);
-                    $nudges[$index]['detail'] = $detail !== null ? mb_substr($detail, 0, 500, 'UTF-8') : null;
+                    unset($nudges[$index]['detail']);
+                    $nudges[$index]['detail_code'] = $diagnostic['code'];
+                    $nudges[$index]['detail_sha256'] = $diagnostic['sha256'];
                     return ['nudges' => $nudges, 'return' => true];
                 }
             }
