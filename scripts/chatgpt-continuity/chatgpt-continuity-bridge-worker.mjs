@@ -914,6 +914,16 @@ async function postSendConfirmationBaseline(cdp, before) {
   };
 }
 
+async function confirmAfterSend(
+  cdp,
+  beforeSend,
+  confirmProgress = confirmAssistantProgress,
+) {
+  const settled = await postSendConfirmationBaseline(cdp, beforeSend);
+  if (settled.progressed) return true;
+  return confirmProgress(cdp, settled.baseline);
+}
+
 async function confirmAssistantProgress(
   cdp,
   baseline,
@@ -1267,7 +1277,7 @@ async function attemptNudge(
       if (!sent) return { result_status: 'ERROR', detail: 'composer found but send failed after bounded reattach' };
     }
 
-    let progressed = await confirmProgress(cdp, baseline);
+    let progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
     if (!progressed && await transmissionErrorPresent(cdp)) {
       // A real iOS capture shows an explicit "Erro na transmissão de mensagem".
       // Treat this as a transport failure, not as an ambiguous unconfirmed send:
@@ -1295,7 +1305,7 @@ async function attemptNudge(
           detail: 'transmission error persisted and retry send failed',
         };
       }
-      progressed = await confirmProgress(cdp, retryAfterReattachBaseline);
+      progressed = await confirmAfterSend(cdp, retryAfterReattachBaseline, confirmProgress);
       if (progressed) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
@@ -1491,7 +1501,7 @@ async function reinforcementCheckOnce(
         };
       }
 
-      const progressed = await confirmProgress(cdp, baseline);
+      const progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
       const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
       console.log(`chatgpt_continuity_reinforcement silent_stall_confirmed sent=true progress=${progressed}`);
       return {
