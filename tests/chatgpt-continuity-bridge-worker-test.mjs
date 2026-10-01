@@ -1343,6 +1343,31 @@ async function run() {
     assert.equal(currentPath, '/c/original-thread', 'temporary cross-device navigation must restore the original tab');
   }
 
+  // Live reproduction 2026-09-30: /stream_status returns 200 while the
+  // conversation metadata endpoint returns 404 when the account context is
+  // omitted. The turn-state probe must use the same authenticated account
+  // headers as latestConversationProbe.
+  {
+    let expression = '';
+    const cdp = {
+      async evaluate(source) {
+        expression = String(source);
+        return {
+          http_status: 200,
+          role: 'assistant',
+          end_turn: false,
+          child_count: 0,
+          message_status: 'finished_successfully',
+        };
+      },
+    };
+    const state = await conversationTurnState(cdp, 25);
+    assert.equal(state.http_status, 200);
+    assert.match(expression, /\/api\/auth\/session/, 'turn-state probe must load the authenticated ChatGPT session');
+    assert.match(expression, /Authorization/, 'turn-state probe must forward the bearer token when available');
+    assert.match(expression, /ChatGPT-Account-Id/, 'turn-state probe must bind the request to the active ChatGPT account');
+  }
+
   // Cross-device/iOS failures may not mirror the orange interruption banner
   // into the canonical VM browser. Use only canonical conversation metadata
   // to classify a silent stall: transport COMPLETE, current assistant node
