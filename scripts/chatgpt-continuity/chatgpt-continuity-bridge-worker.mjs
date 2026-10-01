@@ -86,6 +86,10 @@ const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
 );
+const LATEST_CONVERSATION_FETCH_TIMEOUT_MS = Math.min(
+  LATEST_CONVERSATION_PROBE_TIMEOUT_MS,
+  Math.max(500, Number(process.env.CHATGPT_CONTINUITY_LATEST_FETCH_TIMEOUT_MS || 1500) || 1500),
+);
 const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_STREAM_STATUS_TIMEOUT_MS || 5000),
@@ -804,7 +808,7 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         let accountId='';
         let accessToken='';
         try{
-          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
           if(sessionResponse.ok){
             let session=null;
             try{session=await sessionResponse.json();}catch{}
@@ -1128,6 +1132,18 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       const headers={Accept:'application/json'};
       if(accessToken) headers.Authorization='Bearer '+accessToken;
       if(accountId) headers['ChatGPT-Account-Id']=accountId;
+      const fetchJson=async(url,options={})=>{
+        try{
+          const response=await fetch(url,{
+            ...options,
+            signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS}),
+          });
+          let body=null; try{body=await response.json();}catch{}
+          return {response,body};
+        }catch{
+          return {response:null,body:null};
+        }
+      };
 
       const discovered=[];
       const statuses=[];
@@ -1152,19 +1168,21 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       ];
       let globalLast={http_status:0,source:'none',item_present:false,item_keys:[]};
       for(const candidate of candidates){
-        try{
-          const response=await fetch(candidate.url,{credentials:'same-origin',cache:'no-store',headers});
-          let body=null; try{body=await response.json();}catch{}
-          const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
-          const status=Number(response.status||0);
-          statuses.push(status);
-          globalLast={http_status:status,source:candidate.source,item_present:items.length>0,item_keys:[]};
-          if(response.ok&&items.length>0){
-            addItems(items,'global','');
-            break;
-          }
-        }catch{
+        const {response,body}=await fetchJson(
+          candidate.url,
+          {credentials:'same-origin',cache:'no-store',headers},
+        );
+        if(!response){
           globalLast={http_status:0,source:candidate.source,item_present:false,item_keys:[]};
+          continue;
+        }
+        const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));
+        const status=Number(response.status||0);
+        statuses.push(status);
+        globalLast={http_status:status,source:candidate.source,item_present:items.length>0,item_keys:[]};
+        if(response.ok&&items.length>0){
+          addItems(items,'global','');
+          break;
         }
       }
 
@@ -1174,29 +1192,29 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       // adds no content scraping and avoids guessing from titles.
       const projectIds=[];
       const seenProjects=new Set();
+      const addProjectId=raw=>{
+        const match=String(raw||'').match(/(g-p-[A-Za-z0-9_-]{8,160})/);
+        if(!match||seenProjects.has(match[1])||projectIds.length>=8) return;
+        seenProjects.add(match[1]);
+        projectIds.push(match[1]);
+      };
       try{
-        for(const entry of performance.getEntriesByType('resource')){
-          const raw=String(entry?.name||'');
-          const match=raw.match(/\/backend-api\/gizmos\/(g-p-[A-Za-z0-9_-]+)\/conversations/);
-          if(match&&!seenProjects.has(match[1])){
-            seenProjects.add(match[1]);
-            projectIds.push(match[1]);
-          }
-          if(projectIds.length>=16) break;
-        }
+        for(const entry of performance.getEntriesByType('resource')) addProjectId(entry?.name);
+        for(const anchor of document.querySelectorAll('a[href*="g-p-"]')) addProjectId(anchor.getAttribute('href'));
       }catch{}
 
-      for(const projectId of projectIds){
-        try{
-          const response=await fetch(
-            '/backend-api/gizmos/'+encodeURIComponent(projectId)+'/conversations?limit=12&owned_only=false',
+      for(let offset=0;offset<projectIds.length;offset+=4){
+        const batch=projectIds.slice(offset,offset+4);
+        await Promise.allSettled(batch.map(async projectId=>{
+          const {response,body}=await fetchJson(
+            '/backend-api/gizmos/'+encodeURIComponent(projectId)+'/conversations?limit=24&owned_only=false',
             {credentials:'same-origin',cache:'no-store',headers},
           );
-          let body=null; try{body=await response.json();}catch{}
+          if(!response) return;
           const items=Array.isArray(body?.items)?body.items:(Array.isArray(body)?body:[]);
           statuses.push(Number(response.status||0));
           if(response.ok&&items.length>0) addItems(items,'project',projectId);
-        }catch{}
+        }));
       }
 
       const byId=new Map();
