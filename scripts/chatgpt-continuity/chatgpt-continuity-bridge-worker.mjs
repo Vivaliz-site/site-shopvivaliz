@@ -90,6 +90,7 @@ const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
+const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -363,10 +364,54 @@ async function connectReinforcementChatgptTab({
       // ambiguity only applies to conversation targets, never to /.
       selected = neutralHomes[0];
     } else if (conversationRows.length > 1) {
-      for (const row of opened) {
-        try { row.cdp.close(); } catch {}
+      // With no neutral home tab, multiple conversation tabs are ambiguous
+      // unless their already-synchronized sidebars provide a unique local
+      // mode. This stays entirely inside the attached browser and therefore
+      // still works while the account-scoped latest-conversation endpoint is
+      // rate-limited. Require at least two identical votes and a strict lead
+      // over the runner-up; ties remain fail-closed.
+      const sidebarRows = [];
+      for (const row of conversationRows) {
+        try {
+          const sidebarId = await sidebarLatestConversationId(row.cdp);
+          if (sidebarId) sidebarRows.push({ row, sidebarId });
+        } catch {}
       }
-      throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+
+      const counts = new Map();
+      for (const item of sidebarRows) {
+        counts.set(item.sidebarId, (counts.get(item.sidebarId) || 0) + 1);
+      }
+      const rankedSidebarIds = [...counts.entries()]
+        .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+      const top = rankedSidebarIds[0] || ['', 0];
+      const secondCount = rankedSidebarIds[1]?.[1] || 0;
+      if (top[1] < 2 || top[1] <= secondCount) {
+        for (const row of opened) {
+          try { row.cdp.close(); } catch {}
+        }
+        throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      }
+
+      let consensusRow = null;
+      for (const item of sidebarRows) {
+        if (item.sidebarId !== top[0]) continue;
+        try {
+          if (!(await conversationIsGenerating(item.row.cdp))) {
+            consensusRow = item.row;
+            break;
+          }
+        } catch {}
+      }
+      if (!consensusRow) {
+        for (const row of opened) {
+          try { row.cdp.close(); } catch {}
+        }
+        throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+      }
+
+      selected = consensusRow;
+      SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS.add(selected.cdp);
     }
   }
   for (const row of opened) {
@@ -407,7 +452,10 @@ async function alignToSidebarLatestConversation(cdp) {
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
   const currentConversation = /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
   const homeContext = currentPath === '/';
-  const uniqueConversationContext = currentConversation && SINGLE_SAFE_REINFORCEMENT_CDPS.has(cdp);
+  const uniqueConversationContext = currentConversation && (
+    SINGLE_SAFE_REINFORCEMENT_CDPS.has(cdp)
+    || SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS.has(cdp)
+  );
   if (!homeContext && !uniqueConversationContext) {
     return { action: 'sidebar_unavailable', sidebar_fallback: false };
   }
