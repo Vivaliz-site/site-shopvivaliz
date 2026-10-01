@@ -1419,6 +1419,13 @@ async function run() {
     let connectCalls = 0;
     let pageText = 'normal reply';
     const cdp = fakeCdp({ pageText: '' });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-error-banner-probe')) {
+        return /streaming interrupted/i.test(pageText);
+      }
+      return originalEvaluate(expression);
+    };
     cdp.pageState = async () => ({ href: 'https://chatgpt.com/c/mobile-latest-123', title: 'ChatGPT', text: pageText });
     const result = await reinforcementCheckOnce(
       async () => {
