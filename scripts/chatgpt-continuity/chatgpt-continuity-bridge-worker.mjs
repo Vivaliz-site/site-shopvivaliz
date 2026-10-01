@@ -1122,7 +1122,7 @@ async function latestConversationProbe(cdp, timeoutMs = LATEST_CONVERSATION_PROB
       let accountId='';
       let accessToken='';
       try{
-        const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});
+        const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
         if(sessionResponse.ok){
           let session=null; try{session=await sessionResponse.json();}catch{}
           accessToken=String(session?.accessToken||session?.access_token||'').trim();
