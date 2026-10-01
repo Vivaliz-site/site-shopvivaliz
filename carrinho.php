@@ -46,6 +46,8 @@ header('Content-Type: text/html; charset=UTF-8');
         .btn-checkout { width: 100%; padding: 15px; font-size: 16px; border-radius: 10px; margin-top: 16px; }
         .btn-continue { width: 100%; padding: 12px; font-size: 14px; border-radius: 10px; margin-top: 8px; background: transparent; border: 1.5px solid var(--line); color: var(--ink); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; display: block; }
         .btn-continue:hover { border-color: var(--brand); color: var(--brand); }
+        .sv-cart-chrome-slot { min-height: 87px; }
+        @media (max-width: 768px) { .sv-cart-chrome-slot { min-height: 59px; } }
         @media (max-width: 700px) { .cart-layout { grid-template-columns: 1fr; } }
 
         /*
@@ -90,7 +92,9 @@ header('Content-Type: text/html; charset=UTF-8');
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
+<div class="sv-cart-chrome-slot">
 <?php $svNavCurrent = 'carrinho'; include __DIR__ . '/includes/navbar.php'; ?>
+</div>
 
 <main class="container cart-page">
     <div class="cart-layout">
