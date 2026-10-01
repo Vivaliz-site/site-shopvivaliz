@@ -116,6 +116,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("Environment=HOME=/home/fredrdp", body)
         self.assertIn("Environment=DISPLAY=:0", body)
         self.assertIn("Environment=XAUTHORITY=/home/fredrdp/.Xauthority", body)
+        self.assertIn("Environment=DBUS_SESSION_BUS_ADDRESS=disabled:", body)
         self.assertIn("PrivateTmp=true", body)
         self.assertIn("BindReadOnlyPaths=/tmp/.X11-unix", body)
         self.assertIn("--remote-debugging-port=9555", body)
