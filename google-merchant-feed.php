@@ -167,14 +167,12 @@ function gm_shipping_source_map(string $root): array
 function gm_shipping_package(array $product, array $erpFallback = []): array
 {
     $dimensions = is_array($product['dimensions'] ?? null) ? $product['dimensions'] : [];
-    if ($dimensions === [] && is_array($erpFallback['dimensions'] ?? null)) {
-        $dimensions = $erpFallback['dimensions'];
-    }
+    $fallbackDimensions = is_array($erpFallback['dimensions'] ?? null) ? $erpFallback['dimensions'] : [];
 
-    $weight = (float)($dimensions['gross_weight'] ?? $dimensions['net_weight'] ?? $product['shipping_weight'] ?? $product['weight'] ?? $product['peso'] ?? 0);
-    $length = (float)($dimensions['length'] ?? $product['shipping_length'] ?? $product['length'] ?? $product['comprimento'] ?? 0);
-    $width = (float)($dimensions['width'] ?? $product['shipping_width'] ?? $product['width'] ?? $product['largura'] ?? 0);
-    $height = (float)($dimensions['height'] ?? $product['shipping_height'] ?? $product['height'] ?? $product['altura'] ?? 0);
+    $weight = (float)($product['gross_weight'] ?? $product['shipping_weight'] ?? $product['weight'] ?? $product['peso'] ?? $dimensions['gross_weight'] ?? $dimensions['net_weight'] ?? $fallbackDimensions['gross_weight'] ?? $fallbackDimensions['net_weight'] ?? 0);
+    $length = (float)($product['shipping_length'] ?? $product['length'] ?? $product['comprimento'] ?? $dimensions['length'] ?? $fallbackDimensions['length'] ?? 0);
+    $width = (float)($product['shipping_width'] ?? $product['width'] ?? $product['largura'] ?? $dimensions['width'] ?? $fallbackDimensions['width'] ?? 0);
+    $height = (float)($product['shipping_height'] ?? $product['height'] ?? $product['altura'] ?? $dimensions['height'] ?? $fallbackDimensions['height'] ?? 0);
 
     return [
         'weight' => max(0.0, $weight),
