@@ -1242,7 +1242,7 @@ async function pollBridgeOnce() {
 const REINFORCEMENT_CONFIRM_DELAY_MS = Math.max(3000, Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_CONFIRM_MS || 8000));
 
 async function reinforcementCheckOnce(
-  connect = () => Cdp.connectToChatgptTab(),
+  connect = () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
   confirmDelayMs = REINFORCEMENT_CONFIRM_DELAY_MS,
   confirmProgress = confirmAssistantProgress,
   alignLatest = alignLatestForReinforcement,
