@@ -932,16 +932,16 @@ async function run() {
   // temporary discovery context. A tie remains fail-closed.
   {
     const tabs = [
-      { type: 'page', url: 'https://chatgpt.com/c/open-a', webSocketDebuggerUrl: 'ws://a' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-b', webSocketDebuggerUrl: 'ws://b' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-c', webSocketDebuggerUrl: 'ws://c' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-d', webSocketDebuggerUrl: 'ws://d' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-alpha', webSocketDebuggerUrl: 'ws://a' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-bravo', webSocketDebuggerUrl: 'ws://b' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-charlie', webSocketDebuggerUrl: 'ws://c' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-delta', webSocketDebuggerUrl: 'ws://d' },
     ];
     const sidebarLatestByMarker = new Map([
       ['ws://a', '/c/mobile-latest'],
       ['ws://b', '/c/mobile-latest'],
-      ['ws://c', '/c/stale-c'],
-      ['ws://d', '/c/stale-d'],
+      ['ws://c', '/c/stale-charlie'],
+      ['ws://d', '/c/stale-delta'],
     ]);
     const connector = async tab => {
       const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
@@ -966,7 +966,7 @@ async function run() {
       'unique sidebar mode must select an idle tab that voted for the modal latest conversation',
     );
 
-    let currentPath = selected.marker === 'ws://a' ? '/c/open-a' : '/c/open-b';
+    let currentPath = selected.marker === 'ws://a' ? '/c/open-alpha' : '/c/open-bravo';
     const selectedEvaluate = selected.evaluate.bind(selected);
     selected.evaluate = async expression => {
       const source = String(expression);
@@ -990,10 +990,10 @@ async function run() {
 
   {
     const tabs = [
-      { type: 'page', url: 'https://chatgpt.com/c/open-a', webSocketDebuggerUrl: 'ws://a' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-b', webSocketDebuggerUrl: 'ws://b' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-c', webSocketDebuggerUrl: 'ws://c' },
-      { type: 'page', url: 'https://chatgpt.com/c/open-d', webSocketDebuggerUrl: 'ws://d' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-alpha', webSocketDebuggerUrl: 'ws://a' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-bravo', webSocketDebuggerUrl: 'ws://b' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-charlie', webSocketDebuggerUrl: 'ws://c' },
+      { type: 'page', url: 'https://chatgpt.com/c/open-delta', webSocketDebuggerUrl: 'ws://d' },
     ];
     const sidebarLatestByMarker = new Map([
       ['ws://a', '/c/latest-x'],
