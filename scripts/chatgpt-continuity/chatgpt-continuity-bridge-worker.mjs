@@ -2033,6 +2033,7 @@ async function attemptNudge(
     cdp = await connector();
     detectedFailureReason = await recoverableFailureReason(cdp);
     let recoveredStaleComplete = false;
+    let recoveredTerminalFailure = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
@@ -2090,7 +2091,8 @@ async function attemptNudge(
           };
         }
       }
-      recoveredStaleComplete = streamComplete || Boolean(detectedFailureReason);
+      recoveredStaleComplete = streamComplete;
+      recoveredTerminalFailure = !streamComplete && Boolean(detectedFailureReason);
     }
     if (!(await waitComposer(cdp))) {
       return {
@@ -2177,16 +2179,20 @@ async function attemptNudge(
       return {
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
-          ? 'recovered stale/terminal generation state and sent continuation, but no assistant progress was observed'
-          : 'sent continuation, but no assistant progress was observed',
+          ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
+          : recoveredTerminalFailure
+            ? 'recovered terminal generation state and sent continuation, but no assistant progress was observed'
+            : 'sent continuation, but no assistant progress was observed',
         ...recoveryMetadata(),
       };
     }
     return {
       result_status: 'PROGRESS_CONFIRMED',
       detail: recoveredStaleComplete
-        ? 'recovered stale/terminal generation state; continuation produced assistant progress'
-        : 'continuation produced assistant progress',
+        ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
+        : recoveredTerminalFailure
+          ? 'recovered terminal generation state; continuation produced assistant progress'
+          : 'continuation produced assistant progress',
       ...recoveryMetadata(),
     };
   } catch (error) {
