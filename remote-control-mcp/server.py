@@ -150,6 +150,7 @@ def init_db() -> None:
           host TEXT NOT NULL,
           command TEXT NOT NULL,
           command_sha256 TEXT NOT NULL,
+          request_id TEXT,
           state TEXT NOT NULL,
           created_at TEXT NOT NULL,
           started_at TEXT,
@@ -161,6 +162,10 @@ def init_db() -> None:
           stderr TEXT NOT NULL DEFAULT ''
         );
         """)
+        cols = {row[1] for row in db.execute("PRAGMA table_info(tasks)").fetchall()}
+        if "request_id" not in cols:
+            db.execute("ALTER TABLE tasks ADD COLUMN request_id TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
         db.execute(
             "UPDATE tasks SET state='queued', started_at=NULL, heartbeat_at=NULL "
             "WHERE state='running'"
@@ -414,6 +419,8 @@ def execute_tool(
             result = dict(row)
             if result["state"] in {"succeeded", "failed", "cancelled", "expired"} or time.monotonic() >= deadline:
                 return result
+            if cancel_check and cancel_check():
+                return {"id": tid, "state": result["state"], "detached": True}
             time.sleep(0.25)
     if name == "task_cancel":
         tid = str(args.get("task_id") or "")
@@ -436,17 +443,23 @@ def execute_tool(
             raise ValueError("command_required")
         timeout = validate_timeout(args.get("timeout", 300))
         digest = hashlib.sha256(command.encode()).hexdigest()
+        request_id = str(args.get("request_id") or "").strip() or None
+        if request_id and len(request_id) > 200:
+            raise ValueError("request_id_too_long")
         with db_conn() as db:
-            existing = db.execute(
-                "SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1",
-                (host, digest, timeout),
-            ).fetchone()
+            if request_id:
+                row = db.execute("SELECT id,host,state FROM tasks WHERE request_id=?", (request_id,)).fetchone()
+                if row:
+                    if row["host"] != host:
+                        raise ValueError("request_id_conflict")
+                    return {"task_id": row["id"], "host": row["host"], "state": row["state"], "platform": cfg["platform"], "deduplicated": True}
+            existing = db.execute("SELECT id,state FROM tasks WHERE host=? AND command_sha256=? AND timeout=? AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1", (host, digest, timeout)).fetchone()
             if existing:
                 return {"task_id": existing["id"], "host": host, "state": existing["state"], "platform": cfg["platform"], "deduplicated": True}
             tid = str(uuid.uuid4())
             db.execute(
-                "INSERT INTO tasks(id,host,command,command_sha256,state,created_at,timeout) VALUES(?,?,?,?,?,?,?)",
-                (tid, host, command, digest, "queued", now(), timeout),
+                "INSERT INTO tasks(id,host,command,command_sha256,request_id,state,created_at,timeout) VALUES(?,?,?,?,?,?,?,?)",
+                (tid, host, command, digest, request_id, "queued", now(), timeout),
             )
         return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"], "deduplicated": False}
 
@@ -474,6 +487,10 @@ def execute_tool(
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
+        if bool(args.get("durable", False)):
+            durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
+            durable["durable"] = True
+            return durable
         result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
@@ -490,10 +507,10 @@ TOOLS = [
     ("file_read", "Read a non-sensitive file from a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 262144}}, True, False),
     ("file_list", "List a non-sensitive directory on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}}, True, False),
     ("logs_tail", "Tail a non-sensitive log file on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "lines": {"type": "integer", "minimum": 1, "maximum": 1000}}, True, False),
-    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Fully audited.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
-    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Use durable=true for work that must survive client disconnects.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
-    ("task_wait", "Wait briefly for a durable task without coupling its lifetime to the MCP connection.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
 ]
@@ -507,7 +524,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "wait_seconds"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable"}],
                 "additionalProperties": False,
             },
             "annotations": {
