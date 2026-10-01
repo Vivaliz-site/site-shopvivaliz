@@ -110,11 +110,31 @@ async function installMetrics(page) {
             };
           });
           const sources = details.map((detail) => detail.selector);
+          const contextRect = (selector) => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof Element)) return null;
+            const box = element.getBoundingClientRect();
+            return {
+              selector,
+              x: Math.round(box.x * 10) / 10,
+              y: Math.round(box.y * 10) / 10,
+              width: Math.round(box.width * 10) / 10,
+              height: Math.round(box.height * 10) / 10,
+              display: getComputedStyle(element).display,
+              position: getComputedStyle(element).position
+            };
+          };
           window.__svLayoutShiftSources.push({
             value: entry.value,
             start_time_ms: Math.round(Number(entry.startTime || 0) * 10) / 10,
             sources,
-            details
+            details,
+            context_rects: [
+              contextRect('.sv-announcement-bar'),
+              contextRect('header.sv-navbar'),
+              contextRect('main.cart-page'),
+              contextRect('.cart-layout')
+            ].filter(Boolean)
           });
         }
       }).observe({ type: 'layout-shift', buffered: true });
