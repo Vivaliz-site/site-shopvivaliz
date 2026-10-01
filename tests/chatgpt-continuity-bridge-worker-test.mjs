@@ -1049,6 +1049,61 @@ async function run() {
     assert.equal(currentPath, '/c/project-newer-thread');
   }
 
+  // Real iPhone reproduction 2026-10-01: the UI remained on "Parou de pensar"
+  // roughly 13 minutes after the last user-turn update. Reinforcement must
+  // still inspect that exact latest conversation; the old 10-minute default
+  // silently classified it stale before the explicit failure banner was read.
+  {
+    const nowMs = Date.now();
+    let currentPath = '/';
+    const cdp = fakeCdp();
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/thirteen-minute-stall';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const recoverable = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        project_count: 0,
+        candidates: [
+          {
+            id: 'thirteen-minute-stall',
+            update_time: (nowMs - 13 * 60_000) / 1000,
+            source: 'global',
+          },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(recoverable.action, 'navigated');
+    assert.equal(recoverable.latest_age_seconds >= 13 * 60 - 2, true);
+    assert.equal(recoverable.candidate_count, 1);
+
+    const tooOld = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        project_count: 0,
+        candidates: [
+          {
+            id: 'thirty-one-minute-old',
+            update_time: (nowMs - 31 * 60_000) / 1000,
+            source: 'global',
+          },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(tooOld.action, 'stale_latest');
+  }
+
   {
     const now = Math.floor(Date.now() / 1000);
     const merged = mergeRecentConversationCandidates(
