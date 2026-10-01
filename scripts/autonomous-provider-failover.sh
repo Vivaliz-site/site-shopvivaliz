@@ -105,7 +105,7 @@ run_codex_auto() (
   [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
   "$launcher" \
     --model "$CODEX_MODEL" \
-    --sandbox workspace-write \
+    --sandbox danger-full-access \
     --ask-for-approval never \
     -c 'model_reasoning_effort="low"' \
     -c 'model_verbosity="low"' \
