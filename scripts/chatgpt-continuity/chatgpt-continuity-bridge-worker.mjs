@@ -337,6 +337,26 @@ async function connectReinforcementChatgptTab({
   }
 
   const interrupted = opened.filter(row => row.banner);
+  if (interrupted.length > 1) {
+    // Duplicate CDP targets can point to the exact same conversation (for
+    // example after a browser reconnect). They are not ambiguous targets:
+    // deduplicate by conversation id before applying the ambiguity guard.
+    const interruptedConversationIds = new Set(interrupted.map(row => conversationIdFromTab(row.tab)).filter(Boolean));
+    if (interruptedConversationIds.size === 1) {
+      const selected = interrupted[0];
+      for (const row of opened) {
+        if (row !== selected) {
+          try { row.cdp.close(); } catch {}
+        }
+      }
+      return selected.cdp;
+    }
+    for (const row of opened) {
+      try { row.cdp.close(); } catch {}
+    }
+    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+  }
+
   if (interrupted.length === 1) {
     const selected = interrupted[0];
     for (const row of opened) {

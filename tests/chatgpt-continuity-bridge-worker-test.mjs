@@ -850,6 +850,30 @@ async function run() {
 
   console.log('attemptNudge branches: PASS');
 
+  // Duplicate tabs for the same interrupted conversation are one target,
+  // not an ambiguity. This reproduces the live VM state observed on 2026-10-01.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'Erro na transmissão de mensagem' });
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => true,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.ok(selected);
+    assert.equal(closed.length, 1, 'duplicate same-conversation tab must be deduplicated');
+    selected.close();
+  }
+
   // Multiple open conversations must not block the reinforcement monitor before
   // it can preserve a 429 and schedule the wider discovery backoff. The local
   // connector first scans for exactly one interrupted tab; with no banner it
