@@ -10,11 +10,11 @@ Group=fredrdp
 Environment=HOME=/home/fredrdp
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/fredrdp/.Xauthority
-# The canonical browser runs outside fredconsole's desktop session; disable
-# D-Bus session auto-launch rather than inheriting/guessing another user's bus.
-Environment=DBUS_SESSION_BUS_ADDRESS=disabled:
+# The canonical browser runs outside a desktop user session. Give Chrome an
+# isolated session bus that lives exactly as long as the browser service.
 ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X0
-ExecStart=/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium --remote-debugging-address=127.0.0.1 --remote-debugging-port=9555 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu https://chatgpt.com/
+ExecStartPre=/usr/bin/test -x /usr/bin/dbus-run-session
+ExecStart=/usr/bin/dbus-run-session -- /opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium --remote-debugging-address=127.0.0.1 --remote-debugging-port=9555 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu https://chatgpt.com/
 Restart=always
 RestartSec=5
 KillMode=control-group
