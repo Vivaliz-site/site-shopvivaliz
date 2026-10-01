@@ -564,6 +564,108 @@ async function run() {
   }
   {
     const calls = [];
+    let draft = 'continue';
+    let selectedAll = false;
+    let sendEnabled = false;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus')) return true;
+        if (source.includes('continuity-send-button-target')) {
+          return sendEnabled ? { state: 'ready', x: 700, y: 640 } : { state: 'disabled' };
+        }
+        if (source.includes('continuity-send-button-click')) return sendEnabled;
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method !== 'Input.dispatchKeyEvent') return {};
+        if (params.type === 'rawKeyDown' && params.key === 'a' && Number(params.modifiers || 0) === 2) {
+          selectedAll = true;
+        } else if (params.type === 'rawKeyDown' && params.key === 'Backspace' && selectedAll) {
+          draft = '';
+          selectedAll = false;
+          sendEnabled = false;
+        } else if (params.type === 'char' && typeof params.text === 'string') {
+          draft += params.text;
+          if (draft.trim() === 'continue') sendEnabled = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'production CDP path must clear stale continuation text and retype it with trusted key events',
+    );
+    const typedChars = calls
+      .filter(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.type === 'char')
+      .map(call => String(call[2]?.text || ''))
+      .join('');
+    assert.equal(typedChars, 'continue');
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[2]?.type === 'rawKeyDown' && call[2]?.key === 'Backspace'),
+      'trusted path must clear stale untrusted continuation text before retyping',
+    );
+    const firstCharIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchKeyEvent'
+        && call[2]?.type === 'char',
+    );
+    const composerMousePressIndex = calls.findIndex(
+      call => call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    const sendMousePressIndex = calls.findIndex(
+      (call, index) => index > firstCharIndex
+        && call[0] === 'send'
+        && call[1] === 'Input.dispatchMouseEvent'
+        && call[2]?.type === 'mousePressed',
+    );
+    assert.ok(
+      composerMousePressIndex >= 0 && composerMousePressIndex < firstCharIndex,
+      'production path must use a trusted CDP mouse click in the composer before typing',
+    );
+    assert.ok(
+      sendMousePressIndex > firstCharIndex,
+      'production path must use a trusted CDP mouse click on the enabled Send control',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-target')),
+      'trusted path must resolve the real enabled Send geometry before submitting',
+    );
+  }
+
+  {
+    let sendCalls = 0;
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: 'unsent customer draft' };
+        }
+        return false;
+      },
+      async send() {
+        sendCalls += 1;
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      false,
+      'continuity worker must never overwrite a non-continuation user draft',
+    );
+    assert.equal(sendCalls, 0);
+  }
+
+  {
+    const calls = [];
     const cdp = {
       async evaluate(expression) {
         calls.push(['evaluate', expression]);
