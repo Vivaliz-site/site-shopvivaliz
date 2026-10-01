@@ -87,16 +87,35 @@ async function installMetrics(page) {
         for (const entry of list.getEntries()) {
           if (entry.hadRecentInput) continue;
           window.__svCls += entry.value;
-          const sources = Array.from(entry.sources || []).map((source) => {
+          const details = Array.from(entry.sources || []).map((source) => {
             const node = source.node;
-            if (!(node instanceof Element)) return 'unknown';
-            const id = node.id ? `#${node.id}` : '';
-            const classes = node.classList && node.classList.length
-              ? `.${Array.from(node.classList).slice(0, 3).join('.')}`
-              : '';
-            return `${node.tagName.toLowerCase()}${id}${classes}`;
+            let selector = 'unknown';
+            if (node instanceof Element) {
+              const id = node.id ? `#${node.id}` : '';
+              const classes = node.classList && node.classList.length
+                ? `.${Array.from(node.classList).slice(0, 3).join('.')}`
+                : '';
+              selector = `${node.tagName.toLowerCase()}${id}${classes}`;
+            }
+            const rect = (value) => value ? {
+              x: Math.round(Number(value.x || 0) * 10) / 10,
+              y: Math.round(Number(value.y || 0) * 10) / 10,
+              width: Math.round(Number(value.width || 0) * 10) / 10,
+              height: Math.round(Number(value.height || 0) * 10) / 10
+            } : null;
+            return {
+              selector,
+              previous_rect: rect(source.previousRect),
+              current_rect: rect(source.currentRect)
+            };
           });
-          window.__svLayoutShiftSources.push({ value: entry.value, sources });
+          const sources = details.map((detail) => detail.selector);
+          window.__svLayoutShiftSources.push({
+            value: entry.value,
+            start_time_ms: Math.round(Number(entry.startTime || 0) * 10) / 10,
+            sources,
+            details
+          });
         }
       }).observe({ type: 'layout-shift', buffered: true });
       new PerformanceObserver((list) => {
