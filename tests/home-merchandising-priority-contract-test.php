@@ -27,6 +27,7 @@ home_merch_assert($carouselPos < $searchHeroPos, 'Banners devem aparecer antes d
 
 home_merch_assert(str_contains($index, "'tag' => 'DESCONTO AUTOMÁTICO'"), 'Primeiro banner deve comunicar o desconto de forma direta.');
 home_merch_assert(str_contains($index, "'title' => 'Leve mais e pague menos.'"), 'Primeiro banner deve usar beneficio comercial claro.');
+home_merch_assert(str_contains($index, "'subtitle' => 'Compre 2 ou mais produtos diferentes e ganhe 3% OFF automático no checkout.'"), 'Primeiro banner deve informar que o desconto e aplicado no checkout.');
 home_merch_assert(str_contains($index, "'primary' => ['label' => 'Aproveitar 3% OFF'"), 'CTA do desconto deve dizer o que o cliente recebe.');
 
 home_merch_assert(str_contains($index, "'tag' => 'CASA, OFICINA E NEGÓCIO'"), 'Segundo banner deve representar a amplitude real do catalogo.');
