@@ -56,6 +56,10 @@ const COMPOSER_READY_POLL_MS = Math.max(
   250,
   Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_POLL_MS || 500),
 );
+const POST_SEND_BASELINE_SETTLE_MS = Math.max(
+  250,
+  Number(process.env.CHATGPT_CONTINUITY_POST_SEND_BASELINE_SETTLE_MS || 600),
+);
 const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_RECENT_CONVERSATION_MAX_AGE_MS || 10 * 60_000),
@@ -827,19 +831,58 @@ async function assistantSnapshot(cdp) {
       ...document.querySelectorAll('[data-message-author-role="assistant"]'),
       ...document.querySelectorAll('[data-conversation-role="assistant"]')
     ];
-    const nodes=[];
-    const seen=new Set();
+    const legacyNodes=[];
+    const legacySeen=new Set();
     for(const candidate of candidates){
       const node=candidate.closest('[data-turn-key]')||candidate;
-      if(!node||seen.has(node)) continue;
-      seen.add(node);
-      nodes.push(node);
+      if(!node||legacySeen.has(node)) continue;
+      legacySeen.add(node);
+      legacyNodes.push(node);
     }
+
+    // Current ChatGPT Web no longer exposes the legacy assistant-role
+    // attributes in every surface. Completed assistant replies still expose
+    // semantic action controls; use their enclosing turn container as a
+    // second, localization-independent source.
+    const actionButtons=[
+      ...document.querySelectorAll(
+        'button[aria-label="Rate response"],button[aria-label="Read aloud"],button[aria-label="Regenerate response"]'
+      )
+    ];
+    const actionNodes=[];
+    const actionSeen=new Set();
+    for(const button of actionButtons){
+      const controls=button.closest('.turn-action-controls');
+      const node=controls?.parentElement||null;
+      if(!node||actionSeen.has(node)) continue;
+      actionSeen.add(node);
+      actionNodes.push(node);
+    }
+
+    const nodes=legacyNodes.length ? legacyNodes : actionNodes;
     const last=nodes.length ? nodes[nodes.length-1] : null;
     const lastText=(last?.innerText||last?.textContent||'').trim();
     const keyed=last?.closest?.('[data-turn-key]')||last;
-    const lastKey=String(keyed?.getAttribute?.('data-turn-key')||'');
-    return {count:nodes.length,lastText,lastLength:lastText.length,lastKey};
+    const lastKey=legacyNodes.length
+      ? String(keyed?.getAttribute?.('data-turn-key')||'')
+      : (nodes.length ? 'action-controls-'+String(nodes.length) : '');
+
+    // Progress during reasoning/tool use may not yet have final action
+    // controls. Capture the current conversation surface as a secondary
+    // fingerprint. It is consumed only from a post-send baseline so the
+    // worker's own "continue" message cannot be mistaken for assistant
+    // progress.
+    const main=document.querySelector('main');
+    const surfaceText=(main?.innerText||main?.textContent||'').trim();
+    return {
+      count:nodes.length,
+      lastText,
+      lastLength:lastText.length,
+      lastKey,
+      surfaceText,
+      surfaceLength:surfaceText.length,
+      snapshotSource:legacyNodes.length?'legacy':(actionNodes.length?'action-controls':'main')
+    };
   })()`);
 }
 
@@ -855,6 +898,22 @@ function assistantProgressed(before, after) {
   return currentText.length > priorText.length && currentText !== priorText;
 }
 
+function assistantSurfaceProgressed(before, after) {
+  const priorText=String(before?.surfaceText||'');
+  const currentText=String(after?.surfaceText||'');
+  if(!priorText || !currentText) return false;
+  return currentText.length > priorText.length && currentText !== priorText;
+}
+
+async function postSendConfirmationBaseline(cdp, before) {
+  await sleep(POST_SEND_BASELINE_SETTLE_MS);
+  const after=await assistantSnapshot(cdp);
+  return {
+    progressed:assistantProgressed(before, after),
+    baseline:after,
+  };
+}
+
 async function confirmAssistantProgress(
   cdp,
   baseline,
@@ -865,7 +924,7 @@ async function confirmAssistantProgress(
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
-    if (assistantProgressed(baseline, current)) return true;
+    if (assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current)) return true;
 
     // An explicit transmission failure is terminal for this send attempt;
     // do not burn the full progress-confirmation window before recovery.
