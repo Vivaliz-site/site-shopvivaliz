@@ -1470,7 +1470,7 @@ async function run() {
           { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
           { type: 'page', url: 'https://chatgpt.com/c/other-thread', webSocketDebuggerUrl: 'ws://other' },
         ],
-        connector: async () => fakeCdp({ pageText: 'Erro na transmissão de mensagem' }),
+        connector: async () => fakeCdp({ pageText: 'normal reply' }),
         probeBanner: async () => true,
         allowCrossDeviceDiscovery: true,
       }),
