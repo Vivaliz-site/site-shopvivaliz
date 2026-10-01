@@ -1462,6 +1462,26 @@ async function run() {
     assert.equal(result.progress_confirmed, false);
   }
 
+  {
+    const result = await reinforcementCheckOnce(
+      async () => connectReinforcementChatgptTab({
+        tabs: [
+          { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-a' },
+          { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://same-b' },
+        ],
+        connector: async () => fakeCdp({ pageText: 'Transmissão interrompida. Aguardando a mensagem completa...' }),
+        probeBanner: async () => true,
+        allowCrossDeviceDiscovery: true,
+      }),
+      1,
+      async () => true,
+      async () => ({ action: 'navigated', http_status: 200 }),
+      { allowCrossDeviceDiscovery: true },
+    );
+    assert.equal(result.action, 'confirmed_progress');
+    assert.equal(result.progress_confirmed, true);
+  }
+
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
