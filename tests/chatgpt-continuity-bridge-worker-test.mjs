@@ -24,6 +24,10 @@ import {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementLoop,
+  authorizationButtonTarget,
+  clickAuthorizationIfPresent,
+  authorizationCheckOnce,
+  authorizationLoop,
   mainLoop,
   selectChatgptTab,
   connectFirstUsableChatgptTab,
@@ -2112,6 +2116,43 @@ async function run() {
     );
   }
 
+  // Operational authorization requests must be accepted with trusted CDP
+  // pointer events, preferring Always allow/Sempre permitir when present.
+  {
+    const calls = [];
+    const cdp = {
+      async evaluate(expression) {
+        calls.push(['evaluate', String(expression)]);
+        if (String(expression).includes('continuity-authorization-button-target')) {
+          return { x: 640, y: 480, kind: 'always_allow' };
+        }
+        return null;
+      },
+      async send(method, params) {
+        calls.push(['send', method, params]);
+        return {};
+      },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'clicked');
+    assert.equal(result.kind, 'always_allow');
+    assert.ok(calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'));
+  }
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-authorization-button-target')) return null;
+        return null;
+      },
+      async send() { throw new Error('must not click without authorization'); },
+      close() {},
+    };
+    const result = await clickAuthorizationIfPresent(cdp);
+    assert.equal(result.action, 'no_request');
+  }
+
   // The checkpoint-driven bridge loop and the reinforcement loop must start
   // independently. A slow reinforcement iteration cannot serialize the next
   // pollBridgeOnce cycle.
@@ -2123,9 +2164,11 @@ async function run() {
       async () => { events.push('bridge'); await blocked; },
       async () => { events.push('reinforcement'); await blocked; },
       true,
+      async () => { events.push('authorization'); await blocked; },
+      true,
     );
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.deepEqual(events.sort(), ['bridge', 'reinforcement']);
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'reinforcement']);
     release();
     await running;
   }
