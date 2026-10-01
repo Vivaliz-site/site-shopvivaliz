@@ -11,6 +11,8 @@ unit_target="/etc/systemd/system/$unit_name"
 base_dir="/opt/shopvivaliz-gemini-24x7-controller"
 releases_dir="$base_dir/releases"
 environment_target="/etc/shopvivaliz-gemini-24x7-controller.env"
+gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"
+gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
@@ -42,6 +44,24 @@ if [ ! -d "$target_dir" ]; then
   sudo chmod 0755 "$stage_dir" "$stage_dir/scripts"
   sudo mv "$stage_dir" "$target_dir"
   trap - EXIT
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "ERROR: npm is required to install Gemini CLI" >&2
+  exit 69
+fi
+installed_gemini_version=""
+if [ -x "$gemini_cli_bin" ]; then
+  installed_gemini_version="$("$gemini_cli_bin" --version 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
+fi
+if [ "$installed_gemini_version" != "$gemini_cli_version" ]; then
+  npm install -g "@google/gemini-cli@$gemini_cli_version" --prefix /home/ubuntu/.local --no-audit --no-fund
+fi
+test -x "$gemini_cli_bin"
+installed_gemini_version="$("$gemini_cli_bin" --version | head -n1 | tr -d '[:space:]')"
+if [ "$installed_gemini_version" != "$gemini_cli_version" ]; then
+  echo "ERROR: Gemini CLI version mismatch after install" >&2
+  exit 70
 fi
 
 environment_temp="$(mktemp)"
