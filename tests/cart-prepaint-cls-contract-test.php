@@ -18,6 +18,19 @@ function cart_cls_assert(bool $condition, string $message): void
 }
 
 cart_cls_assert(
+    str_contains($cart, 'class="sv-cart-chrome-slot"'),
+    'Carrinho deve reservar um slot estavel para o chrome antes dos estilos tardios.'
+);
+cart_cls_assert(
+    str_contains($cart, '.sv-cart-chrome-slot { min-height: 87px; }'),
+    'Desktop deve reservar a altura final medida do navbar.'
+);
+cart_cls_assert(
+    str_contains($cart, '.sv-cart-chrome-slot { min-height: 59px; }'),
+    'Mobile deve reservar a altura final medida do navbar.'
+);
+
+cart_cls_assert(
     str_contains($cart, 'data-sv-empty-state="initial"'),
     'Carrinho vazio deve existir no HTML inicial, antes do JS de fim da pagina.'
 );
