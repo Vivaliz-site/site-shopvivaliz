@@ -243,7 +243,11 @@ def stop_task_unit(unit: str) -> bool:
 
 def read_capped_text(path: Path) -> str:
     try:
-        return redact_text(path.read_bytes()[-MAX_OUTPUT:].decode("utf-8", errors="replace"))
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - MAX_OUTPUT), os.SEEK_SET)
+            return redact_text(handle.read(MAX_OUTPUT).decode("utf-8", errors="replace"))
     except OSError:
         return ""
 
