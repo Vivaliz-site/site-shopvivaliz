@@ -525,7 +525,7 @@ jobs:
           "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
           expected_server="$(sha256sum remote-control-mcp/server.py | awk '{print $1}')"
           expected_unit="$(sha256sum deploy/systemd/shopvivaliz-remote-control-mcp.service | awk '{print $1}')"
-          "${BACKEND_SSH[@]}" "EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' sudo -n python3 -" <<'PY'
+          "${BACKEND_SSH[@]}" "sudo -n env EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' python3 -" <<'PY'
           import json, os, sqlite3, subprocess, time, urllib.request, uuid
           from pathlib import Path
 
