@@ -426,7 +426,16 @@ def complete_task(task_id: str) -> dict[str, Any]:
         raise TaskStateError("completion rejected: verification evidence is missing")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
-    _run_completion_checks(payload)
+    try:
+        _run_completion_checks(payload)
+    except TaskStateError:
+        payload["status"] = "RUNNING"
+        payload["next_action"] = "Investigate failed completion checks, repair the original goal, and rerun readiness verification"
+        payload["verification"] = None
+        payload.pop("completion_check_receipts", None)
+        _history(payload, "completion_check_failed_recovery_required")
+        _atomic_write(_path(task_id), payload)
+        raise
     payload["status"] = "CONCLUIDO"
     payload["completed_at"] = utc_now()
     _history(payload, "completed")

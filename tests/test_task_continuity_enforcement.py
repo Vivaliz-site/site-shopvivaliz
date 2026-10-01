@@ -91,7 +91,11 @@ class AgentTaskStateTests(unittest.TestCase):
         artifact.unlink()
         with self.assertRaisesRegex(state.TaskStateError, "completion check"):
             state.complete_task("proof-command")
+        failed = state.load_task("proof-command")
+        self.assertEqual(failed["status"], "RUNNING", "verification failure must remain eligible for automatic recovery")
+        self.assertTrue(failed["next_action"])
         artifact.touch()
+        state.mark_ready("proof-command", evidence=["repaired deployment"], verification="fresh recheck")
         self.assertEqual(state.complete_task("proof-command")["status"], "CONCLUIDO")
 
     def test_privileged_atomic_write_inherits_runtime_directory_owner(self) -> None:
