@@ -1227,12 +1227,50 @@ async function sendContinueMessage(cdp) {
     // is our own stale continuation left by a previous failed DOM-only send.
     if (existing && existing !== expected) return false;
 
+    // A DOM focus() is not sufficient for the current ChatGPT editor:
+    // live production proved that only a trusted pointer click initializes
+    // the editor selection/state so subsequent keyboard events enable Send.
+    const composerTarget = await cdp.evaluate(`(()=>{
+      /* continuity-composer-click-target */
+      const el=document.querySelector('[data-testid="prompt-textarea"]')
+        || document.querySelector('[role="textbox"][contenteditable="true"]');
+      if(!el) return null;
+      el.scrollIntoView({block:'center',inline:'nearest'});
+      const rect=el.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return null;
+      return {
+        x:rect.left+rect.width/2,
+        y:rect.top+rect.height/2
+      };
+    })()`);
+    if (
+      !composerTarget
+      || !Number.isFinite(Number(composerTarget.x))
+      || !Number.isFinite(Number(composerTarget.y))
+    ) return false;
+
+    try {
+      const x=Number(composerTarget.x);
+      const y=Number(composerTarget.y);
+      await cdp.send('Input.dispatchMouseEvent', {
+        type:'mouseMoved', x, y, button:'none',
+      });
+      await cdp.send('Input.dispatchMouseEvent', {
+        type:'mousePressed', x, y, button:'left', clickCount:1,
+      });
+      await cdp.send('Input.dispatchMouseEvent', {
+        type:'mouseReleased', x, y, button:'left', clickCount:1,
+      });
+    } catch {
+      return false;
+    }
+    await sleep(120);
+
     const focused = await cdp.evaluate(`(()=>{
       /* continuity-composer-focus */
       const el=document.querySelector('[data-testid="prompt-textarea"]')
         || document.querySelector('[role="textbox"][contenteditable="true"]');
       if(!el) return false;
-      el.focus();
       return document.activeElement===el || el.contains(document.activeElement);
     })()`);
     if (!focused) return false;
@@ -1242,12 +1280,20 @@ async function sendContinueMessage(cdp) {
     // editor state still considers the composer empty and keeps Send disabled.
     try {
       await cdp.send('Input.dispatchKeyEvent', {
+        type:'rawKeyDown', key:'Control', code:'ControlLeft',
+        windowsVirtualKeyCode:17, nativeVirtualKeyCode:17, modifiers:2,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'a', code: 'KeyA',
         windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
       });
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'keyUp', key: 'a', code: 'KeyA',
         windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65, modifiers: 2,
+      });
+      await cdp.send('Input.dispatchKeyEvent', {
+        type:'keyUp', key:'Control', code:'ControlLeft',
+        windowsVirtualKeyCode:17, nativeVirtualKeyCode:17,
       });
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'Backspace', code: 'Backspace',
@@ -1300,11 +1346,12 @@ async function sendContinueMessage(cdp) {
     await sleep(300);
 
     // Prefer the real enabled submit control once trusted input has updated
-    // ChatGPT's internal editor state. If this UI variant omits the button,
-    // fall back to a trusted Enter key.
+    // ChatGPT's internal editor state. Submit it with a trusted CDP pointer
+    // click; a synthetic HTMLElement.click() did not reproduce the successful
+    // live interaction on the current editor.
     for (let attempt=0; attempt<8; attempt += 1) {
-      const submitState = await cdp.evaluate(`(()=>{
-        /* continuity-send-button-click */
+      const submitTarget = await cdp.evaluate(`(()=>{
+        /* continuity-send-button-target */
         const el=document.querySelector('[data-testid="prompt-textarea"]')
           || document.querySelector('[role="textbox"][contenteditable="true"]');
         const form=el?.closest('form')||null;
@@ -1323,13 +1370,40 @@ async function sendContinueMessage(cdp) {
           const candidate=(form||document).querySelector(selector);
           if(candidate){button=candidate;break;}
         }
-        if(!button) return 'absent';
-        if(button.disabled || button.getAttribute('aria-disabled') === 'true') return 'disabled';
-        button.click();
-        return 'clicked';
+        if(!button) return {state:'absent'};
+        if(button.disabled || button.getAttribute('aria-disabled') === 'true') {
+          return {state:'disabled'};
+        }
+        button.scrollIntoView({block:'nearest',inline:'nearest'});
+        const rect=button.getBoundingClientRect();
+        if(!(rect.width>0&&rect.height>0)) return {state:'unusable'};
+        return {
+          state:'ready',
+          x:rect.left+rect.width/2,
+          y:rect.top+rect.height/2
+        };
       })()`);
-      if (submitState === 'clicked' || submitState === true) return true;
-      if (submitState === 'disabled') {
+
+      if (submitTarget?.state === 'ready') {
+        try {
+          const x=Number(submitTarget.x);
+          const y=Number(submitTarget.y);
+          if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
+          await cdp.send('Input.dispatchMouseEvent', {
+            type:'mouseMoved', x, y, button:'none',
+          });
+          await cdp.send('Input.dispatchMouseEvent', {
+            type:'mousePressed', x, y, button:'left', clickCount:1,
+          });
+          await cdp.send('Input.dispatchMouseEvent', {
+            type:'mouseReleased', x, y, button:'left', clickCount:1,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      if (submitTarget?.state === 'disabled') {
         await sleep(150);
         continue;
       }
