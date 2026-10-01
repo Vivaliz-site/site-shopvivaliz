@@ -11,6 +11,14 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertLess(script.index("\n    gemini)"), script.index("\n    anthropic)"))
         self.assertLess(script.index("\n    anthropic)"), script.index("\n    codex)"))
 
+    def test_background_controller_can_fallback_to_codex_auto_after_gemini(self) -> None:
+        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        self.assertIn("BACKGROUND_ORDER=(gemini)", script)
+        self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
+        self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
+        self.assertIn("--approve-for-me", script)
+
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
         for rel in (
