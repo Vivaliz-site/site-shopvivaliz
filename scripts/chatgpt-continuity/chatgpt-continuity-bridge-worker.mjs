@@ -344,24 +344,23 @@ async function connectReinforcementChatgptTab({
 
   const interrupted = opened.filter(row => row.banner);
   if (interrupted.length > 1) {
-    // Duplicate CDP targets can point to the exact same conversation (for
-    // example after a browser reconnect). They are not ambiguous targets:
-    // deduplicate by conversation id before applying the ambiguity guard.
+    // Local failure evidence is stronger than target ambiguity. Multiple
+    // conversations can independently fail at once (live iOS reproduction
+    // 2026-09-30 23:40-23:41). Process exactly one deterministically and leave
+    // the others for later reinforcement polls; never send concurrently.
+    let selected = interrupted[0];
     const interruptedConversationIds = new Set(interrupted.map(row => conversationIdFromTab(row.tab)).filter(Boolean));
     if (interruptedConversationIds.size === 1) {
-      let selected = interrupted[0];
-      for (const row of interrupted) { if (await reinforcementSendReady(row.cdp)) { selected = row; break; } }
-      for (const row of opened) {
-        if (row !== selected) {
-          try { row.cdp.close(); } catch {}
-        }
+      for (const row of interrupted) {
+        if (await reinforcementSendReady(row.cdp)) { selected = row; break; }
       }
-      return selected.cdp;
     }
     for (const row of opened) {
-      try { row.cdp.close(); } catch {}
+      if (row !== selected) {
+        try { row.cdp.close(); } catch {}
+      }
     }
-    throw new Error(AMBIGUOUS_CONVERSATION_ERROR);
+    return selected.cdp;
   }
 
   if (interrupted.length === 1) {
@@ -1209,6 +1208,53 @@ async function transmissionErrorPresent(cdp) {
   );
 }
 
+async function requestTimeoutPresent(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'a reflexão falhou',
+      'a reflexao falhou',
+      'esgotou-se o tempo limite da solicitação',
+      'esgotou-se o tempo limite da solicitacao',
+      'request timed out',
+      'request timeout',
+      'reflection failed',
+      'reasoning failed',
+      'thinking failed',
+    ],
+    'continuity-request-timeout-probe',
+  );
+}
+
+async function clickRequestRetry(cdp) {
+  if (typeof cdp?.send !== 'function') return false;
+  const target = await cdp.evaluate(`(()=>{
+    /* continuity-request-retry-target */
+    const labels=['repetir','tentar novamente','retry','try again'];
+    for(const button of document.querySelectorAll('button')){
+      if(button.disabled || button.getAttribute('aria-disabled') === 'true') continue;
+      const text=String(button.innerText||button.textContent||'').trim().toLowerCase();
+      const aria=String(button.getAttribute('aria-label')||'').trim().toLowerCase();
+      if(!labels.includes(text) && !labels.includes(aria)) continue;
+      button.scrollIntoView({block:'center',inline:'nearest'});
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) continue;
+      return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+    }
+    return null;
+  })()`);
+  if (!target || !Number.isFinite(Number(target.x)) || !Number.isFinite(Number(target.y))) return false;
+  try {
+    const x=Number(target.x), y=Number(target.y);
+    await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x,y,button:'none'});
+    await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
+    await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function errorBannerPresent(cdp) {
   // Query only the current turn surface / live error regions. A truncated
   // pageState prefix misses bottom-of-thread failures in long conversations,
@@ -1225,6 +1271,15 @@ async function errorBannerPresent(cdp) {
       'transmissao interrompida',
       'stopped thinking',
       'parou de pensar',
+      'a reflexão falhou',
+      'a reflexao falhou',
+      'esgotou-se o tempo limite da solicitação',
+      'esgotou-se o tempo limite da solicitacao',
+      'request timed out',
+      'request timeout',
+      'reflection failed',
+      'reasoning failed',
+      'thinking failed',
     ],
     'continuity-error-banner-probe',
   );
@@ -1833,6 +1888,39 @@ async function reinforcementCheckOnce(
       };
     }
 
+    if (await requestTimeoutPresent(cdp)) {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retried = await clickRequestRetry(cdp);
+      if (retried) {
+        const progressed = await confirmAfterSend(cdp, retryBaseline, confirmProgress);
+        if (progressed) {
+          console.log('chatgpt_continuity_reinforcement request_timeout retry=true progress=true');
+          return {
+            action: 'confirmed_progress',
+            sent: true,
+            progress_confirmed: true,
+            detail: 'request timeout recovered by explicit retry control',
+            http_status: alignmentHttpStatus,
+            cross_device_discovery: crossDeviceDiscovery,
+          };
+        }
+        // If retry removed the timeout surface but progress is not yet visible,
+        // do not inject a duplicate continuation in the same cycle.
+        if (!(await requestTimeoutPresent(cdp))) {
+          return {
+            action: 'sent_unconfirmed',
+            sent: true,
+            progress_confirmed: false,
+            detail: 'explicit retry accepted; assistant progress not yet confirmed',
+            http_status: alignmentHttpStatus,
+            cross_device_discovery: crossDeviceDiscovery,
+          };
+        }
+      }
+      // No usable Retry control (or retry remained failed): fall through to
+      // the hardened reattach/continuation recovery below.
+    }
+
     // Reuse the same hardened recovery path as checkpoint-driven nudges.
     // The live VM reproduced a selector mismatch here even though attemptNudge
     // could successfully reattach and confirm progress on the same conversation.
@@ -1969,6 +2057,8 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   transmissionErrorPresent,
+  requestTimeoutPresent,
+  clickRequestRetry,
   latestConversationProbe,
   normalizeLatestConversationMeta,
   latestConversationMeta,
