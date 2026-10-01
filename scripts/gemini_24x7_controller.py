@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ except ImportError:  # direct execution from a release checkout
 
 LEASE_FILE = "_gemini-24x7-controller-lease.json"
 LOCK_FILE = "_gemini-24x7-controller.lock"
+DAEMON_LOCK_FILE = "_gemini-24x7-controller-daemon.lock"
 EVENTS_FILE = "_gemini-24x7-controller-events.jsonl"
 STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
@@ -126,8 +128,6 @@ def acquire_lease(runtime_dir: Path, *, owner_id: str, ttl_seconds: int = DEFAUL
         _atomic_json(root / LEASE_FILE, payload)
         if recovered:
             _append_event(root, "lease_recovered", previous_owner_id=str(existing.get("owner_id", "")))
-        else:
-            _append_event(root, "lease_acquired", owner_id=owner_id)
         return LeaseResult(True, recovered=recovered)
 
 
@@ -140,7 +140,60 @@ def release_lease(runtime_dir: Path, *, owner_id: str) -> None:
         existing = _read_json(lease_path)
         if existing.get("owner_id") == owner_id:
             lease_path.unlink(missing_ok=True)
-            _append_event(root, "lease_released", owner_id=owner_id)
+
+
+@contextmanager
+def daemon_guard(runtime_dir: Path):
+    """Hold one process-lifetime lock for the 24x7 daemon.
+
+    The per-cycle durable lease still protects crash recovery and run_once
+    callers. This guard closes the gap between cycles so two daemon processes
+    cannot alternate ownership and duplicate external effects.
+    """
+    root = Path(runtime_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / DAEMON_LOCK_FILE
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _has_material_activity(
+    lease: LeaseResult,
+    watch: dict[str, Any],
+    nudge: dict[str, Any],
+    resumed: dict[str, Any],
+) -> bool:
+    if lease.recovered:
+        return True
+    watched = ("eligible", "dispatched")
+    nudged = (
+        "eligible",
+        "dispatched",
+        "skipped_no_token",
+        "skipped_stale_checkpoint",
+        "retry_attempted",
+        "skipped_attempt_limit",
+    )
+    dispatched = (
+        "eligible",
+        "executed",
+        "progressed",
+        "terminal",
+        "no_progress",
+        "failed",
+        "deferred_chatgpt",
+    )
+    return any(int(watch.get(key) or 0) > 0 for key in watched) or any(
+        int(nudge.get(key) or 0) > 0 for key in nudged
+    ) or any(int(resumed.get(key) or 0) > 0 for key in dispatched)
 
 
 def run_once(
@@ -173,7 +226,16 @@ def run_once(
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
-        _append_event(root, "cycle_completed", owner_id=owner, lease_recovered=lease.recovered, dispatcher=summary["dispatcher"])
+        if _has_material_activity(lease, watch, nudge, resumed):
+            _append_event(
+                root,
+                "cycle_completed",
+                owner_id=owner,
+                lease_recovered=lease.recovered,
+                watchdog=summary["watchdog"],
+                chatgpt_nudge=summary["chatgpt_nudge"],
+                dispatcher=summary["dispatcher"],
+            )
         return summary
     finally:
         release_lease(root, owner_id=owner)
@@ -196,14 +258,55 @@ def main() -> int:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    while running:
-        print(json.dumps(run_once(runtime_dir=runtime, stale_seconds=args.stale_seconds, timeout_seconds=args.timeout_seconds), ensure_ascii=False, sort_keys=True), flush=True)
-        if not args.daemon:
-            break
-        for _ in range(max(1, int(args.interval_seconds))):
-            if not running:
-                break
-            time.sleep(1)
+
+    root = Path(runtime or RUNTIME_DIR)
+    if not args.daemon:
+        print(
+            json.dumps(
+                run_once(
+                    runtime_dir=root,
+                    stale_seconds=args.stale_seconds,
+                    timeout_seconds=args.timeout_seconds,
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            flush=True,
+        )
+        return 0
+
+    with daemon_guard(root) as acquired:
+        if not acquired:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "duplicate_daemon_suppressed": True,
+                        "generated_at": utc_now(),
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            return 75
+        while running:
+            print(
+                json.dumps(
+                    run_once(
+                        runtime_dir=root,
+                        stale_seconds=args.stale_seconds,
+                        timeout_seconds=args.timeout_seconds,
+                    ),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            for _ in range(max(1, int(args.interval_seconds))):
+                if not running:
+                    break
+                time.sleep(1)
     return 0
 
 
