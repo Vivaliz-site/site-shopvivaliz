@@ -1398,27 +1398,30 @@ async function reinforcementCheckOnce(
       };
     }
 
-    const baseline = await assistantSnapshot(cdp);
-    const sent = await sendContinueMessage(cdp);
-    if (!sent) {
-      console.log('chatgpt_continuity_reinforcement error_banner_confirmed sent=false');
-      return {
-        action: 'send_failed',
-        sent: false,
-        progress_confirmed: false,
-        http_status: alignmentHttpStatus,
-        cross_device_discovery: crossDeviceDiscovery,
-      };
-    }
-    const progressed = await confirmProgress(cdp, baseline);
-    const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
-    console.log(`chatgpt_continuity_reinforcement error_banner_confirmed sent=true progress=${progressed}`);
+    // Use the same bounded recovery state machine as checkpoint-driven nudges.
+    // The previous inline path sent a single "continue" and stopped at
+    // SENT_UNCONFIRMED, which is exactly the live failure observed on iOS.
+    const outcome = await attemptNudge(
+      'reinforcement-inline',
+      async () => cdp,
+    );
+    const progressConfirmed = outcome.result_status === 'PROGRESS_CONFIRMED';
+    const sent = outcome.result_status !== 'CONVERSATION_NOT_FOUND';
+    const action = progressConfirmed
+      ? 'confirmed_progress'
+      : outcome.result_status === 'ERROR'
+        ? 'send_failed'
+        : 'sent_unconfirmed';
+    console.log(
+      `chatgpt_continuity_reinforcement error_banner_confirmed result=${outcome.result_status} progress=${progressConfirmed}`,
+    );
     return {
       action,
-      sent: true,
-      progress_confirmed: progressed,
+      sent,
+      progress_confirmed: progressConfirmed,
       http_status: alignmentHttpStatus,
       cross_device_discovery: crossDeviceDiscovery,
+      detail: outcome.detail,
     };
   } catch (error) {
     // The reinforcement monitor is best-effort: the checkpoint-driven path
