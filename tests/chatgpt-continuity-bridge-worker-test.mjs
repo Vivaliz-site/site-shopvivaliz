@@ -406,6 +406,8 @@ async function run() {
     assert.match(expressionSeen, /data-message-author-role/);
     assert.match(expressionSeen, /data-conversation-role/);
     assert.match(expressionSeen, /data-turn-key/);
+    assert.match(expressionSeen, /turn-action-controls/, 'current UI assistant actions must be a semantic fallback');
+    assert.match(expressionSeen, /querySelector\(['"]main['"]\)/, 'current UI main surface must be captured for progress fallback');
   }
   assert.equal(
     assistantProgressed(
@@ -415,6 +417,77 @@ async function run() {
     true,
     'a new assistant turn key must confirm progress even when virtualization keeps count stable and the new answer is shorter',
   );
+
+  {
+    let snapshots = 0;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        if (source.includes('data-message-author-role')) {
+          snapshots += 1;
+          return {
+            count: 0,
+            lastText: '',
+            lastLength: 0,
+            lastKey: '',
+            surfaceText: snapshots >= 1 ? 'tool activity advanced' : 'tool activity',
+            surfaceLength: snapshots >= 1 ? 22 : 13,
+          };
+        }
+        if (source.includes('stop-button')) return true;
+        return null;
+      },
+    };
+    assert.equal(
+      await confirmAssistantProgress(
+        cdp,
+        { count: 0, lastText: '', lastLength: 0, lastKey: '', surfaceText: 'tool activity', surfaceLength: 13 },
+        1100,
+        10,
+      ),
+      true,
+      'current UI main-surface growth must confirm assistant/tool progress when legacy turn selectors are absent',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({ generating: false, sendSucceeds: true });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let snapshotNumber = 0;
+    cdp.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('data-message-author-role')) {
+        snapshotNumber += 1;
+        return {
+          count: 0,
+          lastText: '',
+          lastLength: 0,
+          lastKey: '',
+          surfaceText: snapshotNumber >= 3 ? 'after-own-continue' : (snapshotNumber === 2 ? 'before-send' : 'before-reattach'),
+          surfaceLength: snapshotNumber >= 3 ? 18 : (snapshotNumber === 2 ? 11 : 15),
+        };
+      }
+      return originalEvaluate(expression);
+    };
+    let confirmCalls = 0;
+    const result = await attemptNudge(
+      'task-post-send-baseline',
+      async () => cdp,
+      async (_connected, baseline) => {
+        confirmCalls += 1;
+        if (confirmCalls === 1) return false;
+        assert.equal(
+          baseline?.surfaceText,
+          'after-own-continue',
+          'progress confirmation must start from a post-send snapshot so the continue message itself is not counted',
+        );
+        return true;
+      },
+      async () => true,
+    );
+    assert.equal(result.result_status, 'PROGRESS_CONFIRMED');
+    assert.ok(snapshotNumber >= 3, 'attemptNudge must capture a post-send confirmation baseline');
+  }
 
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
