@@ -37,6 +37,9 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
+MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
+INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
+SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -203,6 +206,21 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
+def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
+    """Run command payload outside the controller cgroup when systemd is available."""
+    if os.geteuid() != 0 or not Path(SYSTEMD_RUN).is_file():
+        return args
+    unit = f"shopvivaliz-remote-command-{label}-{uuid.uuid4().hex[:12]}"
+    return [
+        SYSTEMD_RUN, "--scope", "--quiet",
+        "--unit", unit,
+        "--property", "CPUWeight=50",
+        "--property", "IOWeight=50",
+        "--",
+        *args,
+    ]
+
+
 def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
     """Terminate an inline command and every local descendant in its process group."""
     if proc.poll() is not None:
@@ -244,48 +262,54 @@ def run_host_command(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    args = remote_invocation(host, command)
+    args = isolated_invocation(remote_invocation(host, command))
     started = time.monotonic()
     deadline = started + timeout
-    proc = subprocess.Popen(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
-    stdout = b""
-    stderr = b""
-    while True:
-        if cancel_check is not None and cancel_check():
-            terminate_process_group(proc)
+    if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
+        raise RuntimeError("controller_busy_retry_or_use_task_submit")
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        stdout = b""
+        stderr = b""
+        while True:
+            if cancel_check is not None and cancel_check():
+                terminate_process_group(proc)
+                try:
+                    proc.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc, grace_seconds=0.2)
+                raise ClientDisconnected("client_disconnected")
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                terminate_process_group(proc)
+                try:
+                    proc.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    terminate_process_group(proc, grace_seconds=0.2)
+                raise subprocess.TimeoutExpired(args, timeout)
+
             try:
-                proc.communicate(timeout=1)
+                stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+                break
             except subprocess.TimeoutExpired:
-                terminate_process_group(proc, grace_seconds=0.2)
-            raise ClientDisconnected("client_disconnected")
+                continue
 
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            terminate_process_group(proc)
-            try:
-                proc.communicate(timeout=1)
-            except subprocess.TimeoutExpired:
-                terminate_process_group(proc, grace_seconds=0.2)
-            raise subprocess.TimeoutExpired(args, timeout)
-
-        try:
-            stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
-            break
-        except subprocess.TimeoutExpired:
-            continue
-
-    return {
-        "host": host,
-        "exit_code": proc.returncode,
-        "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
-        "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
-        "duration_ms": int((time.monotonic() - started) * 1000),
-    }
+        return {
+            "host": host,
+            "exit_code": proc.returncode,
+            "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+            "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
+            "duration_ms": int((time.monotonic() - started) * 1000),
+        }
+    finally:
+        INLINE_COMMAND_SLOTS.release()
 
 
 def health_command(platform: str) -> str:
@@ -488,7 +512,8 @@ def task_worker() -> None:
                 continue
             tid, host, command, timeout = row["id"], row["host"], row["command"], int(row["timeout"])
             proc = subprocess.Popen(
-                remote_invocation(host, command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                isolated_invocation(remote_invocation(host, command), label="task"),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, errors="replace", start_new_session=True
             )
             with ACTIVE_LOCK:
