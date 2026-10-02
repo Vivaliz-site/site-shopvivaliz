@@ -627,7 +627,20 @@ def service_command(platform: str, service: str, action: str) -> str:
         verb = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
         return f"{verb} -Name '{q}' -ErrorAction Stop; Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
     if action == "status":
-        return f"systemctl --no-pager --full status {service} || true; systemctl is-active {service} || true"
+        # Fail closed and support both system and per-user systemd units.  A
+        # missing unit must never become ok=true merely because a trailing
+        # diagnostic command was forced to succeed.
+        return (
+            f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
+            f"if [ \"$load\" = loaded ]; then "
+            f"systemctl --no-pager --full status {service}; "
+            f"systemctl is-active {service}; exit $?; fi; "
+            f"load=$(systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f"if [ \"$load\" = loaded ]; then "
+            f"systemctl --user --no-pager --full status {service}; "
+            f"systemctl --user is-active {service}; exit $?; fi; "
+            f"printf '%s\\n' 'service_not_found' >&2; exit 4"
+        )
     return f"systemctl {action} {service} && systemctl is-active {service}"
 
 
