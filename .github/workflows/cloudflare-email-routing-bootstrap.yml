@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'prepare = stage apex rule; probe = validate isolated subdomain; cutover = transactional apex MX switch; rollback = restore Titan MX/SPF'
+        description: 'prepare = stage apex rule; probe = validate isolated subdomain; cutover = transactional apex MX switch; finalize = remove obsolete Titan SPF authorization after app cutover; rollback = restore Titan MX/SPF'
         required: true
         type: choice
         default: prepare
@@ -16,6 +16,7 @@ on:
           - prepare
           - probe
           - cutover
+          - finalize
           - rollback
 
 permissions:
@@ -38,12 +39,13 @@ jobs:
       TITAN_MX2: mx2.titan.email
       ORIGINAL_SPF: 'v=spf1 include:amazonses.com include:spf.titan.email ~all'
       ROUTING_SPF: 'v=spf1 include:amazonses.com include:spf.titan.email include:_spf.mx.cloudflare.net ~all'
+      FINAL_SPF: 'v=spf1 include:amazonses.com include:_spf.mx.cloudflare.net ~all'
     steps:
       - name: Validate mode and credentials
         shell: bash
         run: |
           set -euo pipefail
-          case "$MODE" in prepare|probe|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
+          case "$MODE" in prepare|probe|cutover|finalize|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
           if [ -z "${CF_TOKEN:-}" ]; then
             echo 'CLOUDFLARE_CREDENTIAL_MISSING'
             exit 1
@@ -268,6 +270,68 @@ jobs:
           fi
           echo 'ROOT_CUTOVER_VERIFIED'
           echo 'AWAIT_EXTERNAL_INBOUND_VALIDATION'
+
+      - name: Finalize Titan SPF removal
+        if: ${{ github.event.inputs.mode == 'finalize' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          settings=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing")
+          test "$(jq -r '.result.enabled // false' <<<"$settings")" = true || {
+            echo 'FINALIZE_ABORT_ROUTING_DISABLED'
+            exit 40
+          }
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+          titan_mx=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|endswith("titan.email")))] | length' <<<"$dns")
+          test "$titan_mx" -eq 0 || {
+            echo 'FINALIZE_ABORT_TITAN_MX_PRESENT'
+            exit 41
+          }
+
+          cf_mx=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$")))] | length' <<<"$dns")
+          test "$cf_mx" -ge 3 || {
+            echo 'FINALIZE_ABORT_CLOUDFLARE_MX_INCOMPLETE'
+            exit 42
+          }
+
+          spf_rows=$(jq -c --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))]' <<<"$dns")
+          test "$(jq 'length' <<<"$spf_rows")" -eq 1 || {
+            echo 'FINALIZE_ABORT_ROOT_SPF_COUNT'
+            exit 43
+          }
+          spf_id=$(jq -r '.[0].id' <<<"$spf_rows")
+          spf_content=$(jq -r '.[0].content' <<<"$spf_rows")
+
+          if [ "$spf_content" = "$FINAL_SPF" ]; then
+            echo 'FINAL_SPF_ALREADY_ACTIVE'
+          elif [ "$spf_content" = "$ROUTING_SPF" ]; then
+            payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$FINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+            updated=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/dns_records/$spf_id")
+            test "$(jq -r '.success' <<<"$updated")" = true || {
+              echo 'FINALIZE_SPF_UPDATE_FAILED'
+              exit 44
+            }
+            echo 'FINAL_SPF_APPLIED'
+          else
+            echo 'FINALIZE_ABORT_UNEXPECTED_SPF'
+            exit 45
+          fi
+
+          final=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+          final_spf_count=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))] | length' <<<"$final")
+          final_exact=$(jq -r --arg n "$ZONE_NAME" --arg c "$FINAL_SPF" '[.result[] | select(.type=="TXT" and .name==$n and .content==$c)] | length' <<<"$final")
+          final_titan_spf=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|contains("include:spf.titan.email")))] | length' <<<"$final")
+          final_titan_mx=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|endswith("titan.email")))] | length' <<<"$final")
+
+          test "$final_spf_count" -eq 1 -a "$final_exact" -eq 1 -a "$final_titan_spf" -eq 0 -a "$final_titan_mx" -eq 0 || {
+            echo 'FINALIZE_POST_VERIFY_FAILED'
+            exit 46
+          }
+          echo 'TITAN_SPF_REMOVED_VERIFIED'
 
       - name: Restore Titan MX and original SPF
         if: ${{ github.event.inputs.mode == 'rollback' }}

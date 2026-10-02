@@ -12,12 +12,10 @@ import argparse
 import base64
 import json
 import os
-import smtplib
 import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
-from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -219,44 +217,39 @@ class StateStore:
 
 
 class AlertSender:
+    FROM_EMAIL = "atendimento@shopvivaliz.com.br"
+    FROM_NAME = "ShopVivaliz"
+    REPLY_TO_EMAIL = "atendimento@shopvivaliz.com.br"
+
     def __init__(self) -> None:
-        self.host = (os.environ.get("SMTP_HOST") or os.environ.get("EMAIL_SMTP_HOST") or os.environ.get("MAIL_HOST") or "").strip()
-        self.port = int((os.environ.get("SMTP_PORT") or os.environ.get("EMAIL_SMTP_PORT") or os.environ.get("MAIL_PORT") or "465").strip())
-        self.user = (os.environ.get("SMTP_USER") or os.environ.get("EMAIL_USER") or os.environ.get("MAIL_USER") or "").strip()
-        self.password = (os.environ.get("SMTP_PASS") or os.environ.get("EMAIL_PASSWORD") or os.environ.get("MAIL_PASS") or "").strip()
         self.brevo_api_key = (os.environ.get("BREVO_API_KEY") or "").strip()
-        self.from_email = (os.environ.get("EMAIL_FROM") or self.user or "").strip()
         raw_to = (os.environ.get("SHOPEE_ALERT_EMAIL_TO") or os.environ.get("EMAIL_TO") or os.environ.get("NOTIFY_EMAIL_TO") or "").strip()
         self.recipients = [part.strip() for part in raw_to.replace(";", ",").split(",") if "@" in part]
 
     @property
-    def smtp_configured(self) -> bool:
-        return bool(self.host and self.user and self.password and self.recipients)
-
-    @property
     def brevo_configured(self) -> bool:
-        return bool(self.brevo_api_key and self.from_email and self.recipients)
+        return bool(self.brevo_api_key and self.recipients)
 
     @property
     def configured(self) -> bool:
-        return self.brevo_configured or self.smtp_configured
+        return self.brevo_configured
 
     def _send_brevo(self, subject: str, body: str, attachment: Path | None = None) -> bool:
         if not self.brevo_configured:
             return False
         payload: dict[str, Any] = {
-            "sender": {"email": self.from_email, "name": "ShopVivaliz"},
+            "sender": {"email": self.FROM_EMAIL, "name": self.FROM_NAME},
+            "replyTo": {"email": self.REPLY_TO_EMAIL, "name": "ShopVivaliz Atendimento"},
             "to": [{"email": recipient} for recipient in self.recipients],
             "subject": subject,
             "textContent": body,
+            "tags": ["shopvivaliz-transactional"],
         }
         if attachment and attachment.is_file():
-            payload["attachment"] = [
-                {
-                    "content": base64.b64encode(attachment.read_bytes()).decode("ascii"),
-                    "name": attachment.name,
-                }
-            ]
+            payload["attachment"] = [{
+                "content": base64.b64encode(attachment.read_bytes()).decode("ascii"),
+                "name": attachment.name,
+            }]
         request = urllib.request.Request(
             "https://api.brevo.com/v3/smtp/email",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -270,52 +263,12 @@ class AlertSender:
         try:
             with urllib.request.urlopen(request, timeout=25) as response:
                 response.read()
-                return int(getattr(response, "status", 0)) in {200, 201, 202}
-        except Exception:
-            return False
-
-    def _send_smtp(self, subject: str, body: str, attachment: Path | None = None) -> bool:
-        if not self.smtp_configured:
-            return False
-        msg = EmailMessage()
-        msg["From"] = self.from_email or self.user
-        msg["To"] = ", ".join(self.recipients)
-        msg["Subject"] = subject
-        msg.set_content(body)
-        if attachment and attachment.is_file():
-            msg.add_attachment(
-                attachment.read_bytes(),
-                maintype="application",
-                subtype="pdf",
-                filename=attachment.name,
-            )
-        server: smtplib.SMTP
-        try:
-            if self.port == 465:
-                server = smtplib.SMTP_SSL(self.host, self.port, timeout=25)
-            else:
-                server = smtplib.SMTP(self.host, self.port, timeout=25)
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-            try:
-                server.login(self.user, self.password)
-                server.send_message(msg)
-            finally:
-                server.quit()
-            return True
+                return int(getattr(response, "status", 0)) == 201
         except Exception:
             return False
 
     def send(self, subject: str, body: str, attachment: Path | None = None) -> bool:
-        # HTTPS is preferred because the production host has a validated Brevo
-        # transactional key while the legacy SMTP provider currently closes the
-        # connection during authentication.  SMTP stays as a fail-closed fallback.
-        if self.brevo_configured and self._send_brevo(subject, body, attachment):
-            return True
-        if self.smtp_configured and self._send_smtp(subject, body, attachment):
-            return True
-        return False
+        return self._send_brevo(subject, body, attachment)
 
 
 def _package_key(package: dict) -> str:

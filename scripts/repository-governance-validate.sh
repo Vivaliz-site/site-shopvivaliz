@@ -34,6 +34,12 @@ python3 -m unittest tests.test_workflow_latency_budget -v
 python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
 python3 -m unittest tests.test_ci_performance_monitor -v
 python3 tests/test_ci_performance_monitor_workflow.py
+python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
+php tests/cloudflare-email-titan-finalize-test.php
+php tests/shopvivaliz-brevo-mailer-contract-test.php
+php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
+python3 -m unittest tests.test_stock_alerts_brevo_mail -v
+python3 -m unittest tests.test_shopee_logistics_worker -v
 python3 -m unittest tests.test_ci_performance_fetch -v
 
 if command -v composer >/dev/null 2>&1; then

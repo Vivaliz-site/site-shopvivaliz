@@ -170,11 +170,11 @@ FTP_USER = FTP_USERNAME
 FTP_PASS = FTP_PASSWORD
 FTP_REMOTE_PATH = FTP_REMOTE_DIR
 
-SMTP_HOST = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST", default="smtp.titan.email")
-SMTP_PORT = env_int("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT", default=465)
-SMTP_USER = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER", default="agentes@shopvivaliz.com.br")
+SMTP_HOST = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST")
+SMTP_PORT = env_int("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT", default=0)
+SMTP_USER = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER")
 SMTP_PASS = first_env("SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS")
-EMAIL_FROM = first_env("EMAIL_FROM", default=SMTP_USER)
+EMAIL_FROM = "atendimento@shopvivaliz.com.br"
 EMAIL_TO = first_env("EMAIL_TO")
 MAIL_HOST = SMTP_HOST
 MAIL_PORT = SMTP_PORT

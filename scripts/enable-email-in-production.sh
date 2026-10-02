@@ -23,14 +23,14 @@ if [ -z "$PHP_BIN" ]; then
 fi
 echo "✅ PHP encontrado: $PHP_BIN" | tee -a "$LOG_FILE"
 
-# 2. Verificar configuração SMTP no .env
+# 2. Verificar configuração Brevo no runtime
 echo ""
-echo "2️⃣  Verificando credenciais SMTP..."
-if grep -q "SMTP_HOST\|SMTP_USER\|SMTP_PASS" "$REPO_DIR/.env"; then
-    echo "✅ Credenciais SMTP presentes" | tee -a "$LOG_FILE"
-    grep "^SMTP_\|^EMAIL_" "$REPO_DIR/.env" >> "$LOG_FILE"
+echo "2️⃣  Verificando credencial Brevo..."
+if grep -q "^BREVO_API_KEY=." /home/ubuntu/shopvivaliz-deploy/shared/.env 2>/dev/null; then
+    echo "✅ BREVO_API_KEY presente no runtime compartilhado" | tee -a "$LOG_FILE"
 else
-    echo "⚠️  Credenciais SMTP não encontradas em .env" | tee -a "$LOG_FILE"
+    echo "❌ BREVO_API_KEY ausente no runtime compartilhado" | tee -a "$LOG_FILE"
+    exit 1
 fi
 
 # 3. Verificar runtime-secrets.php
@@ -38,9 +38,7 @@ echo ""
 echo "3️⃣  Verificando runtime-secrets.php..."
 if [ -f "$REPO_DIR/config/runtime-secrets.php" ]; then
     echo "✅ runtime-secrets.php presente" | tee -a "$LOG_FILE"
-    if grep -q "SMTP_HOST" "$REPO_DIR/config/runtime-secrets.php"; then
-        echo "✅ SMTP_HOST configurada em runtime-secrets" | tee -a "$LOG_FILE"
-    fi
+    echo "ℹ️  O mailer transacional usa BREVO_API_KEY do shared/.env; SMTP legado não é requerido." | tee -a "$LOG_FILE"
 else
     echo "⚠️  runtime-secrets.php não encontrado" | tee -a "$LOG_FILE"
 fi
@@ -82,7 +80,7 @@ echo ""
 echo "📋 Log salvo em: $LOG_FILE"
 echo ""
 echo "📧 Próximos passos:"
-echo "   1. Verificar que SMTP está configurado em config/runtime-secrets.php"
+echo "   1. Verificar que BREVO_API_KEY está presente em shared/.env"
 echo "   2. Adicionar chamada para send-order-confirmation-email.php após criar pedido"
 echo "   3. Testar envio de email criando um pedido teste"
 echo ""
