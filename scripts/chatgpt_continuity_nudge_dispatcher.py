@@ -110,6 +110,24 @@ def _read_ledger(runtime_dir: Path) -> dict[str, dict[str, Any]]:
     return latest
 
 
+def _ledger_bound_conversation_id(ledger: dict[str, dict[str, Any]], task_id: str) -> str:
+    candidates = []
+    for row in ledger.values():
+        if str(row.get("task_id", "")).strip() != str(task_id).strip():
+            continue
+        if str(row.get("worker_status", "")).strip().upper() != "PROGRESS_CONFIRMED":
+            continue
+        value = str(row.get("conversation_id", "")).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value):
+            continue
+        observed = _parse_time(row.get("worker_status_observed_at") or row.get("dispatched_at"))
+        candidates.append((observed or datetime.min.replace(tzinfo=timezone.utc), value))
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
 def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
     if not task_id or "/" in task_id or "\\" in task_id:
         return ""
@@ -333,6 +351,12 @@ def _run_once_locked(
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
                             observed["worker_status_observed_at"] = utc_now()
+                            confirmed_conversation_id = str(nudge.get("conversation_id", "")).strip()
+                            if (
+                                observed_status == "PROGRESS_CONFIRMED"
+                                and re.fullmatch(r"[A-Za-z0-9_-]{8,160}", confirmed_conversation_id)
+                            ):
+                                observed["conversation_id"] = confirmed_conversation_id
                             has_send_counter = "send_attempt_count" in previous
                             prior_send_attempts = int(previous.get("send_attempt_count") or 0)
                             if not has_send_counter and worker_status in {"SENT", "SENT_UNCONFIRMED"}:
@@ -392,12 +416,16 @@ def _run_once_locked(
             skipped_no_token += 1
             continue
 
+        resolved_conversation_id = (
+            _bound_conversation_id(root, task_id)
+            or _ledger_bound_conversation_id(ledger, task_id)
+        )
         result = enqueue(
             bridge_url=resolved_bridge_url,
             token=resolved_token,
             task_id=task_id,
             repository=repository,
-            conversation_id=_bound_conversation_id(root, task_id),
+            conversation_id=resolved_conversation_id,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
         previous_row = ledger.get(fingerprint) or {}
@@ -420,6 +448,8 @@ def _run_once_locked(
             "attempt_count": previous_attempt_count + 1,
             "send_attempt_count": previous_send_attempt_count,
         }
+        if resolved_conversation_id:
+            ledger_row["conversation_id"] = resolved_conversation_id
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
         if result.get("ok"):
