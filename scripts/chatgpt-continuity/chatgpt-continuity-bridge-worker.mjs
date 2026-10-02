@@ -137,6 +137,12 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
   return 'UNCLASSIFIED_RUNTIME_ERROR';
 }
+
+function outcomeStatusDetailCode(status, detail) {
+  const normalizedStatus = text(status).toUpperCase();
+  if (normalizedStatus === 'PROGRESS_CONFIRMED') return 'PROGRESS_CONFIRMED';
+  return outcomeDetailCode(detail);
+}
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 let REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -2297,7 +2303,7 @@ async function pollBridgeOnce() {
     : outcome.detail;
   await bridge('result', { task_id: taskId, ...outcome, detail: persistedDetail });
   console.log(
-    `chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeDetailCode(persistedDetail)} failure_class=${failureReason ? 'RECOVERABLE_CHAT_FAILURE' : 'none'} failure_reason=${failureReason || 'none'} recovery_attempt=${Number(outcome.recovery_attempt || 0)} recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}`,
+    `chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeStatusDetailCode(outcome.result_status, persistedDetail)} failure_class=${failureReason ? 'RECOVERABLE_CHAT_FAILURE' : 'none'} failure_reason=${failureReason || 'none'} recovery_attempt=${Number(outcome.recovery_attempt || 0)} recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}`,
   );
 }
 
@@ -2684,6 +2690,7 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  outcomeStatusDetailCode,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,

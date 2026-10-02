@@ -9,6 +9,7 @@ import {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  outcomeStatusDetailCode,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -84,6 +85,19 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    assert.equal(
+      outcomeStatusDetailCode('PROGRESS_CONFIRMED', 'continuation produced assistant progress'),
+      'PROGRESS_CONFIRMED',
+      'confirmed progress must never be logged as a runtime error',
+    );
+    assert.equal(
+      outcomeStatusDetailCode('ERROR', 'conversation changed during recovery'),
+      'CONVERSATION_CHANGED_DURING_RECOVERY',
+      'error diagnostics must keep the existing detail classifier',
+    );
+  }
+
   {
     const tabs = [
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
