@@ -1949,7 +1949,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     }
     await sleep(120);
 
-    const focused = await cdp.evaluate(`(()=>{
+    let focused = await cdp.evaluate(`(()=>{
       /* continuity-composer-focus */
       const el=document.querySelector('[data-testid="prompt-textarea"]')
         || document.querySelector('[role="textbox"][contenteditable="true"]');
@@ -1957,10 +1957,24 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       return document.activeElement===el || el.contains(document.activeElement);
     })()`);
     if (!focused) {
-      // Current ProseMirror can receive a trusted pointer event while leaving
-      // document.activeElement on BODY. If the only draft present is exactly
-      // our own bounded continuation and Send is already enabled, submitting
-      // that safe draft is preferable to treating the editor as unusable.
+      // Current ChatGPT can accept the trusted pointer event while leaving
+      // activeElement on BODY after a reload/reattach. We already proved the
+      // exact conversation fingerprint and refused to overwrite any real
+      // draft above, so a single bounded DOM focus repair is safe here. The
+      // trusted pointer event remains the user-gesture boundary; focus() only
+      // repairs the editor selection target before keyboard input.
+      focused = await cdp.evaluate(`(()=>{
+        /* continuity-composer-focus-repair */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        if(!el) return false;
+        try{ el.focus({preventScroll:true}); }catch{ try{el.focus();}catch{} }
+        return document.activeElement===el || el.contains(document.activeElement);
+      })()`);
+    }
+    if (!focused) {
+      // If a previous safe attempt left exactly our continuation draft and
+      // Send is enabled, submit it without touching any other draft.
       if (existing === expected && await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
       return false;
     }
