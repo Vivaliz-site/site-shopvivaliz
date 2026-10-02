@@ -17,12 +17,13 @@ $tmp = sys_get_temp_dir() . '/chatgpt-continuity-test-' . bin2hex(random_bytes(6
 
 $store = new SvChatgptContinuityPendingNudgeStore($tmp);
 
-cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:00Z'), 'First enqueue must succeed.');
+cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:00Z', '11111111-2222-3333-4444-555555555555'), 'First enqueue must succeed.');
 cgnAssert(!$store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:05Z'), 'Duplicate enqueue for the same PENDING task_id must be rejected (idempotent).');
 
 $pulled = $store->pullOldest();
 cgnAssert($pulled !== null, 'pullOldest must return the pending nudge.');
 cgnSame('task-1', $pulled['task_id'], 'Pulled nudge must be task-1.');
+cgnSame('11111111-2222-3333-4444-555555555555', $pulled['conversation_id'], 'Explicit conversation binding must survive enqueue and claim.');
 cgnSame('CLAIMED', $pulled['status'], 'Pull must transition status to CLAIMED.');
 
 cgnSame(null, $store->pullOldest(), 'A second pull with no other pending/abandoned nudge must return null (single active claim).');
