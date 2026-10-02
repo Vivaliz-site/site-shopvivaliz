@@ -2347,6 +2347,12 @@ async function attemptNudge(
   }
 }
 
+function bridgeResultPayload(taskId, outcome, persistedDetail) {
+  const payload = { task_id: taskId, ...outcome, detail: persistedDetail };
+  if (outcome?.result_status !== 'PROGRESS_CONFIRMED') delete payload.conversation_id;
+  return payload;
+}
+
 async function pollBridgeOnce() {
   const response = await bridge('pull');
   if (response.status !== 'JOB') return;
@@ -2364,7 +2370,11 @@ async function pollBridgeOnce() {
   const persistedDetail = failureReason
     ? `failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=${failureReason};recovery_attempt=${Number(outcome.recovery_attempt || 1)};recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}; ${text(outcome.detail).slice(0, 360)}`
     : outcome.detail;
-  await bridge('result', { task_id: taskId, ...outcome, detail: persistedDetail });
+  // A bound conversation is authoritative only after observable assistant
+  // progress. The PHP bridge deliberately rejects conversation_id on any
+  // non-confirmed result so an ERROR/SENT_UNCONFIRMED attempt cannot poison
+  // the durable binding. Keep those outcomes retryable by omitting the id.
+  await bridge('result', bridgeResultPayload(taskId, outcome, persistedDetail));
   console.log(
     `chatgpt_continuity_nudge task_id=${taskId} result=${outcome.result_status} detail_code=${outcomeStatusDetailCode(outcome.result_status, persistedDetail)} failure_class=${failureReason ? 'RECOVERABLE_CHAT_FAILURE' : 'none'} failure_reason=${failureReason || 'none'} recovery_attempt=${Number(outcome.recovery_attempt || 0)} recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}`,
   );
@@ -2757,6 +2767,7 @@ export {
   recoverableFailureReason,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  bridgeResultPayload,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
