@@ -19,6 +19,9 @@ SPEC.loader.exec_module(m)
 
 
 class BrowserMcpTests(unittest.TestCase):
+    def test_base_server_directory_is_available_for_sibling_imports(self):
+        self.assertIn(str((ROOT / "remote-control-mcp").resolve()), m.sys.path)
+
     def test_all_base_tools_and_six_browser_tools_are_exposed(self):
         names = {item["name"] for item in m.tool_specs()}
         base_names = {item["name"] for item in m.base.tool_specs()}
