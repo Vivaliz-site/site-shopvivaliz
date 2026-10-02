@@ -81,6 +81,14 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("projectsecret123456", redacted)
         self.assertIn("REDACTED", redacted)
 
+    def test_linux_service_status_is_fail_closed_and_checks_user_scope(self):
+        command = m.service_command("linux", "shopvivaliz-chatgpt-continuity.service", "status")
+        self.assertIn("LoadState", command)
+        self.assertIn("systemctl --user", command)
+        self.assertIn("service_not_found", command)
+        self.assertIn("exit 4", command)
+        self.assertNotIn("status shopvivaliz-chatgpt-continuity.service || true", command)
+
     def test_run_host_command_tolerates_non_utf8_output(self):
         result = m.run_host_command(
             "always-free-arm-1787907847-26", "printf 'before\\xa2after'"
