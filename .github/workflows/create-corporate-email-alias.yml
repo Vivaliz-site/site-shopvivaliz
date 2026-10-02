@@ -1,0 +1,102 @@
+name: Create Corporate Email Alias
+
+on:
+  push:
+    branches:
+      - ops/create-frederico-email
+    paths:
+      - '.github/workflows/create-corporate-email-alias.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  create-alias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      ZONE_NAME: shopvivaliz.com.br
+      SOURCE_EMAIL: frederico@shopvivaliz.com.br
+      DEST_EMAIL: fredmourao@gmail.com
+      TEST_SENDER: atendimento@shopvivaliz.com.br
+    steps:
+      - name: Validate protected credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_CREDENTIAL_MISSING'; exit 1; }
+          test -n "${BREVO_API_KEY:-}" || { echo 'BREVO_CREDENTIAL_MISSING'; exit 1; }
+          case "$SOURCE_EMAIL" in
+            *@shopvivaliz.com.br) ;;
+            *) echo 'INVALID_SOURCE_DOMAIN'; exit 2 ;;
+          esac
+          echo 'CREDENTIALS_PRESENT'
+
+      - name: Create or validate Cloudflare Email Routing alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
+          test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 3; }
+
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          account_id=$(jq -r '.result[0].account.id // empty' <<<"$zones")
+          test -n "$zone_id" -a -n "$account_id" || { echo 'ZONE_OR_ACCOUNT_NOT_FOUND'; exit 4; }
+
+          settings=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing")
+          test "$(jq -r '.result.enabled // false' <<<"$settings")" = true || {
+            echo 'EMAIL_ROUTING_NOT_ENABLED'
+            exit 5
+          }
+
+          addresses=$(curl -fsS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
+          dest_verified=$(jq -r --arg e "$DEST_EMAIL" '[.result[]? | select(.email==$e and .verified != null)] | length' <<<"$addresses")
+          test "$dest_verified" -ge 1 || { echo 'DESTINATION_NOT_VERIFIED'; exit 6; }
+
+          rules=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
+          rule_id=$(jq -r --arg src "$SOURCE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+
+          if [ -n "$rule_id" ]; then
+            current=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules/$rule_id")
+            target_ok=$(jq -r --arg dst "$DEST_EMAIL" 'any(.result.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$current")
+            test "$target_ok" = true || { echo 'EXISTING_RULE_TARGET_MISMATCH'; exit 7; }
+            enabled=$(jq -r '.result.enabled // false' <<<"$current")
+            if [ "$enabled" != true ]; then
+              payload=$(jq '.result | {name,matchers,actions,priority,source} + {enabled:true}' <<<"$current")
+              updated=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules/$rule_id")
+              test "$(jq -r '.success' <<<"$updated")" = true || { echo 'RULE_ENABLE_FAILED'; exit 8; }
+              echo 'ALIAS_RULE_ENABLED'
+            else
+              echo 'ALIAS_RULE_ALREADY_ACTIVE'
+            fi
+          else
+            payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"Frederico corporate alias",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
+            created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules")
+            test "$(jq -r '.success' <<<"$created")" = true || { echo 'RULE_CREATE_FAILED'; jq -c '.errors' <<<"$created"; exit 9; }
+            rule_id=$(jq -r '.result.id' <<<"$created")
+            echo 'ALIAS_RULE_CREATED'
+          fi
+
+          final=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules/$rule_id")
+          test "$(jq -r '.result.enabled // false' <<<"$final")" = true || { echo 'POST_VERIFY_NOT_ENABLED'; exit 10; }
+          final_target=$(jq -r --arg dst "$DEST_EMAIL" 'any(.result.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$final")
+          test "$final_target" = true || { echo 'POST_VERIFY_TARGET_MISMATCH'; exit 11; }
+          echo "ALIAS_READY=$SOURCE_EMAIL"
+          echo "FORWARDS_TO=$DEST_EMAIL"
+
+      - name: Send real inbound test
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject="ShopVivaliz corporate alias E2E ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mail=$(jq -nc             --arg from "$TEST_SENDER"             --arg to "$SOURCE_EMAIL"             --arg subject "$subject"             '{sender:{name:"ShopVivaliz",email:$from},to:[{email:$to}],subject:$subject,textContent:"Teste E2E do novo e-mail corporativo via Cloudflare Email Routing."}')
+          response=$(curl -fsS -X POST 'https://api.brevo.com/v3/smtp/email'             -H 'Content-Type: application/json'             -H "api-key: $BREVO_API_KEY"             --data "$mail")
+          test -n "$(jq -r '.messageId // empty' <<<"$response")" || { echo 'TEST_SEND_FAILED'; exit 12; }
+          echo "E2E_SUBJECT=$subject"
+          echo 'TEST_SEND_ACCEPTED'
