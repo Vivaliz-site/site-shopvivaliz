@@ -59,5 +59,6 @@ Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime 
 7. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
 8. Consulte `repository-index.md` e `structure-policy.md` antes de mover arquivos ou alterar automações.
 9. Registre lacunas na documentação ao encontrar comportamento novo.
+10. <!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 --> Ao confirmar defeito, **não pare no diagnóstico**: corrija o que estiver autorizado e ao alcance, aplique prevenção pertinente, teste e valide no runtime/E2E aplicável; enquanto houver ação segura executável, a tarefa permanece `RUNNING`. <!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
