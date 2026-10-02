@@ -10,6 +10,7 @@ import {
   errorBannerPresent,
   recoverableFailureReason,
   outcomeStatusDetailCode,
+  persistReinforcementHealth,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -61,7 +62,7 @@ function fakeCdp({
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('continuity-error-banner-probe')) {
-        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar)/i.test(pageText);
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
       }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
@@ -85,6 +86,19 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const timeoutCdp = fakeCdp({ pageText: 'Esgotou-se o tempo limite da solicitação. Repetir' });
+    assert.equal(await errorBannerPresent(timeoutCdp), true);
+    assert.equal(await recoverableFailureReason(timeoutCdp), 'request_timeout');
+    assert.equal(
+      outcomeStatusDetailCode(
+        'ERROR',
+        'failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=request_timeout; request timed out',
+      ),
+      'RECOVERABLE_REQUEST_TIMEOUT',
+    );
+  }
+
   {
     assert.equal(
       outcomeStatusDetailCode('PROGRESS_CONFIRMED', 'continuation produced assistant progress'),
