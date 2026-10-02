@@ -1172,8 +1172,12 @@ async function run() {
   }
 
   {
-    const passive = await attemptNudge('passive-send-proof', async () => fakeCdp(), async () => true);
-    assert.equal(passive.sent, false, 'passive recovery cannot claim a continuation send');
+    const idle = await attemptNudge('idle-reattach-hydration-proof', async () => fakeCdp(), async () => true);
+    assert.equal(
+      idle.sent,
+      true,
+      'idle DOM growth after reload must not be accepted as passive assistant progress',
+    );
     const active = await attemptNudge('active-send-proof', async () => fakeCdp({generating: true}), async () => false);
     assert.equal(active.sent, false, 'deferred active generation cannot claim a send');
     const failed = await attemptNudge('failed-send-proof', async () => fakeCdp({sendSucceeds: false}), async () => false);
@@ -1473,7 +1477,12 @@ async function run() {
   // UI exposes no Stop button. A silent stall must therefore receive the same
   // passive reattach/reload before any continuation send.
   {
-    const silentCdp = fakeCdp({ generating: false, sendSucceeds: true });
+    const silentCdp = fakeCdp({
+      generating: false,
+      composerUsable: false,
+      sendSucceeds: true,
+      streamStatus: 'IN_PROGRESS',
+    });
     const recoveredSilent = await attemptNudge(
       'task-silent-stall-passive-reattach',
       async () => silentCdp,

@@ -2169,6 +2169,17 @@ async function attemptNudge(
     // resume gets exactly one passive reattach before any continuation send,
     // not only turns whose DOM still looks generating.
     const wasGenerating = await conversationIsGenerating(cdp);
+    // A passive reload is only allowed to certify recovery when there was a
+    // real pre-existing signal to recover. An idle conversation can hydrate
+    // extra DOM after reload; treating that surface growth as assistant
+    // progress creates a false-green without ever sending the checkpoint
+    // continuation.
+    const silentStallBeforeReattach = !wasGenerating
+      && !detectedFailureReason
+      && await silentStallPresent(cdp);
+    const passiveRecoveryEligible = wasGenerating
+      || Boolean(detectedFailureReason)
+      || silentStallBeforeReattach;
     const passiveBaseline = await assistantSnapshot(cdp);
     await cdp.evaluate(`(()=>{location.reload();return true})()`);
     await sleep(1200);
@@ -2178,7 +2189,7 @@ async function attemptNudge(
       PASSIVE_REATTACH_CONFIRM_MS,
       PROGRESS_POLL_MS,
     );
-    if (passiveProgressed) {
+    if (passiveProgressed && passiveRecoveryEligible) {
       return {
         result_status: 'PROGRESS_CONFIRMED',
         detail: 'passive reattach restored assistant progress without sending continuation',
