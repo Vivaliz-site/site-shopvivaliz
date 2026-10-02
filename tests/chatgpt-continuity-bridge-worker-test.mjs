@@ -40,6 +40,7 @@ import {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
@@ -152,6 +153,36 @@ async function run() {
       selectBoundConversationTabs(tabs, '99999999-2222-3333-4444-555555555555').length,
       0,
       'missing explicit binding must fail closed rather than choose another tab',
+    );
+  }
+
+  {
+    const id = '11111111-2222-3333-4444-555555555555';
+    const expressions = [];
+    let pathname = '/';
+    const cdp = {
+      async evaluate(expression) {
+        expressions.push(String(expression));
+        if (String(expression).includes('continuity-bound-sidebar-route')) {
+          pathname = `/c/${id}`;
+          return 'sidebar';
+        }
+        if (String(expression) === 'location.pathname') return pathname;
+        return null;
+      },
+      close() {},
+    };
+    const ok = await navigateNeutralTabToConversation(
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+      id,
+      async () => cdp,
+      600,
+      50,
+    );
+    assert.equal(ok, true);
+    assert.ok(
+      expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
+      'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
     );
   }
 
