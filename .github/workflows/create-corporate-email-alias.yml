@@ -1,4 +1,4 @@
-name: Create Corporate Email Alias
+name: Create Dev Corporate Email Alias
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
       ZONE_NAME: shopvivaliz.com.br
-      SOURCE_EMAIL: frederico@shopvivaliz.com.br
+      SOURCE_EMAIL: dev@shopvivaliz.com.br
       DEST_EMAIL: fredmourao@gmail.com
       TEST_SENDER: atendimento@shopvivaliz.com.br
     steps:
@@ -76,7 +76,7 @@ jobs:
               echo 'ALIAS_RULE_ALREADY_ACTIVE'
             fi
           else
-            payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"Frederico corporate alias",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
+            payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz dev corporate alias",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
             created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules")
             test "$(jq -r '.success' <<<"$created")" = true || { echo 'RULE_CREATE_FAILED'; jq -c '.errors' <<<"$created"; exit 9; }
             rule_id=$(jq -r '.result.id' <<<"$created")
