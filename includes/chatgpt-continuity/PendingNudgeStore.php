@@ -251,7 +251,12 @@ final class SvChatgptContinuityPendingNudgeStore
         if (!in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('unsupported nudge result status');
         }
-        $diagnostic = self::safeDetailDiagnostic($detail);
+        $diagnostic = $status === 'PROGRESS_CONFIRMED'
+            ? [
+                'code' => 'PROGRESS_CONFIRMED',
+                'sha256' => trim((string)$detail) !== '' ? hash('sha256', trim((string)$detail)) : null,
+            ]
+            : self::safeDetailDiagnostic($detail);
         return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] === $taskId) {
