@@ -683,6 +683,29 @@ async function run() {
     assert.ok(snapshotNumber >= 3, 'attemptNudge must capture a post-send confirmation baseline');
   }
 
+  {
+    const cdp = fakeCdp({ generating: false, composerUsable: true });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    cdp.evaluate = async expression => {
+      if (String(expression) === 'location.pathname') {
+        return '/c/12345678-2222-3333-4444-555555555555';
+      }
+      return originalEvaluate(expression);
+    };
+    const outcome = await attemptNudge(
+      'task-binding-discovery',
+      async () => cdp,
+      async () => true,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(
+      outcome.conversation_id,
+      '12345678-2222-3333-4444-555555555555',
+      'confirmed recovery must report the exact conversation it acted on',
+    );
+  }
+
   // conversationIsGenerating / composerIsUsable / errorBannerPresent are
   // thin wrappers -- confirm they read the right signal.
   assert.equal(await conversationIsGenerating(fakeCdp({ generating: true })), true);
