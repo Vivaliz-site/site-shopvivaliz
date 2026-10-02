@@ -52,7 +52,8 @@ STARTING_UNIT_VISIBILITY_GRACE_SECONDS = 15
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
-        "platform": "linux", "transport": "local", "role": "backend/control/browser"
+        "platform": "linux", "transport": "local", "role": "backend/control/browser",
+        "service_user_owner": "ubuntu",
     },
     "shopvivaliz-free-a1": {
         "platform": "linux", "transport": "ssh", "address": "10.0.1.112",
@@ -617,7 +618,12 @@ def health_command(platform: str) -> str:
     return "printf 'hostname='; hostname; printf 'user='; id -un; printf 'uid='; id -u; uptime -p || true"
 
 
-def service_command(platform: str, service: str, action: str) -> str:
+def service_command(
+    platform: str,
+    service: str,
+    action: str,
+    service_user_owner: str | None = None,
+) -> str:
     if not SERVICE_RE.fullmatch(service):
         raise ValueError("invalid_service_name")
     if platform == "windows":
@@ -627,7 +633,30 @@ def service_command(platform: str, service: str, action: str) -> str:
         verb = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
         return f"{verb} -Name '{q}' -ErrorAction Stop; Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
     if action == "status":
-        return f"systemctl --no-pager --full status {service} || true; systemctl is-active {service} || true"
+        # Fail closed. Check the system manager first, then the configured
+        # non-root user's manager when this host owns user-scoped services.
+        user_probe = ""
+        if service_user_owner:
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
+                raise ValueError("invalid_service_user_owner")
+            user_probe = (
+                f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
+                f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+                f"if [ \"$load\" = loaded ]; then "
+                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user --no-pager --full status {service}; "
+                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user is-active {service}; exit $?; fi; "
+            )
+        return (
+            f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
+            f"if [ \"$load\" = loaded ]; then "
+            f"systemctl --no-pager --full status {service}; "
+            f"systemctl is-active {service}; exit $?; fi; "
+            f"{user_probe}"
+            f"printf '%s\\n' 'service_not_found' >&2; exit 4"
+        )
     return f"systemctl {action} {service} && systemctl is-active {service}"
 
 
@@ -764,7 +793,17 @@ def execute_tool(
     elif name == "processes_list":
         result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
     elif name == "service_status":
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), "status"), timeout, cancel_check)
+        result = run_host_command(
+            str(host),
+            service_command(
+                platform,
+                str(args.get("service") or ""),
+                "status",
+                str(cfg.get("service_user_owner") or "") or None,
+            ),
+            timeout,
+            cancel_check,
+        )
     elif name == "service_action":
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
