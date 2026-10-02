@@ -46,12 +46,8 @@ STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
 DEFAULT_INTERVAL_SECONDS = 30
 BROWSER_HEALTH_STALE_SECONDS = 180
-BROWSER_HEALTH_FILE = Path(
-    os.environ.get(
-        "CHATGPT_CONTINUITY_REINFORCEMENT_HEALTH_FILE",
-        "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/reinforcement-health.json",
-    )
-)
+_BROWSER_HEALTH_FILE_VALUE = os.environ.get("CHATGPT_CONTINUITY_REINFORCEMENT_HEALTH_FILE", "").strip()
+BROWSER_HEALTH_FILE = Path(_BROWSER_HEALTH_FILE_VALUE) if _BROWSER_HEALTH_FILE_VALUE else None
 
 
 def utc_now() -> str:
@@ -157,7 +153,20 @@ def _browser_reinforcement_health(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    payload = _read_json(Path(path or BROWSER_HEALTH_FILE))
+    selected = path or BROWSER_HEALTH_FILE
+    if selected is None:
+        return {
+            "enabled": False,
+            "observed": False,
+            "stale": False,
+            "age_seconds": None,
+            "unresolved_count": 0,
+            "last_action": "",
+            "last_http_status": 0,
+            "candidate_count": 0,
+            "project_count": 0,
+        }
+    payload = _read_json(Path(selected))
     updated = _parse_utc(payload.get("updated_at"))
     current = now or datetime.now(timezone.utc)
     age_seconds = None if updated is None else max(0, int((current - updated).total_seconds()))
@@ -168,6 +177,7 @@ def _browser_reinforcement_health(
     observed = bool(payload) and updated is not None
     stale = not observed or age_seconds is None or age_seconds > BROWSER_HEALTH_STALE_SECONDS
     return {
+        "enabled": True,
         "observed": observed,
         "stale": stale,
         "age_seconds": age_seconds,
