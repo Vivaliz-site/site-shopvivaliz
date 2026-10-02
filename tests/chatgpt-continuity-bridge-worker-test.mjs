@@ -40,6 +40,7 @@ import {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
@@ -184,6 +185,41 @@ async function run() {
       expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
       'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
     );
+  }
+
+  {
+    const calls = [];
+    const created = await createNeutralChatgptTab(async (url, options) => {
+      calls.push({ url: String(url), method: options?.method });
+      return {
+        ok: true,
+        async json() {
+          return {
+            type: 'page',
+            url: 'https://chatgpt.com/',
+            webSocketDebuggerUrl: 'ws://synthetic-neutral',
+          };
+        },
+      };
+    });
+    assert.equal(created?.webSocketDebuggerUrl, 'ws://synthetic-neutral');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PUT');
+    assert.ok(calls[0].url.endsWith('/json/new?https://chatgpt.com/'));
+  }
+
+  {
+    const refused = await createNeutralChatgptTab(async () => ({
+      ok: true,
+      async json() {
+        return {
+          type: 'page',
+          url: 'https://chatgpt.com/c/real-conversation',
+          webSocketDebuggerUrl: 'ws://real',
+        };
+      },
+    }));
+    assert.equal(refused, null, 'neutral-tab creator must reject a target that is already a real conversation');
   }
 
   {
