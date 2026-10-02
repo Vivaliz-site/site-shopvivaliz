@@ -312,5 +312,21 @@ class ProbeEvaluationTests(unittest.TestCase):
         self.assertIn(self.CONVERSATION_ID, calls[1])
 
 
+
+class ContinuityWorkflowTopologyTest(unittest.TestCase):
+    def test_production_e2e_runs_on_backend_controller_runner(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]",
+            workflow,
+        )
+        self.assertNotIn(
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]",
+            workflow,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -266,9 +266,11 @@ if not E2E_WORKFLOW.is_file():
     errors.append("missing .github/workflows/task-continuity-production-e2e.yml")
 else:
     e2e_workflow_text = E2E_WORKFLOW.read_text(encoding="utf-8", errors="replace")
-    for token in ("scripts/task_continuity_e2e.py", "shopvivaliz-a1-deploy", "TARGET_REPOSITORY", "--repository"):
+    for token in ("scripts/task_continuity_e2e.py", "shopvivaliz-backend-browser", "TARGET_REPOSITORY", "--repository"):
         if token not in e2e_workflow_text:
             errors.append(f".github/workflows/task-continuity-production-e2e.yml: missing {token}")
+    if "shopvivaliz-a1-deploy" in e2e_workflow_text:
+        errors.append(".github/workflows/task-continuity-production-e2e.yml: must not run on shopvivaliz-a1-deploy")
 
 audit_policy = ROOT / "AUDIT_POLICY.md"
 if not audit_policy.is_file() or E2E_VERIFICATION not in audit_policy.read_text(encoding="utf-8", errors="replace"):

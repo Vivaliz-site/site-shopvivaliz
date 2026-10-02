@@ -51,7 +51,7 @@ jobs:
   probe:
     if: inputs.conversation_id != ''
     name: Run detached continuity E2E probe against production
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
       - name: Checkout probe from current release
