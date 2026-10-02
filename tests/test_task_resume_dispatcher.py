@@ -208,6 +208,46 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
 
+    def test_evidence_only_checkpoint_churn_is_not_counted_as_progress(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        script = self.root / "evidence_only.py"
+        script.write_text(
+            """
+import json, os
+from pathlib import Path
+runtime = Path(os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"])
+task_id = os.environ["SHOPVIVALIZ_TASK_ID"]
+state_path = runtime / f"{task_id}.json"
+state = json.loads(state_path.read_text())
+state.setdefault("evidence", []).append("generic verification passed")
+state["updated_at"] = "2026-09-26T20:06:00Z"
+state_path.write_text(json.dumps(state))
+""",
+            encoding="utf-8",
+        )
+
+        result = dispatcher.run_once(
+            runtime_dir=self.runtime,
+            project_dir=self.project,
+            executor=[sys.executable, str(script)],
+            timeout_seconds=30,
+            max_requests=1,
+        )
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 0)
+        self.assertEqual(result["no_progress"], 1)
+        current = json.loads((self.runtime / "resume-e2e.json").read_text())
+        self.assertEqual(current["next_action"], "continue real work")
+        ledger = [
+            json.loads(line)
+            for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(ledger[-1]["result"], "no_progress")
+
     def test_chatgpt_nudge_and_detached_fallback_share_execution_lock(self) -> None:
         dispatcher = load_dispatcher()
         self.assertEqual(dispatcher.LOCK_FILE, nudge_dispatcher.LOCK_FILE)
