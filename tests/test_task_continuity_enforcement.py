@@ -60,6 +60,15 @@ class AgentTaskStateTests(unittest.TestCase):
             state.mark_ready("owned-proof", evidence=["observed PASS"], verification="fresh")
             self.assertEqual(state.complete_task("owned-proof")["status"], "CONCLUIDO")
 
+    def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
+        state.start_task("bound-task", "verify", "work")
+        bound = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        self.assertEqual(bound["conversation_id"], "6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        same = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        self.assertEqual(same, bound)
+        with self.assertRaisesRegex(state.TaskStateError, "cannot be replaced"):
+            state.bind_conversation("bound-task", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
     def test_duplicate_background_progress_is_exact_noop(self) -> None:
         state.start_task("duplicate-background", "verify", "work")
         state.record_progress("duplicate-background", next_action="deploy corrected release", evidence="foreground evidence")
