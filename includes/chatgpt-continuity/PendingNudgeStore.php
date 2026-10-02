@@ -246,7 +246,7 @@ final class SvChatgptContinuityPendingNudgeStore
         return ['code' => $code, 'sha256' => hash('sha256', $raw)];
     }
 
-    public function recordResult(string $taskId, string $status, ?string $detail): bool
+    public function recordResult(string $taskId, string $status, ?string $detail, string $conversationId = ''): bool
     {
         if (!in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('unsupported nudge result status');
@@ -257,9 +257,21 @@ final class SvChatgptContinuityPendingNudgeStore
                 'sha256' => trim((string)$detail) !== '' ? hash('sha256', trim((string)$detail)) : null,
             ]
             : self::safeDetailDiagnostic($detail);
-        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic) {
+        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic, $conversationId) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] === $taskId) {
+                    $existingConversationId = trim((string)($row['conversation_id'] ?? ''));
+                    if (
+                        $status === 'PROGRESS_CONFIRMED'
+                        && $conversationId !== ''
+                        && $existingConversationId !== ''
+                        && $existingConversationId !== $conversationId
+                    ) {
+                        throw new RuntimeException('confirmed conversation binding does not match queued binding');
+                    }
+                    if ($status === 'PROGRESS_CONFIRMED' && $conversationId !== '') {
+                        $nudges[$index]['conversation_id'] = $conversationId;
+                    }
                     $nudges[$index]['status'] = $status;
                     $nudges[$index]['resolved_at'] = gmdate(DATE_ATOM);
                     unset($nudges[$index]['detail']);
