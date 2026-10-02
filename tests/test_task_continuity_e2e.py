@@ -43,10 +43,13 @@ class ProbeStaticContractTests(unittest.TestCase):
             ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_call:", workflow)
-        self.assertIn("github.event.issue.number == 1586", workflow)
-        self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", workflow)
-        self.assertIn("github.event.comment.body == '/continuity-e2e'", workflow)
+        self.assertIn("if: inputs.conversation_id != ''", workflow)
         self.assertIn("workflow_dispatch:", workflow)
+        dispatcher = (
+            ROOT / ".github" / "workflows" / "issue-comment-dispatcher.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("conversation_id: ${{ steps.route.outputs.conversation_id }}", dispatcher)
+        self.assertIn("conversation_id: ${{ needs.classify.outputs.conversation_id }}", dispatcher)
 
 
 class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
