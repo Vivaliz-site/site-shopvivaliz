@@ -121,6 +121,56 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
 
+    def test_unresolved_browser_stall_is_not_continuity_ready(self) -> None:
+        controller = load_controller()
+        health = self.runtime / "browser-health.json"
+        health.write_text(
+            json.dumps({
+                "schema_version": 1,
+                "updated_at": controller.utc_now(),
+                "last_action": "sent_unconfirmed",
+                "unresolved": {"conversation:abc": {"action": "sent_unconfirmed"}},
+                "unresolved_count": 1,
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller, "BROWSER_HEALTH_FILE", health),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 25, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-stall")
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("browser_stall_unresolved", result["degraded_reasons"])
+        self.assertEqual(result["browser_reinforcement"]["unresolved_count"], 1)
+
+    def test_stale_browser_monitor_is_not_continuity_ready(self) -> None:
+        controller = load_controller()
+        health = self.runtime / "browser-health.json"
+        health.write_text(
+            json.dumps({
+                "schema_version": 1,
+                "updated_at": "2000-01-01T00:00:00Z",
+                "last_action": "no_banner",
+                "unresolved": {},
+                "unresolved_count": 0,
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller, "BROWSER_HEALTH_FILE", health),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-monitor-stale")
+
+        self.assertFalse(result["ok"])
+        self.assertIn("browser_monitor_stale", result["degraded_reasons"])
+
     def test_idle_cycle_does_not_spam_event_ledger(self) -> None:
         controller = load_controller()
         with (
@@ -280,6 +330,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn("CHATGPT_CONTINUITY_REINFORCEMENT_HEALTH_FILE", installer)
         self.assertIn("${SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY} --daemon", unit)
         self.assertIn("Restart=on-failure", unit)
         self.assertIn("shopvivaliz-gemini-24x7-controller", installer)
