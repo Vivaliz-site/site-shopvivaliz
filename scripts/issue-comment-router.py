@@ -5,16 +5,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 AUTHORIZED_USER = "fredmourao-ai"
 CONTROL_ISSUE = 1586
+CONTINUITY_E2E_RE = re.compile(r"^/continuity-e2e\\s+conversation_id=([A-Za-z0-9_-]{8,160})$")
 
 EXACT_CONTROL_ROUTES = {
     "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_delete_scope",
     "/delete-superseded-solange-v1 CONFIRM": "delete_superseded_solange",
-    "/continuity-e2e": "continuity_e2e",
     "/backend-continuity-recover-v1": "backend_continuity_recovery",
     "/provision-governed-backend-ci-runners-v1": "provision_backend_runners",
     "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
@@ -38,11 +39,14 @@ def classify(payload: dict[str, Any]) -> str:
         return "none"
 
     if issue_number == CONTROL_ISSUE:
-        exact = EXACT_CONTROL_ROUTES.get(body.strip())
+        stripped = body.strip()
+        if CONTINUITY_E2E_RE.fullmatch(stripped):
+            return "continuity_e2e"
+
+        exact = EXACT_CONTROL_ROUTES.get(stripped)
         if exact:
             return exact
 
-        stripped = body.strip()
         if stripped.startswith("/dc-reauth "):
             return "dc_reauth"
         if stripped.startswith("/remote "):
@@ -64,6 +68,16 @@ def classify(payload: dict[str, Any]) -> str:
     return "none"
 
 
+def continuity_conversation_id(payload: dict[str, Any]) -> str:
+    comment = payload.get("comment") or {}
+    issue = payload.get("issue") or {}
+    actor = str((comment.get("user") or {}).get("login") or "")
+    if actor != AUTHORIZED_USER or issue.get("number") != CONTROL_ISSUE:
+        return ""
+    match = CONTINUITY_E2E_RE.fullmatch(str(comment.get("body") or "").strip())
+    return match.group(1) if match else ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", required=True)
@@ -72,10 +86,12 @@ def main() -> int:
 
     payload = json.loads(Path(args.event).read_text(encoding="utf-8"))
     route = classify(payload)
+    conversation_id = continuity_conversation_id(payload) if route == "continuity_e2e" else ""
 
     if args.output:
         with Path(args.output).open("a", encoding="utf-8") as handle:
             handle.write(f"route={route}\n")
+            handle.write(f"conversation_id={conversation_id}\n")
 
     print(f"ISSUE_COMMENT_ROUTE={route}")
     return 0
