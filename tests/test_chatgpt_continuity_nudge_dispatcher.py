@@ -58,6 +58,40 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.calls.append(kwargs)
         return {"ok": True, "http_status": 200, "body": {"status": "OK", "enqueued": True}}
 
+    def test_worker_error_remains_degraded_during_retry_cooldown(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        status = {"ok": True, "body": {"nudge": {"status": "ERROR"}}}
+        kwargs["query_status"] = lambda **unused: status
+        result = self.dispatcher.run_once(**kwargs)
+        later = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(later["failed"], 1)
+        self.assertEqual(len(self.calls), 1)
+        state.record_progress("task-1", next_action="repair transport", evidence="changed checkpoint")
+        result = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 0, "obsolete failed fingerprint must not degrade current work")
+
+    def test_confirmed_progress_clears_browser_failure(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        result = self.dispatcher.run_once(**kwargs, query_status=lambda **unused: {
+            "ok": True, "body": {"nudge": {"status": "PROGRESS_CONFIRMED"}}})
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_enqueue_failure_is_reported_without_disabling_retry(self) -> None:
+        self._stale_checkpoint_and_request()
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=lambda **unused: {"ok": False, "http_status": 503})
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["dispatched"], 0)
+
     def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
         self.assertEqual(
             self.dispatcher.DEFAULT_BRIDGE_URL,

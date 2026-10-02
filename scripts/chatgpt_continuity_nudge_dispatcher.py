@@ -425,8 +425,27 @@ def _run_once_locked(
         if result.get("ok"):
             dispatched += 1
 
+    # Keep failed outcomes visible throughout cooldown. Only the current
+    # queued fingerprint may affect readiness; completed/superseded work must
+    # not poison health. This is observation only, never a retry/automation gate.
+    failed = 0
+    for request in read_requests(root):
+        if (request.get("preferred_executor") != "chatgpt_common"
+                or request.get("status") != "queued"
+                or not _request_matches_current_checkpoint(root, request)):
+            continue
+        outcome = ledger.get(str(request.get("fingerprint", "")))
+        if not outcome:
+            continue
+        worker_status = str(outcome.get("worker_status", "")).strip().upper()
+        if outcome.get("bridge_ok") is not True or worker_status not in {
+            "", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"
+        }:
+            failed += 1
+
     return {
         "ok": True,
+        "failed": failed,
         "runtime_dir": str(root),
         "scanned": scanned,
         "eligible": eligible,

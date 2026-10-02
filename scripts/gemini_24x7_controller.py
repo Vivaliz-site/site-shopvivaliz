@@ -304,6 +304,12 @@ def run_once(
             degraded_reasons.append("dispatcher_no_progress")
         if failed > 0:
             degraded_reasons.append("dispatcher_failed")
+        if int(nudge.get("failed") or 0) > 0:
+            degraded_reasons.append("chatgpt_resume_failed")
+        if int(nudge.get("skipped_no_token") or 0) > 0:
+            degraded_reasons.append("chatgpt_resume_missing_token")
+        if int(nudge.get("skipped_attempt_limit") or 0) > 0:
+            degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -317,7 +323,7 @@ def run_once(
             "owner_id": owner,
             "lease_recovered": lease.recovered,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "generated_at": utc_now(),
         }
