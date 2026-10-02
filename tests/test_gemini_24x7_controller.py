@@ -107,6 +107,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             with controller.daemon_guard(self.runtime) as second:
                 self.assertFalse(second)
 
+    def test_failed_browser_resume_is_not_continuity_ready(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"failed": 1}),
+            patch.object(controller.dispatcher, "run_once", return_value={"deferred_chatgpt": 1}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-error")
+        self.assertTrue(result["liveness_ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertFalse(result["ok"])
+        self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
+        self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
+
     def test_idle_cycle_does_not_spam_event_ledger(self) -> None:
         controller = load_controller()
         with (
