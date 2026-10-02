@@ -297,8 +297,23 @@ def run_once(
         # The canonical dispatcher itself retains ChatGPT's first recovery
         # window and owns the Gemini-only execution boundary.
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
+        no_progress = int(resumed.get("no_progress") or 0)
+        failed = int(resumed.get("failed") or 0)
+        degraded_reasons: list[str] = []
+        if no_progress > 0:
+            degraded_reasons.append("dispatcher_no_progress")
+        if failed > 0:
+            degraded_reasons.append("dispatcher_failed")
+        continuity_ready = not degraded_reasons
         summary = {
-            "ok": True,
+            # "ok" is intentionally readiness, not mere process liveness.  A
+            # daemon that is alive but unable to advance continuity must fail
+            # closed so dashboards cannot turn no-progress into green.
+            "ok": continuity_ready,
+            "liveness_ok": True,
+            "continuity_ready": continuity_ready,
+            "degraded": not continuity_ready,
+            "degraded_reasons": degraded_reasons,
             "owner_id": owner,
             "lease_recovered": lease.recovered,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},

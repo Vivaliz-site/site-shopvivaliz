@@ -32,6 +32,8 @@ import {
   authorizationLoop,
   mainLoop,
   selectChatgptTab,
+  safeConversationId,
+  selectBoundConversationTabs,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
@@ -82,6 +84,30 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const tabs = [
+      { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
+    ];
+    assert.equal(safeConversationId('bad/id'), '');
+    const bound = selectBoundConversationTabs(
+      tabs,
+      '11111111-2222-3333-4444-555555555555',
+    );
+    assert.equal(bound.length, 1);
+    assert.equal(
+      bound[0].url,
+      'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
+      'explicit binding must select only the requested conversation',
+    );
+    assert.equal(
+      selectBoundConversationTabs(tabs, '99999999-2222-3333-4444-555555555555').length,
+      0,
+      'missing explicit binding must fail closed rather than choose another tab',
+    );
+  }
+
   {
     const started = Date.now();
     const result = await conversationStreamStatus(

@@ -23,6 +23,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -109,6 +110,18 @@ def _read_ledger(runtime_dir: Path) -> dict[str, dict[str, Any]]:
     return latest
 
 
+def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
+    if not task_id or "/" in task_id or "\\" in task_id:
+        return ""
+    path = runtime_dir / f"{task_id}.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    value = str(payload.get("conversation_id", "")).strip() if isinstance(payload, dict) else ""
+    return value if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value) else ""
+
+
 def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, Any]) -> bool:
     task_id = str(request.get("task_id", "")).strip()
     if not task_id or "/" in task_id or "\\" in task_id:
@@ -183,11 +196,15 @@ def enqueue_nudge_via_bridge(
     token: str,
     task_id: str,
     repository: str,
+    conversation_id: str = "",
     timeout_seconds: int = 15,
     bridge_host_header: str = "",
 ) -> dict[str, Any]:
     """Isolated so tests can monkeypatch it without a real network call."""
-    body = json.dumps({"operation": "enqueue", "task_id": task_id, "repository": repository}).encode("utf-8")
+    payload = {"operation": "enqueue", "task_id": task_id, "repository": repository}
+    if conversation_id:
+        payload["conversation_id"] = conversation_id
+    body = json.dumps(payload).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -380,6 +397,7 @@ def _run_once_locked(
             token=resolved_token,
             task_id=task_id,
             repository=repository,
+            conversation_id=_bound_conversation_id(root, task_id),
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
         previous_row = ledger.get(fingerprint) or {}

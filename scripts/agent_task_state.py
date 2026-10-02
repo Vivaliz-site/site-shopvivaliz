@@ -75,6 +75,13 @@ def _safe_repository(value: str) -> str:
     return repository
 
 
+def _safe_conversation_id(value: str) -> str:
+    conversation_id = str(value).strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", conversation_id):
+        raise TaskStateError("conversation_id must be an explicit ChatGPT conversation identifier")
+    return conversation_id
+
+
 def _path(task_id: str) -> Path:
     return RUNTIME_DIR / f"{_safe_id(task_id, 'task_id')}.json"
 
@@ -378,6 +385,17 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
+    # Detached recovery must not manufacture progress by re-writing the
+    # checkpoint it was asked to resume.  Evidence text alone is not a material
+    # state transition; keeping this a strict no-op preserves updated_at,
+    # history, evidence and therefore the queue fingerprint/cooldown.
+    if (
+        os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") == "1"
+        and str(payload.get("status", "")).strip() == "RUNNING"
+        and str(payload.get("next_action", "")).strip() == action
+    ):
+        return payload
+
     payload["status"] = "RUNNING"
     payload["next_action"] = action
     if evidence:
@@ -502,6 +520,23 @@ def resume_task(task_id: str, *, next_action: str) -> dict[str, Any]:
     return payload
 
 
+@_serialized_transition
+def bind_conversation(task_id: str, *, conversation_id: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot change conversation binding")
+    bound = _safe_conversation_id(conversation_id)
+    existing = str(payload.get("conversation_id", "")).strip()
+    if existing and existing != bound:
+        raise TaskStateError("conversation binding already exists and cannot be replaced implicitly")
+    if existing == bound:
+        return payload
+    payload["conversation_id"] = bound
+    _history(payload, "conversation_bound", conversation_id=bound)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 def load_task(task_id: str) -> dict[str, Any]:
     return _load(task_id)
 
@@ -548,6 +583,10 @@ def _parser() -> argparse.ArgumentParser:
     resume.add_argument("--task", required=True)
     resume.add_argument("--next-action", required=True)
 
+    bind = sub.add_parser("bind-conversation")
+    bind.add_argument("--task", required=True)
+    bind.add_argument("--conversation-id", required=True)
+
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
 
@@ -585,6 +624,8 @@ def main() -> int:
             )
         elif args.command == "resume":
             payload = resume_task(args.task, next_action=args.next_action)
+        elif args.command == "bind-conversation":
+            payload = bind_conversation(args.task, conversation_id=args.conversation_id)
         elif args.command == "show":
             payload = load_task(args.task)
         elif args.command == "terminal":

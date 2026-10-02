@@ -143,6 +143,81 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         events = self.runtime / controller.EVENTS_FILE
         self.assertFalse(events.exists(), "idle 30-second cycles must not grow an unbounded event ledger")
 
+    def test_no_progress_cycle_is_live_but_not_continuity_ready(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 1, "dispatched": 0}),
+            patch.object(
+                controller.nudge_dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 1,
+                    "eligible": 0,
+                    "dispatched": 0,
+                    "skipped_no_token": 0,
+                    "skipped_stale_checkpoint": 0,
+                },
+            ),
+            patch.object(
+                controller.dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 1,
+                    "eligible": 1,
+                    "executed": 1,
+                    "progressed": 0,
+                    "terminal": 0,
+                    "no_progress": 1,
+                    "failed": 0,
+                    "deferred_chatgpt": 0,
+                },
+            ),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="no-progress-owner")
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["liveness_ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertTrue(result["degraded"])
+        self.assertEqual(result["degraded_reasons"], ["dispatcher_no_progress"])
+
+    def test_failed_cycle_is_not_continuity_ready(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(
+                controller.nudge_dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 0,
+                    "eligible": 0,
+                    "dispatched": 0,
+                    "skipped_no_token": 0,
+                    "skipped_stale_checkpoint": 0,
+                },
+            ),
+            patch.object(
+                controller.dispatcher,
+                "run_once",
+                return_value={
+                    "scanned": 1,
+                    "eligible": 1,
+                    "executed": 1,
+                    "progressed": 0,
+                    "terminal": 0,
+                    "no_progress": 0,
+                    "failed": 1,
+                    "deferred_chatgpt": 0,
+                },
+            ),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="failed-owner")
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["liveness_ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertEqual(result["degraded_reasons"], ["dispatcher_failed"])
+
     def test_material_cycle_keeps_forensic_event(self) -> None:
         controller = load_controller()
         with (

@@ -60,6 +60,36 @@ class AgentTaskStateTests(unittest.TestCase):
             state.mark_ready("owned-proof", evidence=["observed PASS"], verification="fresh")
             self.assertEqual(state.complete_task("owned-proof")["status"], "CONCLUIDO")
 
+    def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
+        state.start_task("bound-task", "verify", "work")
+        bound = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        self.assertEqual(bound["conversation_id"], "6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        same = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        self.assertEqual(same, bound)
+        with self.assertRaisesRegex(state.TaskStateError, "cannot be replaced"):
+            state.bind_conversation("bound-task", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    def test_duplicate_background_progress_is_exact_noop(self) -> None:
+        state.start_task("duplicate-background", "verify", "work")
+        state.record_progress("duplicate-background", next_action="deploy corrected release", evidence="foreground evidence")
+        before = state.load_task("duplicate-background")
+        before_bytes = state._path("duplicate-background").read_bytes()
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_REQUEST_ID": "resume-current",
+            "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": str(len(before["history"])),
+        }):
+            returned = state.record_progress(
+                "duplicate-background",
+                next_action="deploy corrected release",
+                evidence="background churn that must not be persisted",
+            )
+        after = state.load_task("duplicate-background")
+        self.assertEqual(returned, before)
+        self.assertEqual(after, before)
+        self.assertEqual(state._path("duplicate-background").read_bytes(), before_bytes)
+        self.assertNotIn("background churn that must not be persisted", after["evidence"])
+
     def test_stale_background_progress_cannot_replace_foreground_action(self) -> None:
         state.start_task("stale-write", "verify", "work")
         state.record_progress("stale-write", next_action="foreground deployment")
