@@ -378,6 +378,17 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     action = str(next_action).strip()
     if not action:
         raise TaskStateError("non-terminal task requires a concrete next_action")
+    # Detached recovery must not manufacture progress by re-writing the
+    # checkpoint it was asked to resume.  Evidence text alone is not a material
+    # state transition; keeping this a strict no-op preserves updated_at,
+    # history, evidence and therefore the queue fingerprint/cooldown.
+    if (
+        os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") == "1"
+        and str(payload.get("status", "")).strip() == "RUNNING"
+        and str(payload.get("next_action", "")).strip() == action
+    ):
+        return payload
+
     payload["status"] = "RUNNING"
     payload["next_action"] = action
     if evidence:
