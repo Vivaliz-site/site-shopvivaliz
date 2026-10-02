@@ -288,8 +288,8 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
 def browser_screenshot() -> dict[str, Any]:
     window = active_browser_window()
     focus(window)
-    fd, path = tempfile.mkstemp(prefix="shopvivaliz-browser-", suffix=".png")
-    os.close(fd)
+    tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-browser-")
+    path = str(Path(tmpdir) / "screenshot.png")
     try:
         if shutil.which("scrot"):
             run_gui(["scrot", "-u", path], timeout=20)
@@ -312,10 +312,7 @@ def browser_screenshot() -> dict[str, Any]:
             "__mcp_image__": base64.b64encode(raw).decode("ascii"),
         }
     finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
