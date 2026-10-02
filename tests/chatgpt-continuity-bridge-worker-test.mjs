@@ -901,6 +901,51 @@ async function run() {
 
   {
     const calls = [];
+    let repairedFocus = false;
+    let sendEnabled = false;
+    let draft = '';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus-repair')) {
+          repairedFocus = true;
+          return true;
+        }
+        if (source.includes('continuity-composer-focus')) return repairedFocus;
+        if (source.includes('continuity-send-button-target')) {
+          return sendEnabled ? { state: 'ready', x: 700, y: 640 } : { state: 'disabled' };
+        }
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method !== 'Input.dispatchKeyEvent') return {};
+        if (params.type === 'char' && typeof params.text === 'string') {
+          draft += params.text;
+          if (draft.trim() === 'continue') sendEnabled = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'reattached composer must get one bounded focus repair after the trusted pointer click',
+    );
+    assert.equal(repairedFocus, true);
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-composer-focus-repair')),
+      'worker must attempt the bounded focus repair before giving up on an empty safe composer',
+    );
+  }
+
+  {
+    const calls = [];
     const cdp = {
       async evaluate(expression) {
         const source = String(expression);
