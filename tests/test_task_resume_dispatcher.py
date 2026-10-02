@@ -180,6 +180,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["progressed"], 0)
         self.assertEqual(result["no_progress"], 1)
         current = json.loads((self.runtime / "resume-e2e.json").read_text())
+        self.assertEqual(current, state, "executor-owned no-progress mutations must be rolled back exactly")
         self.assertEqual(current["next_action"], "continue real work")
         ledger = [
             json.loads(line)
@@ -222,6 +223,11 @@ task_id = os.environ["SHOPVIVALIZ_TASK_ID"]
 state_path = runtime / f"{task_id}.json"
 state = json.loads(state_path.read_text())
 state.setdefault("evidence", []).append("generic verification passed")
+state.setdefault("history", []).append({
+    "event": "progress",
+    "resume_request_id": os.environ["SHOPVIVALIZ_RESUME_REQUEST_ID"],
+    "next_action": state.get("next_action"),
+})
 state["updated_at"] = "2026-09-26T20:06:00Z"
 state_path.write_text(json.dumps(state))
 """,

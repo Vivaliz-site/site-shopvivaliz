@@ -208,6 +208,40 @@ def _material_progress(before: dict[str, Any], after: dict[str, Any]) -> bool:
     return False
 
 
+def _restore_executor_owned_no_progress(
+    state_path: Path,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    request_id: str,
+) -> bool:
+    """Undo executor-owned checkpoint churn without clobbering concurrent progress."""
+    history = after.get("history")
+    rows = history if isinstance(history, list) else []
+    latest = rows[-1] if rows and isinstance(rows[-1], dict) else {}
+    if str(latest.get("resume_request_id", "")).strip() != str(request_id).strip():
+        return False
+
+    payload = (json.dumps(before, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{state_path.name}.", suffix=".tmp", dir=state_path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=True) as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, state_path)
+        dir_fd = os.open(state_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        return True
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
         return False
@@ -426,7 +460,8 @@ def _execute(
             timeout=max(1, int(timeout_seconds)),
         )
         exit_code = int(completed.returncode)
-        after_state = _load_json(_state_path(runtime_dir, task_id))
+        state_path = _state_path(runtime_dir, task_id)
+        after_state = _load_json(state_path)
         if after_state and _material_progress(state, after_state):
             if str(after_state.get("status", "")).strip() in TERMINAL_STATES:
                 result = "terminal"
@@ -434,6 +469,14 @@ def _execute(
                 result = "progress"
         else:
             result = "no_progress"
+            if after_state:
+                _restore_executor_owned_no_progress(
+                    state_path,
+                    state,
+                    after_state,
+                    str(request.get("id", "")),
+                )
+                after_state = _load_json(state_path)
         diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
         return result, exit_code, after_state, diagnostic
     except subprocess.TimeoutExpired:
