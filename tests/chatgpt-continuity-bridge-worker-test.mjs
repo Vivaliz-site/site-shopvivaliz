@@ -11,6 +11,7 @@ import {
   recoverableFailureReason,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  bridgeResultPayload,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -89,6 +90,21 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const bound = 'conversation_12345678';
+    const errorPayload = bridgeResultPayload(
+      'task-1',
+      { result_status: 'ERROR', conversation_id: bound, detail: 'failed' },
+      'failed',
+    );
+    assert.equal(errorPayload.conversation_id, undefined);
+    const confirmedPayload = bridgeResultPayload(
+      'task-1',
+      { result_status: 'PROGRESS_CONFIRMED', conversation_id: bound, detail: 'ok' },
+      'ok',
+    );
+    assert.equal(confirmedPayload.conversation_id, bound);
+  }
   {
     const timeoutCdp = fakeCdp({ pageText: 'Esgotou-se o tempo limite da solicitação. Repetir' });
     assert.equal(await errorBannerPresent(timeoutCdp), true);
