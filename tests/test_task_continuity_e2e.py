@@ -236,6 +236,26 @@ class ProbeEvaluationTests(unittest.TestCase):
             ok, reasons = probe.evaluate(observation)
             self.assertTrue(ok, reasons)
 
+    def test_failed_synthetic_checkpoint_is_preserved_outside_active_runtime(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "agent-task-state"
+            runtime.mkdir()
+            task_id = "continuity-e2e-failed"
+            source = runtime / f"{task_id}.json"
+            source.write_text(json.dumps({"task_id": task_id, "status": "RUNNING"}), encoding="utf-8")
+            destination = probe.quarantine_failed_probe(runtime_dir=runtime, task_id=task_id)
+            self.assertIsNotNone(destination)
+            self.assertFalse(source.exists())
+            self.assertTrue(destination.is_file())
+            self.assertTrue((destination.parent / f"{task_id}.sha256").is_file())
+
+    def test_quarantine_refuses_non_e2e_task(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                probe.quarantine_failed_probe(runtime_dir=Path(tmp), task_id="real-production-task")
+
     def test_create_synthetic_task_binds_before_progress(self) -> None:
         probe = load_probe()
         calls = []
