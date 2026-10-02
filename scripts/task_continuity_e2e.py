@@ -287,15 +287,32 @@ def quarantine_failed_probe(*, runtime_dir: Path, task_id: str) -> Path | None:
         return None
     archive_dir = runtime_dir.parent / "agent-task-state-e2e-failures"
     archive_dir.mkdir(parents=True, exist_ok=True)
-    destination = archive_dir / source.name
     raw = source.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    os.replace(source, destination)
-    (archive_dir / f"{task_id}.sha256").write_text(
-        f"{digest}  {destination.name}\n",
-        encoding="utf-8",
-    )
-    return destination
+
+    destination = archive_dir / source.name
+    digest_path = archive_dir / f"{task_id}.sha256"
+    try:
+        os.replace(source, destination)
+        digest_path.write_text(
+            f"{digest}  {destination.name}\n",
+            encoding="utf-8",
+        )
+        return destination
+    except PermissionError:
+        # A historical archive directory may be root-owned on older hosts.
+        # Never leave a failed synthetic RUNNING checkpoint active just because
+        # the preferred archive is not writable. Quarantine it atomically in
+        # the runtime itself under an underscore-prefixed name; the watchdog
+        # intentionally ignores underscore-prefixed JSON files.
+        fallback = runtime_dir / f"_e2e-failure-{task_id}.json"
+        fallback_digest = runtime_dir / f"_e2e-failure-{task_id}.sha256"
+        os.replace(source, fallback)
+        fallback_digest.write_text(
+            f"{digest}  {fallback.name}\n",
+            encoding="utf-8",
+        )
+        return fallback
 
 
 def main() -> int:
