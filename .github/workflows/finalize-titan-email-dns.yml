@@ -1,0 +1,37 @@
+name: Finalize Titan email DNS retirement
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Delete obsolete Titan DKIM selector
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  retire-titan-dns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python3 -m unittest tests.test_retire_titan_dns -v
+      - name: Retire Titan DKIM selector
+        env:
+          CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            args+=(--apply)
+          fi
+          python3 scripts/retire-titan-dns.py "${args[@]}"
