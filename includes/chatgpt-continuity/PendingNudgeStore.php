@@ -152,19 +152,23 @@ final class SvChatgptContinuityPendingNudgeStore
      * appended as a second row, which would leave status()/pullOldest()
      * seeing stale historical data ahead of the current one.
      */
-    public function enqueue(string $taskId, string $repository, string $requestedAt): bool
+    public function enqueue(string $taskId, string $repository, string $requestedAt, string $conversationId = ''): bool
     {
-        return (bool)$this->withLock(function (array $nudges) use ($taskId, $repository, $requestedAt) {
+        return (bool)$this->withLock(function (array $nudges) use ($taskId, $repository, $requestedAt, $conversationId) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] !== $taskId) {
                     continue;
                 }
                 if (in_array($row['status'], ['PENDING', 'CLAIMED'], true)) {
+                    if ($conversationId !== '' && (string)($row['conversation_id'] ?? '') === '') {
+                        $nudges[$index]['conversation_id'] = $conversationId;
+                    }
                     return ['nudges' => $nudges, 'return' => false];
                 }
                 $nudges[$index] = [
                     'task_id' => $taskId,
                     'repository' => $repository,
+                    'conversation_id' => $conversationId !== '' ? $conversationId : null,
                     'requested_at' => $requestedAt,
                     'status' => 'PENDING',
                     'claimed_at' => null,
@@ -176,6 +180,7 @@ final class SvChatgptContinuityPendingNudgeStore
             $nudges[] = [
                 'task_id' => $taskId,
                 'repository' => $repository,
+                'conversation_id' => $conversationId !== '' ? $conversationId : null,
                 'requested_at' => $requestedAt,
                 'status' => 'PENDING',
                 'claimed_at' => null,
