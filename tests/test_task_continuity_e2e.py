@@ -35,6 +35,15 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("python3 scripts/agent_task_state.py ready", next_action)
         self.assertIn("python3 scripts/agent_task_state.py complete", next_action)
         self.assertIn("continuity_e2e_pass", next_action)
+        self.assertNotIn("--evidence", next_action)
+        command_lines = [line.split(") ", 1)[1] for line in next_action.splitlines() if line.startswith(("1) ", "2) "))]
+        self.assertEqual(
+            command_lines,
+            [
+                "python3 scripts/agent_task_state.py ready --task continuity-e2e-fixture --verification continuity_e2e_pass",
+                "python3 scripts/agent_task_state.py complete --task continuity-e2e-fixture",
+            ],
+        )
         self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
         self.assertIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
 
