@@ -33,7 +33,11 @@ DISPLAY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_DISPLAY", ":0")
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
-BASE_SERVER_DIR = str(Path(BASE_SERVER).resolve().parent)\nif BASE_SERVER_DIR not in sys.path:\n    sys.path.insert(0, BASE_SERVER_DIR)\n\nspec = importlib.util.spec_from_file_location("shopvivaliz_remote_control_base", BASE_SERVER)
+BASE_SERVER_DIR = str(Path(BASE_SERVER).resolve().parent)
+if BASE_SERVER_DIR not in sys.path:
+    sys.path.insert(0, BASE_SERVER_DIR)
+
+spec = importlib.util.spec_from_file_location("shopvivaliz_remote_control_base", BASE_SERVER)
 if spec is None or spec.loader is None:
     raise RuntimeError("base_remote_control_server_not_found")
 base = importlib.util.module_from_spec(spec)
