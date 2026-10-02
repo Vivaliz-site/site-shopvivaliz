@@ -1,3 +1,9 @@
+<!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
+## Auditoria externa também é corretiva
+- Auditoria externa/independente segue o mesmo ciclo de investigação, correção, prevenção e validação.
+- Com autorização operacional, o auditor corrige, testa e reaudita; se for read-only, o relatório é intermediário e os achados seguem para executor autorizado até correção e revalidação independente ou bloqueio externo comprovado.
+<!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
+
 <!-- GEPETO_EVERY_TASK_V1 -->
 ## Gepeto obrigatorio em toda tarefa
 Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova mencao do usuario. Leia e cumpra `../../GEPETO-POLICY.md`. Se o runtime nao expuser o plugin, registre `GEPETO_UNAVAILABLE`, informe a limitacao e continue o trabalho autorizado sem simular participacao. Aplicar um plugin nao comprova delegacao nem revisao independente.
