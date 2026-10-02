@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 📊 Proactive Metrics Monitor - Detecta degradação antes da falha
  * Monitora: CPU, memória, taxa de sucesso, latência, queue size
@@ -336,13 +337,10 @@ HTML;
     }
 
     private function sendAlert($title, $message) {
-        // Enviar email
-        mail(
-            'fredmourao@gmail.com',
-            "[SHOPVIVALIZ METRICS] $title",
-            $message,
-            'From: monitor@shopvivaliz.com.br'
-        );
+        $html = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars((string)$message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        send_email('fredmourao@gmail.com', "[SHOPVIVALIZ METRICS] $title", $html);
 
         // Registrar em log
         file_put_contents(

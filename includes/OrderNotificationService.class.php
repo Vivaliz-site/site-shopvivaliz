@@ -411,12 +411,10 @@ class OrderNotificationService
 
     private function isSandboxMode(): bool
     {
-        $smtpUser = getenv('SMTP_USER') ?: '';
-        // If SMTP_USER is gmail or APP_ENV is dev/staging, default to sandbox mode
-        if (str_contains($smtpUser, 'gmail') || getenv('APP_ENV') === 'development' || getenv('APP_ENV') === 'staging') {
-            return true;
-        }
-        return false;
+        $appEnv = strtolower(trim((string)(getenv('APP_ENV') ?: 'production')));
+        $explicit = strtolower(trim((string)(getenv('EMAIL_SANDBOX') ?: '')));
+        return in_array($appEnv, ['development', 'staging', 'test'], true)
+            || in_array($explicit, ['1', 'true', 'yes', 'on'], true);
     }
 
     private function sendEmail(string $to, string $subject, string $html, string $text): array

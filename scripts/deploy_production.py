@@ -130,7 +130,7 @@ def verify_secrets():
     required_secrets = [
         'SHOPEE_ACCESS_TOKEN',
         'TIKTOK_APP_KEY',
-        'SMTP_HOST',
+        'BREVO_API_KEY',
     ]
     # In production, these would be in GitHub Secrets
     pass
