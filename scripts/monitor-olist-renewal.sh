@@ -46,9 +46,11 @@ check_email() {
     local email_logs=(logs/email-*.log)
 
     echo ""
-    echo "Status Email SMTP:"
-    if grep -q "SMTP_HOST=smtp.gmail.com" .env 2>/dev/null; then
-        echo "  ✅ Gmail configurado (shopvivaliz@gmail.com)"
+    echo "Status Email Brevo API:"
+    if grep -q "^BREVO_API_KEY=." .env 2>/dev/null; then
+        echo "  ✅ Brevo API configurada"
+    else
+        echo "  ⚠️ BREVO_API_KEY ausente"
     fi
 
     if (( ${#email_logs[@]} > 0 )); then
