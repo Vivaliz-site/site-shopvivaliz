@@ -1088,6 +1088,39 @@ async function run() {
 
   {
     const calls = [];
+    let draft = '';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus-repair')) return false;
+        if (source.includes('continuity-composer-focus')) return false;
+        if (source.includes('continuity-composer-draft-after-trusted-insert')) return draft;
+        if (source.includes('continuity-send-button-target')) return { state: 'disabled' };
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method === 'Input.insertText') draft += String(params.text || '');
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'BODY-focus recovery must fall back to trusted Enter when exact inserted draft has no enabled Send button',
+    );
+    assert.equal(draft, 'continue');
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchKeyEvent' && call[2]?.key === 'Enter'),
+      'BODY-focus recovery must submit the verified safe draft with trusted Enter when Send stays unavailable',
+    );
+  }
+
+  {
+    const calls = [];
     const cdp = {
       async evaluate(expression) {
         const source = String(expression);
