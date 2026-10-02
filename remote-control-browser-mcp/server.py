@@ -314,6 +314,7 @@ def browser_screenshot() -> dict[str, Any]:
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
+BASE_TOOL_SPECS = base.tool_specs
 BASE_AUDIT = base.audit
 
 
@@ -403,7 +404,7 @@ BROWSER_TOOL_SPECS = [
 
 
 def tool_specs() -> list[dict[str, Any]]:
-    return base.tool_specs() + BROWSER_TOOL_SPECS
+    return BASE_TOOL_SPECS() + BROWSER_TOOL_SPECS
 
 
 base.execute_tool = execute_tool
