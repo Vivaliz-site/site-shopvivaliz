@@ -431,7 +431,8 @@ class TaskContinuityPolicyTests(unittest.TestCase):
 
         workflow_text = workflow.read_text(encoding="utf-8")
         self.assertIn("scripts/task_continuity_e2e.py", workflow_text)
-        self.assertIn("shopvivaliz-a1-deploy", workflow_text)
+        self.assertIn("shopvivaliz-backend-browser", workflow_text)
+        self.assertNotIn("shopvivaliz-a1-deploy", workflow_text)
 
         validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
         self.assertIn("task_continuity_e2e.py", validator)
