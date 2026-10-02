@@ -193,6 +193,21 @@ def _state_signature(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _material_progress(before: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Accept only objective durable advancement, not timestamp/evidence churn."""
+    before_status = str(before.get("status", "")).strip()
+    after_status = str(after.get("status", "")).strip()
+    if after_status in TERMINAL_STATES and after_status != before_status:
+        return True
+
+    before_next = str(before.get("next_action", "")).strip()
+    after_next = str(after.get("next_action", "")).strip()
+    if after_next and after_next != before_next:
+        return True
+
+    return False
+
+
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
         return False
@@ -412,8 +427,7 @@ def _execute(
         )
         exit_code = int(completed.returncode)
         after_state = _load_json(_state_path(runtime_dir, task_id))
-        after = _state_signature(after_state) if after_state else ""
-        if after and after != before:
+        if after_state and _material_progress(state, after_state):
             if str(after_state.get("status", "")).strip() in TERMINAL_STATES:
                 result = "terminal"
             else:
