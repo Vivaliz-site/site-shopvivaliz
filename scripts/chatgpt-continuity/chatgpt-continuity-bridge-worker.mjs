@@ -29,6 +29,8 @@ const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
 const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
   || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
+const REINFORCEMENT_HEALTH_FILE = process.env.CHATGPT_CONTINUITY_REINFORCEMENT_HEALTH_FILE
+  || '/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/reinforcement-health.json';
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
@@ -118,6 +120,53 @@ const REINFORCEMENT_SWEEP_MAX_CANDIDATES = Math.max(
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
+
+function loadReinforcementHealth() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(REINFORCEMENT_HEALTH_FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistReinforcementHealth(targetKey, outcome, observedAtMs = Date.now()) {
+  const previous = loadReinforcementHealth();
+  const unresolved = previous.unresolved && typeof previous.unresolved === 'object'
+    ? { ...previous.unresolved }
+    : {};
+  const action = text(outcome?.action);
+  const key = text(targetKey) || 'active';
+  const unresolvedActions = new Set(['sent_unconfirmed', 'send_failed', 'error']);
+  const resolvedActions = new Set(['self_resolved', 'confirmed_progress', 'no_banner']);
+  if (unresolvedActions.has(action)) {
+    unresolved[key] = {
+      action,
+      observed_at: new Date(observedAtMs).toISOString(),
+      sent: outcome?.sent === true,
+      progress_confirmed: outcome?.progress_confirmed === true,
+      http_status: Math.max(0, Number(outcome?.http_status || 0)),
+    };
+  } else if (resolvedActions.has(action)) {
+    delete unresolved[key];
+  }
+  const payload = {
+    schema_version: 1,
+    updated_at: new Date(observedAtMs).toISOString(),
+    last_action: action || 'unknown',
+    last_http_status: Math.max(0, Number(outcome?.http_status || 0)),
+    candidate_count: Math.max(0, Number(outcome?.candidate_count || 0)),
+    project_count: Math.max(0, Number(outcome?.project_count || 0)),
+    unresolved,
+    unresolved_count: Object.keys(unresolved).length,
+  };
+  const tmp = REINFORCEMENT_HEALTH_FILE + '.tmp-' + process.pid;
+  fs.mkdirSync(new URL('.', 'file://' + REINFORCEMENT_HEALTH_FILE).pathname, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(tmp, JSON.stringify(payload) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, REINFORCEMENT_HEALTH_FILE);
+  fs.chmodSync(REINFORCEMENT_HEALTH_FILE, 0o600);
+  return payload;
+}
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 
 function outcomeDetailCode(detail) {
@@ -2592,6 +2641,8 @@ async function reinforcementLoop(
       };
     }
 
+    persistReinforcementHealth('active', outcome, now());
+
     if (allowAccountDiscovery) {
       console.log(
         'chatgpt_continuity_reinforcement_discovery'
@@ -2631,7 +2682,7 @@ async function reinforcementLoop(
       REINFORCEMENT_RECENT_CURSOR = sweep.next_cursor;
       for (const candidate of sweep.batch) {
         try {
-          await check(
+          const candidateOutcome = await check(
             () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
             REINFORCEMENT_CONFIRM_DELAY_MS,
             confirmAssistantProgress,
@@ -2643,7 +2694,13 @@ async function reinforcementLoop(
             ),
             { allowCrossDeviceDiscovery: true },
           );
+          persistReinforcementHealth('conversation:' + sha(candidate.id), candidateOutcome, now());
         } catch (error) {
+          persistReinforcementHealth(
+            'conversation:' + sha(candidate.id),
+            { action: 'error', detail: text(error?.message), cross_device_discovery: true },
+            now(),
+          );
           console.error(
             `chatgpt_continuity_reinforcement_sweep_error source=${text(candidate?.source)} project=${candidate?.project_id ? 'true' : 'false'} detail=${text(error?.message)}`,
           );
@@ -2711,6 +2768,8 @@ export {
   reinforcementDiscoveryDelayMs,
   bridgeLoop,
   reinforcementLoop,
+  loadReinforcementHealth,
+  persistReinforcementHealth,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,
