@@ -45,6 +45,7 @@ EVENTS_FILE = "_gemini-24x7-controller-events.jsonl"
 STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
 DEFAULT_INTERVAL_SECONDS = 30
+CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
 
 
 def utc_now() -> str:
@@ -143,6 +144,18 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
+    state = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
+    if not state:
+        return {"degraded": False, "action": "", "updated_at": ""}
+    return {
+        "degraded": state.get("degraded") is True,
+        "action": str(state.get("action", "")).strip(),
+        "updated_at": str(state.get("updated_at", "")).strip(),
+        "failure_reason": str(state.get("failure_reason", "")).strip(),
+    }
 
 
 def _append_event(root: Path, event: str, **fields: Any) -> None:
@@ -299,6 +312,7 @@ def run_once(
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
+        monitor = _chatgpt_monitor_health(root)
         degraded_reasons: list[str] = []
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
@@ -310,6 +324,8 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
+        if monitor.get("degraded") is True:
+            degraded_reasons.append("chatgpt_browser_stall_unresolved")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -325,6 +341,7 @@ def run_once(
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "chatgpt_monitor": monitor,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
