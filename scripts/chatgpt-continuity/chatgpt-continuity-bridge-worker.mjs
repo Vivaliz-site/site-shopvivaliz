@@ -224,6 +224,17 @@ async function connectFirstUsableChatgptTab(tabs, connector) {
   return null;
 }
 
+function safeConversationId(value) {
+  const id = text(value);
+  return /^[A-Za-z0-9_-]{8,160}$/.test(id) ? id : '';
+}
+
+function selectBoundConversationTabs(tabs, conversationId) {
+  const id = safeConversationId(conversationId);
+  if (!id) return [];
+  return (Array.isArray(tabs) ? tabs : []).filter(tab => conversationIdFromTab(tab) === id);
+}
+
 function conversationIdFromTab(tab) {
   if (chatgptTabRank(tab) !== 0) return '';
   try {
@@ -358,7 +369,11 @@ class Cdp {
     });
   }
 
-  static async connectToChatgptTab({ allowLatestDisambiguation = false, targetUpdatedAtMs = 0 } = {}) {
+  static async connectToChatgptTab({
+    allowLatestDisambiguation = false,
+    targetUpdatedAtMs = 0,
+    targetConversationId = '',
+  } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
         `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
@@ -371,8 +386,25 @@ class Cdp {
       (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
     let candidateTabs = tabs;
+    const boundConversationId = safeConversationId(targetConversationId);
     const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
-    if (allowLatestDisambiguation && checkpointTargetMs > 0) {
+    if (boundConversationId) {
+      candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
+      if (candidateTabs.length === 0) {
+        const neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
+        if (neutralHomeTabs.length !== 1) {
+          throw new Error('bound conversation is not available in the attached browser');
+        }
+        const [neutralHomeTab] = neutralHomeTabs;
+        const navigated = await navigateNeutralTabToConversation(
+          neutralHomeTab,
+          boundConversationId,
+          connectCdpTarget,
+        );
+        if (!navigated) throw new Error('bound conversation could not be opened');
+        candidateTabs = [neutralHomeTab];
+      }
+    } else if (allowLatestDisambiguation && checkpointTargetMs > 0) {
       // Checkpoint-driven recovery must bind to the intended conversation
       // even when the persistent browser currently has only a neutral home
       // tab. Otherwise "continue" can be typed into a new chat instead of the
@@ -2048,6 +2080,7 @@ async function attemptNudge(
   connect = null,
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
+  conversationId = '',
 ) {
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
@@ -2064,7 +2097,8 @@ async function attemptNudge(
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
-      targetUpdatedAtMs: checkpointUpdatedAtMs(taskId),
+      targetUpdatedAtMs: conversationId ? 0 : checkpointUpdatedAtMs(taskId),
+      targetConversationId: conversationId,
     }));
     cdp = await connector();
     detectedFailureReason = await recoverableFailureReason(cdp);
@@ -2249,7 +2283,14 @@ async function pollBridgeOnce() {
   if (response.status !== 'JOB') return;
   const taskId = response.nudge?.task_id;
   if (!taskId) return;
-  const outcome = await attemptNudge(taskId);
+  const conversationId = safeConversationId(response.nudge?.conversation_id || '');
+  const outcome = await attemptNudge(
+    taskId,
+    null,
+    confirmAssistantProgress,
+    waitForComposerUsable,
+    conversationId,
+  );
   const failureReason = text(outcome.failure_reason);
   const persistedDetail = failureReason
     ? `failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=${failureReason};recovery_attempt=${Number(outcome.recovery_attempt || 1)};recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}; ${text(outcome.detail).slice(0, 360)}`
@@ -2628,6 +2669,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 export {
   Cdp,
   selectChatgptTab,
+  safeConversationId,
+  selectBoundConversationTabs,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
