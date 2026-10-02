@@ -83,8 +83,9 @@ def deploy_production():
                 'app_key': '6kf502maarj2k',
                 'status': 'active'
             },
-            'smtp': {
-                'host': 'smtp0101.titan.email',
+            'transactional_email': {
+                'provider': 'brevo_api',
+                'from': 'atendimento@shopvivaliz.com.br',
                 'status': 'active'
             }
         },
