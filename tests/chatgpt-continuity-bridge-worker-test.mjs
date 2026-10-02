@@ -67,6 +67,9 @@ function fakeCdp({
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
+      if (expression.includes('continuity-request-timeout-probe')) {
+        return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
