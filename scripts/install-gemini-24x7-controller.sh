@@ -20,7 +20,11 @@ gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
 test -f "$unit_source"
-python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py"
+compile_cache="$(mktemp -d)"
+trap 'rm -rf "$compile_cache"' EXIT
+PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py"
+rm -rf "$compile_cache"
+trap - EXIT
 if [ -z "$release_id" ] && [ -f "$release_dir/.release-sha" ]; then
   release_id="$(tr -d '[:space:]' < "$release_dir/.release-sha")"
 fi
