@@ -1,0 +1,197 @@
+name: ChatGPT Continuity A1 Browser API Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chatgpt-continuity-a1-browser-api-diag.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.event.pull_request.head.ref == 'diag/chatgpt-continuity-a1-browser-api-20260927'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Inspect A1 continuity runtime read only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "A1_CONTINUITY_DIAG_BEGIN"
+          if systemctl is-active --quiet shopvivaliz-agent.service; then
+            echo "A1_AGENT_SERVICE=active"
+          else
+            echo "A1_AGENT_SERVICE=inactive_or_missing"
+          fi
+          if pgrep -af 'autonomous-agent-loop.sh' >/dev/null 2>&1; then
+            echo "A1_AGENT_LOOP_PROCESS=running"
+          else
+            echo "A1_AGENT_LOOP_PROCESS=missing"
+          fi
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          if grep -Fq 'chatgpt_continuity_nudge_dispatcher.py' "$current/scripts/autonomous-agent-loop.sh" 2>/dev/null; then
+            echo "A1_LOOP_HAS_CHATGPT_DISPATCHER=yes"
+          else
+            echo "A1_LOOP_HAS_CHATGPT_DISPATCHER=no"
+          fi
+          if grep -Eq '^CHATGPT_CONTINUITY_BRIDGE_TOKEN=.+' /home/ubuntu/shopvivaliz-deploy/shared/.env 2>/dev/null; then
+            echo "A1_ENV_CONTINUITY_TOKEN=present"
+          else
+            echo "A1_ENV_CONTINUITY_TOKEN=missing"
+          fi
+          if [ -s /home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token ]; then
+            echo "A1_TOKEN_FILE=present"
+          else
+            echo "A1_TOKEN_FILE=missing"
+          fi
+          code="$(curl -sS -o /tmp/chatgpt-bridge-local-body -w '%{http_code}' --max-time 10             -H 'Host: shopvivaliz.com.br'             -H 'Content-Type: application/json'             --data '{"operation":"heartbeat"}'             http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php || true)"
+          echo "A1_LOCAL_BRIDGE_UNAUTH_HTTP=${code:-000}"
+          if [ -s /tmp/chatgpt-bridge-local-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/chatgpt-bridge-local-body').read_text(encoding='utf-8',errors='replace').split())[:200]
+          print('A1_LOCAL_BRIDGE_BODY='+body)
+          PY
+          fi
+          log=/home/ubuntu/shopvivaliz-deploy/current/logs/autonomous-agent.log
+          if [ -r "$log" ]; then
+            echo "A1_AGENT_LOG=present"
+            python3 - "$log" <<'PY'
+          import re,sys
+          from pathlib import Path
+          lines=Path(sys.argv[1]).read_text(encoding='utf-8',errors='replace').splitlines()
+          pats=('Task continuation watchdog completed.','ChatGPT continuity nudge dispatcher completed.','ChatGPT continuity nudge dispatcher did not complete cleanly')
+          hits=[line for line in lines[-5000:] if any(p in line for p in pats)]
+          print('A1_CONTINUITY_LOG_MATCHES='+str(len(hits)))
+          for line in hits[-10:]:
+              print('A1_CONTINUITY_LOG='+re.sub(r'[^\x20-\x7E]','',line)[:300])
+          PY
+          else
+            echo "A1_AGENT_LOG=missing"
+          fi
+          echo "A1_CONTINUITY_DIAG_END"
+
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+
+      - name: Inspect Browser Worker API read only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          echo BROWSER_API_DIAG_BEGIN
+          health="$(curl -fsS --max-time 5 http://127.0.0.1:17777/health)"
+          HEALTH="$health" python3 - <<'PY'
+          import json,os
+          j=json.loads(os.environ['HEALTH'])
+          print('BROWSER_WORKER_HEALTH_OK='+str(j.get('ok') is True).lower())
+          print('BROWSER_WORKER_ENDPOINT='+str(j.get('endpoint','')))
+          PY
+
+          sessions="$(curl -fsS --max-time 5 http://127.0.0.1:17777/sessions)"
+          SESSIONS="$sessions" python3 - <<'PY'
+          import json,os
+          j=json.loads(os.environ['SESSIONS'])
+          rows=j.get('sessions',[]) if isinstance(j,dict) else []
+          print('BROWSER_WORKER_SESSION_COUNT='+str(len(rows)))
+          for row in rows:
+              if not isinstance(row,dict):
+                  continue
+              safe={
+                  'profile': row.get('profile'),
+                  'persistent': row.get('persistent'),
+                  'status': row.get('status'),
+                  'headless': row.get('headless'),
+              }
+              print('BROWSER_WORKER_SESSION='+json.dumps(safe,separators=(',',':')))
+          PY
+
+          for endpoint in /openapi.json /api /; do
+            code="$(curl -sS -o /tmp/bw-probe -w '%{http_code}' --max-time 5 "http://127.0.0.1:17777$endpoint" || true)"
+            echo "BROWSER_WORKER_PROBE endpoint=$endpoint http=${code:-000}"
+            if [ "$code" = 200 ] && [ -s /tmp/bw-probe ]; then
+              python3 - "$endpoint" <<'PY'
+          import json,sys
+          from pathlib import Path
+          endpoint=sys.argv[1]
+          raw=Path('/tmp/bw-probe').read_text(encoding='utf-8',errors='replace')
+          try:
+              j=json.loads(raw)
+          except Exception:
+              print('BROWSER_WORKER_PROBE_TYPE endpoint='+endpoint+' type=text')
+          else:
+              if isinstance(j,dict):
+                  print('BROWSER_WORKER_PROBE_KEYS endpoint='+endpoint+' keys='+','.join(sorted(map(str,j.keys()))[:30]))
+              else:
+                  print('BROWSER_WORKER_PROBE_TYPE endpoint='+endpoint+' type='+type(j).__name__)
+          PY
+            fi
+          done
+
+          code="$(curl -sS -o /tmp/a1-continuity-bridge-body -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+            -H 'Host: shopvivaliz.com.br' \
+            -H 'Content-Type: application/json' \
+            --data '{"operation":"heartbeat"}' \
+            http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php || true)"
+          echo "BACKEND_TO_A1_BRIDGE_UNAUTH_HTTP=${code:-000}"
+          if [ -s /tmp/a1-continuity-bridge-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/a1-continuity-bridge-body').read_text(encoding='utf-8',errors='replace').split())[:200]
+          print('BACKEND_TO_A1_BRIDGE_BODY='+body)
+          PY
+          fi
+
+          if ss -ltn 2>/dev/null | grep -q ':9555 '; then
+            echo BACKEND_CDP_9555_LISTENING=true
+          else
+            echo BACKEND_CDP_9555_LISTENING=false
+          fi
+          systemctl --user list-unit-files --no-legend 2>/dev/null | grep -Ei 'browser|chrom|chatgpt' | sed -n '1,30p' | sed 's/^/BACKEND_USER_UNIT=/' || true
+          echo BROWSER_API_DIAG_END
+          REMOTE
+
+
+  backend-private-probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 3
+    steps:
+      - name: Probe A1 private continuity bridge from backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          code="$(curl -sS -o /tmp/a1-private-bridge-body -w '%{http_code}' --connect-timeout 3 --max-time 8 \
+            -H 'Host: shopvivaliz.com.br' \
+            -H 'Content-Type: application/json' \
+            --data '{"operation":"heartbeat"}' \
+            http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php || true)"
+          echo "BACKEND_DIRECT_TO_A1_BRIDGE_HTTP=${code:-000}"
+          if [ -s /tmp/a1-private-bridge-body ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          body=' '.join(Path('/tmp/a1-private-bridge-body').read_text(encoding='utf-8',errors='replace').split())[:200]
+          print('BACKEND_DIRECT_TO_A1_BRIDGE_BODY='+body)
+          PY
+          fi
+          if [ "$code" = "401" ]; then
+            echo "BACKEND_DIRECT_TO_A1_BRIDGE_REACHABLE=true"
+          else
+            echo "BACKEND_DIRECT_TO_A1_BRIDGE_REACHABLE=false"
+          fi
