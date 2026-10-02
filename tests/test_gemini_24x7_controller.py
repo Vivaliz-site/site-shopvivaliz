@@ -327,6 +327,9 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"', installer)
         self.assertIn('e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"', installer)
         self.assertIn('sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime_dir" "$e2e_failures_dir"', installer)
+        self.assertIn('compile_cache="$(mktemp -d)"', installer)
+        self.assertIn('PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile', installer)
+        self.assertIn('rm -rf "$compile_cache"', installer)
 
 
 if __name__ == "__main__":
