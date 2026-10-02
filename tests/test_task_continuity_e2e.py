@@ -253,6 +253,37 @@ class ProbeEvaluationTests(unittest.TestCase):
             self.assertTrue(destination.is_file())
             self.assertTrue((destination.parent / f"{task_id}.sha256").is_file())
 
+    def test_quarantine_falls_back_inside_runtime_when_archive_is_not_writable(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "agent-task-state"
+            runtime.mkdir()
+            task_id = "continuity-e2e-permission-fallback"
+            source = runtime / f"{task_id}.json"
+            source.write_text(json.dumps({"task_id": task_id, "status": "RUNNING"}), encoding="utf-8")
+
+            original_replace = probe.os.replace
+            calls = {"count": 0}
+
+            def permission_then_replace(src, dst):
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    raise PermissionError("archive directory is not writable")
+                return original_replace(src, dst)
+
+            probe.os.replace = permission_then_replace
+            try:
+                destination = probe.quarantine_failed_probe(runtime_dir=runtime, task_id=task_id)
+            finally:
+                probe.os.replace = original_replace
+
+            self.assertEqual(destination, runtime / f"_e2e-failure-{task_id}.json")
+            self.assertFalse(source.exists())
+            self.assertTrue(destination.is_file())
+            digest = runtime / f"_e2e-failure-{task_id}.sha256"
+            self.assertTrue(digest.is_file())
+            self.assertIn(destination.name, digest.read_text(encoding="utf-8"))
+
     def test_quarantine_refuses_non_e2e_task(self) -> None:
         probe = load_probe()
         with tempfile.TemporaryDirectory() as tmp:
