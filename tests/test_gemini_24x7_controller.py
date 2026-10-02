@@ -121,6 +121,36 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
 
+    def test_unresolved_browser_stall_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": "2026-10-02T08:53:45Z",
+                    "degraded": True,
+                    "action": "sent_unconfirmed",
+                    "sent": True,
+                    "progress_confirmed": False,
+                    "failure_reason": "request_timeout",
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="browser-stall")
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertTrue(result["degraded"])
+        self.assertIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
+        self.assertTrue(result["chatgpt_monitor"]["degraded"])
+        self.assertEqual(result["chatgpt_monitor"]["action"], "sent_unconfirmed")
+
     def test_idle_cycle_does_not_spam_event_ledger(self) -> None:
         controller = load_controller()
         with (
