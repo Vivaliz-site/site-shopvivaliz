@@ -13,6 +13,7 @@ from typing import Any
 
 EXPECTED_VERIFICATION = "continuity_e2e_pass"
 NUDGE_LEDGER = "_chatgpt-continuity-nudges.jsonl"
+EXECUTIONS_LEDGER = "_resume-executions.jsonl"
 CONVERSATION_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
 
 
@@ -136,6 +137,26 @@ def certify(runtime_dir: Path, task_id: str) -> dict[str, Any]:
         failures.append("task_not_concluido")
     if str(state.get("verification", "")).strip() != EXPECTED_VERIFICATION:
         failures.append("verification_not_continuity_e2e_pass")
+
+    # This certifier is for same-conversation browser continuity. A detached
+    # Gemini/CLI executor touching the synthetic probe invalidates provenance,
+    # even if it produced the same terminal verification string.
+    if any(
+        str(row.get("task_id", "")).strip() == task_id
+        for row in _read_jsonl(runtime_dir / EXECUTIONS_LEDGER)
+    ):
+        failures.append("detached_executor_touched_browser_probe")
+
+    history = state.get("history") if isinstance(state.get("history"), list) else []
+    terminal_events = [
+        row for row in history
+        if isinstance(row, dict) and str(row.get("event", "")).strip() in {"ready_to_complete", "completed"}
+    ]
+    terminal_names = {str(row.get("event", "")).strip() for row in terminal_events}
+    if not {"ready_to_complete", "completed"}.issubset(terminal_names):
+        failures.append("browser_sentinel_transitions_missing")
+    if any(str(row.get("resume_request_id", "")).strip() for row in terminal_events):
+        failures.append("detached_terminal_provenance")
 
     proof = browser_proof(runtime_dir, state)
     failures.extend(proof["failures"])

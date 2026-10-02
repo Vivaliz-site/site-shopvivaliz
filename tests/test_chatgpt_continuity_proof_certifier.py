@@ -19,6 +19,7 @@ class ProofCertifierTest(unittest.TestCase):
                 "conversation_id": cid,
                 "history": [
                     {"at": "2026-10-02T08:00:00Z", "event": "progress", "next_action": "continue bound probe"},
+                    {"at": "2026-10-02T08:02:30Z", "event": "ready_to_complete"},
                     {"at": "2026-10-02T08:03:00Z", "event": "completed"},
                 ],
             }
@@ -36,6 +37,26 @@ class ProofCertifierTest(unittest.TestCase):
             }
             (root / "_chatgpt-continuity-nudges.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
             self.assertTrue(certifier.certify(root, task)["ok"])
+
+            (root / "_resume-executions.jsonl").write_text(
+                json.dumps({
+                    "task_id": task,
+                    "fingerprint": fp,
+                    "result": "terminal",
+                    "diagnostic": {"provider": "gemini", "provider_status": "task_state_advanced"},
+                }) + "\n",
+                encoding="utf-8",
+            )
+            detached = certifier.certify(root, task)
+            self.assertFalse(detached["ok"])
+            self.assertIn("detached_executor_touched_browser_probe", detached["failures"])
+
+            (root / "_resume-executions.jsonl").unlink()
+            state["history"][1]["resume_request_id"] = "resume-false-green"
+            (root / f"{task}.json").write_text(json.dumps(state), encoding="utf-8")
+            provenance = certifier.certify(root, task)
+            self.assertFalse(provenance["ok"])
+            self.assertIn("detached_terminal_provenance", provenance["failures"])
 
 
 if __name__ == "__main__":

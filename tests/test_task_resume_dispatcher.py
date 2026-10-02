@@ -397,6 +397,72 @@ state_path.write_text(json.dumps(state))
         self.assertEqual(result["executed"], 1)
         self.assertEqual(result["progressed"], 1)
 
+    def test_browser_e2e_probe_never_falls_through_to_detached_executor(self) -> None:
+        dispatcher = load_dispatcher()
+        task_id = "continuity-e2e-browser-only"
+        next_action = (
+            "Esta tarefa e um probe de continuidade automatica; nao ha edicao de codigo real necessaria. "
+            "Rode exatamente estes dois comandos, nesta ordem, e nada mais:\n"
+            f"1) python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass\n"
+            f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
+        )
+        state = self._state(next_action=next_action)
+        (self.runtime / "resume-e2e.json").unlink()
+        state["task_id"] = task_id
+        state["conversation_id"] = "12345678-2222-3333-4444-555555555555"
+        (self.runtime / f"{task_id}.json").write_text(json.dumps(state), encoding="utf-8")
+        request = {
+            "id": "resume-browser-probe",
+            "kind": "auto_resume",
+            "status": "queued",
+            "task_id": task_id,
+            "agent_id": "gpt",
+            "goal": state["goal"],
+            "next_action": state["next_action"],
+            "checkpoint_updated_at": state["updated_at"],
+            "fingerprint": "browser-probe-fingerprint",
+            "preferred_executor": "chatgpt_common",
+            "secondary_executor": "chatgpt_work",
+            "final_fallback": "cli",
+            "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
+            "fallback_policy": "chatgpt_common_then_work_then_cli",
+        }
+        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "fingerprint": request["fingerprint"],
+                "task_id": task_id,
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "dispatched_at": dispatcher.utc_now(),
+                "bridge_ok": True,
+                "http_status": 200,
+                "worker_status": "ERROR",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result.get("deferred_browser_probe"), 1)
+        self.assertFalse(self.capture.exists(), "browser E2E sentinel must not be executed by Gemini/CLI fallback")
+        current = json.loads((self.runtime / f"{task_id}.json").read_text())
+        self.assertEqual(current["status"], "RUNNING")
+        self.assertFalse((self.runtime / "_resume-executions.jsonl").exists())
+
     def test_detached_prompt_requires_safe_git_push_wrapper(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
