@@ -289,6 +289,9 @@ def browser_screenshot() -> dict[str, Any]:
     window = active_browser_window()
     focus(window)
     tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-browser-")
+    gui = pwd.getpwnam(GUI_USER)
+    os.chown(tmpdir, gui.pw_uid, gui.pw_gid)
+    os.chmod(tmpdir, 0o700)
     path = str(Path(tmpdir) / "screenshot.png")
     try:
         if shutil.which("scrot"):
