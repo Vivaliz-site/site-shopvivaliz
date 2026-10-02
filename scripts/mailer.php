@@ -1,25 +1,10 @@
 <?php
 /**
- * Módulo de envio de emails
- * Usa PHPMailer ou mail() nativo
+ * Central ShopVivaliz transactional mailer.
+ *
+ * Production is Brevo API only and fails closed when BREVO_API_KEY is absent.
+ * Sender and Reply-To are fixed in code to prevent legacy identity drift.
  */
-
-// class_exists() abaixo so encontra o PHPMailer se algo mais no request ja
-// tiver carregado essas classes -- quando send_email() e chamado por um
-// fluxo que nao passa por isso antes (ex: auth/forgot-password.php), o
-// PHPMailer nunca e encontrado e cai no fallback mail() nativo, que falha
-// sempre porque o servidor nao tem /usr/sbin/sendmail instalado. Confirmado
-// ao vivo: send_email() retornava false sempre nesse cenario. Garantimos
-// aqui que o PHPMailer real esteja sempre disponivel, independente de quem
-// chamou este arquivo primeiro.
-if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-    $phpMailerDir = dirname(__DIR__) . '/includes/PHPMailer';
-    if (is_file($phpMailerDir . '/Exception.php')) {
-        require_once $phpMailerDir . '/Exception.php';
-        require_once $phpMailerDir . '/PHPMailer.php';
-        require_once $phpMailerDir . '/SMTP.php';
-    }
-}
 
 function sv_mailer_load_env(): void
 {
@@ -71,84 +56,145 @@ function get_mailer_config(): array
     sv_mailer_load_env();
 
     return [
-        'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
+        'provider' => 'brevo_api',
+        'api_key' => trim((string)(getenv('BREVO_API_KEY') ?: '')),
+        'endpoint' => 'https://api.brevo.com/v3/smtp/email',
+        'from_email' => 'atendimento@shopvivaliz.com.br',
         'from_name' => 'ShopVivaliz',
-        'smtp_host' => getenv('SMTP_HOST') ?: getenv('EMAIL_SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.titan.email',
-        'smtp_port' => (int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465),
-        'smtp_user' => getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
-        'smtp_pass' => getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '',
-        'smtp_secure' => ((int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465) === 465) ? 'ssl' : 'tls',
+        'reply_to_email' => 'atendimento@shopvivaliz.com.br',
+        'reply_to_name' => 'ShopVivaliz Atendimento',
     ];
 }
 
-function send_email(string $to, string $subject, string $html, ?string $text = null): bool
+function sv_mailer_has_forbidden_brand_content(string ...$parts): bool
 {
-    $config = get_mailer_config();
-
-    // Se PHPMailer está disponível, usar
-    if (class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-        return send_email_phpmailer($to, $subject, $html, $text, $config);
+    $haystack = mb_strtolower(implode("\n", $parts), 'UTF-8');
+    foreach ([
+        'contabilidade melo',
+        'contabilidademelo',
+        'fiscalmelo',
+        'naoresponda@dev.shopvivaliz.com.br',
+    ] as $forbidden_brand_content) {
+        if (str_contains($haystack, $forbidden_brand_content)) {
+            return true;
+        }
     }
-
-    // Fallback: usar mail() nativo
-    return send_email_native($to, $subject, $html, $config);
+    return false;
 }
 
-function send_email_phpmailer(
+function sv_mailer_build_brevo_payload(
     string $to,
     string $subject,
     string $html,
-    ?string $text,
-    array $config
-): bool {
+    ?string $text = null,
+    array $attachments = []
+): array {
+    $config = get_mailer_config();
+
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        throw new InvalidArgumentException('recipient_invalid');
+    }
+    if (sv_mailer_has_forbidden_brand_content($subject, $html, (string)$text)) {
+        throw new RuntimeException('forbidden_brand_content');
+    }
+
+    $payload = [
+        'sender' => ['name' => $config['from_name'], 'email' => $config['from_email']],
+        'replyTo' => ['name' => $config['reply_to_name'], 'email' => $config['reply_to_email']],
+        'to' => [['email' => $to]],
+        'subject' => $subject,
+        'htmlContent' => $html,
+        'headers' => ['X-ShopVivaliz-Mailer' => 'transactional-v1'],
+        'tags' => ['shopvivaliz-transactional'],
+    ];
+    if ($text !== null && trim($text) !== '') {
+        $payload['textContent'] = $text;
+    }
+
+    if ($attachments !== []) {
+        $payload['attachment'] = [];
+        foreach ($attachments as $attachment) {
+            $name = trim((string)($attachment['name'] ?? ''));
+            $content = trim((string)($attachment['content'] ?? ''));
+            if ($name === '' || $content === '') {
+                throw new InvalidArgumentException('attachment_invalid');
+            }
+            $payload['attachment'][] = ['name' => $name, 'content' => $content];
+        }
+    }
+
+    return $payload;
+}
+
+function send_email_with_result(
+    string $to,
+    string $subject,
+    string $html,
+    ?string $text = null,
+    array $attachments = []
+): array {
+    $config = get_mailer_config();
+    if ($config['api_key'] === '') {
+        error_log('[ShopVivaliz Mail] BREVO_API_KEY missing; fail-closed.');
+        return ['success' => false, 'error' => 'provider_not_configured'];
+    }
+    if (!function_exists('curl_init')) {
+        error_log('[ShopVivaliz Mail] PHP cURL extension missing; fail-closed.');
+        return ['success' => false, 'error' => 'curl_extension_missing'];
+    }
+
     try {
-        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $payload = sv_mailer_build_brevo_payload($to, $subject, $html, $text, $attachments);
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
-        $mail->isSMTP();
-        $mail->Host = $config['smtp_host'];
-        $mail->Port = $config['smtp_port'];
-        $mail->SMTPSecure = $config['smtp_secure'];
-        $mail->SMTPAuth = true;
-        $mail->Timeout = 30;
-        $mail->Username = $config['smtp_user'];
-        $mail->Password = $config['smtp_pass'];
+        $ch = curl_init($config['endpoint']);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'accept: application/json',
+                'content-type: application/json; charset=utf-8',
+                'api-key: ' . $config['api_key'],
+            ],
+            CURLOPT_POSTFIELDS => $encoded,
+        ]);
+        $body = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
 
-        $mail->setFrom($config['from_email'], $config['from_name']);
-        $mail->addAddress($to);
-        $mail->Subject = $subject;
-
-        $mail->isHTML(true);
-        $mail->Body = $html;
-        if ($text) {
-            $mail->AltBody = $text;
+        if ($body === false || $status !== 201) {
+            error_log('[ShopVivaliz Mail] Brevo send failed status=' . $status . ' transport=' . ($curlError !== '' ? 'curl_error' : 'http_error'));
+            return ['success' => false, 'error' => 'provider_send_failed', 'status_code' => $status];
         }
 
-        $mail->CharSet = 'UTF-8';
-        $mail->Encoding = '8bit';
+        $decoded = json_decode((string)$body, true);
+        $messageId = is_array($decoded) ? trim((string)($decoded['messageId'] ?? '')) : '';
+        if ($messageId === '') {
+            error_log('[ShopVivaliz Mail] Brevo response missing messageId.');
+            return ['success' => false, 'error' => 'provider_response_invalid', 'status_code' => $status];
+        }
 
-        return $mail->send();
-    } catch (Exception $e) {
-        error_log('PHPMailer error: ' . $e->getMessage());
-        return false;
+        return ['success' => true, 'message_id' => $messageId, 'status_code' => $status];
+    } catch (Throwable $e) {
+        $kind = $e instanceof RuntimeException && $e->getMessage() === 'forbidden_brand_content'
+            ? 'forbidden_brand_content'
+            : 'provider_exception';
+        error_log('[ShopVivaliz Mail] send blocked/failure class=' . $kind);
+        return ['success' => false, 'error' => $kind];
     }
 }
 
-function send_email_native(string $to, string $subject, string $html, array $config): bool
-{
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-Type: text/html; charset=UTF-8',
-        'From: ' . $config['from_name'] . ' <' . $config['from_email'] . '>',
-        'Reply-To: ' . $config['from_email'],
-        'X-Mailer: ShopVivaliz/1.0',
-    ];
-
-    return mail(
-        $to,
-        $subject,
-        $html,
-        implode("\r\n", $headers)
-    );
+function send_email(
+    string $to,
+    string $subject,
+    string $html,
+    ?string $text = null,
+    array $attachments = []
+): bool {
+    return (bool)(send_email_with_result($to, $subject, $html, $text, $attachments)['success'] ?? false);
 }
 
 // Helpers específicos
@@ -191,16 +237,14 @@ function svmp_send_pix_qr_email(
     string $qrCode,
     string $qrCodeBase64
 ): bool {
-    $config = get_mailer_config();
     $totalFmt = number_format($total, 2, ',', '.');
     $subject = "Pague com Pix - Pedido $orderNumber - ShopVivaliz";
 
-    $html = "<h2>Oi $name,</h2>";
-    $html .= "<p>Recebemos seu pedido <strong>#$orderNumber</strong>! Falta só o pagamento via Pix para confirmarmos.</p>";
+    $html = "<h2>Oi " . htmlspecialchars($name) . ",</h2>";
+    $html .= "<p>Recebemos seu pedido <strong>#" . htmlspecialchars($orderNumber) . "</strong>! Falta só o pagamento via Pix para confirmarmos.</p>";
     $html .= "<p><strong>Valor:</strong> R$ $totalFmt</p>";
     if ($qrCodeBase64 !== '') {
-        $html .= "<p>Escaneie o QR Code abaixo no app do seu banco:</p>";
-        $html .= "<p><img src=\"cid:pixqrcode\" alt=\"QR Code Pix\" style=\"max-width:260px;\"></p>";
+        $html .= "<p>O QR Code Pix está anexado a este email como <strong>pix-qrcode.png</strong>.</p>";
     }
     if ($qrCode !== '') {
         $html .= "<p>Ou copie e cole o código Pix:</p>";
@@ -208,40 +252,12 @@ function svmp_send_pix_qr_email(
     }
     $html .= "<p>O Pix é aprovado na hora. Assim que identificarmos o pagamento, você recebe a confirmação por email.</p>";
 
-    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-        return false;
+    $attachments = [];
+    if ($qrCodeBase64 !== '' && base64_decode($qrCodeBase64, true) !== false) {
+        $attachments[] = ['name' => 'pix-qrcode.png', 'content' => $qrCodeBase64];
     }
 
-    try {
-        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-        $mail->isSMTP();
-        $mail->Host = $config['smtp_host'];
-        $mail->Port = $config['smtp_port'];
-        $mail->SMTPSecure = $config['smtp_secure'];
-        $mail->SMTPAuth = true;
-        $mail->Timeout = 30;
-        $mail->Username = $config['smtp_user'];
-        $mail->Password = $config['smtp_pass'];
-        $mail->setFrom($config['from_email'], $config['from_name']);
-        $mail->addAddress($email);
-        $mail->Subject = $subject;
-        $mail->isHTML(true);
-        $mail->Body = $html;
-        $mail->CharSet = 'UTF-8';
-        $mail->Encoding = '8bit';
-
-        if ($qrCodeBase64 !== '') {
-            $decoded = base64_decode($qrCodeBase64, true);
-            if ($decoded !== false) {
-                $mail->addStringEmbeddedImage($decoded, 'pixqrcode', 'pix-qrcode.png', 'base64', 'image/png');
-            }
-        }
-
-        return $mail->send();
-    } catch (Exception $e) {
-        error_log('PHPMailer error (pix qr): ' . $e->getMessage());
-        return false;
-    }
+    return send_email($email, $subject, $html, null, $attachments);
 }
 
 function send_order_confirmation_email(

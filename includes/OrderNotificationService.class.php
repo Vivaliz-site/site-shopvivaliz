@@ -5,9 +5,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/PHPMailer/Exception.php';
-require_once __DIR__ . '/PHPMailer/PHPMailer.php';
-require_once __DIR__ . '/PHPMailer/SMTP.php';
+require_once __DIR__ . '/../scripts/mailer.php';
 
 require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../config/constants.php';
@@ -423,74 +421,18 @@ class OrderNotificationService
 
     private function sendEmail(string $to, string $subject, string $html, string $text): array
     {
-        // Safe SMTP config parsing
-        $host = getenv('SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.gmail.com';
-        $port = (int)(getenv('SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465);
-        $user = getenv('SMTP_USER') ?: getenv('MAIL_USER') ?: '';
-        $pass = getenv('SMTP_PASS') ?: getenv('MAIL_PASS') ?: '';
-        $fromEmail = getenv('SMTP_FROM') ?: getenv('EMAIL_FROM') ?: $user;
-        $fromName = getenv('SMTP_FROMNAME') ?: getenv('EMAIL_FROM_NAME') ?: 'ShopVivaliz';
-
-        if ($user === '' || $pass === '') {
-            return ['success' => false, 'error' => 'SMTP credentials missing from environment.'];
+        $result = send_email_with_result($to, $subject, $html, $text);
+        if (!($result['success'] ?? false)) {
+            return [
+                'success' => false,
+                'error' => (string)($result['error'] ?? 'provider_send_failed'),
+            ];
         }
 
-        try {
-            $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
-
-            $mail->isSMTP();
-            $mail->Host = $host;
-            $mail->Port = $port;
-            $mail->SMTPAuth = true;
-            $mail->Username = $user;
-            $mail->Password = $pass;
-            $mail->Timeout = 12; // Short timeout so webhooks don't block
-            
-            // Connect implicitly using SSL on 465, or STARTTLS on 587/other ports
-            if ($port === 465) {
-                $mail->SMTPSecure = 'ssl';
-            } else {
-                $mail->SMTPSecure = 'tls';
-            }
-
-            // Rodada 2 (2026-08-18): antes disto rodava incondicional em producao,
-            // apesar do comentario dizer "for local testing if needed" -- com
-            // SMTPAuth=true e a senha do e-mail transacional sendo enviada, isso
-            // aceitava qualquer certificado (inclusive de um MITM) no canal onde a
-            // senha trafega. Agora so desliga a verificacao de peer quando estamos
-            // genuinamente em sandbox/dev/staging; em producao o PHPMailer usa o
-            // verify_peer padrao (true).
-            $appEnv = (string)(getenv('APP_ENV') ?: '');
-            if ($this->isSandboxMode() || in_array($appEnv, ['dev', 'local', 'staging'], true)) {
-                $mail->SMTPOptions = [
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                        'allow_self_signed' => true
-                    ]
-                ];
-            }
-
-            $mail->setFrom($fromEmail, $fromName);
-            $mail->addAddress($to);
-            $mail->Subject = $subject;
-
-            $mail->isHTML(true);
-            $mail->Body = $html;
-            $mail->AltBody = $text;
-
-            $mail->CharSet = 'UTF-8';
-            $mail->Encoding = '8bit';
-
-            $mail->send();
-            
-            $messageId = $mail->getLastMessageID() ?: ('local_' . uniqid('', true));
-            return ['success' => true, 'message_id' => $messageId];
-        } catch (Exception $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
-        } catch (Throwable $e) {
-            return ['success' => false, 'error' => get_class($e) . ': ' . $e->getMessage()];
-        }
+        return [
+            'success' => true,
+            'message_id' => (string)($result['message_id'] ?? ''),
+        ];
     }
 
     /**

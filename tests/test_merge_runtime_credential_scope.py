@@ -17,12 +17,13 @@ SPEC.loader.exec_module(MODULE)
 def main() -> None:
     fields = [
         b"BREVO_API_KEY", b"valid-brevo-api-key",
-        b"EMAIL_USER", b"atendimento@example.test",
-        b"EMAIL_PASSWORD", b"valid-email-password",
+        b"EMAIL_TO", b"fredmourao@example.test",
+        b"EMAIL_USER", b"legacy@example.test",
+        b"EMAIL_PASSWORD", b"valid-legacy-password",
         b"OLIST_CLIENT_SECRET", b"bad",
     ]
     email_values = MODULE.parse_payload_fields(fields, scope="email")
-    assert set(email_values) == {"BREVO_API_KEY", "EMAIL_USER", "EMAIL_PASSWORD"}
+    assert set(email_values) == {"BREVO_API_KEY", "EMAIL_TO"}
     melhorenvio_fields = [
         b"MELHORENVIO_CLIENTE_ID", b"26364-valid-client-id",
         b"MELHORENVIO_CLIENTE_SECRET", b"valid-melhorenvio-client-secret",

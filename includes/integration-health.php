@@ -757,7 +757,7 @@ function svih_check_all(bool $fix = false): array
         svih_config_only('Facebook CAPI', 'facebook_capi', ['FACEBOOK_ACCESS_TOKEN'], 'Configurar FACEBOOK_ACCESS_TOKEN.'),
         svih_google_ads(),
         svih_config_only('TikTok Pixel', 'tiktok_pixel', ['TIKTOK_PIXEL_TOKEN'], 'Configurar TIKTOK_PIXEL_TOKEN.'),
-        svih_config_only('SMTP / E-mail', 'smtp', ['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS'], 'Configurar credencial SMTP.'),
+        svih_config_only('Brevo E-mail', 'smtp', ['BREVO_API_KEY'], 'Configurar BREVO_API_KEY para o mailer transacional.'),
     ];
 
     $connected = count(array_filter($integrations, static fn(array $item): bool => $item['status'] === 'connected'));

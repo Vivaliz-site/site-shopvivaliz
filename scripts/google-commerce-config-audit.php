@@ -135,10 +135,9 @@ $checks = [
         'HTTP ' . $merchant['status']
     ),
     'smtp_order_email' => gc_result(
-        gc_bool_env(['SMTP_HOST', 'EMAIL_SMTP_HOST', 'MAIL_HOST'])
-            && gc_bool_env(['SMTP_USER', 'EMAIL_USER', 'MAIL_USER'])
-            && gc_bool_env(['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS']),
-        'runtime_presence_checked'
+        gc_bool_env(['BREVO_API_KEY']),
+        'brevo_api_runtime_presence_checked',
+        'ShopVivaliz transactional email uses Brevo API; legacy SMTP is not a production dependency.'
     ),
     'mercadopago_boleto' => gc_result(
         gc_bool_env(['MERCADOPAGO_ACCESS_TOKEN'])
