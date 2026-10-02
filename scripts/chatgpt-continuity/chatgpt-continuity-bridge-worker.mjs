@@ -860,10 +860,22 @@ async function navigateNeutralTabToConversation(
     if (!cdp) return false;
 
     const target = '/c/' + id;
-    const navigated = await cdp.evaluate(
-      `(()=>{location.assign(${JSON.stringify(target)});return true})()`,
+    const route = await cdp.evaluate(
+      `(()=>{
+        /* continuity-bound-sidebar-route */
+        const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
+        const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
+          try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
+        });
+        if(link){
+          link.click();
+          return 'sidebar';
+        }
+        location.assign(target);
+        return 'direct';
+      })()`,
     );
-    if (!navigated) return false;
+    if (route !== 'sidebar' && route !== 'direct') return false;
 
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
@@ -2769,6 +2781,7 @@ export {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  navigateNeutralTabToConversation,
   checkpointUpdatedAtMs,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
