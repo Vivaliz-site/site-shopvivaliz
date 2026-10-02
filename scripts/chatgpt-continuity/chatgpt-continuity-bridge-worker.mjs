@@ -2107,7 +2107,7 @@ async function attemptNudge(
     cdp = await connector();
     try {
       const pathname = String(await cdp.evaluate('location.pathname') || '');
-      const actualConversationId = safeConversationId(pathname.match(/^\\/c\\/([^/?#]+)/)?.[1] || '');
+      const actualConversationId = safeConversationId(pathname.match(/^\/c\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
     detectedFailureReason = await recoverableFailureReason(cdp);
