@@ -47,6 +47,8 @@ cgnAssert(!$store->recordResult('task-does-not-exist', 'PROGRESS_CONFIRMED', nul
 
 $status = $store->status('task-1');
 cgnSame('PROGRESS_CONFIRMED', $status['status'], 'Status after confirmed progress must reflect PROGRESS_CONFIRMED.');
+cgnSame('PROGRESS_CONFIRMED', $status['detail_code'], 'Confirmed progress must never be mislabeled as a runtime error.');
+cgnAssert(preg_match('/^[a-f0-9]{64}$/', (string)($status['detail_sha256'] ?? '')) === 1, 'Confirmed progress may retain a safe detail correlation hash.');
 cgnAssert($status['resolved_at'] !== null, 'resolved_at must be set after recordResult.');
 
 cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:10:00Z'), 'A fresh enqueue after PROGRESS_CONFIRMED must be allowed again for a later interruption of the same task.');
