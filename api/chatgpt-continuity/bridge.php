@@ -143,12 +143,19 @@ if ($operation === 'result') {
     $taskId = sv_cgn_safe_task_id($input['task_id'] ?? '');
     $resultStatus = strtoupper(trim((string)($input['result_status'] ?? '')));
     $detail = isset($input['detail']) ? (string)$input['detail'] : null;
+    $conversationRaw = trim((string)($input['conversation_id'] ?? ''));
+    $conversationId = $conversationRaw !== '' ? sv_cgn_safe_conversation_id($conversationRaw) : '';
     $allowed = ['SENT', 'SENT_UNCONFIRMED', 'PROGRESS_CONFIRMED', 'STALLED_NOT_CONFIRMED', 'CONVERSATION_NOT_FOUND', 'ERROR'];
-    if ($taskId === '' || !in_array($resultStatus, $allowed, true)) {
+    if (
+        $taskId === ''
+        || !in_array($resultStatus, $allowed, true)
+        || ($conversationRaw !== '' && $conversationId === '')
+        || ($conversationId !== '' && $resultStatus !== 'PROGRESS_CONFIRMED')
+    ) {
         sv_cgn_bridge_reply(['status' => 'INVALID_REQUEST'], 400);
     }
     try {
-        $recorded = $store->recordResult($taskId, $resultStatus, $detail);
+        $recorded = $store->recordResult($taskId, $resultStatus, $detail, $conversationId);
         if (!$recorded) {
             sv_cgn_bridge_reply(['status' => 'JOB_NOT_FOUND'], 404);
         }
