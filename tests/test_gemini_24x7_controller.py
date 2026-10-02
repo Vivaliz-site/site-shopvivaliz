@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -29,6 +30,17 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.runtime = Path(self.temp.name) / "runtime"
         self.runtime.mkdir()
+        (self.runtime / "_chatgpt-browser-health.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "session_state": "AUTHENTICATED",
+                    "authenticated": True,
+                }
+            ),
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -120,6 +132,80 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("chatgpt_resume_failed", result["degraded_reasons"])
         self.assertEqual(result["chatgpt_nudge"]["failed"], 1)
+
+    def test_logged_out_browser_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_BROWSER_HEALTH_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "session_state": "LOGGED_OUT",
+                    "authenticated": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="logged-out-browser")
+
+        self.assertTrue(result["liveness_ok"])
+        self.assertFalse(result["continuity_ready"])
+        self.assertFalse(result["ok"])
+        self.assertIn("chatgpt_browser_not_authenticated", result["degraded_reasons"])
+        self.assertEqual(result["chatgpt_browser"]["session_state"], "LOGGED_OUT")
+
+    def test_auth_flow_browser_fails_readiness_without_claiming_logout(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_BROWSER_HEALTH_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "session_state": "AUTH_FLOW",
+                    "authenticated": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="auth-flow-browser")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_auth_in_progress", result["degraded_reasons"])
+        self.assertNotIn("chatgpt_browser_not_authenticated", result["degraded_reasons"])
+
+    def test_stale_browser_auth_health_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_BROWSER_HEALTH_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": "2000-01-01T00:00:00Z",
+                    "session_state": "AUTHENTICATED",
+                    "authenticated": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="stale-browser-auth")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_auth_unknown", result["degraded_reasons"])
+        self.assertFalse(result["chatgpt_browser"]["fresh"])
 
     def test_unresolved_browser_stall_fails_readiness_closed(self) -> None:
         controller = load_controller()

@@ -5,6 +5,7 @@ browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
 cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
+browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
 
 runtime_eval_ready() {
@@ -17,7 +18,12 @@ runtime_eval_ready() {
       const response = await fetch(base + "/json", { signal: AbortSignal.timeout(2500) });
       if (!response.ok) process.exit(1);
       const tabs = await response.json();
-      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "appleid.apple.com"]);
+      const authPage = tabs.find(page => {
+        if (!page || page.type !== "page" || !page.webSocketDebuggerUrl) return false;
+        try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }
+      });
+      const connect = async page => {
         let ws;
         let candidate;
         try {
@@ -40,7 +46,8 @@ runtime_eval_ready() {
           try { ws?.close(); } catch {}
           throw error;
         }
-      });
+      };
+      const c = authPage ? await connect(authPage) : await connectFirstUsableChatgptTab(tabs, connect);
       if (!c) process.exit(1);
       try {
         const value = await c.evaluate("(()=>42)()");
@@ -49,6 +56,80 @@ runtime_eval_ready() {
         c.close();
       }
     ' >/dev/null 2>&1
+}
+
+browser_session_state() {
+  CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
+    timeout 8s node --input-type=module -e '
+      // CONTINUITY_BROWSER_SESSION_STATE_PROBE
+      const { Cdp, connectFirstUsableChatgptTab } = await import(
+        "file://" + process.env.CHATGPT_CONTINUITY_WORKER_MODULE
+      );
+      const base = String(process.env.CHATGPT_BROWSER_CDP_BASE || "").replace(/\/$/, "");
+      const response = await fetch(base + "/json", { signal: AbortSignal.timeout(2500) });
+      if (!response.ok) { console.log("UNREACHABLE"); process.exit(0); }
+      const tabs = await response.json();
+      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "appleid.apple.com"]);
+      const authFlow = tabs.some(page => {
+        if (!page || page.type !== "page") return false;
+        try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }
+      });
+      if (authFlow) { console.log("AUTH_FLOW"); process.exit(0); }
+      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+        const ws = new WebSocket(page.webSocketDebuggerUrl);
+        await Promise.race([
+          new Promise((resolve, reject) => {
+            ws.addEventListener("open", resolve, { once: true });
+            ws.addEventListener("error", reject, { once: true });
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
+        ]);
+        return new Cdp(ws);
+      });
+      if (!c) { console.log("UNKNOWN"); process.exit(0); }
+      try {
+        const state = await c.evaluate(`(()=>{
+          const body = String(document.body?.innerText || "").toLowerCase();
+          const path = String(location.pathname || "");
+          const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
+            || body.includes("log in or sign up")
+            || body.includes("log in to get answers");
+          if (loggedOut) return "LOGGED_OUT";
+          if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
+          return "UNKNOWN";
+        })()`);
+        console.log(String(state || "UNKNOWN"));
+      } finally {
+        c.close();
+      }
+    ' 2>/dev/null || printf '%s\n' "UNREACHABLE"
+}
+
+persist_browser_health() {
+  local state="$1"
+  case "$state" in
+    AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|UNKNOWN|UNREACHABLE) ;;
+    *) state="UNKNOWN" ;;
+  esac
+  local authenticated=false
+  [[ "$state" == "AUTHENTICATED" ]] && authenticated=true
+  local dir temp
+  dir="$(dirname "$browser_health_file")"
+  mkdir -p "$dir"
+  temp="$browser_health_file.tmp.$$"
+  printf '{"schema_version":1,"updated_at":"%s","session_state":"%s","authenticated":%s}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$state" "$authenticated" >"$temp"
+  chmod 0644 "$temp"
+  mv -f "$temp" "$browser_health_file"
+}
+
+report_browser_state() {
+  local guardian_state="$1"
+  local session_state
+  session_state="$(browser_session_state | tail -n 1)"
+  persist_browser_health "$session_state"
+  echo "CHATGPT_BROWSER_GUARDIAN=$guardian_state"
+  echo "CHATGPT_BROWSER_SESSION=$session_state"
 }
 
 cdp_ready() {
@@ -80,16 +161,16 @@ mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
 
 status=0
 if cdp_ready; then
-  echo "CHATGPT_BROWSER_GUARDIAN=HEALTHY"
+  report_browser_state "HEALTHY"
 elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
   if systemctl is-active --quiet "$browser_unit"; then
     sleep 5
     if cdp_ready; then
-      echo "CHATGPT_BROWSER_GUARDIAN=HEALTHY_AFTER_RECHECK"
+      report_browser_state "HEALTHY_AFTER_RECHECK"
     else
       systemctl restart "$browser_unit"
       if wait_for_cdp; then
-        echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART"
+        report_browser_state "RECOVERED_MANAGED_RESTART"
       else
         echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
         status=1
@@ -122,7 +203,7 @@ elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
       else
         systemctl start "$browser_unit"
         if wait_for_cdp; then
-          echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED_UNMANAGED_TAKEOVER"
+          report_browser_state "RECOVERED_UNMANAGED_TAKEOVER"
         else
           echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
           status=1
@@ -136,7 +217,7 @@ elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
 else
   systemctl start "$browser_unit"
   if wait_for_cdp; then
-    echo "CHATGPT_BROWSER_GUARDIAN=RECOVERED"
+    report_browser_state "RECOVERED"
   else
     echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
     status=1
