@@ -49,6 +49,17 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 - Nunca assumir uma resposta sem evidência.
 - Informar claramente quando a evidência estiver incompleta, ambígua ou desatualizada.
 
+<!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+## Auditoria corretiva obrigatória
+
+- Todo pedido de auditoria implica **investigar, corrigir, prevenir e validar**; não encerrar apenas relacionando erros.
+- Todo achado material corrigível e autorizado deve ter causa raiz investigada, correção aplicada, prevenção pertinente, teste e reauditoria.
+- Relatório de achados, recomendação, issue ou plano são estados intermediários enquanto existir ação segura executável.
+- APTO/CONCLUIDO só com evidência fresca pós-correção e E2E real quando aplicável; sem falso-verde.
+- Pendência só é aceitável após esgotar alternativas seguras e registrar evidência, causa e ação exata necessária para continuidade.
+- A coleta inicial é não invasiva; a remediação subsequente deve corrigir o que estiver dentro do escopo autorizado.
+- Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`, policy `AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`.
+<!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## Diagnóstico
 
 - Identificar o erro antes de sugerir a solução.
