@@ -2,7 +2,7 @@ name: Agents Hourly Deep Audit
 
 on:
   schedule:
-    - cron: '19 * * * *' # refreshed after watchdog detected stale scheduled execution
+    - cron: '17 * * * *' # canonical cadence; file refreshed after watchdog detected stale schedule delivery
   workflow_dispatch:
   push:
     branches:
