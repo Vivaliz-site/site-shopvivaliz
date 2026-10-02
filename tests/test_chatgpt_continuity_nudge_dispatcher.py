@@ -92,6 +92,27 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(result["failed"], 1)
         self.assertEqual(result["dispatched"], 0)
 
+    def test_confirmed_ledger_binding_is_reused_across_fingerprints(self) -> None:
+        ledger = {
+            "old-fingerprint": {
+                "task_id": "task-1",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:00:00Z",
+                "conversation_id": "12345678-2222-3333-4444-555555555555",
+            },
+            "other-task": {
+                "task_id": "task-2",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:01:00Z",
+                "conversation_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            },
+        }
+        self.assertEqual(
+            self.dispatcher._ledger_bound_conversation_id(ledger, "task-1"),
+            "12345678-2222-3333-4444-555555555555",
+        )
+        self.assertEqual(self.dispatcher._ledger_bound_conversation_id(ledger, "missing"), "")
+
     def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
         self.assertEqual(
             self.dispatcher.DEFAULT_BRIDGE_URL,
