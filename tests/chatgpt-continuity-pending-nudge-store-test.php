@@ -64,6 +64,21 @@ try {
     // expected
 }
 
+$bindTmp = sys_get_temp_dir() . '/chatgpt-continuity-binding-test-' . bin2hex(random_bytes(6)) . '/pending-nudges.json';
+$bindStore = new SvChatgptContinuityPendingNudgeStore($bindTmp);
+cgnAssert($bindStore->enqueue('task-bind', 'Vivaliz-site/site-shopvivaliz', '2026-10-02T06:00:00Z'), 'Unbound task enqueue must succeed.');
+cgnAssert($bindStore->recordResult('task-bind', 'PROGRESS_CONFIRMED', 'advanced', '12345678-2222-3333-4444-555555555555'), 'Confirmed recovery must persist discovered binding.');
+cgnSame('12345678-2222-3333-4444-555555555555', $bindStore->status('task-bind')['conversation_id'], 'Confirmed binding must be durable.');
+cgnAssert($bindStore->enqueue('task-bind', 'Vivaliz-site/site-shopvivaliz', '2026-10-02T06:05:00Z'), 'Later interruption must re-enqueue bound task.');
+cgnSame('12345678-2222-3333-4444-555555555555', $bindStore->status('task-bind')['conversation_id'], 'Re-enqueue without an id must preserve confirmed binding.');
+$bindingMismatchRejected = false;
+try {
+    $bindStore->recordResult('task-bind', 'PROGRESS_CONFIRMED', 'advanced elsewhere', 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+} catch (RuntimeException $e) {
+    $bindingMismatchRejected = str_contains($e->getMessage(), 'does not match');
+}
+cgnAssert($bindingMismatchRejected, 'Conflicting confirmed binding must be rejected for the binding reason.');
+
 $historyTmp = sys_get_temp_dir() . '/chatgpt-continuity-history-test-' . bin2hex(random_bytes(6)) . '/pending-nudges.json';
 $historyArchive = dirname($historyTmp) . '/pending-nudges-archive.jsonl';
 $historyStore = new SvChatgptContinuityPendingNudgeStore($historyTmp, $historyArchive, 0);
