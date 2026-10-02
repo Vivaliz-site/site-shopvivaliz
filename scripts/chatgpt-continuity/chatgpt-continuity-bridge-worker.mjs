@@ -119,6 +119,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
+const MONITOR_STATE_FILE = `${TASK_STATE_DIR}/_chatgpt-continuity-monitor-state.json`;
 
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
@@ -126,6 +127,7 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('failure_reason=additional_checks')) return 'RECOVERABLE_ADDITIONAL_CHECKS';
   if (normalized.includes('failure_reason=stopped_thinking')) return 'RECOVERABLE_STOPPED_THINKING';
   if (normalized.includes('failure_reason=streaming_interrupted')) return 'RECOVERABLE_STREAMING_INTERRUPTED';
+  if (normalized.includes('failure_reason=request_timeout')) return 'RECOVERABLE_REQUEST_TIMEOUT';
   if (normalized.includes('composer/send-button remained unavailable after bounded reattach')) return 'COMPOSER_UNAVAILABLE_AFTER_REATTACH';
   if (normalized.includes('composer found but send failed after bounded reattach')) return 'SEND_FAILED_AFTER_REATTACH';
   if (normalized.includes('transmission error persisted and composer was unavailable after reattach')) return 'TRANSMISSION_COMPOSER_UNAVAILABLE';
@@ -143,6 +145,32 @@ function outcomeStatusDetailCode(status, detail) {
   if (normalizedStatus === 'PROGRESS_CONFIRMED') return 'PROGRESS_CONFIRMED';
   return outcomeDetailCode(detail);
 }
+
+function persistReinforcementHealth(outcome) {
+  const action = text(outcome?.action);
+  const degraded = action === 'sent_unconfirmed'
+    || action === 'send_failed'
+    || action === 'error'
+    || (outcome?.sent === true && outcome?.progress_confirmed !== true);
+  const recovered = action === 'self_resolved' || action === 'confirmed_progress';
+  if (!degraded && !recovered) return;
+
+  const payload = {
+    schema_version: 1,
+    updated_at: new Date().toISOString(),
+    degraded,
+    action,
+    sent: outcome?.sent === true,
+    progress_confirmed: outcome?.progress_confirmed === true,
+    detail: text(outcome?.detail).slice(0, 400),
+    failure_reason: text(outcome?.failure_reason),
+  };
+  fs.mkdirSync(TASK_STATE_DIR, { recursive: true, mode: 0o700 });
+  const temp = MONITOR_STATE_FILE + '.tmp.' + process.pid;
+  fs.writeFileSync(temp, JSON.stringify(payload) + '\n', { mode: 0o600 });
+  fs.renameSync(temp, MONITOR_STATE_FILE);
+}
+
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 let REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -1728,6 +1756,10 @@ async function errorBannerPresent(cdp) {
       'additional checks before responding',
       'try again with a faster model',
       'try again using a faster model',
+      'esgotou-se o tempo limite da solicitação',
+      'esgotou-se o tempo limite da solicitacao',
+      'request timed out',
+      'request timeout',
     ],
     'continuity-error-banner-probe',
   );
@@ -1765,6 +1797,17 @@ async function recoverableFailureReason(cdp) {
     ['streaming interrupted', 'transmissão interrompida', 'transmissao interrompida'],
     'continuity-streaming-interrupted-probe',
   )) return 'streaming_interrupted';
+
+  if (await currentConversationSurfaceContains(
+    cdp,
+    [
+      'esgotou-se o tempo limite da solicitação',
+      'esgotou-se o tempo limite da solicitacao',
+      'request timed out',
+      'request timeout',
+    ],
+    'continuity-request-timeout-probe',
+  )) return 'request_timeout';
 
   return 'generation_error';
 }
@@ -2601,6 +2644,8 @@ async function reinforcementLoop(
       };
     }
 
+    persistReinforcementHealth(outcome);
+
     if (allowAccountDiscovery) {
       console.log(
         'chatgpt_continuity_reinforcement_discovery'
@@ -2700,6 +2745,7 @@ export {
   errorBannerPresent,
   recoverableFailureReason,
   outcomeStatusDetailCode,
+  persistReinforcementHealth,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
