@@ -19,6 +19,7 @@
 // remote-debugging port open. If that port is not reachable, the worker
 // fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
+import { dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
@@ -121,17 +122,22 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 
-function loadReinforcementHealth() {
+function loadReinforcementHealth(healthFile = REINFORCEMENT_HEALTH_FILE) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(REINFORCEMENT_HEALTH_FILE, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(healthFile, 'utf8'));
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 }
 
-function persistReinforcementHealth(targetKey, outcome, observedAtMs = Date.now()) {
-  const previous = loadReinforcementHealth();
+function persistReinforcementHealth(
+  targetKey,
+  outcome,
+  observedAtMs = Date.now(),
+  healthFile = REINFORCEMENT_HEALTH_FILE,
+) {
+  const previous = loadReinforcementHealth(healthFile);
   const unresolved = previous.unresolved && typeof previous.unresolved === 'object'
     ? { ...previous.unresolved }
     : {};
@@ -160,11 +166,11 @@ function persistReinforcementHealth(targetKey, outcome, observedAtMs = Date.now(
     unresolved,
     unresolved_count: Object.keys(unresolved).length,
   };
-  const tmp = REINFORCEMENT_HEALTH_FILE + '.tmp-' + process.pid;
-  fs.mkdirSync(new URL('.', 'file://' + REINFORCEMENT_HEALTH_FILE).pathname, { recursive: true, mode: 0o700 });
+  const tmp = healthFile + '.tmp-' + process.pid;
+  fs.mkdirSync(dirname(healthFile), { recursive: true, mode: 0o700 });
   fs.writeFileSync(tmp, JSON.stringify(payload) + '\n', { mode: 0o600 });
-  fs.renameSync(tmp, REINFORCEMENT_HEALTH_FILE);
-  fs.chmodSync(REINFORCEMENT_HEALTH_FILE, 0o600);
+  fs.renameSync(tmp, healthFile);
+  fs.chmodSync(healthFile, 0o600);
   return payload;
 }
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
