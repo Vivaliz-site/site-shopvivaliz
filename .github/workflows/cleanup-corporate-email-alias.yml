@@ -1,0 +1,56 @@
+name: Cleanup Temporary Corporate Alias
+
+on:
+  push:
+    branches:
+      - ops/create-frederico-email
+    paths:
+      - '.github/workflows/cleanup-corporate-email-alias.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZONE_NAME: shopvivaliz.com.br
+      KEEP_EMAIL: dev@shopvivaliz.com.br
+      REMOVE_EMAIL: frederico@shopvivaliz.com.br
+      DEST_EMAIL: fredmourao@gmail.com
+    steps:
+      - name: Validate dev alias and remove temporary alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_CREDENTIAL_MISSING'; exit 1; }
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          test -n "$zone_id" || { echo 'ZONE_NOT_FOUND'; exit 2; }
+
+          rules=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
+          keep_id=$(jq -r --arg src "$KEEP_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+          test -n "$keep_id" || { echo 'DEV_ALIAS_NOT_FOUND'; exit 3; }
+          keep=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules/$keep_id")
+          test "$(jq -r '.result.enabled // false' <<<"$keep")" = true || { echo 'DEV_ALIAS_DISABLED'; exit 4; }
+          target_ok=$(jq -r --arg dst "$DEST_EMAIL" 'any(.result.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$keep")
+          test "$target_ok" = true || { echo 'DEV_ALIAS_TARGET_MISMATCH'; exit 5; }
+          echo 'DEV_ALIAS_VERIFIED_ACTIVE'
+
+          remove_id=$(jq -r --arg src "$REMOVE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+          if [ -n "$remove_id" ]; then
+            deleted=$(curl -fsS -X DELETE "${auth[@]}" "$api/zones/$zone_id/email/routing/rules/$remove_id")
+            test "$(jq -r '.success' <<<"$deleted")" = true || { echo 'TEMP_ALIAS_DELETE_FAILED'; exit 6; }
+            echo 'TEMP_ALIAS_DELETED'
+          else
+            echo 'TEMP_ALIAS_ALREADY_ABSENT'
+          fi
+
+          final=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
+          remain=$(jq -r --arg src "$REMOVE_EMAIL" '[.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src))] | length' <<<"$final")
+          test "$remain" -eq 0 || { echo 'TEMP_ALIAS_STILL_PRESENT'; exit 7; }
+          echo 'CLEANUP_VERIFIED'
