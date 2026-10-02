@@ -82,12 +82,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("REDACTED", redacted)
 
     def test_linux_service_status_is_fail_closed_and_checks_user_scope(self):
-        command = m.service_command("linux", "shopvivaliz-chatgpt-continuity.service", "status")
+        command = m.service_command(
+            "linux",
+            "shopvivaliz-chatgpt-continuity.service",
+            "status",
+            "ubuntu",
+        )
         self.assertIn("LoadState", command)
+        self.assertIn("runuser -u ubuntu", command)
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/$uid", command)
         self.assertIn("systemctl --user", command)
         self.assertIn("service_not_found", command)
         self.assertIn("exit 4", command)
         self.assertNotIn("status shopvivaliz-chatgpt-continuity.service || true", command)
+
+    def test_backend_config_declares_canonical_user_service_owner(self):
+        self.assertEqual(m.HOSTS["always-free-arm-1787907847-26"]["service_user_owner"], "ubuntu")
 
     def test_run_host_command_tolerates_non_utf8_output(self):
         result = m.run_host_command(
