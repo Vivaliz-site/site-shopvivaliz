@@ -292,7 +292,7 @@ def browser_screenshot() -> dict[str, Any]:
     os.close(fd)
     try:
         if shutil.which("scrot"):
-            run_gui(["scrot", path], timeout=20)
+            run_gui(["scrot", "-u", path], timeout=20)
         elif shutil.which("gnome-screenshot"):
             run_gui(["gnome-screenshot", "-f", path], timeout=20)
         elif shutil.which("import"):
