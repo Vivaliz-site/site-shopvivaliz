@@ -45,6 +45,13 @@ EVENTS_FILE = "_gemini-24x7-controller-events.jsonl"
 STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
 DEFAULT_INTERVAL_SECONDS = 30
+BROWSER_HEALTH_STALE_SECONDS = 180
+BROWSER_HEALTH_FILE = Path(
+    os.environ.get(
+        "CHATGPT_CONTINUITY_REINFORCEMENT_HEALTH_FILE",
+        "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/reinforcement-health.json",
+    )
+)
 
 
 def utc_now() -> str:
@@ -143,6 +150,33 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _browser_reinforcement_health(
+    path: Path | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    payload = _read_json(Path(path or BROWSER_HEALTH_FILE))
+    updated = _parse_utc(payload.get("updated_at"))
+    current = now or datetime.now(timezone.utc)
+    age_seconds = None if updated is None else max(0, int((current - updated).total_seconds()))
+    unresolved = payload.get("unresolved")
+    unresolved_count = int(payload.get("unresolved_count") or 0)
+    if isinstance(unresolved, dict):
+        unresolved_count = max(unresolved_count, len(unresolved))
+    observed = bool(payload) and updated is not None
+    stale = not observed or age_seconds is None or age_seconds > BROWSER_HEALTH_STALE_SECONDS
+    return {
+        "observed": observed,
+        "stale": stale,
+        "age_seconds": age_seconds,
+        "unresolved_count": max(0, unresolved_count),
+        "last_action": str(payload.get("last_action") or ""),
+        "last_http_status": int(payload.get("last_http_status") or 0),
+        "candidate_count": int(payload.get("candidate_count") or 0),
+        "project_count": int(payload.get("project_count") or 0),
+    }
 
 
 def _append_event(root: Path, event: str, **fields: Any) -> None:
@@ -299,6 +333,7 @@ def run_once(
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
+        browser_health = _browser_reinforcement_health()
         degraded_reasons: list[str] = []
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
@@ -310,6 +345,10 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
+        if browser_health["stale"]:
+            degraded_reasons.append("browser_monitor_stale")
+        if int(browser_health["unresolved_count"]) > 0:
+            degraded_reasons.append("browser_stall_unresolved")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -325,6 +364,7 @@ def run_once(
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "browser_reinforcement": browser_health,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
