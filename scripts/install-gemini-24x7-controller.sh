@@ -48,7 +48,14 @@ if [ ! -d "$target_dir" ]; then
     sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"
   done
   sudo install -o root -g root -m 0644 "$release_dir/AGENTS.md" "$stage_dir/AGENTS.md"
-  sudo install -o root -g root -m 0644 "$release_dir/docs/knowledge/task-continuity.md" "$stage_dir/README"
+  continuity_doc="$release_dir/docs/knowledge/task-continuity.md"
+  if [ -f "$continuity_doc" ]; then
+    sudo install -o root -g root -m 0644 "$continuity_doc" "$stage_dir/README"
+  else
+    # Runtime deployment artifacts may intentionally omit docs/. Keep the
+    # systemd Documentation= target valid without mutating the source release.
+    sudo install -o root -g root -m 0644 "$release_dir/AGENTS.md" "$stage_dir/README"
+  fi
   # The systemd process runs as ubuntu and must traverse this immutable code
   # directory; runtime state remains under the separately protected shared
   # directory and is not copied into the release.

@@ -1,0 +1,42 @@
+name: Remote Control Browser MCP CI
+
+on:
+  pull_request:
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - 'remote-control-mcp/server.py'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - '.github/workflows/remote-control-browser-mcp-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - 'remote-control-mcp/server.py'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - '.github/workflows/remote-control-browser-mcp-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Browser MCP contract tests
+        run: |
+          set -Eeuo pipefail
+          python3 tests/remote-control-browser-mcp-test.py
+      - name: Existing Remote Control MCP regression tests
+        run: |
+          set -Eeuo pipefail
+          python3 tests/remote-control-mcp-test.py

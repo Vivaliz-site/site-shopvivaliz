@@ -66,6 +66,18 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 - A coleta inicial é não invasiva; a remediação subsequente deve corrigir o que estiver dentro do escopo autorizado.
 - Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`, policy `AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`.
 <!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+## Diagnóstico corretivo obrigatório em qualquer tarefa
+
+- Todo diagnóstico, investigação, troubleshooting, health check ou apuração de falha é **etapa de execução**, não estado final: identificar o defeito não conclui a tarefa.
+- Ao confirmar um problema material dentro do escopo autorizado, o agente deve seguir o ciclo **reproduzir/confirmar → investigar causa raiz → corrigir → aplicar prevenção pertinente → testar → validar no runtime/E2E quando aplicável → revalidar o diagnóstico**.
+- Enquanto existir correção segura e executável, o estado permanece `RUNNING`. Relatório, recomendação, issue, hipótese confirmada, serviço `active`, health verde ou HTTP 200 não autorizam `CONCLUIDO`/`APTO`.
+- `CONCLUIDO` exige evidência fresca pós-correção de que o comportamento afetado funciona. Para fluxos de UI, integração, automação, fila, worker, deploy ou continuidade, validar o caminho real ponta a ponta quando tecnicamente aplicável.
+- Só é aceitável terminar sem correção como `BLOCKED_EXTERNAL` quando o impedimento for externo, objetivo e comprovado **depois de esgotar alternativas seguras autorizadas**, registrando evidência e a ação exata necessária.
+- Esta regra vale para **qualquer tarefa e qualquer agente/subagente/controlador**, inclusive debugging, infraestrutura, navegador, integrações, deploy, auditoria e diagnósticos rotineiros.
+- Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`, policy `DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`.
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## Diagnóstico
 
 - Identificar o erro antes de sugerir a solução.

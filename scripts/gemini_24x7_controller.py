@@ -46,6 +46,8 @@ STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
 DEFAULT_INTERVAL_SECONDS = 30
 CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
+CHATGPT_BROWSER_HEALTH_STATE_FILE = "_chatgpt-browser-health.json"
+DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS = 90
 
 
 def utc_now() -> str:
@@ -155,6 +157,38 @@ def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
         "action": str(state.get("action", "")).strip(),
         "updated_at": str(state.get("updated_at", "")).strip(),
         "failure_reason": str(state.get("failure_reason", "")).strip(),
+    }
+
+
+def _chatgpt_browser_health(root: Path) -> dict[str, Any]:
+    state = _read_json(root / CHATGPT_BROWSER_HEALTH_STATE_FILE)
+    session_state = str(state.get("session_state", "")).strip().upper() or "UNKNOWN"
+    updated_at = str(state.get("updated_at", "")).strip()
+    updated = _parse_utc(updated_at)
+    try:
+        max_age_seconds = max(
+            30,
+            int(os.environ.get("CHATGPT_BROWSER_HEALTH_MAX_AGE_SECONDS", DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS)),
+        )
+    except (TypeError, ValueError):
+        max_age_seconds = DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS
+    age_seconds: int | None = None
+    fresh = False
+    if updated is not None:
+        age_seconds = int(max(0, (datetime.now(timezone.utc) - updated).total_seconds()))
+        fresh = age_seconds <= max_age_seconds
+    authenticated = (
+        fresh
+        and session_state == "AUTHENTICATED"
+        and state.get("authenticated") is True
+    )
+    return {
+        "session_state": session_state,
+        "authenticated": authenticated,
+        "fresh": fresh,
+        "updated_at": updated_at,
+        "age_seconds": age_seconds,
+        "max_age_seconds": max_age_seconds,
     }
 
 
@@ -313,6 +347,7 @@ def run_once(
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
         monitor = _chatgpt_monitor_health(root)
+        browser_health = _chatgpt_browser_health(root)
         degraded_reasons: list[str] = []
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
@@ -326,6 +361,15 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
         if monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
+        if browser_health.get("fresh") is not True:
+            degraded_reasons.append("chatgpt_browser_auth_unknown")
+        elif browser_health.get("session_state") == "AUTH_FLOW":
+            degraded_reasons.append("chatgpt_browser_auth_in_progress")
+        elif browser_health.get("authenticated") is not True:
+            if browser_health.get("session_state") == "LOGGED_OUT":
+                degraded_reasons.append("chatgpt_browser_not_authenticated")
+            else:
+                degraded_reasons.append("chatgpt_browser_auth_unknown")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -342,6 +386,7 @@ def run_once(
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
+            "chatgpt_browser": browser_health,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
