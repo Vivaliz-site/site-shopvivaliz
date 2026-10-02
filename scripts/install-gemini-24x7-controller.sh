@@ -12,6 +12,8 @@ unit_target="/etc/systemd/system/$unit_name"
 base_dir="/opt/shopvivaliz-gemini-24x7-controller"
 releases_dir="$base_dir/releases"
 environment_target="/etc/shopvivaliz-gemini-24x7-controller.env"
+runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"
 gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"
 gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 
@@ -27,6 +29,10 @@ if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]{7,160}$ ]]; then
   exit 64
 fi
 
+# The daemon and E2E probe both run as ubuntu. Provision the active state and
+# preferred failed-probe archive explicitly so quarantine never falls back to
+# a RUNNING JSON in the active runtime root because of historical root ownership.
+sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime_dir" "$e2e_failures_dir"
 sudo install -d -o root -g root -m 0755 "$releases_dir"
 target_dir="$releases_dir/$release_id"
 if [ ! -d "$target_dir" ]; then

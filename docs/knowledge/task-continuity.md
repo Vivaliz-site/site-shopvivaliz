@@ -277,49 +277,46 @@ imutável já publicada; nunca editar `current/` ou a release ativa.
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
-## Prova de ponta a ponta da retomada desacoplada em produção
+## Prova E2E da retomada na mesma conversa ChatGPT
 
 Policy: `DETACHED_TASK_RECOVERY_E2E_V7`.
 
-A V6 garante que existe um executor real. A V7 garante que ninguém pode
-certificar continuidade a partir de gates estáticos/ACK: exige prova real,
-correlacionada, de que o daemon já em execução na produção detecta, enfileira,
-executa e conclui uma tarefa sintética por conta própria.
+A recuperação detached continua sendo o fallback legítimo para tarefas normais.
+Ela, porém, **não pode certificar a retomada do browser na mesma conversa**. O
+probe sintético `continuity-e2e-*` existe exclusivamente para provar a cadeia
+watchdog → fila → bridge/worker → conversa ChatGPT explicitamente vinculada.
 
-- `scripts/task_continuity_e2e.py` cria exatamente uma tarefa sintética
-  `RUNNING` (`continuity-e2e-<uuid>`) via `agent_task_state.py` e, a partir
-  daí, **somente observa** arquivos de estado/ledger em disco. É proibido o
-  probe importar ou chamar `task_continuation_watchdog`/
-  `task_resume_dispatcher` ou invocar diretamente qualquer `run_once`; toda
-  detecção/execução deve vir do daemon `shopvivaliz-gemini-24x7-controller.service` já
-  rodando no backend de produção, no ciclo dele.
-- `next_action` da tarefa sintética usa apenas comandos já permitidos na
-  política headless do executor (`agent_task_state.py ready`/`complete`),
-  para que o resultado do probe nunca dependa de uma política de aprovação
-  de ferramenta não relacionada.
-- PASS exige, tudo correlacionado pelo mesmo `task_id`/`fingerprint`:
-  pedido em `_resume-requests.jsonl`; linha correspondente em
-  `_resume-executions.jsonl` com `result` igual a `progress` ou `terminal`
-  (nunca `no_progress`); o diagnóstico deve provar um modo autorizado de background: `diagnostic.background_paid_fallback_forbidden=true` quando não houve fallback pago, ou `diagnostic.background_codex_fallback_authorized=true` quando o fallback finito `codex-auto` foi usado; checkpoint final com `status=CONCLUIDO` e
-  `verification=continuity_e2e_pass`.
-- `.github/workflows/task-continuity-production-e2e.yml` roda manualmente
-  (`workflow_dispatch`) no runner `shopvivaliz-a1-deploy`, único lugar onde
-  o daemon real está ativo; não substitui os testes unitários do probe, que
-  correm no `Task Continuity Fast Gate` de forma isolada (com estado
-  fabricado, sem depender de produção).
-- **Distinção obrigatória, sempre explícita:** retomada desacoplada
-  (watchdog + dispatcher + Gemini continuando estado persistido) **não é**
-  reabertura da mesma conversa do aplicativo ChatGPT. Desde
-  `CHATGPT_SESSION_REENTRY_V10`, a reentrada da conversa existe como uma
-  camada separada: o pedido `chatgpt_common` é enfileirado no bridge HTTPS e
-  um worker da VM backend anexa via CDP `127.0.0.1:9555` ao navegador
-  ChatGPT já autenticado do usuário. O worker nunca cria um browser/perfil
-  paralelo e nunca usa Codex como fallback automático.
-- Falha do E2E (qualquer motivo: nenhum pedido observado, dispatcher não
-  executou, `no_progress`, checkpoint não terminal, verificação ausente,
-  só ACK do worker, `task_id` não correlacionado, evidência antiga) nunca é
-  motivo para declarar `NÃO APTO` e parar: é `RUNNING`. Levantar causa raiz,
-  TDD (RED → GREEN), commit/PR/merge/deploy, e repetir o E2E.
+- `scripts/task_continuity_e2e.py` cria exatamente um checkpoint sintético
+  `RUNNING`, vincula um `conversation_id` explícito e grava como `next_action`
+  somente os dois comandos allowlisted `agent_task_state.py ready` e
+  `agent_task_state.py complete`. Depois disso o probe apenas observa o estado
+  e os ledgers; ele nunca invoca watchdog/dispatcher diretamente.
+- O dispatcher reconhece estritamente esse contrato e **não libera fallback
+  detached/Gemini/CLI para `continuity-e2e-*`**. Esse isolamento é restrito ao
+  probe de browser e não desabilita a retomada automática das tarefas reais.
+- PASS exige o mesmo `task_id`, fingerprint e `conversation_id` no request e no
+  nudge, `worker_status=PROGRESS_CONFIRMED`, checkpoint final
+  `CONCLUIDO`, `verification=continuity_e2e_pass`, histórico contendo
+  `ready_to_complete` e `completed` sem `resume_request_id`, e ausência de
+  qualquer execução correspondente em `_resume-executions.jsonl`.
+- `scripts/chatgpt_continuity_proof_certifier.py` repete essas verificações de
+  provenance de forma fail-closed; `ok=true` é obrigatório antes de aceitar a
+  evidência como prova da mesma conversa.
+- Falha/timeout preserva evidência e quarentena o checkpoint sintético fora da
+  raiz ativa. Se o arquivo histórico preferencial não puder ser usado, a
+  quarentena cai em `agent-task-state/_e2e-failures/`, subdiretório que não é
+  varrido pelo watchdog. Nunca se deixa um JSON sintético `RUNNING` residual na
+  raiz ativa.
+- O workflow `.github/workflows/task-continuity-production-e2e.yml` roda no
+  runner `[self-hosted, Linux, ARM64, shopvivaliz-backend-browser]`, porque a
+  prova depende do browser canônico autenticado no backend. Browser de
+  Fred-Win/KOCEPSV e conversas reais de negócio são proibidos para probes.
+- A conversa de teste deve ser dedicada e fornecida explicitamente ao workflow;
+  a automação nunca seleciona conversa por atividade recente, título ou fallback
+  ambíguo.
+
+Um terminal criado por Gemini/Codex/CLI, ainda que contenha exatamente
+`continuity_e2e_pass`, é falso-verde para esta prova e deve ser rejeitado.
 <!-- /DETACHED_TASK_RECOVERY_E2E_V7 -->
 
 

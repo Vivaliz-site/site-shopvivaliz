@@ -2022,6 +2022,27 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       // If a previous safe attempt left exactly our continuation draft and
       // Send is enabled, submit it without touching any other draft.
       if (existing === expected && await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
+      if (!existing) {
+        // Some ProseMirror builds keep document.activeElement on BODY even
+        // after the trusted pointer click and the bounded focus repair. Never
+        // overwrite a real draft: only the already-proven empty composer may
+        // receive one trusted CDP text insertion, then read it back exactly
+        // before resolving and clicking Send.
+        try {
+          await cdp.send('Input.insertText', { text: expected });
+        } catch {
+          return false;
+        }
+        await sleep(120);
+        const insertedDraft = await cdp.evaluate(`(()=>{
+          /* continuity-composer-draft-after-trusted-insert */
+          const el=document.querySelector('[data-testid="prompt-textarea"]')
+            || document.querySelector('[role="textbox"][contenteditable="true"]');
+          return el ? String(el.innerText||el.textContent||'').trim() : '';
+        })()`);
+        if (String(insertedDraft || '').trim() !== expected) return false;
+        if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
+      }
       return false;
     }
 

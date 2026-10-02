@@ -177,6 +177,35 @@ def _recent_successful_chatgpt_nudge(
     return False
 
 
+def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> bool:
+    """Recognize the strict browser E2E sentinel contract.
+
+    These synthetic checkpoints exist specifically to prove that the bound
+    ChatGPT Web conversation executed the two allowlisted state transitions.
+    Letting Gemini/CLI run the same commands would manufacture a terminal
+    checkpoint without proving browser continuity.
+    """
+    task_id = str(state.get("task_id", "")).strip()
+    if not task_id.startswith("continuity-e2e-"):
+        return False
+    if str(request.get("preferred_executor", "")).strip() != "chatgpt_common":
+        return False
+    if str(state.get("agent_id", "")).strip() != "chatgpt-common":
+        return False
+    if not str(state.get("conversation_id", "")).strip():
+        return False
+    next_action = str(state.get("next_action", ""))
+    commands = [
+        line.split(") ", 1)[1].strip()
+        for line in next_action.splitlines()
+        if line.startswith(("1) ", "2) ")) and ") " in line
+    ]
+    return commands == [
+        f"python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass",
+        f"python3 scripts/agent_task_state.py complete --task {task_id}",
+    ]
+
+
 def _state_signature(payload: dict[str, Any]) -> str:
     evidence = payload.get("evidence")
     evidence_rows = evidence if isinstance(evidence, list) else []
@@ -517,6 +546,7 @@ def run_once(
         "no_progress": 0,
         "failed": 0,
         "deferred_chatgpt": 0,
+        "deferred_browser_probe": 0,
         "generated_at": utc_now(),
     }
 
@@ -564,6 +594,10 @@ def run_once(
 
             state = _load_json(_state_path(runtime, task_id))
             if not _request_matches_state(request, state):
+                continue
+
+            if _browser_only_e2e_probe(request, state):
+                summary["deferred_browser_probe"] += 1
                 continue
 
             summary["eligible"] += 1

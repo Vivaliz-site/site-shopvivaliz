@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-"""Production-only end-to-end probe for detached task-continuity recovery.
+"""Production browser-continuity E2E probe for the bound ChatGPT conversation.
 
 DETACHED_TASK_RECOVERY_E2E_V7
 
-This probe creates exactly one synthetic RUNNING checkpoint and then only
-reads durable task state and ledger files on disk while the already-running
-autonomous daemon performs stale detection, request queuing, one detached
-recovery attempt, and Gemini background execution entirely on its own.
-
-Hard boundary: this probe must never import or call the daemon's internal
-stale-detection or detached-execution modules or entrypoints. Any observed
-effect must come from the real, already-running production daemon cycling
-on its own schedule. This file is intentionally observe-only.
+The probe creates exactly one synthetic RUNNING checkpoint bound to an explicit
+ChatGPT conversation, then only reads durable task/ledger files while the
+already-running production daemon performs watchdog -> queue -> bridge/worker
+recovery. The sentinel must be executed by that browser conversation itself.
+Any detached Gemini/CLI execution for the synthetic task invalidates the proof.
+The probe never imports or invokes watchdog/dispatcher internals directly.
 """
 from __future__ import annotations
 
@@ -236,6 +233,7 @@ def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
     state = observation.get("final_state") or {}
     request = observation.get("request") or {}
     nudge = observation.get("chatgpt_nudge") or {}
+    execution = observation.get("execution") or {}
     repository = str(observation.get("repository", DEFAULT_REPOSITORY))
     conversation_id = str(observation.get("conversation_id", "")).strip()
 
@@ -258,6 +256,20 @@ def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
             reasons.append("ChatGPT nudge conversation_id does not match explicit binding")
         if not request_fingerprint or nudge_fingerprint != request_fingerprint:
             reasons.append("ChatGPT nudge fingerprint does not match current resume request")
+
+    if execution:
+        reasons.append("detached executor touched browser E2E probe; sentinel provenance is invalid")
+
+    history = state.get("history") if isinstance(state.get("history"), list) else []
+    terminal_events = [
+        row for row in history
+        if isinstance(row, dict) and str(row.get("event", "")) in {"ready_to_complete", "completed"}
+    ]
+    terminal_event_names = {str(row.get("event", "")) for row in terminal_events}
+    if not {"ready_to_complete", "completed"}.issubset(terminal_event_names):
+        reasons.append("checkpoint history does not prove both browser sentinel transitions")
+    if any(str(row.get("resume_request_id", "")).strip() for row in terminal_events):
+        reasons.append("browser sentinel history contains detached resume_request_id provenance")
 
     if str(state.get("repository", DEFAULT_REPOSITORY)) != repository:
         reasons.append("checkpoint repository does not match requested repository")
@@ -301,12 +313,14 @@ def quarantine_failed_probe(*, runtime_dir: Path, task_id: str) -> Path | None:
         return destination
     except PermissionError:
         # A historical archive directory may be root-owned on older hosts.
-        # Never leave a failed synthetic RUNNING checkpoint active just because
-        # the preferred archive is not writable. Quarantine it atomically in
-        # the runtime itself under an underscore-prefixed name; the watchdog
-        # intentionally ignores underscore-prefixed JSON files.
-        fallback = runtime_dir / f"_e2e-failure-{task_id}.json"
-        fallback_digest = runtime_dir / f"_e2e-failure-{task_id}.sha256"
+        # Keep failed RUNNING JSON out of the active runtime root entirely:
+        # the watchdog scans only runtime_dir/*.json. A private subdirectory
+        # is therefore fail-closed without leaving a synthetic RUNNING residue
+        # that can be mistaken for active work by audits or broad scanners.
+        fallback_dir = runtime_dir / "_e2e-failures"
+        fallback_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fallback = fallback_dir / f"{task_id}.json"
+        fallback_digest = fallback_dir / f"{task_id}.sha256"
         os.replace(source, fallback)
         fallback_digest.write_text(
             f"{digest}  {fallback.name}\n",

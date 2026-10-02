@@ -113,6 +113,15 @@ class ProbeReportOutputTests(unittest.TestCase):
         self.assertIn("--report-path", text)
         self.assertIn("write_report(report, args.report_path)", text)
 
+    def test_fast_gate_covers_independent_browser_proof_certifier(self) -> None:
+        fast_gate = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertGreaterEqual(fast_gate.count("scripts/chatgpt_continuity_proof_certifier.py"), 3)
+        self.assertGreaterEqual(fast_gate.count("tests/test_chatgpt_continuity_proof_certifier.py"), 2)
+        self.assertIn("tests.test_chatgpt_continuity_proof_certifier", fast_gate)
+        production = (ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/chatgpt_continuity_proof_certifier.py", production)
+        self.assertIn("chatgpt-continuity-proof.json", production)
+
 
 class ProbeEvaluationTests(unittest.TestCase):
     CONVERSATION_ID = "12345678-2222-3333-4444-555555555555"
@@ -136,19 +145,16 @@ class ProbeEvaluationTests(unittest.TestCase):
                 "worker_status": "PROGRESS_CONFIRMED",
                 "conversation_id": self.CONVERSATION_ID,
             },
-            "execution": {
-                "task_id": "continuity-e2e-fixture",
-                "result": "terminal",
-                "diagnostic": {
-                    "background_paid_fallback_forbidden": True,
-                    "provider": "gemini",
-                },
-            },
+            "execution": None,
             "final_state": {
                 "repository": "Vivaliz-site/site-shopvivaliz",
                 "conversation_id": self.CONVERSATION_ID,
                 "status": "CONCLUIDO",
                 "verification": "continuity_e2e_pass",
+                "history": [
+                    {"at": "2026-10-02T12:00:02Z", "event": "ready_to_complete"},
+                    {"at": "2026-10-02T12:00:03Z", "event": "completed"},
+                ],
             },
         }
 
@@ -157,6 +163,26 @@ class ProbeEvaluationTests(unittest.TestCase):
         ok, reasons = probe.evaluate(self._base_observation())
         self.assertTrue(ok)
         self.assertEqual(reasons, [])
+
+    def test_detached_executor_touching_browser_probe_invalidates_certification(self) -> None:
+        probe = load_probe()
+        observation = self._base_observation()
+        observation["execution"] = {
+            "task_id": "continuity-e2e-fixture",
+            "result": "terminal",
+            "diagnostic": {"provider": "gemini", "provider_status": "task_state_advanced"},
+        }
+        ok, reasons = probe.evaluate(observation)
+        self.assertFalse(ok)
+        self.assertTrue(any("detached executor" in reason for reason in reasons))
+
+    def test_detached_resume_request_id_in_sentinel_history_invalidates_certification(self) -> None:
+        probe = load_probe()
+        observation = self._base_observation()
+        observation["final_state"]["history"][0]["resume_request_id"] = "resume-false-green"
+        ok, reasons = probe.evaluate(observation)
+        self.assertFalse(ok)
+        self.assertTrue(any("resume_request_id" in reason for reason in reasons))
 
     def test_detached_terminal_alone_does_not_certify_conversation_resume(self) -> None:
         probe = load_probe()
@@ -233,6 +259,10 @@ class ProbeEvaluationTests(unittest.TestCase):
                     "conversation_id": self.CONVERSATION_ID,
                     "status": "CONCLUIDO",
                     "verification": "continuity_e2e_pass",
+                    "history": [
+                        {"at": "2026-10-02T12:00:02Z", "event": "ready_to_complete"},
+                        {"at": "2026-10-02T12:00:03Z", "event": "completed"},
+                    ],
                 }),
                 encoding="utf-8",
             )
@@ -286,12 +316,14 @@ class ProbeEvaluationTests(unittest.TestCase):
             finally:
                 probe.os.replace = original_replace
 
-            self.assertEqual(destination, runtime / f"_e2e-failure-{task_id}.json")
+            fallback_dir = runtime / "_e2e-failures"
+            self.assertEqual(destination, fallback_dir / f"{task_id}.json")
             self.assertFalse(source.exists())
             self.assertTrue(destination.is_file())
-            digest = runtime / f"_e2e-failure-{task_id}.sha256"
+            digest = fallback_dir / f"{task_id}.sha256"
             self.assertTrue(digest.is_file())
             self.assertIn(destination.name, digest.read_text(encoding="utf-8"))
+            self.assertEqual(list(runtime.glob("_e2e-failure-*.json")), [])
 
     def test_quarantine_refuses_non_e2e_task(self) -> None:
         probe = load_probe()
