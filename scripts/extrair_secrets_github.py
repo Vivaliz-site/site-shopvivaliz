@@ -59,7 +59,7 @@ def extract_from_workflows():
     # Procurar em scripts Python
     for script_file in Path("scripts").glob("*.py"):
         content = script_file.read_text()
-        if "FTP_HOST" in content or "SMTP_HOST" in content:
+        if "FTP_HOST" in content or "BREVO_API_KEY" in content:
             print(f"✓ Script encontrado: {script_file.name}")
 
     return secrets_found
@@ -74,7 +74,7 @@ def main():
     if gh_secrets:
         print("\n✅ Secrets disponíveis no GitHub:\n")
         for key in sorted(gh_secrets.keys()):
-            if any(x in key for x in ["FTP", "SMTP", "MAIL", "EMAIL"]):
+            if any(x in key for x in ["FTP", "BREVO", "EMAIL"]):
                 print(f"  • {key}")
     else:
         print("\n⚠️  Não foi possível acessar GitHub Secrets")

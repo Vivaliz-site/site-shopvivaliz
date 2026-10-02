@@ -4,46 +4,11 @@
  * Simplified - No database dependencies
  */
 
-// Load .env file
-$env_file = __DIR__ . '/../.env';
-$env_vars = [];
+require_once __DIR__ . '/mailer.php';
 
-if (file_exists($env_file)) {
-    foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        $line = trim($line);
-        if ($line === '' || $line[0] === '#') continue;
-        if (strpos($line, '=') !== false) {
-            list($k, $v) = explode('=', $line, 2);
-            $k = trim($k);
-            $v = trim(trim($v), '"\'');
-            $env_vars[$k] = $v;
-            putenv("$k=$v");
-        }
-    }
-}
-
-// Get SMTP config
-$host = $env_vars['SMTP_HOST'] ?? $env_vars['MAIL_HOST'] ?? '';
-$port = (int)($env_vars['SMTP_PORT'] ?? $env_vars['MAIL_PORT'] ?? '465');
-$user = $env_vars['SMTP_USER'] ?? $env_vars['MAIL_USER'] ?? '';
-$pass = $env_vars['SMTP_PASS'] ?? $env_vars['MAIL_PASS'] ?? '';
-$from = $env_vars['EMAIL_FROM'] ?? $user;
-$to   = $env_vars['EMAIL_TO'] ?? 'fredmourao@gmail.com';
-
-echo "🔍 Testing SMTP Configuration...\n\n";
-echo "Host: $host\n";
-echo "Port: $port\n";
-echo "User: $user\n";
-echo "Pass: " . (strlen($pass) > 0 ? "✅ SET" : "❌ EMPTY") . "\n";
-echo "From: $from\n";
-echo "To:   $to\n\n";
-
-if (empty($host) || empty($user) || empty($pass)) {
-    echo "❌ SMTP credentials missing!\n";
-    exit(1);
-}
-
-echo "📧 Sending Audit Report Email...\n\n";
+sv_mailer_load_env();
+$to = getenv('EMAIL_TO') ?: 'fredmourao@gmail.com';
+echo "📧 Sending Audit Report via ShopVivaliz Brevo API...\n\n";
 
 // Email content
 $subject = "✅ ShopVivaliz - Auditoria Operacional 2026-07-12 - RELATÓRIO COMPLETO";
@@ -205,27 +170,14 @@ $html = <<<'HTML'
 </html>
 HTML;
 
-// Send email using PHP's mail() function
-$headers = array(
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'From: ' . $from,
-    'Reply-To: ' . $from,
-);
-
-$result = mail($to, $subject, $html, implode("\r\n", $headers));
+$result = send_email($to, $subject, $html);
 
 if ($result) {
     echo "✅ SUCCESS! Email sent to: $to\n\n";
-    echo "📧 Email Details:\n";
-    echo "   Subject: $subject\n";
-    echo "   From: $from\n";
-    echo "   To: $to\n";
-    echo "\n🎉 AUDIT REPORT DELIVERED!\n";
+    echo "📧 Provider: Brevo API\n";
+    echo "📧 From: ShopVivaliz <atendimento@shopvivaliz.com.br>\n";
+    echo "📧 To: $to\n";
     exit(0);
-} else {
-    echo "❌ FAILED to send email!\n";
-    echo "   Check mail() configuration in php.ini\n";
-    exit(1);
 }
-?>
+echo "❌ FAILED to send audit report via Brevo API.\n";
+exit(1);

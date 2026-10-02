@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 🔐 Security Scanner - OWASP Top 10 + Dependency Scanning
  * Vulnerabilidades, secrets, dependências inseguras
@@ -381,12 +382,10 @@ class SecurityScanner {
     }
 
     private function sendAlert($title, $message) {
-        mail(
-            'fredmourao@gmail.com',
-            "[SECURITY] $title",
-            $message,
-            'From: security@shopvivaliz.com.br'
-        );
+        $html = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars((string)$message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        send_email('fredmourao@gmail.com', "[SECURITY] $title", $html);
     }
 }
 
