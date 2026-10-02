@@ -425,7 +425,15 @@ class Cdp {
     if (boundConversationId) {
       candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
       if (candidateTabs.length === 0) {
-        const neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
+        let neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
+        if (neutralHomeTabs.length === 0) {
+          // Never repurpose another real conversation. When every attached
+          // ChatGPT tab is already a conversation, create one isolated neutral
+          // tab through the existing CDP endpoint and use only that tab for
+          // exact bound-conversation reentry.
+          const syntheticNeutralTab = await createNeutralChatgptTab();
+          if (syntheticNeutralTab) neutralHomeTabs = [syntheticNeutralTab];
+        }
         if (neutralHomeTabs.length !== 1) {
           throw new Error('bound conversation is not available in the attached browser');
         }
@@ -902,6 +910,17 @@ async function navigateNeutralTabToConversation(
     return false;
   } finally {
     try { cdp?.close(); } catch {}
+  }
+}
+
+async function createNeutralChatgptTab(fetcher = fetch) {
+  try {
+    const response = await fetcher(`${CDP_BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    if (!response?.ok) return null;
+    const tab = await response.json();
+    return chatgptTabRank(tab) === 1 ? tab : null;
+  } catch {
+    return null;
   }
 }
 
@@ -2781,6 +2800,7 @@ export {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   checkpointUpdatedAtMs,
   selectCheckpointConversationCandidate,
