@@ -158,6 +158,57 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
         self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
 
+    def test_chatgpt_browser_guardian_preserves_oauth_flow_without_restart(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        self.assertIn("accounts.google.com", body)
+        self.assertIn("auth.openai.com", body)
+        self.assertIn("CONTINUITY_BROWSER_SESSION_STATE_PROBE", body)
+        self.assertIn("_chatgpt-browser-health.json", body)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            systemctl_log = root / "systemctl.log"
+            health_file = root / "browser-health.json"
+
+            def executable(name: str, body: str) -> None:
+                path = fake_bin / name
+                path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\n" + body, encoding="utf-8")
+                path.chmod(0o755)
+
+            executable("curl", "printf '{\\\"webSocketDebuggerUrl\\\":\\\"ws://127.0.0.1/test\\\"}'\n")
+            executable(
+                "node",
+                'if [[ "$*" == *"CONTINUITY_BROWSER_SESSION_STATE_PROBE"* ]]; then printf "AUTH_FLOW\\n"; fi; exit 0\n',
+            )
+            executable("pgrep", "printf '424242\\n'\n")
+            executable(
+                "systemctl",
+                'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; exit 0\n',
+            )
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
+            result = subprocess.run(
+                ["bash", str(guardian)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_FLOW", result.stdout)
+            calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
+            self.assertNotIn("restart shopvivaliz-chatgpt-browser.service", calls)
+            state = json.loads(health_file.read_text(encoding="utf-8"))
+            self.assertEqual(state["session_state"], "AUTH_FLOW")
+            self.assertFalse(state["authenticated"])
+
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:

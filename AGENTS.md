@@ -50,6 +50,10 @@ Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs o
 <!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 > 🛠️ **AUDITORIA É CORRETIVA:** qualquer pedido de auditoria, mesmo sem "extrema", obriga todos os agentes a investigar causa raiz, corrigir todo achado material seguro/autorizado, aplicar prevenção quando pertinente, testar e reauditar. Listar erros, recomendar ou abrir issue não conclui a auditoria. APTO/CONCLUIDO exige evidência fresca pós-correção e E2E real quando aplicável. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md` (`AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`).
 <!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> 🔧 **DIAGNÓSTICO É CORRETIVO EM QUALQUER TAREFA:** identificar a causa não conclui o trabalho. Todo agente/controlador deve continuar de defeito confirmado para **correção segura → prevenção pertinente → testes → validação real/E2E aplicável → revalidação**. Enquanto houver ação segura executável, o estado é `RUNNING`; `CONCLUIDO` exige evidência fresca pós-correção. Só `BLOCKED_EXTERNAL` comprovado, após esgotar alternativas autorizadas, permite encerrar sem corrigir. Fonte: `REGRAS-AGENTES-CENTRALIZADAS.md` (`DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`).
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## 🔴 Auditoria Extrema — cobertura universal obrigatória
 
 Quando houver auditoria completa/extrema, validação de release/apto ou condição definida em `AUDIT_POLICY.md`, todos os agentes (Claude, Codex, Gemini, GPT e demais) devem executar integralmente `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md`.
