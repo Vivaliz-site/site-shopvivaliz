@@ -942,6 +942,52 @@ async function run() {
   }
 
   {
+    const calls = [];
+    let draft = '';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus')) return false;
+        if (source.includes('continuity-composer-draft-after-trusted-insert')) return draft;
+        if (source.includes('continuity-send-button-target')) {
+          return draft === 'continue'
+            ? { state: 'ready', x: 700, y: 640 }
+            : { state: 'disabled' };
+        }
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method === 'Input.insertText') draft += String(params.text || '');
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'an empty composer must recover through trusted insert when ProseMirror leaves BODY focused',
+    );
+    assert.equal(draft, 'continue');
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[1] === 'Input.insertText' && call[2]?.text === 'continue'),
+      'BODY-focus recovery must use trusted CDP text insertion',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-composer-draft-after-trusted-insert')),
+      'worker must read the composer back before submitting the inserted continuation',
+    );
+    assert.ok(
+      calls.some(call => call[0] === 'send' && call[1] === 'Input.dispatchMouseEvent' && call[2]?.type === 'mousePressed'),
+      'verified continuation must be submitted through a trusted pointer event',
+    );
+  }
+
+  {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
