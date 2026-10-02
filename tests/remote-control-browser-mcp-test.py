@@ -19,6 +19,9 @@ SPEC.loader.exec_module(m)
 
 
 class BrowserMcpTests(unittest.TestCase):
+    def test_base_server_directory_is_available_for_sibling_imports(self):
+        self.assertIn(str((ROOT / "remote-control-mcp").resolve()), m.sys.path)
+
     def test_all_base_tools_and_six_browser_tools_are_exposed(self):
         names = {item["name"] for item in m.tool_specs()}
         base_names = {item["name"] for item in m.base.tool_specs()}
@@ -54,6 +57,12 @@ class BrowserMcpTests(unittest.TestCase):
                 m.browser_click({"x": 50, "y": 50})
             result = m.browser_click({"x": 150, "y": 150})
             self.assertTrue(result["ok"])
+
+    def test_screenshot_uses_active_window_capture(self):
+        src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('["scrot", "-u", path]', src)
+        self.assertIn("tempfile.mkdtemp", src)
+        self.assertNotIn("tempfile.mkstemp", src)
 
     def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
