@@ -44,10 +44,13 @@ assert deps.get('scrot') is True
 print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
 PY
     rm -f /tmp/shopvivaliz-browser-mcp-health.json
-    exit 0
+    REMOTE_CONTROL_BROWSER_MCP_READY=1
+    break
   fi
   sleep 1
 done
-systemctl status shopvivaliz-remote-control-browser-mcp.service --no-pager -l
-journalctl -u shopvivaliz-remote-control-browser-mcp.service -n 100 --no-pager
-exit 7
+if [ "${REMOTE_CONTROL_BROWSER_MCP_READY:-0}" != "1" ]; then
+  systemctl status shopvivaliz-remote-control-browser-mcp.service --no-pager -l
+  journalctl -u shopvivaliz-remote-control-browser-mcp.service -n 100 --no-pager
+  exit 7
+fi
