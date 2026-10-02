@@ -58,6 +58,10 @@ class BrowserMcpTests(unittest.TestCase):
             result = m.browser_click({"x": 150, "y": 150})
             self.assertTrue(result["ok"])
 
+    def test_screenshot_uses_active_window_capture(self):
+        src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('["scrot", "-u", path]', src)
+
     def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
         forbidden_runtime_tokens = (
