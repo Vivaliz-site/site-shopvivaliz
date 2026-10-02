@@ -11,7 +11,7 @@ from typing import Any
 
 AUTHORIZED_USER = "fredmourao-ai"
 CONTROL_ISSUE = 1586
-CONTINUITY_E2E_RE = re.compile(r"^/continuity-e2e\\s+conversation_id=([A-Za-z0-9_-]{8,160})$")
+CONTINUITY_E2E_RE = re.compile(r"^/continuity-e2e\s+conversation_id=([A-Za-z0-9_-]{8,160})$")
 
 EXACT_CONTROL_ROUTES = {
     "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_delete_scope",
