@@ -11,6 +11,8 @@ import {
   recoverableFailureReason,
   outcomeStatusDetailCode,
   transmissionErrorPresent,
+  retryableRequestFailurePresent,
+  retryRequestFailure,
   latestConversationProbe,
   latestConversationMeta,
   normalizeConversationCandidates,
@@ -1086,6 +1088,21 @@ async function run() {
   }
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'Erro na transmissão de mensagem' })), true);
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
+  assert.equal(
+    await retryableRequestFailurePresent(fakeCdp({ pageText: 'A reflexão falhou\nEsgotou-se o tempo limite da solicitação.\nRepetir' })),
+    true,
+    'live iOS reflection timeout must be recognized as a retryable request failure',
+  );
+  assert.equal(
+    await retryableRequestFailurePresent(fakeCdp({ pageText: 'The request timed out.\nTry again' })),
+    true,
+    'English request timeout must also be recognized',
+  );
+  assert.equal(
+    await errorBannerPresent(fakeCdp({ pageText: 'A reflexão falhou\nEsgotou-se o tempo limite da solicitação.\nRepetir' })),
+    true,
+    'retryable timeout must also count as an interrupted tab for local tab selection',
+  );
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
 
@@ -1689,6 +1706,43 @@ async function run() {
   const connectFailed = await attemptNudge('task-1', async () => { throw new Error('CDP endpoint unreachable'); });
   assert.equal(connectFailed.result_status, 'ERROR');
   assert.ok(connectFailed.detail.includes('unreachable'), 'connect failures must surface their reason in detail');
+
+  {
+    const events = [];
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-retry-request-target')) {
+          return { x: 120, y: 640, label: 'Repetir' };
+        }
+        return null;
+      },
+      async send(method, params) {
+        events.push({ method, params });
+        return {};
+      },
+    };
+    assert.equal(
+      await retryRequestFailure(cdp),
+      true,
+      'visible retry control must be clicked with trusted CDP pointer events',
+    );
+    assert.equal(events.filter(e => e.method === 'Input.dispatchMouseEvent').length, 3);
+    assert.equal(events[1]?.params?.type, 'mousePressed');
+    assert.equal(events[2]?.params?.type, 'mouseReleased');
+  }
+
+  {
+    const cdp = {
+      async evaluate(expression) {
+        if (String(expression).includes('continuity-retry-request-target')) return null;
+        return null;
+      },
+      async send() {
+        throw new Error('should not send pointer events without a retry target');
+      },
+    };
+    assert.equal(await retryRequestFailure(cdp), false);
+  }
 
   console.log('attemptNudge branches: PASS');
 
