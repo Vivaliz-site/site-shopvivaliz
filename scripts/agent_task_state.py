@@ -34,9 +34,13 @@ def resolve_runtime_dir(root: Path, configured: str = "") -> Path:
 
     resolved = root.resolve()
     parts = resolved.parts
-    if "shopvivaliz-deploy" in parts and "releases" in parts:
+    if "shopvivaliz-deploy" in parts:
         deploy_index = parts.index("shopvivaliz-deploy")
         deploy_root = Path(*parts[: deploy_index + 1])
+        # All checkouts under the canonical deploy root (immutable releases,
+        # repo/, sync-repo/, and operational worktrees nested there) must share
+        # one durable state directory. Otherwise a task started from repo/ is
+        # invisible to the 24x7 watchdog/controller.
         return deploy_root / "shared" / "agent-task-state"
     return resolved / "storage" / "private" / "agent-task-state"
 
