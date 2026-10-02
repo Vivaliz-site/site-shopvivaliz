@@ -334,6 +334,14 @@ class AgentTaskStateTests(unittest.TestCase):
             Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
         )
 
+        for checkout in ("repo", "sync-repo"):
+            with self.subTest(checkout=checkout):
+                mutable_checkout = Path("/home/ubuntu/shopvivaliz-deploy") / checkout
+                self.assertEqual(
+                    state.resolve_runtime_dir(mutable_checkout, configured=""),
+                    Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
+                )
+
         local_root = Path("/tmp/site-shopvivaliz")
         local = state.resolve_runtime_dir(local_root, configured="")
         self.assertEqual(local, local_root / "storage" / "private" / "agent-task-state")
