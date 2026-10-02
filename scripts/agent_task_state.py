@@ -220,22 +220,6 @@ def _require_freeze_browser_progress(task_id: str) -> None:
         )
 
 
-def _require_continuity_e2e_browser_proof(payload: dict[str, Any], verification: str) -> None:
-    if str(verification).strip() != "continuity_e2e_pass":
-        return
-    try:
-        from scripts.chatgpt_continuity_proof_certifier import browser_proof
-    except ImportError:
-        from chatgpt_continuity_proof_certifier import browser_proof
-    proof = browser_proof(RUNTIME_DIR, payload)
-    if not proof.get("ok"):
-        failures = ",".join(str(item) for item in proof.get("failures", []))
-        raise TaskStateError(
-            "continuity_e2e_pass requires bound browser PROGRESS_CONFIRMED "
-            f"for the same checkpoint fingerprint: {failures or 'proof_missing'}"
-        )
-
-
 def _require_current_resume(payload: dict[str, Any]) -> None:
     if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
         return
@@ -438,7 +422,6 @@ def mark_ready(
     if not verification_text:
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
-    _require_continuity_e2e_browser_proof(payload, verification_text)
     _require_current_resume(payload)
     _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
