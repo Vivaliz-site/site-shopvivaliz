@@ -55,7 +55,8 @@
       "absolute-audit-governance-validate.sh",
       "Absolute Audit Main Guard",
       "AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1",
-      "AUDIT_EXTERNAL_REMEDIATION_V1"
+      "AUDIT_EXTERNAL_REMEDIATION_V1",
+      "DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1"
     ],
     "CLAUDE.md": [
       "AGENTS.md",
@@ -65,12 +66,14 @@
       "AUDIT_MERGE_ENFORCEMENT_V1.md",
       "AUDIT_PROJECT_REQUIREMENTS_V1.md",
       "AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1",
-      "AUDIT_EXTERNAL_REMEDIATION_V1"
+      "AUDIT_EXTERNAL_REMEDIATION_V1",
+      "DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1"
     ],
     "GEMINI.md": [
       "GEMINI_READ_AGENTS_FIRST_V1",
       "AGENTS.md",
-      "AUDIT_EXTERNAL_REMEDIATION_V1"
+      "AUDIT_EXTERNAL_REMEDIATION_V1",
+      "DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1"
     ],
     ".github/workflows/absolute-audit-governance.yml": [
       "Absolute Audit Governance",
