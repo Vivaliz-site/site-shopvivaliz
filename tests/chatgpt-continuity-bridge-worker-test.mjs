@@ -40,6 +40,8 @@ import {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  createNeutralChatgptTab,
+  navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
 } from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 
@@ -153,6 +155,107 @@ async function run() {
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
+  }
+
+  {
+    const id = '11111111-2222-3333-4444-555555555555';
+    const expressions = [];
+    let pathname = '/';
+    const cdp = {
+      async evaluate(expression) {
+        expressions.push(String(expression));
+        if (String(expression).includes('continuity-bound-sidebar-route')) {
+          pathname = `/c/${id}`;
+          return 'sidebar';
+        }
+        if (String(expression) === 'location.pathname') return pathname;
+        return null;
+      },
+      close() {},
+    };
+    const ok = await navigateNeutralTabToConversation(
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
+      id,
+      async () => cdp,
+      600,
+      50,
+    );
+    assert.equal(ok, true);
+    assert.ok(
+      expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
+      'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
+    );
+  }
+
+  {
+    const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    let sidebarProbes = 0;
+    let pathname = '/';
+    let directFallbacks = 0;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        if (source.includes('continuity-bound-sidebar-route')) {
+          sidebarProbes += 1;
+          if (sidebarProbes < 3) return 'waiting';
+          pathname = `/c/${id}`;
+          return 'sidebar';
+        }
+        if (source.includes('location.assign')) {
+          directFallbacks += 1;
+          pathname = `/c/${id}`;
+          return 'direct';
+        }
+        if (source === 'location.pathname') return pathname;
+        return null;
+      },
+      close() {},
+    };
+    const ok = await navigateNeutralTabToConversation(
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://fresh-neutral' },
+      id,
+      async () => cdp,
+      1000,
+      50,
+    );
+    assert.equal(ok, true);
+    assert.equal(sidebarProbes, 3, 'fresh neutral tab must wait for sidebar hydration');
+    assert.equal(directFallbacks, 0, 'direct navigation must not race a sidebar that is still hydrating');
+  }
+
+  {
+    const calls = [];
+    const created = await createNeutralChatgptTab(async (url, options) => {
+      calls.push({ url: String(url), method: options?.method });
+      return {
+        ok: true,
+        async json() {
+          return {
+            type: 'page',
+            url: 'https://chatgpt.com/',
+            webSocketDebuggerUrl: 'ws://synthetic-neutral',
+          };
+        },
+      };
+    });
+    assert.equal(created?.webSocketDebuggerUrl, 'ws://synthetic-neutral');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PUT');
+    assert.ok(calls[0].url.endsWith('/json/new?https://chatgpt.com/'));
+  }
+
+  {
+    const refused = await createNeutralChatgptTab(async () => ({
+      ok: true,
+      async json() {
+        return {
+          type: 'page',
+          url: 'https://chatgpt.com/c/real-conversation',
+          webSocketDebuggerUrl: 'ws://real',
+        };
+      },
+    }));
+    assert.equal(refused, null, 'neutral-tab creator must reject a target that is already a real conversation');
   }
 
   {
@@ -896,6 +999,51 @@ async function run() {
     assert.ok(
       calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-send-button-target')),
       'trusted path must resolve the real enabled Send geometry before submitting',
+    );
+  }
+
+  {
+    const calls = [];
+    let repairedFocus = false;
+    let sendEnabled = false;
+    let draft = '';
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        calls.push(['evaluate', source]);
+        if (source.includes('continuity-composer-draft-probe')) {
+          return { usable: true, text: draft };
+        }
+        if (source.includes('continuity-composer-click-target')) return { x: 320, y: 640 };
+        if (source.includes('continuity-composer-focus-repair')) {
+          repairedFocus = true;
+          return true;
+        }
+        if (source.includes('continuity-composer-focus')) return repairedFocus;
+        if (source.includes('continuity-send-button-target')) {
+          return sendEnabled ? { state: 'ready', x: 700, y: 640 } : { state: 'disabled' };
+        }
+        return false;
+      },
+      async send(method, params = {}) {
+        calls.push(['send', method, params]);
+        if (method !== 'Input.dispatchKeyEvent') return {};
+        if (params.type === 'char' && typeof params.text === 'string') {
+          draft += params.text;
+          if (draft.trim() === 'continue') sendEnabled = true;
+        }
+        return {};
+      },
+    };
+    assert.equal(
+      await sendContinueMessage(cdp),
+      true,
+      'reattached composer must get one bounded focus repair after the trusted pointer click',
+    );
+    assert.equal(repairedFocus, true);
+    assert.ok(
+      calls.some(call => call[0] === 'evaluate' && String(call[1]).includes('continuity-composer-focus-repair')),
+      'worker must attempt the bounded focus repair before giving up on an empty safe composer',
     );
   }
 

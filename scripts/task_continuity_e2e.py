@@ -83,7 +83,7 @@ def build_sentinel_next_action(task_id: str) -> str:
         "codigo real necessaria. Rode exatamente estes dois comandos, nesta "
         "ordem, e nada mais:\n"
         f'1) python3 scripts/agent_task_state.py ready --task {task_id} '
-        f'--evidence "continuity e2e sentinel executed" --verification {EXPECTED_VERIFICATION}\n'
+        f'--verification {EXPECTED_VERIFICATION}\n'
         f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
     )
 

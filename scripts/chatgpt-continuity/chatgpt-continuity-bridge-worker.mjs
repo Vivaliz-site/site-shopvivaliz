@@ -425,7 +425,15 @@ class Cdp {
     if (boundConversationId) {
       candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
       if (candidateTabs.length === 0) {
-        const neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
+        let neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
+        if (neutralHomeTabs.length === 0) {
+          // Never repurpose another real conversation. When every attached
+          // ChatGPT tab is already a conversation, create one isolated neutral
+          // tab through the existing CDP endpoint and use only that tab for
+          // exact bound-conversation reentry.
+          const syntheticNeutralTab = await createNeutralChatgptTab();
+          if (syntheticNeutralTab) neutralHomeTabs = [syntheticNeutralTab];
+        }
         if (neutralHomeTabs.length !== 1) {
           throw new Error('bound conversation is not available in the attached browser');
         }
@@ -860,19 +868,46 @@ async function navigateNeutralTabToConversation(
     if (!cdp) return false;
 
     const target = '/c/' + id;
-    const navigated = await cdp.evaluate(
-      `(()=>{location.assign(${JSON.stringify(target)});return true})()`,
-    );
-    if (!navigated) return false;
-
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
-    const deadline = Date.now() + (Number.isFinite(requestedTimeout)
+    const totalTimeoutMs = Number.isFinite(requestedTimeout)
       ? Math.max(500, requestedTimeout)
-      : 12000);
+      : 12000;
     const intervalMs = Number.isFinite(requestedPoll)
       ? Math.max(50, requestedPoll)
       : 250;
+    const startedAt = Date.now();
+    const deadline = startedAt + totalTimeoutMs;
+
+    // A freshly created neutral CDP target can be connected before the
+    // authenticated ChatGPT shell/sidebar has hydrated. Wait a bounded window
+    // for the exact existing conversation link instead of immediately falling
+    // back to direct /c/<id> navigation, which can render an unavailable shell.
+    const sidebarDeadline = Math.min(deadline, startedAt + Math.min(5000, totalTimeoutMs));
+    let route = 'waiting';
+    while (Date.now() < sidebarDeadline) {
+      route = await cdp.evaluate(
+        `(()=>{
+          /* continuity-bound-sidebar-route */
+          const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
+          const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
+            try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
+          });
+          if(!link) return 'waiting';
+          link.click();
+          return 'sidebar';
+        })()`,
+      );
+      if (route === 'sidebar') break;
+      await sleep(intervalMs);
+    }
+
+    if (route !== 'sidebar') {
+      route = await cdp.evaluate(
+        `(()=>{location.assign(${JSON.stringify(target)});return 'direct';})()`,
+      );
+    }
+    if (route !== 'sidebar' && route !== 'direct') return false;
 
     while (Date.now() < deadline) {
       await sleep(intervalMs);
@@ -890,6 +925,17 @@ async function navigateNeutralTabToConversation(
     return false;
   } finally {
     try { cdp?.close(); } catch {}
+  }
+}
+
+async function createNeutralChatgptTab(fetcher = fetch) {
+  try {
+    const response = await fetcher(`${CDP_BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    if (!response?.ok) return null;
+    const tab = await response.json();
+    return chatgptTabRank(tab) === 1 ? tab : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1949,7 +1995,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     }
     await sleep(120);
 
-    const focused = await cdp.evaluate(`(()=>{
+    let focused = await cdp.evaluate(`(()=>{
       /* continuity-composer-focus */
       const el=document.querySelector('[data-testid="prompt-textarea"]')
         || document.querySelector('[role="textbox"][contenteditable="true"]');
@@ -1957,10 +2003,24 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       return document.activeElement===el || el.contains(document.activeElement);
     })()`);
     if (!focused) {
-      // Current ProseMirror can receive a trusted pointer event while leaving
-      // document.activeElement on BODY. If the only draft present is exactly
-      // our own bounded continuation and Send is already enabled, submitting
-      // that safe draft is preferable to treating the editor as unusable.
+      // Current ChatGPT can accept the trusted pointer event while leaving
+      // activeElement on BODY after a reload/reattach. We already proved the
+      // exact conversation fingerprint and refused to overwrite any real
+      // draft above, so a single bounded DOM focus repair is safe here. The
+      // trusted pointer event remains the user-gesture boundary; focus() only
+      // repairs the editor selection target before keyboard input.
+      focused = await cdp.evaluate(`(()=>{
+        /* continuity-composer-focus-repair */
+        const el=document.querySelector('[data-testid="prompt-textarea"]')
+          || document.querySelector('[role="textbox"][contenteditable="true"]');
+        if(!el) return false;
+        try{ el.focus({preventScroll:true}); }catch{ try{el.focus();}catch{} }
+        return document.activeElement===el || el.contains(document.activeElement);
+      })()`);
+    }
+    if (!focused) {
+      // If a previous safe attempt left exactly our continuation draft and
+      // Send is enabled, submit it without touching any other draft.
       if (existing === expected && await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
 
       // Live backend evidence 2026-10-02: the canonical dedicated probe could
@@ -2779,6 +2839,8 @@ export {
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
+  createNeutralChatgptTab,
+  navigateNeutralTabToConversation,
   checkpointUpdatedAtMs,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
