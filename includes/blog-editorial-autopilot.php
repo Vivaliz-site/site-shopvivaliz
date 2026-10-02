@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function sv_blog_editorial_agenda(): array
 {
-    return [
+    $base = [
         'monday' => [
             'Como escolher uma caixa organizadora para cada ambiente',
             'Rodízio com trava ou sem trava: quando usar cada modelo',
@@ -46,6 +46,96 @@ function sv_blog_editorial_agenda(): array
             'Produtos para facilitar pequenos consertos em casa',
             'Guia rápido de produtos úteis para começar uma casa nova',
         ],
+    ];
+
+    $supplemental = sv_blog_editorial_supplemental_agenda();
+    foreach ($base as $weekday => $titles) {
+        $base[$weekday] = array_values(array_unique(array_merge(
+            $titles,
+            $supplemental[$weekday] ?? []
+        )));
+    }
+
+    return $base;
+}
+
+function sv_blog_editorial_supplemental_agenda(): array
+{
+    $mondayContexts = [
+        'rodízios' => ['móveis leves', 'móveis pesados', 'bancadas móveis', 'carrinhos utilitários', 'estantes', 'mesas', 'armários', 'equipamentos domésticos'],
+        'cadeados' => ['portões', 'armários', 'malas', 'bicicletas', 'caixas de ferramentas', 'depósitos', 'áreas externas', 'uso diário'],
+        'caixas organizadoras' => ['cozinha', 'lavanderia', 'garagem', 'quarto', 'despensa', 'banheiro', 'home office', 'estoque doméstico'],
+        'ferramentas manuais' => ['apartamento', 'casa', 'garagem', 'pequenos reparos', 'montagem de móveis', 'manutenção preventiva', 'kit de emergência', 'primeiro kit'],
+        'ganchos e suportes' => ['cozinha', 'banheiro', 'garagem', 'lavanderia', 'quarto', 'área de serviço', 'parede de alvenaria', 'espaços pequenos'],
+        'parafusos e buchas' => ['alvenaria', 'drywall', 'madeira', 'móveis', 'prateleiras', 'suportes', 'quadros', 'pequenos reparos'],
+        'dobradiças e puxadores' => ['armários de cozinha', 'guarda-roupas', 'gabinetes', 'móveis antigos', 'portas leves', 'banheiro', 'lavanderia', 'renovação de móveis'],
+        'acessórios de organização' => ['apartamento pequeno', 'casa com crianças', 'home office', 'cozinha compacta', 'lavanderia', 'garagem', 'despensa', 'mudança de casa'],
+    ];
+    $monday = [];
+    foreach ($mondayContexts as $subject => $contexts) {
+        foreach ($contexts as $context) {
+            $monday[] = "Como escolher {$subject} para {$context}";
+        }
+    }
+
+    $maintenanceSubjects = [
+        'rodízios',
+        'cadeados',
+        'ferramentas manuais',
+        'ferragens',
+        'parafusos e buchas',
+        'ganchos e suportes',
+        'caixas organizadoras',
+        'dobradiças e puxadores',
+    ];
+    $maintenancePatterns = [
+        'Como limpar %s sem reduzir a vida útil',
+        'Como guardar %s para evitar desgaste',
+        'Como identificar sinais de desgaste em %s',
+        'Como revisar %s antes de reutilizar',
+        'Como evitar umidade e corrosão em %s',
+        'Quando vale substituir %s em vez de reparar',
+        'Erros de manutenção que encurtam a vida de %s',
+        'Checklist de conservação para %s',
+    ];
+    $wednesday = [];
+    foreach ($maintenanceSubjects as $subject) {
+        foreach ($maintenancePatterns as $pattern) {
+            $wednesday[] = sprintf($pattern, $subject);
+        }
+    }
+
+    $spaces = [
+        'lavanderia',
+        'garagem',
+        'cozinha',
+        'quarto',
+        'banheiro',
+        'área de serviço',
+        'despensa',
+        'home office',
+    ];
+    $goals = [
+        'ganhar espaço sem obra',
+        'guardar itens de uso diário',
+        'organizar objetos pequenos',
+        'reduzir a bagunça visual',
+        'facilitar a limpeza semanal',
+        'separar estoque e reposição',
+        'montar um kit de manutenção',
+        'aproveitar prateleiras e paredes',
+    ];
+    $friday = [];
+    foreach ($spaces as $space) {
+        foreach ($goals as $goal) {
+            $friday[] = "Ideias para {$goal} na {$space}";
+        }
+    }
+
+    return [
+        'monday' => $monday,
+        'wednesday' => $wednesday,
+        'friday' => $friday,
     ];
 }
 
