@@ -868,31 +868,46 @@ async function navigateNeutralTabToConversation(
     if (!cdp) return false;
 
     const target = '/c/' + id;
-    const route = await cdp.evaluate(
-      `(()=>{
-        /* continuity-bound-sidebar-route */
-        const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
-        const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
-          try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
-        });
-        if(link){
-          link.click();
-          return 'sidebar';
-        }
-        location.assign(target);
-        return 'direct';
-      })()`,
-    );
-    if (route !== 'sidebar' && route !== 'direct') return false;
-
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
-    const deadline = Date.now() + (Number.isFinite(requestedTimeout)
+    const totalTimeoutMs = Number.isFinite(requestedTimeout)
       ? Math.max(500, requestedTimeout)
-      : 12000);
+      : 12000;
     const intervalMs = Number.isFinite(requestedPoll)
       ? Math.max(50, requestedPoll)
       : 250;
+    const startedAt = Date.now();
+    const deadline = startedAt + totalTimeoutMs;
+
+    // A freshly created neutral CDP target can be connected before the
+    // authenticated ChatGPT shell/sidebar has hydrated. Wait a bounded window
+    // for the exact existing conversation link instead of immediately falling
+    // back to direct /c/<id> navigation, which can render an unavailable shell.
+    const sidebarDeadline = Math.min(deadline, startedAt + Math.min(5000, totalTimeoutMs));
+    let route = 'waiting';
+    while (Date.now() < sidebarDeadline) {
+      route = await cdp.evaluate(
+        `(()=>{
+          /* continuity-bound-sidebar-route */
+          const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
+          const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
+            try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
+          });
+          if(!link) return 'waiting';
+          link.click();
+          return 'sidebar';
+        })()`,
+      );
+      if (route === 'sidebar') break;
+      await sleep(intervalMs);
+    }
+
+    if (route !== 'sidebar') {
+      route = await cdp.evaluate(
+        `(()=>{location.assign(${JSON.stringify(target)});return 'direct';})()`,
+      );
+    }
+    if (route !== 'sidebar' && route !== 'direct') return false;
 
     while (Date.now() < deadline) {
       await sleep(intervalMs);

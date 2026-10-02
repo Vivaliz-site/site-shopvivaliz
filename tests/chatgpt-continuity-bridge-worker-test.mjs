@@ -188,6 +188,42 @@ async function run() {
   }
 
   {
+    const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    let sidebarProbes = 0;
+    let pathname = '/';
+    let directFallbacks = 0;
+    const cdp = {
+      async evaluate(expression) {
+        const source = String(expression);
+        if (source.includes('continuity-bound-sidebar-route')) {
+          sidebarProbes += 1;
+          if (sidebarProbes < 3) return 'waiting';
+          pathname = `/c/${id}`;
+          return 'sidebar';
+        }
+        if (source.includes('location.assign')) {
+          directFallbacks += 1;
+          pathname = `/c/${id}`;
+          return 'direct';
+        }
+        if (source === 'location.pathname') return pathname;
+        return null;
+      },
+      close() {},
+    };
+    const ok = await navigateNeutralTabToConversation(
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://fresh-neutral' },
+      id,
+      async () => cdp,
+      1000,
+      50,
+    );
+    assert.equal(ok, true);
+    assert.equal(sidebarProbes, 3, 'fresh neutral tab must wait for sidebar hydration');
+    assert.equal(directFallbacks, 0, 'direct navigation must not race a sidebar that is still hydrating');
+  }
+
+  {
     const calls = [];
     const created = await createNeutralChatgptTab(async (url, options) => {
       calls.push({ url: String(url), method: options?.method });
