@@ -61,6 +61,8 @@ class BrowserMcpTests(unittest.TestCase):
     def test_screenshot_uses_active_window_capture(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
         self.assertIn('["scrot", "-u", path]', src)
+        self.assertIn("tempfile.mkdtemp", src)
+        self.assertNotIn("tempfile.mkstemp", src)
 
     def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
