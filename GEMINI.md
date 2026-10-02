@@ -20,6 +20,10 @@ Regras obrigatórias:
 <!-- /SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
 
 <!-- GEMINI_READ_AGENTS_FIRST_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> **DIAGNÓSTICO CORRETIVO GLOBAL:** em qualquer tarefa, diagnóstico confirmado obriga correção segura, prevenção pertinente, testes e validação real/E2E aplicável antes de `CONCLUIDO`. Enquanto houver ação executável, permaneça `RUNNING`; só `BLOCKED_EXTERNAL` comprovado permite encerrar sem corrigir. Siga `AGENTS.md` e `REGRAS-AGENTES-CENTRALIZADAS.md`.
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 > **BOOTSTRAP OBRIGATÓRIO DO GEMINI:** antes de analisar, planejar, editar, executar comandos, usar navegador, abrir PR, fazer merge, deploy ou validar qualquer tarefa, leia integralmente o `AGENTS.md` da raiz deste repositório e siga suas regras. Releia em retomadas ou quando o arquivo mudar. Em conflito, `AGENTS.md` prevalece.
 
 # Protocolo IA-to-CLI obrigatório
