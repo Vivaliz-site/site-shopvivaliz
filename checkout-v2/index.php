@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once dirname(__DIR__) . '/includes/csrf.php';
+require_once dirname(__DIR__) . '/scripts/mailer.php';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !sv_csrf_valid('checkout-v2', $_POST['csrf_token'] ?? null)) {
     $_SERVER['REQUEST_METHOD'] = 'CSRF_REJECTED';
     http_response_code(419);
@@ -172,9 +173,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Acesse os pedidos em: https://shopvivaliz.com.br/admin/
 ";
-        @mail($adminEmail, $subject, $body, "From: pedidos@shopvivaliz.com.br
-
-Content-Type: text/plain; charset=UTF-8");
+        $htmlBody = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        send_email($adminEmail, $subject, $htmlBody);
 
         $pedidoCriado = true;
     }

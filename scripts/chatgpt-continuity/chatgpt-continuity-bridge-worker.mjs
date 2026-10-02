@@ -2091,7 +2091,11 @@ async function attemptNudge(
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
   let continuationSent = false;
-  const recoveryMetadata = () => ({sent: continuationSent, ...(detectedFailureReason
+  let resolvedConversationId = safeConversationId(conversationId);
+  const recoveryMetadata = () => ({
+    sent: continuationSent,
+    ...(resolvedConversationId ? { conversation_id: resolvedConversationId } : {}),
+    ...(detectedFailureReason
     ? {
         failure_class: 'RECOVERABLE_CHAT_FAILURE',
         failure_reason: detectedFailureReason,
@@ -2107,6 +2111,11 @@ async function attemptNudge(
       targetConversationId: conversationId,
     }));
     cdp = await connector();
+    try {
+      const pathname = String(await cdp.evaluate('location.pathname') || '');
+      const actualConversationId = safeConversationId(pathname.match(/^\/c\/([^/?#]+)/)?.[1] || '');
+      if (actualConversationId) resolvedConversationId = actualConversationId;
+    } catch {}
     detectedFailureReason = await recoverableFailureReason(cdp);
     let recoveredStaleComplete = false;
     let recoveredTerminalFailure = false;
