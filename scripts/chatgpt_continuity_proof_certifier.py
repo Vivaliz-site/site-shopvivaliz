@@ -46,45 +46,53 @@ def _fingerprint(repository: str, task_id: str, updated_at: str, next_action: st
 
 
 def _historical_fingerprints(state: dict[str, Any]) -> set[str]:
+    """Rebuild every RUNNING checkpoint fingerprint represented by history."""
     repository = str(state.get("repository", "")).strip()
     task_id = str(state.get("task_id", "")).strip()
+    history = state.get("history", [])
     result: set[str] = set()
-    for row in state.get("history", []):
+    next_action = "determine and execute the next safe action required by the original goal"
+    status = "RUNNING"
+    for row in history if isinstance(history, list) else []:
         if not isinstance(row, dict):
             continue
-        next_action = str(row.get("next_action", "")).strip()
+        event = str(row.get("event", "")).strip()
         at = str(row.get("at", "")).strip()
-        if repository and task_id and at and next_action:
+        if event == "started_successor":
+            next_action = "determine and execute the next safe action required by the successor goal"
+            status = "RUNNING"
+        elif event == "progress":
+            next_action = str(row.get("next_action", "")).strip() or next_action
+            status = "RUNNING"
+        elif event == "completion_check_failed_recovery_required":
+            next_action = (
+                "Investigate failed completion checks, repair the original goal, "
+                "and rerun readiness verification"
+            )
+            status = "RUNNING"
+        elif event == "ready_to_complete":
+            status = "READY_TO_COMPLETE"
+        elif event in {"completed", "blocked_external"}:
+            status = "TERMINAL"
+        if repository and task_id and at and next_action and status == "RUNNING":
             result.add(_fingerprint(repository, task_id, at, next_action))
     return result
 
 
-def certify(runtime_dir: Path, task_id: str) -> dict[str, Any]:
-    state = _read_json(runtime_dir / f"{task_id}.json")
+def browser_proof(runtime_dir: Path, state: dict[str, Any]) -> dict[str, Any]:
+    task_id = str(state.get("task_id", "")).strip()
     failures: list[str] = []
-
-    if not state:
-        failures.append("task_state_missing")
-        return {"ok": False, "task_id": task_id, "failures": failures}
-
-    if str(state.get("status", "")).strip() != "CONCLUIDO":
-        failures.append("task_not_concluido")
-    if str(state.get("verification", "")).strip() != EXPECTED_VERIFICATION:
-        failures.append("verification_not_continuity_e2e_pass")
-
     conversation_id = str(state.get("conversation_id", "")).strip()
     if not CONVERSATION_RE.fullmatch(conversation_id):
         failures.append("explicit_conversation_binding_missing")
 
     historical_fingerprints = _historical_fingerprints(state)
     matching = [
-        row
-        for row in _read_jsonl(runtime_dir / NUDGE_LEDGER)
+        row for row in _read_jsonl(runtime_dir / NUDGE_LEDGER)
         if str(row.get("task_id", "")).strip() == task_id
     ]
     confirmed = [
-        row
-        for row in matching
+        row for row in matching
         if str(row.get("worker_status", "")).strip().upper() == "PROGRESS_CONFIRMED"
         and str(row.get("worker_status_observed_at", "")).strip()
         and str(row.get("conversation_id", "")).strip() == conversation_id
@@ -99,8 +107,7 @@ def certify(runtime_dir: Path, task_id: str) -> dict[str, Any]:
         if fp:
             latest_by_fingerprint[fp] = row
     confirmed_latest = [
-        row
-        for row in confirmed
+        row for row in confirmed
         if latest_by_fingerprint.get(str(row.get("fingerprint", "")).strip()) is row
     ]
     if confirmed and not confirmed_latest:
@@ -110,13 +117,33 @@ def certify(runtime_dir: Path, task_id: str) -> dict[str, Any]:
     return {
         "ok": not failures,
         "task_id": task_id,
-        "status": str(state.get("status", "")).strip(),
-        "verification": str(state.get("verification", "")).strip(),
         "conversation_id": conversation_id if CONVERSATION_RE.fullmatch(conversation_id) else "",
         "fingerprint": str(proof.get("fingerprint", "")).strip(),
         "worker_status": str(proof.get("worker_status", "")).strip().upper(),
         "worker_status_observed_at": str(proof.get("worker_status_observed_at", "")).strip(),
         "send_attempt_count": int(proof.get("send_attempt_count") or 0) if proof else 0,
+        "failures": failures,
+    }
+
+
+def certify(runtime_dir: Path, task_id: str) -> dict[str, Any]:
+    state = _read_json(runtime_dir / f"{task_id}.json")
+    failures: list[str] = []
+    if not state:
+        return {"ok": False, "task_id": task_id, "failures": ["task_state_missing"]}
+
+    if str(state.get("status", "")).strip() != "CONCLUIDO":
+        failures.append("task_not_concluido")
+    if str(state.get("verification", "")).strip() != EXPECTED_VERIFICATION:
+        failures.append("verification_not_continuity_e2e_pass")
+
+    proof = browser_proof(runtime_dir, state)
+    failures.extend(proof["failures"])
+    return {
+        **proof,
+        "ok": not failures,
+        "status": str(state.get("status", "")).strip(),
+        "verification": str(state.get("verification", "")).strip(),
         "failures": failures,
     }
 
