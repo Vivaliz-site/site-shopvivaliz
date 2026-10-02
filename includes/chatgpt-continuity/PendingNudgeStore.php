@@ -165,10 +165,20 @@ final class SvChatgptContinuityPendingNudgeStore
                     }
                     return ['nudges' => $nudges, 'return' => false];
                 }
+                $existingConversationId = trim((string)($row['conversation_id'] ?? ''));
+                if (
+                    $conversationId !== ''
+                    && $existingConversationId !== ''
+                    && $existingConversationId !== $conversationId
+                ) {
+                    throw new RuntimeException('enqueue conversation binding does not match persisted binding');
+                }
                 $nudges[$index] = [
                     'task_id' => $taskId,
                     'repository' => $repository,
-                    'conversation_id' => $conversationId !== '' ? $conversationId : null,
+                    'conversation_id' => $conversationId !== ''
+                        ? $conversationId
+                        : ($existingConversationId !== '' ? $existingConversationId : null),
                     'requested_at' => $requestedAt,
                     'status' => 'PENDING',
                     'claimed_at' => null,
