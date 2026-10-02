@@ -1962,6 +1962,30 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
       // our own bounded continuation and Send is already enabled, submitting
       // that safe draft is preferable to treating the editor as unusable.
       if (existing === expected && await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
+
+      // Live backend evidence 2026-10-02: the canonical dedicated probe could
+      // reattach to the correct conversation and find a usable empty composer,
+      // but activeElement remained BODY after the trusted pointer click. Do not
+      // overwrite any user draft. For an empty composer only, use a trusted CDP
+      // text insertion, then read the composer back and require exact equality
+      // with our bounded continuation before attempting Submit.
+      if (!existing) {
+        try {
+          await cdp.send('Input.insertText', { text: expected });
+        } catch {
+          return false;
+        }
+        await sleep(120);
+        const insertedDraft = await cdp.evaluate(`(()=>{
+          /* continuity-composer-draft-after-trusted-insert */
+          const el=document.querySelector('[data-testid="prompt-textarea"]')
+            || document.querySelector('[role="textbox"][contenteditable="true"]');
+          if(!el) return '';
+          return String(el.innerText||el.value||el.textContent||'').trim();
+        })()`);
+        if (String(insertedDraft || '').trim() !== expected) return false;
+        if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
+      }
       return false;
     }
 
