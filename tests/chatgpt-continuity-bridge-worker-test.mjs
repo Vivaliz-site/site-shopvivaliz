@@ -86,9 +86,9 @@ function fakeCdp({
 async function run() {
   {
     const tabs = [
-      { url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
-      { url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
-      { url: 'https://chatgpt.com/' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
     const bound = selectBoundConversationTabs(
