@@ -16,6 +16,7 @@ on its own schedule. This file is intentionally observe-only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -269,6 +270,34 @@ def evaluate(observation: dict[str, Any]) -> tuple[bool, list[str]]:
 
     return (len(reasons) == 0), reasons
 
+def quarantine_failed_probe(*, runtime_dir: Path, task_id: str) -> Path | None:
+    """Preserve a failed synthetic checkpoint outside the active runtime.
+
+    This runs only after polling/reporting has finished. It never mutates
+    ledgers or non-E2E tasks, and prevents a failed probe from being retried
+    indefinitely by the production watchdog.
+    """
+    if not task_id.startswith("continuity-e2e-"):
+        raise ValueError("refusing to quarantine a non-E2E task")
+    source = runtime_dir / f"{task_id}.json"
+    if not source.is_file():
+        return None
+    payload = _read_json(source)
+    if str(payload.get("status", "")).strip() != "RUNNING":
+        return None
+    archive_dir = runtime_dir.parent / "agent-task-state-e2e-failures"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    destination = archive_dir / source.name
+    raw = source.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    os.replace(source, destination)
+    (archive_dir / f"{task_id}.sha256").write_text(
+        f"{digest}  {destination.name}\n",
+        encoding="utf-8",
+    )
+    return destination
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Detached continuity production E2E probe (creates one task, then only observes)."
@@ -325,6 +354,8 @@ def main() -> int:
         "generated_at": utc_now(),
     }
     print(write_report(report, args.report_path))
+    if not ok:
+        quarantine_failed_probe(runtime_dir=runtime_dir, task_id=task_id)
     return 0 if ok else 1
 
 
