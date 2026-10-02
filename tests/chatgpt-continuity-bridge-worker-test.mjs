@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   Cdp,
   conversationIsGenerating,
@@ -27,6 +30,8 @@ import {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementLoop,
+  loadReinforcementHealth,
+  persistReinforcementHealth,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,
@@ -85,6 +90,31 @@ function fakeCdp({
 }
 
 async function run() {
+  {
+    const dir=fs.mkdtempSync(path.join(os.tmpdir(),'continuity-health-'));
+    const healthFile=path.join(dir,'reinforcement-health.json');
+    try {
+      let state=persistReinforcementHealth(
+        'conversation:abc',
+        {action:'sent_unconfirmed',sent:true,progress_confirmed:false,http_status:200},
+        Date.parse('2026-10-02T08:53:45Z'),
+        healthFile,
+      );
+      assert.equal(state.unresolved_count,1);
+      assert.equal(state.unresolved['conversation:abc'].action,'sent_unconfirmed');
+      state=persistReinforcementHealth(
+        'conversation:abc',
+        {action:'self_resolved',sent:false,progress_confirmed:true,http_status:200},
+        Date.parse('2026-10-02T08:54:15Z'),
+        healthFile,
+      );
+      assert.equal(state.unresolved_count,0);
+      assert.deepEqual(loadReinforcementHealth(healthFile).unresolved,{});
+    } finally {
+      fs.rmSync(dir,{recursive:true,force:true});
+    }
+  }
+
   {
     assert.equal(
       outcomeStatusDetailCode('PROGRESS_CONFIRMED', 'continuation produced assistant progress'),
