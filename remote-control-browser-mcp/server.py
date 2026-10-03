@@ -434,7 +434,9 @@ BROWSER_TOOL_SPECS = [
 
 
 def tool_specs() -> list[dict[str, Any]]:
-    return BASE_TOOL_SPECS() + BROWSER_TOOL_SPECS
+    browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
+    inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names]
+    return inherited + BROWSER_TOOL_SPECS
 
 
 base.execute_tool = execute_tool
