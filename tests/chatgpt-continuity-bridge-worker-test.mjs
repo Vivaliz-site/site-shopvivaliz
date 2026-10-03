@@ -738,14 +738,20 @@ async function run() {
       return { conversationPath: '/c/thread-a' };
     }});
     let composerProbes = 0;
+    let platformChecks = 0;
     await sendContinueMessage({ async evaluate(source) {
       if (String(source).includes('continuity-conversation-identity-probe')) {
         return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
+      }
+      if (String(source).includes('continuity-error-banner-probe')) {
+        platformChecks += 1;
+        return false;
       }
       composerProbes += 1;
       return false;
     }}, expected.conversationFingerprint);
     assert.equal(composerProbes, 1, 'matching identity expression must parse and permit the composer probe');
+    assert.equal(platformChecks, 1, 'matching identity must check platform deferral before editing a draft');
   }
 
   // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only

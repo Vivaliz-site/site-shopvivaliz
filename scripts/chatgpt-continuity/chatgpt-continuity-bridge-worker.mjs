@@ -162,6 +162,7 @@ function reinforcementHealthPayload(
   const degradedAction = action === 'sent_unconfirmed'
     || action === 'send_failed'
     || action === 'error'
+    || action === 'additional_checks_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved' || action === 'confirmed_progress';
   const prior = previous && typeof previous === 'object' ? previous : {};
@@ -2050,6 +2051,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
 async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
         /* continuity-composer-draft-probe */
@@ -2417,6 +2419,13 @@ async function attemptNudge(
 
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks appeared after reattach; deferred without stop or continuation',
+        ...recoveryMetadata(),
+      };
+    }
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
@@ -2907,6 +2916,14 @@ async function reinforcementLoop(
     }
 
     if (now() < nextReinforcementCheckAt) {
+      // Keep local liveness fresh without contacting the browser or account.
+      persistReinforcementHealth({
+        action: 'additional_checks_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_reason: 'additional_checks',
+        cross_device_discovery: false,
+      });
       await wait(REINFORCEMENT_POLL_MS);
       continue;
     }
@@ -2940,6 +2957,8 @@ async function reinforcementLoop(
         nextReinforcementCheckAt,
         now() + ADDITIONAL_CHECKS_COOLDOWN_MS,
       );
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
     }
 
     if (allowAccountDiscovery) {
@@ -2994,6 +3013,12 @@ async function reinforcementLoop(
             { allowCrossDeviceDiscovery: true },
           );
           persistReinforcementHealth(candidateOutcome);
+          if (candidateOutcome?.action === 'additional_checks_cooldown') {
+            nextReinforcementCheckAt = Math.max(
+              nextReinforcementCheckAt, now() + ADDITIONAL_CHECKS_COOLDOWN_MS,
+            );
+            break;
+          }
         } catch (error) {
           console.error(
             `chatgpt_continuity_reinforcement_sweep_error source=${text(candidate?.source)} project=${candidate?.project_id ? 'true' : 'false'} detail=${text(error?.message)}`,

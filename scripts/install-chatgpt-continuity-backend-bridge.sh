@@ -208,7 +208,6 @@ if sudo -n systemctl is-active --quiet "$browser_unit" && [[ "$browser_unit_chan
   sudo -n systemctl try-restart "$browser_unit"
 fi
 sudo -n systemctl enable --now "$browser_guardian_timer" >/dev/null
-sudo -n systemctl start "$browser_guardian_service"
 
 if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true ]]; then
   systemctl --user daemon-reload
@@ -257,6 +256,11 @@ if payload.get("status") != "OK":
     raise SystemExit("continuity bridge heartbeat did not return OK")
 print("CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS")
 PY
+
+# Installation and session readiness are separate gates. Expired auth must
+# not leave the old worker running after new safe code has been copied.
+echo "CHATGPT_CONTINUITY_BACKEND_INSTALLED=PASS"
+sudo -n systemctl start "$browser_guardian_service"
 
 echo "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS"
 echo "UNIT=$unit"

@@ -555,3 +555,16 @@ compatível e sua conclusão textual não certifica aptidão por si só.
 
 O worker registra `sent` somente quando o envio efetivo ocorreu; progresso
 restaurado por reattach passivo e tentativa rejeitada não contam como envio.
+
+## Cooldown e instalacao segura (2026-10-03)
+
+Durante `additional_checks_cooldown`, o heartbeat local continua avancando a
+cada ciclo, sem chamadas ao browser/conta. O monitor permanece degradado; um
+resultado saudavel anterior nao pode mascarar o deferimento atual. A deteccao
+apos reattach e a entrada de envio tambem devem rejeitar novos envios. O
+cooldown interrompe o sweep do ciclo atual.
+
+O instalador conclui a copia, reload e restart do worker antes da verificacao
+final da sessao autenticada. `CHATGPT_CONTINUITY_BACKEND_INSTALLED=PASS` prova
+somente instalacao; o `BACKEND_SERVICE=PASS` continua atras do guardian real.
+Auth expirada mantem falha de readiness, mas nao mantem codigo antigo rodando.
