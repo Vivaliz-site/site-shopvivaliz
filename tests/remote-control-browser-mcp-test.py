@@ -96,6 +96,16 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertLess(bridge.index(browser_url), bridge.index(base_url))
         self.assertIn("MCP_URLS", bridge)
 
+    def test_active_browser_window_uses_focus_fallback_without_ewmh(self):
+        with (
+            mock.patch.object(m, "browser_windows", return_value=["123"]),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="999\n")) as run,
+            mock.patch.object(m, "focus") as focus,
+        ):
+            self.assertEqual("123", m.active_browser_window())
+        run.assert_called_once_with(["xdotool", "getactivewindow"], check=False)
+        focus.assert_called_once_with("123")
+
     def test_focus_falls_back_to_x11_windowfocus_without_ewmh(self):
         activate_failed = mock.Mock(returncode=1)
         focused = mock.Mock(returncode=0)
