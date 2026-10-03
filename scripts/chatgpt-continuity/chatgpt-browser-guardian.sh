@@ -210,8 +210,11 @@ validate_browser_session() {
       return 1
       ;;
     AUTH_TERMINAL)
-      report_browser_state "DEGRADED_AUTH_TERMINAL" "$session_state"
-      return 1
+      # Authentication reached a terminal page. The browser/CDP runtime is
+      # healthy, so keep the unauthenticated health state without turning the
+      # periodic guardian unit into a permanent failure loop.
+      report_browser_state "QUIESCENT_AUTH_TERMINAL" "$session_state"
+      return 0
       ;;
     LOGGED_OUT)
       report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"

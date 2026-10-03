@@ -1257,6 +1257,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
         "const c=new Cdp(ws); "
         "const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); "
+        "if(r.exceptionDetails) throw new Error('browser_runtime_exception'); "
         "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
         "JS"
     )
@@ -1286,6 +1287,22 @@ def browser_click_command(tab_id: str, selector: str) -> str:
     return _browser_cdp_command(tab_id, expression)
 
 
+def browser_click_control_command(tab_id: str, index: int) -> str:
+    _safe_browser_token(tab_id, "tab_id")
+    try:
+        idx = int(index)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid_control_index") from exc
+    if idx < 0 or idx >= 120:
+        raise ValueError("invalid_control_index")
+    expression = (
+        "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
+        f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
+        f"e.click();return {{clicked:true,index:{idx}}}}})()"
+    )
+    return _browser_cdp_command(tab_id, expression)
+
+
 BROWSER_TYPE_NODE_SCRIPT = r"""
 const mod='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
 const {Cdp}=await import('file://'+mod);
@@ -1305,6 +1322,7 @@ await Promise.race([
 const c=new Cdp(ws);
 const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
 const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+if(r.exceptionDetails) throw new Error('browser_runtime_exception');
 if(c.close)c.close();
 console.log(JSON.stringify(r.result?.value ?? null));
 """
@@ -1368,6 +1386,13 @@ def execute_tool(
         return _browser_result(run_host_command(
             CONTROLLER_BACKEND_HOST,
             browser_click_command(str(args.get("tab_id") or ""), str(args.get("selector") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_click_control":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_click_control_command(str(args.get("tab_id") or ""), args.get("index")),
             DEFAULT_TIMEOUT,
             cancel_check,
         ))
@@ -1535,6 +1560,7 @@ TOOLS = [
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
+    ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),

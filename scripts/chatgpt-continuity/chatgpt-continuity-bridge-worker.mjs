@@ -46,6 +46,10 @@ const REINFORCEMENT_429_BACKOFF_MS = Math.max(
   REINFORCEMENT_DISCOVERY_INTERVAL_MS + 60_000,
   Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_429_BACKOFF_MS || 5 * 60_000),
 );
+const ADDITIONAL_CHECKS_COOLDOWN_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_ADDITIONAL_CHECKS_COOLDOWN_MS || 5 * 60_000),
+);
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
@@ -120,6 +124,7 @@ const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 const MONITOR_STATE_FILE = `${TASK_STATE_DIR}/_chatgpt-continuity-monitor-state.json`;
+const BROWSER_HEALTH_MAX_AGE_MS = Math.max(30_000, Number(process.env.CHATGPT_BROWSER_HEALTH_MAX_AGE_MS || 90_000));
 const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE
   || '/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/_chatgpt-continuity-monitor-state.json';
 
@@ -157,8 +162,12 @@ function reinforcementHealthPayload(
   const degradedAction = action === 'sent_unconfirmed'
     || action === 'send_failed'
     || action === 'error'
+    || action === 'auth_quiescent'
+    || action === 'additional_checks_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
-  const recoveredAction = action === 'self_resolved' || action === 'confirmed_progress';
+  const recoveredAction = action === 'self_resolved'
+    || action === 'confirmed_progress'
+    || action === 'idle_no_checkpoint';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
@@ -364,6 +373,41 @@ function checkpointUpdatedAtMs(taskId, taskStateDir = TASK_STATE_DIR) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   } catch {
     return 0;
+  }
+}
+
+function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
+  try {
+    for (const entry of fs.readdirSync(taskStateDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('_')) continue;
+      try {
+        const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
+        const status = text(payload?.status).toUpperCase();
+        if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
+      } catch {
+        // Ignore one malformed/unreadable checkpoint; another valid active task
+        // must still be able to enable continuity.
+      }
+    }
+  } catch {}
+  return false;
+}
+
+function browserSessionReadyForReinforcement(
+  taskStateDir = TASK_STATE_DIR,
+  nowMs = Date.now(),
+  maxAgeMs = BROWSER_HEALTH_MAX_AGE_MS,
+) {
+  try {
+    const payload = JSON.parse(fs.readFileSync(taskStateDir + '/_chatgpt-browser-health.json', 'utf8'));
+    if (!payload || typeof payload !== 'object') return false;
+    const updatedAtMs = Date.parse(text(payload.updated_at));
+    if (!Number.isFinite(updatedAtMs) || updatedAtMs <= 0) return false;
+    const ageMs = Math.max(0, Number(nowMs) - updatedAtMs);
+    if (!Number.isFinite(ageMs) || ageMs > Math.max(30_000, Number(maxAgeMs || BROWSER_HEALTH_MAX_AGE_MS))) return false;
+    return payload.authenticated === true && text(payload.session_state).toUpperCase() === 'AUTHENTICATED';
+  } catch {
+    return false;
   }
 }
 
@@ -2010,6 +2054,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
 async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
         /* continuity-composer-draft-probe */
@@ -2331,6 +2376,13 @@ async function attemptNudge(
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
     detectedFailureReason = await recoverableFailureReason(cdp);
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks active; deferred without reload or continuation',
+        ...recoveryMetadata(),
+      };
+    }
     let recoveredStaleComplete = false;
     let recoveredTerminalFailure = false;
 
@@ -2370,6 +2422,13 @@ async function attemptNudge(
 
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks appeared after reattach; deferred without stop or continuation',
+        ...recoveryMetadata(),
+      };
+    }
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
@@ -2632,6 +2691,20 @@ async function reinforcementCheckOnce(
       }
     }
 
+    if (failureReason === 'additional_checks') {
+      return {
+        action: 'additional_checks_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_class: 'RECOVERABLE_CHAT_FAILURE',
+        failure_reason: failureReason,
+        recovery_attempt: 0,
+        recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
+    }
+
     await sleep(confirmDelayMs);
     if (!crossDeviceDiscovery) {
       cdp.close();
@@ -2811,9 +2884,53 @@ async function reinforcementLoop(
   check = reinforcementCheckOnce,
   now = () => Date.now(),
   wait = sleep,
+  checkpointActive = check === reinforcementCheckOnce ? hasActiveContinuityCheckpoint : null,
+  browserSessionReady = check === reinforcementCheckOnce ? browserSessionReadyForReinforcement : null,
 ) {
   let nextAccountDiscoveryAt = 0;
+  let nextReinforcementCheckAt = 0;
   for (;;) {
+    if (checkpointActive && !(await checkpointActive())) {
+      REINFORCEMENT_RECENT_CANDIDATES = [];
+      REINFORCEMENT_RECENT_CURSOR = 0;
+      REINFORCEMENT_LATEST_ID = '';
+      persistReinforcementHealth({
+        action: 'idle_no_checkpoint',
+        sent: false,
+        progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
+    if (browserSessionReady && !(await browserSessionReady())) {
+      REINFORCEMENT_RECENT_CANDIDATES = [];
+      REINFORCEMENT_RECENT_CURSOR = 0;
+      REINFORCEMENT_LATEST_ID = '';
+      persistReinforcementHealth({
+        action: 'auth_quiescent',
+        sent: false,
+        progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
+    if (now() < nextReinforcementCheckAt) {
+      // Keep local liveness fresh without contacting the browser or account.
+      persistReinforcementHealth({
+        action: 'additional_checks_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_reason: 'additional_checks',
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
     const allowAccountDiscovery = now() >= nextAccountDiscoveryAt;
     const alignLatest = allowAccountDiscovery
       ? alignLatestForReinforcement
@@ -2837,6 +2954,15 @@ async function reinforcementLoop(
     }
 
     persistReinforcementHealth(outcome);
+
+    if (outcome?.action === 'additional_checks_cooldown') {
+      nextReinforcementCheckAt = Math.max(
+        nextReinforcementCheckAt,
+        now() + ADDITIONAL_CHECKS_COOLDOWN_MS,
+      );
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
 
     if (allowAccountDiscovery) {
       console.log(
@@ -2890,6 +3016,12 @@ async function reinforcementLoop(
             { allowCrossDeviceDiscovery: true },
           );
           persistReinforcementHealth(candidateOutcome);
+          if (candidateOutcome?.action === 'additional_checks_cooldown') {
+            nextReinforcementCheckAt = Math.max(
+              nextReinforcementCheckAt, now() + ADDITIONAL_CHECKS_COOLDOWN_MS,
+            );
+            break;
+          }
         } catch (error) {
           console.error(
             `chatgpt_continuity_reinforcement_sweep_error source=${text(candidate?.source)} project=${candidate?.project_id ? 'true' : 'false'} detail=${text(error?.message)}`,
@@ -2930,6 +3062,8 @@ export {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   checkpointUpdatedAtMs,
+  hasActiveContinuityCheckpoint,
+  browserSessionReadyForReinforcement,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
   conversationStreamStatus,

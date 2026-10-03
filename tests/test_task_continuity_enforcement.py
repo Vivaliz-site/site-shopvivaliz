@@ -49,7 +49,7 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(state.load_task("race-proof")["status"], "RUNNING")
         self.assertEqual(state.load_task("race-proof")["next_action"], "deployment still missing")
 
-    def test_background_own_progress_can_complete_but_not_overwrite_newer_owner(self) -> None:
+    def test_background_cannot_certify_terminal_without_pinned_completion_checks(self) -> None:
         state.start_task("owned-proof", "verify", "work")
         with mock.patch.dict(state.os.environ, {
             "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
@@ -57,8 +57,22 @@ class AgentTaskStateTests(unittest.TestCase):
             "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": "1",
         }):
             state.record_progress("owned-proof", next_action="verify next")
-            state.mark_ready("owned-proof", evidence=["observed PASS"], verification="fresh")
-            self.assertEqual(state.complete_task("owned-proof")["status"], "CONCLUIDO")
+            with self.assertRaisesRegex(state.TaskStateError, "background terminal certification requires pinned completion checks"):
+                state.mark_ready("owned-proof", evidence=["claimed PASS"], verification="claimed fresh")
+        self.assertEqual(state.load_task("owned-proof")["status"], "RUNNING")
+
+    def test_background_can_complete_with_pinned_completion_check(self) -> None:
+        artifact = Path(self.temp.name) / "background-verified"
+        artifact.touch()
+        state.start_task("owned-proof-checked", "verify", "work", completion_checks=[["/usr/bin/test", "-f", str(artifact)]])
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_REQUEST_ID": "resume-current",
+            "SHOPVIVALIZ_RESUME_HISTORY_LENGTH": "1",
+        }):
+            state.record_progress("owned-proof-checked", next_action="verify next")
+            state.mark_ready("owned-proof-checked", evidence=["observed PASS"], verification="fresh")
+            self.assertEqual(state.complete_task("owned-proof-checked")["status"], "CONCLUIDO")
 
     def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
         state.start_task("bound-task", "verify", "work")
