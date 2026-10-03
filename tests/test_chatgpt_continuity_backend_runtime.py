@@ -291,7 +291,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('pageHost === "auth.openai.com"', probe)
         self.assertIn('location.pathname === "/email-verification"', probe)
         self.assertIn('document.querySelector("input[name=code]")', probe)
-        self.assertIn("residualAuthTerminal && !validOpenAiAuthFlow", probe)
+        self.assertIn("authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;", probe)
 
     def test_chatgpt_browser_guardian_active_openai_verification_precedes_stale_openai_terminal(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
