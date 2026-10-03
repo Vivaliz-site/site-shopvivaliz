@@ -465,6 +465,10 @@ def run(
                 "Abra a Shopee e organize o envio imediatamente.",
             )
         except Exception as exc:
+            if "logistics.lack_of_invoice_data" in str(exc):
+                summary["deferred_by_shopee"] += 1
+                store.event("invoice_deferred", order_sn=order_sn, package_number=package_number, channel=channel, message=str(exc)[:500])
+                continue
             summary["errors"] += 1
             store.event("error", order_sn=order_sn, package_number=package_number, channel=channel, error=type(exc).__name__, message=str(exc)[:500])
             _alert_once(

@@ -274,3 +274,19 @@ class ShopeeUnsplitRetryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'some_other_error'):
             m.ship_order_with_unsplit_retry(Client(), {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}})
         self.assertEqual(len(calls), 1)
+
+class ShopeeInvoicePendingRegressionTests(unittest.TestCase):
+    def test_invoice_validation_error_is_deferred_not_worker_error(self):
+        import tempfile
+        m = load_module()
+        now = 100000
+        package = {'order_sn': 'NF1', 'package_number': 'PKG1', 'logistics_channel_id': 91003, 'is_shipment_arranged': False}
+        client = _FakeClient(package, now - 7200)
+        def fail_ship(body):
+            raise RuntimeError('Shopee API error logistics.lack_of_invoice_data: invalid by SEFAZ')
+        client.ship_order = fail_ship
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = m.run(apply=True, now=now, client=client, shared_root=Path(tmp), sender=_FakeSender())
+        self.assertEqual(summary['errors'], 0)
+        self.assertEqual(summary['deferred_by_shopee'], 1)
+        self.assertEqual(summary['arranged'], 0)
