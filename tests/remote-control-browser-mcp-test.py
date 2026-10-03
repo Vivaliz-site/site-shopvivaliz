@@ -131,6 +131,12 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
 
+    def test_setup_restarts_existing_browser_service_after_install(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("systemctl enable shopvivaliz-remote-control-browser-mcp.service", setup)
+        self.assertIn("systemctl restart shopvivaliz-remote-control-browser-mcp.service", setup)
+        self.assertNotIn("systemctl enable --now shopvivaliz-remote-control-browser-mcp.service", setup)
+
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-remote-control-browser-mcp", setup)
