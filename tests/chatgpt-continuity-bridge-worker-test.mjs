@@ -5,6 +5,8 @@ import path from 'node:path';
 
 const testTaskStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-worker-test-'));
 process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR = testTaskStateDir;
+const testMonitorFallbackFile = path.join(testTaskStateDir, '_worker-fallback-health.json');
+process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE = testMonitorFallbackFile;
 
 const {
   Cdp,
@@ -2968,6 +2970,22 @@ async function run() {
     );
     assert.equal(result.action, 'confirmed_progress');
     assert.equal(result.progress_confirmed, true);
+  }
+
+  {
+    const payload = persistReinforcementHealth({
+      action: 'self_resolved',
+      sent: false,
+      progress_confirmed: true,
+    });
+    const primary = JSON.parse(
+      fs.readFileSync(path.join(testTaskStateDir, '_chatgpt-continuity-monitor-state.json'), 'utf8'),
+    );
+    const fallback = JSON.parse(fs.readFileSync(testMonitorFallbackFile, 'utf8'));
+    assert.equal(primary.updated_at, payload.updated_at);
+    assert.equal(fallback.updated_at, payload.updated_at);
+    assert.equal(primary.action, fallback.action);
+    assert.equal(primary.degraded, fallback.degraded);
   }
 
   {
