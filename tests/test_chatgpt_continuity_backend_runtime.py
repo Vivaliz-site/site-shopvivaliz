@@ -85,6 +85,14 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("http://127.0.0.1:9555", body)
         self.assertIn("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", body)
         self.assertIn("systemctl --user enable --now", body)
+        self.assertIn(
+            "Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
+            body,
+        )
+        self.assertIn(
+            "ReadWritePaths=$install_root $config_root /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
+            body,
+        )
         self.assertNotIn("C:\\ShopVivaliz", body)
 
     def test_backend_installer_persists_restart_intent_across_partial_failures(self) -> None:

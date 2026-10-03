@@ -146,29 +146,71 @@ function outcomeStatusDetailCode(status, detail) {
   return outcomeDetailCode(detail);
 }
 
-function persistReinforcementHealth(outcome) {
-  const action = text(outcome?.action);
-  const degraded = action === 'sent_unconfirmed'
+function reinforcementHealthPayload(
+  outcome,
+  updatedAt = new Date().toISOString(),
+  previous = {},
+) {
+  const action = text(outcome?.action) || 'heartbeat';
+  const degradedAction = action === 'sent_unconfirmed'
     || action === 'send_failed'
     || action === 'error'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
-  const recovered = action === 'self_resolved' || action === 'confirmed_progress';
-  if (!degraded && !recovered) return;
+  const recoveredAction = action === 'self_resolved' || action === 'confirmed_progress';
+  const prior = previous && typeof previous === 'object' ? previous : {};
 
-  const payload = {
-    schema_version: 1,
-    updated_at: new Date().toISOString(),
+  let degraded = prior.degraded === true;
+  let effectiveAction = text(prior.action);
+  let sent = prior.sent === true;
+  let progressConfirmed = prior.progress_confirmed === true;
+  let detail = text(prior.detail).slice(0, 400);
+  let failureReason = text(prior.failure_reason);
+
+  if (degradedAction || recoveredAction || !effectiveAction) {
+    degraded = degradedAction;
+    effectiveAction = action;
+    sent = outcome?.sent === true;
+    progressConfirmed = outcome?.progress_confirmed === true;
+    detail = text(outcome?.detail).slice(0, 400);
+    failureReason = text(outcome?.failure_reason);
+  }
+
+  return {
+    schema_version: 2,
+    updated_at: updatedAt,
     degraded,
-    action,
-    sent: outcome?.sent === true,
-    progress_confirmed: outcome?.progress_confirmed === true,
-    detail: text(outcome?.detail).slice(0, 400),
-    failure_reason: text(outcome?.failure_reason),
+    action: effectiveAction || action,
+    last_cycle_action: action,
+    sent,
+    progress_confirmed: progressConfirmed,
+    detail,
+    failure_reason: failureReason,
   };
+}
+
+function persistReinforcementHealth(outcome) {
+  let previous = {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MONITOR_STATE_FILE, 'utf8'));
+    if (parsed && typeof parsed === 'object') previous = parsed;
+  } catch {}
+
+  const payload = reinforcementHealthPayload(outcome, new Date().toISOString(), previous);
   fs.mkdirSync(TASK_STATE_DIR, { recursive: true, mode: 0o700 });
   const temp = MONITOR_STATE_FILE + '.tmp.' + process.pid;
-  fs.writeFileSync(temp, JSON.stringify(payload) + '\n', { mode: 0o600 });
+  const fd = fs.openSync(temp, 'w', 0o600);
+  try {
+    fs.writeFileSync(fd, JSON.stringify(payload) + '\n', 'utf8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
   fs.renameSync(temp, MONITOR_STATE_FILE);
+  try {
+    const dirFd = fs.openSync(TASK_STATE_DIR, 'r');
+    try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
+  } catch {}
+  return payload;
 }
 
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
@@ -2787,7 +2829,7 @@ async function reinforcementLoop(
       REINFORCEMENT_RECENT_CURSOR = sweep.next_cursor;
       for (const candidate of sweep.batch) {
         try {
-          await check(
+          const candidateOutcome = await check(
             () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
             REINFORCEMENT_CONFIRM_DELAY_MS,
             confirmAssistantProgress,
@@ -2799,6 +2841,7 @@ async function reinforcementLoop(
             ),
             { allowCrossDeviceDiscovery: true },
           );
+          persistReinforcementHealth(candidateOutcome);
         } catch (error) {
           console.error(
             `chatgpt_continuity_reinforcement_sweep_error source=${text(candidate?.source)} project=${candidate?.project_id ? 'true' : 'false'} detail=${text(error?.message)}`,
@@ -2849,6 +2892,7 @@ export {
   errorBannerPresent,
   recoverableFailureReason,
   outcomeStatusDetailCode,
+  reinforcementHealthPayload,
   persistReinforcementHealth,
   bridgeResultPayload,
   transmissionErrorPresent,

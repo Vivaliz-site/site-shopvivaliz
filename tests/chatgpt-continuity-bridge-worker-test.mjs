@@ -11,6 +11,7 @@ import {
   recoverableFailureReason,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  reinforcementHealthPayload,
   bridgeResultPayload,
   transmissionErrorPresent,
   latestConversationProbe,
@@ -2927,6 +2928,35 @@ async function run() {
     );
     assert.equal(result.action, 'confirmed_progress');
     assert.equal(result.progress_confirmed, true);
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'no_banner', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.000Z',
+    );
+    assert.equal(payload.updated_at, '2026-10-03T01:23:45.000Z');
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'no_banner');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'no_banner', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:46.000Z',
+      {
+        degraded: true,
+        action: 'sent_unconfirmed',
+        sent: true,
+        progress_confirmed: false,
+        detail: 'still unresolved',
+        failure_reason: 'request_timeout',
+      },
+    );
+    assert.equal(payload.degraded, true);
+    assert.equal(payload.action, 'sent_unconfirmed');
+    assert.equal(payload.last_cycle_action, 'no_banner');
+    assert.equal(payload.failure_reason, 'request_timeout');
   }
 
   console.log('reinforcementCheckOnce branches: PASS');
