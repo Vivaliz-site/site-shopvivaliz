@@ -67,6 +67,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
             "controller_status", "controller_promote", "continuity_status", "continuity_e2e",
             "claude_remote_control_status", "claude_remote_control_reconcile",
+            "browser_tabs", "browser_controls", "browser_navigate", "browser_click", "browser_type",
         }:
             self.assertIn(required, names)
 
@@ -94,6 +95,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(specs["claude_remote_control_status"]["annotations"]["destructiveHint"])
         self.assertFalse(specs["claude_remote_control_reconcile"]["annotations"]["readOnlyHint"])
         self.assertTrue(specs["claude_remote_control_reconcile"]["annotations"]["destructiveHint"])
+
+    def test_browser_tools_have_safe_annotations_and_canonical_schemas(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for name in ("browser_tabs", "browser_controls"):
+            self.assertTrue(specs[name]["annotations"]["readOnlyHint"])
+            self.assertFalse(specs[name]["annotations"]["destructiveHint"])
+        for name in ("browser_navigate", "browser_click", "browser_type"):
+            self.assertFalse(specs[name]["annotations"]["readOnlyHint"])
+            self.assertTrue(specs[name]["annotations"]["destructiveHint"])
+        self.assertNotIn("host", specs["browser_tabs"]["inputSchema"]["properties"])
+        self.assertEqual(
+            specs["browser_type"]["inputSchema"]["required"],
+            ["tab_id", "selector", "text"],
+        )
 
     def test_controller_promote_requires_full_expected_sha(self):
         with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
@@ -219,6 +234,94 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("abcdefghijklmnopqrstuvwxyz", redacted)
         self.assertNotIn("projectsecret123456", redacted)
         self.assertIn("REDACTED", redacted)
+
+    def test_audit_redacts_browser_text_and_navigation_query(self):
+        safe = m.sanitize_audit_args(
+            "browser_type",
+            {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
+        )
+        self.assertNotIn("text", safe)
+        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
+        nav = m.sanitize_audit_args(
+            "browser_navigate",
+            {"tab_id": "ABC123", "url": "https://auth.openai.com/log-in?state=opaque#fragment"},
+        )
+        self.assertEqual(nav["url"], "https://auth.openai.com/log-in")
+        self.assertNotIn("opaque", json.dumps(nav))
+
+    def test_linux_service_action_is_fail_closed_and_checks_user_scope(self):
+        command = m.service_command(
+            "linux",
+            "shopvivaliz-chatgpt-continuity.service",
+            "restart",
+            "ubuntu",
+        )
+        self.assertIn("LoadState", command)
+        self.assertIn("runuser -u ubuntu", command)
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/$uid", command)
+        self.assertIn("systemctl --user restart", command)
+        self.assertIn("service_not_found", command)
+
+    def test_service_action_handler_passes_canonical_user_owner(self):
+        captured = {}
+        def fake_run(host, command, timeout=30, cancel_check=None):
+            captured["command"] = command
+            return {"host": host, "exit_code": 0, "stdout": "active", "stderr": "", "duration_ms": 1}
+        with mock.patch.object(m, "run_host_command", side_effect=fake_run):
+            result = m.execute_tool(
+                "service_action",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "service": "shopvivaliz-chatgpt-continuity.service",
+                    "action": "restart",
+                },
+            )
+        self.assertTrue(result["ok"])
+        self.assertIn("runuser -u ubuntu", captured["command"])
+        self.assertIn("systemctl --user restart", captured["command"])
+
+    def test_browser_commands_are_allowlisted_and_metadata_only(self):
+        tabs = m.browser_tabs_command()
+        expression = m.browser_controls_expression()
+        self.assertNotIn("'title':", tabs)
+        self.assertNotIn("document.title", expression)
+        self.assertNotIn(".value", expression)
+        self.assertIn("[REDACTED_EMAIL]", expression)
+        with self.assertRaisesRegex(ValueError, "browser_url_not_allowlisted"):
+            m.browser_navigate_command("ABC123", "https://mail.google.com/mail/u/0/")
+        with self.assertRaisesRegex(ValueError, "browser_url_query_not_allowed"):
+            m.browser_navigate_command("ABC123", "https://auth.openai.com/log-in?state=opaque")
+
+    def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
+        command = m._browser_cdp_command("ABC123", "(()=>true)()")
+        self.assertIn("new WebSocket(t.webSocketDebuggerUrl)", command)
+        self.assertIn("addEventListener('open'", command)
+        self.assertIn("new Cdp(ws)", command)
+        self.assertNotIn("await c.connect()", command)
+
+    def test_browser_type_uses_modern_node_with_websocket_support(self):
+        self.assertEqual(m.BROWSER_NODE_BIN, "/usr/local/bin/node")
+
+    def test_browser_type_uses_stdin_not_command_line(self):
+        argv = m.browser_type_invocation("ABC123", "#code", True)
+        joined = " ".join(argv)
+        self.assertIn("process.stdin", joined)
+        self.assertNotIn("sample-sensitive-input", joined)
+        with mock.patch.object(m, "run_local_command_with_stdin", return_value={
+            "host": m.CONTROLLER_BACKEND_HOST,
+            "exit_code": 0,
+            "stdout": '{"typed":true,"submitted":true}',
+            "stderr": "",
+            "duration_ms": 1,
+        }) as runner:
+            result = m.execute_tool(
+                "browser_type",
+                {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
+            )
+        self.assertTrue(result["ok"])
+        runner.assert_called_once()
+        self.assertEqual(runner.call_args.args[1], "sample-sensitive-input")
 
     def test_linux_service_status_is_fail_closed_and_checks_user_scope(self):
         command = m.service_command(

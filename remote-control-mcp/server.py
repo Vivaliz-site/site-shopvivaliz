@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -891,12 +892,28 @@ def run_task_entrypoint(task_id: str) -> int:
         return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
-def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
-    aid = str(uuid.uuid4())
+def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
+    for secret_key in ("text", "otp", "secret", "code", "password"):
+        if secret_key in safe_args:
+            secret_value = str(safe_args.pop(secret_key))
+            safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
+            safe_args[f"{secret_key}_length"] = len(secret_value)
+    if "email" in safe_args:
+        email_value = str(safe_args.pop("email"))
+        safe_args["email_sha256"] = hashlib.sha256(email_value.encode()).hexdigest()
+    if tool == "browser_navigate" and "url" in safe_args:
+        parsed = urlsplit(str(safe_args["url"]))
+        safe_args["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return safe_args
+
+
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
+    aid = str(uuid.uuid4())
+    safe_args = sanitize_audit_args(tool, args)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
@@ -1037,6 +1054,62 @@ def run_host_command(
         INLINE_COMMAND_SLOTS.release()
 
 
+def run_local_command_with_stdin(
+    args: list[str],
+    stdin_text: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    timeout = validate_timeout(timeout)
+    if len(stdin_text) > 4096:
+        raise ValueError("browser_text_too_long")
+    invocation = isolated_invocation(args, label="browser-input")
+    started = time.monotonic()
+    deadline = started + timeout
+    if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
+        raise RuntimeError("controller_busy_retry_or_use_task_submit")
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            invocation,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        assert proc.stdin is not None
+        try:
+            proc.stdin.write(stdin_text.encode("utf-8"))
+            proc.stdin.flush()
+        finally:
+            proc.stdin.close()
+            proc.stdin = None
+        stdout = b""
+        stderr = b""
+        while True:
+            if cancel_check is not None and cancel_check():
+                terminate_process_group(proc)
+                raise ClientDisconnected("client_disconnected")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                terminate_process_group(proc)
+                raise subprocess.TimeoutExpired(invocation, timeout)
+            try:
+                stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        return {
+            "host": CONTROLLER_BACKEND_HOST,
+            "exit_code": proc.returncode,
+            "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+            "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
+            "duration_ms": int((time.monotonic() - started) * 1000),
+        }
+    finally:
+        INLINE_COMMAND_SLOTS.release()
+
+
 def health_command(platform: str) -> str:
     if platform == "windows":
         return (
@@ -1062,32 +1135,44 @@ def service_command(
             return f"Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
         verb = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
         return f"{verb} -Name '{q}' -ErrorAction Stop; Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
-    if action == "status":
-        # Fail closed. Check the system manager first, then the configured
-        # non-root user's manager when this host owns user-scoped services.
-        user_probe = ""
-        if service_user_owner:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
-                raise ValueError("invalid_service_user_owner")
-            user_probe = (
-                f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
-                f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
-                f"if [ \"$load\" = loaded ]; then "
+
+    user_probe = ""
+    if service_user_owner:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
+            raise ValueError("invalid_service_user_owner")
+        if action == "status":
+            user_operation = (
                 f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
                 f"systemctl --user --no-pager --full status {service}; "
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user is-active {service}; exit $?; fi; "
             )
-        return (
-            f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
-            f"if [ \"$load\" = loaded ]; then "
-            f"systemctl --no-pager --full status {service}; "
-            f"systemctl is-active {service}; exit $?; fi; "
-            f"{user_probe}"
-            f"printf '%s\\n' 'service_not_found' >&2; exit 4"
+        else:
+            user_operation = (
+                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user {action} {service}; "
+            )
+        user_probe = (
+            f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
+            f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f'if [ "$load" = loaded ]; then '
+            f"{user_operation}"
+            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user is-active {service}; exit $?; fi; "
         )
-    return f"systemctl {action} {service} && systemctl is-active {service}"
+
+    system_operation = (
+        f"systemctl --no-pager --full status {service}; "
+        if action == "status"
+        else f"systemctl {action} {service}; "
+    )
+    return (
+        f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
+        f'if [ "$load" = loaded ]; then '
+        f"{system_operation}"
+        f"systemctl is-active {service}; exit $?; fi; "
+        f"{user_probe}"
+        f"printf '%s\n' 'service_not_found' >&2; exit 4"
+    )
 
 
 def file_read_command(platform: str, path: str, max_bytes: int) -> str:
@@ -1125,6 +1210,117 @@ def processes_command(platform: str) -> str:
     return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
 
 
+BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "claude.ai"}
+BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
+BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
+
+
+def _safe_browser_token(value: str, label: str) -> str:
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:#@()=[]-")
+    if not value or len(value) > 240 or any(ch not in allowed for ch in value):
+        raise ValueError(f"invalid_{label}")
+    return value
+
+
+def browser_tabs_command() -> str:
+    return (
+        "python3 - <<'PY'\n"
+        "import json,urllib.request,urllib.parse\n"
+        "with urllib.request.urlopen('http://127.0.0.1:9555/json',timeout=5) as r: a=json.load(r)\n"
+        "out=[]\n"
+        "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','claude.ai'}\n"
+        "for x in a:\n"
+        " if x.get('type')!='page': continue\n"
+        " u=urllib.parse.urlparse(x.get('url',''))\n"
+        " if u.hostname not in allowed: continue\n"
+        " out.append({'id':x.get('id'),'origin':u.scheme+'://'+u.netloc if u.netloc else ''})\n"
+        "print(json.dumps({'tabs':out},separators=(',',':')))\n"
+        "PY"
+    )
+
+
+def _browser_cdp_command(tab_id: str, expression: str) -> str:
+    _safe_browser_token(tab_id, "tab_id")
+    tid = base64.b64encode(tab_id.encode()).decode()
+    expr = base64.b64encode(expression.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_TAB_ID_B64={tid} SHOPVIVALIZ_EXPR_B64={expr}; "
+        "node --input-type=module <<'JS'\n"
+        f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
+        "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
+        "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
+        "const tabs=await (await fetch('http://127.0.0.1:9555/json')).json(); "
+        "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
+        "const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']); "
+        "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
+        "const ws=new WebSocket(t.webSocketDebuggerUrl); "
+        "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
+        "const c=new Cdp(ws); "
+        "const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); "
+        "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
+        "JS"
+    )
+
+
+def browser_controls_expression() -> str:
+    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
+
+
+def browser_controls_command(tab_id: str) -> str:
+    return _browser_cdp_command(tab_id, browser_controls_expression())
+
+
+def browser_navigate_command(tab_id: str, url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    expression = f"(()=>{{location.href={json.dumps(url)};return {{navigated:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_click_command(tab_id: str, selector: str) -> str:
+    selector = _safe_browser_token(selector, "selector")
+    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+BROWSER_TYPE_NODE_SCRIPT = r"""
+const mod='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+const {Cdp}=await import('file://'+mod);
+const [id,selector,submitRaw]=process.argv.slice(1);
+let secret='';
+for await (const chunk of process.stdin) secret += chunk;
+if(secret.length>4096) throw new Error('browser_text_too_long');
+const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
+const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found');
+const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']);
+const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
+const ws=new WebSocket(t.webSocketDebuggerUrl);
+await Promise.race([
+  new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+]);
+const c=new Cdp(ws);
+const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
+const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+if(c.close)c.close();
+console.log(JSON.stringify(r.result?.value ?? null));
+"""
+
+
+def browser_type_invocation(tab_id: str, selector: str, submit: bool) -> list[str]:
+    _safe_browser_token(tab_id, "tab_id")
+    _safe_browser_token(selector, "selector")
+    return [BROWSER_NODE_BIN, "--input-type=module", "-e", BROWSER_TYPE_NODE_SCRIPT, tab_id, selector, "1" if submit else "0"]
+
+
+def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
+    result["ok"] = result["exit_code"] == 0
+    return result
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
@@ -1152,6 +1348,43 @@ def execute_tool(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
+    if name == "browser_tabs":
+        return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
+    if name == "browser_controls":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_controls_command(str(args.get("tab_id") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_navigate":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_navigate_command(str(args.get("tab_id") or ""), str(args.get("url") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_click":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_click_command(str(args.get("tab_id") or ""), str(args.get("selector") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_type":
+        text_value = str(args.get("text") or "")
+        if len(text_value) > 4096:
+            raise ValueError("browser_text_too_long")
+        return _browser_result(run_local_command_with_stdin(
+            browser_type_invocation(
+                str(args.get("tab_id") or ""),
+                str(args.get("selector") or ""),
+                bool(args.get("submit", False)),
+            ),
+            text_value,
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
     if name == "audit_recent":
@@ -1259,7 +1492,17 @@ def execute_tool(
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
             raise ValueError("invalid_service_action")
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), action), timeout, cancel_check)
+        result = run_host_command(
+            str(host),
+            service_command(
+                platform,
+                str(args.get("service") or ""),
+                action,
+                str(cfg.get("service_user_owner") or "") or None,
+            ),
+            timeout,
+            cancel_check,
+        )
     elif name == "file_read":
         result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
     elif name == "file_list":
@@ -1288,6 +1531,11 @@ TOOLS = [
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
+    ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
+    ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
+    ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
+    ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -1313,7 +1561,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}],
                 "additionalProperties": False,
             },
             "annotations": {
