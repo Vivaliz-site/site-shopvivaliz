@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,22 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.runtime = Path(self.temp.name) / "runtime"
         self.runtime.mkdir()
+        self.previous_claude_pointer = os.environ.get("CLAUDE_REMOTE_CONTROL_POINTER_FILE")
+        self.claude_pointer = Path(self.temp.name) / "claude-bridge-pointer.json"
+        process_fields = Path(f"/proc/{os.getpid()}/stat").read_text(encoding="utf-8").split()
+        self.claude_pointer.write_text(
+            json.dumps(
+                {
+                    "sessionId": "session-test",
+                    "environmentId": "env-test",
+                    "source": "standalone",
+                    "pid": os.getpid(),
+                    "procStart": process_fields[21],
+                }
+            ),
+            encoding="utf-8",
+        )
+        os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = str(self.claude_pointer)
         (self.runtime / "_chatgpt-browser-health.json").write_text(
             json.dumps(
                 {
@@ -57,6 +74,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        if self.previous_claude_pointer is None:
+            os.environ.pop("CLAUDE_REMOTE_CONTROL_POINTER_FILE", None)
+        else:
+            os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
     def test_expired_durable_lease_is_recovered_and_recorded(self) -> None:
@@ -262,6 +283,68 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("chatgpt_browser_monitor_stale", result["degraded_reasons"])
         self.assertFalse(result["chatgpt_monitor"]["fresh"])
         self.assertGreater(result["chatgpt_monitor"]["age_seconds"], result["chatgpt_monitor"]["max_age_seconds"])
+
+    def test_missing_claude_pointer_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        self.claude_pointer.unlink()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="missing-claude-pointer")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("claude_remote_control_pointer_missing", result["degraded_reasons"])
+        self.assertFalse(result["claude_remote_control"]["pointer_present"])
+
+    def test_dead_claude_remote_control_process_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        payload = json.loads(self.claude_pointer.read_text(encoding="utf-8"))
+        payload["pid"] = 99999999
+        self.claude_pointer.write_text(json.dumps(payload), encoding="utf-8")
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="dead-claude-process")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("claude_remote_control_process_missing", result["degraded_reasons"])
+        self.assertFalse(result["claude_remote_control"]["process_alive"])
+
+    def test_stale_claude_pointer_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        payload = json.loads(self.claude_pointer.read_text(encoding="utf-8"))
+        payload["procStart"] = "0"
+        self.claude_pointer.write_text(json.dumps(payload), encoding="utf-8")
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="stale-claude-pointer")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("claude_remote_control_pointer_stale", result["degraded_reasons"])
+        self.assertTrue(result["claude_remote_control"]["process_alive"])
+        self.assertFalse(result["claude_remote_control"]["identity_match"])
+
+    def test_claude_health_state_is_connected_and_sanitized(self) -> None:
+        controller = load_controller()
+        health = controller._claude_remote_control_health()
+
+        self.assertTrue(health["connected"])
+        self.assertTrue(health["pointer_present"])
+        self.assertTrue(health["process_alive"])
+        self.assertTrue(health["identity_match"])
+        self.assertTrue(health["session_present"])
+        self.assertTrue(health["environment_present"])
+        self.assertNotIn("sessionId", health)
+        self.assertNotIn("environmentId", health)
+        self.assertNotIn("pid", health)
+        self.assertNotIn("procStart", health)
 
     def test_unresolved_browser_stall_fails_readiness_closed(self) -> None:
         controller = load_controller()
