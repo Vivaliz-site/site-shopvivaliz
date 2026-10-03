@@ -120,6 +120,8 @@ const text = value => String(value ?? '').replace(/\s+/g, ' ').trim();
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 const AMBIGUOUS_CONVERSATION_ERROR = 'multiple open ChatGPT conversation tabs found; continuity target is ambiguous';
 const MONITOR_STATE_FILE = `${TASK_STATE_DIR}/_chatgpt-continuity-monitor-state.json`;
+const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE
+  || '/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/_chatgpt-continuity-monitor-state.json';
 
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
@@ -188,16 +190,25 @@ function reinforcementHealthPayload(
   };
 }
 
-function persistReinforcementHealth(outcome) {
-  let previous = {};
-  try {
-    const parsed = JSON.parse(fs.readFileSync(MONITOR_STATE_FILE, 'utf8'));
-    if (parsed && typeof parsed === 'object') previous = parsed;
-  } catch {}
+function monitorStateUpdatedAtMs(state) {
+  const parsed = Date.parse(text(state?.updated_at));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  const payload = reinforcementHealthPayload(outcome, new Date().toISOString(), previous);
-  fs.mkdirSync(TASK_STATE_DIR, { recursive: true, mode: 0o700 });
-  const temp = MONITOR_STATE_FILE + '.tmp.' + process.pid;
+function readMonitorState(file) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistMonitorStateFile(file, payload) {
+  const slash = file.lastIndexOf('/');
+  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const temp = file + '.tmp.' + process.pid;
   const fd = fs.openSync(temp, 'w', 0o600);
   try {
     fs.writeFileSync(fd, JSON.stringify(payload) + '\n', 'utf8');
@@ -205,11 +216,34 @@ function persistReinforcementHealth(outcome) {
   } finally {
     fs.closeSync(fd);
   }
-  fs.renameSync(temp, MONITOR_STATE_FILE);
+  fs.renameSync(temp, file);
   try {
-    const dirFd = fs.openSync(TASK_STATE_DIR, 'r');
+    const dirFd = fs.openSync(dir, 'r');
     try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
   } catch {}
+}
+
+function persistReinforcementHealth(outcome) {
+  let previous = {};
+  for (const file of [MONITOR_STATE_FILE, MONITOR_FALLBACK_FILE]) {
+    const candidate = readMonitorState(file);
+    if (monitorStateUpdatedAtMs(candidate) >= monitorStateUpdatedAtMs(previous)) {
+      previous = candidate;
+    }
+  }
+
+  const payload = reinforcementHealthPayload(outcome, new Date().toISOString(), previous);
+  let persisted = 0;
+  let firstError = null;
+  for (const file of [...new Set([MONITOR_STATE_FILE, MONITOR_FALLBACK_FILE])]) {
+    try {
+      persistMonitorStateFile(file, payload);
+      persisted += 1;
+    } catch (error) {
+      if (!firstError) firstError = error;
+    }
+  }
+  if (persisted === 0) throw firstError || new Error('monitor health persistence failed');
   return payload;
 }
 
