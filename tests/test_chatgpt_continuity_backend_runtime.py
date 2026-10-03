@@ -214,6 +214,21 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertEqual(state["session_state"], "AUTH_FLOW")
             self.assertFalse(state["authenticated"])
 
+    def test_chatgpt_browser_guardian_authenticated_tab_precedes_residual_oauth_flow(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        session_probe = body.split("// CONTINUITY_BROWSER_SESSION_STATE_PROBE", 1)[1]
+
+        connect_chatgpt = "const c = await connectFirstUsableChatgptTab"
+        authenticated = 'if (state === "AUTHENTICATED")'
+        oauth_fallback = 'if (authFlow) { console.log("AUTH_FLOW"); process.exit(0); }'
+
+        self.assertIn(connect_chatgpt, session_probe)
+        self.assertIn(authenticated, session_probe)
+        self.assertIn(oauth_fallback, session_probe)
+        self.assertLess(session_probe.index(connect_chatgpt), session_probe.index(authenticated))
+        self.assertLess(session_probe.index(authenticated), session_probe.index(oauth_fallback))
+
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:

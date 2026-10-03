@@ -74,7 +74,6 @@ browser_session_state() {
         if (!page || page.type !== "page") return false;
         try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }
       });
-      if (authFlow) { console.log("AUTH_FLOW"); process.exit(0); }
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
@@ -86,7 +85,10 @@ browser_session_state() {
         ]);
         return new Cdp(ws);
       });
-      if (!c) { console.log("UNKNOWN"); process.exit(0); }
+      if (!c) {
+        console.log(authFlow ? "AUTH_FLOW" : "UNKNOWN");
+        process.exit(0);
+      }
       try {
         const state = await c.evaluate(`(()=>{
           const body = String(document.body?.innerText || "").toLowerCase();
@@ -98,6 +100,8 @@ browser_session_state() {
           if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
           return "UNKNOWN";
         })()`);
+        if (state === "AUTHENTICATED") { console.log("AUTHENTICATED"); process.exit(0); }
+        if (authFlow) { console.log("AUTH_FLOW"); process.exit(0); }
         console.log(String(state || "UNKNOWN"));
       } finally {
         c.close();
