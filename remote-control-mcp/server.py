@@ -776,6 +776,88 @@ def claude_remote_control_install_command(ref: str) -> str:
     )
 
 
+
+BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "mail.google.com", "claude.ai"}
+BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
+
+
+def _safe_browser_token(value: str, label: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.:#@()=\\[\\]\\-]{1,240}", value):
+        raise ValueError(f"invalid_{label}")
+    return value
+
+
+def browser_tabs_command() -> str:
+    return (
+        "python3 - <<'PY'\n"
+        "import json,urllib.request,urllib.parse\n"
+        "with urllib.request.urlopen('http://127.0.0.1:9555/json',timeout=5) as r: a=json.load(r)\n"
+        "out=[]\n"
+        "for x in a:\n"
+        " if x.get('type')!='page': continue\n"
+        " u=urllib.parse.urlparse(x.get('url',''))\n"
+        " out.append({'id':x.get('id'),'title':x.get('title','')[:160],'origin':u.scheme+'://'+u.netloc if u.netloc else ''})\n"
+        "print(json.dumps({'tabs':out},separators=(',',':')))\n"
+        "PY"
+    )
+
+
+def _browser_cdp_command(tab_id: str, expression: str) -> str:
+    _safe_browser_token(tab_id, "tab_id")
+    tid = base64.b64encode(tab_id.encode()).decode()
+    expr = base64.b64encode(expression.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_TAB_ID_B64={tid} SHOPVIVALIZ_EXPR_B64={expr}; "
+        "node --input-type=module <<'JS'\n"
+        f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
+        "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
+        "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
+        "const tabs=await (await fetch('http://127.0.0.1:9555/json')).json(); "
+        "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
+        "const c=new Cdp(t.webSocketDebuggerUrl); await c.connect(); "
+        "const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); "
+        "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
+        "JS"
+    )
+
+
+def browser_controls_command(tab_id: str) -> str:
+    expression = """(()=>({title:document.title,origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,a,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120),disabled:!!e.disabled}))}))()"""
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_navigate_command(tab_id: str, url: str) -> str:
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    expression = f"(()=>{{location.href={json.dumps(url)};return {{navigated:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_click_command(tab_id: str, selector: str) -> str:
+    selector = _safe_browser_token(selector, "selector")
+    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_type_command(tab_id: str, selector: str, text: str, submit: bool) -> str:
+    selector = _safe_browser_token(selector, "selector")
+    if len(text) > 4096:
+        raise ValueError("browser_text_too_long")
+    expression = (
+        "(()=>{const e=document.querySelector(" + json.dumps(selector) + ");"
+        "if(!e)throw new Error('selector_not_found');e.focus();"
+        "const v=" + json.dumps(text) + ";"
+        "const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');"
+        "if(p&&p.set)p.set.call(e,v);else e.value=v;"
+        "e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));"
+        + ("e.form?.requestSubmit?.();" if submit else "")
+        + "return {typed:true,submitted:" + ("true" if submit else "false") + "}})()"
+    )
+    return _browser_cdp_command(tab_id, expression)
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
