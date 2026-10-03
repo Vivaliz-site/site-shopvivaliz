@@ -40,7 +40,10 @@ jobs:
             verify|repair) ;;
             *) echo 'INVALID_MODE'; exit 1 ;;
           esac
-          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_CREDENTIAL_MISSING'; exit 1; }
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
+            exit 1
+          fi
           echo "MODE=$MODE"
 
       - name: Resolve Cloudflare zone
