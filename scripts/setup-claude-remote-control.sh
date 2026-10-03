@@ -252,6 +252,11 @@ status(){
   verify_bridge
   systemctl is-enabled --quiet "$SERVICE" || die service_not_enabled 52
   systemctl is-active --quiet "$SERVICE" || die service_not_active 53
+  local exec_start
+  exec_start="$(systemctl show "$SERVICE" -p ExecStart --value)"
+  case "$exec_start" in
+    *--no-create-session-in-dir*) die service_session_recovery_disabled 54 ;;
+  esac
   echo "CLAUDE_REMOTE_CONTROL_STATUS=PASS"
 }
 
