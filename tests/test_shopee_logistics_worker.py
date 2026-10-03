@@ -247,3 +247,30 @@ class ShopeeAlertSenderTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ShopeeUnsplitRetryTests(unittest.TestCase):
+    def test_ship_order_retries_without_package_number_only_for_unsplit_error(self):
+        m = load_module()
+        calls = []
+        class Client:
+            def ship_order(self, body):
+                calls.append(dict(body))
+                if len(calls) == 1:
+                    raise RuntimeError("Shopee API error logistics.ship_order_not_need_pacakge_number: Please don't request with package_number for this unsplit order.")
+                return {'error': ''}
+        m.ship_order_with_unsplit_retry(Client(), {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}})
+        self.assertEqual(calls, [
+            {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}},
+            {'order_sn': 'O1', 'dropoff': {}},
+        ])
+
+    def test_ship_order_does_not_retry_unrelated_error(self):
+        m = load_module()
+        calls = []
+        class Client:
+            def ship_order(self, body):
+                calls.append(dict(body))
+                raise RuntimeError('Shopee API error logistics.some_other_error: nope')
+        with self.assertRaisesRegex(RuntimeError, 'some_other_error'):
+            m.ship_order_with_unsplit_retry(Client(), {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}})
+        self.assertEqual(len(calls), 1)
