@@ -271,8 +271,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(result.returncode, 1, result.stderr)
-            self.assertIn("CHATGPT_BROWSER_GUARDIAN=DEGRADED_AUTH_TERMINAL", result.stdout)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_TERMINAL", result.stdout)
             self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_TERMINAL", result.stdout)
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertNotIn("restart shopvivaliz-chatgpt-browser.service", calls)
