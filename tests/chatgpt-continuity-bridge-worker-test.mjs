@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import {
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const testTaskStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-worker-test-'));
+process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR = testTaskStateDir;
+
+const {
   Cdp,
   conversationIsGenerating,
   conversationStreamStatus,
@@ -11,6 +18,7 @@ import {
   recoverableFailureReason,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  reinforcementHealthPayload,
   bridgeResultPayload,
   transmissionErrorPresent,
   latestConversationProbe,
@@ -43,7 +51,7 @@ import {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
-} from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+} = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
 // report) be tested without a real browser or WebSocket -- exactly the
@@ -2929,6 +2937,35 @@ async function run() {
     assert.equal(result.progress_confirmed, true);
   }
 
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'no_banner', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.000Z',
+    );
+    assert.equal(payload.updated_at, '2026-10-03T01:23:45.000Z');
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'no_banner');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'no_banner', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:46.000Z',
+      {
+        degraded: true,
+        action: 'sent_unconfirmed',
+        sent: true,
+        progress_confirmed: false,
+        detail: 'still unresolved',
+        failure_reason: 'request_timeout',
+      },
+    );
+    assert.equal(payload.degraded, true);
+    assert.equal(payload.action, 'sent_unconfirmed');
+    assert.equal(payload.last_cycle_action, 'no_banner');
+    assert.equal(payload.failure_reason, 'request_timeout');
+  }
+
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
@@ -2937,4 +2974,6 @@ run().then(() => {
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;
+}).finally(() => {
+  fs.rmSync(testTaskStateDir, { recursive: true, force: true });
 });

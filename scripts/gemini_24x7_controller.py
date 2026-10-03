@@ -48,6 +48,7 @@ DEFAULT_INTERVAL_SECONDS = 30
 CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
 CHATGPT_BROWSER_HEALTH_STATE_FILE = "_chatgpt-browser-health.json"
 DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS = 90
+DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS = 180
 
 
 def utc_now() -> str:
@@ -150,13 +151,34 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
     state = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
-    if not state:
-        return {"degraded": False, "action": "", "updated_at": ""}
+    updated_at = str(state.get("updated_at", "")).strip()
+    updated = _parse_utc(updated_at)
+    try:
+        max_age_seconds = max(
+            60,
+            int(os.environ.get(
+                "CHATGPT_CONTINUITY_MONITOR_HEALTH_MAX_AGE_SECONDS",
+                DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS,
+            )),
+        )
+    except (TypeError, ValueError):
+        max_age_seconds = DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS
+
+    age_seconds: int | None = None
+    fresh = False
+    if updated is not None:
+        age_seconds = int(max(0, (datetime.now(timezone.utc) - updated).total_seconds()))
+        fresh = age_seconds <= max_age_seconds
+
     return {
         "degraded": state.get("degraded") is True,
         "action": str(state.get("action", "")).strip(),
-        "updated_at": str(state.get("updated_at", "")).strip(),
+        "last_cycle_action": str(state.get("last_cycle_action", "")).strip(),
+        "updated_at": updated_at,
         "failure_reason": str(state.get("failure_reason", "")).strip(),
+        "fresh": fresh,
+        "age_seconds": age_seconds,
+        "max_age_seconds": max_age_seconds,
     }
 
 
@@ -359,6 +381,8 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
+        if monitor.get("fresh") is not True:
+            degraded_reasons.append("chatgpt_browser_monitor_stale")
         if monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
         if browser_health.get("fresh") is not True:

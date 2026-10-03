@@ -396,6 +396,15 @@ operacional:
    da janela de confirmação, evitando duplicar a tentativa de recuperação do
    próprio cliente.
 
+O monitor passivo grava heartbeat durável em
+`agent-task-state/_chatgpt-continuity-monitor-state.json` em todo ciclo e em
+cada resultado do sweep de conversas. Falhas ficam latched até recuperação
+confirmada; um ciclo neutro não pode apagar degradação anterior. O controlador
+trata heartbeat ausente ou stale como `chatgpt_browser_monitor_stale` e falha
+fechado em `continuity_ready=false`. O instalador do worker fixa
+`SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera explicitamente esse diretório no
+sandbox do systemd; depender apenas do path default do código é proibido.
+
 O instalador canônico é
 `scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
 Windows permanece somente como legado/fallback e não é a rota operacional
@@ -408,6 +417,24 @@ ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
 natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
 a mitigação instalada/armada, não “continuidade E2E comprovada”.
 <!-- /CHATGPT_SESSION_REENTRY_V10 -->
+
+<!-- CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+## Durabilidade das sessoes Claude Remote Control
+
+O servidor `shopvivaliz-claude-remote-control.service` deve manter capacidade
+de reanexar as sessoes servidas depois de uma saida/restart do processo. O
+`ExecStart` canônico usa `claude remote-control --spawn worktree` e **nao pode**
+usar `--no-create-session-in-dir`, pois essa flag arquiva as sessoes do servidor
+quando ele para e impede a retomada pelo novo processo. `Restart=always` e
+mantido para recuperar saidas limpas causadas por falha prolongada de rede ou
+do ambiente remoto.
+
+`StandardOutput` e `StandardError` devem ir para o journal para que uma saida
+limpa nao vire falso-verde sem causa observavel. O comando `status` do instalador
+falha fechado com `service_session_recovery_disabled` se o unit instalado
+reintroduzir a flag que descarta retomada. Servico `active` sem executor de
+sessao nao comprova continuidade do chat remoto.
+<!-- /CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
 
 
 ### Resiliência de quota Gemini no background

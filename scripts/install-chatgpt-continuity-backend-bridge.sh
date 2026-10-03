@@ -126,13 +126,14 @@ Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
 Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
 Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
+Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
 ExecStart=$node_bin $worker
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=$install_root $config_root
+ReadWritePaths=$install_root $config_root /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
 
 [Install]
 WantedBy=default.target
