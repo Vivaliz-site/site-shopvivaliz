@@ -217,6 +217,7 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
+- Um executor de background **não pode certificar `READY_TO_COMPLETE` somente por texto/evidência gerada pelo provider**. A transição terminal em background exige `completion_checks` determinísticos e previamente fixados no checkpoint; sem eles, o provider pode apenas registrar progresso concreto e deixar a certificação terminal para uma execução foreground.
 - Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; o mesmo checkpoint pode ser tentado
   novamente após cooldown (900 s padrão, configurável por
   `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
