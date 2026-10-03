@@ -22,15 +22,20 @@ class BrowserMcpTests(unittest.TestCase):
     def test_base_server_directory_is_available_for_sibling_imports(self):
         self.assertIn(str((ROOT / "remote-control-mcp").resolve()), m.sys.path)
 
-    def test_all_base_tools_and_six_browser_tools_are_exposed(self):
+    def test_all_base_tools_and_seven_browser_tools_are_exposed(self):
         names = {item["name"] for item in m.tool_specs()}
         base_names = {item["name"] for item in m.base.tool_specs()}
         self.assertTrue(base_names <= names)
         self.assertEqual(
-            {"browser_tabs", "browser_open", "browser_navigate", "browser_screenshot", "browser_click", "browser_type"},
+            {"browser_health", "browser_tabs", "browser_open", "browser_navigate", "browser_screenshot", "browser_click", "browser_type"},
             m.BROWSER_TOOLS,
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
+
+    def test_browser_health_is_read_only(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_health"]["annotations"]["destructiveHint"])
 
     def test_browser_type_audit_redacts_text(self):
         captured = {}

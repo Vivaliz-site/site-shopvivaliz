@@ -27,7 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
 LISTEN_HOST = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "5580"))
@@ -49,6 +49,25 @@ TASKS_DIR = STATE_DIR / "tasks"
 TERMINAL_STATES = {"succeeded", "failed", "expired", "cancelled", "indeterminate"}
 ACTIVE_STATES = {"starting", "running", "cancel_requested"}
 STARTING_UNIT_VISIBILITY_GRACE_SECONDS = 15
+CONTROLLER_REPO = Path(os.environ.get("SHOPVIVALIZ_CONTROLLER_REPO", "/home/ubuntu/shopvivaliz-deploy/repo"))
+CONTROLLER_STATE_FILE = Path(os.environ.get(
+    "SHOPVIVALIZ_CONTROLLER_STATE_FILE",
+    "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_gemini-24x7-controller-state.json",
+))
+CONTROLLER_RUNTIME_DIR = Path(os.environ.get(
+    "SHOPVIVALIZ_CONTROLLER_RUNTIME_DIR",
+    "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
+))
+CONTROLLER_WORKTREE_ROOT = Path(os.environ.get("SHOPVIVALIZ_CONTROLLER_WORKTREE_ROOT", "/home/ubuntu/worktrees"))
+CONTROLLER_SERVICE = "shopvivaliz-gemini-24x7-controller.service"
+CONTROLLER_BACKEND_HOST = "always-free-arm-1787907847-26"
+CLAUDE_REMOTE_CONTROL_SERVICE = "shopvivaliz-claude-remote-control.service"
+CLAUDE_REMOTE_CONTROL_POINTER_FILE = Path(os.environ.get(
+    "SHOPVIVALIZ_CLAUDE_REMOTE_CONTROL_POINTER_FILE",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-shopvivaliz-claude-workspace-site-shopvivaliz/bridge-pointer.json",
+))
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -113,6 +132,417 @@ def validate_host(host: str) -> dict[str, Any]:
     if host not in HOSTS:
         raise ValueError("unsupported_host")
     return HOSTS[host]
+
+
+def _decode_output(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _run_local(argv: list[str], *, timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(argv, capture_output=True, check=False, timeout=timeout)
+
+
+def _run_local_checked(argv: list[str], *, timeout: int = 60) -> str:
+    completed = _run_local(argv, timeout=timeout)
+    stdout = _decode_output(completed.stdout)
+    stderr = _decode_output(completed.stderr)
+    if completed.returncode != 0:
+        raise RuntimeError(redact_text(stderr or stdout or "local_command_failed"))
+    return stdout.strip()
+
+
+def _run_as_ubuntu(argv: list[str], *, timeout: int = 60) -> str:
+    return _run_local_checked(["runuser", "-u", "ubuntu", "--", *argv], timeout=timeout)
+
+
+def _validate_expected_sha(value: Any) -> str:
+    sha = str(value or "").strip().lower()
+    if not FULL_SHA_RE.fullmatch(sha):
+        raise ValueError("invalid_expected_sha")
+    return sha
+
+
+def _validate_conversation_id(value: Any) -> str:
+    conversation_id = str(value or "").strip()
+    if not CONVERSATION_ID_RE.fullmatch(conversation_id):
+        raise ValueError("invalid_conversation_id")
+    return conversation_id
+
+
+def _controller_origin_main_sha(*, refresh: bool = False) -> str:
+    if refresh:
+        _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "fetch", "origin", "main", "--quiet"], timeout=60)
+    sha = _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "rev-parse", "origin/main"], timeout=30).lower()
+    if not FULL_SHA_RE.fullmatch(sha):
+        raise RuntimeError("controller_origin_main_invalid")
+    return sha
+
+
+def _controller_active_sha() -> str:
+    try:
+        pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
+        pid = int(pid_text or "0")
+    except (RuntimeError, ValueError):
+        return ""
+    if pid <= 0:
+        return ""
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    match = re.search(r"/releases/([0-9a-f]{40})/", cmdline)
+    return match.group(1) if match else ""
+
+
+RUNTIME_PRIVATE_KEYS = {
+    "sessionid", "environmentid", "pid", "procstart", "token", "secret",
+    "cookie", "authorization", "password",
+}
+
+
+def _sanitize_runtime_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized = str(key).replace("_", "").replace("-", "").lower()
+            if normalized in RUNTIME_PRIVATE_KEYS:
+                continue
+            safe[str(key)] = _sanitize_runtime_value(item)
+        return safe
+    if isinstance(value, list):
+        return [_sanitize_runtime_value(item) for item in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+
+
+def _read_controller_state() -> dict[str, Any]:
+    try:
+        payload = json.loads(CONTROLLER_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    allowed = {
+        "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
+        "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
+        "watchdog", "dispatcher", "chatgpt_nudge",
+    }
+    return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
+
+
+def _process_start_ticks(pid: int) -> str:
+    if pid <= 0:
+        return ""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
+    except (OSError, UnicodeError):
+        return ""
+    return fields[21] if len(fields) > 21 else ""
+
+
+def claude_remote_control_status() -> dict[str, Any]:
+    active_result = _run_local([SYSTEMCTL, "is-active", CLAUDE_REMOTE_CONTROL_SERVICE], timeout=15)
+    service_active = active_result.returncode == 0 and _decode_output(active_result.stdout).strip() == "active"
+    exec_result = _run_local(
+        [SYSTEMCTL, "show", CLAUDE_REMOTE_CONTROL_SERVICE, "-p", "ExecStart", "--value"],
+        timeout=15,
+    )
+    exec_start = _decode_output(exec_result.stdout) if exec_result.returncode == 0 else ""
+    session_recovery_enabled = bool(exec_start) and "--no-create-session-in-dir" not in exec_start
+
+    try:
+        pointer = json.loads(CLAUDE_REMOTE_CONTROL_POINTER_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        pointer = {}
+    if not isinstance(pointer, dict):
+        pointer = {}
+    try:
+        pid = int(pointer.get("pid") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    expected_start = str(pointer.get("procStart") or "").strip()
+    actual_start = _process_start_ticks(pid)
+    source = str(pointer.get("source") or "").strip()
+    pointer_present = bool(pointer)
+    process_alive = bool(actual_start)
+    identity_match = bool(expected_start and actual_start and expected_start == actual_start)
+    session_present = bool(str(pointer.get("sessionId") or "").strip())
+    environment_present = bool(str(pointer.get("environmentId") or "").strip())
+    ok = bool(
+        service_active
+        and pointer_present
+        and process_alive
+        and identity_match
+        and source == "standalone"
+        and session_present
+        and environment_present
+        and session_recovery_enabled
+    )
+    return {
+        "ok": ok,
+        "service": CLAUDE_REMOTE_CONTROL_SERVICE,
+        "service_active": service_active,
+        "pointer_present": pointer_present,
+        "process_alive": process_alive,
+        "identity_match": identity_match,
+        "source": source,
+        "session_present": session_present,
+        "environment_present": environment_present,
+        "session_recovery_enabled": session_recovery_enabled,
+    }
+
+
+def controller_status() -> dict[str, Any]:
+    service_state = _run_local([SYSTEMCTL, "is-active", CONTROLLER_SERVICE], timeout=15)
+    active = _decode_output(service_state.stdout).strip() == "active"
+    active_sha = _controller_active_sha()
+    try:
+        origin_main_sha = _controller_origin_main_sha(refresh=False)
+    except Exception:
+        origin_main_sha = ""
+    state = _read_controller_state()
+    return {
+        "ok": active and bool(active_sha),
+        "host": CONTROLLER_BACKEND_HOST,
+        "service": CONTROLLER_SERVICE,
+        "service_active": active,
+        "active_sha": active_sha,
+        "origin_main_sha": origin_main_sha,
+        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "state": state,
+    }
+
+
+def _controller_worktree(sha: str) -> Path:
+    CONTROLLER_WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
+    path = CONTROLLER_WORKTREE_ROOT / f"controller-promote-{sha[:8]}-{uuid.uuid4().hex[:8]}"
+    _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "worktree", "add", "--detach", str(path), sha], timeout=120)
+    return path
+
+
+def _remove_controller_worktree(path: Path) -> None:
+    try:
+        _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "worktree", "remove", "--force", str(path)], timeout=60)
+    except Exception:
+        pass
+
+
+def _controller_promote_sync(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    previous_generated_at = (_read_controller_state().get("generated_at") or "")
+    worktree = _controller_worktree(sha)
+    try:
+        installer = worktree / "scripts" / "install-gemini-24x7-controller.sh"
+        if not installer.is_file():
+            raise RuntimeError("controller_installer_missing")
+        _run_as_ubuntu(["bash", str(installer), str(worktree), sha], timeout=timeout)
+        deadline = time.monotonic() + 60
+        status = controller_status()
+        while time.monotonic() < deadline:
+            state = status.get("state") or {}
+            generated_at = str(state.get("generated_at") or "")
+            if (
+                status.get("active_sha") == sha
+                and status.get("service_active") is True
+                and generated_at
+                and generated_at != previous_generated_at
+            ):
+                return {"ok": True, "promoted_sha": sha, "status": status}
+            time.sleep(1)
+            status = controller_status()
+        raise RuntimeError("controller_promotion_not_observed")
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def continuity_status() -> dict[str, Any]:
+    status = controller_status()
+    state = status.get("state") or {}
+    ready = (
+        bool(status.get("service_active"))
+        and state.get("liveness_ok") is True
+        and state.get("continuity_ready") is True
+    )
+    return {
+        "ok": ready,
+        "controller": status,
+        "continuity_ready": state.get("continuity_ready"),
+        "degraded": state.get("degraded"),
+        "degraded_reasons": state.get("degraded_reasons") or [],
+        "chatgpt_browser": state.get("chatgpt_browser") or {},
+        "chatgpt_monitor": state.get("chatgpt_monitor") or {},
+        "claude_remote_control": state.get("claude_remote_control") or {},
+        "generated_at": state.get("generated_at"),
+    }
+
+
+def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+    cid = _validate_conversation_id(conversation_id)
+    timeout_seconds = max(30, min(int(timeout_seconds), 600))
+    status = controller_status()
+    active_sha = str(status.get("active_sha") or "")
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if not active_sha or active_sha != origin_main:
+        raise RuntimeError("controller_not_current")
+    worktree = _controller_worktree(active_sha)
+    try:
+        probe = worktree / "scripts" / "task_continuity_e2e.py"
+        if not probe.is_file():
+            raise RuntimeError("continuity_e2e_probe_missing")
+        completed = _run_local(
+            [
+                "runuser", "-u", "ubuntu", "--", "python3", str(probe),
+                "--runtime-dir", str(CONTROLLER_RUNTIME_DIR),
+                "--timeout-seconds", str(timeout_seconds),
+                "--poll-interval-seconds", "2",
+                "--repository", "Vivaliz-site/site-shopvivaliz",
+                "--conversation-id", cid,
+            ],
+            timeout=timeout_seconds + 45,
+        )
+        stdout = _decode_output(completed.stdout).strip()
+        stderr = redact_text(_decode_output(completed.stderr))
+        try:
+            report = json.loads(stdout.splitlines()[-1]) if stdout else {}
+        except json.JSONDecodeError:
+            report = {}
+        ok = (
+            completed.returncode == 0
+            and report.get("pass") is True
+            and report.get("observed_request") is True
+            and report.get("final_verification") == "continuity_e2e_pass"
+        )
+        return {
+            "ok": ok,
+            "controller_sha": active_sha,
+            "report": report,
+            "stderr": stderr if not ok else "",
+        }
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def _durable_operation_command(operation: str, value: str, timeout: int) -> str:
+    if operation not in {"controller-promote", "continuity-e2e", "claude-reconcile"}:
+        raise ValueError("unsupported_durable_operation")
+    if operation in {"controller-promote", "claude-reconcile"}:
+        _validate_expected_sha(value)
+    else:
+        _validate_conversation_id(value)
+    return (
+        "/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py "
+        f"--{operation}-run {value} {int(timeout)}"
+    )
+
+
+def _claude_remote_control_reconcile_sync(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    worktree = _controller_worktree(sha)
+    try:
+        setup = worktree / "scripts" / "setup-claude-remote-control.sh"
+        bridge = worktree / "scripts" / "claude-remote-control-mcp-stdio.py"
+        unit = worktree / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service"
+        trust = worktree / "scripts" / "claude_workspace_trust_bootstrap.py"
+        for required in (setup, bridge, unit, trust):
+            if not required.is_file():
+                raise RuntimeError("claude_reconcile_source_missing")
+        _run_local_checked(
+            ["bash", str(setup), "install", str(bridge), str(unit), str(trust)],
+            timeout=timeout,
+        )
+        deadline = time.monotonic() + 60
+        status = claude_remote_control_status()
+        while time.monotonic() < deadline:
+            if status.get("ok") is True:
+                return {"ok": True, "reconciled_sha": sha, "status": status}
+            time.sleep(1)
+            status = claude_remote_control_status()
+        raise RuntimeError("claude_reconcile_not_healthy")
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def claude_remote_control_reconcile(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    current = claude_remote_control_status()
+    if current.get("ok") is True:
+        return {"ok": True, "already_healthy": True, "reconciled_sha": sha, "status": current}
+    command = _durable_operation_command("claude-reconcile", sha, timeout)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout + 120),
+        },
+    )
+    return {
+        **task,
+        "ok": True,
+        "durable": True,
+        "operation": "claude_remote_control_reconcile",
+        "expected_sha": sha,
+    }
+
+
+def controller_promote(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    current = controller_status()
+    if current.get("active_sha") == sha and current.get("service_active") is True:
+        return {"ok": True, "already_current": True, "promoted_sha": sha, "status": current}
+    command = _durable_operation_command("controller-promote", sha, timeout)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout + 120),
+        },
+    )
+    return {**task, "ok": True, "durable": True, "operation": "controller_promote", "expected_sha": sha}
+
+
+def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+    cid = _validate_conversation_id(conversation_id)
+    timeout_seconds = max(30, min(int(timeout_seconds), 600))
+    status = controller_status()
+    active_sha = str(status.get("active_sha") or "")
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if not active_sha or active_sha != origin_main:
+        raise RuntimeError("controller_not_current")
+    command = _durable_operation_command("continuity-e2e", cid, timeout_seconds)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout_seconds + 120),
+        },
+    )
+    return {
+        **task,
+        "ok": True,
+        "durable": True,
+        "operation": "continuity_e2e",
+        "controller_sha": active_sha,
+    }
 
 
 def validate_timeout(value: Any) -> int:
@@ -701,6 +1131,27 @@ def execute_tool(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    if name == "claude_remote_control_status":
+        return claude_remote_control_status()
+    if name == "claude_remote_control_reconcile":
+        return claude_remote_control_reconcile(
+            _validate_expected_sha(args.get("expected_sha")),
+            timeout=validate_timeout(args.get("timeout", 240)),
+        )
+    if name == "controller_status":
+        return controller_status()
+    if name == "controller_promote":
+        return controller_promote(
+            _validate_expected_sha(args.get("expected_sha")),
+            timeout=validate_timeout(args.get("timeout", 240)),
+        )
+    if name == "continuity_status":
+        return continuity_status()
+    if name == "continuity_e2e":
+        return continuity_e2e(
+            _validate_conversation_id(args.get("conversation_id")),
+            timeout_seconds=int(args.get("timeout_seconds", 240)),
+        )
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
     if name == "audit_recent":
@@ -831,6 +1282,12 @@ def execute_tool(
 
 
 TOOLS = [
+    ("claude_remote_control_status", "Inspect sanitized Claude Remote Control service, session pointer identity and session-recovery health on the canonical backend.", {}, True, False),
+    ("claude_remote_control_reconcile", "Reconcile Claude Remote Control from exactly the expected origin/main SHA using the canonical installer and durable execution.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
+    ("controller_status", "Inspect the active 24x7 continuity controller release and sanitized runtime state on the canonical backend.", {}, True, False),
+    ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
+    ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
+    ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -856,7 +1313,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds"}],
                 "additionalProperties": False,
             },
             "annotations": {
@@ -1053,4 +1510,28 @@ def main() -> None:
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--run-task":
         raise SystemExit(run_task_entrypoint(sys.argv[2]))
+    if len(sys.argv) == 4 and sys.argv[1] == "--controller-promote-run":
+        try:
+            result = _controller_promote_sync(_validate_expected_sha(sys.argv[2]), timeout=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
+    if len(sys.argv) == 4 and sys.argv[1] == "--claude-reconcile-run":
+        try:
+            result = _claude_remote_control_reconcile_sync(_validate_expected_sha(sys.argv[2]), timeout=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
+    if len(sys.argv) == 4 and sys.argv[1] == "--continuity-e2e-run":
+        try:
+            result = _continuity_e2e_sync(_validate_conversation_id(sys.argv[2]), timeout_seconds=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
     main()

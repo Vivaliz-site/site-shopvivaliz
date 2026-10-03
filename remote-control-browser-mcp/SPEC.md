@@ -11,6 +11,7 @@ Segundo MCP privado, derivado do Remote Control MCP canônico. Ele preserva toda
 
 ## Ferramentas adicionais
 
+- browser_health
 - `browser_tabs`
 - `browser_open`
 - `browser_navigate`
@@ -30,4 +31,4 @@ A automação usa somente a sessão gráfica X11 do usuário `fredrdp` com `xdot
 
 ## Validação
 
-O health só é válido com `ok=true`, `endpoint=shopvivaliz-remote-control-browser-mcp` e dependências GUI presentes. A validação funcional deve ainda provar `tools/list`, screenshot real e uma navegação segura na sessão autenticada.
+O endpoint HTTP de health e a tool browser_health devem confirmar dependências GUI e ao menos uma janela de navegador visível; o endpoint HTTP continua exigindo identidade correta do serviço. A validação funcional deve ainda provar `tools/list`, screenshot real e uma navegação segura na sessão autenticada.
