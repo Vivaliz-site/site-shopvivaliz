@@ -165,7 +165,7 @@ function squad_github_tree(): string
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_HTTPHEADER     => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             "Accept: application/vnd.github+json",
             "User-Agent: ShopVivaliz-Squad/1.0",
         ],
@@ -201,7 +201,7 @@ function squad_github_file(string $path): string
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_HTTPHEADER     => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             "Accept: application/vnd.github+json",
             "User-Agent: ShopVivaliz-Squad/1.0",
         ],
@@ -230,7 +230,7 @@ function squad_github_issues(): string
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_HTTPHEADER     => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             "Accept: application/vnd.github+json",
             "User-Agent: ShopVivaliz-Squad/1.0",
         ],
@@ -262,7 +262,7 @@ function squad_github_create_issue(string $title, string $body, array $labels = 
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_HTTPHEADER     => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             "Accept: application/vnd.github+json",
             "Content-Type: application/json",
             "User-Agent: ShopVivaliz-Squad/1.0",
@@ -305,7 +305,7 @@ function squad_github_commit(string $path, string $content, string $message): st
     $sha = '';
     $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer [REDACTED] "Accept: application/vnd.github+json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
     $existing = json_decode((string) curl_exec($ch), true);
     curl_close($ch);
     if (isset($existing['sha'])) $sha = $existing['sha'];
@@ -316,7 +316,7 @@ function squad_github_commit(string $path, string $content, string $message): st
     $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
     curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
         CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_TIMEOUT => 15,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json",
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer [REDACTED] "Accept: application/vnd.github+json",
             "Content-Type: application/json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
     $res  = json_decode((string) curl_exec($ch), true);
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -339,7 +339,7 @@ function squad_github_commits(): string
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_HTTPHEADER     => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             "Accept: application/vnd.github+json",
             "User-Agent: ShopVivaliz-Squad/1.0",
         ],
@@ -392,7 +392,7 @@ $maxTokens = (int) (getenv('SQUAD_MAX_TOKENS') ?: 900);
 if ($maxTokens < 100 || $maxTokens > 4000) {
     $maxTokens = 900;
 }
-$claudeBridgeUrl = getenv('AI_SQUAD_CLAUDE_BRIDGE_URL') ?: 'http://127.0.0.1:17657';
+$claudeBridgeUrl = getenv('AI_SQUAD_CLAUDE_BRIDGE_URL') ?: 'http://127.0.0.1:17659';
 // Use bridge when API key absent or AI_SQUAD_USE_BRIDGE=1
 $useBridge = ($anthropicKey === '' || getenv('AI_SQUAD_USE_BRIDGE') === '1');
 
@@ -645,7 +645,7 @@ function call_openai_agent(string $key, string $system, string $model, array $me
     }
     $data = squad_curl_json('https://api.openai.com/v1/chat/completions', [
         'Content-Type: application/json',
-        'Authorization: Bearer ' . $key,
+        'Authorization: Bearer [REDACTED] . $key,
     ], [
         'model' => $model,
         'messages' => $payloadMessages,
@@ -692,7 +692,7 @@ function gh_get_open_prs(): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
         ],
@@ -723,7 +723,7 @@ function gh_get_file_content(string $path): string
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
         ],
@@ -749,7 +749,7 @@ function gh_get_issues(string $state = 'open'): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
         ],
@@ -778,7 +778,7 @@ function gh_create_issue(string $title, string $body, array $labels = []): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Content-Type: application/json',
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
@@ -806,7 +806,7 @@ function gh_get_workflow_runs(string $workflow = '', string $branch = 'main'): a
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
         ],
@@ -831,7 +831,7 @@ function gh_get_repo_stats(): array
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 15,
         CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$token}",
+            "Authorization: Bearer [REDACTED]
             'Accept: application/vnd.github+json',
             'User-Agent: ShopVivaliz-Squad/1.0',
         ],
