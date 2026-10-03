@@ -82,6 +82,15 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_PORT=5581", unit)
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_PORT=5580", (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8"))
 
+    def test_stdio_bridge_prefers_browser_mcp_and_keeps_base_fallback(self):
+        bridge = (ROOT / "scripts" / "claude-remote-control-mcp-stdio.py").read_text(encoding="utf-8")
+        browser_url = "http://127.0.0.1:5581/mcp"
+        base_url = "http://127.0.0.1:5580/mcp"
+        self.assertIn(browser_url, bridge)
+        self.assertIn(base_url, bridge)
+        self.assertLess(bridge.index(browser_url), bridge.index(base_url))
+        self.assertIn("MCP_URLS", bridge)
+
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-remote-control-browser-mcp", setup)
