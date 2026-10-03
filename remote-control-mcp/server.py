@@ -74,6 +74,10 @@ SENSITIVE_PATH_PARTS = (
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
 )
 SERVICE_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,120}$")
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+CONTROLLER_REPO = Path("/home/ubuntu/shopvivaliz-deploy/repo")
+CONTROLLER_WORKTREE_ROOT = Path("/home/ubuntu/worktrees")
+CONTINUITY_STATE_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
 SECRET_PATTERNS = (
     re.compile(r"(?i)(authorization\s*:\s*bearer\s+)[^\s]+"),
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]{12,}"),
@@ -695,6 +699,79 @@ def processes_command(platform: str) -> str:
     return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
 
 
+def _safe_json_file(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def continuity_status() -> dict[str, Any]:
+    controller = _safe_json_file(CONTINUITY_STATE_DIR / "_gemini-24x7-controller-state.json")
+    browser = _safe_json_file(CONTINUITY_STATE_DIR / "_chatgpt-browser-health.json")
+    monitor = _safe_json_file(CONTINUITY_STATE_DIR / "_chatgpt-continuity-monitor-state.json")
+    claude = controller.get("claude_remote_control")
+    if not isinstance(claude, dict):
+        claude = {}
+    services = {}
+    for service in (
+        "shopvivaliz-gemini-24x7-controller.service",
+        "shopvivaliz-claude-remote-control.service",
+    ):
+        completed = subprocess.run([SYSTEMCTL, "is-active", service], text=True, capture_output=True, check=False)
+        services[service] = (completed.stdout or "").strip() == "active"
+    return {
+        "ok": bool(controller.get("continuity_ready")) and all(services.values()),
+        "continuity_ready": bool(controller.get("continuity_ready")),
+        "degraded": bool(controller.get("degraded")),
+        "degraded_reasons": list(controller.get("degraded_reasons") or []),
+        "generated_at": controller.get("generated_at"),
+        "chatgpt": {
+            "session_state": browser.get("session_state"),
+            "authenticated": browser.get("authenticated"),
+            "monitor_degraded": monitor.get("degraded"),
+            "monitor_action": monitor.get("action") or monitor.get("last_cycle_action"),
+        },
+        "claude_remote_control": {
+            "health_present": bool(claude),
+            "connected": claude.get("connected"),
+            "pointer_present": claude.get("pointer_present"),
+            "process_alive": claude.get("process_alive"),
+            "identity_match": claude.get("identity_match"),
+        },
+        "services": services,
+    }
+
+
+def _checked(argv: list[str], timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(argv, text=True, capture_output=True, timeout=timeout, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(redact_text(completed.stderr or completed.stdout or "controller_promote_failed"))
+    return completed
+
+
+def controller_promote(sha: str) -> dict[str, Any]:
+    sha = str(sha or "").strip().lower()
+    if not GIT_SHA_RE.fullmatch(sha):
+        raise ValueError("invalid_controller_sha")
+    _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(CONTROLLER_REPO), "fetch", "origin", "main", "--quiet"])
+    current = _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(CONTROLLER_REPO), "rev-parse", "origin/main"]).stdout.strip()
+    if current != sha:
+        raise ValueError("controller_sha_not_current_main")
+    _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(CONTROLLER_REPO), "merge-base", "--is-ancestor", "1c7c3c33e4ec22f5138dbc786d838baf68dfb954", sha])
+    worktree = CONTROLLER_WORKTREE_ROOT / f"continuity-deploy-{sha[:12]}"
+    if not worktree.is_dir():
+        _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(CONTROLLER_REPO), "worktree", "add", "--detach", str(worktree), sha])
+    head = _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(worktree), "rev-parse", "HEAD"]).stdout.strip()
+    dirty = _checked(["sudo", "-n", "-u", "ubuntu", "git", "-C", str(worktree), "status", "--porcelain"]).stdout.strip()
+    if head != sha or dirty:
+        raise RuntimeError("controller_worktree_not_clean_exact_sha")
+    installer = worktree / "scripts" / "install-gemini-24x7-controller.sh"
+    _checked(["sudo", "-n", "-u", "ubuntu", "-H", "bash", str(installer), str(worktree), sha], timeout=MAX_TIMEOUT)
+    return {"ok": True, "host": "always-free-arm-1787907847-26", "promoted_sha": sha}
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
@@ -703,6 +780,10 @@ def execute_tool(
     host = args.get("host")
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
+    if name == "continuity_status":
+        return continuity_status()
+    if name == "controller_promote":
+        return controller_promote(str(args.get("sha") or ""))
     if name == "audit_recent":
         limit = max(1, min(int(args.get("limit", 25)), 200))
         with db_conn() as db:
@@ -832,6 +913,8 @@ def execute_tool(
 
 TOOLS = [
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
+    ("continuity_status", "Read sanitized ChatGPT, Claude Remote Control and controller continuity readiness from the backend.", {}, True, False),
+    ("controller_promote", "Promote an exact immutable main SHA to the backend 24x7 continuity controller using the canonical installer.", {"sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, False, True),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
