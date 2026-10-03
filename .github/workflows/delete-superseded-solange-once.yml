@@ -1,8 +1,7 @@
 name: Delete Superseded Solange Legacy Once
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
 
 permissions:
   contents: read

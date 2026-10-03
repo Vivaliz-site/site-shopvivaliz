@@ -5,9 +5,16 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-iphone-private-ssh-relay.sh'
+      - 'scripts/ensure-chatgpt-freeze-successor.py'
       - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/setup-secure-mcp-tunnel-runtime.sh'
       - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
+      - 'scripts/runtime-status-policy.sh'
       - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
+      - 'deploy/systemd/shopvivaliz-secure-mcp-tunnel.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
@@ -15,12 +22,28 @@ on:
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/test_secure_mcp_tunnel_stability.py'
+      - 'tests/iphone-private-ssh-relay-contract-test.py'
+      - 'tests/test_chatgpt_freeze_successor.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/secure-mcp-runtime-recovery.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
   push:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-iphone-private-ssh-relay.sh'
+      - 'scripts/ensure-chatgpt-freeze-successor.py'
+      - 'scripts/setup-claude-remote-control.sh'
+      - 'scripts/setup-secure-mcp-tunnel-runtime.sh'
+      - 'scripts/claude-remote-control-mcp-stdio.py'
+      - 'scripts/claude_workspace_trust_bootstrap.py'
+      - 'scripts/oci-mcp-stage7-action.py'
+      - 'scripts/runtime-status-policy.sh'
+      - 'deploy/systemd/shopvivaliz-claude-remote-control.service'
+      - 'deploy/systemd/shopvivaliz-secure-mcp-tunnel.service'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
@@ -28,8 +51,14 @@ on:
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/test_secure_mcp_tunnel_stability.py'
+      - 'tests/iphone-private-ssh-relay-contract-test.py'
+      - 'tests/test_chatgpt_freeze_successor.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - '.github/workflows/remote-control-mcp-*.yml'
+      - '.github/workflows/secure-mcp-runtime-recovery.yml'
+      - '.github/workflows/oci-bastion-private-access-bootstrap.yml'
+      - '.github/workflows/shopvivaliz-remote-access.yml'
 
 permissions:
   contents: read
@@ -43,11 +72,17 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py scripts/claude-remote-control-mcp-stdio.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py tests/test_secure_mcp_tunnel_stability.py
           python3 tests/remote-control-mcp-test.py
+          python3 tests/iphone-private-ssh-relay-contract-test.py
+          python3 tests/test_chatgpt_freeze_successor.py
+          python3 tests/test_secure_mcp_tunnel_stability.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax
         run: |
           bash -n scripts/setup-remote-control-access.sh
+          bash -n scripts/setup-iphone-private-ssh-relay.sh
           bash -n scripts/setup-claude-remote-control.sh
+          bash -n scripts/setup-secure-mcp-tunnel-runtime.sh
+          bash -n scripts/runtime-status-policy.sh

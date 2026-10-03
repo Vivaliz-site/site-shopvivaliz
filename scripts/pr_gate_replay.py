@@ -29,6 +29,7 @@ GATES: dict[str, str] = {
     "History Integrity": "history-integrity.yml",
     "Ecommerce Excellence Audit": "ecommerce-excellence-audit.yml",
     "PR Policy Enforcement": "pr-policy-enforcement.yml",
+    "Task Continuity Fast Gate": "task-continuity-fast-gate.yml",
 }
 
 

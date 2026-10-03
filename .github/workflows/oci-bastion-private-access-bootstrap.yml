@@ -22,12 +22,21 @@ jobs:
           github.event.issue.body == 'action=validate-rustdesk-via-fredwin' ||
           github.event.issue.body == 'action=bootstrap-remote-control-mcp' ||
           github.event.issue.body == 'action=e2e-remote-control-mcp' ||
+          github.event.issue.body == 'action=durable-mcp-v2-production-e2e' ||
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
+          github.event.issue.body == 'action=secure-mcp-runtime-recover' ||
           github.event.issue.body == 'action=secure-mcp-platform-ui-probe' ||
           github.event.issue.body == 'action=chatgpt-continuity-repair' ||
-          github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
+          github.event.issue.body == 'action=chatgpt-continuity-diagnostic' ||
+          github.event.issue.body == 'action=chatgpt-continuity-successor' ||
+          github.event.issue.body == 'action=chatgpt-freeze-task-state' ||
+          github.event.issue.body == 'action=ai-squad-claude-diagnostic' ||
+          github.event.issue.body == 'action=backend-storage-scan' ||
+          github.event.issue.body == 'action=backend-storage-cleanup-safe' ||
+          github.event.issue.body == 'action=claude-remote-control-install' ||
+          github.event.issue.body == 'action=claude-remote-control-status'
         )
       }}
     runs-on: ubuntu-latest
@@ -208,6 +217,103 @@ jobs:
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo "PRIVATE_SSH_TUNNELS=PASS"
 
+      # Recovery-only path: use the private Bastion tunnel only when backend
+      # storage pressure prevents the loopback Remote Control MCP from staging
+      # its normal bounded action. Operational commands remain MCP-first.
+      - name: Scan backend storage for Stage 7 recovery
+        if: github.event.issue.body == 'action=backend-storage-scan'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            echo BACKEND_STORAGE_SCAN_BEGIN
+            df -h /
+            df -i /
+            echo HOME_UBUNTU
+            if ! timeout 120s du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 50; then
+              echo BACKEND_STORAGE_SCAN_WARN=home_du_partial
+            fi
+            echo VAR
+            if ! timeout 120s sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; then
+              echo BACKEND_STORAGE_SCAN_WARN=var_du_partial
+            fi
+            echo REGENERABLE_CACHES
+            for p in /home/ubuntu/.cache/ms-playwright /home/ubuntu/.npm/_cacache /home/ubuntu/.npm/_npx /home/ubuntu/.cache/pip; do
+              if [ -e "$p" ]; then du -sh "$p"; else echo MISSING="$p"; fi
+            done
+            echo STAGE7_TMP
+            sudo -n find /tmp -maxdepth 1 -type d -name "shopvivaliz-claude-oci-*" -mmin +120 -printf "%TY-%Tm-%TdT%TH:%TM %p\n"
+            echo BACKEND_STORAGE_SCAN_END'
+
+      - name: Safely recover backend storage for Stage 7
+        if: github.event.issue.body == 'action=backend-storage-cleanup-safe'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
+            echo BACKEND_STORAGE_CLEANUP_BEGIN
+            df -h /
+
+            path_in_use() {
+              target="$1"
+              for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
+                resolved="$(readlink -f "$ref" 2>/dev/null || :)"
+                case "$resolved" in
+                  "$target"|"$target"/*) return 0 ;;
+                esac
+              done
+              return 1
+            }
+
+            clean_regenerable() {
+              target="$1"
+              if [ ! -e "$target" ]; then
+                echo MISSING="$target"
+                return 0
+              fi
+              if path_in_use "$target"; then
+                echo SKIPPED_ACTIVE="$target"
+                return 0
+              fi
+              rm -rf -- "$target"
+              echo CLEANED="$target"
+            }
+
+            clean_regenerable /home/ubuntu/.cache/ms-playwright
+            clean_regenerable /home/ubuntu/.npm/_cacache
+            clean_regenerable /home/ubuntu/.npm/_npx
+            clean_regenerable /home/ubuntu/.cache/pip
+
+            now="$(date +%s)"
+            for d in /tmp/shopvivaliz-claude-oci-*; do
+              [ -d "$d" ] || continue
+              modified="$(stat -c %Y "$d")"
+              age="$((now - modified))"
+              if [ "$age" -lt 7200 ]; then
+                echo SKIPPED_RECENT="$d"
+                continue
+              fi
+              if path_in_use "$d"; then
+                echo SKIPPED_ACTIVE="$d"
+                continue
+              fi
+              rm -rf -- "$d"
+              echo CLEANED="$d"
+            done
+
+            read -r filesystem blocks used free_kb capacity mountpoint < <(df -Pk / | tail -n 1)
+            echo BACKEND_STORAGE_FREE_KB="$free_kb"
+            if [ "$free_kb" -lt 262144 ]; then
+              echo BACKEND_STORAGE_CLEANUP=FAIL class=insufficient_free_space
+              exit 72
+            fi
+            df -h /
+            echo BACKEND_STORAGE_CLEANUP_END'
+
       - name: Bootstrap Remote Control MCP through OCI Bastion
         if: github.event.issue.body == 'action=bootstrap-remote-control-mcp'
         shell: bash
@@ -217,8 +323,8 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh ubuntu@127.0.0.1:/tmp/
-          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh'
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
           PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
           test -n "$PUBKEY"
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
@@ -408,6 +514,158 @@ jobs:
           print('REMOTE_CONTROL_FOUR_HOST_E2E=PASS')
           PY
 
+      - name: Durable MCP V2 backup, recovery, and adversarial restart E2E
+        if: github.event.issue.body == 'action=durable-mcp-v2-production-e2e'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          expected_server="$(sha256sum remote-control-mcp/server.py | awk '{print $1}')"
+          expected_unit="$(sha256sum deploy/systemd/shopvivaliz-remote-control-mcp.service | awk '{print $1}')"
+          "${BACKEND_SSH[@]}" "sudo -n env EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' python3 -" <<'PY'
+          import json, os, sqlite3, subprocess, time, urllib.request, uuid
+          from pathlib import Path
+
+          state = Path('/var/lib/shopvivaliz-remote-control')
+          db_path = state / 'state.db'
+          backup_dir = state / 'backups'
+          backup_dir.mkdir(mode=0o700, exist_ok=True)
+          backup = backup_dir / ('state-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '.db')
+          source = sqlite3.connect(db_path)
+          destination = sqlite3.connect(backup)
+          try:
+              source.backup(destination)
+          finally:
+              destination.close(); source.close()
+          backup.chmod(0o600)
+          if backup.stat().st_size <= 0 or backup.stat().st_mode & 0o077:
+              raise RuntimeError('sqlite_backup_not_root_only')
+          print('DURABLE_V2_SQLITE_BACKUP=PASS')
+
+          with sqlite3.connect(db_path) as db:
+              states = dict(db.execute('SELECT state, COUNT(*) FROM tasks GROUP BY state').fetchall())
+          print('DURABLE_V2_TASK_INVENTORY=' + ','.join(f'{k}:{states[k]}' for k in sorted(states)))
+          legacy = subprocess.run(
+              ['systemctl', 'list-units', '--all', '--no-legend', 'shopvivaliz-remote-command-task-*.scope'],
+              check=True, text=True, capture_output=True,
+          ).stdout.strip()
+          if legacy:
+              raise RuntimeError('legacy_scope_present_before_recovery')
+          print('DURABLE_V2_LEGACY_SCOPES=0')
+
+          expected_server, expected_unit = os.environ['EXPECTED_SERVER'], os.environ['EXPECTED_UNIT']
+          installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+          installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              subprocess.run([
+                  'bash', '/tmp/setup-remote-control-access.sh', 'install-controller',
+                  '/tmp/server.py', '/tmp/shopvivaliz-remote-control-mcp.service',
+              ], check=True)
+              installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+              installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              raise RuntimeError('installed_artifact_parity_failed')
+          print('DURABLE_V2_PARITY=PASS')
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = (state / 'mcp-token').read_text(encoding='utf-8').strip()
+          def call(name, arguments):
+              body = json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':name,'arguments':arguments}}).encode()
+              request = urllib.request.Request(endpoint, data=body, headers={'Content-Type':'application/json','Authorization':'Bearer '+token}, method='POST')
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = json.load(response)
+              result = (payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('error'):
+                  raise RuntimeError(name + '_failed')
+              return result
+          def wait_health(url):
+              deadline = time.time() + 45
+              while time.time() < deadline:
+                  try:
+                      with urllib.request.urlopen(url, timeout=3) as response:
+                          if response.status == 200: return
+                  except OSError: pass
+                  time.sleep(1)
+              raise RuntimeError('health_timeout')
+
+          run = uuid.uuid4().hex
+          marker_dir = state / 'e2e' / run
+          request_id = 'durable-v2-' + run
+          command = "mkdir -p {d}; printf 'START\\n' >> {d}/count.log; printf 'TASK_START\\n'; sleep 35; printf 'DONE\\n' >> {d}/count.log; printf 'TASK_DONE\\n'".format(d=marker_dir)
+          submitted = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          task_id = submitted.get('task_id')
+          if not task_id: raise RuntimeError('missing_task_id')
+          deadline = time.time() + 35
+          status = {}
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'running' and status.get('execution_unit'):
+                  subprocess.run(['systemctl', 'is-active', '--quiet', status['execution_unit']], check=True)
+                  break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_not_running_before_restart')
+              time.sleep(1)
+          else: raise RuntimeError('task_start_timeout')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-remote-control-mcp.service'], check=True)
+          wait_health('http://127.0.0.1:5580/health')
+          after_controller = call('task_status', {'task_id':task_id})
+          if after_controller.get('id') != task_id or after_controller.get('state') not in {'running','starting'}:
+              raise RuntimeError('controller_restart_task_continuity_failed')
+          print('DURABLE_V2_CONTROLLER_RESTART=PASS')
+
+          duplicate = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          if duplicate.get('task_id') != task_id:
+              raise RuntimeError('request_id_dedup_failed')
+          print('DURABLE_V2_DEDUP=PASS')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-secure-mcp-tunnel.service'], check=True)
+          wait_health('http://127.0.0.1:8080/healthz'); wait_health('http://127.0.0.1:8080/readyz')
+          after_tunnel = call('task_status', {'task_id':task_id})
+          if after_tunnel.get('id') != task_id or after_tunnel.get('state') not in {'running','starting'}:
+              raise RuntimeError('tunnel_restart_task_continuity_failed')
+          print('DURABLE_V2_TUNNEL_RESTART=PASS')
+
+          deadline = time.time() + 100
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'succeeded': break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_terminal_failure')
+              time.sleep(1)
+          else: raise RuntimeError('task_completion_timeout')
+          if status.get('exit_code') != 0 or 'TASK_START' not in str(status.get('stdout')) or 'TASK_DONE' not in str(status.get('stdout')) or not isinstance(status.get('stderr'), str):
+              raise RuntimeError('persisted_result_fields_failed')
+          result_path = Path(status['result_dir']) / 'result.json'
+          result = json.loads(result_path.read_text(encoding='utf-8'))
+          if result.get('state') != 'succeeded' or result.get('exit_code') != 0:
+              raise RuntimeError('persisted_result_json_failed')
+          counts = (marker_dir / 'count.log').read_text(encoding='utf-8').splitlines()
+          if counts.count('START') != 1 or counts.count('DONE') != 1:
+              raise RuntimeError('physical_marker_count_failed')
+          print('DURABLE_V2_MARKERS=PASS')
+
+          for path in ('/health',): wait_health('http://127.0.0.1:5580' + path)
+          for path in ('/healthz','/readyz'): wait_health('http://127.0.0.1:8080' + path)
+          tunnel_pids = [p for p in subprocess.run(['pgrep','-u','ubuntu','-x','tunnel-client'], text=True, capture_output=True).stdout.splitlines() if p]
+          if len(tunnel_pids) != 1: raise RuntimeError('tunnel_client_count_failed')
+          remaining_legacy = subprocess.run(['systemctl','list-units','--all','--no-legend','shopvivaliz-remote-command-task-*.scope'], text=True, capture_output=True, check=True).stdout.strip()
+          if remaining_legacy: raise RuntimeError('legacy_scope_remained')
+          with sqlite3.connect(db_path) as db:
+              request_count = db.execute('SELECT COUNT(*) FROM tasks WHERE request_id=?', (request_id,)).fetchone()[0]
+              active = db.execute("SELECT COUNT(*) FROM tasks WHERE id=? AND state IN ('queued','starting','running','cancel_requested')", (task_id,)).fetchone()[0]
+          if request_count != 1 or active != 0: raise RuntimeError('lost_or_duplicate_task_detected')
+          for host in ['always-free-arm-1787907847-26','shopvivaliz-free-a1','Fred-Win','KOCEPSV']:
+              health = call('host_health', {'host':host,'timeout':45})
+              if health.get('ok') is False: raise RuntimeError('four_host_smoke_failed')
+          print('DURABLE_V2_FOUR_HOST_SMOKE=PASS')
+          print('DURABLE_V2_PRODUCTION_E2E=PASS')
+          PY
+          "${BACKEND_SSH[@]}" 'rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
+
       - name: Submit disconnected runtime proof
         if: github.event.issue.body == 'action=runtime-proof-submit'
         shell: bash
@@ -476,12 +734,34 @@ jobs:
           }
           trap cleanup_continuity_repair EXIT
 
-          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
-          "${BACKEND_SCP[@]}"             scripts/install-chatgpt-continuity-backend-bridge.sh             scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs             "ubuntu@127.0.0.1:$remote_dir/"
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir' '$remote_dir/scripts' '$remote_dir/scripts/chatgpt-continuity' '$remote_dir/ops' '$remote_dir/ops/systemd' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+          "${BACKEND_SCP[@]}" scripts/install-chatgpt-continuity-backend-bridge.sh "ubuntu@127.0.0.1:$remote_dir/scripts/"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-guardian.sh "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 
           "${SITE_SSH[@]}" 'set -Eeuo pipefail
-            token_file=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token
+            token_dir=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity
+            token_file="$token_dir/bridge.token"
             sudo -n test -s "$token_file"
+            before="$(sudo -n sha256sum -- "$token_file")"
+            before="${before%% *}"
+            test -n "$before"
+            sudo -n chown www-data:ubuntu "$token_dir"
+            sudo -n chmod 750 "$token_dir"
+            sudo -n chown www-data:ubuntu "$token_file"
+            sudo -n chmod 640 "$token_file"
+            after="$(sudo -n sha256sum -- "$token_file")"
+            after="${after%% *}"
+            test -n "$after"
+            if [ "$before" != "$after" ]; then
+              echo "::error::Continuity bridge token content changed during metadata repair" >&2
+              exit 32
+            fi
+            sudo -u ubuntu test -r "$token_file"
+            echo "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS" >&2
             sudo -n dd if="$token_file" status=none
           ' | "${BACKEND_SSH[@]}" 'set -Eeuo pipefail
             install -d -m 700 /home/ubuntu/.config/shopvivaliz-chatgpt-continuity
@@ -494,30 +774,10 @@ jobs:
             trap - EXIT
           '
 
-          bridge_endpoint="$("${BACKEND_SSH[@]}" 'set -Eeuo pipefail
-            token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
-            token="$(dd if="$token_file" status=none)"
-            trap '"'"'unset token'"'"' EXIT
-            for candidate in               http://10.0.1.112/api/chatgpt-continuity/bridge.php               http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php               https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php
-            do
-              tmp="$(mktemp)"
-              if curl -fsS --connect-timeout 4 --max-time 10                 -H "Host: shopvivaliz.com.br"                 -H "Authorization: Bearer $token"                 -H "Content-Type: application/json"                 --data '"'"'{"operation":"heartbeat"}'"'"'                 "$candidate" > "$tmp" &&
-                jq -e '"'"'.status == "OK"'"'"' "$tmp" >/dev/null 2>&1
-              then
-                rm -f "$tmp"
-                printf "%s\n" "$candidate"
-                exit 0
-              fi
-              rm -f "$tmp"
-            done
-            exit 41
-          ')"
-          test -n "$bridge_endpoint"
-
           "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
           install_output=''
           install_rc=0
-          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
+          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
           then
             install_rc=0
           else
@@ -534,10 +794,336 @@ jobs:
           fi
           printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
           printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+          echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=private_loopback_18081"
           echo "CHATGPT_CONTINUITY_BASTION_REPAIR=PASS"
 
           cleanup_continuity_repair
           trap - EXIT
+
+      - name: Ensure next ChatGPT freeze generation through Remote Control MCP
+        if: github.event.issue.body == 'action=chatgpt-continuity-successor'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          HELPER_B64="$(base64 -w0 scripts/ensure-chatgpt-freeze-successor.py)"
+          "${BACKEND_SSH[@]}" "sudo -n python3 - '$HELPER_B64'" <<'PY'
+          import json
+          import re
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          helper_b64 = sys.argv[1]
+          if not re.fullmatch(r'[A-Za-z0-9+/=]+', helper_b64):
+              raise SystemExit('invalid helper transport')
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+
+          command = r"""set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s' '__HELPER_B64__' | base64 -d > "$tmp/ensure.py"
+          chmod 700 "$tmp/ensure.py"
+          result="$(python3 "$tmp/ensure.py" \
+            --state-dir /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state \
+            --state-script /home/ubuntu/shopvivaliz-deploy/current/scripts/agent_task_state.py \
+            --predecessor chatgpt-freeze-root-cause-20260927 \
+            --base-id chatgpt-freeze-root-cause-20260928 \
+            --goal 'Continue ChatGPT freeze root-cause investigation after the natural iOS transmission interruption at 2026-09-29T00:09:00Z' \
+            --next-action 'Validate the post-freeze continuity runtime, reconcile current ChatGPT lifecycle endpoints, preserve automatic checkpoint resume, and continue until verified completion or a proved external blocker' \
+            --evidence 'Natural iOS freeze at 2026-09-29T00:09:00Z showed Thinking plus interrupted transmission after g2 was already terminal' \
+            --agent gpt-5.6-sol)"
+          python3 - "$result" <<'INNER'
+          import json
+          import re
+          import sys
+          payload=json.loads(sys.argv[1])
+          task=str(payload.get('task_id','')).strip()
+          status=str(payload.get('status','')).strip()
+          predecessor=str(payload.get('predecessor_task_id','')).strip()
+          if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g(?:[2-9]|[1-9][0-9]+)',task):
+              raise SystemExit('invalid successor task')
+          if status not in {'RUNNING','READY_TO_COMPLETE'}:
+              raise SystemExit('successor is not resumable')
+          if not predecessor:
+              raise SystemExit('successor predecessor missing')
+          print('CHATGPT_CONTINUITY_SUCCESSOR_TASK='+task)
+          print('CHATGPT_CONTINUITY_SUCCESSOR_STATUS='+status)
+          print('CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT=true')
+          INNER
+          echo CHATGPT_CONTINUITY_SUCCESSOR=PASS
+          """.replace('__HELPER_B64__', helper_b64)
+
+          request_body = json.dumps({
+              'jsonrpc': '2.0',
+              'id': 1,
+              'method': 'tools/call',
+              'params': {
+                  'name': 'admin_command_run',
+                  'arguments': {
+                      'host': 'shopvivaliz-free-a1',
+                      'command': command,
+                      'timeout': 45,
+                  },
+              },
+          }).encode()
+          req = urllib.request.Request(
+              endpoint,
+              data=request_body,
+              headers={
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + token,
+              },
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=70) as response:
+              payload = json.load(response)
+          result = (payload.get('result') or {}).get('structuredContent') or {}
+          if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+              raise SystemExit('Remote Control MCP successor action failed')
+
+          stdout = str(result.get('stdout') or '')
+          allowed_prefixes = (
+              'CHATGPT_CONTINUITY_SUCCESSOR_TASK=',
+              'CHATGPT_CONTINUITY_SUCCESSOR_STATUS=',
+              'CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT=',
+              'CHATGPT_CONTINUITY_SUCCESSOR=',
+          )
+          safe = [line for line in stdout.splitlines() if line.startswith(allowed_prefixes)]
+          required = {
+              'CHATGPT_CONTINUITY_SUCCESSOR_TASK',
+              'CHATGPT_CONTINUITY_SUCCESSOR_STATUS',
+              'CHATGPT_CONTINUITY_SUCCESSOR_PREDECESSOR_PRESENT',
+              'CHATGPT_CONTINUITY_SUCCESSOR',
+          }
+          seen = {line.split('=', 1)[0] for line in safe if '=' in line}
+          if required.difference(seen):
+              raise SystemExit('missing successor recovery markers')
+          print('\n'.join(safe))
+          PY
+
+      - name: Diagnose AI Squad Claude bridge through Remote Control MCP
+        if: github.event.issue.body == 'action=ai-squad-claude-diagnostic'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" 'sudo -n python3 -' <<'PY'
+          import json
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = Path('/var/lib/shopvivaliz-remote-control/mcp-token').read_text().strip()
+          command = r'''set -Eeuo pipefail
+          uid="$(id -u ubuntu)"
+          xdg="/run/user/$uid"
+          service="shopvivaliz-squad-claude-bridge.service"
+          service_active=false
+          if sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user is-active --quiet "$service"; then
+            service_active=true
+          fi
+          printf 'AI_SQUAD_CLAUDE_SERVICE_ACTIVE=%s\n' "$service_active"
+
+          health='{}'
+          if value="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health 2>/dev/null)"; then
+            health="$value"
+          fi
+          python3 - "$health" <<'INNER_HEALTH'
+          import json, sys
+          try:
+              data=json.loads(sys.argv[1])
+          except Exception:
+              data={}
+          endpoint=str(data.get('endpoint') or '')
+          print('AI_SQUAD_CLAUDE_HEALTH_ENDPOINT_VALID=' + ('true' if endpoint == 'ai-squad-claude-bridge' else 'false'))
+          for src, dst in (
+              ('ok','OK'),
+              ('token_configured','TOKEN_CONFIGURED'),
+              ('credential_store_configured','CREDENTIAL_STORE_CONFIGURED'),
+              ('authenticated','AUTHENTICATED'),
+              ('binary_configured','BINARY_CONFIGURED'),
+          ):
+              print('AI_SQUAD_CLAUDE_HEALTH_' + dst + '=' + ('true' if data.get(src) is True else 'false'))
+          INNER_HEALTH
+
+          help_tmp="$(mktemp)"
+          auth_tmp="$(mktemp)"
+          probe_out="$(mktemp)"
+          probe_err="$(mktemp)"
+          trap 'rm -f "$help_tmp" "$auth_tmp" "$probe_out" "$probe_err"' EXIT
+
+          sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --help >"$help_tmp" 2>&1 || :
+          for spec in SAFE_MODE:--safe-mode RESTRICTED:--restricted PERMISSION_PROMPTS:--permission-prompts NO_CHROME:--no-chrome; do
+            key="${spec%%:*}"
+            flag="${spec#*:}"
+            supported=false
+            if grep -Fq -- "$flag" "$help_tmp"; then supported=true; fi
+            printf 'AI_SQUAD_CLAUDE_FLAG_%s=%s\n' "$key" "$supported"
+          done
+
+          auth_rc=0
+          if sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude auth status --json >"$auth_tmp" 2>/dev/null; then
+            auth_rc=0
+          else
+            auth_rc=$?
+          fi
+          python3 - "$auth_tmp" "$auth_rc" <<'INNER_AUTH'
+          import json, sys
+          path, rc = sys.argv[1], int(sys.argv[2])
+          try:
+              data=json.load(open(path, encoding='utf-8'))
+          except Exception:
+              data={}
+          logged=data.get('loggedIn') is True
+          raw=str(data.get('subscriptionType') or '').strip().lower()
+          allowed={'free','pro','max','team','enterprise','business','unknown'}
+          subscription=raw if raw in allowed else ('unknown' if raw else 'none')
+          print('AI_SQUAD_CLAUDE_AUTH_COMMAND_OK=' + ('true' if rc == 0 else 'false'))
+          print('AI_SQUAD_CLAUDE_AUTH_LOGGED_IN=' + ('true' if logged else 'false'))
+          print('AI_SQUAD_CLAUDE_AUTH_SUBSCRIPTION_CLASS=' + subscription)
+          INNER_AUTH
+
+          process_count="$(pgrep -c -u ubuntu -f '/home/ubuntu/.local/bin/claude' 2>/dev/null || true)"
+          case "$process_count" in ''|*[!0-9]*) process_count=0 ;; esac
+          printf 'AI_SQUAD_CLAUDE_PROCESS_COUNT=%s\n' "$process_count"
+
+          probe_rc=0
+          if timeout 35s sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin             /home/ubuntu/.local/bin/claude -p             --output-format stream-json --verbose --no-session-persistence             --safe-mode --restricted --permission-mode dontAsk --permission-prompts none             --disable-slash-commands --no-chrome --model claude-sonnet-5 --effort low             --system-prompt 'AI Squad authentication health probe. Reply only OK.' --tools ''             >"$probe_out" 2>"$probe_err" <<'INNER_PROMPT'
+          OK
+          INNER_PROMPT
+          then
+            probe_rc=0
+          else
+            probe_rc=$?
+          fi
+
+          failure_class=none
+          if [ "$probe_rc" -ne 0 ]; then
+            combined="$(tr '[:upper:]' '[:lower:]' <"$probe_err"; tr '[:upper:]' '[:lower:]' <"$probe_out")"
+            if [ "$probe_rc" -eq 124 ]; then
+              failure_class=timeout
+            elif grep -Eq 'another claude code process is refreshing|exited mid-refresh|refresh oauth token' <<<"$combined"; then
+              failure_class=oauth_refresh_contention
+            elif grep -Eq 'unknown option|unknown argument|invalid option' <<<"$combined"; then
+              failure_class=cli_flags
+            elif grep -Eq 'selected model|model.*(not exist|access)|not.*access.*model' <<<"$combined"; then
+              failure_class=model_access
+            elif grep -Eq 'usage limit|rate limit|quota|credit balance' <<<"$combined"; then
+              failure_class=quota
+            elif grep -Eq 'oauth|authenticate|authentication|not logged in|token expired|login' <<<"$combined"; then
+              failure_class=auth
+            else
+              failure_class=transport
+            fi
+          elif ! grep -q '"type":"result"' "$probe_out"; then
+            failure_class=invalid_output
+          fi
+          printf 'AI_SQUAD_CLAUDE_PROBE_OK=%s\n' "$([ "$failure_class" = none ] && echo true || echo false)"
+          printf 'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=%s\n' "$failure_class"
+          '''
+
+          body = json.dumps({
+              'jsonrpc':'2.0',
+              'id':1,
+              'method':'tools/call',
+              'params':{
+                  'name':'admin_command_run',
+                  'arguments':{
+                      'host':'shopvivaliz-free-a1',
+                      'command':command,
+                      'timeout':55,
+                  },
+              },
+          }).encode()
+          req=urllib.request.Request(
+              endpoint,
+              data=body,
+              headers={'Content-Type':'application/json','Authorization':'Bearer '+token},
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=75) as response:
+                  payload=json.load(response)
+          except urllib.error.HTTPError as exc:
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=http_' + str(exc.code))
+              raise SystemExit(1)
+
+          result=(payload.get('result') or {}).get('structuredContent') or {}
+          if (payload.get('result') or {}).get('isError') or result.get('ok') is False or result.get('error'):
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=tool_error')
+              raise SystemExit(1)
+
+          stdout=str(result.get('stdout') or '')
+          prefixes=(
+              'AI_SQUAD_CLAUDE_SERVICE_ACTIVE=',
+              'AI_SQUAD_CLAUDE_HEALTH_',
+              'AI_SQUAD_CLAUDE_FLAG_',
+              'AI_SQUAD_CLAUDE_AUTH_',
+              'AI_SQUAD_CLAUDE_PROCESS_COUNT=',
+              'AI_SQUAD_CLAUDE_PROBE_',
+          )
+          safe=[line for line in stdout.splitlines() if line.startswith(prefixes)]
+          required={
+              'AI_SQUAD_CLAUDE_SERVICE_ACTIVE',
+              'AI_SQUAD_CLAUDE_HEALTH_OK',
+              'AI_SQUAD_CLAUDE_HEALTH_AUTHENTICATED',
+              'AI_SQUAD_CLAUDE_AUTH_LOGGED_IN',
+              'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS',
+          }
+          seen={line.split('=',1)[0] for line in safe if '=' in line}
+          if required.difference(seen):
+              print('AI_SQUAD_CLAUDE_MCP_FAILURE_CLASS=missing_markers')
+              raise SystemExit(1)
+          print('\n'.join(safe))
+          print('AI_SQUAD_CLAUDE_MCP_DIAGNOSTIC=PASS')
+          PY
+
+      - name: Install Claude Remote Control through Remote Control MCP
+        if: github.event.issue.body == 'action=claude-remote-control-install'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_dir="/home/ubuntu/.local/state/shopvivaliz/claude-stage7/oci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_dir'"
+          cleanup_stage() { "${BACKEND_SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :; }
+          trap cleanup_stage EXIT
+          "${BACKEND_SCP[@]}" \
+            scripts/oci-mcp-stage7-action.py \
+            scripts/setup-claude-remote-control.sh \
+            scripts/claude-remote-control-mcp-stdio.py \
+            scripts/claude_workspace_trust_bootstrap.py \
+            deploy/systemd/shopvivaliz-claude-remote-control.service \
+            "ubuntu@127.0.0.1:$remote_dir/"
+          "${BACKEND_SSH[@]}" "sudo -n python3 '$remote_dir/oci-mcp-stage7-action.py' claude-install --stage-dir '$remote_dir'"
+          trap - EXIT
+          cleanup_stage
+
+      - name: Check Claude Remote Control status through Remote Control MCP
+        if: github.event.issue.body == 'action=claude-remote-control-status'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" "sudo -n python3 - claude-status" < scripts/oci-mcp-stage7-action.py
+
+      - name: Read latest ChatGPT freeze state through Remote Control MCP
+        if: github.event.issue.body == 'action=chatgpt-freeze-task-state'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${BACKEND_SSH[@]}" "sudo -n python3 - freeze-state" < scripts/oci-mcp-stage7-action.py
 
       - name: ChatGPT continuity diagnostic through Remote Control MCP
         if: github.event.issue.body == 'action=chatgpt-continuity-diagnostic'
@@ -580,12 +1166,18 @@ jobs:
           agent_active=false
           systemctl is-active --quiet shopvivaliz-agent.service && agent_active=true
           python3 - "$runtime" "$agent_active" <<'INNER'
-          import hashlib, json, pathlib, sys
+          import hashlib, json, pathlib, re, subprocess, sys
           root=pathlib.Path(sys.argv[1]); agent=sys.argv[2]
           running=0
           current_fingerprints=set()
           canonical_task_status='MISSING'
+          canonical_task_updated_at='NONE'
+          canonical_task_completed_at='NONE'
+          canonical_task_evidence_count=0
+          canonical_task_verification_present=False
+          canonical_task_history_events='NONE'
           canonical_path=root/'chatgpt-freeze-root-cause-20260928-g2.json'
+          timestamp_re=re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$')
           if canonical_path.is_file():
               try:
                   canonical=json.loads(canonical_path.read_text(encoding='utf-8'))
@@ -594,6 +1186,80 @@ jobs:
               else:
                   candidate=str(canonical.get('status','')).strip() if isinstance(canonical,dict) else ''
                   canonical_task_status=candidate if candidate in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'} else 'INVALID'
+                  if isinstance(canonical,dict):
+                      updated_at=str(canonical.get('updated_at','')).strip()
+                      completed_at=str(canonical.get('completed_at','')).strip()
+                      canonical_task_updated_at=updated_at if timestamp_re.fullmatch(updated_at) else 'NONE'
+                      canonical_task_completed_at=completed_at if timestamp_re.fullmatch(completed_at) else 'NONE'
+                      evidence=canonical.get('evidence')
+                      canonical_task_evidence_count=min(len(evidence),9999) if isinstance(evidence,list) else 0
+                      canonical_task_verification_present=bool(str(canonical.get('verification') or '').strip())
+                      events=[]
+                      history=canonical.get('history')
+                      if isinstance(history,list):
+                          for row in history[:32]:
+                              if not isinstance(row,dict): continue
+                              event=re.sub(r'[^A-Za-z0-9_-]','',str(row.get('event','')))[:64]
+                              if event: events.append(event)
+                      canonical_task_history_events=','.join(events) if events else 'NONE'
+          latest_generation_number=0
+          latest_generation_status='MISSING'
+          latest_generation_readable=False
+          latest_generation_owner_matches_runtime=False
+          latest_generation_mode_0600=False
+          latest_generation_fingerprint=''
+          latest_generation_updated_at='NONE'
+          latest_generation_completed_at='NONE'
+          latest_generation_evidence_count=0
+          latest_generation_verification_present=False
+          latest_generation_history_events='NONE'
+          generation_re=re.compile(r'^chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)\.json$')
+          generation_paths=[]
+          if root.is_dir():
+              for candidate_path in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
+                  match=generation_re.fullmatch(candidate_path.name)
+                  if match and candidate_path.is_file():
+                      generation_paths.append((int(match.group(1)),candidate_path))
+          if generation_paths:
+              generation_paths.sort(key=lambda item:item[0])
+              latest_generation_number,latest_generation_path=generation_paths[-1]
+              try:
+                  runtime_stat=root.stat()
+                  latest_stat=latest_generation_path.stat()
+                  latest_generation_owner_matches_runtime=(
+                      latest_stat.st_uid==runtime_stat.st_uid and latest_stat.st_gid==runtime_stat.st_gid
+                  )
+                  latest_generation_mode_0600=(latest_stat.st_mode & 0o7777)==0o600
+                  latest_payload=json.loads(latest_generation_path.read_text(encoding='utf-8'))
+              except (OSError,UnicodeError,json.JSONDecodeError):
+                  latest_generation_status='UNREADABLE'
+              else:
+                  latest_generation_readable=True
+                  latest_candidate=str(latest_payload.get('status','')).strip() if isinstance(latest_payload,dict) else ''
+                  latest_generation_status=latest_candidate if latest_candidate in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'} else 'INVALID'
+                  if isinstance(latest_payload,dict):
+                      updated_at=str(latest_payload.get('updated_at','')).strip()
+                      completed_at=str(latest_payload.get('completed_at','')).strip()
+                      latest_generation_updated_at=updated_at if timestamp_re.fullmatch(updated_at) else 'NONE'
+                      latest_generation_completed_at=completed_at if timestamp_re.fullmatch(completed_at) else 'NONE'
+                      evidence=latest_payload.get('evidence')
+                      latest_generation_evidence_count=min(len(evidence),9999) if isinstance(evidence,list) else 0
+                      latest_generation_verification_present=bool(str(latest_payload.get('verification') or '').strip())
+                      events=[]
+                      history=latest_payload.get('history')
+                      if isinstance(history,list):
+                          for row in history[:32]:
+                              if not isinstance(row,dict): continue
+                              event=re.sub(r'[^A-Za-z0-9_-]','',str(row.get('event','')))[:64]
+                              if event: events.append(event)
+                      latest_generation_history_events=','.join(events) if events else 'NONE'
+                      basis='\n'.join([
+                          str(latest_payload.get('repository','Vivaliz-site/site-shopvivaliz')).strip(),
+                          str(latest_payload.get('task_id','')).strip(),
+                          str(latest_payload.get('updated_at','')).strip(),
+                          str(latest_payload.get('next_action','')).strip(),
+                      ])
+                      latest_generation_fingerprint=hashlib.sha256(basis.encode('utf-8')).hexdigest()
           if root.is_dir():
               for p in root.glob('*.json'):
                   if p.name.startswith('_') or not p.is_file(): continue
@@ -610,15 +1276,86 @@ jobs:
                   current_fingerprints.add(hashlib.sha256(basis.encode('utf-8')).hexdigest())
           pending=0
           matching=0
-          req=root/'_resume-requests.jsonl'
-          if req.is_file():
-              for line in req.read_text(encoding='utf-8',errors='replace').splitlines():
-                  try: row=json.loads(line)
-                  except Exception: continue
-                  if not isinstance(row,dict) or str(row.get('status','')).strip()!='queued': continue
-                  pending+=1
-                  if str(row.get('fingerprint','')).strip() in current_fingerprints:
-                      matching+=1
+          queue_certifier_available=False
+          queue_certified=False
+          queue_raw_rows=0
+          queue_actionable_rows=0
+          queue_nonactionable_rows=0
+          queue_archive_present=False
+          dispatcher_requests_scanned=0
+          dispatcher_chatgpt_common_rows=0
+          dispatcher_explicit_repository_rows=0
+          dispatcher_current_checkpoint_rows=0
+          dispatcher_eligible_rows=0
+          try:
+              scripts_dir=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/scripts')
+              certifier=scripts_dir/'task_resume_queue.py'
+              completed=subprocess.run(
+                  [sys.executable,str(certifier),'--runtime-dir',str(root)],
+                  capture_output=True,text=True,check=False,timeout=8,
+              )
+              if completed.returncode in {0,75}:
+                  queue_summary=json.loads(completed.stdout)
+                  if isinstance(queue_summary,dict):
+                      queue_certifier_available=True
+                      queue_certified=bool(queue_summary.get('certified'))
+                      queue_raw_rows=min(max(int(queue_summary.get('raw_rows',0)),0),999999)
+                      queue_actionable_rows=min(max(int(queue_summary.get('actionable_rows',0)),0),999999)
+                      queue_nonactionable_rows=min(max(int(queue_summary.get('nonactionable_rows',0)),0),999999)
+                      queue_archive_present=(root/'_resume-requests-archive.jsonl').is_file()
+                      pending=queue_actionable_rows
+                      matching=queue_actionable_rows
+
+              if str(scripts_dir) not in sys.path:
+                  sys.path.insert(0,str(scripts_dir))
+              import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
+              for request in nudge_dispatcher.read_requests(root):
+                  if not isinstance(request,dict):
+                      continue
+                  dispatcher_requests_scanned+=1
+                  if str(request.get('preferred_executor','')).strip()!='chatgpt_common':
+                      continue
+                  dispatcher_chatgpt_common_rows+=1
+                  if str(request.get('status','')).strip()!='queued':
+                      continue
+                  repository=str(request.get('repository','')).strip()
+                  if repository:
+                      dispatcher_explicit_repository_rows+=1
+                  fingerprint=str(request.get('fingerprint','')).strip()
+                  task_id=str(request.get('task_id','')).strip()
+                  if not fingerprint or not task_id or not repository:
+                      continue
+                  if not nudge_dispatcher._request_matches_current_checkpoint(root,request):
+                      continue
+                  dispatcher_current_checkpoint_rows+=1
+                  dispatcher_eligible_rows+=1
+          except (OSError,ValueError,json.JSONDecodeError,subprocess.SubprocessError,ImportError):
+              queue_certifier_available=False
+
+          bridge_queue_total=0
+          bridge_queue_pending=0
+          bridge_queue_claimed=0
+          bridge_queue_active=0
+          bridge_queue_resolved=0
+          bridge_store=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json')
+          try:
+              bridge_data=json.loads(bridge_store.read_text(encoding='utf-8')) if bridge_store.is_file() else {}
+              nudges=bridge_data.get('nudges',[]) if isinstance(bridge_data,dict) else []
+              if not isinstance(nudges,list):
+                  nudges=[]
+              for item in nudges:
+                  if not isinstance(item,dict):
+                      continue
+                  bridge_queue_total+=1
+                  status=str(item.get('status','')).strip().upper()
+                  if status=='PENDING':
+                      bridge_queue_pending+=1
+                  elif status=='CLAIMED':
+                      bridge_queue_claimed+=1
+              bridge_queue_active=bridge_queue_pending+bridge_queue_claimed
+              bridge_queue_resolved=max(0,bridge_queue_total-bridge_queue_active)
+          except (OSError,UnicodeError,json.JSONDecodeError):
+              pass
           latest='NONE'
           current_ledger_present=False
           allowed={'','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}
@@ -629,10 +1366,10 @@ jobs:
                   except Exception: continue
                   if not isinstance(row,dict): continue
                   fingerprint=str(row.get('fingerprint','')).strip()
-                  if fingerprint in current_fingerprints:
+                  if latest_generation_fingerprint and fingerprint==latest_generation_fingerprint:
                       current_ledger_present=True
-                  value=str(row.get('worker_status','')).strip().upper()
-                  if value in allowed: latest=value or 'EMPTY'
+                      value=str(row.get('worker_status','')).strip().upper()
+                      if value in allowed: latest=value or 'EMPTY'
           token_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token')
           token_available=False
           try:
@@ -640,6 +1377,16 @@ jobs:
           except (OSError,UnicodeError):
               token_available=False
           dispatcher_log_seen=False
+          dispatcher_last_cycle_at='NONE'
+          dispatcher_log_fresh=False
+          dispatcher_last_summary_available=False
+          dispatcher_last_scanned=0
+          dispatcher_last_eligible=0
+          dispatcher_last_dispatched=0
+          dispatcher_last_skipped_no_token=0
+          dispatcher_last_skipped_stale_checkpoint=0
+          dispatcher_last_skipped_attempt_limit=0
+          dispatcher_event_suffix='] ChatGPT continuity nudge dispatcher completed.'
           log_path=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/current/logs/autonomous-agent.log')
           try:
               if log_path.is_file():
@@ -648,16 +1395,102 @@ jobs:
                       size=handle.tell()
                       handle.seek(max(0,size-524288))
                       tail=handle.read().decode('utf-8',errors='replace')
-                  dispatcher_log_seen='ChatGPT continuity nudge dispatcher completed.' in tail
-          except OSError:
+                  for line in tail.splitlines():
+                      candidate_line=line.strip()
+                      if not candidate_line.startswith('[') or not candidate_line.endswith(dispatcher_event_suffix):
+                          continue
+                      candidate=candidate_line[1:21]
+                      if candidate_line!='['+candidate+dispatcher_event_suffix:
+                          continue
+                      if timestamp_re.fullmatch(candidate) and (
+                          dispatcher_last_cycle_at=='NONE' or candidate>dispatcher_last_cycle_at
+                      ):
+                          dispatcher_last_cycle_at=candidate
+                  dispatcher_log_fresh=(
+                      dispatcher_last_cycle_at!='NONE'
+                      and latest_generation_updated_at!='NONE'
+                      and dispatcher_last_cycle_at>=latest_generation_updated_at
+                  )
+                  dispatcher_log_seen=dispatcher_log_fresh
+
+                  tail_lines=tail.splitlines()
+                  marker_indexes=[
+                      index for index,line in enumerate(tail_lines)
+                      if line.strip().startswith('[') and line.strip().endswith(dispatcher_event_suffix)
+                  ]
+                  if marker_indexes:
+                      marker_index=marker_indexes[-1]
+                      for start in range(marker_index-1,max(-1,marker_index-80),-1):
+                          if tail_lines[start].strip()!='{':
+                              continue
+                          try:
+                              summary=json.loads('\n'.join(tail_lines[start:marker_index]))
+                          except json.JSONDecodeError:
+                              continue
+                          if not isinstance(summary,dict):
+                              continue
+                          required={'scanned','eligible','dispatched','skipped_no_token','skipped_stale_checkpoint','skipped_attempt_limit'}
+                          if not required.issubset(summary):
+                              continue
+                          dispatcher_last_summary_available=True
+                          dispatcher_last_scanned=min(max(int(summary.get('scanned',0)),0),999999)
+                          dispatcher_last_eligible=min(max(int(summary.get('eligible',0)),0),999999)
+                          dispatcher_last_dispatched=min(max(int(summary.get('dispatched',0)),0),999999)
+                          dispatcher_last_skipped_no_token=min(max(int(summary.get('skipped_no_token',0)),0),999999)
+                          dispatcher_last_skipped_stale_checkpoint=min(max(int(summary.get('skipped_stale_checkpoint',0)),0),999999)
+                          dispatcher_last_skipped_attempt_limit=min(max(int(summary.get('skipped_attempt_limit',0)),0),999999)
+                          break
+          except (OSError,ValueError):
               dispatcher_log_seen=False
+              dispatcher_last_cycle_at='NONE'
+              dispatcher_log_fresh=False
           print('CHATGPT_CONTINUITY_AGENT_ACTIVE='+agent)
           print('CHATGPT_CONTINUITY_RUNNING_TASKS='+str(running))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER='+str(latest_generation_number))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS='+latest_generation_status)
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_READABLE='+('true' if latest_generation_readable else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_OWNER_MATCHES_RUNTIME='+('true' if latest_generation_owner_matches_runtime else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_MODE_0600='+('true' if latest_generation_mode_0600 else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_UPDATED_AT='+latest_generation_updated_at)
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_COMPLETED_AT='+latest_generation_completed_at)
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_EVIDENCE_COUNT='+str(latest_generation_evidence_count))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_VERIFICATION_PRESENT='+('true' if latest_generation_verification_present else 'false'))
+          print('CHATGPT_CONTINUITY_LATEST_GENERATION_HISTORY_EVENTS='+latest_generation_history_events)
           print('CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS='+canonical_task_status)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT='+canonical_task_updated_at)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT='+canonical_task_completed_at)
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT='+str(canonical_task_evidence_count))
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION_PRESENT='+('true' if canonical_task_verification_present else 'false'))
+          print('CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS='+canonical_task_history_events)
           print('CHATGPT_CONTINUITY_PENDING_REQUESTS='+str(pending))
           print('CHATGPT_CONTINUITY_MATCHING_REQUESTS='+str(matching))
+          print('CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE='+('true' if queue_certifier_available else 'false'))
+          print('CHATGPT_CONTINUITY_QUEUE_CERTIFIED='+('true' if queue_certified else 'false'))
+          print('CHATGPT_CONTINUITY_QUEUE_RAW_ROWS='+str(queue_raw_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS='+str(queue_actionable_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS='+str(queue_nonactionable_rows))
+          print('CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT='+('true' if queue_archive_present else 'false'))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL='+str(bridge_queue_total))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING='+str(bridge_queue_pending))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED='+str(bridge_queue_claimed))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE='+str(bridge_queue_active))
+          print('CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED='+str(bridge_queue_resolved))
           print('CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT='+('true' if current_ledger_present else 'false'))
           print('CHATGPT_CONTINUITY_TOKEN_AVAILABLE='+('true' if token_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED='+str(dispatcher_requests_scanned))
+          print('CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS='+str(dispatcher_chatgpt_common_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS='+str(dispatcher_explicit_repository_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS='+str(dispatcher_current_checkpoint_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS='+str(dispatcher_eligible_rows))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SUMMARY_AVAILABLE='+('true' if dispatcher_last_summary_available else 'false'))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED='+str(dispatcher_last_scanned))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE='+str(dispatcher_last_eligible))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED='+str(dispatcher_last_dispatched))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN='+str(dispatcher_last_skipped_no_token))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT='+str(dispatcher_last_skipped_stale_checkpoint))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT='+str(dispatcher_last_skipped_attempt_limit))
+          print('CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT='+dispatcher_last_cycle_at)
+          print('CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH='+('true' if dispatcher_log_fresh else 'false'))
           print('CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN='+('true' if dispatcher_log_seen else 'false'))
           print('CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS='+latest)
           INNER
@@ -678,7 +1511,54 @@ jobs:
           if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service; then worker=true; fi
           cdp=false
           curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null && cdp=true
-          sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{const kind=v=>Array.isArray(v)?"array":(v===null?"null":(typeof v==="object"?"object":"other"));const count=v=>Array.isArray(v)?Math.min(v.length,9999):0;const candidates=[{name:"filtered",url:"/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false"},{name:"fallback",url:"/backend-api/conversations?offset=0&limit=1&order=updated"}];let selected={item_present:false,id_present:false,id_valid:false,update_present:false,update_valid:false,item_keys:[]};const observations=[];for(const candidate of candidates){const o={name:candidate.name,http_status:0,body_kind:"null",items_count:0,conversations_count:0,data_kind:"null",data_items_count:0,data_conversations_count:0};try{const response=await fetch(candidate.url,{credentials:"same-origin",cache:"no-store"});o.http_status=Number(response.status||0);let body=null;try{body=await response.json();}catch{}o.body_kind=kind(body);o.items_count=count(body?.items);o.conversations_count=count(body?.conversations);o.data_kind=kind(body?.data??null);o.data_items_count=count(body?.data?.items);o.data_conversations_count=count(body?.data?.conversations);const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));if(response.ok&&items.length>0&&!selected.item_present){const item=items[0]||{};const id=String(item.id||item.conversation_id||"").trim();const rawUpdate=item.update_time??item.updateTime??item.updated_at??item.updatedAt??null;let updateNumber=Number(rawUpdate||0);if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||""));updateNumber=Number.isFinite(parsed)?parsed/1000:0;}const item_keys=Object.keys(item).map(key=>String(key).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32);selected={item_present:true,id_present:Boolean(id),id_valid:/^[A-Za-z0-9_-]{8,160}$/.test(id),update_present:rawUpdate!==null&&String(rawUpdate).trim()!=="",update_valid:Number.isFinite(updateNumber)&&updateNumber>0,item_keys};}}catch{}observations.push(o);}const path=String(location.pathname||"");const match=path.match(/^\\/c\\/([^/?#]+)/);const path_kind=match?"conversation":(path==="/"?"home":"other");let current_fetch_status=0;if(match){try{const response=await fetch("/backend-api/conversation/"+encodeURIComponent(match[1]),{credentials:"same-origin",cache:"no-store"});current_fetch_status=Number(response.status||0);}catch{}}return {...selected,observations,path_kind,current_fetch_status};})()`); const b=v=>v?"true":"false"; const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; const obs=Object.fromEntries((Array.isArray(p?.observations)?p.observations:[]).map(o=>[String(o?.name||""),o])); const safeHttp=v=>Math.max(0,Math.min(599,Number(v||0))); const safeCount=v=>Math.max(0,Math.min(9999,Number(v||0))); const safeKind=v=>(["object","array","null","other"].includes(String(v))?String(v):"other"); const filtered=obs.filtered||{}; const fallback=obs.fallback||{}; console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+b(p?.item_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+b(p?.id_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+b(p?.id_valid)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+b(p?.update_present)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+b(p?.update_valid)); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE="+b(p?.id_valid&&p?.update_valid)); console.log("CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS="+safeHttp(filtered.http_status)); console.log("CHATGPT_CONTINUITY_FILTERED_BODY_KIND="+safeKind(filtered.body_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT="+safeCount(filtered.items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT="+safeCount(filtered.conversations_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_KIND="+safeKind(filtered.data_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT="+safeCount(filtered.data_items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT="+safeCount(filtered.data_conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS="+safeHttp(fallback.http_status)); console.log("CHATGPT_CONTINUITY_FALLBACK_BODY_KIND="+safeKind(fallback.body_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT="+safeCount(fallback.items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT="+safeCount(fallback.conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_KIND="+safeKind(fallback.data_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT="+safeCount(fallback.data_items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT="+safeCount(fallback.data_conversations_count)); console.log("CHATGPT_CONTINUITY_CURRENT_PATH_KIND="+(["conversation","home","other"].includes(String(p?.path_kind))?String(p.path_kind):"other")); console.log("CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS="+Math.max(0,Math.min(599,Number(p?.current_fetch_status||0)))); } finally { c.close(); }'
+          shape_probe_output="$(timeout 10s sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{const kind=v=>Array.isArray(v)?"array":(v===null?"null":(typeof v==="object"?"object":"other"));const count=v=>Array.isArray(v)?Math.min(v.length,9999):0;const candidates=[{name:"filtered",url:"/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false"},{name:"fallback",url:"/backend-api/conversations?offset=0&limit=1&order=updated"}];let selected={item_present:false,id_present:false,id_valid:false,update_present:false,update_valid:false,item_keys:[]};const observations=[];for(const candidate of candidates){const o={name:candidate.name,http_status:0,body_kind:"null",items_count:0,conversations_count:0,data_kind:"null",data_items_count:0,data_conversations_count:0};try{const response=await fetch(candidate.url,{credentials:"same-origin",cache:"no-store"});o.http_status=Number(response.status||0);let body=null;try{body=await response.json();}catch{}o.body_kind=kind(body);o.items_count=count(body?.items);o.conversations_count=count(body?.conversations);o.data_kind=kind(body?.data??null);o.data_items_count=count(body?.data?.items);o.data_conversations_count=count(body?.data?.conversations);const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));if(response.ok&&items.length>0&&!selected.item_present){const item=items[0]||{};const id=String(item.id||item.conversation_id||"").trim();const rawUpdate=item.update_time??item.updateTime??item.updated_at??item.updatedAt??null;let updateNumber=Number(rawUpdate||0);if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||""));updateNumber=Number.isFinite(parsed)?parsed/1000:0;}const item_keys=Object.keys(item).map(key=>String(key).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32);selected={item_present:true,id_present:Boolean(id),id_valid:/^[A-Za-z0-9_-]{8,160}$/.test(id),update_present:rawUpdate!==null&&String(rawUpdate).trim()!=="",update_valid:Number.isFinite(updateNumber)&&updateNumber>0,item_keys};}}catch{}observations.push(o);}const path=String(location.pathname||"");const match=path.match(/^\\/c\\/([^/?#]+)/);const path_kind=match?"conversation":(path==="/"?"home":"other");let current_fetch_status=0;if(match){try{const response=await fetch("/backend-api/conversation/"+encodeURIComponent(match[1]),{credentials:"same-origin",cache:"no-store"});current_fetch_status=Number(response.status||0);}catch{}}return {...selected,observations,path_kind,current_fetch_status};})()`); const b=v=>v?"true":"false"; const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; const obs=Object.fromEntries((Array.isArray(p?.observations)?p.observations:[]).map(o=>[String(o?.name||""),o])); const safeHttp=v=>Math.max(0,Math.min(599,Number(v||0))); const safeCount=v=>Math.max(0,Math.min(9999,Number(v||0))); const safeKind=v=>(["object","array","null","other"].includes(String(v))?String(v):"other"); const filtered=obs.filtered||{}; const fallback=obs.fallback||{}; console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+b(p?.item_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+b(p?.id_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+b(p?.id_valid)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+b(p?.update_present)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+b(p?.update_valid)); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE="+b(p?.id_valid&&p?.update_valid)); console.log("CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS="+safeHttp(filtered.http_status)); console.log("CHATGPT_CONTINUITY_FILTERED_BODY_KIND="+safeKind(filtered.body_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT="+safeCount(filtered.items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT="+safeCount(filtered.conversations_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_KIND="+safeKind(filtered.data_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT="+safeCount(filtered.data_items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT="+safeCount(filtered.data_conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS="+safeHttp(fallback.http_status)); console.log("CHATGPT_CONTINUITY_FALLBACK_BODY_KIND="+safeKind(fallback.body_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT="+safeCount(fallback.items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT="+safeCount(fallback.conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_KIND="+safeKind(fallback.data_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT="+safeCount(fallback.data_items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT="+safeCount(fallback.data_conversations_count)); console.log("CHATGPT_CONTINUITY_CURRENT_PATH_KIND="+(["conversation","home","other"].includes(String(p?.path_kind))?String(p.path_kind):"other")); console.log("CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS="+Math.max(0,Math.min(599,Number(p?.current_fetch_status||0)))); } finally { c.close(); }' 2>/dev/null || true)"
+          if ! printf '%s\n' "$shape_probe_output" | grep -Fq 'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS='; then
+            shape_probe_output="$(printf '%s\n' \
+              'CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT=false' \
+              'CHATGPT_CONTINUITY_LATEST_ID_PRESENT=false' \
+              'CHATGPT_CONTINUITY_LATEST_ID_VALID=false' \
+              'CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT=false' \
+              'CHATGPT_CONTINUITY_LATEST_UPDATE_VALID=false' \
+              'CHATGPT_CONTINUITY_LATEST_ITEM_KEYS=NONE' \
+              'CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE=false' \
+              'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS=0' \
+              'CHATGPT_CONTINUITY_FILTERED_BODY_KIND=null' \
+              'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FILTERED_DATA_KIND=null' \
+              'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS=0' \
+              'CHATGPT_CONTINUITY_FALLBACK_BODY_KIND=null' \
+              'CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_KIND=null' \
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT=0' \
+              'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT=0' \
+              'CHATGPT_CONTINUITY_CURRENT_PATH_KIND=other' \
+              'CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS=0')"
+          fi
+          printf '%s\n' "$shape_probe_output"
+          session_probe_output="$(timeout 10s sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{let session_http_status=0;let session=null;try{const response=await fetch("/api/auth/session",{credentials:"same-origin",cache:"no-store"});session_http_status=Number(response.status||0);try{session=await response.json();}catch{}}catch{}const accessToken=String(session?.accessToken??session?.access_token??"").trim();const accountId=String(session?.account?.id??session?.accountId??session?.user?.account_id??session?.user?.accountId??"").trim();const account_id_source=accountId?"session":"none";const headers={Accept:"application/json"};if(accessToken)headers.Authorization="Bearer "+accessToken;if(accountId)headers["ChatGPT-Account-ID"]=accountId;let account_scoped_http_status=0;let account_scoped_items_count=0;let account_scoped_current_fetch_status=0;if(accessToken&&accountId){try{const response=await fetch("/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false",{credentials:"same-origin",cache:"no-store",headers});account_scoped_http_status=Number(response.status||0);let body=null;try{body=await response.json();}catch{}const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));account_scoped_items_count=Math.min(items.length,9999);}catch{}const match=String(location.pathname||"").match(/^\\/c\\/([^/?#]+)/);if(match){try{const response=await fetch("/backend-api/conversation/"+encodeURIComponent(match[1]),{credentials:"same-origin",cache:"no-store",headers});account_scoped_current_fetch_status=Number(response.status||0);}catch{}}}return{session_http_status,access_token_present:Boolean(accessToken),account_id_present:Boolean(accountId),account_id_source,account_scoped_http_status,account_scoped_items_count,account_scoped_current_fetch_status};})()`); const b=v=>v?"true":"false"; const safeHttp=v=>Math.max(0,Math.min(599,Number(v||0))); const safeCount=v=>Math.max(0,Math.min(9999,Number(v||0))); const source=["none","session"].includes(String(p?.account_id_source))?String(p.account_id_source):"none"; console.log("CHATGPT_CONTINUITY_SESSION_HTTP_STATUS="+safeHttp(p?.session_http_status)); console.log("CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN_PRESENT="+b(p?.access_token_present)); console.log("CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID_PRESENT="+b(p?.account_id_present)); console.log("CHATGPT_CONTINUITY_ACCOUNT_ID_SOURCE="+source); console.log("CHATGPT_CONTINUITY_ACCOUNT_SCOPED_HTTP_STATUS="+safeHttp(p?.account_scoped_http_status)); console.log("CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT="+safeCount(p?.account_scoped_items_count)); console.log("CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CURRENT_FETCH_STATUS="+safeHttp(p?.account_scoped_current_fetch_status)); } finally { c.close(); }' 2>/dev/null || true)"
+          if ! printf '%s\n' "$session_probe_output" | grep -Fq 'CHATGPT_CONTINUITY_SESSION_HTTP_STATUS='; then
+            session_probe_output="$(printf '%s\n' \
+              'CHATGPT_CONTINUITY_SESSION_HTTP_STATUS=0' \
+              'CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN_PRESENT=false' \
+              'CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID_PRESENT=false' \
+              'CHATGPT_CONTINUITY_ACCOUNT_ID_SOURCE=none' \
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_HTTP_STATUS=0' \
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT=0' \
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CURRENT_FETCH_STATUS=0')"
+          fi
+          printf '%s\n' "$session_probe_output"
+          worker_latest_output="$(timeout 10s sudo -u ubuntu node --input-type=module -e 'import {Cdp,latestConversationProbe,normalizeLatestConversationMeta} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await latestConversationProbe(c); const m=normalizeLatestConversationMeta(p); const status=Number.isFinite(Number(p?.http_status))?Math.max(0,Math.min(599,Number(p.http_status))):0; const source=["filtered","fallback_unfiltered","probe_failed","none"].includes(String(p?.source||""))?String(p.source):"none"; console.log("CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS="+status); console.log("CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE="+source); console.log("CHATGPT_CONTINUITY_WORKER_LATEST_META_VALID="+(m?"true":"false")); } finally { c.close(); }' 2>/dev/null || true)"
+          if ! printf '%s\n' "$worker_latest_output" | grep -Fq 'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS='; then
+            worker_latest_output="$(printf '%s\n' \
+              'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS=0' \
+              'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE=probe_failed' \
+              'CHATGPT_CONTINUITY_WORKER_LATEST_META_VALID=false')"
+          fi
+          printf '%s\n' "$worker_latest_output"
           echo CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=$worker
           echo CHATGPT_CONTINUITY_CDP_REACHABLE=$cdp"""
 
@@ -697,11 +1577,51 @@ jobs:
           allowed_keys = {
               'CHATGPT_CONTINUITY_AGENT_ACTIVE',
               'CHATGPT_CONTINUITY_RUNNING_TASKS',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_READABLE',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_OWNER_MATCHES_RUNTIME',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_MODE_0600',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_UPDATED_AT',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_COMPLETED_AT',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_EVIDENCE_COUNT',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_VERIFICATION_PRESENT',
+              'CHATGPT_CONTINUITY_LATEST_GENERATION_HISTORY_EVENTS',
               'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_VERIFICATION_PRESENT',
+              'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS',
               'CHATGPT_CONTINUITY_PENDING_REQUESTS',
               'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
+              'CHATGPT_CONTINUITY_QUEUE_CERTIFIER_AVAILABLE',
+              'CHATGPT_CONTINUITY_QUEUE_CERTIFIED',
+              'CHATGPT_CONTINUITY_QUEUE_RAW_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS',
+              'CHATGPT_CONTINUITY_QUEUE_ARCHIVE_PRESENT',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE',
+              'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
               'CHATGPT_CONTINUITY_CURRENT_LEDGER_PRESENT',
               'CHATGPT_CONTINUITY_TOKEN_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED',
+              'CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SUMMARY_AVAILABLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT',
+              'CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT',
+              'CHATGPT_CONTINUITY_DISPATCHER_LOG_FRESH',
               'CHATGPT_CONTINUITY_DISPATCHER_LOG_SEEN',
               'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS',
               'CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE',
@@ -730,6 +1650,16 @@ jobs:
               'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
               'CHATGPT_CONTINUITY_CURRENT_PATH_KIND',
               'CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS',
+              'CHATGPT_CONTINUITY_SESSION_HTTP_STATUS',
+              'CHATGPT_CONTINUITY_SESSION_ACCESS_TOKEN_PRESENT',
+              'CHATGPT_CONTINUITY_SESSION_ACCOUNT_ID_PRESENT',
+              'CHATGPT_CONTINUITY_ACCOUNT_ID_SOURCE',
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_HTTP_STATUS',
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT',
+              'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CURRENT_FETCH_STATUS',
+              'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS',
+              'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE',
+              'CHATGPT_CONTINUITY_WORKER_LATEST_META_VALID',
           }
           seen = {}
           for output in outputs:
@@ -741,8 +1671,19 @@ jobs:
                       continue
                   if key in {
                       'CHATGPT_CONTINUITY_RUNNING_TASKS',
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_NUMBER',
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_EVIDENCE_COUNT',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_EVIDENCE_COUNT',
                       'CHATGPT_CONTINUITY_PENDING_REQUESTS',
                       'CHATGPT_CONTINUITY_MATCHING_REQUESTS',
+                      'CHATGPT_CONTINUITY_QUEUE_RAW_ROWS',
+                      'CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS',
+                      'CHATGPT_CONTINUITY_QUEUE_NONACTIONABLE_ROWS',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE',
+                      'CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED',
                       'CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT',
                       'CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT',
@@ -751,6 +1692,18 @@ jobs:
                       'CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT',
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT',
                       'CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT',
+                      'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_ITEMS_COUNT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_REQUESTS_SCANNED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_CHATGPT_COMMON_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_EXPLICIT_REPOSITORY_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_CURRENT_CHECKPOINT_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_ELIGIBLE_ROWS',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SCANNED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_ELIGIBLE',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_DISPATCHED',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_NO_TOKEN',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_STALE_CHECKPOINT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_SKIPPED_ATTEMPT_LIMIT',
                   }:
                       if not re.fullmatch(r'\d+', value):
                           raise RuntimeError('invalid diagnostic count')
@@ -758,6 +1711,10 @@ jobs:
                       'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS',
                       'CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS',
                       'CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS',
+                      'CHATGPT_CONTINUITY_SESSION_HTTP_STATUS',
+                      'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_HTTP_STATUS',
+                      'CHATGPT_CONTINUITY_ACCOUNT_SCOPED_CURRENT_FETCH_STATUS',
+                      'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_HTTP_STATUS',
                   }:
                       if not re.fullmatch(r'\d{1,3}', value) or not (0 <= int(value) <= 599):
                           raise RuntimeError('invalid diagnostic http status')
@@ -772,15 +1729,39 @@ jobs:
                   elif key == 'CHATGPT_CONTINUITY_CURRENT_PATH_KIND':
                       if value not in {'conversation','home','other'}:
                           raise RuntimeError('invalid diagnostic path kind')
+                  elif key == 'CHATGPT_CONTINUITY_LATEST_GENERATION_STATUS':
+                      if value not in {'MISSING','UNREADABLE','INVALID','RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
+                          raise RuntimeError('invalid latest generation status')
                   elif key == 'CHATGPT_CONTINUITY_CANONICAL_TASK_STATUS':
                       if value not in {'MISSING','UNREADABLE','INVALID','RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
                           raise RuntimeError('invalid canonical task status')
+                  elif key in {
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_UPDATED_AT',
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_COMPLETED_AT',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_UPDATED_AT',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_COMPLETED_AT',
+                      'CHATGPT_CONTINUITY_DISPATCHER_LAST_CYCLE_AT',
+                  }:
+                      if value != 'NONE' and not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', value):
+                          raise RuntimeError('invalid task timestamp')
+                  elif key in {
+                      'CHATGPT_CONTINUITY_LATEST_GENERATION_HISTORY_EVENTS',
+                      'CHATGPT_CONTINUITY_CANONICAL_TASK_HISTORY_EVENTS',
+                  }:
+                      if not re.fullmatch(r'(?:NONE|[A-Za-z0-9_-]{1,64}(?:,[A-Za-z0-9_-]{1,64}){0,31})', value):
+                          raise RuntimeError('invalid task history events')
                   elif key == 'CHATGPT_CONTINUITY_LATEST_NUDGE_STATUS':
                       if value not in {'NONE','EMPTY','PENDING','CLAIMED','SENT','SENT_UNCONFIRMED','PROGRESS_CONFIRMED','STALLED_NOT_CONFIRMED','CONVERSATION_NOT_FOUND','ERROR'}:
                           raise RuntimeError('invalid nudge status')
                   elif key == 'CHATGPT_CONTINUITY_LATEST_ITEM_KEYS':
                       if not re.fullmatch(r'(?:NONE|[A-Za-z0-9_]{1,64}(?:,[A-Za-z0-9_]{1,64}){0,31})', value):
                           raise RuntimeError('invalid sanitized item keys')
+                  elif key == 'CHATGPT_CONTINUITY_ACCOUNT_ID_SOURCE':
+                      if value not in {'none','session'}:
+                          raise RuntimeError('invalid account id source')
+                  elif key == 'CHATGPT_CONTINUITY_WORKER_LATEST_LIST_SOURCE':
+                      if value not in {'filtered','fallback_unfiltered','probe_failed','none'}:
+                          raise RuntimeError('invalid worker latest source')
                   elif value not in {'true','false'}:
                       raise RuntimeError('invalid diagnostic boolean')
                   seen[key] = value
@@ -847,6 +1828,24 @@ jobs:
           echo 'TUNNEL_OUTBOUND_HTTPS=PASS'
           echo 'SECURE_MCP_TUNNEL_PROBE=PASS'
           REMOTE
+
+      - name: Recover Secure MCP Tunnel runtime through OCI Bastion
+        if: github.event.issue.body == 'action=secure-mcp-runtime-recover'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          remote_root="/home/ubuntu/.local/state/shopvivaliz/secure-mcp-runtime-recovery"
+          remote_script="$remote_root/setup-secure-mcp-tunnel-runtime.sh"
+          remote_unit="$remote_root/shopvivaliz-secure-mcp-tunnel.service"
+
+          "${BACKEND_SSH[@]}" "install -d -m 700 '$remote_root'"
+          "${BACKEND_SCP[@]}" scripts/setup-secure-mcp-tunnel-runtime.sh ubuntu@127.0.0.1:"$remote_script"
+          "${BACKEND_SCP[@]}" deploy/systemd/shopvivaliz-secure-mcp-tunnel.service ubuntu@127.0.0.1:"$remote_unit"
+          "${BACKEND_SSH[@]}" "chmod 700 '$remote_script'; chmod 600 '$remote_unit'; sudo -n bash '$remote_script' diagnose; sudo -n bash '$remote_script' install '$remote_unit'; sudo -n bash '$remote_script' status"
+          echo "SECURE_MCP_BASTION_RECOVERY=PASS"
 
       - name: Probe OpenAI Platform tunnel settings through canonical backend browser
         if: github.event.issue.body == 'action=secure-mcp-platform-ui-probe'

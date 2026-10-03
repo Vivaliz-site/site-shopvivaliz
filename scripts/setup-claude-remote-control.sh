@@ -19,24 +19,44 @@ SERVICE="shopvivaliz-claude-remote-control.service"
 die(){ echo "CLAUDE_REMOTE_CONTROL_SETUP=FAIL reason=$1" >&2; exit "${2:-1}"; }
 require_backend(){ [ "$(hostname)" = "$BACKEND_HOST" ] || die backend_host_mismatch 21; }
 require_root(){ [ "$(id -u)" -eq 0 ] || die root_required 22; }
-run_as_claude(){ sudo -u "$CLAUDE_USER" -H env -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME="$CLAUDE_HOME" "$@"; }
+run_as_claude(){ sudo -u "$CLAUDE_USER" -H env -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK -u DISABLE_TELEMETRY -u DO_NOT_TRACK HOME="$CLAUDE_HOME" "$@"; }
 run_in_workspace_as_claude(){ run_as_claude bash -c 'cd "$1"; shift; exec "$@"' bash "$WORKSPACE" "$@"; }
 
 probe_auth_and_command(){
   test -x "$CLAUDE_BIN" || die claude_missing 30
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33
   trap 'rm -f "$tmp"' RETURN
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
-  python3 - "$tmp" <<'PY'
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=auth_status"
+  local auth_state
+  auth_state="$(python3 - "$tmp" <<'PY'
 import json, sys
-with open(sys.argv[1], encoding="utf-8") as h:
-    data=json.load(h)
-raise SystemExit(0 if data.get("loggedIn") is True else 1)
+try:
+    with open(sys.argv[1], encoding="utf-8") as h:
+        data=json.load(h)
+except (OSError, UnicodeError, json.JSONDecodeError):
+    print("invalid")
+else:
+    if not isinstance(data, dict):
+        print("invalid")
+    else:
+        print("logged_in" if data.get("loggedIn") is True else "logged_out")
 PY
+)"
+  case "$auth_state" in
+    logged_in) ;;
+    logged_out) die claude_not_logged_in 31 ;;
+    *) die claude_auth_status_invalid 31 ;;
+  esac
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=logged_in"
   run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
+  echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help"
+  rm -f "$tmp"
+  trap - RETURN
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
 
@@ -129,7 +149,7 @@ bootstrap_workspace_trust(){
   test -f "$TRUST_HELPER_SOURCE" || die trust_helper_missing 57
   trust_out="$(mktemp)"
   trust_rc=0
-  if run_in_workspace_as_claude timeout 25s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN" >"$trust_out" 2>&1; then
+  if run_in_workspace_as_claude timeout 90s python3 "$TRUST_HELPER_SOURCE" "$CLAUDE_BIN" >"$trust_out" 2>&1; then
     trust_rc=0
   else
     trust_rc=$?
@@ -237,13 +257,23 @@ status(){
 
 case "$MODE" in
   install)
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=eligibility"
     require_backend; require_root
     probe_auth_and_command
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_install"
     install_bridge
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=workspace"
     prepare_workspace
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=mcp_config"
     configure_mcp
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_verify"
     verify_bridge
+    if systemctl is-active --quiet "$SERVICE"; then
+      systemctl stop "$SERVICE"
+    fi
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=consent"
     accept_consent
+    echo "CLAUDE_REMOTE_CONTROL_PHASE=service"
     install_service
     echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
     ;;

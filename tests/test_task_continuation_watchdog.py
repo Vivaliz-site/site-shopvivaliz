@@ -78,7 +78,11 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self._age_task("task-a", seconds=600)
         third = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
         self.assertEqual(third["dispatched"], 1)
-        self.assertEqual(len(watchdog.read_requests(self.runtime)), 2)
+        requests_after_advance = watchdog.read_requests(self.runtime)
+        self.assertEqual(len(requests_after_advance), 1)
+        self.assertEqual(requests_after_advance[0]["next_action"], "executar validacao final")
+        self.assertGreaterEqual(third["queue"]["archived_rows"], 1)
+        self.assertTrue((self.runtime / "_resume-requests-archive.jsonl").is_file())
 
     def test_fresh_or_terminal_tasks_do_not_dispatch(self) -> None:
         from scripts import task_continuation_watchdog as watchdog

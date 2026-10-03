@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """
-Script para enviar boleto Mercado Pago por email via SMTP
+Script para enviar boleto Mercado Pago pelo provider transacional ShopVivaliz.
 """
 
-import smtplib
 import sys
-import os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+from shopvivaliz_mail import send_html
 
 # Carregar .env
 load_dotenv()
@@ -18,11 +15,6 @@ PREFERENCE_ID = "112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a"
 CHECKOUT_URL = f"https://www.mercadopago.com.br/checkout/v1/redirect?pref_id={PREFERENCE_ID}"
 AMOUNT = "99,90"
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "fredmourao@gmail.com")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@shopvivaliz.com.br")
 EMAIL_TO = "fredmourao@gmail.com"
 
 # Corpo do email
@@ -101,83 +93,27 @@ BODY_HTML = f"""
 """
 
 def enviar_email():
-    """Enviar email com boleto"""
-    try:
-        print(f"📧 Enviando email para: {EMAIL_TO}")
-        print(f"   Host: {SMTP_HOST}:{SMTP_PORT}")
-        print(f"   Usuário: {SMTP_USER}")
-        print("")
-
-        # Conectar ao servidor SMTP
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-        server.starttls()
-
-        if SMTP_USER and SMTP_PASS:
-            print("🔐 Autenticando...")
-            server.login(SMTP_USER, SMTP_PASS)
-
-        # Criar mensagem
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = SUBJECT
-        msg["From"] = EMAIL_FROM
-        msg["To"] = EMAIL_TO
-
-        # Versão texto
-        body_text = f"""
-Olá Fredmourao,
-
-Seu boleto de teste foi gerado com sucesso!
-
-Preference ID: {PREFERENCE_ID}
-Valor: R$ {AMOUNT}
-Link: {CHECKOUT_URL}
-
-Clique no link acima para acessar o checkout.
-
-Atenciosamente,
-Sistema ShopVivaliz
-"""
-
-        msg.attach(MIMEText(body_text, "plain"))
-        msg.attach(MIMEText(BODY_HTML, "html"))
-
-        # Enviar
-        print("✉️  Enviando mensagem...")
-        server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
-        server.quit()
-
-        print("")
+    """Enviar email com boleto via Brevo API com identidade fixa ShopVivaliz."""
+    print(f"📧 Enviando email para: {EMAIL_TO}")
+    result = send_html(
+        EMAIL_TO,
+        SUBJECT,
+        BODY_HTML,
+        tags=["shopvivaliz-transactional", "boleto-test"],
+    )
+    if result.success:
         print("✅ EMAIL ENVIADO COM SUCESSO!")
-        print("")
-        print("📋 Detalhes:")
-        print(f"   De: {EMAIL_FROM}")
+        print("   Provider: Brevo API")
+        print("   De: ShopVivaliz <atendimento@shopvivaliz.com.br>")
         print(f"   Para: {EMAIL_TO}")
         print(f"   Assunto: {SUBJECT}")
-        print(f"   Preference ID: {PREFERENCE_ID}")
-        print(f"   Valor: R$ {AMOUNT}")
-
         return True
 
-    except Exception as e:
-        print(f"❌ Erro ao enviar email: {e}")
-        print("")
-        print("⚠️  Possíveis causas:")
-        print("   1. SMTP_USER ou SMTP_PASS não configurados")
-        print("   2. Firewall bloqueando conexão")
-        print("   3. Credenciais inválidas")
-        print("")
-        print("Link do boleto (acesso manual):")
-        print(f"   {CHECKOUT_URL}")
-        return False
+    print(f"❌ Falha no envio: {result.error}")
+    print("Link do boleto (acesso manual):")
+    print(f"   {CHECKOUT_URL}")
+    return False
 
 if __name__ == "__main__":
-    if not SMTP_PASS:
-        print("⚠️  SMTP_PASS não configurada no .env")
-        print("   Configurar em: C:\\site-shopvivaliz\\.env")
-        print("")
-        print("   Ou execute com variável de ambiente:")
-        print("   set SMTP_PASS=sua_senha && python scripts/send-boleto-email.py")
-        sys.exit(1)
-
     success = enviar_email()
     sys.exit(0 if success else 1)

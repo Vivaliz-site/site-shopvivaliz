@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-24T02:28:31.055Z",
+  "generated_at": "2026-10-01T00:18:35.707Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -92,14 +92,14 @@
       "source_bytes": 5327
     },
     "/js/cro-interactions.js": {
-      "file": "/public/dist/js/cro-interactions.36ffeb6074.min.js",
-      "bytes": 4148,
-      "source_bytes": 6700
+      "file": "/public/dist/js/cro-interactions.1a86d9efcf.min.js",
+      "bytes": 4414,
+      "source_bytes": 6871
     },
     "/js/first-purchase-popup-v1.js": {
-      "file": "/public/dist/js/first-purchase-popup-v1.0805dde65a.min.js",
-      "bytes": 488,
-      "source_bytes": 889
+      "file": "/public/dist/js/first-purchase-popup-v1.c22f2d6eb3.min.js",
+      "bytes": 774,
+      "source_bytes": 1501
     },
     "/js/home-image-rotator-v1.js": {
       "file": "/public/dist/js/home-image-rotator-v1.c394ca106e.min.js",
@@ -306,6 +306,11 @@
       "bytes": 342,
       "source_bytes": 342
     },
+    "/css/paid-mobile-funnel-v1.css": {
+      "file": "/public/dist/css/paid-mobile-funnel-v1.237649b599.min.css",
+      "bytes": 2211,
+      "source_bytes": 3480
+    },
     "/css/premium-theme.css": {
       "file": "/public/dist/css/premium-theme.2a8a8ba3ab.min.css",
       "bytes": 6477,
@@ -322,9 +327,9 @@
       "source_bytes": 592
     },
     "/css/privacy-consent-v1.css": {
-      "file": "/public/dist/css/privacy-consent-v1.ff7cfe9e26.min.css",
-      "bytes": 2014,
-      "source_bytes": 2431
+      "file": "/public/dist/css/privacy-consent-v1.9baba6608b.min.css",
+      "bytes": 2521,
+      "source_bytes": 3268
     },
     "/css/product-conversion-v5.css": {
       "file": "/public/dist/css/product-conversion-v5.b8eece7cfd.min.css",
@@ -392,9 +397,9 @@
       "source_bytes": 29746
     },
     "/css/visual-audit-v1.css": {
-      "file": "/public/dist/css/visual-audit-v1.d023aa2164.min.css",
-      "bytes": 10380,
-      "source_bytes": 16183
+      "file": "/public/dist/css/visual-audit-v1.0dd2c35c7c.min.css",
+      "bytes": 10976,
+      "source_bytes": 17271
     },
     "/css/visual-polish-v4.css": {
       "file": "/public/dist/css/visual-polish-v4.6c7fa3255d.min.css",
@@ -445,6 +450,11 @@
       "file": "/public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js",
       "bytes": 423,
       "source_bytes": 438
+    },
+    "/css/home-merchandising-v1.css": {
+      "file": "/public/dist/css/home-merchandising-v1.fadef70d8d.min.css",
+      "bytes": 2497,
+      "source_bytes": 3333
     }
   }
 }

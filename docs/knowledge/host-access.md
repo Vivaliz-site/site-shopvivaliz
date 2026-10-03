@@ -77,6 +77,18 @@ ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38  # somente dentro da VCN
 ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
 ```
 
+### iPhone / cliente SSH humano
+
+O acesso humano pelas conexoes SSH do iPhone deve permanecer privado:
+
+| Perfil | Host | Porta | Usuario | Destino real |
+|---|---|---:|---|---|
+| Backend A1 | `100.66.174.74` | `22` | `ubuntu` | backend A1 pela rede Tailscale |
+| shopvivaliz A1 | `100.66.174.74` | `2224` | `ubuntu` | relay Tailscale-only no backend -> `10.0.1.112:22` |
+
+O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e deve escutar somente no IPv4 Tailscale atual do backend. Nao usar os IPs publicos das VMs como fallback no iPhone. A chave privada continua armazenada apenas no cliente autorizado e nunca deve ser copiada para Git, logs ou chat.
+
+
 ## Prioridade operacional
 
 1. **Remote Control MCP** — primeira escolha para controle, observacao e tarefas duraveis.

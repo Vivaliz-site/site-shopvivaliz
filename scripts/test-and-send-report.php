@@ -21,23 +21,18 @@ if (file_exists($env_file)) {
     }
 }
 
-$host = getenv('SMTP_HOST') ?: getenv('MAIL_HOST') ?: '';
-$port = getenv('SMTP_PORT') ?: getenv('MAIL_PORT') ?: '465';
-$user = getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: '';
-$pass = getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '';
-$from = getenv('EMAIL_FROM') ?: $user;
-$to   = getenv('EMAIL_TO') ?: 'fredmourao@gmail.com';
+$config = get_mailer_config();
+$to = getenv('EMAIL_TO') ?: 'fredmourao@gmail.com';
 
-echo "SMTP Configuration:\n";
-echo "  Host: $host\n";
-echo "  Port: $port\n";
-echo "  User: $user\n";
-echo "  Pass: " . (strlen($pass) > 0 ? "✅ SET" : "❌ EMPTY") . "\n";
-echo "  From: $from\n";
-echo "  To:   $to\n\n";
+echo "Transactional Email Configuration:\n";
+echo "  Provider: " . $config['provider'] . "\n";
+echo "  API key: " . ($config['api_key'] !== '' ? "✅ SET" : "❌ EMPTY") . "\n";
+echo "  From: " . $config['from_name'] . " <" . $config['from_email'] . ">\n";
+echo "  Reply-To: " . $config['reply_to_email'] . "\n";
+echo "  To: $to\n\n";
 
-if (empty($host) || empty($user) || empty($pass)) {
-    echo "❌ Missing SMTP credentials!\n";
+if ($config['api_key'] === '') {
+    echo "❌ Missing BREVO_API_KEY!\n";
     exit(1);
 }
 

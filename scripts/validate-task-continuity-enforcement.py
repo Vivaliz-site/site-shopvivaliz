@@ -40,7 +40,12 @@ WATCHDOG_TEST = ROOT / "tests" / "test_task_continuation_watchdog.py"
 GOVERNANCE = ROOT / "scripts" / "repository-governance-validate.sh"
 FALLBACK = ROOT / "scripts" / "autonomous-provider-failover.sh"
 DISPATCHER = ROOT / "scripts" / "task_resume_dispatcher.py"
+GEMINI_CONTROLLER = ROOT / "scripts" / "gemini_24x7_controller.py"
+GEMINI_CONTROLLER_TEST = ROOT / "tests" / "test_gemini_24x7_controller.py"
 DISPATCHER_TEST = ROOT / "tests" / "test_task_resume_dispatcher.py"
+QUEUE = ROOT / "scripts" / "task_resume_queue.py"
+QUEUE_TEST = ROOT / "tests" / "test_task_resume_queue.py"
+QUEUE_MARKER = "RESUME_QUEUE_CERTIFICATION_V12"
 LOOP = ROOT / "scripts" / "autonomous-agent-loop.sh"
 E2E_PROBE = ROOT / "scripts" / "task_continuity_e2e.py"
 E2E_PROBE_TEST = ROOT / "tests" / "test_task_continuity_e2e.py"
@@ -106,7 +111,18 @@ if not STATE.is_file():
     errors.append("missing scripts/agent_task_state.py")
 else:
     state_text = STATE.read_text(encoding="utf-8", errors="replace")
-    for token in ("READY_TO_COMPLETE", "BLOCKED_EXTERNAL", "alternatives_attempted", "next_action", "DEFAULT_REPOSITORY", "repository"):
+    for token in (
+        "READY_TO_COMPLETE",
+        "BLOCKED_EXTERNAL",
+        "alternatives_attempted",
+        "next_action",
+        "DEFAULT_REPOSITORY",
+        "repository",
+        "STATE_LOCK_FILE",
+        "_state_lock",
+        "fcntl.LOCK_EX",
+        "_fsync_dir(path.parent)",
+    ):
         if token not in state_text:
             errors.append(f"scripts/agent_task_state.py: missing {token}")
 
@@ -117,7 +133,7 @@ else:
     for token in (
         "auto_resume",
         "stale_seconds",
-        "_resume-requests.jsonl",
+        "resume_queue.REQUESTS_FILE",
         "chatgpt_common",
         "chatgpt_work",
         "final_fallback",
@@ -170,8 +186,51 @@ else:
         if token not in dispatcher_text:
             errors.append(f"scripts/task_resume_dispatcher.py: missing {token}")
 
+if not GEMINI_CONTROLLER.is_file():
+    errors.append("missing scripts/gemini_24x7_controller.py")
+else:
+    controller_text = GEMINI_CONTROLLER.read_text(encoding="utf-8", errors="replace")
+    for token in ("acquire_lease", "daemon_guard", "DAEMON_LOCK_FILE", "_lease_owner_alive", "pid_start_ticks", "boot_id", "_fsync_dir(path.parent)", "duplicate_suppressed", "lease_recovered", "chatgpt_continuity_nudge_dispatcher", "task_resume_dispatcher"):
+        if token not in controller_text:
+            errors.append(f"scripts/gemini_24x7_controller.py: missing {token}")
+if not GEMINI_CONTROLLER_TEST.is_file():
+    errors.append("missing tests/test_gemini_24x7_controller.py")
+
+nudge_dispatcher = ROOT / "scripts" / "chatgpt_continuity_nudge_dispatcher.py"
+if not nudge_dispatcher.is_file():
+    errors.append("missing scripts/chatgpt_continuity_nudge_dispatcher.py")
+else:
+    nudge_text = nudge_dispatcher.read_text(encoding="utf-8", errors="replace")
+    for token in ("LOCK_FILE", "_continuity-execution.lock", "_dispatcher_lock", "LOCK_EX | fcntl.LOCK_NB", "os.fsync", "_fsync_dir(runtime_dir)"):
+        if token not in nudge_text:
+            errors.append(f"scripts/chatgpt_continuity_nudge_dispatcher.py: missing {token}")
+    if DISPATCHER.is_file():
+        detached_text = DISPATCHER.read_text(encoding="utf-8", errors="replace")
+        if "_continuity-execution.lock" not in detached_text:
+            errors.append("scripts/task_resume_dispatcher.py: missing shared continuity execution lock")
+
 if not DISPATCHER_TEST.is_file():
     errors.append("missing tests/test_task_resume_dispatcher.py")
+
+if not QUEUE.is_file():
+    errors.append("missing scripts/task_resume_queue.py")
+else:
+    queue_text = QUEUE.read_text(encoding="utf-8", errors="replace")
+    for token in (
+        "_resume-requests-archive.jsonl",
+        "_resume-queue.lock",
+        "checkpoint_fingerprint",
+        "certify_queue",
+        "compact_queue",
+        "fcntl.LOCK_EX",
+        "os.replace",
+        "os.fsync",
+    ):
+        if token not in queue_text:
+            errors.append(f"scripts/task_resume_queue.py: missing {token}")
+
+if not QUEUE_TEST.is_file():
+    errors.append("missing tests/test_task_resume_queue.py")
 
 continuity_docs = ROOT / "docs" / "knowledge" / "task-continuity.md"
 if not continuity_docs.is_file():
@@ -184,6 +243,8 @@ else:
         errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_MARKER}")
     if E2E_VERIFICATION not in continuity_docs_text:
         errors.append(f"docs/knowledge/task-continuity.md: missing {E2E_VERIFICATION}")
+    if QUEUE_MARKER not in continuity_docs_text:
+        errors.append(f"docs/knowledge/task-continuity.md: missing {QUEUE_MARKER}")
     if GLOBAL_MARKER not in continuity_docs_text:
         errors.append(f"docs/knowledge/task-continuity.md: missing {GLOBAL_MARKER}")
 
@@ -205,9 +266,11 @@ if not E2E_WORKFLOW.is_file():
     errors.append("missing .github/workflows/task-continuity-production-e2e.yml")
 else:
     e2e_workflow_text = E2E_WORKFLOW.read_text(encoding="utf-8", errors="replace")
-    for token in ("scripts/task_continuity_e2e.py", "shopvivaliz-a1-deploy", "TARGET_REPOSITORY", "--repository"):
+    for token in ("scripts/task_continuity_e2e.py", "shopvivaliz-backend-browser", "TARGET_REPOSITORY", "--repository"):
         if token not in e2e_workflow_text:
             errors.append(f".github/workflows/task-continuity-production-e2e.yml: missing {token}")
+    if "shopvivaliz-a1-deploy" in e2e_workflow_text:
+        errors.append(".github/workflows/task-continuity-production-e2e.yml: must not run on shopvivaliz-a1-deploy")
 
 audit_policy = ROOT / "AUDIT_POLICY.md"
 if not audit_policy.is_file() or E2E_VERIFICATION not in audit_policy.read_text(encoding="utf-8", errors="replace"):
@@ -246,6 +309,10 @@ else:
         errors.append("repository governance does not execute auto-resume regression tests")
     if "tests.test_task_resume_dispatcher" not in governance:
         errors.append("repository governance does not execute detached-resume regression tests")
+    if "tests.test_task_resume_queue" not in governance:
+        errors.append("repository governance does not execute resume-queue certification tests")
+    if "chatgpt-continuity-bridge-worker-test.mjs" not in governance:
+        errors.append("repository governance does not execute ChatGPT bridge-worker regression")
     if "tests.test_global_task_continuity_v8" not in governance:
         errors.append("repository governance does not execute global-continuity regression tests")
 

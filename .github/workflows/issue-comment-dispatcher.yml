@@ -1,0 +1,161 @@
+name: Issue Comment Dispatcher
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+      conversation_id: ${{ steps.route.outputs.conversation_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Classify comment without logging its body
+        id: route
+        shell: bash
+        run: python3 scripts/issue-comment-router.py --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"
+
+  claude:
+    needs: classify
+    if: needs.classify.outputs.route == 'claude'
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    uses: ./.github/workflows/claude.yml
+    secrets: inherit
+
+  refresh-backend-delete-scope:
+    needs: classify
+    if: needs.classify.outputs.route == 'refresh_backend_delete_scope'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/refresh-backend-delete-repo-scope-once.yml
+    secrets: inherit
+
+  delete-superseded-solange:
+    needs: classify
+    if: needs.classify.outputs.route == 'delete_superseded_solange'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/delete-superseded-solange-once.yml
+    secrets: inherit
+
+  continuity-e2e:
+    needs: classify
+    if: needs.classify.outputs.route == 'continuity_e2e'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/task-continuity-production-e2e.yml
+    with:
+      conversation_id: ${{ needs.classify.outputs.conversation_id }}
+    secrets: inherit
+
+  backend-continuity-recovery:
+    needs: classify
+    if: needs.classify.outputs.route == 'backend_continuity_recovery'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/backend-continuity-direct-recovery.yml
+
+  provision-backend-runners:
+    needs: classify
+    if: needs.classify.outputs.route == 'provision_backend_runners'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/provision-governed-backend-ci-runners.yml
+    secrets: inherit
+
+  mlrr:
+    needs: classify
+    if: needs.classify.outputs.route == 'mlrr'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mlrr-production-ops-bridge.yml
+    secrets: inherit
+
+  codex-continuity-launcher:
+    needs: classify
+    if: needs.classify.outputs.route == 'codex_continuity_launcher'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/codex-auto-continuity-v7-launcher.yml
+    secrets: inherit
+
+  refresh-a1-delete-scope:
+    needs: classify
+    if: needs.classify.outputs.route == 'refresh_a1_delete_scope'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/refresh-a1-delete-repo-scope-once.yml
+    secrets: inherit
+
+  codex-continuity-goal:
+    needs: classify
+    if: needs.classify.outputs.route == 'codex_continuity_goal'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/codex-auto-continuity-v7-goal.yml
+    secrets: inherit
+
+  remote-access:
+    needs: classify
+    if: needs.classify.outputs.route == 'remote_access'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/shopvivaliz-remote-access.yml
+    secrets: inherit
+
+  secure-mcp-runtime-recovery:
+    needs: classify
+    if: needs.classify.outputs.route == 'secure_mcp_runtime_recovery'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/secure-mcp-runtime-recovery.yml
+
+  codex-remote-control:
+    needs: classify
+    if: needs.classify.outputs.route == 'codex_remote_control'
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    uses: ./.github/workflows/codex-remote-control-mcp-one-shot.yml
+    secrets: inherit
+
+  codex-global-issue-comment-routing:
+    needs: classify
+    if: needs.classify.outputs.route == 'codex_global_issue_comment_routing'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/codex-global-issue-comment-routing.yml
+    secrets: inherit
+
+  amazon-support-breakglass:
+    needs: classify
+    if: needs.classify.outputs.route == 'amazon_support_breakglass'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/amazon-support-reply-oci-breakglass.yml
+    secrets: inherit
+
+  dc-reauth:
+    needs: classify
+    if: needs.classify.outputs.route == 'dc_reauth'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/desktop-commander-reauth-runner.yml
+    secrets: inherit

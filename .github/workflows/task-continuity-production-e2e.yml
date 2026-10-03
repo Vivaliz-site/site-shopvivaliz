@@ -1,17 +1,37 @@
 name: Task Continuity Production E2E
 
-# Audited observe-only production proof for detached task-continuity
-# recovery (DETACHED_TASK_RECOVERY_E2E_V7). This workflow creates exactly one
-# synthetic RUNNING checkpoint on the production host and then only polls
-# durable state/ledger files while the already-running autonomous daemon
-# (watchdog -> dispatcher -> Gemini) performs detection and recovery on its
-# own schedule. It never invokes the daemon's internal stale-detection or
+# Audited observe-only production proof for same-conversation browser continuity
+# (DETACHED_TASK_RECOVERY_E2E_V7). This workflow creates exactly one
+# synthetic RUNNING checkpoint explicitly bound to one ChatGPT conversation
+# and then only polls durable state/ledger files while the already-running
+# autonomous daemon performs watchdog -> queue -> bridge/worker recovery.
+# Certification requires PROGRESS_CONFIRMED on that same conversation and
+# current fingerprint; any detached execution of the synthetic sentinel invalidates
+# the proof. It never invokes the daemon's internal stale-detection or
 # detached-execution entrypoints directly.
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      conversation_id:
+        description: "Explicit ChatGPT conversation id for fail-closed E2E binding"
+        required: true
+        type: string
+      repository:
+        description: "Governed repository to recover (owner/name)"
+        required: false
+        type: string
+        default: "Vivaliz-site/site-shopvivaliz"
+      timeout_seconds:
+        description: "Probe timeout in seconds"
+        required: false
+        type: string
+        default: "480"
   workflow_dispatch:
     inputs:
+      conversation_id:
+        description: "Explicit ChatGPT conversation id for fail-closed E2E binding"
+        required: true
+        type: string
       repository:
         description: "Governed repository to recover (owner/name)"
         required: false
@@ -30,9 +50,9 @@ concurrency:
 
 jobs:
   probe:
-    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && github.event.comment.body == '/continuity-e2e')
-    name: Run detached continuity E2E probe against production
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    if: inputs.conversation_id != ''
+    name: Run bound ChatGPT continuity E2E probe against production
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
       - name: Checkout probe from current release
@@ -49,21 +69,38 @@ jobs:
         env:
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
           TARGET_REPOSITORY: ${{ inputs.repository }}
+          CONVERSATION_ID: ${{ inputs.conversation_id }}
         run: |
           set -Eeuo pipefail
           runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
           test -d "$runtime_dir" || { echo "::error::production runtime dir not found: $runtime_dir"; exit 1; }
+          test -n "${CONVERSATION_ID:-}" || { echo "::error::explicit conversation_id is required"; exit 1; }
           python3 scripts/task_continuity_e2e.py \
             --runtime-dir "$runtime_dir" \
             --repository "${TARGET_REPOSITORY:-Vivaliz-site/site-shopvivaliz}" \
+            --conversation-id "$CONVERSATION_ID" \
             --timeout-seconds "${TIMEOUT_SECONDS:-480}" \
             --poll-interval-seconds 10 \
-            | tee task-continuity-e2e-report.json
+            --report-path task-continuity-e2e-report.json
+
+      - name: Certify same-conversation provenance
+        run: |
+          set -Eeuo pipefail
+          runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+          task_id="$(python3 -c 'import json; print(json.load(open("task-continuity-e2e-report.json", encoding="utf-8"))["task_id"])')"
+          test -n "$task_id"
+          python3 scripts/chatgpt_continuity_proof_certifier.py \
+            --runtime-dir "$runtime_dir" \
+            --task "$task_id" \
+            | tee chatgpt-continuity-proof.json
+          python3 -c 'import json; assert json.load(open("chatgpt-continuity-proof.json", encoding="utf-8"))["ok"] is True'
 
       - name: Upload sanitized E2E report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: task-continuity-e2e-report
-          path: task-continuity-e2e-report.json
+          path: |
+            task-continuity-e2e-report.json
+            chatgpt-continuity-proof.json
           retention-days: 1

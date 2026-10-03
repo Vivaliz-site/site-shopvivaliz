@@ -18,13 +18,15 @@ bash tests/chatgpt-account-diagnostic-contract-test.sh
 python3 -m unittest tests.test_task_continuity_enforcement -v
 python3 -m unittest tests.test_task_continuation_watchdog -v
 python3 -m unittest tests.test_task_resume_dispatcher -v
+python3 -m unittest tests.test_task_resume_queue -v
 python3 -m unittest tests.test_global_task_continuity_v8 -v
 python3 -m unittest tests.test_checkpoint_first_zero_window -v
 python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
 python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
+node tests/chatgpt-continuity-bridge-worker-test.mjs
 bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
 python3 -m unittest tests.test_executor_fallback_order -v
-python3 -m unittest tests.test_background_gemini_runner -v
+env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
@@ -32,6 +34,12 @@ python3 -m unittest tests.test_workflow_latency_budget -v
 python3 -m unittest tests.unit.test_runtime_deploy_reconciliation -v
 python3 -m unittest tests.test_ci_performance_monitor -v
 python3 tests/test_ci_performance_monitor_workflow.py
+python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
+php tests/cloudflare-email-titan-finalize-test.php
+php tests/shopvivaliz-brevo-mailer-contract-test.php
+php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
+python3 -m unittest tests.test_stock_alerts_brevo_mail -v
+python3 -m unittest tests.test_shopee_logistics_worker -v
 python3 -m unittest tests.test_ci_performance_fetch -v
 
 if command -v composer >/dev/null 2>&1; then

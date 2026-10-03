@@ -10,10 +10,12 @@ SHOPVIVALIZ_RESUME_BACKGROUND="${SHOPVIVALIZ_RESUME_BACKGROUND:-0}"
 LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
-CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6}}"
+CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
+CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
+SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK:-0}"
 mkdir -p "$LOG_DIR"
 : > "$ATTEMPTS"
 : > "$OUTPUT"
@@ -94,6 +96,22 @@ try_provider() {
   return 1
 }
 
+run_codex_auto() (
+  unset OPENAI_API_KEY CODEX_API_KEY
+  local launcher="$CODEX_AUTO_BIN"
+  if [ ! -x "$launcher" ]; then
+    launcher="$(command -v codex-auto || true)"
+  fi
+  [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
+  "$launcher" \
+    --model "$CODEX_MODEL" \
+    --sandbox danger-full-access \
+    --ask-for-approval never \
+    -c 'model_reasoning_effort="low"' \
+    -c 'model_verbosity="low"' \
+    exec - < "$PROMPT_FILE"
+)
+
 PROMPT="$(cat "$PROMPT_FILE")"
 
 # CHATGPT_RESUME_ORDER_V5: CLI is the final fallback only.
@@ -110,8 +128,13 @@ fi
 # aprovada. Claude/Codex continuam exigindo gatilho humano explicito.
 BACKGROUND_ORDER=(gemini)
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  if [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
+    BACKGROUND_ORDER+=(codex_auto)
+    echo "background_codex_fallback_authorized=true" | tee -a "$OUTPUT"
+  else
+    echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+  fi
   ORDER=("${BACKGROUND_ORDER[@]}")
-  echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
 else
   # Execucao finita/interativa: preservar cota, Gemini -> Claude -> Codex.
   ORDER=(gemini anthropic codex)
@@ -133,6 +156,9 @@ for provider in "${ORDER[@]}"; do
     anthropic)
       command -v claude >/dev/null 2>&1 || { record anthropic missing_cli 127; continue; }
       try_provider anthropic env -u ANTHROPIC_API_KEY claude --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT" && exit 0
+      ;;
+    codex_auto)
+      try_provider codex_auto run_codex_auto && exit 0
       ;;
     codex)
       # Never let a platform API key take precedence over the approved native

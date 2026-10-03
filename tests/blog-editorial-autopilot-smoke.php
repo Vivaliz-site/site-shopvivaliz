@@ -4,9 +4,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/../includes/blog-editorial-autopilot.php';
 
 $agenda = sv_blog_editorial_agenda();
-if (count($agenda['monday'] ?? []) !== 12 || count($agenda['wednesday'] ?? []) !== 12 || count($agenda['friday'] ?? []) !== 12) {
-    fwrite(STDERR, "Agenda editorial invalida.\n");
-    exit(1);
+foreach (['monday', 'wednesday', 'friday'] as $weekday) {
+    $titles = $agenda[$weekday] ?? [];
+    if (count($titles) < 64) {
+        fwrite(STDERR, "Agenda editorial sem runway anual para {$weekday}.\n");
+        exit(1);
+    }
+    $slugs = array_map('sv_blog_editorial_topic_slug', $titles);
+    if (count($slugs) !== count(array_unique($slugs))) {
+        fwrite(STDERR, "Agenda editorial com slugs duplicados em {$weekday}.\n");
+        exit(1);
+    }
+}
+
+$generatedCases = [
+    ['Como escolher rodízios para bancadas móveis', 'monday'],
+    ['Como identificar sinais de desgaste em cadeados', 'wednesday'],
+    ['Ideias para aproveitar prateleiras e paredes na garagem', 'friday'],
+];
+foreach ($generatedCases as [$title, $weekday]) {
+    $candidate = sv_blog_editorial_build_article($title, $weekday);
+    $candidateErrors = sv_blog_editorial_validate_article($candidate);
+    if ($candidateErrors !== []) {
+        fwrite(STDERR, "Artigo suplementar invalido: " . implode(',', $candidateErrors) . "\n");
+        exit(1);
+    }
 }
 
 $reference = new DateTimeImmutable('2026-07-29 09:30:00', new DateTimeZone('America/Sao_Paulo'));

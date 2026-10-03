@@ -111,8 +111,7 @@ def test_secrets_structure():
     print_header("5. TESTE DE SECRETS")
 
     secrets = {
-        'SMTP': ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'],
-        'EMAIL': ['EMAIL_FROM', 'EMAIL_TO'],
+        'EMAIL': ['BREVO_API_KEY', 'EMAIL_TO'],
         'Shopee': ['SHOPEE_ACCESS_TOKEN', 'SHOPEE_SHOP_ID'],
         'TikTok': ['TIKTOK_APP_KEY', 'TIKTOK_APP_SECRET'],
     }

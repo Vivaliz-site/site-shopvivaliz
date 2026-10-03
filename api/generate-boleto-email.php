@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../scripts/mailer.php';
 header('Content-Type: application/json; charset=UTF-8');
 
 // Rodada 10 (2026-08-19) - R10-3: irmao de api/generate-test-order.php (fechado na
@@ -120,16 +121,17 @@ Obrigado,
 Sistema ShopVivaliz
 BODY;
 
-$headers = "Content-Type: text/plain; charset=UTF-8\r\n";
-$headers .= "From: noreply@shopvivaliz.com.br\r\n";
-
-mail($emailTo, $subject, $body, $headers);
+$emailSent = send_email(
+    $emailTo,
+    $subject,
+    '<pre style="white-space:pre-wrap">' . htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>'
+);
 
 echo json_encode([
     'ok' => true,
     'preference_id' => $preferenceId,
     'checkout_url' => $checkoutUrl,
-    'email_sent' => true,
+    'email_sent' => $emailSent,
     'email_to' => $emailTo,
     'amount' => 99.90,
     'external_reference' => $preference['external_reference'],

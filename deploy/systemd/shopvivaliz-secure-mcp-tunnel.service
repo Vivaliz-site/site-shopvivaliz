@@ -1,0 +1,28 @@
+[Unit]
+Description=ShopVivaliz OpenAI Secure MCP Tunnel
+After=network-online.target shopvivaliz-remote-control-mcp.service
+Wants=network-online.target
+Wants=shopvivaliz-remote-control-mcp.service
+StartLimitIntervalSec=60
+StartLimitBurst=12
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+Environment=XDG_CONFIG_HOME=/home/ubuntu/.config
+Environment=MCP_STDIO_SEND_INITIALIZED_NOTIFICATION=true
+Environment=MCP_CONNECTION_MAX_TTL=30m
+Environment=MCP_MAX_CONCURRENT_REQUESTS=4
+Environment=MCP_STARTUP_WAIT_TIMEOUT=60s
+Environment=HEALTH_LISTEN_ADDR=127.0.0.1:8080
+Environment=OPEN_WEB_UI=false
+ExecStart=/usr/local/bin/tunnel-client run --profile shopvivaliz-remote-control
+Restart=always
+RestartSec=5
+KillMode=mixed
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

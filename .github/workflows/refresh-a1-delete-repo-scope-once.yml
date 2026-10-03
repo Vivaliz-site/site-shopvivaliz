@@ -1,8 +1,7 @@
 name: Refresh A1 Delete Repo Scope Once
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_call:
 
 permissions:
   contents: read

@@ -83,8 +83,9 @@ def deploy_production():
                 'app_key': '6kf502maarj2k',
                 'status': 'active'
             },
-            'smtp': {
-                'host': 'smtp0101.titan.email',
+            'transactional_email': {
+                'provider': 'brevo_api',
+                'from': 'atendimento@shopvivaliz.com.br',
                 'status': 'active'
             }
         },
@@ -130,7 +131,7 @@ def verify_secrets():
     required_secrets = [
         'SHOPEE_ACCESS_TOKEN',
         'TIKTOK_APP_KEY',
-        'SMTP_HOST',
+        'BREVO_API_KEY',
     ]
     # In production, these would be in GitHub Secrets
     pass

@@ -79,13 +79,14 @@ define('CACHE_ENABLED', true);
 define('CACHE_TTL', 3600); // 1 hora
 define('CACHE_DRIVER', 'file'); // file, redis, memcached
 
-// Email
-define('MAIL_HOST', getenv('MAIL_HOST') ?: 'smtp.titan.email');
-define('MAIL_PORT', getenv('MAIL_PORT') ?: 465);
-define('MAIL_USER', getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br');
-define('MAIL_PASS', getenv('MAIL_PASS') ?: '');
-define('MAIL_FROM', 'ShopVivaliz <noreply@shopvivaliz.com.br>');
-define('MAIL_REPLY_TO', 'support@shopvivaliz.com.br');
+// Email (legacy constants retained without provider fallback).
+// Transactional delivery is Brevo API via scripts/mailer.php.
+define('MAIL_HOST', '');
+define('MAIL_PORT', 0);
+define('MAIL_USER', '');
+define('MAIL_PASS', '');
+define('MAIL_FROM', 'ShopVivaliz <atendimento@shopvivaliz.com.br>');
+define('MAIL_REPLY_TO', 'atendimento@shopvivaliz.com.br');
 
 // Integrações
 define('OLIST_ENABLED', true);

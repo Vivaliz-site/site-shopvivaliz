@@ -97,15 +97,15 @@ def test_upload_config():
 
 def test_email_config():
     """9. PUBLICAÇÃO - Check email configuration"""
-    email_vars = ['EMAIL_FROM', 'EMAIL_TO', 'EMAIL_SMTP_HOST']
+    email_vars = ['BREVO_API_KEY', 'EMAIL_TO']
     missing = [v for v in email_vars if not os.environ.get(v)]
 
     if missing:
         logger.warning(f"⚠️  Email vars missing: {', '.join(missing)}")
-        logger.info("💡 Set: EMAIL_FROM, EMAIL_TO, EMAIL_SMTP_HOST for email step")
+        logger.info("💡 Set: BREVO_API_KEY, EMAIL_TO for email step")
         return True  # Not critical for testing
 
-    logger.info(f"✅ Email From: {os.environ.get('EMAIL_FROM', 'NOT SET')}")
+    logger.info("✅ Email From: ShopVivaliz <atendimento@shopvivaliz.com.br>")
     return True
 
 def test_ab_test_module():

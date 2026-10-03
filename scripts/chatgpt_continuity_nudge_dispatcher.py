@@ -20,11 +20,14 @@ prints the bridge token.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import urllib.parse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -37,9 +40,11 @@ except ImportError:  # direct CLI execution from repository root
     from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
-DEFAULT_BRIDGE_URL = "http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php"
+LOCK_FILE = "_continuity-execution.lock"
+DEFAULT_BRIDGE_URL = "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php"
 DEFAULT_BRIDGE_HOST_HEADER = "shopvivaliz.com.br"
-DEFAULT_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
+DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token")
+LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
 
@@ -50,8 +55,13 @@ def resolve_bridge_token(explicit_token: str = "") -> str:
 
     configured = os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", "").strip()
     candidates = [Path(configured).expanduser()] if configured else []
-    candidates.append(DEFAULT_TOKEN_FILE)
+    candidates.extend((DEFAULT_TOKEN_FILE, LEGACY_TOKEN_FILE))
+    seen: set[Path] = set()
     for token_path in candidates:
+        token_path = token_path.expanduser()
+        if token_path in seen:
+            continue
+        seen.add(token_path)
         try:
             if not token_path.is_file():
                 continue
@@ -100,6 +110,36 @@ def _read_ledger(runtime_dir: Path) -> dict[str, dict[str, Any]]:
     return latest
 
 
+def _ledger_bound_conversation_id(ledger: dict[str, dict[str, Any]], task_id: str) -> str:
+    candidates = []
+    for row in ledger.values():
+        if str(row.get("task_id", "")).strip() != str(task_id).strip():
+            continue
+        if str(row.get("worker_status", "")).strip().upper() != "PROGRESS_CONFIRMED":
+            continue
+        value = str(row.get("conversation_id", "")).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value):
+            continue
+        observed = _parse_time(row.get("worker_status_observed_at") or row.get("dispatched_at"))
+        candidates.append((observed or datetime.min.replace(tzinfo=timezone.utc), value))
+    if not candidates:
+        return ""
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
+    if not task_id or "/" in task_id or "\\" in task_id:
+        return ""
+    path = runtime_dir / f"{task_id}.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    value = str(payload.get("conversation_id", "")).strip() if isinstance(payload, dict) else ""
+    return value if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value) else ""
+
+
 def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, Any]) -> bool:
     task_id = str(request.get("task_id", "")).strip()
     if not task_id or "/" in task_id or "\\" in task_id:
@@ -119,11 +159,45 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
         return False
     return str(request.get("fingerprint", "")).strip() == checkpoint_fingerprint(payload)
 
+@contextmanager
+def _dispatcher_lock(runtime_dir: Path):
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    path = runtime_dir / LOCK_FILE
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _append_ledger(runtime_dir: Path, row: dict[str, Any]) -> None:
     runtime_dir.mkdir(parents=True, exist_ok=True)
     path = runtime_dir / LEDGER_FILE
     with path.open("a", encoding="utf-8") as handle:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    _fsync_dir(runtime_dir)
 
 
 def _bridge_host_header(bridge_url: str) -> str:
@@ -140,11 +214,15 @@ def enqueue_nudge_via_bridge(
     token: str,
     task_id: str,
     repository: str,
+    conversation_id: str = "",
     timeout_seconds: int = 15,
     bridge_host_header: str = "",
 ) -> dict[str, Any]:
     """Isolated so tests can monkeypatch it without a real network call."""
-    body = json.dumps({"operation": "enqueue", "task_id": task_id, "repository": repository}).encode("utf-8")
+    payload = {"operation": "enqueue", "task_id": task_id, "repository": repository}
+    if conversation_id:
+        payload["conversation_id"] = conversation_id
+    body = json.dumps(payload).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -205,7 +283,7 @@ def query_nudge_status_via_bridge(
         return {"ok": False, "http_status": 0, "error": "transport_error"}
 
 
-def run_once(
+def _run_once_locked(
     *,
     runtime_dir: Path | None = None,
     bridge_url: str = "",
@@ -273,6 +351,12 @@ def run_once(
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
                             observed["worker_status_observed_at"] = utc_now()
+                            confirmed_conversation_id = str(nudge.get("conversation_id", "")).strip()
+                            if (
+                                observed_status == "PROGRESS_CONFIRMED"
+                                and re.fullmatch(r"[A-Za-z0-9_-]{8,160}", confirmed_conversation_id)
+                            ):
+                                observed["conversation_id"] = confirmed_conversation_id
                             has_send_counter = "send_attempt_count" in previous
                             prior_send_attempts = int(previous.get("send_attempt_count") or 0)
                             if not has_send_counter and worker_status in {"SENT", "SENT_UNCONFIRMED"}:
@@ -315,18 +399,15 @@ def run_once(
             ):
                 previous_send_attempts = previous_attempts
 
-            if worker_status == "STALLED_NOT_CONFIRMED":
-                # This status proves no continuation message was injected.
-                # Keep the cooldown, but never spend the budget reserved for
-                # real Web turn submissions merely by observing a silent stall.
-                pass
-            elif worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+            if worker_status in {"SENT", "SENT_UNCONFIRMED"}:
+                # The bounded Web budget is a send budget, not a generic
+                # transport/observation-attempt budget. Only statuses proving
+                # that a continuation message was actually submitted may
+                # exhaust it. ERROR, CONVERSATION_NOT_FOUND and
+                # STALLED_NOT_CONFIRMED remain retryable after the cooldown.
                 if previous_send_attempts >= max_web_attempts:
                     skipped_attempt_limit += 1
                     continue
-            elif previous_attempts >= max_web_attempts:
-                skipped_attempt_limit += 1
-                continue
             retry_attempted += 1
 
         eligible += 1
@@ -335,11 +416,16 @@ def run_once(
             skipped_no_token += 1
             continue
 
+        resolved_conversation_id = (
+            _bound_conversation_id(root, task_id)
+            or _ledger_bound_conversation_id(ledger, task_id)
+        )
         result = enqueue(
             bridge_url=resolved_bridge_url,
             token=resolved_token,
             task_id=task_id,
             repository=repository,
+            conversation_id=resolved_conversation_id,
             bridge_host_header=_bridge_host_header(resolved_bridge_url),
         )
         previous_row = ledger.get(fingerprint) or {}
@@ -362,13 +448,34 @@ def run_once(
             "attempt_count": previous_attempt_count + 1,
             "send_attempt_count": previous_send_attempt_count,
         }
+        if resolved_conversation_id:
+            ledger_row["conversation_id"] = resolved_conversation_id
         _append_ledger(root, ledger_row)
         ledger[fingerprint] = ledger_row
         if result.get("ok"):
             dispatched += 1
 
+    # Keep failed outcomes visible throughout cooldown. Only the current
+    # queued fingerprint may affect readiness; completed/superseded work must
+    # not poison health. This is observation only, never a retry/automation gate.
+    failed = 0
+    for request in read_requests(root):
+        if (request.get("preferred_executor") != "chatgpt_common"
+                or request.get("status") != "queued"
+                or not _request_matches_current_checkpoint(root, request)):
+            continue
+        outcome = ledger.get(str(request.get("fingerprint", "")))
+        if not outcome:
+            continue
+        worker_status = str(outcome.get("worker_status", "")).strip().upper()
+        if outcome.get("bridge_ok") is not True or worker_status not in {
+            "", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"
+        }:
+            failed += 1
+
     return {
         "ok": True,
+        "failed": failed,
         "runtime_dir": str(root),
         "scanned": scanned,
         "eligible": eligible,
@@ -379,6 +486,39 @@ def run_once(
         "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
     }
+
+
+def run_once(
+    *,
+    runtime_dir: Path | None = None,
+    bridge_url: str = "",
+    token: str = "",
+    enqueue: Any = enqueue_nudge_via_bridge,
+    query_status: Any = query_nudge_status_via_bridge,
+) -> dict[str, Any]:
+    root = Path(runtime_dir or RUNTIME_DIR)
+    with _dispatcher_lock(root) as acquired:
+        if not acquired:
+            return {
+                "ok": True,
+                "runtime_dir": str(root),
+                "scanned": 0,
+                "eligible": 0,
+                "dispatched": 0,
+                "skipped_no_token": 0,
+                "skipped_stale_checkpoint": 0,
+                "retry_attempted": 0,
+                "skipped_attempt_limit": 0,
+                "locked": True,
+                "generated_at": utc_now(),
+            }
+        return _run_once_locked(
+            runtime_dir=root,
+            bridge_url=bridge_url,
+            token=token,
+            enqueue=enqueue,
+            query_status=query_status,
+        )
 
 
 def main() -> int:
