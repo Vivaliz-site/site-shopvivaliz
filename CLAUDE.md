@@ -56,7 +56,7 @@ Leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`; preserve o governance bridge 
 - Falha de ferramenta, plugin, CLI, API, navegador, sessão, runner, workflow, timeout ou rota primária é estado `RUNNING`, nunca terminal enquanto existir fallback seguro ou próxima ação executável.
 - Tarefa simples segue a mesma regra: progresso parcial, diagnóstico ou erro recuperável não autorizam encerrar.
 - Quando o runtime tiver acesso ao repositório, persistir o estado em `scripts/agent_task_state.py`; antes de alegar término, o gate `terminal --task <id>` deve aceitar o estado.
-- Contrato detalhado: `docs/knowledge/task-continuity.md`.
+- Contrato detalhado: `docs/knowledge/task-continuity.md`; protocolo canônico de conclusão: `AI-TO-CLI-PROTOCOL.md`.
 <!-- /TASK_CONTINUITY_ENFORCEMENT_V3 -->
 
 <!-- CODEX_LAST_RESORT_V1 -->

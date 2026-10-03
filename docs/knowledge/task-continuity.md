@@ -396,6 +396,15 @@ operacional:
    da janela de confirmação, evitando duplicar a tentativa de recuperação do
    próprio cliente.
 
+O monitor passivo grava heartbeat durável em
+`agent-task-state/_chatgpt-continuity-monitor-state.json` em todo ciclo e em
+cada resultado do sweep de conversas. Falhas ficam latched até recuperação
+confirmada; um ciclo neutro não pode apagar degradação anterior. O controlador
+trata heartbeat ausente ou stale como `chatgpt_browser_monitor_stale` e falha
+fechado em `continuity_ready=false`. O instalador do worker fixa
+`SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera explicitamente esse diretório no
+sandbox do systemd; depender apenas do path default do código é proibido.
+
 O instalador canônico é
 `scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
 Windows permanece somente como legado/fallback e não é a rota operacional
