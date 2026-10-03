@@ -19,6 +19,9 @@ browser_unit_source="$repo_root/ops/systemd/$browser_unit"
 browser_unit_target="/etc/systemd/system/$browser_unit"
 browser_guardian_source="$script_dir/chatgpt-continuity/chatgpt-browser-guardian.sh"
 browser_guardian_target="/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh"
+probe_cache_source="$script_dir/chatgpt-continuity/chatgpt-browser-probe-cache.py"
+probe_cache_helper="/usr/local/libexec/chatgpt-browser-probe-cache.py"
+browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
 browser_guardian_service_source="$repo_root/ops/systemd/$browser_guardian_service"
 browser_guardian_service_target="/etc/systemd/system/$browser_guardian_service"
 browser_guardian_timer_source="$repo_root/ops/systemd/$browser_guardian_timer"
@@ -75,6 +78,7 @@ sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser 
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
 [[ -f "$browser_unit_source" ]] || fail "browser systemd unit missing: $browser_unit_source"
 [[ -f "$browser_guardian_source" ]] || fail "browser guardian missing: $browser_guardian_source"
+[[ -f "$probe_cache_source" ]] || fail "browser probe helper missing: $probe_cache_source"
 [[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
 [[ -f "$browser_guardian_timer_source" ]] || fail "browser guardian timer missing: $browser_guardian_timer_source"
 [[ -s "$token_file" ]] || fail "protected bridge token missing: $token_file"
@@ -191,6 +195,9 @@ if sudo_install_if_changed "$browser_unit_source" "$browser_unit_target" 644; th
   browser_unit_changed=true
   system_units_changed=true
 fi
+if sudo_install_if_changed "$probe_cache_source" "$probe_cache_helper" 755; then
+  system_units_changed=true
+fi
 if sudo_install_if_changed "$browser_guardian_source" "$browser_guardian_target" 755; then
   system_units_changed=true
 fi
@@ -265,3 +272,8 @@ sudo -n systemctl start "$browser_guardian_service"
 echo "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS"
 echo "UNIT=$unit"
 echo "CDP_URL=$cdp_url"
+
+# AUTH_SESSION_READINESS_GATE
+# A successful oneshot can mean healthy transport with a pending login.
+# Only a recent, actually observed authenticated session establishes readiness.
+python3 "$probe_cache_helper" verify-ready --health "$browser_health_file"

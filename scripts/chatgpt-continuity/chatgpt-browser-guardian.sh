@@ -6,6 +6,8 @@ cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
+probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgpt-browser-probe-cache.py}"
+task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
 
 runtime_eval_ready() {
@@ -173,16 +175,8 @@ persist_browser_health() {
     AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
     *) state="UNKNOWN" ;;
   esac
-  local authenticated=false
-  [[ "$state" == "AUTHENTICATED" ]] && authenticated=true
-  local dir temp
-  dir="$(dirname "$browser_health_file")"
-  mkdir -p "$dir"
-  temp="$browser_health_file.tmp.$$"
-  printf '{"schema_version":1,"updated_at":"%s","session_state":"%s","authenticated":%s}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$state" "$authenticated" >"$temp"
-  chmod 0644 "$temp"
-  mv -f "$temp" "$browser_health_file"
+  python3 "$probe_cache_helper" record --health "$browser_health_file" \
+    --base "$cdp_base" --tasks "$task_state_dir" --state "$state"
 }
 
 report_browser_state() {
@@ -207,7 +201,7 @@ validate_browser_session() {
       ;;
     AUTH_FLOW)
       report_browser_state "AUTH_PENDING" "$session_state"
-      return 1
+      return 0
       ;;
     AUTH_TERMINAL)
       # Authentication reached a terminal page. The browser/CDP runtime is
@@ -218,7 +212,7 @@ validate_browser_session() {
       ;;
     LOGGED_OUT)
       report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"
-      return 1
+      return 0
       ;;
     *)
       report_browser_state "DEGRADED_SESSION" "${session_state:-UNKNOWN}"
@@ -251,6 +245,17 @@ pid_is_live() {
   state="$(ps -o stat= -p "$pid" 2>/dev/null | awk '{print $1}')"
   [[ -n "$state" && "$state" != Z* ]]
 }
+
+# Keep the timer and transport liveness checks enabled. Reuse only a negative
+# session observation, for a bounded window, when browser/task context agrees.
+# No renderer evaluation or account request is made on this path.
+if [[ "${CHATGPT_BROWSER_FORCE_SESSION_PROBE:-0}" != 1 ]] && \
+  cached_state="$(python3 "$probe_cache_helper" check --health "$browser_health_file" \
+    --base "$cdp_base" --tasks "$task_state_dir")"; then
+  echo "CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_CACHE"
+  echo "CHATGPT_BROWSER_SESSION=$cached_state"
+  exit 0
+fi
 
 mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
 

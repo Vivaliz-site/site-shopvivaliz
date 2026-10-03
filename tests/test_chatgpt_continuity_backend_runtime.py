@@ -167,7 +167,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('kill -TERM "$canonical_pid"', guardian_body)
         self.assertNotIn("pkill", guardian_body)
         self.assertNotIn("kill -KILL", guardian_body)
-        self.assertNotIn("exit 0", guardian_body)
+        # Only the bounded negative-cache branch may finish before CDP recovery.
+        # Behavioral tests cover transport failure even while this cache exists.
+        cache_branch = guardian_body.split('cached_state="$(python3', 1)[1].split('mapfile -t canonical_pids', 1)[0]
+        self.assertIn('QUIESCENT_AUTH_CACHE', cache_branch)
+        self.assertIn('exit 0', cache_branch)
+        self.assertNotIn('exit 0', guardian_body.split('mapfile -t canonical_pids', 1)[1])
         self.assertIn('exit "$status"', guardian_body)
         timer_body = timer.read_text(encoding="utf-8")
         self.assertIn("OnUnitActiveSec=30s", timer_body)
@@ -219,7 +224,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=AUTH_PENDING", result.stdout)
             self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_FLOW", result.stdout)
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
