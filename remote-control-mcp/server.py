@@ -74,6 +74,15 @@ SENSITIVE_PATH_PARTS = (
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
 )
 SERVICE_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,120}$")
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+CONTINUITY_BACKEND_HOST = "always-free-arm-1787907847-26"
+CONTINUITY_REPO = "/home/ubuntu/shopvivaliz-deploy/repo"
+CONTINUITY_STATE = "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_gemini-24x7-controller-state.json"
+MANAGED_CONTINUITY_SERVICES = {
+    "controller": "shopvivaliz-gemini-24x7-controller.service",
+    "claude_remote_control": "shopvivaliz-claude-remote-control.service",
+    "chatgpt_backend_bridge": "shopvivaliz-chatgpt-continuity-backend.service",
+}
 SECRET_PATTERNS = (
     re.compile(r"(?i)(authorization\s*:\s*bearer\s+)[^\s]+"),
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]{12,}"),
@@ -785,6 +794,51 @@ def execute_tool(
             )
         return {"task_id": tid, "host": host, "state": "queued", "platform": cfg["platform"], "deduplicated": False}
 
+    if name in {"continuity_controller_promote", "claude_remote_control_install", "continuity_status", "continuity_service_restart"}:
+        if str(host) != CONTINUITY_BACKEND_HOST:
+            raise ValueError("continuity_action_backend_only")
+        cfg = validate_host(str(host))
+        platform = str(cfg["platform"])
+        timeout = validate_timeout(args.get("timeout"))
+        if platform != "linux":
+            raise ValueError("continuity_action_linux_only")
+        if name == "continuity_status":
+            command = (
+                "python3 - <<'PY'\n"
+                "import json,pathlib,subprocess\n"
+                f"p=pathlib.Path('{CONTINUITY_STATE}')\n"
+                "d=json.loads(p.read_text()) if p.exists() else {}\n"
+                "entry=subprocess.run(['systemctl','show','shopvivaliz-gemini-24x7-controller.service','-p','ExecStart','--value'],capture_output=True,text=True).stdout.strip()\n"
+                "print(json.dumps({'continuity_ready':d.get('continuity_ready'),'degraded':d.get('degraded'),'degraded_reasons':d.get('degraded_reasons',[]),'generated_at':d.get('generated_at'),'claude_remote_control':d.get('claude_remote_control'),'controller_exec_start':entry}))\n"
+                "PY"
+            )
+        elif name == "continuity_service_restart":
+            target = str(args.get("target") or "")
+            service = MANAGED_CONTINUITY_SERVICES.get(target)
+            if not service:
+                raise ValueError("invalid_continuity_service_target")
+            command = f"systemctl restart {service} && systemctl is-active {service}"
+        else:
+            sha = str(args.get("sha") or "").lower()
+            if not GIT_SHA_RE.fullmatch(sha):
+                raise ValueError("invalid_git_sha")
+            worktree = f"/home/ubuntu/worktrees/remote-control-deploy-{sha[:12]}"
+            common = (
+                f"set -Eeuo pipefail; repo={CONTINUITY_REPO}; sha={sha}; wt={worktree}; "
+                "sudo -u ubuntu git -C \"$repo\" fetch origin main --quiet; "
+                "test \"$(sudo -u ubuntu git -C \"$repo\" rev-parse origin/main)\" = \"$sha\"; "
+                "if [ ! -e \"$wt/.git\" ]; then sudo -u ubuntu git -C \"$repo\" worktree add --detach \"$wt\" \"$sha\"; fi; "
+                "test \"$(sudo -u ubuntu git -C \"$wt\" rev-parse HEAD)\" = \"$sha\"; "
+                "test -z \"$(sudo -u ubuntu git -C \"$wt\" status --porcelain)\"; "
+            )
+            if name == "continuity_controller_promote":
+                command = common + 'sudo -u ubuntu -H bash "$wt/scripts/install-gemini-24x7-controller.sh" "$wt" "$sha"'
+            else:
+                command = common + 'bash "$wt/scripts/setup-claude-remote-control.sh" install "$wt/scripts/claude-remote-control-mcp-stdio.py" "$wt/deploy/systemd/shopvivaliz-claude-remote-control.service" "$wt/scripts/claude_workspace_trust_bootstrap.py"'
+        result = run_host_command(str(host), command, timeout, cancel_check)
+        result["ok"] = result["exit_code"] == 0
+        return result
+
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
     timeout = validate_timeout(args.get("timeout"))
@@ -845,6 +899,10 @@ TOOLS = [
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
+    ("continuity_status", "Read sanitized ShopVivaliz continuity readiness and active controller release on the backend.", {"host": {"type": "string", "enum": [CONTINUITY_BACKEND_HOST]}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, True, False),
+    ("continuity_controller_promote", "Promote an exact origin/main SHA to the immutable 24x7 continuity controller release on the backend.", {"host": {"type": "string", "enum": [CONTINUITY_BACKEND_HOST]}, "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("claude_remote_control_install", "Install or update Claude Remote Control from an exact origin/main SHA on the backend.", {"host": {"type": "string", "enum": [CONTINUITY_BACKEND_HOST]}, "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("continuity_service_restart", "Restart one allowlisted continuity service on the backend.", {"host": {"type": "string", "enum": [CONTINUITY_BACKEND_HOST]}, "target": {"type": "string", "enum": list(MANAGED_CONTINUITY_SERVICES)}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
 ]
 
 
