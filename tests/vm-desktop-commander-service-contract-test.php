@@ -25,7 +25,7 @@ foreach ([
     'systemctl enable "$SERVICE"', 'systemctl restart "$SERVICE"',
     'LEGACY_SERVICE=', 'desktop-commander.service', 'disable --now',
     'kill_tree', 'CANONICAL_REMOTE_COUNT', 'NONCANONICAL_REMOTE_COUNT',
-    '@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session',
+    'DC_VERSION=\'0.2.51\'', 'DC_PINNED_ROOT=', 'DESKTOP_COMMANDER_PINNED_ROOT',
     'for attempt in {1..12}', 'sleep 5',
     'is-enabled', 'is-active'
 ] as $needle) {
@@ -35,7 +35,7 @@ $supervisor = file_get_contents($supervisorPath);
 $requiredSupervisor = [
     'DEVICE_DIR="$HOME_DIR/.desktop-commander-device"',
     'DEVICE_FILE="$DEVICE_DIR/device.json"',
-    'NPX_BIN','@wonderwhy-er/desktop-commander@0.2.48','AUTH_REQUIRED','exit 20','remote --persist-session'
+    'NODE_BIN','@wonderwhy-er/desktop-commander@0.2.51','PINNED_ROOT','pinned_binary_missing','AUTH_REQUIRED','exit 20','remote --persist-session'
 ];
 foreach ($requiredSupervisor as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
