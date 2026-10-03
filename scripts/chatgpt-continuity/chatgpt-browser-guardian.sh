@@ -125,7 +125,7 @@ browser_session_state() {
           try { authCdp?.close(); } catch {}
         }
       }
-      authTerminal = authTerminal || (residualAuthTerminal && !validOpenAiAuthFlow);
+      authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
