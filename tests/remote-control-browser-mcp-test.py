@@ -81,6 +81,12 @@ class BrowserMcpTests(unittest.TestCase):
         for token in forbidden_runtime_tokens:
             self.assertNotIn(token, src)
 
+    def test_tool_specs_remain_unique_when_base_exposes_browser_actions(self):
+        names = [spec["name"] for spec in m.tool_specs()]
+        self.assertEqual(len(names), len(set(names)))
+        for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
+            self.assertEqual(names.count(name), 1)
+
     def test_unit_is_loopback_and_separate_port(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1", unit)
