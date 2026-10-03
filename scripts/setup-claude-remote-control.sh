@@ -26,9 +26,9 @@ run_in_workspace_as_claude(){ run_as_claude bash -c 'cd "$1"; shift; exec "$@"' 
 probe_auth_and_command(){
   test -x "$CLAUDE_BIN" || die claude_missing 30
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary"
-  local tmp
+  local tmp help_out="" help_rc
   tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33
-  trap 'rm -f "$tmp"' RETURN
+  trap 'rm -f "$tmp" "$help_out"' RETURN
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
@@ -54,9 +54,23 @@ PY
     *) die claude_auth_status_invalid 31 ;;
   esac
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=logged_in"
-  run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
+  help_out="$(mktemp)" || die claude_help_tmpfile_failed 34
+  help_rc=0
+  if run_as_claude timeout 5s "$CLAUDE_BIN" remote-control --help >"$help_out" 2>&1; then
+    help_rc=0
+  else
+    help_rc=$?
+  fi
+  if ! grep -Fq 'Remote Control - Control local sessions' "$help_out"     || ! grep -Fq -- '--spawn <mode>' "$help_out"; then
+    die remote_control_help_missing 32
+  fi
+  case "$help_rc" in
+    0|124) ;;
+    *) die remote_control_unavailable 32 ;;
+  esac
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help"
-  rm -f "$tmp"
+  rm -f "$tmp" "$help_out"
+  help_out=""
   trap - RETURN
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
