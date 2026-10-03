@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import importlib.util
+import base64
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -67,7 +69,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
             "controller_status", "controller_promote", "continuity_status", "continuity_e2e",
             "claude_remote_control_status", "claude_remote_control_reconcile",
-            "browser_tabs", "browser_controls", "browser_navigate", "browser_click", "browser_type",
+            "browser_tabs", "browser_controls", "browser_navigate", "browser_click", "browser_click_control", "browser_type",
         }:
             self.assertIn(required, names)
 
@@ -101,13 +103,17 @@ class RemoteControlMcpTests(unittest.TestCase):
         for name in ("browser_tabs", "browser_controls"):
             self.assertTrue(specs[name]["annotations"]["readOnlyHint"])
             self.assertFalse(specs[name]["annotations"]["destructiveHint"])
-        for name in ("browser_navigate", "browser_click", "browser_type"):
+        for name in ("browser_navigate", "browser_click", "browser_click_control", "browser_type"):
             self.assertFalse(specs[name]["annotations"]["readOnlyHint"])
             self.assertTrue(specs[name]["annotations"]["destructiveHint"])
         self.assertNotIn("host", specs["browser_tabs"]["inputSchema"]["properties"])
         self.assertEqual(
             specs["browser_type"]["inputSchema"]["required"],
             ["tab_id", "selector", "text"],
+        )
+        self.assertEqual(
+            specs["browser_click_control"]["inputSchema"]["required"],
+            ["tab_id", "index"],
         )
 
     def test_controller_promote_requires_full_expected_sha(self):
@@ -299,6 +305,26 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("addEventListener('open'", command)
         self.assertIn("new Cdp(ws)", command)
         self.assertNotIn("await c.connect()", command)
+
+    def test_browser_cdp_runtime_exceptions_fail_closed(self):
+        command = m._browser_cdp_command("ABC123", "(()=>{throw new Error('boom')})()")
+        self.assertIn("exceptionDetails", command)
+        self.assertIn("browser_runtime_exception", command)
+
+    def test_browser_click_control_uses_sanitized_control_index(self):
+        command = m.browser_click_control_command("ABC123", 2)
+        match = re.search(r"SHOPVIVALIZ_EXPR_B64=([A-Za-z0-9+/=]+)", command)
+        self.assertIsNotNone(match)
+        expression = base64.b64decode(match.group(1)).decode()
+        self.assertIn("querySelectorAll('input,button,[role=button]')", expression)
+        self.assertIn("controls[2]", expression)
+        self.assertIn("control_index_not_found", expression)
+        with self.assertRaisesRegex(ValueError, "invalid_control_index"):
+            m.browser_click_control_command("ABC123", 120)
+
+    def test_browser_type_runtime_exceptions_fail_closed(self):
+        self.assertIn("exceptionDetails", m.BROWSER_TYPE_NODE_SCRIPT)
+        self.assertIn("browser_runtime_exception", m.BROWSER_TYPE_NODE_SCRIPT)
 
     def test_browser_type_uses_modern_node_with_websocket_support(self):
         self.assertEqual(m.BROWSER_NODE_BIN, "/usr/local/bin/node")

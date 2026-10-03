@@ -239,6 +239,13 @@ def _require_current_resume(payload: dict[str, Any]) -> None:
         raise TaskStateError("stale resume cannot certify a newer checkpoint; reload and continue current work")
 
 
+def _require_background_terminal_checks(payload: dict[str, Any]) -> None:
+    if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
+        return
+    if not payload.get("completion_checks"):
+        raise TaskStateError("background terminal certification requires pinned completion checks")
+
+
 def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
     normalized = []
     for command in checks:
@@ -427,6 +434,7 @@ def mark_ready(
         raise TaskStateError("READY_TO_COMPLETE requires verification against the original goal")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
+    _require_background_terminal_checks(payload)
     _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text

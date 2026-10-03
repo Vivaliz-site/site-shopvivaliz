@@ -34,6 +34,7 @@ on:
       - 'tests/test_remote_control_mcp_priority_policy.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-continuity-cooldown-test.mjs'
       - 'tests/chatgpt-continuity-pending-nudge-store-test.php'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
       - 'tests/test_checkpoint_first_zero_window.py'
@@ -78,6 +79,7 @@ on:
       - 'tests/test_chatgpt_continuity_proof_certifier.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-continuity-cooldown-test.mjs'
       - 'tests/chatgpt-continuity-pending-nudge-store-test.php'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
       - 'tests/test_checkpoint_first_zero_window.py'
@@ -117,6 +119,8 @@ jobs:
         run: python3 -m unittest tests.test_background_gemini_runner -v
       - name: Run ChatGPT continuity bridge worker regression
         run: node tests/chatgpt-continuity-bridge-worker-test.mjs
+      - name: Run platform-wait safety regression
+        run: node --test tests/chatgpt-continuity-cooldown-test.mjs
       - name: Run ChatGPT continuity pending queue regression
         run: php tests/chatgpt-continuity-pending-nudge-store-test.php
       - name: Validate continuity policy

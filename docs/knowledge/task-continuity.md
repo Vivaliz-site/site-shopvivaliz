@@ -217,6 +217,7 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
+- Um executor de background **não pode certificar `READY_TO_COMPLETE` somente por texto/evidência gerada pelo provider**. A transição terminal em background exige `completion_checks` determinísticos e previamente fixados no checkpoint; sem eles, o provider pode apenas registrar progresso concreto e deixar a certificação terminal para uma execução foreground.
 - Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; o mesmo checkpoint pode ser tentado
   novamente após cooldown (900 s padrão, configurável por
   `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
@@ -392,30 +393,46 @@ operacional:
    `always-free-arm-1787907847-26` e anexa ao browser canônico por
    `http://127.0.0.1:9555`;
 5. o worker só envia `continue` quando não há geração ativa. O monitor de
-   reforço só atua quando um banner explícito de interrupção persiste depois
-   da janela de confirmação, evitando duplicar a tentativa de recuperação do
-   próprio cliente.
+   reforço só atua quando existe checkpoint não terminal (`RUNNING` ou
+   `READY_TO_COMPLETE`) **e** o health do browser canônico está recente e
+   `AUTHENTICATED`; sem tarefa ativa não faz discovery da conta, e estados
+   `AUTH_FLOW`, `AUTH_TERMINAL`, `LOGGED_OUT`, `UNKNOWN` ou health stale ficam
+   em quiescência fail-closed;
+6. a mensagem de plataforma de **verificações adicionais** (`additional_checks`)
+   é um estado de deferimento: não autoriza reload, novo `continue` nem troca
+   automática para modelo mais rápido. O reinforcement entra em cooldown de
+   cinco minutos antes de nova tentativa;
+7. interrupções realmente recuperáveis continuam exigindo confirmação de
+   progresso do assistente para sair da degradação.
 
-O monitor passivo grava heartbeat durável em
-`agent-task-state/_chatgpt-continuity-monitor-state.json` em todo ciclo e em
-cada resultado do sweep de conversas. Falhas ficam latched até recuperação
-confirmada; um ciclo neutro não pode apagar degradação anterior. O controlador
-trata heartbeat ausente ou stale como `chatgpt_browser_monitor_stale` e falha
-fechado em `continuity_ready=false`. O instalador do worker fixa
-`SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera explicitamente esse diretório no
-sandbox do systemd; depender apenas do path default do código é proibido.
+O monitor grava heartbeat durável em
+`agent-task-state/_chatgpt-continuity-monitor-state.json`. Em idle ou durante
+autenticação ele mantém somente o heartbeat local; sweep/discovery de
+conversas é permitido apenas com checkpoint ativo e sessão autenticada. Falhas
+ficam latched até recuperação confirmada; um ciclo neutro não pode apagar
+degradação anterior. O controlador trata heartbeat ausente ou stale como
+`chatgpt_browser_monitor_stale` e falha fechado em `continuity_ready=false`.
+O instalador do worker fixa `SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera
+explicitamente esse diretório no sandbox do systemd; depender apenas do path
+default do código é proibido.
 
 O instalador canônico é
-`scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
-Windows permanece somente como legado/fallback e não é a rota operacional
-padrão. O worker nunca deve imprimir token/cookie/storage de sessão e nunca
-deve iniciar outro perfil do navegador.
+`scripts/install-chatgpt-continuity-backend-bridge.sh`. Existe um único owner
+de supervisão do Chrome: `shopvivaliz-chatgpt-browser-guardian.timer`. O
+instalador deve desabilitar/remover o antigo
+`shopvivaliz-browser-healthcheck.timer`/`.service` e seu script para impedir
+restarts concorrentes do mesmo perfil autenticado. A implementação Windows
+permanece somente como legado/fallback e não é a rota operacional padrão. O
+worker nunca deve imprimir token/cookie/storage de sessão e nunca deve iniciar
+outro perfil do navegador.
 
 Não executar probes sintéticos repetitivos para “testar” a conta. A prova
 operacional preferida é: heartbeat autenticado do bridge + serviço backend
 ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
-natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
-a mitigação instalada/armada, não “continuidade E2E comprovada”.
+natural chegando a `PROGRESS_CONFIRMED` na mesma conversa. `SENT` ou
+`SENT_UNCONFIRMED` não certificam retomada. Enquanto faltar a última
+evidência, declarar a mitigação instalada/armada, não “continuidade E2E
+comprovada”.
 <!-- /CHATGPT_SESSION_REENTRY_V10 -->
 
 <!-- CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
@@ -539,3 +556,16 @@ compatível e sua conclusão textual não certifica aptidão por si só.
 
 O worker registra `sent` somente quando o envio efetivo ocorreu; progresso
 restaurado por reattach passivo e tentativa rejeitada não contam como envio.
+
+## Cooldown e instalacao segura (2026-10-03)
+
+Durante `additional_checks_cooldown`, o heartbeat local continua avancando a
+cada ciclo, sem chamadas ao browser/conta. O monitor permanece degradado; um
+resultado saudavel anterior nao pode mascarar o deferimento atual. A deteccao
+apos reattach e a entrada de envio tambem devem rejeitar novos envios. O
+cooldown interrompe o sweep do ciclo atual.
+
+O instalador conclui a copia, reload e restart do worker antes da verificacao
+final da sessao autenticada. `CHATGPT_CONTINUITY_BACKEND_INSTALLED=PASS` prova
+somente instalacao; o `BACKEND_SERVICE=PASS` continua atras do guardian real.
+Auth expirada mantem falha de readiness, mas nao mantem codigo antigo rodando.
