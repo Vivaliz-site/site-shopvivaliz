@@ -64,6 +64,9 @@ class RemoteControlMcpTests(unittest.TestCase):
         for required in {
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
+            "controller_status", "controller_promote",
+            "claude_remote_control_status", "claude_remote_control_install",
+            "browser_tabs", "browser_controls", "browser_navigate", "browser_click", "browser_type",
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
         }:
             self.assertIn(required, names)
@@ -95,6 +98,100 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("service_not_found", command)
         self.assertIn("exit 4", command)
         self.assertNotIn("status shopvivaliz-chatgpt-continuity.service || true", command)
+
+    def test_linux_service_action_uses_user_manager_when_unit_is_user_scoped(self):
+        command = m.service_command(
+            "linux",
+            "shopvivaliz-chatgpt-continuity.service",
+            "restart",
+            "ubuntu",
+        )
+        self.assertIn("LoadState", command)
+        self.assertIn("runuser -u ubuntu", command)
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/$uid", command)
+        self.assertIn("systemctl --user restart", command)
+        self.assertIn("service_not_found", command)
+
+    def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
+        command = m._browser_cdp_command("ABC123", "(()=>true)()")
+        self.assertIn("new WebSocket(t.webSocketDebuggerUrl)", command)
+        self.assertIn("addEventListener('open'", command)
+        self.assertIn("new Cdp(ws)", command)
+        self.assertNotIn("await c.connect()", command)
+
+    def test_browser_inventory_does_not_expose_page_titles_or_values(self):
+        tabs = m.browser_tabs_command()
+        expression = m.browser_controls_expression()
+        self.assertNotIn("'title':", tabs)
+        self.assertNotIn("querySelectorAll('input,button,a,", expression)
+        self.assertNotIn(".value", expression)
+        self.assertNotIn("document.title", expression)
+        self.assertIn("[REDACTED_EMAIL]", expression)
+
+    def test_browser_navigate_audit_strips_query_and_fragment(self):
+        safe = m.sanitize_audit_args(
+            "browser_navigate",
+            {"url": "https://auth.openai.com/log-in?state=opaque#fragment", "tab_id": "ABC123"},
+        )
+        self.assertEqual(safe["url"], "https://auth.openai.com/log-in")
+        self.assertNotIn("opaque", json.dumps(safe))
+
+    def test_browser_type_audit_hashes_text(self):
+        safe = m.sanitize_audit_args(
+            "browser_type",
+            {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
+        )
+        self.assertNotIn("text", safe)
+        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
+
+    def test_service_action_handler_passes_canonical_user_owner(self):
+        captured = {}
+        def fake_run(host, command, timeout=30, cancel_check=None):
+            captured["host"] = host
+            captured["command"] = command
+            return {"host": host, "exit_code": 0, "stdout": "active", "stderr": "", "duration_ms": 1}
+        with mock.patch.object(m, "run_host_command", side_effect=fake_run):
+            result = m.execute_tool(
+                "service_action",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "service": "shopvivaliz-chatgpt-continuity.service",
+                    "action": "restart",
+                },
+            )
+        self.assertTrue(result["ok"])
+        self.assertIn("runuser -u ubuntu", captured["command"])
+        self.assertIn("systemctl --user restart", captured["command"])
+
+    def test_controller_promote_requires_full_sha_and_main_ancestor_guard(self):
+        with self.assertRaisesRegex(ValueError, "full_commit_sha_required"):
+            m.controller_promote_command("abc123")
+        sha = "a" * 40
+        command = m.controller_promote_command(sha)
+        self.assertIn("fetch origin main", command)
+        self.assertIn("merge-base --is-ancestor", command)
+        self.assertIn("worktree add --detach", command)
+        self.assertIn("install-gemini-24x7-controller.sh", command)
+        self.assertIn("CONTROLLER_PROMOTE=PASS", command)
+
+    def test_native_backend_tools_reject_non_backend_host(self):
+        for name, args in (
+            ("controller_status", {"host": "shopvivaliz-free-a1"}),
+            ("controller_promote", {"host": "shopvivaliz-free-a1", "ref": "a" * 40}),
+            ("browser_tabs", {"host": "shopvivaliz-free-a1"}),
+        ):
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(ValueError, "backend_host_required"):
+                    m.execute_tool(name, args)
+
+    def test_browser_navigation_rejects_non_allowlisted_origins(self):
+        with self.assertRaisesRegex(ValueError, "browser_url_not_allowlisted"):
+            m.browser_navigate_command("ABC123", "https://mail.google.com/mail/u/0/")
+        with self.assertRaisesRegex(ValueError, "browser_url_not_allowlisted"):
+            m.browser_navigate_command("ABC123", "https://example.com/")
+        command = m.browser_navigate_command("ABC123", "https://auth.openai.com/log-in")
+        self.assertIn("auth.openai.com", command)
 
     def test_backend_config_declares_canonical_user_service_owner(self):
         self.assertEqual(m.HOSTS["always-free-arm-1787907847-26"]["service_user_owner"], "ubuntu")

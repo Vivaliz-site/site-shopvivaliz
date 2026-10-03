@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 VERSION = "1.0.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -461,17 +462,28 @@ def run_task_entrypoint(task_id: str) -> int:
         return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
-def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
-    aid = str(uuid.uuid4())
+def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret"):
+    for secret_key in ("text", "otp", "secret", "code", "password"):
         if secret_key in safe_args:
             secret_value = str(safe_args.pop(secret_key))
             safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
             safe_args[f"{secret_key}_length"] = len(secret_value)
+    if "email" in safe_args:
+        email_value = str(safe_args.pop("email"))
+        safe_args["email_sha256"] = hashlib.sha256(email_value.encode()).hexdigest()
+    if tool == "browser_navigate" and "url" in safe_args:
+        parsed = urlsplit(str(safe_args["url"]))
+        safe_args["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return safe_args
+
+
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
+    aid = str(uuid.uuid4())
+    safe_args = sanitize_audit_args(tool, args)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
@@ -637,32 +649,44 @@ def service_command(
             return f"Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
         verb = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
         return f"{verb} -Name '{q}' -ErrorAction Stop; Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
-    if action == "status":
-        # Fail closed. Check the system manager first, then the configured
-        # non-root user's manager when this host owns user-scoped services.
-        user_probe = ""
-        if service_user_owner:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
-                raise ValueError("invalid_service_user_owner")
-            user_probe = (
-                f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
-                f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
-                f"if [ \"$load\" = loaded ]; then "
+
+    user_probe = ""
+    if service_user_owner:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
+            raise ValueError("invalid_service_user_owner")
+        if action == "status":
+            user_operation = (
                 f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
                 f"systemctl --user --no-pager --full status {service}; "
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user is-active {service}; exit $?; fi; "
             )
-        return (
-            f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
-            f"if [ \"$load\" = loaded ]; then "
-            f"systemctl --no-pager --full status {service}; "
-            f"systemctl is-active {service}; exit $?; fi; "
-            f"{user_probe}"
-            f"printf '%s\\n' 'service_not_found' >&2; exit 4"
+        else:
+            user_operation = (
+                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user {action} {service}; "
+            )
+        user_probe = (
+            f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
+            f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f'if [ "$load" = loaded ]; then '
+            f"{user_operation}"
+            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user is-active {service}; exit $?; fi; "
         )
-    return f"systemctl {action} {service} && systemctl is-active {service}"
+
+    system_operation = (
+        f"systemctl --no-pager --full status {service}; "
+        if action == "status"
+        else f"systemctl {action} {service}; "
+    )
+    return (
+        f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
+        f'if [ "$load" = loaded ]; then '
+        f"{system_operation}"
+        f"systemctl is-active {service}; exit $?; fi; "
+        f"{user_probe}"
+        f"printf '%s\n' 'service_not_found' >&2; exit 4"
+    )
 
 
 def file_read_command(platform: str, path: str, max_bytes: int) -> str:
@@ -777,12 +801,12 @@ def claude_remote_control_install_command(ref: str) -> str:
 
 
 
-BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "mail.google.com", "claude.ai"}
+BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "claude.ai"}
 BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
 
 
 def _safe_browser_token(value: str, label: str) -> str:
-    if not re.fullmatch(r"[A-Za-z0-9_.:#@()=\\[\\]\\-]{1,240}", value):
+    if not re.fullmatch(r"[A-Za-z0-9_.:#@()=\[\]\-]{1,240}", value):
         raise ValueError(f"invalid_{label}")
     return value
 
@@ -793,10 +817,12 @@ def browser_tabs_command() -> str:
         "import json,urllib.request,urllib.parse\n"
         "with urllib.request.urlopen('http://127.0.0.1:9555/json',timeout=5) as r: a=json.load(r)\n"
         "out=[]\n"
+        "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','claude.ai'}\n"
         "for x in a:\n"
         " if x.get('type')!='page': continue\n"
         " u=urllib.parse.urlparse(x.get('url',''))\n"
-        " out.append({'id':x.get('id'),'title':x.get('title','')[:160],'origin':u.scheme+'://'+u.netloc if u.netloc else ''})\n"
+        " if u.hostname not in allowed: continue\n"
+        " out.append({'id':x.get('id'),'origin':u.scheme+'://'+u.netloc if u.netloc else ''})\n"
         "print(json.dumps({'tabs':out},separators=(',',':')))\n"
         "PY"
     )
@@ -814,16 +840,23 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
         "const tabs=await (await fetch('http://127.0.0.1:9555/json')).json(); "
         "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
-        "const c=new Cdp(t.webSocketDebuggerUrl); await c.connect(); "
+        "const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']); "
+        "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
+        "const ws=new WebSocket(t.webSocketDebuggerUrl); "
+        "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
+        "const c=new Cdp(ws); "
         "const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); "
         "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
         "JS"
     )
 
 
+def browser_controls_expression() -> str:
+    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
+
+
 def browser_controls_command(tab_id: str) -> str:
-    expression = """(()=>({title:document.title,origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,a,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120),disabled:!!e.disabled}))}))()"""
-    return _browser_cdp_command(tab_id, expression)
+    return _browser_cdp_command(tab_id, browser_controls_expression())
 
 
 def browser_navigate_command(tab_id: str, url: str) -> str:
@@ -998,7 +1031,17 @@ def execute_tool(
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
             raise ValueError("invalid_service_action")
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), action), timeout, cancel_check)
+        result = run_host_command(
+            str(host),
+            service_command(
+                platform,
+                str(args.get("service") or ""),
+                action,
+                str(cfg.get("service_user_owner") or "") or None,
+            ),
+            timeout,
+            cancel_check,
+        )
     elif name == "file_read":
         result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
     elif name == "file_list":
