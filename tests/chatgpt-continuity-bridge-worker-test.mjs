@@ -3153,6 +3153,39 @@ async function run() {
 
   {
     const payload = reinforcementHealthPayload(
+      { action: 'idle_no_checkpoint', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.500Z',
+      {
+        degraded: true,
+        action: 'error',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'no usable open chatgpt.com tab found in the attached browser',
+        failure_reason: 'request_timeout',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'idle_no_checkpoint');
+    assert.equal(payload.last_cycle_action, 'idle_no_checkpoint');
+    assert.equal(payload.detail, '');
+    assert.equal(payload.failure_reason, '');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'auth_quiescent', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.700Z',
+      { degraded: true, action: 'error', detail: 'stale browser error', failure_reason: 'request_timeout' },
+    );
+    assert.equal(payload.degraded, true);
+    assert.equal(payload.action, 'auth_quiescent');
+    assert.equal(payload.last_cycle_action, 'auth_quiescent');
+    assert.equal(payload.detail, '');
+    assert.equal(payload.failure_reason, '');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
       { action: 'no_banner', sent: false, progress_confirmed: false },
       '2026-10-03T01:23:46.000Z',
       {
