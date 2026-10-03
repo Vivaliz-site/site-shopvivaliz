@@ -1332,7 +1332,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("dh1:", relay_py)
         self.assertIn("base64.urlsafe_b64decode", relay_py)
         self.assertIn("subprocess.run", relay_py)
-        self.assertIn("stdin", submit_js)
+        self.assertIn("fs.readFileSync(0", submit_js)
         self.assertIn("CHATGPT_OTP_SUBMIT=PASS", submit_js)
         for forbidden in (
             'print(code)',
