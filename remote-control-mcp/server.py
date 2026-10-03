@@ -695,6 +695,82 @@ def processes_command(platform: str) -> str:
     return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
 
 
+
+BACKEND_HOST = "always-free-arm-1787907847-26"
+CONTROLLER_SERVICE = "shopvivaliz-gemini-24x7-controller.service"
+CLAUDE_REMOTE_SERVICE = "shopvivaliz-claude-remote-control.service"
+REPO_DIR = "/home/ubuntu/shopvivaliz-deploy/repo"
+CONTROLLER_INSTALLER = "scripts/install-gemini-24x7-controller.sh"
+CLAUDE_INSTALLER = "scripts/setup-claude-remote-control.sh"
+
+
+def require_backend_host(host: str) -> None:
+    if host != BACKEND_HOST:
+        raise ValueError("backend_host_required")
+
+
+def controller_status_command() -> str:
+    return (
+        "systemctl show " + CONTROLLER_SERVICE + " -p ActiveState -p SubState -p MainPID --no-pager; "
+        "pid=$(systemctl show " + CONTROLLER_SERVICE + " -p MainPID --value); "
+        "if [ -n \"$pid\" ] && [ \"$pid\" != 0 ]; then tr '\\0' ' ' < /proc/$pid/cmdline; echo; fi; "
+        "python3 - <<'PY'\n"
+        "import json,pathlib\n"
+        "p=pathlib.Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_gemini-24x7-controller-state.json')\n"
+        "d=json.loads(p.read_text()) if p.exists() else {}\n"
+        "print(json.dumps({k:d.get(k) for k in ('ok','liveness_ok','continuity_ready','degraded','degraded_reasons','generated_at','claude_remote_control')},separators=(',',':')))\n"
+        "PY"
+    )
+
+
+def controller_promote_command(ref: str) -> str:
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+        raise ValueError("full_commit_sha_required")
+    wt = f"/home/ubuntu/worktrees/remote-control-promote-{ref[:12]}"
+    return (
+        f"set -Eeuo pipefail; repo={REPO_DIR}; sha={ref}; wt={wt}; "
+        "sudo -u ubuntu git -C \"$repo\" fetch origin main --quiet; "
+        "sudo -u ubuntu git -C \"$repo\" cat-file -e \"$sha^{commit}\"; "
+        "sudo -u ubuntu git -C \"$repo\" merge-base --is-ancestor \"$sha\" origin/main; "
+        "if [ ! -d \"$wt\" ]; then sudo -u ubuntu git -C \"$repo\" worktree add --detach \"$wt\" \"$sha\"; fi; "
+        "test \"$(sudo -u ubuntu git -C \"$wt\" rev-parse HEAD)\" = \"$sha\"; "
+        "test -z \"$(sudo -u ubuntu git -C \"$wt\" status --porcelain)\"; "
+        f"sudo -u ubuntu -H bash \"$wt/{CONTROLLER_INSTALLER}\" \"$wt\" \"$sha\"; "
+        "systemctl is-active " + CONTROLLER_SERVICE + "; "
+        "pid=$(systemctl show " + CONTROLLER_SERVICE + " -p MainPID --value); "
+        "tr '\\0' ' ' < /proc/$pid/cmdline | grep -F -- \"$sha\" >/dev/null; "
+        "echo CONTROLLER_PROMOTE=PASS"
+    )
+
+
+def claude_remote_control_status_command() -> str:
+    return (
+        "systemctl show " + CLAUDE_REMOTE_SERVICE + " -p ActiveState -p SubState -p MainPID --no-pager; "
+        "systemctl cat " + CLAUDE_REMOTE_SERVICE + " --no-pager | "
+        "grep -E '^(ExecStart|Restart|StandardOutput|StandardError)=' || true"
+    )
+
+
+def claude_remote_control_install_command(ref: str) -> str:
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+        raise ValueError("full_commit_sha_required")
+    wt = f"/home/ubuntu/worktrees/remote-control-claude-{ref[:12]}"
+    return (
+        f"set -Eeuo pipefail; repo={REPO_DIR}; sha={ref}; wt={wt}; "
+        "sudo -u ubuntu git -C \"$repo\" fetch origin main --quiet; "
+        "sudo -u ubuntu git -C \"$repo\" cat-file -e \"$sha^{commit}\"; "
+        "sudo -u ubuntu git -C \"$repo\" merge-base --is-ancestor \"$sha\" origin/main; "
+        "if [ ! -d \"$wt\" ]; then sudo -u ubuntu git -C \"$repo\" worktree add --detach \"$wt\" \"$sha\"; fi; "
+        "test \"$(sudo -u ubuntu git -C \"$wt\" rev-parse HEAD)\" = \"$sha\"; "
+        f"bash \"$wt/{CLAUDE_INSTALLER}\" install "
+        "\"$wt/scripts/claude-remote-control-mcp-stdio.py\" "
+        "\"$wt/deploy/systemd/shopvivaliz-claude-remote-control.service\" "
+        "\"$wt/scripts/claude_workspace_trust_bootstrap.py\"; "
+        "systemctl is-active " + CLAUDE_REMOTE_SERVICE + "; "
+        "echo CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
+    )
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
