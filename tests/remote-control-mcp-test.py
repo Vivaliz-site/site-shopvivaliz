@@ -1338,6 +1338,37 @@ class BootstrapContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, repair)
 
+    def test_chatgpt_otp_relay_is_backend_only_and_secret_safe(self):
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        relay_py = (ROOT / "scripts" / "chatgpt_otp_relay.py").read_text(encoding="utf-8")
+        submit_js = (ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-otp-submit.mjs").read_text(encoding="utf-8")
+
+        self.assertIn('"chatgpt_otp_relay"', workflow)
+        self.assertIn('action == "chatgpt_otp_relay"', workflow)
+        self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
+        self.assertIn("reason_b64=", workflow)
+        self.assertIn("REQUEST_REASON_B64:", workflow)
+        relay = workflow.split("            chatgpt_otp_relay)", 1)[1].split("              ;;", 1)[0]
+        self.assertIn("scripts/chatgpt_otp_relay.py", relay)
+        self.assertIn("scripts/chatgpt-continuity/chatgpt-otp-submit.mjs", relay)
+        self.assertIn("CHATGPT_OTP_RELAY=PASS", relay)
+        self.assertNotIn("set -x", relay)
+
+        self.assertIn(".otp-dh-private", relay_py)
+        self.assertIn("dh1:", relay_py)
+        self.assertIn("base64.urlsafe_b64decode", relay_py)
+        self.assertIn("subprocess.run", relay_py)
+        self.assertIn('input=code + "\\n"', relay_py)
+        self.assertNotIn("stdin=subprocess.PIPE", relay_py)
+        self.assertIn("fs.readFileSync(0", submit_js)
+        self.assertIn("CHATGPT_OTP_SUBMIT=PASS", submit_js)
+        for forbidden in (
+            'print(code)',
+            'echo "$code"',
+            'CHATGPT_OTP_CODE=',
+        ):
+            self.assertNotIn(forbidden, workflow + relay_py + submit_js)
+
     def test_chatgpt_continuity_diagnostic_checks_user_service_scope(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
         diagnostic = workflow.split("chatgpt_continuity_diagnostic)", 1)[1].split("secure_mcp_platform_ui_probe)", 1)[0]
