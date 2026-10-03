@@ -65,6 +65,8 @@ class RemoteControlMcpTests(unittest.TestCase):
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
+            "continuity_status", "continuity_controller_promote", "claude_remote_control_install",
+            "continuity_service_restart",
         }:
             self.assertIn(required, names)
 
@@ -1878,6 +1880,61 @@ class DurableExecutorV2Tests(unittest.TestCase):
         argv = run.call_args.args[0]
         self.assertNotIn("forbidden-payload", " ".join(argv))
         self.assertEqual(argv[-2:], ["--run-task", task_id])
+
+    def test_continuity_semantic_tools_are_backend_only_and_sha_bounded(self):
+        backend = "always-free-arm-1787907847-26"
+        with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "ok", "stderr": "", "duration_ms": 1}) as run:
+            result = m.execute_tool("continuity_controller_promote", {
+                "host": backend, "sha": "a" * 40, "timeout": 60,
+            })
+        self.assertTrue(result["ok"])
+        command = run.call_args.args[1]
+        self.assertIn("rev-parse origin/main", command)
+        self.assertIn("install-gemini-24x7-controller.sh", command)
+        self.assertIn("a" * 40, command)
+        with self.assertRaisesRegex(ValueError, "invalid_git_sha"):
+            m.execute_tool("continuity_controller_promote", {
+                "host": backend, "sha": "main; touch /tmp/nope", "timeout": 60,
+            })
+        with self.assertRaisesRegex(ValueError, "continuity_action_backend_only"):
+            m.execute_tool("continuity_controller_promote", {
+                "host": "shopvivaliz-free-a1", "sha": "a" * 40, "timeout": 60,
+            })
+
+    def test_claude_install_uses_exact_main_sha_and_canonical_installer(self):
+        with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "ok", "stderr": "", "duration_ms": 1}) as run:
+            result = m.execute_tool("claude_remote_control_install", {
+                "host": "always-free-arm-1787907847-26", "sha": "b" * 40, "timeout": 60,
+            })
+        self.assertTrue(result["ok"])
+        command = run.call_args.args[1]
+        self.assertIn("rev-parse origin/main", command)
+        self.assertIn("setup-claude-remote-control.sh", command)
+        self.assertIn("claude_workspace_trust_bootstrap.py", command)
+
+    def test_continuity_service_restart_is_allowlisted(self):
+        with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "active", "stderr": "", "duration_ms": 1}) as run:
+            result = m.execute_tool("continuity_service_restart", {
+                "host": "always-free-arm-1787907847-26", "target": "controller",
+            })
+        self.assertTrue(result["ok"])
+        self.assertIn("shopvivaliz-gemini-24x7-controller.service", run.call_args.args[1])
+        with self.assertRaisesRegex(ValueError, "invalid_continuity_service_target"):
+            m.execute_tool("continuity_service_restart", {
+                "host": "always-free-arm-1787907847-26", "target": "ssh",
+            })
+
+    def test_continuity_status_uses_sanitized_state_projection(self):
+        with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": "", "duration_ms": 1}) as run:
+            result = m.execute_tool("continuity_status", {
+                "host": "always-free-arm-1787907847-26",
+            })
+        self.assertTrue(result["ok"])
+        command = run.call_args.args[1]
+        self.assertIn("continuity_ready", command)
+        self.assertIn("claude_remote_control", command)
+        self.assertNotIn("sessionId", command)
+        self.assertNotIn("environmentId", command)
 
     def test_tunnel_unit_does_not_require_controller_hard_dependency(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-secure-mcp-tunnel.service").read_text(encoding="utf-8")
