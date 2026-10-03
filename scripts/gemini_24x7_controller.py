@@ -46,6 +46,12 @@ STATE_FILE = "_gemini-24x7-controller-state.json"
 DEFAULT_LEASE_SECONDS = 960
 DEFAULT_INTERVAL_SECONDS = 30
 CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
+CHATGPT_MONITOR_FALLBACK_FILE = Path(
+    os.environ.get(
+        "CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE",
+        "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/monitor-health.json",
+    )
+)
 CHATGPT_BROWSER_HEALTH_STATE_FILE = "_chatgpt-browser-health.json"
 DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS = 90
 DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS = 180
@@ -151,7 +157,16 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
-    state = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
+    primary = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
+    fallback = _read_json(Path(CHATGPT_MONITOR_FALLBACK_FILE))
+    primary_updated = _parse_utc(str(primary.get("updated_at", "")).strip())
+    fallback_updated = _parse_utc(str(fallback.get("updated_at", "")).strip())
+    state = primary
+    if fallback_updated is not None and (
+        primary_updated is None or fallback_updated > primary_updated
+    ):
+        state = fallback
+
     updated_at = str(state.get("updated_at", "")).strip()
     updated = _parse_utc(updated_at)
     try:
