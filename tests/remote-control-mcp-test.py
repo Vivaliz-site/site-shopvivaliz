@@ -65,8 +65,84 @@ class RemoteControlMcpTests(unittest.TestCase):
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
+            "continuity_status", "controller_promote",
         }:
             self.assertIn(required, names)
+
+    def test_continuity_status_is_sanitized(self):
+        state = Path(self.tmp.name) / "continuity"
+        state.mkdir()
+        original = m.CONTINUITY_STATE_DIR
+        m.CONTINUITY_STATE_DIR = state
+        try:
+            (state / "_gemini-24x7-controller-state.json").write_text(json.dumps({
+                "continuity_ready": True,
+                "degraded": False,
+                "degraded_reasons": [],
+                "generated_at": "2026-10-03T00:00:00+00:00",
+                "claude_remote_control": {
+                    "connected": True, "pointer_present": True,
+                    "process_alive": True, "identity_match": True,
+                    "sessionId": "must-not-leak", "environmentId": "must-not-leak",
+                },
+            }), encoding="utf-8")
+            (state / "_chatgpt-browser-health.json").write_text(json.dumps({
+                "session_state": "AUTHENTICATED", "authenticated": True,
+            }), encoding="utf-8")
+            (state / "_chatgpt-continuity-monitor-state.json").write_text(json.dumps({
+                "degraded": False, "action": "healthy",
+            }), encoding="utf-8")
+            with mock.patch.object(m.subprocess, "run", return_value=mock.Mock(stdout="active\n", returncode=0)):
+                result = m.execute_tool("continuity_status", {})
+        finally:
+            m.CONTINUITY_STATE_DIR = original
+        encoded = json.dumps(result)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["claude_remote_control"]["connected"])
+        self.assertNotIn("must-not-leak", encoded)
+        self.assertNotIn("sessionId", encoded)
+        self.assertNotIn("environmentId", encoded)
+
+    def test_controller_promote_rejects_invalid_sha_before_subprocess(self):
+        with mock.patch.object(m.subprocess, "run") as run:
+            with self.assertRaisesRegex(ValueError, "invalid_controller_sha"):
+                m.execute_tool("controller_promote", {"sha": "main"})
+        run.assert_not_called()
+
+    def test_controller_promote_requires_exact_current_main_and_canonical_installer(self):
+        sha = "a" * 40
+        calls = []
+        def fake_checked(argv, timeout=120):
+            calls.append((list(argv), timeout))
+            if "rev-parse" in argv:
+                return mock.Mock(stdout=sha + "\n", returncode=0)
+            if "status" in argv and "--porcelain" in argv:
+                return mock.Mock(stdout="", returncode=0)
+            return mock.Mock(stdout="", returncode=0)
+        original_repo = m.CONTROLLER_REPO
+        original_root = m.CONTROLLER_WORKTREE_ROOT
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            repo = root / "repo"
+            worktrees = root / "worktrees"
+            repo.mkdir(); worktrees.mkdir()
+            wt = worktrees / f"continuity-deploy-{sha[:12]}"
+            (wt / "scripts").mkdir(parents=True)
+            (wt / "scripts" / "install-gemini-24x7-controller.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+            m.CONTROLLER_REPO = repo
+            m.CONTROLLER_WORKTREE_ROOT = worktrees
+            try:
+                with mock.patch.object(m, "_checked", side_effect=fake_checked):
+                    result = m.execute_tool("controller_promote", {"sha": sha})
+            finally:
+                m.CONTROLLER_REPO = original_repo
+                m.CONTROLLER_WORKTREE_ROOT = original_root
+        self.assertTrue(result["ok"])
+        flattened = [" ".join(argv) for argv, _ in calls]
+        self.assertTrue(any("fetch origin main --quiet" in row for row in flattened))
+        self.assertTrue(any("merge-base --is-ancestor" in row for row in flattened))
+        self.assertTrue(any("install-gemini-24x7-controller.sh" in row for row in flattened))
+        self.assertFalse(any("bash -lc" in row for row in flattened))
 
     def test_admin_tools_are_annotated_mutating(self):
         specs = {item["name"]: item for item in m.tool_specs()}
