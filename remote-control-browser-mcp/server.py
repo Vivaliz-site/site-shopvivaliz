@@ -116,7 +116,7 @@ def active_browser_window() -> str:
     if current in windows:
         return current
     window = windows[0]
-    run_gui(["xdotool", "windowactivate", "--sync", window])
+    focus(window)
     return window
 
 
