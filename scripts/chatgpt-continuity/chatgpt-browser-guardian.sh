@@ -76,9 +76,13 @@ browser_session_state() {
       });
       const authFlow = authPages.length > 0;
       let authTerminal = false;
+      let residualAuthTerminal = false;
+      let validOpenAiAuthFlow = false;
       for (const page of authPages) {
         let authCdp;
+        let pageHost = "";
         try {
+          pageHost = new URL(String(page.url || "")).hostname;
           const ws = new WebSocket(page.webSocketDebuggerUrl);
           await Promise.race([
             new Promise((resolve, reject) => {
@@ -88,27 +92,40 @@ browser_session_state() {
             new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
           ]);
           authCdp = new Cdp(ws);
-          authTerminal = Boolean(await Promise.race([
+          const authProbe = await Promise.race([
             authCdp.evaluate(`(()=>{
               /* CONTINUITY_BROWSER_AUTH_TERMINAL_PROBE */
               const body = String(document.body?.innerText || "").toLowerCase();
               const href = String(location.href || "").toLowerCase();
-              return body.includes("invalid_state")
+              const terminal = body.includes("invalid_state")
                 || href.includes("error=invalid_state")
                 || body.includes("session ended")
                 || body.includes("your sign-in session is no longer valid")
                 || body.includes("operation timed out")
                 || body.includes("oops, an error occurred");
+              const activeOpenAiVerification = location.hostname === "auth.openai.com"
+                && location.pathname === "/email-verification"
+                && body.includes("enter the verification code")
+                && Boolean(document.querySelector("input[name=code]"));
+              return { terminal, activeOpenAiVerification };
             })()`),
             new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 2500)),
-          ]));
-          if (authTerminal) break;
+          ]);
+          if (authProbe?.activeOpenAiVerification === true) validOpenAiAuthFlow = true;
+          if (authProbe?.terminal === true) {
+            if (pageHost === "auth.openai.com") {
+              authTerminal = true;
+            } else {
+              residualAuthTerminal = true;
+            }
+          }
         } catch {
           // A detached auth tab is not enough evidence to classify terminal auth.
         } finally {
           try { authCdp?.close(); } catch {}
         }
       }
+      authTerminal = authTerminal || (residualAuthTerminal && !validOpenAiAuthFlow);
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
