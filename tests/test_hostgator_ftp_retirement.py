@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,36 +40,37 @@ FORBIDDEN_RUNTIME_MARKERS = (
 )
 
 
-def test_retired_hostgator_bootstrap_paths_are_gone():
-    existing = [str(path.relative_to(ROOT)) for path in RETIRED_PATHS if path.exists()]
-    assert not existing, f"retired HostGator bootstrap paths still exist: {existing}"
+class HostGatorFtpRetirementTests(unittest.TestCase):
+    def test_retired_hostgator_bootstrap_paths_are_gone(self):
+        existing = [str(path.relative_to(ROOT)) for path in RETIRED_PATHS if path.exists()]
+        self.assertEqual(existing, [], f"retired HostGator bootstrap paths still exist: {existing}")
+
+    def test_active_runtime_has_no_ftp_credentials_or_network_client(self):
+        errors = []
+        for path in ACTIVE_FILES:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                if marker in text:
+                    errors.append(f"{path.relative_to(ROOT)} contains {marker}")
+        self.assertEqual(errors, [], "\n".join(errors))
+
+    def test_autonomous_config_has_no_ftp_deploy(self):
+        payload = json.loads((ROOT / "config" / "autonomous-settings.json").read_text(encoding="utf-8"))
+        serialized = json.dumps(payload, ensure_ascii=False).lower()
+        self.assertNotIn("autonomous-ftp-deploy", serialized)
+        self.assertNotIn("auto ftp deploy", serialized)
+        self.assertNotIn('"ftp"', serialized)
+
+    def test_secret_groups_have_no_ftp_scope(self):
+        payload = json.loads((ROOT / "config" / "secrets-groups.json").read_text(encoding="utf-8"))
+        self.assertNotIn("ftp", payload)
+
+    def test_ai_image_pipeline_uses_persistent_public_storage(self):
+        generator = (ROOT / "scripts" / "generate-ai-images.py").read_text(encoding="utf-8")
+        uploader = (ROOT / "scripts" / "upload_images.py").read_text(encoding="utf-8")
+        self.assertIn("publish_file", generator)
+        self.assertIn("publish_file", uploader)
 
 
-def test_active_runtime_has_no_ftp_credentials_or_network_client():
-    errors = []
-    for path in ACTIVE_FILES:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for marker in FORBIDDEN_RUNTIME_MARKERS:
-            if marker in text:
-                errors.append(f"{path.relative_to(ROOT)} contains {marker}")
-    assert not errors, "\n".join(errors)
-
-
-def test_autonomous_config_has_no_ftp_deploy():
-    payload = json.loads((ROOT / "config" / "autonomous-settings.json").read_text(encoding="utf-8"))
-    serialized = json.dumps(payload, ensure_ascii=False).lower()
-    assert "autonomous-ftp-deploy" not in serialized
-    assert "auto ftp deploy" not in serialized
-    assert '"ftp"' not in serialized
-
-
-def test_secret_groups_have_no_ftp_scope():
-    payload = json.loads((ROOT / "config" / "secrets-groups.json").read_text(encoding="utf-8"))
-    assert "ftp" not in payload
-
-
-def test_ai_image_pipeline_uses_persistent_public_storage():
-    generator = (ROOT / "scripts" / "generate-ai-images.py").read_text(encoding="utf-8")
-    uploader = (ROOT / "scripts" / "upload_images.py").read_text(encoding="utf-8")
-    assert "publish_file" in generator
-    assert "publish_file" in uploader
+if __name__ == "__main__":
+    unittest.main()
