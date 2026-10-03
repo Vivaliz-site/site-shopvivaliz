@@ -65,7 +65,6 @@ def main() -> int:
 
         proc = subprocess.run(
             ["node", str(submit_script)],
-            stdin=subprocess.PIPE,
             input=code + "\n",
             text=True,
             capture_output=True,
