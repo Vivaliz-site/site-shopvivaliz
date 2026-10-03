@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import {
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const testTaskStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-worker-test-'));
+process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR = testTaskStateDir;
+
+const {
   Cdp,
   conversationIsGenerating,
   conversationStreamStatus,
@@ -44,7 +51,7 @@ import {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
-} from '../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+} = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
 // report) be tested without a real browser or WebSocket -- exactly the
@@ -2967,4 +2974,6 @@ run().then(() => {
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;
+}).finally(() => {
+  fs.rmSync(testTaskStateDir, { recursive: true, force: true });
 });
