@@ -222,6 +222,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             fake_bin.mkdir()
             count_file = root / "curl-count"
             systemctl_log = root / "systemctl.log"
+            health_file = root / "browser-health.json"
 
             def executable(name: str, body: str) -> None:
                 path = fake_bin / name
@@ -249,6 +250,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
             env["GUARDIAN_CURL_COUNT_FILE"] = str(count_file)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
                 ["bash", str(guardian)],
                 env=env,
@@ -258,6 +260,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(health_file.exists())
             calls = systemctl_log.read_text(encoding="utf-8")
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
@@ -271,6 +274,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             fake_bin.mkdir()
             node_count = root / "node-count"
             systemctl_log = root / "systemctl.log"
+            health_file = root / "browser-health.json"
 
             def executable(name: str, body: str) -> None:
                 path = fake_bin / name
@@ -296,6 +300,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
             env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             env["GUARDIAN_FAKE_PID"] = "99999999"
             result = subprocess.run(
                 ["bash", str(guardian)],
@@ -307,6 +312,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(health_file.exists())
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("start shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_UNMANAGED_TAKEOVER", result.stdout)
@@ -326,6 +332,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             fake_bin.mkdir()
             node_count = root / "node-count"
             systemctl_log = root / "systemctl.log"
+            health_file = root / "browser-health.json"
 
             def executable(name: str, body: str) -> None:
                 path = fake_bin / name
@@ -351,6 +358,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
             env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
                 ["bash", str(guardian)],
                 env=env,
@@ -361,6 +369,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(health_file.exists())
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
