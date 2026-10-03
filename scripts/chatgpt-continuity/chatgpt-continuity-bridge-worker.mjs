@@ -162,9 +162,12 @@ function reinforcementHealthPayload(
   const degradedAction = action === 'sent_unconfirmed'
     || action === 'send_failed'
     || action === 'error'
+    || action === 'auth_quiescent'
     || action === 'additional_checks_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
-  const recoveredAction = action === 'self_resolved' || action === 'confirmed_progress';
+  const recoveredAction = action === 'self_resolved'
+    || action === 'confirmed_progress'
+    || action === 'idle_no_checkpoint';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
