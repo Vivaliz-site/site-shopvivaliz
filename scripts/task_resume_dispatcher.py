@@ -33,7 +33,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
-LOCK_FILE = "_resume-dispatch.lock"
+LOCK_FILE = "_continuity-execution.lock"
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
@@ -114,7 +114,13 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _recent_successful_chatgpt_nudge(
@@ -171,6 +177,35 @@ def _recent_successful_chatgpt_nudge(
     return False
 
 
+def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> bool:
+    """Recognize the strict browser E2E sentinel contract.
+
+    These synthetic checkpoints exist specifically to prove that the bound
+    ChatGPT Web conversation executed the two allowlisted state transitions.
+    Letting Gemini/CLI run the same commands would manufacture a terminal
+    checkpoint without proving browser continuity.
+    """
+    task_id = str(state.get("task_id", "")).strip()
+    if not task_id.startswith("continuity-e2e-"):
+        return False
+    if str(request.get("preferred_executor", "")).strip() != "chatgpt_common":
+        return False
+    if str(state.get("agent_id", "")).strip() != "chatgpt-common":
+        return False
+    if not str(state.get("conversation_id", "")).strip():
+        return False
+    next_action = str(state.get("next_action", ""))
+    commands = [
+        line.split(") ", 1)[1].strip()
+        for line in next_action.splitlines()
+        if line.startswith(("1) ", "2) ")) and ") " in line
+    ]
+    return commands == [
+        f"python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass",
+        f"python3 scripts/agent_task_state.py complete --task {task_id}",
+    ]
+
+
 def _state_signature(payload: dict[str, Any]) -> str:
     evidence = payload.get("evidence")
     evidence_rows = evidence if isinstance(evidence, list) else []
@@ -185,6 +220,55 @@ def _state_signature(payload: dict[str, Any]) -> str:
     }
     raw = json.dumps(basis, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _material_progress(before: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Accept only objective durable advancement, not timestamp/evidence churn."""
+    before_status = str(before.get("status", "")).strip()
+    after_status = str(after.get("status", "")).strip()
+    if after_status in TERMINAL_STATES and after_status != before_status:
+        return True
+
+    before_next = str(before.get("next_action", "")).strip()
+    after_next = str(after.get("next_action", "")).strip()
+    if after_next and after_next != before_next:
+        return True
+
+    return False
+
+
+def _restore_executor_owned_no_progress(
+    state_path: Path,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    request_id: str,
+) -> bool:
+    """Undo executor-owned checkpoint churn without clobbering concurrent progress."""
+    history = after.get("history")
+    rows = history if isinstance(history, list) else []
+    latest = rows[-1] if rows and isinstance(rows[-1], dict) else {}
+    if str(latest.get("resume_request_id", "")).strip() != str(request_id).strip():
+        return False
+
+    payload = (json.dumps(before, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{state_path.name}.", suffix=".tmp", dir=state_path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=True) as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, state_path)
+        dir_fd = os.open(state_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        return True
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
@@ -287,6 +371,7 @@ def _prepare_workspace(task_id: str, repository: str) -> Path:
 
 _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
+    "background_codex_fallback_authorized",
     "background_gemini_error",
     "background_gemini_exit_code",
     "background_gemini_reason",
@@ -313,6 +398,9 @@ def _summarize_executor_artifacts(workspace: Path) -> dict[str, Any]:
             entry = line.strip()
             if entry == "background_paid_fallback_forbidden=true":
                 diagnostic["background_paid_fallback_forbidden"] = True
+                continue
+            if entry == "background_codex_fallback_authorized=true":
+                diagnostic["background_codex_fallback_authorized"] = True
                 continue
             if entry.startswith("background_gemini_error="):
                 diagnostic["background_gemini_error"] = entry.split("=", 1)[1].strip()
@@ -386,6 +474,7 @@ def _execute(
         env["SHOPVIVALIZ_RESUME_STAGE"] = "cli_last"
         env["SHOPVIVALIZ_RESUME_RESULT_MODE"] = "task_state"
         env["SHOPVIVALIZ_RESUME_BACKGROUND"] = "1"
+        env["SHOPVIVALIZ_RESUME_HISTORY_LENGTH"] = str(len(state.get("history", [])))
         env["SHOPVIVALIZ_RESUME_SOURCE"] = "task-continuation-watchdog"
         env["SHOPVIVALIZ_RESUME_REQUEST_ID"] = str(request.get("id", ""))
         env["SHOPVIVALIZ_RESUME_FINGERPRINT"] = str(request.get("fingerprint", ""))
@@ -400,15 +489,23 @@ def _execute(
             timeout=max(1, int(timeout_seconds)),
         )
         exit_code = int(completed.returncode)
-        after_state = _load_json(_state_path(runtime_dir, task_id))
-        after = _state_signature(after_state) if after_state else ""
-        if after and after != before:
+        state_path = _state_path(runtime_dir, task_id)
+        after_state = _load_json(state_path)
+        if after_state and _material_progress(state, after_state):
             if str(after_state.get("status", "")).strip() in TERMINAL_STATES:
                 result = "terminal"
             else:
                 result = "progress"
         else:
             result = "no_progress"
+            if after_state:
+                _restore_executor_owned_no_progress(
+                    state_path,
+                    state,
+                    after_state,
+                    str(request.get("id", "")),
+                )
+                after_state = _load_json(state_path)
         diagnostic = _summarize_executor_artifacts(workspace) if workspace is not None else {}
         return result, exit_code, after_state, diagnostic
     except subprocess.TimeoutExpired:
@@ -449,6 +546,7 @@ def run_once(
         "no_progress": 0,
         "failed": 0,
         "deferred_chatgpt": 0,
+        "deferred_browser_probe": 0,
         "generated_at": utc_now(),
     }
 
@@ -496,6 +594,10 @@ def run_once(
 
             state = _load_json(_state_path(runtime, task_id))
             if not _request_matches_state(request, state):
+                continue
+
+            if _browser_only_e2e_probe(request, state):
+                summary["deferred_browser_probe"] += 1
                 continue
 
             summary["eligible"] += 1

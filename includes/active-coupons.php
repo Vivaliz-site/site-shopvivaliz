@@ -106,6 +106,43 @@ function sv_primary_active_coupon(): ?array
     return $coupons[0] ?? null;
 }
 
+/**
+ * Calcula apenas uma prévia visual do preço após o cupom público ativo.
+ *
+ * Esta função nunca decide elegibilidade: o checkout continua validando o
+ * código, subtotal, cliente, validade e limites no motor autoritativo
+ * svcp_validate(). Configurações inesperadas falham fechadas e não geram
+ * promessa de preço na vitrine.
+ */
+function sv_active_coupon_preview_price(float $basePrice, array $coupon): ?float
+{
+    $basePrice = round($basePrice, 2);
+    if ($basePrice <= 0) {
+        return null;
+    }
+
+    $type = strtolower(trim((string)($coupon['type'] ?? '')));
+    $value = max(0.0, (float)($coupon['value'] ?? 0));
+    $discount = 0.0;
+
+    if ($type === 'percent') {
+        if ($value <= 0 || $value > 100) {
+            return null;
+        }
+        $discount = round($basePrice * $value / 100, 2);
+    } elseif ($type === 'fixed') {
+        if ($value <= 0) {
+            return null;
+        }
+        $discount = round(min($value, $basePrice), 2);
+    } else {
+        return null;
+    }
+
+    $preview = round(max(0.0, $basePrice - $discount), 2);
+    return $preview < $basePrice ? $preview : null;
+}
+
 function sv_active_coupon_offer_text(array $coupon): string
 {
     $type = strtolower(trim((string)($coupon['type'] ?? '')));

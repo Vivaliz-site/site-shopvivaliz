@@ -98,14 +98,27 @@ function sv_cgn_safe_task_id(mixed $value): string
     return preg_match('/^[A-Za-z0-9._-]{1,128}$/', $taskId) === 1 ? $taskId : '';
 }
 
+function sv_cgn_safe_conversation_id(mixed $value): string
+{
+    $conversationId = trim((string)$value);
+    return preg_match('/^[A-Za-z0-9_-]{8,160}$/', $conversationId) === 1 ? $conversationId : '';
+}
+
 if ($operation === 'enqueue') {
     $taskId = sv_cgn_safe_task_id($input['task_id'] ?? '');
     $repository = trim((string)($input['repository'] ?? ''));
-    if ($taskId === '' || $repository === '' || !preg_match('#^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$#', $repository)) {
+    $conversationRaw = trim((string)($input['conversation_id'] ?? ''));
+    $conversationId = $conversationRaw !== '' ? sv_cgn_safe_conversation_id($conversationRaw) : '';
+    if (
+        $taskId === ''
+        || $repository === ''
+        || !preg_match('#^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$#', $repository)
+        || ($conversationRaw !== '' && $conversationId === '')
+    ) {
         sv_cgn_bridge_reply(['status' => 'INVALID_REQUEST'], 400);
     }
     try {
-        $enqueued = $store->enqueue($taskId, $repository, gmdate(DATE_ATOM));
+        $enqueued = $store->enqueue($taskId, $repository, gmdate(DATE_ATOM), $conversationId);
         sv_cgn_bridge_reply(['status' => 'OK', 'enqueued' => $enqueued]);
     } catch (Throwable $e) {
         error_log('[chatgpt-continuity-bridge-enqueue] ' . $e->getMessage());
@@ -130,12 +143,19 @@ if ($operation === 'result') {
     $taskId = sv_cgn_safe_task_id($input['task_id'] ?? '');
     $resultStatus = strtoupper(trim((string)($input['result_status'] ?? '')));
     $detail = isset($input['detail']) ? (string)$input['detail'] : null;
+    $conversationRaw = trim((string)($input['conversation_id'] ?? ''));
+    $conversationId = $conversationRaw !== '' ? sv_cgn_safe_conversation_id($conversationRaw) : '';
     $allowed = ['SENT', 'SENT_UNCONFIRMED', 'PROGRESS_CONFIRMED', 'STALLED_NOT_CONFIRMED', 'CONVERSATION_NOT_FOUND', 'ERROR'];
-    if ($taskId === '' || !in_array($resultStatus, $allowed, true)) {
+    if (
+        $taskId === ''
+        || !in_array($resultStatus, $allowed, true)
+        || ($conversationRaw !== '' && $conversationId === '')
+        || ($conversationId !== '' && $resultStatus !== 'PROGRESS_CONFIRMED')
+    ) {
         sv_cgn_bridge_reply(['status' => 'INVALID_REQUEST'], 400);
     }
     try {
-        $recorded = $store->recordResult($taskId, $resultStatus, $detail);
+        $recorded = $store->recordResult($taskId, $resultStatus, $detail, $conversationId);
         if (!$recorded) {
             sv_cgn_bridge_reply(['status' => 'JOB_NOT_FOUND'], 404);
         }

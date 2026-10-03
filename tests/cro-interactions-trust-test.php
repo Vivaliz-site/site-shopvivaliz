@@ -30,12 +30,29 @@ $required = [
     "initSkeletonLoaders();",
     "initImageHoverZoom();",
     "initFreeShippingProgress();",
+    "const STICKY_REVEAL_SCROLL_Y = 80;",
+    "const outsideViewport = rect.bottom <= 0 || rect.top >= viewportHeight;",
+    "window.addEventListener('resize', syncStickyVisibility, { passive: true });",
 ];
 foreach ($required as $snippet) {
     if (!str_contains($source, $snippet)) {
         fwrite(STDERR, "FAIL: required CRO safety behavior missing: {$snippet}\n");
         exit(1);
     }
+}
+
+
+$productPage = file_get_contents(__DIR__ . '/../produto.php');
+if (!is_string($productPage)) {
+    fwrite(STDERR, "FAIL: produto.php could not be read\n");
+    exit(1);
+}
+if (
+    !str_contains($productPage, '/js/cro-interactions.js?v=')
+    || !str_contains($productPage, "filemtime(__DIR__ . '/js/cro-interactions.js')")
+) {
+    fwrite(STDERR, "FAIL: produto.php must cache-bust cro-interactions.js with its filemtime\n");
+    exit(1);
 }
 
 echo "cro-interactions-trust: ok\n";

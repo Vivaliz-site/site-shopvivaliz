@@ -381,26 +381,23 @@ function sv_home_banners(): array
 {
     return [
         [
-            'alt' => 'Banner Vivaliz com 3% OFF automatico em carrinho com 2 ou mais produtos diferentes',
+            'alt' => 'Banner ShopVivaliz com desconto automatico de 3% em 2 ou mais produtos diferentes',
             'image' => '/public/assets/home-banners/banner-primeira-compra.webp',
-            'tag' => 'OFERTA EXCLUSIVA',
-            'title' => 'Tudo o que você precisa.',
-            'subtitle' => 'Leve 2 ou mais produtos diferentes e ganhe 3% OFF automatico no carrinho.',
-            'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
-            'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
+            'tag' => 'DESCONTO AUTOMÁTICO',
+            'title' => 'Leve mais e pague menos.',
+            'subtitle' => 'Compre 2 ou mais produtos diferentes e ganhe 3% OFF automático no checkout.',
+            'primary' => ['label' => 'Aproveitar 3% OFF', 'href' => '/catalogo'],
         ],
         [
-            'alt' => 'Banner Vivaliz para casa, jardim e organização',
+            'alt' => 'Banner ShopVivaliz com rodizios, ferramentas, ferragens e utilidades',
             'image' => '/public/assets/home-banners/banner-casa-estilo.webp',
-            'tag' => 'COLEÇÃO 2026',
-            'title' => 'Renove o seu espaço.',
-            'subtitle' => 'Ferramentas de alta precisão e organização inteligente para uma casa impecável.',
-            'primary' => ['label' => 'Ver Coleção', 'href' => '/catalogo'],
-            'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
+            'tag' => 'CASA, OFICINA E NEGÓCIO',
+            'title' => 'Do reparo à organização, encontre o que precisa.',
+            'subtitle' => 'Rodízios, ferramentas, ferragens e utilidades com preço, disponibilidade e frete consultados antes da compra.',
+            'primary' => ['label' => 'Explorar produtos', 'href' => '/catalogo'],
         ],
     ];
 }
-
 function sv_home_category_icon(string $category): string
 {
     // Mapeia categorias para classes CSS ou ícones SVG
@@ -760,8 +757,46 @@ $svNavCurrent = '';
 
     <main id="main-content">
 
+    <section class="hero-carousel-section homepage-primary-merchandising">
+        <div class="container">
+            <div class="hero-carousel" id="hero-carousel" role="region" aria-roledescription="carousel" aria-label="Ofertas e categorias em destaque">
+                <div class="hero-carousel-track">
+                    <?php foreach ($heroBanners as $index => $banner): ?>
+                        <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" aria-roledescription="slide" aria-label="Banner <?= $index + 1 ?> de <?= count($heroBanners) ?>" style="position:relative;">
+                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" width="1200" height="480" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" <?= $index === 0 ? 'fetchpriority="high"' : 'fetchpriority="low"' ?> decoding="async" style="width:100%;height:100%;object-fit:cover;">
+                            <div class="hero-overlay banner-overlay">
+                                <?php if (!empty($banner['tag'])): ?>
+                                    <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($banner['title'])): ?>
+                                    <h2 class="banner-title"><?= sv_home_esc($banner['title']) ?></h2>
+                                <?php endif; ?>
+                                <?php if (!empty($banner['subtitle'])): ?>
+                                    <p class="banner-subtitle color-text-muted"><?= sv_home_esc($banner['subtitle']) ?></p>
+                                <?php endif; ?>
+                                <div class="banner-cta-container">
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <div class="hero-carousel-controls" aria-label="Controles do banner">
+                    <button type="button" class="hero-carousel-arrow" data-dir="-1" aria-label="Banner anterior">‹</button>
+                    <div class="hero-carousel-dots">
+                        <?php foreach ($heroBanners as $index => $banner): ?>
+                            <button type="button" class="hero-carousel-dot<?= $index === 0 ? ' is-active' : '' ?>" data-dot="<?= $index ?>" aria-label="Ir para banner <?= $index + 1 ?>"></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="hero-carousel-arrow" data-dir="1" aria-label="Próximo banner">›</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
     <!-- Hero Section -->
-    <section class="hero">
+    <section class="hero home-discovery-hero">
         <div class="container">
             <div class="hero-content">
                 <?php if ($svFreeShipping['enabled'] && $svFreeShipping['threshold'] > 0): ?>
@@ -770,27 +805,27 @@ $svNavCurrent = '';
                 </div>
                 <?php endif; ?>
                 <p class="eyebrow hero-kicker">
-                    Ferragens e utilidades para o dia a dia
+                    Encontre rápido no catálogo
                 </p>
-                <h1>Seu projeto começa com <span class="gradient-word">a peça certa</span></h1>
-                <p>Rodízios, ferragens, ferramentas e utilidades para casa, organização e reparos. Veja preço, disponibilidade e frete por CEP antes de finalizar.</p>
+                <h1>Procure, compare e escolha <span class="gradient-word">com facilidade</span></h1>
+                <p>Busque por produto, marca ou categoria e confira preço, disponibilidade e frete antes de finalizar.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
                     <form action="/catalogo" method="GET" class="hero-search-form">
                         <label for="hero-search-input" class="sr-only">Buscar produtos</label>
                         <span class="hero-search-icon">🔍</span>
-                        <input id="hero-search-input" type="text" name="q" placeholder="O que você procura? Ex.: rodízios, ferramentas..." required>
+                        <input id="hero-search-input" type="text" name="q" placeholder="Busque por produto, marca ou categoria" required>
                         <button type="submit">Buscar</button>
                     </form>
                 </div>
 
                 <div class="cta-buttons hero-cta hero-cta-mt-24">
                     <a href="/catalogo" class="btn btn-hero-primary">
-                        Ver catálogo
+                        Ver todos os produtos
                     </a>
                     <a href="/contato" class="btn btn-hero-secondary">
-                        Tirar uma dúvida
+                        Preciso de ajuda
                     </a>
                 </div>
             </div>
@@ -838,43 +873,6 @@ $svNavCurrent = '';
             </div>
         </div>
     </div>
-
-    <section class="hero-carousel-section">
-        <div class="container">
-            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
-                <div class="hero-carousel-track">
-                    <?php foreach ($heroBanners as $index => $banner): ?>
-                        <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" width="1200" height="480" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" <?= $index === 0 ? 'fetchpriority="high"' : 'fetchpriority="low"' ?> decoding="async" style="width:100%;height:100%;object-fit:cover;">
-                            <div class="hero-overlay banner-overlay">
-                                <?php if (!empty($banner['tag'])): ?>
-                                    <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
-                                <?php endif; ?>
-                                <?php if (!empty($banner['title'])): ?>
-                                    <h2 class="banner-title"><?= sv_home_esc($banner['title']) ?></h2>
-                                <?php endif; ?>
-                                <?php if (!empty($banner['subtitle'])): ?>
-                                    <p class="banner-subtitle color-text-muted"><?= sv_home_esc($banner['subtitle']) ?></p>
-                                <?php endif; ?>
-                                <div class="banner-cta-container">
-                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
-                                </div>
-                            </div>
-                        </article>
-                    <?php endforeach; ?>
-                </div>
-                <div class="hero-carousel-controls" aria-label="Controles do banner">
-                    <button type="button" class="hero-carousel-arrow" data-dir="-1" aria-label="Banner anterior">‹</button>
-                    <div class="hero-carousel-dots">
-                        <?php foreach ($heroBanners as $index => $banner): ?>
-                            <button type="button" class="hero-carousel-dot<?= $index === 0 ? ' is-active' : '' ?>" data-dot="<?= $index ?>" aria-label="Ir para banner <?= $index + 1 ?>"></button>
-                        <?php endforeach; ?>
-                    </div>
-                    <button type="button" class="hero-carousel-arrow" data-dir="1" aria-label="Próximo banner">›</button>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <section class="home-categories home-products home-section-shell" aria-labelledby="home-categories-title">
         <div class="container">
@@ -1107,7 +1105,7 @@ $svNavCurrent = '';
         elements.forEach(function (el) { observer.observe(el); });
     })();
     </script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script>
     (function () {
         var root = document.getElementById('hero-carousel');
@@ -1118,18 +1116,34 @@ $svNavCurrent = '';
         var current = 0;
         var timer = null;
 
+        var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+        var pausedByInteraction = false;
+
         function show(index) {
             current = (index + slides.length) % slides.length;
             slides.forEach(function (slide, slideIndex) {
-                slide.classList.toggle('is-active', slideIndex === current);
+                var active = slideIndex === current;
+                slide.classList.toggle('is-active', active);
+                slide.setAttribute('aria-hidden', active ? 'false' : 'true');
             });
             dots.forEach(function (dot, dotIndex) {
-                dot.classList.toggle('is-active', dotIndex === current);
+                var active = dotIndex === current;
+                dot.classList.toggle('is-active', active);
+                dot.setAttribute('aria-current', active ? 'true' : 'false');
             });
+        }
+
+        function shouldAutoRotate() {
+            return !document.hidden
+                && !pausedByInteraction
+                && !(reduceMotion && reduceMotion.matches)
+                && slides.length > 1;
         }
 
         function restart() {
             clearInterval(timer);
+            timer = null;
+            if (!shouldAutoRotate()) return;
             timer = setInterval(function () {
                 show(current + 1);
             }, 5000);
@@ -1148,6 +1162,31 @@ $svNavCurrent = '';
                 restart();
             });
         });
+
+        root.addEventListener('mouseenter', function () {
+            pausedByInteraction = true;
+            restart();
+        });
+        root.addEventListener('mouseleave', function () {
+            pausedByInteraction = false;
+            restart();
+        });
+        root.addEventListener('focusin', function () {
+            pausedByInteraction = true;
+            restart();
+        });
+        root.addEventListener('focusout', function () {
+            pausedByInteraction = root.contains(document.activeElement);
+            restart();
+        });
+        document.addEventListener('visibilitychange', restart);
+        if (reduceMotion) {
+            if (typeof reduceMotion.addEventListener === 'function') {
+                reduceMotion.addEventListener('change', restart);
+            } else if (typeof reduceMotion.addListener === 'function') {
+                reduceMotion.addListener(restart);
+            }
+        }
 
         show(0);
         restart();

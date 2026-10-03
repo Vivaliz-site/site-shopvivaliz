@@ -35,16 +35,30 @@ class ProbeStaticContractTests(unittest.TestCase):
         self.assertIn("python3 scripts/agent_task_state.py ready", next_action)
         self.assertIn("python3 scripts/agent_task_state.py complete", next_action)
         self.assertIn("continuity_e2e_pass", next_action)
+        self.assertNotIn("--evidence", next_action)
+        command_lines = [line.split(") ", 1)[1] for line in next_action.splitlines() if line.startswith(("1) ", "2) "))]
+        self.assertEqual(
+            command_lines,
+            [
+                "python3 scripts/agent_task_state.py ready --task continuity-e2e-fixture --verification continuity_e2e_pass",
+                "python3 scripts/agent_task_state.py complete --task continuity-e2e-fixture",
+            ],
+        )
+        self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
 
     def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
         workflow = (
             ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_call:", workflow)
-        self.assertIn("github.event.issue.number == 1586", workflow)
-        self.assertIn("github.event.comment.user.login == 'fredmourao-ai'", workflow)
-        self.assertIn("github.event.comment.body == '/continuity-e2e'", workflow)
+        self.assertIn("if: inputs.conversation_id != ''", workflow)
         self.assertIn("workflow_dispatch:", workflow)
+        dispatcher = (
+            ROOT / ".github" / "workflows" / "issue-comment-dispatcher.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("conversation_id: ${{ steps.route.outputs.conversation_id }}", dispatcher)
+        self.assertIn("conversation_id: ${{ needs.classify.outputs.conversation_id }}", dispatcher)
 
 
 class ProbeWorkflowRuntimeDirTests(unittest.TestCase):
@@ -99,71 +113,108 @@ class ProbeReportOutputTests(unittest.TestCase):
         self.assertIn("--report-path", text)
         self.assertIn("write_report(report, args.report_path)", text)
 
+    def test_fast_gate_covers_independent_browser_proof_certifier(self) -> None:
+        fast_gate = (ROOT / ".github" / "workflows" / "task-continuity-fast-gate.yml").read_text(encoding="utf-8")
+        self.assertGreaterEqual(fast_gate.count("scripts/chatgpt_continuity_proof_certifier.py"), 3)
+        self.assertGreaterEqual(fast_gate.count("tests/test_chatgpt_continuity_proof_certifier.py"), 2)
+        self.assertIn("tests.test_chatgpt_continuity_proof_certifier", fast_gate)
+        production = (ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/chatgpt_continuity_proof_certifier.py", production)
+        self.assertIn("chatgpt-continuity-proof.json", production)
+
 
 class ProbeEvaluationTests(unittest.TestCase):
+    CONVERSATION_ID = "12345678-2222-3333-4444-555555555555"
+    FINGERPRINT = "f" * 64
+
     def _base_observation(self) -> dict:
         return {
             "task_id": "continuity-e2e-fixture",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "conversation_id": self.CONVERSATION_ID,
             "observed_request": True,
-            "execution": {
+            "request": {
                 "task_id": "continuity-e2e-fixture",
-                "result": "terminal",
-                "diagnostic": {
-                    "background_paid_fallback_forbidden": True,
-                    "provider": "gemini",
-                },
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "fingerprint": self.FINGERPRINT,
             },
+            "chatgpt_nudge": {
+                "task_id": "continuity-e2e-fixture",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "fingerprint": self.FINGERPRINT,
+                "worker_status": "PROGRESS_CONFIRMED",
+                "conversation_id": self.CONVERSATION_ID,
+            },
+            "execution": None,
             "final_state": {
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "conversation_id": self.CONVERSATION_ID,
                 "status": "CONCLUIDO",
                 "verification": "continuity_e2e_pass",
+                "history": [
+                    {"at": "2026-10-02T12:00:02Z", "event": "ready_to_complete"},
+                    {"at": "2026-10-02T12:00:03Z", "event": "completed"},
+                ],
             },
         }
 
-    def test_full_real_evidence_passes(self) -> None:
+    def test_browser_confirmed_bound_evidence_passes(self) -> None:
         probe = load_probe()
         ok, reasons = probe.evaluate(self._base_observation())
         self.assertTrue(ok)
         self.assertEqual(reasons, [])
 
-    def test_progress_result_is_accepted_as_valid_terminal_path(self) -> None:
+    def test_detached_executor_touching_browser_probe_invalidates_certification(self) -> None:
         probe = load_probe()
         observation = self._base_observation()
-        observation["execution"]["result"] = "progress"
-        ok, reasons = probe.evaluate(observation)
-        self.assertTrue(ok)
-
-    # --- Fault injection: each single missing/incorrect piece must fail RED ---
-
-    def test_fails_when_no_resume_request_was_observed(self) -> None:
-        probe = load_probe()
-        observation = self._base_observation()
-        observation["observed_request"] = False
+        observation["execution"] = {
+            "task_id": "continuity-e2e-fixture",
+            "result": "terminal",
+            "diagnostic": {"provider": "gemini", "provider_status": "task_state_advanced"},
+        }
         ok, reasons = probe.evaluate(observation)
         self.assertFalse(ok)
-        self.assertTrue(any("no resume request" in reason for reason in reasons))
+        self.assertTrue(any("detached executor" in reason for reason in reasons))
 
-    def test_fails_when_dispatcher_never_executed(self) -> None:
+    def test_detached_resume_request_id_in_sentinel_history_invalidates_certification(self) -> None:
         probe = load_probe()
         observation = self._base_observation()
-        observation["execution"] = None
+        observation["final_state"]["history"][0]["resume_request_id"] = "resume-false-green"
         ok, reasons = probe.evaluate(observation)
         self.assertFalse(ok)
-        self.assertTrue(any("no matching execution ledger row" in reason for reason in reasons))
+        self.assertTrue(any("resume_request_id" in reason for reason in reasons))
 
-    def test_fails_when_ledger_result_is_no_progress(self) -> None:
+    def test_detached_terminal_alone_does_not_certify_conversation_resume(self) -> None:
         probe = load_probe()
         observation = self._base_observation()
-        observation["execution"]["result"] = "no_progress"
+        observation["chatgpt_nudge"] = None
         ok, reasons = probe.evaluate(observation)
         self.assertFalse(ok)
-        self.assertTrue(any("no_progress" in reason for reason in reasons))
+        self.assertTrue(any("ChatGPT nudge evidence" in reason for reason in reasons))
 
-    def test_fails_when_ledger_result_is_unrecognized(self) -> None:
+    def test_fails_when_worker_did_not_confirm_progress(self) -> None:
         probe = load_probe()
         observation = self._base_observation()
-        observation["execution"]["result"] = "executor_error"
+        observation["chatgpt_nudge"]["worker_status"] = "SENT_UNCONFIRMED"
         ok, reasons = probe.evaluate(observation)
         self.assertFalse(ok)
+        self.assertTrue(any("PROGRESS_CONFIRMED" in reason for reason in reasons))
+
+    def test_fails_when_conversation_binding_differs(self) -> None:
+        probe = load_probe()
+        observation = self._base_observation()
+        observation["chatgpt_nudge"]["conversation_id"] = "87654321-2222-3333-4444-555555555555"
+        ok, reasons = probe.evaluate(observation)
+        self.assertFalse(ok)
+        self.assertTrue(any("conversation_id" in reason for reason in reasons))
+
+    def test_fails_when_fingerprint_is_historical_or_mismatched(self) -> None:
+        probe = load_probe()
+        observation = self._base_observation()
+        observation["chatgpt_nudge"]["fingerprint"] = "e" * 64
+        ok, reasons = probe.evaluate(observation)
+        self.assertFalse(ok)
+        self.assertTrue(any("fingerprint" in reason for reason in reasons))
 
     def test_fails_when_checkpoint_does_not_reach_terminal(self) -> None:
         probe = load_probe()
@@ -181,89 +232,141 @@ class ProbeEvaluationTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("continuity_e2e_pass" in reason for reason in reasons))
 
-    def test_fails_when_diagnostic_does_not_prove_gemini_only_background(self) -> None:
-        probe = load_probe()
-        observation = self._base_observation()
-        observation["execution"]["diagnostic"]["background_paid_fallback_forbidden"] = False
-        ok, reasons = probe.evaluate(observation)
-        self.assertFalse(ok)
-        self.assertTrue(any("background_paid_fallback_forbidden" in reason for reason in reasons))
-
-    def test_ledger_row_belonging_to_a_different_task_is_not_matched(self) -> None:
+    def test_poll_requires_same_request_fingerprint_and_bound_conversation(self) -> None:
         probe = load_probe()
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)
             task_id = "continuity-e2e-real"
+            repository = "Vivaliz-site/site-shopvivaliz"
             (runtime / "_resume-requests.jsonl").write_text(
-                json.dumps({"task_id": "some-other-task"}) + "\n", encoding="utf-8"
-            )
-            (runtime / "_resume-executions.jsonl").write_text(
-                json.dumps({"task_id": "some-other-task", "result": "terminal"}) + "\n",
+                json.dumps({"task_id": task_id, "repository": repository, "fingerprint": self.FINGERPRINT}) + "\n",
                 encoding="utf-8",
             )
-            (runtime / f"{task_id}.json").write_text(
-                json.dumps({"status": "RUNNING"}), encoding="utf-8"
+            (runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+                json.dumps({
+                    "task_id": task_id,
+                    "repository": repository,
+                    "fingerprint": self.FINGERPRINT,
+                    "worker_status": "PROGRESS_CONFIRMED",
+                    "conversation_id": self.CONVERSATION_ID,
+                }) + "\n",
+                encoding="utf-8",
             )
-
+            (runtime / "_resume-executions.jsonl").write_text("", encoding="utf-8")
+            (runtime / f"{task_id}.json").write_text(
+                json.dumps({
+                    "repository": repository,
+                    "conversation_id": self.CONVERSATION_ID,
+                    "status": "CONCLUIDO",
+                    "verification": "continuity_e2e_pass",
+                    "history": [
+                        {"at": "2026-10-02T12:00:02Z", "event": "ready_to_complete"},
+                        {"at": "2026-10-02T12:00:03Z", "event": "completed"},
+                    ],
+                }),
+                encoding="utf-8",
+            )
             observation = probe.poll_for_terminal_evidence(
                 runtime_dir=runtime,
                 task_id=task_id,
-                repository="Vivaliz-site/site-shopvivaliz",
+                repository=repository,
+                conversation_id=self.CONVERSATION_ID,
                 timeout_seconds=1,
                 poll_interval_seconds=1,
                 sleep=lambda _seconds: None,
             )
             ok, reasons = probe.evaluate(observation)
-            self.assertFalse(observation["observed_request"])
-            self.assertIsNone(observation["execution"])
-            self.assertFalse(ok)
+            self.assertTrue(ok, reasons)
 
-    def test_poll_observes_matching_task_and_stops_early_once_terminal(self) -> None:
+    def test_failed_synthetic_checkpoint_is_preserved_outside_active_runtime(self) -> None:
         probe = load_probe()
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = Path(tmp)
-            task_id = "continuity-e2e-real"
-            (runtime / "_resume-requests.jsonl").write_text(
-                json.dumps({"task_id": task_id}) + "\n", encoding="utf-8"
-            )
-            (runtime / "_resume-executions.jsonl").write_text(
-                json.dumps(
-                    {
-                        "task_id": task_id,
-                        "result": "terminal",
-                        "diagnostic": {"background_paid_fallback_forbidden": True},
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            (runtime / f"{task_id}.json").write_text(
-                json.dumps({"status": "CONCLUIDO", "verification": "continuity_e2e_pass"}),
-                encoding="utf-8",
-            )
+            runtime = Path(tmp) / "agent-task-state"
+            runtime.mkdir()
+            task_id = "continuity-e2e-failed"
+            source = runtime / f"{task_id}.json"
+            source.write_text(json.dumps({"task_id": task_id, "status": "RUNNING"}), encoding="utf-8")
+            destination = probe.quarantine_failed_probe(runtime_dir=runtime, task_id=task_id)
+            self.assertIsNotNone(destination)
+            self.assertFalse(source.exists())
+            self.assertTrue(destination.is_file())
+            self.assertTrue((destination.parent / f"{task_id}.sha256").is_file())
 
-            clock = {"value": 0.0}
+    def test_quarantine_falls_back_inside_runtime_when_archive_is_not_writable(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "agent-task-state"
+            runtime.mkdir()
+            task_id = "continuity-e2e-permission-fallback"
+            source = runtime / f"{task_id}.json"
+            source.write_text(json.dumps({"task_id": task_id, "status": "RUNNING"}), encoding="utf-8")
 
-            def fake_now() -> float:
-                return clock["value"]
+            original_replace = probe.os.replace
+            calls = {"count": 0}
 
-            def fake_sleep(seconds: float) -> None:
-                clock["value"] += seconds
+            def permission_then_replace(src, dst):
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    raise PermissionError("archive directory is not writable")
+                return original_replace(src, dst)
 
-            observation = probe.poll_for_terminal_evidence(
-                runtime_dir=runtime,
-                task_id=task_id,
+            probe.os.replace = permission_then_replace
+            try:
+                destination = probe.quarantine_failed_probe(runtime_dir=runtime, task_id=task_id)
+            finally:
+                probe.os.replace = original_replace
+
+            fallback_dir = runtime / "_e2e-failures"
+            self.assertEqual(destination, fallback_dir / f"{task_id}.json")
+            self.assertFalse(source.exists())
+            self.assertTrue(destination.is_file())
+            digest = fallback_dir / f"{task_id}.sha256"
+            self.assertTrue(digest.is_file())
+            self.assertIn(destination.name, digest.read_text(encoding="utf-8"))
+            self.assertEqual(list(runtime.glob("_e2e-failure-*.json")), [])
+
+    def test_quarantine_refuses_non_e2e_task(self) -> None:
+        probe = load_probe()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                probe.quarantine_failed_probe(runtime_dir=Path(tmp), task_id="real-production-task")
+
+    def test_create_synthetic_task_binds_before_progress(self) -> None:
+        probe = load_probe()
+        calls = []
+
+        def fake_runner(argv, **kwargs):
+            calls.append(list(argv))
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            probe.create_synthetic_task(
+                runtime_dir=Path(tmp),
+                task_id="continuity-e2e-bound",
                 repository="Vivaliz-site/site-shopvivaliz",
-                timeout_seconds=600,
-                poll_interval_seconds=5,
-                sleep=fake_sleep,
-                now=fake_now,
+                agent_task_state_script=Path("scripts/agent_task_state.py"),
+                conversation_id=self.CONVERSATION_ID,
+                runner=fake_runner,
             )
-            ok, reasons = probe.evaluate(observation)
-            self.assertTrue(ok, reasons)
-            # Terminal evidence was already on disk; the loop must not have
-            # needed to consume the whole timeout budget.
-            self.assertLess(clock["value"], 600)
+        commands = [call[2] for call in calls]
+        self.assertEqual(commands, ["start", "bind-conversation", "progress"])
+        self.assertIn(self.CONVERSATION_ID, calls[1])
+
+
+
+class ContinuityWorkflowTopologyTest(unittest.TestCase):
+    def test_production_e2e_runs_on_backend_controller_runner(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "task-continuity-production-e2e.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]",
+            workflow,
+        )
+        self.assertNotIn(
+            "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]",
+            workflow,
+        )
 
 
 if __name__ == "__main__":

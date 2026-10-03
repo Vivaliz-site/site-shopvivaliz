@@ -33,39 +33,29 @@ def first_env(*names: str) -> tuple[str, str]:
 
 def inspect_config() -> dict:
     load_env_files([".env", ".env.local"])
-    host_name, host = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST")
-    port_name, port = first_env("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT")
-    user_name, user = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER")
-    pass_name, password = first_env("SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS")
+    key_name, api_key = first_env("BREVO_API_KEY")
     to_name, recipients = first_env("EMAIL_TO")
-    from_name, sender = first_env("EMAIL_FROM", "SMTP_USER", "EMAIL_USER", "MAIL_USER")
-
     recipient_list = [item.strip() for item in recipients.split(",") if item.strip()]
     recipients_valid = bool(recipient_list) and all("@" in item and "." in item for item in recipient_list)
 
     checks = {
-        "host": bool(host),
-        "port": bool(port),
-        "user": bool(user),
-        "password": bool(password),
+        "brevo_api_key": bool(api_key),
         "recipients": recipients_valid,
-        "sender": bool(sender),
+        "fixed_sender": True,
+        "fixed_reply_to": True,
     }
-    ok = all(checks.values())
-    report = {
-        "ok": ok,
+    return {
+        "ok": all(checks.values()),
+        "provider": "brevo_api",
         "sources": {
-            "host": host_name,
-            "port": port_name,
-            "user": user_name,
-            "password": pass_name,
+            "api_key": key_name,
             "recipients": to_name,
-            "sender": from_name,
         },
         "checks": checks,
         "recipient_count": len(recipient_list),
+        "sender": "atendimento@shopvivaliz.com.br",
+        "reply_to": "atendimento@shopvivaliz.com.br",
     }
-    return report
 
 
 def main() -> int:

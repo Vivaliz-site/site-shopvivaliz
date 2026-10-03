@@ -62,6 +62,7 @@ on:
           - claude_remote_control_status
           - chatgpt_continuity_diagnostic
           - chatgpt_continuity_repair
+          - gemini_24x7_controller_install
           - chatgpt_freeze_task_state
           - chatgpt_freeze_state_owner_repair
           - chatgpt_freeze_task_successor
@@ -117,7 +118,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "gemini_24x7_controller_install", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -158,6 +159,8 @@ jobs:
               raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
           if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
               raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
+          if action == "gemini_24x7_controller_install" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("Gemini controller install is restricted to the backend VM")
           if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
               raise SystemExit("ChatGPT freeze task actions are restricted to the site VM")
           if not reason:
@@ -265,7 +268,7 @@ jobs:
               echo "REMOTE_STORAGE_SCAN_END"
               ;;
             runtime_status)
-              bash scripts/runtime-service-status.sh site
+              bash scripts/runtime-status-policy.sh site
               ;;
             amazon_support_readback)
               sudo -n env AMAZON_SUPPORT_READBACK_PROFILE=current-tickets AMAZON_SUPPORT_READBACK_CASE_IDS=22153259501,22154699381 AMAZON_SUPPORT_READBACK_ALLOW_MISSING=1 bash scripts/amazon-support-readback-oci-site.sh
@@ -367,7 +370,23 @@ jobs:
             chatgpt_freeze_task_state)
               state_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
               state_file="$RUNNER_TEMP/chatgpt-freeze-task-state.json"
-              canonical_task_id="chatgpt-freeze-root-cause-20260928-g2"
+              canonical_task_id="$(python3 - "$state_dir" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          pattern = re.compile(r"chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)")
+          candidates = []
+          for candidate in root.glob("chatgpt-freeze-root-cause-20260928-g*.json"):
+              match = pattern.fullmatch(candidate.stem)
+              if match and candidate.is_file() and not candidate.is_symlink():
+                  candidates.append((int(match.group(1)), candidate.stem))
+          if not candidates:
+              raise SystemExit("no generational freeze checkpoint found")
+          print(max(candidates)[1])
+          PY
+              )"
               trap 'rm -f "$state_file"' EXIT
               test -f "$state_dir/$canonical_task_id.json"
               SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" \
@@ -511,7 +530,7 @@ jobs:
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
           if [ "$ACTION" = "runtime_status" ]; then
-            "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-service-status.sh
+            "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-status-policy.sh
             exit 0
           fi
           case "$ACTION" in
@@ -572,6 +591,24 @@ jobs:
                   | grep -Fxq shopvivaliz-backend-browser
                 echo BACKEND_BROWSER_RUNNER_STATUS=PASS'
               ;;
+            gemini_24x7_controller_install)
+              remote_dir="/tmp/shopvivaliz-gemini-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_gemini_controller() { "${SSH[@]}" "rm -rf '$remote_dir'"; }
+              trap cleanup_gemini_controller RETURN
+              "${SSH[@]}" "install -d -m 700 '$remote_dir/scripts' '$remote_dir/deploy/systemd' '$remote_dir/docs/knowledge'"
+              for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
+                "${SSH[@]}" "dd of='$remote_dir/scripts/$source' status=none && chmod 700 '$remote_dir/scripts/$source'" < "scripts/$source"
+              done
+              "${SSH[@]}" "dd of='$remote_dir/AGENTS.md' status=none" < AGENTS.md
+              "${SSH[@]}" "dd of='$remote_dir/docs/knowledge/task-continuity.md' status=none" < docs/knowledge/task-continuity.md
+              "${SSH[@]}" "dd of='$remote_dir/deploy/systemd/shopvivaliz-gemini-24x7-controller.service' status=none" < deploy/systemd/shopvivaliz-gemini-24x7-controller.service
+              if ! "${SSH[@]}" "bash '$remote_dir/scripts/install-gemini-24x7-controller.sh' '$remote_dir' '$GITHUB_SHA'"; then
+                "${SSH[@]}" "sudo -n journalctl -u shopvivaliz-gemini-24x7-controller.service -n 40 --no-pager | sed -E 's/(GEMINI_API_KEY|GOOGLE_API_KEY|GOOGLE_GEMINI_API_KEY)=([^[:space:]]+)/\\1=***/g'"
+                exit 1
+              fi
+              "${SSH[@]}" 'systemctl is-enabled --quiet shopvivaliz-gemini-24x7-controller.service && systemctl is-active --quiet shopvivaliz-gemini-24x7-controller.service'
+              echo GEMINI_24X7_CONTROLLER_INSTALL=PASS
+              ;;
             chatgpt_continuity_repair)
               token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
               token_file="$token_dir/bridge.token"
@@ -589,6 +626,22 @@ jobs:
                 sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
                 sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
               fi
+
+              before="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
+              test -n "$before"
+              sudo -n chown www-data:ubuntu "$token_dir"
+              sudo -n chmod 750 "$token_dir"
+              sudo -n chown www-data:ubuntu "$token_file"
+              sudo -n chmod 640 "$token_file"
+              after="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
+              test -n "$after"
+              if [ "$before" != "$after" ]; then
+                echo "::error::Continuity bridge token content changed during metadata repair"
+                exit 32
+              fi
+              sudo -u ubuntu test -r "$token_file"
+              echo "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS"
+
               sudo -n python3 - "$token_file" <<'PY'
           import pathlib, sys
           value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
@@ -613,21 +666,20 @@ jobs:
               jq -e '.status == "OK"' "$heartbeat_tmp" >/dev/null
               rm -f "$heartbeat_tmp"
 
-              "${SSH[@]}" "install -d -m 700 '$remote_dir' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
-              "${SSH[@]}" "dd of='$remote_dir/install.sh' status=none && chmod 700 '$remote_dir/install.sh'" < scripts/install-chatgpt-continuity-backend-bridge.sh
-              "${SSH[@]}" "dd of='$remote_dir/worker.mjs' status=none && chmod 700 '$remote_dir/worker.mjs'" < scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+              "${SSH[@]}" "install -d -m 700 '$remote_dir' '$remote_dir/scripts' '$remote_dir/scripts/chatgpt-continuity' '$remote_dir/ops' '$remote_dir/ops/systemd' /home/ubuntu/.config/shopvivaliz-chatgpt-continuity"
+              "${SSH[@]}" "dd of='$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh' status=none && chmod 700 '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" < scripts/install-chatgpt-continuity-backend-bridge.sh
+              "${SSH[@]}" "dd of='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' status=none && chmod 700 '$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'" < scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
+              "${SSH[@]}" "dd of='$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh' status=none && chmod 700 '$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh'" < scripts/chatgpt-continuity/chatgpt-browser-guardian.sh
+              "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service'" < ops/systemd/shopvivaliz-chatgpt-browser.service
+              "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.service
+              "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer
               sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
               echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
-
-              bridge_endpoint=''
-              bridge_endpoint="$("${SSH[@]}" 'set -Eeuo pipefail; token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token; token=$(dd if="$token_file" status=none); trap "unset token" EXIT; for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do tmp=$(mktemp); if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data "{\"operation\":\"heartbeat\"}" "$candidate" > "$tmp" && jq -e ".status == \"OK\"" "$tmp" >/dev/null 2>&1; then rm -f "$tmp"; printf "%s\\n" "$candidate"; exit 0; fi; rm -f "$tmp"; done; exit 41')"
-              test -n "$bridge_endpoint"
-              echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=$bridge_endpoint"
 
               "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
               install_output=''
               install_rc=0
-              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/worker.mjs' CHATGPT_CONTINUITY_BRIDGE_ENDPOINT='$bridge_endpoint' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/install.sh'" 2>&1)"; then
+              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"; then
                 install_rc=0
               else
                 install_rc=$?
@@ -640,6 +692,7 @@ jobs:
               fi
               printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS'
               printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
+              echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=private_loopback_18081"
               echo "CHATGPT_CONTINUITY_REPAIR=PASS"
               ;;
             chatgpt_continuity_diagnostic)
@@ -700,6 +753,8 @@ jobs:
           bridge_queue_total = 0
           bridge_queue_pending = 0
           bridge_queue_claimed = 0
+          bridge_latest_error_code = "NONE"
+          bridge_latest_error_sha256 = ""
           bridge_store = pathlib.Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/pending-nudges.json")
           try:
               bridge_data = json.loads(bridge_store.read_text(encoding="utf-8")) if bridge_store.is_file() else {}
@@ -715,6 +770,20 @@ jobs:
                       bridge_queue_pending += 1
                   elif status == "CLAIMED":
                       bridge_queue_claimed += 1
+                  if status == "ERROR":
+                      raw_detail = str(item.get("detail") or "")
+                      normalized = raw_detail.lower()
+                      bridge_latest_error_code = str(item.get("detail_code") or (
+                          "COMPOSER_UNAVAILABLE_AFTER_REATTACH" if "composer/send-button remained unavailable after bounded reattach" in normalized else
+                          "SEND_FAILED_AFTER_REATTACH" if "composer found but send failed after bounded reattach" in normalized else
+                          "TRANSMISSION_COMPOSER_UNAVAILABLE" if "transmission error persisted and composer was unavailable after reattach" in normalized else
+                          "TRANSMISSION_RETRY_SEND_FAILED" if "transmission error persisted and retry send failed" in normalized else
+                          "TRANSMISSION_PERSISTED_AFTER_RETRY" if "transmission error persisted after bounded recovery retry" in normalized else
+                          "AMBIGUOUS_CONVERSATION_TARGET" if "multiple open chatgpt conversation tabs found" in normalized else
+                          "CDP_ENDPOINT_UNREACHABLE" if "cdp endpoint unreachable" in normalized else
+                          "UNCLASSIFIED_RUNTIME_ERROR"
+                      ))
+                      bridge_latest_error_sha256 = str(item.get("detail_sha256") or __import__("hashlib").sha256(raw_detail.encode()).hexdigest()) if raw_detail else ""
           except (OSError, UnicodeError, json.JSONDecodeError):
               pass
           bridge_queue_active = bridge_queue_pending + bridge_queue_claimed
@@ -752,6 +821,8 @@ jobs:
               "bridge_queue_total": bridge_queue_total,
               "bridge_queue_pending": bridge_queue_pending,
               "bridge_queue_claimed": bridge_queue_claimed,
+              "bridge_latest_error_code": bridge_latest_error_code,
+              "bridge_latest_error_sha256": bridge_latest_error_sha256,
               "bridge_queue_active": bridge_queue_active,
               "bridge_queue_resolved": bridge_queue_resolved,
           }, sort_keys=True))
@@ -768,6 +839,8 @@ jobs:
               bridge_queue_total="$(jq -r '.bridge_queue_total' "$diag_json")"
               bridge_queue_pending="$(jq -r '.bridge_queue_pending' "$diag_json")"
               bridge_queue_claimed="$(jq -r '.bridge_queue_claimed' "$diag_json")"
+              bridge_latest_error_code="$(jq -r '.bridge_latest_error_code' "$diag_json")"
+              bridge_latest_error_sha256="$(jq -r '.bridge_latest_error_sha256' "$diag_json")"
               bridge_queue_active="$(jq -r '.bridge_queue_active' "$diag_json")"
               bridge_queue_resolved="$(jq -r '.bridge_queue_resolved' "$diag_json")"
               rm -f "$diag_json"
@@ -796,24 +869,13 @@ jobs:
                 test -s "$token_file"
                 token="$(dd if="$token_file" status=none)"
                 trap "unset token" EXIT
-                heartbeat_ok=false
-                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
-                  heartbeat_tmp="$(mktemp)"
-                  if curl -fsS --connect-timeout 4 --max-time 10 \
-                    -H "Host: shopvivaliz.com.br" \
-                    -H "Authorization: Bearer $token" \
-                    -H "Content-Type: application/json" \
-                    --data '"'"'{"operation":"heartbeat"}'"'"' \
-                    "$candidate" > "$heartbeat_tmp" &&
-                    jq -e '"'"'.status == "OK"'"'"' "$heartbeat_tmp" >/dev/null 2>&1
-                  then
-                    rm -f "$heartbeat_tmp"
-                    heartbeat_ok=true
-                    break
-                  fi
-                  rm -f "$heartbeat_tmp"
-                done
-                test "$heartbeat_ok" = true'
+                curl -fsS --connect-timeout 4 --max-time 10 \
+                  -H "Host: shopvivaliz.com.br" \
+                  -H "Authorization: Bearer $token" \
+                  -H "Content-Type: application/json" \
+                  --data "{\"operation\":\"heartbeat\"}" \
+                  http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php \
+                  | jq -e ".status == \"OK\"" >/dev/null'
               then
                 bridge_heartbeat=true
               fi
@@ -825,17 +887,17 @@ jobs:
                 token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
                 test -s "$token_file"
                 token="$(dd if="$token_file" status=none)"
-                trap "unset token" EXIT
-                for candidate in http://10.0.1.112/api/chatgpt-continuity/bridge.php http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php; do
-                  tmp="$(mktemp)"
-                  if curl -fsS --connect-timeout 4 --max-time 10 -H "Host: shopvivaliz.com.br" -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '"'"'{"operation":"queue_status"}'"'"' "$candidate" > "$tmp" && jq -e '"'"'.status == "OK" and (.queue.certified | type == "boolean")'"'"' "$tmp" >/dev/null 2>&1; then
-                    jq -r '"'"'[.queue.certified,.queue.archive_rows,.queue.resolved_recent,.queue.invalid] | @tsv'"'"' "$tmp"
-                    rm -f "$tmp"
-                    exit 0
-                  fi
-                  rm -f "$tmp"
-                done
-                exit 42' 2>/dev/null || true)"
+                tmp="$(mktemp)"
+                trap "rm -f \"$tmp\"; unset token" EXIT
+                curl -fsS --connect-timeout 4 --max-time 10 \
+                  -H "Host: shopvivaliz.com.br" \
+                  -H "Authorization: Bearer $token" \
+                  -H "Content-Type: application/json" \
+                  --data "{\"operation\":\"queue_status\"}" \
+                  http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php > "$tmp"
+                jq -e ".status == \"OK\" and (.queue.certified | type == \"boolean\")" "$tmp" >/dev/null
+                jq -r "[.queue.certified,.queue.archive_rows,.queue.resolved_recent,.queue.invalid] | @tsv" "$tmp"
+              ' 2>/dev/null || true)"
               if [ -n "$bridge_store_status" ]; then
                 read -r bridge_store_certified bridge_store_archive_rows bridge_store_resolved_recent bridge_store_invalid <<< "$bridge_store_status"
               fi
@@ -853,6 +915,8 @@ jobs:
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_TOTAL=$bridge_queue_total"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_PENDING=$bridge_queue_pending"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_CLAIMED=$bridge_queue_claimed"
+              echo "CHATGPT_CONTINUITY_LATEST_ERROR_CODE=$bridge_latest_error_code"
+              echo "CHATGPT_CONTINUITY_LATEST_ERROR_SHA256=${bridge_latest_error_sha256:-NONE}"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_ACTIVE=$bridge_queue_active"
               echo "CHATGPT_CONTINUITY_BRIDGE_QUEUE_RESOLVED=$bridge_queue_resolved"
               echo "CHATGPT_CONTINUITY_BRIDGE_STORE_CERTIFIED=$bridge_store_certified"

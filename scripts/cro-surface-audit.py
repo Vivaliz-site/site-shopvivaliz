@@ -16,10 +16,10 @@ SURFACES = [
     {
         "id": "home",
         "label": "Home",
-        "path": Path("home.php"),
+        "path": Path("index.php"),
         "signals": [
-            {"id": "hero_cta", "label": "CTA principal acima da dobra", "pattern": r"hero-btn", "weight": 3},
-            {"id": "category_shortcuts", "label": "Atalhos de categoria", "pattern": r"categories-grid", "weight": 2},
+            {"id": "hero_cta", "label": "CTA principal acima da dobra", "pattern": r"btn-cta-green|btn-hero-primary", "weight": 3},
+            {"id": "category_shortcuts", "label": "Atalhos de categoria", "pattern": r"home-categories", "weight": 2},
             {"id": "featured_products", "label": "Produtos em destaque", "pattern": r"Produtos em destaque", "weight": 2},
             {"id": "contact_cta", "label": "CTA de contato", "pattern": r"/contato", "weight": 1},
         ],
@@ -46,7 +46,7 @@ SURFACES = [
             {
                 "id": "trust_strip",
                 "label": "Adicionar faixa de confianca no catalogo",
-                "pattern": r"Compra 100% segura|Envio para todo Brasil|troca",
+                "pattern": r"catalog-trust-strip|Checkout protegido|Frete calculado|devolu",
                 "hint": "Exibir uma faixa curta de confianca perto da grade de produtos.",
             },
         ],
@@ -91,7 +91,7 @@ SURFACES = [
             {
                 "id": "abandonment_recovery",
                 "label": "Adicionar recuperacao leve de abandono",
-                "pattern": r"salvar|continuar depois|whatsapp",
+                "pattern": r"cart-recovery-note|salvo localmente|continuar a compra|whatsapp",
                 "hint": "Oferecer um caminho de retomada simples para carrinhos abandonados.",
             },
         ],

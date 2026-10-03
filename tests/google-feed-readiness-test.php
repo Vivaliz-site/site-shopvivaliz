@@ -30,6 +30,13 @@ foreach ($feeds as $name => $file) {
     if (strpos($xml, '<g:availability>in_stock</g:availability>') === false) {
         $errors[] = "$name:no_in_stock_items";
     }
+    if ($name === 'merchant') {
+        if (strpos($xml, '<g:additional_image_link>') === false) $errors[] = "$name:no_additional_images";
+        if (strpos($xml, '<g:shipping_weight>') === false) $errors[] = "$name:no_shipping_weight";
+        if (strpos($xml, '<g:shipping_length>') === false) $errors[] = "$name:no_shipping_length";
+        if (strpos($xml, '<g:shipping_width>') === false) $errors[] = "$name:no_shipping_width";
+        if (strpos($xml, '<g:shipping_height>') === false) $errors[] = "$name:no_shipping_height";
+    }
 }
 if ($errors !== []) {
     fwrite(STDERR, "GOOGLE_FEED_READINESS_FAILED\n" . implode("\n", array_unique($errors)) . "\n");

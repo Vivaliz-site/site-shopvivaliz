@@ -69,6 +69,12 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Querying task status is idempotent.
 
 ## Initial MCP Tools
+- controller_status
+- controller_promote
+- continuity_status
+- continuity_e2e
+- claude_remote_control_status
+- claude_remote_control_reconcile
 - `hosts_list`
 - `host_health`
 - `processes_list`
@@ -77,7 +83,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - `file_read`
 - `file_list`
 - `logs_tail`
-- `command_run` (policy-controlled)
+- `admin_command_run` (policy-controlled)
 - `task_submit`
 - `task_status`
 - `task_cancel`
@@ -100,6 +106,17 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 4. Return structured evidence and audit ID.
 
 Tools: `hosts_list`, `host_health`, `processes_list`, `service_status`, `service_action`, `file_read`, `file_list`, `logs_tail`, `admin_command_run`.
+
+### Promote and validate the continuity controller
+1. controller_status reads the active immutable controller SHA and sanitized runtime state.
+2. controller_promote accepts only a full 40-character SHA that must equal refreshed origin/main.
+3. Promotion uses a clean detached worktree plus the canonical installer; it never edits the active release in place.
+4. continuity_status aggregates sanitized ChatGPT, Claude Remote Control and dispatcher health.
+5. continuity_e2e runs the canonical detached continuity probe bound to an explicit conversation ID and only passes with observed_request=true and continuity_e2e_pass.
+
+Tools: controller_status, controller_promote, continuity_status, continuity_e2e, claude_remote_control_status, claude_remote_control_reconcile.
+
+controller_promote, continuity_e2e and claude_remote_control_reconcile are always dispatched as durable MCP tasks. The initial tool call returns a task ID quickly; completion is verified through task_status/task_wait and survives caller disconnects.
 
 ### Run a durable privileged task
 1. Submit an operation for a named host.

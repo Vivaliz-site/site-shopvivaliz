@@ -15,6 +15,7 @@ SETUP_TARGET="/usr/local/sbin/shopvivaliz-setup-claude-remote-control"
 SUDOERS_FILE="/etc/sudoers.d/shopvivaliz-claude-mcp"
 UNIT_TARGET="/etc/systemd/system/shopvivaliz-claude-remote-control.service"
 SERVICE="shopvivaliz-claude-remote-control.service"
+service_previously_installed=false
 
 die(){ echo "CLAUDE_REMOTE_CONTROL_SETUP=FAIL reason=$1" >&2; exit "${2:-1}"; }
 require_backend(){ [ "$(hostname)" = "$BACKEND_HOST" ] || die backend_host_mismatch 21; }
@@ -25,9 +26,9 @@ run_in_workspace_as_claude(){ run_as_claude bash -c 'cd "$1"; shift; exec "$@"' 
 probe_auth_and_command(){
   test -x "$CLAUDE_BIN" || die claude_missing 30
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary"
-  local tmp
+  local tmp help_out="" help_rc
   tmp="$(mktemp)" || die claude_auth_tmpfile_failed 33
-  trap 'rm -f "$tmp"' RETURN
+  trap 'rm -f "$tmp" "$help_out"' RETURN
   if ! run_as_claude timeout 15s "$CLAUDE_BIN" auth status --json >"$tmp" 2>/dev/null; then
     die claude_auth_status_failed 31
   fi
@@ -53,8 +54,24 @@ PY
     *) die claude_auth_status_invalid 31 ;;
   esac
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=logged_in"
-  run_as_claude timeout 15s "$CLAUDE_BIN" remote-control --help >/dev/null 2>&1 || die remote_control_unavailable 32
+  help_out="$(mktemp)" || die claude_help_tmpfile_failed 34
+  help_rc=0
+  if run_as_claude timeout 5s "$CLAUDE_BIN" remote-control --help >"$help_out" 2>&1; then
+    help_rc=0
+  else
+    help_rc=$?
+  fi
+  if ! grep -Fq 'Remote Control - Control local sessions' "$help_out"     || ! grep -Fq -- '--spawn <mode>' "$help_out"; then
+    die remote_control_help_missing 32
+  fi
+  case "$help_rc" in
+    0|124) ;;
+    *) die remote_control_unavailable 32 ;;
+  esac
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help"
+  rm -f "$tmp" "$help_out"
+  help_out=""
+  trap - RETURN
   echo "CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS"
 }
 
@@ -250,6 +267,11 @@ status(){
   verify_bridge
   systemctl is-enabled --quiet "$SERVICE" || die service_not_enabled 52
   systemctl is-active --quiet "$SERVICE" || die service_not_active 53
+  local exec_start
+  exec_start="$(systemctl show "$SERVICE" -p ExecStart --value)"
+  case "$exec_start" in
+    *--no-create-session-in-dir*) die service_session_recovery_disabled 54 ;;
+  esac
   echo "CLAUDE_REMOTE_CONTROL_STATUS=PASS"
 }
 
@@ -266,11 +288,18 @@ case "$MODE" in
     configure_mcp
     echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_verify"
     verify_bridge
+    if [ -f "$UNIT_TARGET" ] || systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+      service_previously_installed=true
+    fi
     if systemctl is-active --quiet "$SERVICE"; then
       systemctl stop "$SERVICE"
     fi
     echo "CLAUDE_REMOTE_CONTROL_PHASE=consent"
-    accept_consent
+    if [[ "$service_previously_installed" = true ]]; then
+      echo "CLAUDE_REMOTE_CONTROL_CONSENT=SKIP reason=existing_service"
+    else
+      accept_consent
+    fi
     echo "CLAUDE_REMOTE_CONTROL_PHASE=service"
     install_service
     echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"

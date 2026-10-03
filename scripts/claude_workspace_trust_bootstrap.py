@@ -212,6 +212,72 @@ def bootstrap_plain_workspace_trust(claude_bin: str, workspace: str) -> PtyResul
     return PtyResult("plain_prompt_missing")
 
 
+def run_interactive_remote_control_mode(claude_bin: str, workspace: str) -> PtyResult:
+    """Use Claude's documented interactive --remote-control mode to persist trust."""
+    command = [claude_bin, "--remote-control", "ShopVivaliz-Trust-Bootstrap"]
+    proc, master_fd, slave_fd = open_pty_process(command)
+    buffer = ""
+    accepted_trust = False
+    accepted_remote = False
+    deadline = time.monotonic() + 30.0
+
+    try:
+        os.close(slave_fd)
+        slave_fd = -1
+        while time.monotonic() < deadline:
+            chunk = read_chunk(master_fd)
+            if chunk is None:
+                if proc.poll() is not None:
+                    break
+                continue
+            if not chunk:
+                break
+
+            buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-65536:]
+
+            if workspace_not_trusted_visible(buffer):
+                return PtyResult("workspace_not_trusted")
+
+            if not accepted_trust:
+                sequence = documented_server_trust_sequence(buffer, workspace)
+                if sequence is None:
+                    sequence = legacy_trust_acceptance_sequence(buffer)
+                if sequence is not None:
+                    os.write(master_fd, sequence)
+                    accepted_trust = True
+                    continue
+
+            if not accepted_remote:
+                sequence = remote_control_acceptance_sequence(buffer)
+                if sequence is not None:
+                    os.write(master_fd, sequence)
+                    accepted_remote = True
+                    continue
+
+            if server_startup_visible(buffer):
+                return PtyResult(
+                    "started",
+                    accepted_trust=accepted_trust,
+                    accepted_remote_control=accepted_remote,
+                )
+
+            if unexpected_prompt_visible(buffer, workspace):
+                return PtyResult("unexpected_prompt")
+    finally:
+        if slave_fd >= 0:
+            os.close(slave_fd)
+        stop_process(proc)
+        os.close(master_fd)
+
+    if accepted_trust or accepted_remote:
+        return PtyResult(
+            "startup_missing",
+            accepted_trust=accepted_trust,
+            accepted_remote_control=accepted_remote,
+        )
+    return PtyResult("prompt_missing")
+
+
 def run_server_mode(claude_bin: str, workspace: str) -> PtyResult:
     command = [
         claude_bin,
@@ -303,14 +369,19 @@ def main(argv: list[str]) -> int:
 
     # The installer invokes this helper only after its bounded non-PTY
     # server attempt has classified workspace trust as the blocker. Follow
-    # Claude's supported first-run order: plain CLI trust first, then
-    # remote-control server mode. If trust was already persisted, plain
-    # Claude may not prompt; only a real server startup can make that case
-    # PASS.
+    # Claude's supported first-run order starts with interactive trust. The
+    # documented --remote-control form can surface that dialog when server
+    # mode only reports Workspace not trusted. Confirm persistence by starting
+    # the production server mode afterwards; never edit Claude's trust store.
     plain = bootstrap_plain_workspace_trust(claude_bin, workspace)
     if plain.status not in {"plain_trust_persisted", "plain_prompt_missing"}:
         print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class={plain.status}")
         return 69
+
+    interactive = run_interactive_remote_control_mode(claude_bin, workspace)
+    if interactive.status not in {"started", "startup_missing"}:
+        print(f"CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=FAIL class=interactive_{interactive.status}")
+        return 70
 
     server = run_server_mode(claude_bin, workspace)
     if server.status == "started":

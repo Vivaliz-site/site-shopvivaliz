@@ -15,6 +15,17 @@
     var pending = String(localStorage.getItem(pendingKey) || '').toUpperCase();
     var used = String(localStorage.getItem(usedKey) || '').toUpperCase();
 
+    // Google Ads and other paid links can carry the currently advertised
+    // coupon as ?cupom=CODE. Persist only a conservative code shape here; the
+    // checkout still validates eligibility server-side before any discount is
+    // applied, so the URL is never trusted as a pricing source.
+    var params = new URLSearchParams(window.location.search || '');
+    var deeplinkCoupon = String(params.get('cupom') || '').trim().toUpperCase();
+    if (deeplinkCoupon && /^[A-Z0-9_-]{2,30}$/.test(deeplinkCoupon)) {
+      localStorage.setItem(pendingKey, deeplinkCoupon);
+      pending = deeplinkCoupon;
+    }
+
     if (pending === 'PRIMEIRA10' || pending === 'PRIMEIRA15') {
       localStorage.removeItem(pendingKey);
     }
