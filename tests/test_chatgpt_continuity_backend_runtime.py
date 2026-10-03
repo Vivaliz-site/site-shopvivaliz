@@ -122,6 +122,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-browser-healthcheck.service", body)
         self.assertIn('sudo -n systemctl disable --now "$legacy_browser_healthcheck_timer"', body)
         self.assertIn('sudo -n systemctl stop "$legacy_browser_healthcheck_service"', body)
+        self.assertNotIn('systemctl disable --now "$legacy_browser_healthcheck_timer" >/dev/null 2>&1 || true', body)
+        self.assertNotIn('systemctl stop "$legacy_browser_healthcheck_service" >/dev/null 2>&1 || true', body)
         self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_timer_path"', body)
         self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_service_path"', body)
         self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_script"', body)

@@ -169,9 +169,11 @@ system_units_changed=false
 # installing/enabling the single guardian owner.
 if sudo -n systemctl is-enabled --quiet "$legacy_browser_healthcheck_timer" 2>/dev/null \
   || sudo -n systemctl is-active --quiet "$legacy_browser_healthcheck_timer" 2>/dev/null; then
-  sudo -n systemctl disable --now "$legacy_browser_healthcheck_timer" >/dev/null 2>&1 || true
+  sudo -n systemctl disable --now "$legacy_browser_healthcheck_timer" >/dev/null
 fi
-sudo -n systemctl stop "$legacy_browser_healthcheck_service" >/dev/null 2>&1 || true
+if sudo -n systemctl is-active --quiet "$legacy_browser_healthcheck_service" 2>/dev/null; then
+  sudo -n systemctl stop "$legacy_browser_healthcheck_service" >/dev/null
+fi
 if sudo -n test -e "$legacy_browser_healthcheck_timer_path"; then
   sudo -n rm -f "$legacy_browser_healthcheck_timer_path"
   system_units_changed=true
