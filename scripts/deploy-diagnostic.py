@@ -13,33 +13,19 @@ class DeployDiagnostic:
         self.issues = []
         self.warnings = []
 
-    def check_ftp_credentials(self):
-        """Verificar credenciais FTP"""
-        print(" Verificando credenciais FTP...")
-
-        ftp_host = os.getenv('FTP_SERVER')
-        ftp_user = os.getenv('FTP_USERNAME')
-        ftp_pass = os.getenv('FTP_PASSWORD')
-        ftp_dir = os.getenv('FTP_REMOTE_DIR')
-
-        if ftp_host and "://" in ftp_host:
-            parsed = urlparse(ftp_host)
-            if parsed.hostname:
-                self.warnings.append(f" FTP_SERVER contem protocolo; prefira apenas: {parsed.hostname}")
-            else:
-                self.issues.append(" FTP_SERVER invalido: use apenas o host FTP")
-
-        if not ftp_host:
-            self.issues.append(" FTP_SERVER não configurado nos secrets")
-        if not ftp_user:
-            self.issues.append(" FTP_USERNAME não configurado")
-        if not ftp_pass:
-            self.issues.append(" FTP_PASSWORD não configurado")
-        if not ftp_dir:
-            self.warnings.append(" FTP_REMOTE_DIR não definido (verificar padrão)")
-
-        if not self.issues:
-            print("   Credenciais FTP configuradas")
+    def check_public_storage(self):
+        """Verificar storage público persistente da VM de produção."""
+        print(" Verificando public storage...")
+        root = Path(os.getenv('SHOPVIVALIZ_PUBLIC_ROOT') or Path.cwd())
+        uploads = root / 'uploads'
+        try:
+            uploads.mkdir(parents=True, exist_ok=True)
+            probe = uploads / '.deploy-diagnostic-write-probe'
+            probe.write_text('ok', encoding='utf-8')
+            probe.unlink()
+            print(f"   Public storage gravável: {uploads}")
+        except Exception as exc:
+            self.issues.append(f" Public storage indisponível: {exc}")
 
     def check_file_permissions(self):
         """Verificar permissões de arquivos"""
@@ -66,10 +52,6 @@ class DeployDiagnostic:
         print(" Verificando GitHub Secrets...")
 
         required_secrets = [
-            'FTP_SERVER',
-            'FTP_USERNAME',
-            'FTP_PASSWORD',
-            'FTP_REMOTE_DIR',
             'ANTHROPIC_API_KEY',
             'OPENAI_API_KEY',
             'GEMINI_API_KEY',
@@ -179,7 +161,7 @@ class DeployDiagnostic:
         print(" DEPLOY DIAGNOSTIC")
         print("=" * 60 + "\n")
 
-        self.check_ftp_credentials()
+        self.check_public_storage()
         self.check_file_permissions()
         self.check_github_secrets()
         self.check_workflow_syntax()

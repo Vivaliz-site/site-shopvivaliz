@@ -120,7 +120,10 @@ def active_browser_window() -> str:
 
 
 def focus(window: str) -> None:
-    run_gui(["xdotool", "windowactivate", "--sync", window])
+    activated = run_gui(["xdotool", "windowactivate", "--sync", window], check=False)
+    if activated.returncode == 0:
+        return
+    run_gui(["xdotool", "windowfocus", "--sync", window])
 
 
 def key(*keys: str) -> None:

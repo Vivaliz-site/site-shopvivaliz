@@ -14,7 +14,7 @@ Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5581
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
 Environment=SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER=/opt/shopvivaliz-remote-control/server.py
 Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp
-Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0
+Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99
 EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
 ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control-browser/server.py
 Restart=always
