@@ -27,16 +27,6 @@ SECRETS_TO_ADD = {
     'CLIENT_SECRET_OLIST': 'Secret API Olist',
     'OLIST_REDIRECT_URI': 'Redirect Olist',
 
-    # FTP
-    'FTP_SERVER': 'Servidor FTP',
-    'FTP_HOST': 'Servidor FTP (alias)',
-    'FTP_USERNAME': 'Usuário FTP',
-    'FTP_USER': 'Usuário FTP (alias)',
-    'FTP_PASSWORD': 'Senha FTP',
-    'FTP_PASS': 'Senha FTP (alias)',
-    'FTP_PORT': '21 (porta FTP)',
-    'FTP_REMOTE_DIR': '/public_html (diretório remoto)',
-
     # Email
     'EMAIL_TO': 'Email destinatário',
     'BREVO_API_KEY': 'Chave API transacional Brevo',
