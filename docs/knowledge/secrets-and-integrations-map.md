@@ -132,29 +132,20 @@ Ambiente de teste:
 
 ## SMTP / Email
 
-Canônicos preferidos:
+Runtime atual: Brevo API only.
 
 | Canônico | Uso |
 |---|---|
-| `SMTP_HOST` | Host SMTP |
-| `SMTP_PORT` | Porta SMTP |
-| `SMTP_USER` | Usuário SMTP |
-| `SMTP_PASS` | Senha SMTP |
-| `EMAIL_FROM` | Remetente |
-| `EMAIL_TO` | Destinatário padrão |
+| BREVO_API_KEY | Credencial da API Brevo |
+| EMAIL_TO | Destinatário padrão quando necessário |
 
-Aliases aceitos:
+Sender e reply-to são fixos pela aplicação em atendimento@shopvivaliz.com.br.
 
-| Alias | Mapear para |
-|---|---|
-| `EMAIL_SMTP_HOST` | `SMTP_HOST` |
-| `EMAIL_SMTP_PORT` | `SMTP_PORT` |
-| `EMAIL_USER` | `SMTP_USER` |
-| `EMAIL_PASSWORD` | `SMTP_PASS` |
-| `MAIL_HOST` | `SMTP_HOST` |
-| `MAIL_PORT` | `SMTP_PORT` |
-| `MAIL_USER` | `SMTP_USER` |
-| `MAIL_PASS` | `SMTP_PASS` |
+Aposentados: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_SMTP_HOST,
+EMAIL_SMTP_PORT, EMAIL_USER, EMAIL_PASSWORD, EMAIL_FROM, MAIL_HOST, MAIL_PORT,
+MAIL_USER, MAIL_PASS e EMAIL_AGENTES_SECRET. Esses nomes não podem voltar ao
+runtime; referências remanescentes são permitidas apenas em guards/migrações
+que comprovem a aposentadoria.
 
 ## FTP / Deploy legado
 

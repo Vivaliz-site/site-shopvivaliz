@@ -1,30 +1,22 @@
 # Email Secrets Aliases
 
-Use GitHub Secrets for Actions and environment variables for local or server runtime.
-Do not put real passwords in tracked PHP, Python, shell, Markdown, or `.env.example` files.
+ShopVivaliz production email is Brevo API only. Transportes SMTP/Gmail/Titan e seus aliases de runtime estão aposentados.
 
-Canonical cross-reference: [`docs/secrets-inventory.md`](docs/secrets-inventory.md). Use it for the full alias map and the current VM/runtime split.
+Canonical current runtime:
+- BREVO_API_KEY — Brevo API credential.
+- EMAIL_TO — default recipient list when a job needs one.
+- Sender and reply-to are fixed by application policy as atendimento@shopvivaliz.com.br.
 
-Canonical accepted groups:
+Aposentados do runtime (não restaurar nem materializar):
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+- EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_USER, EMAIL_PASSWORD, EMAIL_FROM
+- MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS
+- EMAIL_AGENTES_SECRET
 
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
-- `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`
-- `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`
-
-Required recipients:
-
-- `EMAIL_TO`, comma-separated when there is more than one recipient.
-- `EMAIL_FROM`, optional; defaults to the configured SMTP user where supported.
-
-Current automated report recipients:
-
-- `fredmourao@gmail.com`
-- `atendimento@shopvivaliz.com.br`
+Os nomes aposentados só podem aparecer em código de migração/guard e documentação histórica que os identifique explicitamente como aposentados. Código novo deve usar os helpers da API Brevo.
 
 Validation:
 
-```bash
-python scripts/automation/validate_email_config.py
-```
+    python scripts/automation/validate_email_config.py
 
-The validator writes `logs/email-config-check.json` and never prints secret values.
+The validator writes logs/email-config-check.json and never prints credential values.
