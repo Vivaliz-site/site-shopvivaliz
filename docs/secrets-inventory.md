@@ -50,29 +50,25 @@ Mapa complementar de consumidores reais: [docs/secret-usage-map.md](secret-usage
 
 ## Email / SMTP
 
-- Canônicos preferidos:
-  - `SMTP_HOST`
-  - `SMTP_PORT`
-  - `SMTP_USER`
-  - `SMTP_PASS`
-  - `EMAIL_FROM`
-  - `EMAIL_TO`
-- Aliases aceitos:
-  - `EMAIL_SMTP_HOST`
-  - `EMAIL_SMTP_PORT`
-  - `EMAIL_USER`
-  - `EMAIL_PASSWORD`
-  - `MAIL_HOST`
-  - `MAIL_PORT`
-  - `MAIL_USER`
-  - `MAIL_PASS`
-  - `EMAIL_REPLY_TO`
+- Canônicos atuais (Brevo API only):
+  - BREVO_API_KEY
+  - EMAIL_TO
+- Identidade fixa pela aplicação:
+  - sender: atendimento@shopvivaliz.com.br
+  - reply-to: atendimento@shopvivaliz.com.br
+- Aposentados do runtime:
+  - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
+  - EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_USER, EMAIL_PASSWORD, EMAIL_FROM
+  - MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS
+  - EMAIL_AGENTES_SECRET
 - Uso:
-  - relatórios, notificações, cron de email e mailer PHP
+  - relatórios, notificações, cron de email e mailers via API Brevo
+- Regra:
+  - aliases SMTP/Gmail/Titan não podem ser rematerializados no .env; aparecem apenas em guards/migração explícita.
 - Referências:
-  - [config/secrets.py](C:/site-shopvivaliz/config/secrets.py:173)
-  - [config/constants.php](C:/site-shopvivaliz/config/constants.php:127)
-  - [docs/email-secrets-aliases.md](C:/site-shopvivaliz/docs/email-secrets-aliases.md:1)
+  - scripts/shopvivaliz_mail.py
+  - scripts/retire-legacy-email-runtime-keys.py
+  - docs/email-secrets-aliases.md
 
 ## FTP / Deploy legado
 

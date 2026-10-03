@@ -28,17 +28,9 @@ REQUIRED_SECRETS = {
         'OLIST_ACCESS_TOKEN',
         'OLIST_REFRESH_TOKEN',
     ],
-    'FTP': [
-        'FTP_SERVER',
-        'FTP_USERNAME',
-        'FTP_PASSWORD',
-    ],
     'Email': [
-        'EMAIL_FROM',
         'EMAIL_TO',
-        'EMAIL_SMTP_HOST',
-        'EMAIL_USER',
-        'EMAIL_PASSWORD',
+        'BREVO_API_KEY',
     ],
     'Database': [
         'DB_HOST',

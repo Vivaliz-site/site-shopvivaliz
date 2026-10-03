@@ -27,15 +27,8 @@ declare -A secrets_config=(
     ["SHOPEE_PARTNER_KEY"]="🛍️  Shopee Partner Key|https://partner.shopee.com.br|shpk_"
     ["TIKTOK_CLIENT_ID"]="🎵 TikTok Client ID|https://seller.tiktok.com|7"
     ["TIKTOK_CLIENT_SECRET"]="🎵 TikTok Client Secret|https://seller.tiktok.com|secret_"
-    ["FTP_SERVER"]="📤 FTP Server|seu provedor|ftp.shopvivaliz.com.br"
-    ["FTP_USERNAME"]="📤 FTP Username|seu provedor|usuario"
-    ["FTP_PASSWORD"]="📤 FTP Password|seu provedor|senha"
-    ["FTP_PORT"]="📤 FTP Port|padrão|21"
-    ["EMAIL_FROM"]="📧 Email From|padrão|noreply@shopvivaliz.com.br"
     ["EMAIL_TO"]="📧 Email To|padrão|fredmourao@gmail.com"
-    ["EMAIL_SMTP_HOST"]="📧 Email SMTP Host|padrão|smtp.gmail.com"
-    ["EMAIL_SMTP_PORT"]="📧 Email SMTP Port|padrão|587"
-    ["EMAIL_USER"]="📧 Email User|https://myaccount.google.com/app-passwords|seu-email@gmail.com"
+    ["BREVO_API_KEY"]="📧 Brevo API Key|Brevo transacional|obrigatório"
 )
 
 echo "════════════════════════════════════════════════════════════════════"

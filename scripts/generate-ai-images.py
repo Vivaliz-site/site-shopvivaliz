@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import ftplib
 import hashlib
 import json
 import os
-import posixpath
 import re
 import sys
 import time
@@ -22,8 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+from site_public_storage import publish_file
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -38,7 +38,7 @@ IMAGE_QUALITY      = os.getenv("OPENAI_IMAGE_QUALITY",  "standard")
 DEFAULT_IN_CSV     = Path(os.getenv("AI_INPUT_CSV",     "logs/olist-images-export.csv"))
 DEFAULT_OUT_DIR    = Path(os.getenv("AI_IMAGES_DIR",    "storage/ai-images"))
 DEFAULT_REPORTS    = Path(os.getenv("AI_REPORTS_DIR",   "logs"))
-REMOTE_ROOT        = os.getenv("AI_REMOTE_ROOT",        "uploads/ai-images")
+PUBLIC_ROOT        = os.getenv("AI_PUBLIC_ROOT",        "uploads/ai-images")
 SITE_BASE_URL      = os.getenv("SITE_BASE_URL",         "https://shopvivaliz.com.br")
 USER_AGENT         = "ShopVivalizAIImageGen/1.0"
 MAX_RETRY          = int(os.getenv("AI_MAX_RETRY",      "2"))
@@ -345,71 +345,32 @@ def generate_image(prompt: str, api_key: str) -> Tuple[str, str, str]:
 
 
 # ---------------------------------------------------------------------------
-# FTP Upload
+# Publicação local persistente
 # ---------------------------------------------------------------------------
 
-class FtpUploader:
-    def __init__(self, remote_root: str) -> None:
-        server   = os.getenv("FTP_SERVER",   "").strip()
-        username = os.getenv("FTP_USERNAME", "").strip()
-        password = os.getenv("FTP_PASSWORD", "").strip()
-        if not server or not username:
-            raise RuntimeError("FTP_SERVER ou FTP_USERNAME ausente — upload via FTP desativado.")
-        port           = int(os.getenv("FTP_PORT", "21") or "21")
-        self.base_dir  = (os.getenv("FTP_REMOTE_DIR") or "/").strip() or "/"
-        self.remote_root = remote_root.strip("/")
-        self.ftp       = ftplib.FTP()
-        self.ftp.connect(server, port, timeout=60)
-        self.ftp.login(username, password)
-
-    def _ensure_dir(self, path: str) -> None:
-        parts = [p for p in path.replace("\\", "/").split("/") if p]
-        if path.startswith("/"):
-            self.ftp.cwd("/")
-        for part in parts:
-            try:
-                self.ftp.mkd(part)
-            except ftplib.error_perm:
-                pass
-            self.ftp.cwd(part)
+class SiteUploader:
+    def __init__(self, public_root: str) -> None:
+        self.public_root = public_root.strip("/")
 
     def upload(self, local_file: Path, sku_key: str, image_type: str) -> Tuple[bool, str, str]:
-        remote_dir = posixpath.join(
-            self.base_dir, self.remote_root, sku_key
-        ).replace("\\", "/")
+        public_name = f"{image_type}_{local_file.name}"
+        relative_path = "/".join([
+            self.public_root,
+            sku_key,
+            public_name,
+        ])
         try:
-            self._ensure_dir(remote_dir)
-            remote_name = f"{image_type}_{local_file.name}"
-            try:
-                exists = self.ftp.size(remote_name) is not None
-            except ftplib.error_perm:
-                exists = False
-            if not exists:
-                with local_file.open("rb") as fh:
-                    self.ftp.storbinary(f"STOR {remote_name}", fh)
-            site_path = "/".join([
-                self.remote_root,
-                quote(sku_key),
-                quote(remote_name),
-            ])
-            return True, f"{SITE_BASE_URL}/{site_path}", ""
+            site_url = publish_file(local_file, relative_path, base_url=SITE_BASE_URL)
+            return True, site_url, ""
         except Exception as exc:
-            return False, "", f"FTP falhou: {exc.__class__.__name__}: {exc}"
+            return False, "", f"publicação local falhou: {exc.__class__.__name__}: {exc}"
 
     def close(self) -> None:
-        try:
-            self.ftp.quit()
-        except Exception:
-            pass
+        return None
 
 
-def build_uploader() -> Optional[FtpUploader]:
-    if os.getenv("FTP_SERVER") and os.getenv("FTP_USERNAME") and os.getenv("FTP_PASSWORD"):
-        try:
-            return FtpUploader(REMOTE_ROOT)
-        except Exception as exc:
-            log(f"  Aviso FTP: {exc}. Imagens salvas apenas localmente.")
-    return None
+def build_uploader() -> SiteUploader:
+    return SiteUploader(PUBLIC_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +408,7 @@ def process_product(
     product:  ProductRow,
     api_key:  str,
     out_dir:  Path,
-    uploader: Optional[FtpUploader],
+    uploader: Optional[SiteUploader],
     dry_run:  bool,
 ) -> List[GeneratedImage]:
 
@@ -503,18 +464,18 @@ def process_product(
         img.local_file = str(local_path)
         log(f"    Salvo: {local_path.name}")
 
-        # 4. Upload FTP
+        # 4. Publicação persistente no webroot compartilhado
         if uploader:
-            uploaded, site_url, ftp_err = uploader.upload(local_path, sku_key, image_type)
+            uploaded, site_url, publish_err = uploader.upload(local_path, sku_key, image_type)
             img.uploaded  = uploaded
             img.site_url  = site_url
-            if ftp_err:
-                img.error_message = ftp_err
+            if publish_err:
+                img.error_message = publish_err
                 img.status        = "uploaded_locally"
-                log(f"    FTP: {ftp_err[:60]}")
+                log(f"    Publicação: {publish_err[:60]}")
             else:
                 img.status = "uploaded"
-                log(f"    FTP OK: {site_url[:70]}")
+                log(f"    Publicado: {site_url[:70]}")
         else:
             img.status = "generated"
 
@@ -602,7 +563,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     p.add_argument("--limit",      type=int, default=int(os.getenv("AI_LIMIT", "0")),
                    help="Limite de produtos (0 = todos).")
     p.add_argument("--dry-run",    action="store_true",           help="Não gera imagens; apenas simula.")
-    p.add_argument("--skip-upload",action="store_true",           help="Não faz upload FTP.")
+    p.add_argument("--skip-upload",action="store_true",           help="Não publica no webroot persistente.")
     p.add_argument("--types",      nargs="+", choices=IMAGE_TYPES, default=IMAGE_TYPES,
                    help="Tipos de imagem a gerar.")
     return p.parse_args(argv)
@@ -631,7 +592,7 @@ def main(argv: List[str]) -> int:
         log("Nenhum produto com imagem encontrada. Verifique o CSV de entrada.")
         return 0
 
-    uploader: Optional[FtpUploader] = None
+    uploader: Optional[SiteUploader] = None
     if not args.skip_upload and not args.dry_run:
         uploader = build_uploader()
 
@@ -656,7 +617,7 @@ def main(argv: List[str]) -> int:
     log(f"\n=== CONCLUÍDO ===")
     log(f"Produtos processados: {len(products)}")
     log(f"Imagens geradas:      {len(all_images)}")
-    log(f"Enviadas (FTP):       {uploaded}")
+    log(f"Publicadas no site:    {uploaded}")
     log(f"Erros:                {errors}")
     log(f"CSV: {csv_path}")
     log(f"JSON: {json_path}")

@@ -22,15 +22,20 @@ if grep -Fq 'chatgpt_account_diag' "$remote"; then
   exit 1
 fi
 
-# The canonical issue #1586 control plane must expose a fixed, read-only
-# checkpoint readback for the freeze investigation. It may print only the
-# allowlisted summary, never the raw durable JSON/evidence payload.
+# The canonical issue #1586 control plane must expose a generation-aware,
+# read-only checkpoint readback for the freeze investigation. It may print
+# only the allowlisted summary, never the raw durable JSON/evidence payload.
 grep -Fq 'chatgpt_freeze_task_state' "$remote"
 grep -Fq '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state' "$remote"
 grep -Fq 'TASK_STATE_STATUS=' "$remote"
-grep -Fq 'latest_task_id=' "$remote"
-grep -Fq 'agent_task_state.py show --task "$latest_task_id"' "$remote"
-grep -Fq 'agent_task_state.py terminal --task "$latest_task_id"' "$remote"
+grep -Fq 'chatgpt-freeze-root-cause-20260928-g*.json' "$remote"
+grep -Fq 'print(max(candidates)[1])' "$remote"
+if grep -Fq 'canonical_task_id="chatgpt-freeze-root-cause-20260928-g2"' "$remote"; then
+  echo "freeze task readback must follow the latest generation" >&2
+  exit 1
+fi
+grep -Fq 'agent_task_state.py show --task "$canonical_task_id"' "$remote"
+grep -Fq 'agent_task_state.py terminal --task "$canonical_task_id"' "$remote"
 if grep -Fq 'agent_task_state.py show --task chatgpt-freeze-root-cause-20260927' "$remote"; then
   echo "freeze task readback must not be hardcoded to the historical predecessor" >&2
   exit 1
@@ -38,12 +43,11 @@ fi
 grep -Fq 'TASK_TERMINAL_GATE=PASS' "$remote"
 grep -Fq 'TASK_TERMINAL_GATE=NONTERMINAL' "$remote"
 
-# The read-only freeze checkpoint action must also expose the latest generational
-# checkpoint safely. This is required to distinguish g3 RUNNING/READY/terminal
-# state without mutating it or creating a successor just to inspect it.
-grep -Fq 'CHATGPT_FREEZE_LATEST_STATE=' "$remote"
-grep -Fq 'chatgpt-freeze-root-cause-20260928-g' "$remote"
-grep -Fq 'latest_generation' "$remote"
+# The read-only freeze checkpoint action must expose the highest valid gN
+# generation. Historical terminal generations remain immutable lineage.
+grep -Fq 'CHATGPT_FREEZE_CANONICAL_STATE=' "$remote"
+grep -Fq 'chatgpt-freeze-root-cause-20260928-g*.json' "$remote"
+grep -Fq 'canonical_generation' "$remote"
 
 # A privileged writer can create a 0600 checkpoint owned by root while the
 # canonical watchdog/dispatcher runs as ubuntu. The control plane must expose a
@@ -55,12 +59,11 @@ grep -Fq 'CHATGPT_FREEZE_STATE_OWNER_CONTENT_UNCHANGED=true' "$remote"
 grep -Fq 'sudo -n chown "$runtime_owner" "$path"' "$remote"
 grep -Fq 'sudo -u ubuntu test -r "$state_dir/$latest_task_id.json"' "$remote"
 
-# Fresh evidence after a historical CONCLUIDO checkpoint must use a distinct
-# successor generation; never mutate/reopen the completed predecessor.
+# Historical successor creation remains available for lineage/bootstrap, but
+# the current task contract must not depend on g2 being the active generation.
+# Current readback is validated above by highest-gN selection.
 grep -Fq 'chatgpt_freeze_task_successor' "$remote"
 grep -Fq 'ChatGPT freeze task actions are restricted to the site VM' "$remote"
-grep -Fq 'agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927' "$remote"
-grep -Fq 'agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2' "$remote"
 grep -Fq 'CHATGPT_FREEZE_SUCCESSOR_STATUS=' "$remote"
 grep -Fq 'predecessor_task_id' "$remote"
 if grep -Fq 'cat "$state_file"' "$remote"; then
@@ -72,7 +75,7 @@ from pathlib import Path
 import sys
 
 lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-needle = 'python3 - "$state_file" <<\'PY\''
+needle = 'python3 - "$state_file" "$canonical_task_id" <<\'PY\''
 start = next((i for i, line in enumerate(lines) if needle in line), None)
 if start is None:
     raise SystemExit("task-state sanitizer heredoc command missing")

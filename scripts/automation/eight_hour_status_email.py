@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import json
 import os
-import smtplib
 import subprocess
 import sys
-import base64
 import urllib.error
-import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shopvivaliz_mail import send_text
 
 
 DEFAULT_BASE_URL = "https://shopvivaliz.com.br"
@@ -257,258 +256,37 @@ def persist_report(report: str) -> None:
     path.write_text(report, encoding="utf-8")
 
 
-class SmtpNotConfiguredError(Exception):
-    """Raised when SMTP configuration is incomplete."""
+class ProviderNotConfiguredError(Exception):
+    """Raised when the ShopVivaliz Brevo provider is not configured."""
 
-
-def first_non_empty(*values: str) -> str:
-    for value in values:
-        if value and value.strip():
-            return value.strip()
-    return ""
-
-
-def smtp_candidates() -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    ports = [
-        env("SMTP_PORT"),
-        env("EMAIL_SMTP_PORT"),
-        env("MAIL_PORT"),
-        "465",
-    ]
-    candidate_rows = [
-        {
-            "label": "smtp_primary",
-            "host": first_non_empty(env("SMTP_HOST"), env("EMAIL_SMTP_HOST"), env("MAIL_HOST")),
-            "port": first_non_empty(*ports),
-            "user": env("SMTP_USER"),
-            "password": env("SMTP_PASS"),
-        },
-        {
-            "label": "email_alias",
-            "host": first_non_empty(env("EMAIL_SMTP_HOST"), env("SMTP_HOST"), env("MAIL_HOST")),
-            "port": first_non_empty(env("EMAIL_SMTP_PORT"), env("SMTP_PORT"), env("MAIL_PORT"), "465"),
-            "user": env("EMAIL_USER"),
-            "password": env("EMAIL_PASSWORD"),
-        },
-        {
-            "label": "mail_alias",
-            "host": first_non_empty(env("MAIL_HOST"), env("SMTP_HOST"), env("EMAIL_SMTP_HOST")),
-            "port": first_non_empty(env("MAIL_PORT"), env("SMTP_PORT"), env("EMAIL_SMTP_PORT"), "465"),
-            "user": env("MAIL_USER"),
-            "password": env("MAIL_PASS"),
-        },
-    ]
-
-    seen: set[tuple[str, str, str, str]] = set()
-    for row in candidate_rows:
-        normalized = (
-            row["host"],
-            row["port"],
-            row["user"],
-            row["password"],
-        )
-        if not all(normalized):
-            continue
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        candidates.append(row)
-    return candidates
-
-
-def parse_email_agentes_secret() -> dict[str, str]:
-    raw = env("EMAIL_AGENTES_SECRET")
-    if not raw:
-        return {}
-
-    parsed: dict[str, str] = {}
-    candidates = [raw]
-    try:
-        decoded = urllib.parse.unquote(raw)
-        if decoded != raw:
-            candidates.append(decoded)
-    except Exception:
-        pass
-    try:
-        padded = raw + "=" * (-len(raw) % 4)
-        decoded_base64 = base64.b64decode(padded).decode("utf-8", errors="ignore").strip()
-        if decoded_base64 and decoded_base64 not in candidates:
-            candidates.append(decoded_base64)
-    except Exception:
-        pass
-
-    for candidate in candidates:
-        stripped = candidate.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("{") and stripped.endswith("}"):
-            try:
-                data = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict):
-                for key, value in data.items():
-                    if isinstance(value, str):
-                        parsed[str(key)] = value
-                return parsed
-        if stripped.startswith("re_"):
-            return {"provider": "resend", "api_key": stripped}
-
-    return parsed
-
-
-def secret_diagnostics() -> dict[str, Any]:
-    raw = env("EMAIL_AGENTES_SECRET")
-    parsed = parse_email_agentes_secret()
-    keys = sorted(parsed.keys())
-    api_key = first_non_empty(
-        parsed.get("api_key", ""),
-        parsed.get("resend_api_key", ""),
-        parsed.get("token", ""),
-    )
-    provider = first_non_empty(
-        parsed.get("provider", ""),
-        "resend" if api_key.startswith("re_") else "",
-    )
+def provider_diagnostics() -> dict[str, object]:
     return {
-        "present": bool(raw),
-        "length": len(raw),
-        "starts_with_re": raw.startswith("re_"),
-        "starts_with_json": raw.lstrip().startswith("{"),
-        "looks_urlencoded": "%" in raw,
-        "parsed_keys": keys,
-        "provider": provider or "unknown",
-        "has_api_key": bool(api_key),
-        "api_key_prefix": api_key[:3] if api_key else "",
+        "provider": "brevo_api",
+        "brevo_key_present": bool(env("BREVO_API_KEY")),
+        "recipient_count": len([x for x in env("EMAIL_TO", DEFAULT_RECIPIENTS).split(",") if x.strip()]),
+        "fixed_sender": "atendimento@shopvivaliz.com.br",
     }
-
-
-def send_via_resend(subject: str, body: str, recipients: list[str]) -> bool:
-    parsed = parse_email_agentes_secret()
-    api_key = first_non_empty(
-        parsed.get("api_key", ""),
-        parsed.get("resend_api_key", ""),
-        parsed.get("token", ""),
-    )
-    provider = first_non_empty(parsed.get("provider", ""), "resend" if api_key.startswith("re_") else "")
-    if provider.lower() != "resend" or not api_key:
-        return False
-
-    from_email = first_non_empty(
-        parsed.get("from", ""),
-        parsed.get("from_email", ""),
-        env("EMAIL_FROM"),
-        "onboarding@resend.dev",
-    )
-    payload = {
-        "from": from_email,
-        "to": recipients,
-        "subject": subject,
-        "text": body,
-    }
-    request = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        response.read()
-    print("Envio concluido via Resend fallback.")
-    return True
-
 
 def send_email(subject: str, body: str) -> None:
     email_to = env("EMAIL_TO", DEFAULT_RECIPIENTS)
-    configured_from = env("EMAIL_FROM")
-
-    if not email_to:
-        raise SmtpNotConfiguredError(
-            "SMTP incompleto: configure host, usuario, senha e destinatarios."
-        )
-
     recipients = [item.strip() for item in email_to.split(",") if item.strip()]
     if not recipients or any("@" not in item or "." not in item for item in recipients):
-        raise SmtpNotConfiguredError("Destinatarios de email invalidos em EMAIL_TO.")
-
-    candidates = smtp_candidates()
-    if not candidates:
-        raise SmtpNotConfiguredError(
-            "SMTP incompleto: nenhuma combinacao valida de host, usuario e senha foi encontrada."
-        )
-
-    last_error: Exception | None = None
-    for candidate in candidates:
-        smtp_host = candidate["host"]
-        smtp_port = int(candidate["port"])
-        smtp_user = candidate["user"]
-        smtp_pass = candidate["password"]
-        email_from = first_non_empty(configured_from, smtp_user)
-        print(
-            "Tentando envio SMTP "
-            f"perfil={candidate['label']} host={smtp_host} port={smtp_port} "
-            f"user_len={len(smtp_user)} pass_len={len(smtp_pass)}"
-        )
-
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = email_from
-        msg["To"] = ", ".join(recipients)
-        msg["X-ShopVivaliz-SMTP-Profile"] = candidate["label"]
-        msg.set_content(body)
-
-        try:
-            if smtp_port == 465:
-                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-
-            with server:
-                if smtp_port != 465:
-                    server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            print(f"Envio SMTP concluido com perfil {candidate['label']}.")
-            return
-        except Exception as exc:
-            print(f"Falha SMTP no perfil {candidate['label']}: {exc}")
-            last_error = exc
-            continue
-
-    try:
-        diagnostics = secret_diagnostics()
-        print(f"Diagnostico EMAIL_AGENTES_SECRET: {json.dumps(diagnostics, ensure_ascii=False)}")
-        if send_via_resend(subject, body, recipients):
-            return
-    except Exception as exc:
-        print(f"Falha no fallback EMAIL_AGENTES_SECRET: {exc}")
-        last_error = exc
-
-    if last_error is not None:
-        raise last_error
-    raise RuntimeError("Falha desconhecida ao enviar email.")
-
+        raise ProviderNotConfiguredError("Destinatários de email inválidos em EMAIL_TO.")
+    result = send_text(
+        recipients,
+        subject,
+        body,
+        tags=["shopvivaliz-transactional", "eight-hour-status"],
+    )
+    if not result.success:
+        if result.error == "provider_not_configured":
+            raise ProviderNotConfiguredError("BREVO_API_KEY não configurada.")
+        raise RuntimeError(f"Falha no provider ShopVivaliz: {result.error}")
 
 def main() -> int:
     load_env_files([".env", ".env.local"])
     if env_flag("REPORT_EMAIL_DEBUG_ONLY"):
-        print(json.dumps({
-            "smtp_candidates": [
-                {
-                    "label": row["label"],
-                    "host": row["host"],
-                    "port": row["port"],
-                    "user_len": len(row["user"]),
-                    "pass_len": len(row["password"]),
-                }
-                for row in smtp_candidates()
-            ],
-            "secret_diagnostics": secret_diagnostics(),
-        }, ensure_ascii=False, indent=2))
+        print(json.dumps(provider_diagnostics(), ensure_ascii=False, indent=2))
         return 0
     hours = report_window_hours()
     report = build_report()
@@ -526,7 +304,7 @@ def main() -> int:
         send_email(subject, report)
         print("Relatorio enviado por email com sucesso.")
         return 0
-    except SmtpNotConfiguredError as exc:
+    except ProviderNotConfiguredError as exc:
         print(f"[AVISO] {exc}", file=sys.stderr)
         return 0
     except urllib.error.URLError as exc:

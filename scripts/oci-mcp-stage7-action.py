@@ -15,6 +15,7 @@ ENDPOINT = "http://127.0.0.1:5580/mcp"
 TOKEN_FILE = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
 BACKEND = "always-free-arm-1787907847-26"
 SITE = "shopvivaliz-free-a1"
+CLAUDE_STAGE_ROOT = "/home/ubuntu/.local/state/shopvivaliz/claude-stage7"
 
 
 def call_admin(host: str, command: str, timeout: int) -> tuple[bool, str, str, str, int | None]:
@@ -100,7 +101,7 @@ def require_exact(lines: list[str], required: set[str], label: str) -> None:
 
 
 def claude_install(stage_dir: str) -> None:
-    if not re.fullmatch(r"/tmp/shopvivaliz-claude-oci-[A-Za-z0-9._-]+", stage_dir):
+    if not re.fullmatch(re.escape(CLAUDE_STAGE_ROOT) + r"/oci-[A-Za-z0-9._-]+", stage_dir):
         raise SystemExit("invalid Claude staging directory")
     q = shlex.quote
     setup = stage_dir + "/setup-claude-remote-control.sh"
@@ -119,10 +120,65 @@ if ! chmod 700 {q(setup)} || ! chmod 600 {q(bridge)} {q(trust)} {q(unit)}; then
   exit 62
 fi
 echo "CLAUDE_OCI_STAGE_PREPARE=PASS"
+if [ ! -s {q(setup)} ] || [ ! -r {q(setup)} ]; then
+  echo "CLAUDE_OCI_STAGE_SETUP_FILE=FAIL class=unreadable"
+  exit 63
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_FILE=PASS"
+if ! grep -Fq 'CLAUDE_REMOTE_CONTROL_PHASE=eligibility' {q(setup)} || ! grep -Fq 'CLAUDE_REMOTE_CONTROL_ELIGIBILITY=binary' {q(setup)}; then
+  echo "CLAUDE_OCI_STAGE_SETUP_CONTRACT=FAIL class=markers"
+  exit 64
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_CONTRACT=PASS"
+if ! bash -n {q(setup)} >/dev/null 2>&1; then
+  echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=FAIL"
+  exit 65
+fi
+echo "CLAUDE_OCI_STAGE_SETUP_SYNTAX=PASS"
 echo "CLAUDE_OCI_STAGE_INSTALLER=START"
+if [ "${{BASH_ENV+x}}" = x ]; then
+  echo "CLAUDE_OCI_BASH_ENV_PRESENT=true"
+else
+  echo "CLAUDE_OCI_BASH_ENV_PRESENT=false"
+fi
+bash_startup_rc=0
+bash_startup_out="$(bash -c 'printf "%s\\n" CLAUDE_OCI_BASH_STARTUP_BODY=PASS' 2>&1)" || bash_startup_rc=$?
+if [ "$bash_startup_rc" -eq 0 ] && printf '%s\\n' "$bash_startup_out" | grep -Fqx 'CLAUDE_OCI_BASH_STARTUP_BODY=PASS'; then
+  echo "CLAUDE_OCI_BASH_STARTUP=PASS"
+else
+  echo "CLAUDE_OCI_BASH_STARTUP=FAIL"
+fi
+bash_startup_clean_rc=0
+bash_startup_clean_out="$(env -u BASH_ENV bash -c 'printf "%s\\n" CLAUDE_OCI_BASH_STARTUP_CLEAN_BODY=PASS' 2>&1)" || bash_startup_clean_rc=$?
+if [ "$bash_startup_clean_rc" -eq 0 ] && printf '%s\\n' "$bash_startup_clean_out" | grep -Fqx 'CLAUDE_OCI_BASH_STARTUP_CLEAN_BODY=PASS'; then
+  echo "CLAUDE_OCI_BASH_STARTUP_CLEAN=PASS"
+else
+  echo "CLAUDE_OCI_BASH_STARTUP_CLEAN=FAIL"
+fi
 rc=0
 out="$(bash {q(setup)} install {q(bridge)} {q(unit)} {q(trust)} 2>&1)" || rc=$?
-printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{print}'
+if [ "$rc" -ne 0 ]; then
+  setup_output_present=false
+  setup_failure_class=setup_runtime
+  if [ -n "$out" ]; then
+    setup_output_present=true
+    out_lc="$(printf '%s' "$out" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$out_lc" == *"bad interpreter"* || "$out_lc" == *"cannot execute"* || "$out_lc" == *"exec format"* || "$out_lc" == *"invalid option"* || "$out_lc" == *"syntax error near unexpected token"* ]]; then
+      setup_failure_class=shell_startup
+    elif [[ "$out_lc" == *"no space left"* || "$out_lc" == *"disk full"* || "$out_lc" == *"insufficient_free_space"* ]]; then
+      setup_failure_class=storage
+    elif [[ "$out_lc" == *"permission denied"* || "$out_lc" == *"operation not permitted"* ]]; then
+      setup_failure_class=permission
+    elif [[ "$out_lc" == *"no such file"* || "$out_lc" == *"command not found"* || "$out_lc" == *"not found"* ]]; then
+      setup_failure_class=missing
+    elif [[ "$out_lc" == *"resource temporarily unavailable"* || "$out_lc" == *"cannot fork"* || "$out_lc" == *"fork: retry"* ]]; then
+      setup_failure_class=resource
+    fi
+  fi
+  printf 'CLAUDE_OCI_SETUP_OUTPUT_PRESENT=%s\n' "$setup_output_present"
+  printf 'CLAUDE_OCI_SETUP_FAILURE_CLASS=%s\n' "$setup_failure_class"
+fi
+printf '%s\n' "$out" | awk '/^CLAUDE_[A-Z0-9_]+=/{{print}}'
 exit "$rc"
 """
     ok, stdout, stderr, error, exit_code = call_admin(BACKEND, command, 180)
@@ -139,7 +195,6 @@ exit "$rc"
         "CLAUDE_WORKSPACE=PASS",
         "CLAUDE_MCP_CONFIG=PASS",
         "CLAUDE_PRIVATE_MCP_BRIDGE=PASS",
-        "CLAUDE_WORKSPACE_TRUST_BOOTSTRAP=PASS",
         "CLAUDE_REMOTE_CONTROL_CONSENT=PASS",
         "CLAUDE_REMOTE_CONTROL_SERVICE=PASS",
         "CLAUDE_REMOTE_CONTROL_INSTALL=PASS",
@@ -182,28 +237,29 @@ import re
 from pathlib import Path
 
 root = Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state')
-pattern = re.compile(r'chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)\.json')
-candidates = []
-if root.is_dir():
-    for path in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
-        match = pattern.fullmatch(path.name)
-        if match:
-            candidates.append((int(match.group(1)), path))
+pattern = re.compile(r'chatgpt-freeze-root-cause-20260928-g([2-9]|[1-9][0-9]+)')
+candidates = {}
+for candidate in root.glob('chatgpt-freeze-root-cause-20260928-g*.json'):
+    match = pattern.fullmatch(candidate.stem)
+    if match and candidate.is_file() and not candidate.is_symlink():
+        candidates[int(match.group(1))] = candidate
 if not candidates:
-    raise SystemExit('no freeze generation found')
-_, path = max(candidates, key=lambda row: row[0])
+    raise SystemExit('canonical freeze generation missing')
+canonical_generation = max(candidates)
+path = candidates[canonical_generation]
+canonical_task_id = path.stem
 try:
     payload = json.loads(path.read_text(encoding='utf-8'))
 except Exception as exc:
-    raise SystemExit('latest freeze generation unreadable') from exc
+    raise SystemExit('canonical freeze generation unreadable') from exc
 if not isinstance(payload, dict):
-    raise SystemExit('latest freeze generation invalid')
+    raise SystemExit('canonical freeze generation invalid')
 task_id = str(payload.get('task_id') or '').strip()
 status = str(payload.get('status') or '').strip()
-if not re.fullmatch(r'chatgpt-freeze-root-cause-20260928-g(?:[2-9]|[1-9][0-9]+)', task_id):
-    raise SystemExit('latest freeze task id invalid')
+if task_id != canonical_task_id:
+    raise SystemExit('canonical freeze task id mismatch')
 if status not in {'RUNNING','READY_TO_COMPLETE','CONCLUIDO','BLOCKED_EXTERNAL'}:
-    raise SystemExit('latest freeze status invalid')
+    raise SystemExit('canonical freeze status invalid')
 evidence = payload.get('evidence')
 summary = {
     'task_id': task_id,
@@ -211,22 +267,21 @@ summary = {
     'updated_at': str(payload.get('updated_at') or '')[:64],
     'evidence_count': len(evidence) if isinstance(evidence, list) else 0,
     'verification_present': bool(str(payload.get('verification') or '').strip()),
-    'latest_generation': True,
+    'canonical_generation': True,
 }
-print('CHATGPT_FREEZE_LATEST_STATE=' + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+print('CHATGPT_FREEZE_CANONICAL_STATE=' + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 print('TASK_TERMINAL_GATE=' + ('PASS' if status in {'CONCLUIDO','BLOCKED_EXTERNAL'} else 'NONTERMINAL'))
 INNER
 """
     ok, stdout, _stderr, _error, _exit_code = call_admin(SITE, command, 45)
-    safe = safe_markers(stdout, ("CHATGPT_FREEZE_LATEST_STATE=", "TASK_TERMINAL_GATE="))
+    safe = safe_markers(stdout, ("CHATGPT_FREEZE_CANONICAL_STATE=", "TASK_TERMINAL_GATE="))
     if not ok:
         raise SystemExit("Remote Control MCP freeze-state action failed")
     keys = {line.split("=", 1)[0] for line in safe if "=" in line}
-    if {"CHATGPT_FREEZE_LATEST_STATE", "TASK_TERMINAL_GATE"} - keys:
+    if {"CHATGPT_FREEZE_CANONICAL_STATE", "TASK_TERMINAL_GATE"} - keys:
         raise SystemExit("missing freeze-state markers")
     print("\n".join(safe))
     print("OCI_MCP_CHATGPT_FREEZE_STATE=PASS")
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()

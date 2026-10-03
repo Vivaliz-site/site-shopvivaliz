@@ -93,7 +93,8 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- No backend OCI atual, o fallback finito `codex-auto` usa `--sandbox danger-full-access --ask-for-approval never` porque o sandbox Linux da CLI depende de user namespaces indisponíveis nesse host. Isso **não** altera o critério de sucesso: a execução só é aceita quando o `task_state_signature` muda no mesmo fingerprint; resposta textual/exit 0 sem avanço continua `no_progress`.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
@@ -209,18 +210,14 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1` e
-  só pode usar provedores permitidos para automação recorrente; atualmente,
-  `Gemini` é a rota automática. **Claude/GPT/Codex não podem ser fallback
-  silencioso de daemon/cron.**
+- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1`. `Gemini` é sempre a rota primária. Quando `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`, autorização explícita vigente desde 2026-10-01 permite um único fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso; lease, deduplicação e cooldown continuam obrigatórios. Claude/GPT permanecem proibidos como fallback silencioso de daemon/cron.
 - Em execução finita/interativa fora do background permanece a ordem
   `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
   login ChatGPT, sem `OPENAI_API_KEY`.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
-- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; como
-  o recovery de background não usa IA paga, o mesmo checkpoint pode ser tentado
+- Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; o mesmo checkpoint pode ser tentado
   novamente após cooldown (900 s padrão, configurável por
   `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
   ciclo. A tarefa continua `RUNNING` até progresso real ou terminal válido.
@@ -230,61 +227,96 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   é estritamente alocado por allowlist (`provider`, `provider_status`,
   `provider_attempt_exit_code`, `background_gemini_error`,
   `background_gemini_exit_code`, `background_paid_fallback_forbidden`,
-  `provider_output_bytes`, `provider_output_sha256`) — nunca prompt bruto,
+  `background_codex_fallback_authorized`, `provider_output_bytes`,
+  `provider_output_sha256`) — nunca prompt bruto,
   stdout/stderr bruto, tokens ou segredos.
 - ACK de fila (`agent-operations-worker.py` reconhecendo um pedido
   `auto_resume` para o painel/timeline interno) **não é execução**. O evento
   correspondente usa `kind=auto-resume-queued`/`auto-resume-ack` e a mensagem
   deixa explícito que aquilo não comprova execução real. Só a cadeia real
-  (watchdog → dispatcher → `autonomous-provider-failover.sh` → Gemini →
-  mudança material do checkpoint) é evidência.
+  (watchdog → dispatcher → `autonomous-provider-failover.sh` → Gemini primário
+  [→ `codex-auto` apenas se explicitamente autorizado e necessário] → mudança
+  material do checkpoint) é evidência.
 <!-- /DETACHED_CONTINUATION_EXECUTOR_V6 -->
 
+<!-- GEMINI_24X7_CONTROLLER_V1 -->
+## Controlador Gemini 24x7 no backend
+
+O controlador `scripts/gemini_24x7_controller.py` supervisiona a pilha já
+existente, sem substituí-la: watchdog determinístico → nudge de ChatGPT comum
+→ dispatcher finito com Gemini primário e fallback `codex-auto` explicitamente autorizado. Ele mantém um lease atômico no runtime
+compartilhado, registra apenas metadados sanitizados e recusa propriedade
+duplicada enquanto o lease estiver vivo. Além do lease por ciclo, o modo
+`--daemon` mantém um lock exclusivo durante toda a vida do processo; um segundo
+daemon falha fechado antes de executar watchdog, nudge ou dispatcher. O nudge
+ChatGPT possui um lock transacional próprio cobrindo leitura do ledger, decisão,
+chamada ao bridge e persistência do resultado, impedindo duplo envio por TOCTOU.
+Após interrupção/crash, lease vencido é recuperado e registrado antes de novo ciclo.
+
+Os checkpoints em `agent_task_state.py` serializam toda transição
+`load -> mutate -> atomic write` com um lock compartilhado entre processos.
+A gravação faz `fsync` no arquivo, `os.replace` e `fsync` no diretório pai;
+`start` repetido para a mesma identidade é idempotente e uma colisão de
+`task_id` com objetivo/repositório diferentes falha fechado, sem sobrescrever
+histórico. O estado-resumo do controlador continua sendo atualizado a cada ciclo,
+mas o ledger de eventos só cresce quando existe atividade material, recuperação
+de lease ou anomalia, evitando crescimento ocioso a cada 30 segundos.
+
+A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
+`always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
+`KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
+PID, exit code ou resposta HTTP. O daemon mantém
+`_gemini-24x7-controller-daemon.lock` durante toda a vida do processo, portanto
+dois daemons não podem alternar ownership entre ciclos. O nudge ChatGPT e o
+fallback detached compartilham `_continuity-execution.lock`: enquanto um efeito
+externo de retomada estiver em voo, o outro tier fica suprimido. O lease durável
+registra PID, boot id e start ticks; se o processo proprietário morrer, o restart
+recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
+continuam fail-closed pelo TTL. A instalação só pode partir de uma release
+imutável já publicada; nunca editar `current/` ou a release ativa.
+<!-- /GEMINI_24X7_CONTROLLER_V1 -->
+
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
-## Prova de ponta a ponta da retomada desacoplada em produção
+## Prova E2E da retomada na mesma conversa ChatGPT
 
 Policy: `DETACHED_TASK_RECOVERY_E2E_V7`.
 
-A V6 garante que existe um executor real. A V7 garante que ninguém pode
-certificar continuidade a partir de gates estáticos/ACK: exige prova real,
-correlacionada, de que o daemon já em execução na produção detecta, enfileira,
-executa e conclui uma tarefa sintética por conta própria.
+A recuperação detached continua sendo o fallback legítimo para tarefas normais.
+Ela, porém, **não pode certificar a retomada do browser na mesma conversa**. O
+probe sintético `continuity-e2e-*` existe exclusivamente para provar a cadeia
+watchdog → fila → bridge/worker → conversa ChatGPT explicitamente vinculada.
 
-- `scripts/task_continuity_e2e.py` cria exatamente uma tarefa sintética
-  `RUNNING` (`continuity-e2e-<uuid>`) via `agent_task_state.py` e, a partir
-  daí, **somente observa** arquivos de estado/ledger em disco. É proibido o
-  probe importar ou chamar `task_continuation_watchdog`/
-  `task_resume_dispatcher` ou invocar diretamente qualquer `run_once`; toda
-  detecção/execução deve vir do daemon `shopvivaliz-agent.service` já
-  rodando no host de produção, no ciclo dele.
-- `next_action` da tarefa sintética usa apenas comandos já permitidos na
-  política headless do executor (`agent_task_state.py ready`/`complete`),
-  para que o resultado do probe nunca dependa de uma política de aprovação
-  de ferramenta não relacionada.
-- PASS exige, tudo correlacionado pelo mesmo `task_id`/`fingerprint`:
-  pedido em `_resume-requests.jsonl`; linha correspondente em
-  `_resume-executions.jsonl` com `result` igual a `progress` ou `terminal`
-  (nunca `no_progress`); `diagnostic.background_paid_fallback_forbidden`
-  igual a `true`; checkpoint final com `status=CONCLUIDO` e
-  `verification=continuity_e2e_pass`.
-- `.github/workflows/task-continuity-production-e2e.yml` roda manualmente
-  (`workflow_dispatch`) no runner `shopvivaliz-a1-deploy`, único lugar onde
-  o daemon real está ativo; não substitui os testes unitários do probe, que
-  correm no `Task Continuity Fast Gate` de forma isolada (com estado
-  fabricado, sem depender de produção).
-- **Distinção obrigatória, sempre explícita:** retomada desacoplada
-  (watchdog + dispatcher + Gemini continuando estado persistido) **não é**
-  reabertura da mesma conversa do aplicativo ChatGPT. Desde
-  `CHATGPT_SESSION_REENTRY_V10`, a reentrada da conversa existe como uma
-  camada separada: o pedido `chatgpt_common` é enfileirado no bridge HTTPS e
-  um worker da VM backend anexa via CDP `127.0.0.1:9555` ao navegador
-  ChatGPT já autenticado do usuário. O worker nunca cria um browser/perfil
-  paralelo e nunca usa Codex como fallback automático.
-- Falha do E2E (qualquer motivo: nenhum pedido observado, dispatcher não
-  executou, `no_progress`, checkpoint não terminal, verificação ausente,
-  só ACK do worker, `task_id` não correlacionado, evidência antiga) nunca é
-  motivo para declarar `NÃO APTO` e parar: é `RUNNING`. Levantar causa raiz,
-  TDD (RED → GREEN), commit/PR/merge/deploy, e repetir o E2E.
+- `scripts/task_continuity_e2e.py` cria exatamente um checkpoint sintético
+  `RUNNING`, vincula um `conversation_id` explícito e grava como `next_action`
+  somente os dois comandos allowlisted `agent_task_state.py ready` e
+  `agent_task_state.py complete`. Depois disso o probe apenas observa o estado
+  e os ledgers; ele nunca invoca watchdog/dispatcher diretamente.
+- O dispatcher reconhece estritamente esse contrato e **não libera fallback
+  detached/Gemini/CLI para `continuity-e2e-*`**. Esse isolamento é restrito ao
+  probe de browser e não desabilita a retomada automática das tarefas reais.
+- PASS exige o mesmo `task_id`, fingerprint e `conversation_id` no request e no
+  nudge, `worker_status=PROGRESS_CONFIRMED`, checkpoint final
+  `CONCLUIDO`, `verification=continuity_e2e_pass`, histórico contendo
+  `ready_to_complete` e `completed` sem `resume_request_id`, e ausência de
+  qualquer execução correspondente em `_resume-executions.jsonl`.
+- `scripts/chatgpt_continuity_proof_certifier.py` repete essas verificações de
+  provenance de forma fail-closed; `ok=true` é obrigatório antes de aceitar a
+  evidência como prova da mesma conversa.
+- Falha/timeout preserva evidência e quarentena o checkpoint sintético fora da
+  raiz ativa. Se o arquivo histórico preferencial não puder ser usado, a
+  quarentena cai em `agent-task-state/_e2e-failures/`, subdiretório que não é
+  varrido pelo watchdog. Nunca se deixa um JSON sintético `RUNNING` residual na
+  raiz ativa.
+- O workflow `.github/workflows/task-continuity-production-e2e.yml` roda no
+  runner `[self-hosted, Linux, ARM64, shopvivaliz-backend-browser]`, porque a
+  prova depende do browser canônico autenticado no backend. Browser de
+  Fred-Win/KOCEPSV e conversas reais de negócio são proibidos para probes.
+- A conversa de teste deve ser dedicada e fornecida explicitamente ao workflow;
+  a automação nunca seleciona conversa por atividade recente, título ou fallback
+  ambíguo.
+
+Um terminal criado por Gemini/Codex/CLI, ainda que contenha exatamente
+`continuity_e2e_pass`, é falso-verde para esta prova e deve ser rejeitado.
 <!-- /DETACHED_TASK_RECOVERY_E2E_V7 -->
 
 
@@ -364,6 +396,15 @@ operacional:
    da janela de confirmação, evitando duplicar a tentativa de recuperação do
    próprio cliente.
 
+O monitor passivo grava heartbeat durável em
+`agent-task-state/_chatgpt-continuity-monitor-state.json` em todo ciclo e em
+cada resultado do sweep de conversas. Falhas ficam latched até recuperação
+confirmada; um ciclo neutro não pode apagar degradação anterior. O controlador
+trata heartbeat ausente ou stale como `chatgpt_browser_monitor_stale` e falha
+fechado em `continuity_ready=false`. O instalador do worker fixa
+`SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera explicitamente esse diretório no
+sandbox do systemd; depender apenas do path default do código é proibido.
+
 O instalador canônico é
 `scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
 Windows permanece somente como legado/fallback e não é a rota operacional
@@ -377,18 +418,34 @@ natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
 a mitigação instalada/armada, não “continuidade E2E comprovada”.
 <!-- /CHATGPT_SESSION_REENTRY_V10 -->
 
+<!-- CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+## Durabilidade das sessoes Claude Remote Control
+
+O servidor `shopvivaliz-claude-remote-control.service` deve manter capacidade
+de reanexar as sessoes servidas depois de uma saida/restart do processo. O
+`ExecStart` canônico usa `claude remote-control --spawn worktree` e **nao pode**
+usar `--no-create-session-in-dir`, pois essa flag arquiva as sessoes do servidor
+quando ele para e impede a retomada pelo novo processo. `Restart=always` e
+mantido para recuperar saidas limpas causadas por falha prolongada de rede ou
+do ambiente remoto.
+
+`StandardOutput` e `StandardError` devem ir para o journal para que uma saida
+limpa nao vire falso-verde sem causa observavel. O comando `status` do instalador
+falha fechado com `service_session_recovery_disabled` se o unit instalado
+reintroduzir a flag que descarta retomada. Servico `active` sem executor de
+sessao nao comprova continuidade do chat remoto.
+<!-- /CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+
 
 ### Resiliência de quota Gemini no background
 
-O recovery automático continua estritamente **Gemini-only**. O modelo padrão
-é o alias estável `gemini-flash-latest`; em `quota_exhausted` ou
+O recovery automático usa **Gemini como primário**. O modelo padrão é o alias estável `gemini-flash-latest`; em `quota_exhausted` ou
 `model_unavailable`, o wrapper protegido pode tentar
 `gemini-flash-lite-latest` e, se o runtime possuir mais de uma credencial
 Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
 2026-09-27 um probe funcional sanitizado no A1 confirmou
 `gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
-`*-latest`. Isso não autoriza Claude, Codex ou qualquer fallback
-pago/silencioso no daemon.
+`*-latest`. Claude/GPT continuam proibidos como fallback silencioso. O `codex-auto` só é permitido na exceção explícita e finita do controlador 24/7 (`SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`), sempre depois de Gemini falhar em produzir progresso.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.
@@ -460,3 +517,25 @@ Mudancas em `api/chatgpt-continuity/**`,
 de Actions devem acionar o `Task Continuity Fast Gate`.
 Se `main` avancar enquanto o PR de continuidade estiver em validacao, os gates devem ser reexecutados contra a nova base antes do merge; verde calculado apenas contra base anterior nao certifica a integracao final.
 <!-- /CONTINUITY_QUEUE_CERTIFICATION_V13 -->
+
+### Prova de conclusão e concorrência de retomadas
+
+O dispatcher registra `SHOPVIVALIZ_RESUME_HISTORY_LENGTH` e a identidade do
+request no histórico. Um executor de checkpoint antigo não pode certificar
+`ready`/`complete` depois de avanço concorrente; ele deve reler o estado e
+continuar a ação atual. A retomada automática permanece habilitada.
+
+Tarefas críticas devem fixar verificações objetivas na criação, usando
+`agent_task_state.py start --completion-check '["/usr/bin/test","-f","/caminho/artefato"]'`.
+São aceitos apenas probes read-only limitados de arquivo, hash e serviços
+canônicos (no máximo quatro; timeout de 10s por probe). As verificações usam
+argv, sem shell, não podem conter secrets e executam de
+novo tanto em `ready` quanto em `complete`. Saída não é registrada; recibos
+contêm somente índice, hash do argv, timestamp e exit code. Uma frase PASS
+não substitui essas verificações. Checkpoints com checks usam schema 2: clientes
+antigos devem rejeitá-los em vez de ignorar o contrato de prova. Atualize o CLI
+antes de retomá-los. Tarefas legadas sem checks mantêm contrato
+compatível e sua conclusão textual não certifica aptidão por si só.
+
+O worker registra `sent` somente quando o envio efetivo ocorreu; progresso
+restaurado por reattach passivo e tentativa rejeitada não contam como envio.

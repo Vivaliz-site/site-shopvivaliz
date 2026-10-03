@@ -6,122 +6,24 @@ declare(strict_types=1);
  * Requirement 9 & 25: Real email delivery, executive reports, idle alerts
  */
 
+require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+
 class EmailSender
 {
-    private const SMTP_HOST = 'smtp.gmail.com';
-    private const SMTP_PORT = 587;
-
-    /**
-     * Send email with SMTP authentication
-     */
     public static function send(string $to, string $subject, string $body, string $messageType = 'html'): bool
     {
-        $from = getenv('EMAIL_FROM') ?: 'shopvivaliz@gmail.com';
-        $smtpHost = getenv('SMTP_HOST') ?: self::SMTP_HOST;
-        $smtpPort = (int)(getenv('SMTP_PORT') ?: self::SMTP_PORT);
-        $smtpUser = getenv('SMTP_USER') ?: getenv('EMAIL_USER');
-        $smtpPass = getenv('SMTP_PASS') ?: getenv('EMAIL_PASS');
+        $html = $messageType === 'html'
+            ? $body
+            : '<pre style="white-space:pre-wrap">' . htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
 
-        // Validate credentials
-        if (!$smtpUser || !$smtpPass) {
-            self::logError("SMTP credentials missing: USER={$smtpUser}, PASS=" . (strlen($smtpPass ?? '') > 0 ? 'SET' : 'MISSING'));
+        $result = send_email_with_result($to, $subject, $html);
+        if (!($result['success'] ?? false)) {
+            self::logError('Central mail provider failed: ' . (string)($result['error'] ?? 'unknown'));
             return false;
         }
 
-        try {
-            // Use PHP mail() with proper headers
-            $headers = [
-                'From' => $from,
-                'Reply-To' => $from,
-                'X-Mailer' => 'ShopVivaliz-AutonomousSystem/1.0',
-                'X-Task-System' => 'autonomous-agents',
-                'Content-Type' => $messageType === 'html' ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8'
-            ];
-
-            $headerStr = implode("\r\n", array_map(fn($k, $v) => "$k: $v", array_keys($headers), $headers));
-
-            // Try mail() first (most common on Linux)
-            if (function_exists('mail')) {
-                $success = mail($to, $subject, $body, $headerStr);
-                if ($success) {
-                    self::logSuccess($to, $subject, "mail() function");
-                    return true;
-                }
-            }
-
-            // Fallback: manual SMTP (if needed)
-            return self::sendViaSMTP($smtpHost, $smtpPort, $smtpUser, $smtpPass, $from, $to, $subject, $body, $messageType);
-
-        } catch (Exception $e) {
-            self::logError("Email send failed: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Manual SMTP implementation (fallback)
-     */
-    private static function sendViaSMTP(
-        string $host,
-        int $port,
-        string $user,
-        string $pass,
-        string $from,
-        string $to,
-        string $subject,
-        string $body,
-        string $messageType
-    ): bool {
-        try {
-            $sock = fsockopen($host, $port, $errno, $errstr, 30);
-            if (!$sock) {
-                self::logError("SMTP connection failed: $errstr ($errno)");
-                return false;
-            }
-
-            $out = "EHLO shopvivaliz-autonomous\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = "AUTH LOGIN\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = base64_encode($user) . "\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = base64_encode($pass) . "\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = "MAIL FROM: <{$from}>\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = "RCPT TO: <{$to}>\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $out = "DATA\r\n";
-            fwrite($sock, $out);
-            fgets($sock, 1024);
-
-            $mime = $messageType === 'html' ? 'text/html' : 'text/plain';
-            $message = "From: {$from}\r\nTo: {$to}\r\nSubject: {$subject}\r\nContent-Type: {$mime}; charset=UTF-8\r\n\r\n{$body}";
-            fwrite($sock, $message . "\r\n.\r\n");
-            fgets($sock, 1024);
-
-            fwrite($sock, "QUIT\r\n");
-            fclose($sock);
-
-            self::logSuccess($to, $subject, "SMTP");
-            return true;
-
-        } catch (Exception $e) {
-            self::logError("SMTP send failed: " . $e->getMessage());
-            return false;
-        }
+        self::logSuccess($to, $subject, 'brevo_api');
+        return true;
     }
 
     /**

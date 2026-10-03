@@ -26,8 +26,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-      - run: npm ci
+      - name: Install dependencies with ephemeral npm cache
+        env:
+          NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
+        run: npm ci
       - name: Verify canonical backend browser runtime
         run: |
           set -Eeuo pipefail

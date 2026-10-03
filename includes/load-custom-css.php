@@ -90,9 +90,13 @@ function sv_emit_prepaint_page_state(string $pageName): void
     echo "      var root=document.documentElement;\n";
     echo "      root.className+=(root.className?' ':'')+" . json_encode($pageClass) . ";\n";
     if ($emptyClass !== '') {
-        echo "      var empty=false;\n";
-        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;}\n";
+        echo "      var empty=false;var cartCount=0;\n";
+        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');cartCount=Array.isArray(cart)?cart.length:0;empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;}\n";
         echo "      root.classList.toggle(" . json_encode($emptyClass) . ",empty);\n";
+        if ($pageName === 'carrinho') {
+            echo "      var reservedHeight=cartCount===0?210:(Math.min(Math.max(cartCount,1),8)*130);\n";
+            echo "      root.style.setProperty('--sv-cart-reserved-height',reservedHeight+'px');\n";
+        }
     }
     echo "    })();\n";
     echo "    </script>\n";
@@ -203,6 +207,15 @@ function load_custom_css(): void
         $visualAuditVersion = (string) filemtime($visualAuditCss);
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-audit-v1.css?v="
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
+
+    if ($pageName === 'index') {
+        $homeMerchandisingCss = $root . '/css/home-merchandising-v1.css';
+        if (is_file($homeMerchandisingCss) && is_readable($homeMerchandisingCss)) {
+            $homeMerchandisingVersion = (string)filemtime($homeMerchandisingCss);
+            echo "    <link rel=\"stylesheet\" href=\"/css/home-merchandising-v1.css?v="
+                . htmlspecialchars($homeMerchandisingVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+        }
     }
 
     // Regras transversais de acessibilidade do main sao preservadas antes do

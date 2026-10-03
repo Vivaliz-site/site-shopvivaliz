@@ -1,0 +1,9 @@
+[Unit]
+Description=ShopVivaliz ChatGPT browser guardian
+After=network-online.target display-manager.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh
+NoNewPrivileges=true

@@ -17,12 +17,13 @@ $tmp = sys_get_temp_dir() . '/chatgpt-continuity-test-' . bin2hex(random_bytes(6
 
 $store = new SvChatgptContinuityPendingNudgeStore($tmp);
 
-cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:00Z'), 'First enqueue must succeed.');
+cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:00Z', '11111111-2222-3333-4444-555555555555'), 'First enqueue must succeed.');
 cgnAssert(!$store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:00:05Z'), 'Duplicate enqueue for the same PENDING task_id must be rejected (idempotent).');
 
 $pulled = $store->pullOldest();
 cgnAssert($pulled !== null, 'pullOldest must return the pending nudge.');
 cgnSame('task-1', $pulled['task_id'], 'Pulled nudge must be task-1.');
+cgnSame('11111111-2222-3333-4444-555555555555', $pulled['conversation_id'], 'Explicit conversation binding must survive enqueue and claim.');
 cgnSame('CLAIMED', $pulled['status'], 'Pull must transition status to CLAIMED.');
 
 cgnSame(null, $store->pullOldest(), 'A second pull with no other pending/abandoned nudge must return null (single active claim).');
@@ -33,11 +34,21 @@ cgnAssert($store->recordResult('task-1', 'SENT_UNCONFIRMED', 'typed continue; no
 $statusUnconfirmed = $store->status('task-1');
 cgnSame('SENT_UNCONFIRMED', $statusUnconfirmed['status'], 'A click without assistant progress must not be terminal success.');
 
+// Browser/CDP failures can contain unexpected runtime text. Persist only a
+// fixed diagnostic category and a non-reversible correlation hash.
+cgnAssert($store->recordResult('task-1', 'ERROR', 'composer found but send failed after bounded reattach unexpected-runtime-text'), 'Error result must be recordable.');
+$sanitizedError = $store->status('task-1');
+cgnSame('SEND_FAILED_AFTER_REATTACH', $sanitizedError['detail_code'], 'Known browser failure must retain its safe diagnostic class.');
+cgnAssert(preg_match('/^[a-f0-9]{64}$/', (string)($sanitizedError['detail_sha256'] ?? '')) === 1, 'Error detail must retain only a SHA-256 correlation value.');
+cgnAssert(!isset($sanitizedError['detail']), 'Raw worker detail must never be returned from the durable queue.');
+
 cgnAssert($store->recordResult('task-1', 'PROGRESS_CONFIRMED', 'assistant output advanced'), 'Confirmed assistant progress must be a valid result.');
 cgnAssert(!$store->recordResult('task-does-not-exist', 'PROGRESS_CONFIRMED', null), 'Recording a result for an unknown task_id must fail.');
 
 $status = $store->status('task-1');
 cgnSame('PROGRESS_CONFIRMED', $status['status'], 'Status after confirmed progress must reflect PROGRESS_CONFIRMED.');
+cgnSame('PROGRESS_CONFIRMED', $status['detail_code'], 'Confirmed progress must never be mislabeled as a runtime error.');
+cgnAssert(preg_match('/^[a-f0-9]{64}$/', (string)($status['detail_sha256'] ?? '')) === 1, 'Confirmed progress may retain a safe detail correlation hash.');
 cgnAssert($status['resolved_at'] !== null, 'resolved_at must be set after recordResult.');
 
 cgnAssert($store->enqueue('task-1', 'Vivaliz-site/site-shopvivaliz', '2026-09-27T19:10:00Z'), 'A fresh enqueue after PROGRESS_CONFIRMED must be allowed again for a later interruption of the same task.');
@@ -52,6 +63,21 @@ try {
 } catch (InvalidArgumentException) {
     // expected
 }
+
+$bindTmp = sys_get_temp_dir() . '/chatgpt-continuity-binding-test-' . bin2hex(random_bytes(6)) . '/pending-nudges.json';
+$bindStore = new SvChatgptContinuityPendingNudgeStore($bindTmp);
+cgnAssert($bindStore->enqueue('task-bind', 'Vivaliz-site/site-shopvivaliz', '2026-10-02T06:00:00Z'), 'Unbound task enqueue must succeed.');
+cgnAssert($bindStore->recordResult('task-bind', 'PROGRESS_CONFIRMED', 'advanced', '12345678-2222-3333-4444-555555555555'), 'Confirmed recovery must persist discovered binding.');
+cgnSame('12345678-2222-3333-4444-555555555555', $bindStore->status('task-bind')['conversation_id'], 'Confirmed binding must be durable.');
+cgnAssert($bindStore->enqueue('task-bind', 'Vivaliz-site/site-shopvivaliz', '2026-10-02T06:05:00Z'), 'Later interruption must re-enqueue bound task.');
+cgnSame('12345678-2222-3333-4444-555555555555', $bindStore->status('task-bind')['conversation_id'], 'Re-enqueue without an id must preserve confirmed binding.');
+$bindingMismatchRejected = false;
+try {
+    $bindStore->recordResult('task-bind', 'PROGRESS_CONFIRMED', 'advanced elsewhere', 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+} catch (RuntimeException $e) {
+    $bindingMismatchRejected = str_contains($e->getMessage(), 'does not match');
+}
+cgnAssert($bindingMismatchRejected, 'Conflicting confirmed binding must be rejected for the binding reason.');
 
 $historyTmp = sys_get_temp_dir() . '/chatgpt-continuity-history-test-' . bin2hex(random_bytes(6)) . '/pending-nudges.json';
 $historyArchive = dirname($historyTmp) . '/pending-nudges-archive.jsonl';

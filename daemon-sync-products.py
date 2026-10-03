@@ -72,6 +72,7 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
             "altura": float(dimensions.get("altura") or 0),
             "comprimento": float(dimensions.get("comprimento") or 0),
             "pesoLiquido": float(dimensions.get("pesoLiquido") or dimensions.get("peso_liquido") or item.get("peso") or 0),
+            "pesoBruto": float(dimensions.get("pesoBruto") or dimensions.get("peso_bruto") or 0),
         },
         "anexos": attachments,
         "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
