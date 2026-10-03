@@ -418,6 +418,24 @@ natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
 a mitigação instalada/armada, não “continuidade E2E comprovada”.
 <!-- /CHATGPT_SESSION_REENTRY_V10 -->
 
+<!-- CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+## Durabilidade das sessoes Claude Remote Control
+
+O servidor `shopvivaliz-claude-remote-control.service` deve manter capacidade
+de reanexar as sessoes servidas depois de uma saida/restart do processo. O
+`ExecStart` canônico usa `claude remote-control --spawn worktree` e **nao pode**
+usar `--no-create-session-in-dir`, pois essa flag arquiva as sessoes do servidor
+quando ele para e impede a retomada pelo novo processo. `Restart=always` e
+mantido para recuperar saidas limpas causadas por falha prolongada de rede ou
+do ambiente remoto.
+
+`StandardOutput` e `StandardError` devem ir para o journal para que uma saida
+limpa nao vire falso-verde sem causa observavel. O comando `status` do instalador
+falha fechado com `service_session_recovery_disabled` se o unit instalado
+reintroduzir a flag que descarta retomada. Servico `active` sem executor de
+sessao nao comprova continuidade do chat remoto.
+<!-- /CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+
 
 ### Resiliência de quota Gemini no background
 

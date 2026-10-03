@@ -919,8 +919,12 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('ANTHROPIC_API_KEY', unit_text)
         self.assertIn('claude remote-control', unit_text)
         self.assertIn('--spawn worktree', unit_text)
-        self.assertIn('--no-create-session-in-dir', unit_text)
-        self.assertIn('StandardOutput=null', unit_text)
+        self.assertNotIn('--no-create-session-in-dir', unit_text)
+        self.assertIn('Restart=always', unit_text)
+        self.assertIn('StandardOutput=journal', unit_text)
+        self.assertIn('StandardError=journal', unit_text)
+        self.assertIn('service_session_recovery_disabled', setup_text)
+        self.assertIn('systemctl show "$SERVICE" -p ExecStart --value', setup_text)
 
     def test_remote_access_can_install_and_verify_claude_remote_control(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
