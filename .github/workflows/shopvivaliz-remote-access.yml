@@ -62,6 +62,7 @@ on:
           - claude_remote_control_status
           - chatgpt_continuity_diagnostic
           - chatgpt_continuity_repair
+          - chatgpt_otp_relay
           - gemini_24x7_controller_install
           - chatgpt_freeze_task_state
           - chatgpt_freeze_state_owner_repair
@@ -94,6 +95,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
+          import base64
           import json
           import os
           import re
@@ -118,7 +120,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "gemini_24x7_controller_install", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "chatgpt_otp_relay", "gemini_24x7_controller_install", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -159,6 +161,10 @@ jobs:
               raise SystemExit("ChatGPT continuity diagnostic is restricted to the backend VM")
           if action == "chatgpt_continuity_repair" and target != "always-free-arm-1787907847-26":
               raise SystemExit("ChatGPT continuity repair is restricted to the backend VM")
+          if action == "chatgpt_otp_relay" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("ChatGPT OTP relay is restricted to the backend VM")
+          if action == "chatgpt_otp_relay" and not re.fullmatch(r"dh1:[A-Za-z0-9_-]{300,380}:[0-9]{1,6}", reason):
+              raise SystemExit("Invalid encrypted ChatGPT OTP relay payload")
           if action == "gemini_24x7_controller_install" and target != "always-free-arm-1787907847-26":
               raise SystemExit("Gemini controller install is restricted to the backend VM")
           if action in {"chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"} and target != "shopvivaliz-free-a1":
@@ -169,6 +175,8 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"target={target}\n")
               output.write(f"action={action}\n")
+              reason_b64 = base64.urlsafe_b64encode(reason.encode("utf-8")).decode("ascii").rstrip("=")
+              output.write(f"reason_b64={reason_b64}\n")
           print(f"REMOTE_REQUEST target={target} action={action} requested_at={requested_at}")
           print(f"REMOTE_REASON={reason}")
           PY
@@ -522,6 +530,7 @@ jobs:
         if: steps.req.outputs.target == 'always-free-arm-1787907847-26'
         env:
           ACTION: ${{ steps.req.outputs.action }}
+          REQUEST_REASON_B64: ${{ steps.req.outputs.reason_b64 }}
           SHOPVIVALIZ_AGENT_SSH_PUBKEY: ${{ secrets.SHOPVIVALIZ_AGENT_SSH_PUBKEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
@@ -694,6 +703,25 @@ jobs:
               printf '%s\n' "$safe_output" | grep -Fq 'CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS'
               echo "CHATGPT_CONTINUITY_BRIDGE_ROUTE=private_loopback_18081"
               echo "CHATGPT_CONTINUITY_REPAIR=PASS"
+              ;;
+            chatgpt_otp_relay)
+              remote_dir="/tmp/shopvivaliz-chatgpt-otp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_chatgpt_otp() { "${SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :; }
+              trap cleanup_chatgpt_otp RETURN
+              "${SSH[@]}" "install -d -m 700 '$remote_dir'"
+              "${SSH[@]}" "dd of='$remote_dir/chatgpt_otp_relay.py' status=none && chmod 700 '$remote_dir/chatgpt_otp_relay.py'" < scripts/chatgpt_otp_relay.py
+              "${SSH[@]}" "dd of='$remote_dir/chatgpt-otp-submit.mjs' status=none && chmod 700 '$remote_dir/chatgpt-otp-submit.mjs'" < scripts/chatgpt-continuity/chatgpt-otp-submit.mjs
+              request_reason="$(python3 - "$REQUEST_REASON_B64" <<'PY'
+          import base64
+          import sys
+          value = sys.argv[1]
+          value += "=" * ((4 - len(value) % 4) % 4)
+          print(base64.urlsafe_b64decode(value.encode("ascii")).decode("utf-8"))
+          PY
+              )"
+              test -n "$request_reason"
+              "${SSH[@]}" "python3 '$remote_dir/chatgpt_otp_relay.py' --submit-script '$remote_dir/chatgpt-otp-submit.mjs' '$request_reason'"
+              echo "CHATGPT_OTP_RELAY=PASS"
               ;;
             chatgpt_continuity_diagnostic)
               runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
