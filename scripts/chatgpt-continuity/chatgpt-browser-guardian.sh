@@ -70,10 +70,45 @@ browser_session_state() {
       if (!response.ok) { console.log("UNREACHABLE"); process.exit(0); }
       const tabs = await response.json();
       const authHosts = new Set(["auth.openai.com", "accounts.google.com", "appleid.apple.com"]);
-      const authFlow = tabs.some(page => {
-        if (!page || page.type !== "page") return false;
+      const authPages = tabs.filter(page => {
+        if (!page || page.type !== "page" || !page.webSocketDebuggerUrl) return false;
         try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }
       });
+      const authFlow = authPages.length > 0;
+      let authTerminal = false;
+      for (const page of authPages) {
+        let authCdp;
+        try {
+          const ws = new WebSocket(page.webSocketDebuggerUrl);
+          await Promise.race([
+            new Promise((resolve, reject) => {
+              ws.addEventListener("open", resolve, { once: true });
+              ws.addEventListener("error", reject, { once: true });
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
+          ]);
+          authCdp = new Cdp(ws);
+          authTerminal = Boolean(await Promise.race([
+            authCdp.evaluate(`(()=>{
+              /* CONTINUITY_BROWSER_AUTH_TERMINAL_PROBE */
+              const body = String(document.body?.innerText || "").toLowerCase();
+              const href = String(location.href || "").toLowerCase();
+              return body.includes("invalid_state")
+                || href.includes("error=invalid_state")
+                || body.includes("session ended")
+                || body.includes("your sign-in session is no longer valid")
+                || body.includes("operation timed out")
+                || body.includes("oops, an error occurred");
+            })()`),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 2500)),
+          ]));
+          if (authTerminal) break;
+        } catch {
+          // A detached auth tab is not enough evidence to classify terminal auth.
+        } finally {
+          try { authCdp?.close(); } catch {}
+        }
+      }
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
@@ -86,7 +121,7 @@ browser_session_state() {
         return new Cdp(ws);
       });
       if (!c) {
-        console.log(authFlow ? "AUTH_FLOW" : "UNKNOWN");
+        console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
         process.exit(0);
       }
       try {
@@ -102,6 +137,8 @@ browser_session_state() {
         })()`);
         if (state === "AUTHENTICATED") {
           console.log("AUTHENTICATED");
+        } else if (authTerminal) {
+          console.log("AUTH_TERMINAL");
         } else if (authFlow) {
           console.log("AUTH_FLOW");
         } else {
@@ -116,7 +153,7 @@ browser_session_state() {
 persist_browser_health() {
   local state="$1"
   case "$state" in
-    AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|UNKNOWN|UNREACHABLE) ;;
+    AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
     *) state="UNKNOWN" ;;
   esac
   local authenticated=false
@@ -133,11 +170,41 @@ persist_browser_health() {
 
 report_browser_state() {
   local guardian_state="$1"
-  local session_state
-  session_state="$(browser_session_state | tail -n 1)"
+  local session_state="${2:-}"
+  if [[ -z "$session_state" ]]; then
+    session_state="$(browser_session_state | tail -n 1)"
+  fi
   persist_browser_health "$session_state"
   echo "CHATGPT_BROWSER_GUARDIAN=$guardian_state"
   echo "CHATGPT_BROWSER_SESSION=$session_state"
+}
+
+validate_browser_session() {
+  local healthy_guardian_state="$1"
+  local session_state
+  session_state="$(browser_session_state | tail -n 1)"
+  case "$session_state" in
+    AUTHENTICATED)
+      report_browser_state "$healthy_guardian_state" "$session_state"
+      return 0
+      ;;
+    AUTH_FLOW)
+      report_browser_state "AUTH_PENDING" "$session_state"
+      return 1
+      ;;
+    AUTH_TERMINAL)
+      report_browser_state "DEGRADED_AUTH_TERMINAL" "$session_state"
+      return 1
+      ;;
+    LOGGED_OUT)
+      report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"
+      return 1
+      ;;
+    *)
+      report_browser_state "DEGRADED_SESSION" "${session_state:-UNKNOWN}"
+      return 1
+      ;;
+  esac
 }
 
 cdp_ready() {
@@ -169,16 +236,16 @@ mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
 
 status=0
 if cdp_ready; then
-  report_browser_state "HEALTHY"
+  validate_browser_session "HEALTHY" || status=1
 elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
   if systemctl is-active --quiet "$browser_unit"; then
     sleep 5
     if cdp_ready; then
-      report_browser_state "HEALTHY_AFTER_RECHECK"
+      validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
     else
       systemctl restart "$browser_unit"
       if wait_for_cdp; then
-        report_browser_state "RECOVERED_MANAGED_RESTART"
+        validate_browser_session "RECOVERED_MANAGED_RESTART" || status=1
       else
         echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
         status=1
@@ -211,7 +278,7 @@ elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
       else
         systemctl start "$browser_unit"
         if wait_for_cdp; then
-          report_browser_state "RECOVERED_UNMANAGED_TAKEOVER"
+          validate_browser_session "RECOVERED_UNMANAGED_TAKEOVER" || status=1
         else
           echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
           status=1
@@ -225,7 +292,7 @@ elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
 else
   systemctl start "$browser_unit"
   if wait_for_cdp; then
-    report_browser_state "RECOVERED"
+    validate_browser_session "RECOVERED" || status=1
   else
     echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
     status=1
