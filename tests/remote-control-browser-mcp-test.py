@@ -91,6 +91,25 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertLess(bridge.index(browser_url), bridge.index(base_url))
         self.assertIn("MCP_URLS", bridge)
 
+    def test_focus_falls_back_to_x11_windowfocus_without_ewmh(self):
+        activate_failed = mock.Mock(returncode=1)
+        focused = mock.Mock(returncode=0)
+        with mock.patch.object(m, "run_gui", side_effect=[activate_failed, focused]) as run:
+            m.focus("123")
+        self.assertEqual(
+            [
+                mock.call(["xdotool", "windowactivate", "--sync", "123"], check=False),
+                mock.call(["xdotool", "windowfocus", "--sync", "123"]),
+            ],
+            run.call_args_list,
+        )
+
+    def test_browser_mcp_targets_canonical_chatgpt_xvfb_display(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
+        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
+
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-remote-control-browser-mcp", setup)
