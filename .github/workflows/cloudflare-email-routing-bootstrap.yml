@@ -174,15 +174,15 @@ jobs:
             exit 26
           }
 
-          dmarc=$(jq -r --arg n "_dmarc.$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=DMARC1")))] | length' <<<"$dns")
-          test "$dmarc" -ge 1 || {
+          dmarc_public=$(dig +short TXT "_dmarc.$ZONE_NAME" || true)
+          grep -q 'v=DMARC1' <<<"$dmarc_public" || {
             echo 'VERIFY_DMARC_MISSING'
             exit 27
           }
 
           dkim_name="$BREVO_DKIM_SELECTOR._domainkey.$ZONE_NAME"
-          dkim=$(jq -r --arg n "$dkim_name" '[.result[] | select(.name==$n and (.type=="TXT" or .type=="CNAME"))] | length' <<<"$dns")
-          test "$dkim" -ge 1 || {
+          dkim_public=$(dig +short TXT "$dkim_name" || true)
+          grep -Eq 'DKIM1|p=' <<<"$dkim_public" || {
             echo 'VERIFY_BREVO_DKIM_MISSING'
             exit 28
           }
