@@ -28,7 +28,8 @@ install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
 python3 -m py_compile "$INSTALL_DIR/server.py"
 
 systemctl daemon-reload
-systemctl enable --now shopvivaliz-remote-control-browser-mcp.service
+systemctl enable shopvivaliz-remote-control-browser-mcp.service
+systemctl restart shopvivaliz-remote-control-browser-mcp.service
 
 for _ in $(seq 1 20); do
   if curl -fsS http://127.0.0.1:5581/health > /tmp/shopvivaliz-browser-mcp-health.json; then
