@@ -1,0 +1,89 @@
+name: Production Runner Out-of-Band Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-runner-out-of-band-recovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-runner-out-of-band-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 6
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
+
+    steps:
+      - name: Configure verified backend SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_HOST:-}"
+          test -n "${VM_USER:-}"
+          test -n "${VM_SSH_KEY:-}"
+          test -n "${VM_KNOWN_HOSTS:-}"
+          case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "invalid VM host" >&2; exit 2;; esac
+          case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "invalid VM user" >&2; exit 2;; esac
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Restart production runner through backend private peer
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=12
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=2
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -i "$HOME/.ssh/id_rsa"
+          )
+          output="$(
+            ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'bash -s' <<'BACKEND'
+          set -Eeuo pipefail
+          peer_key=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+          test -r "$peer_key"
+          ssh -i "$peer_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=8 \
+            -o ServerAliveCountMax=2 \
+            -o StrictHostKeyChecking=yes \
+            ubuntu@10.0.1.112 'bash -s' <<'A1'
+          set -Eeuo pipefail
+          export XDG_RUNTIME_DIR=/run/user/1001
+          export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus
+          systemctl --user restart shopvivaliz-actions-runner.service
+          sleep 8
+          state="$(systemctl --user is-active shopvivaliz-actions-runner.service)"
+          listener_count="$(pgrep -fc '/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Listener run' || true)"
+          worker_count="$(pgrep -fc '/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker' || true)"
+          printf 'RUNNER_SERVICE=%s\nRUNNER_LISTENER_COUNT=%s\nRUNNER_WORKER_COUNT=%s\n' \
+            "$state" "$listener_count" "$worker_count"
+          test "$state" = active
+          test "$listener_count" -eq 1
+          A1
+          BACKEND
+          )"
+          printf '%s\n' "$output"
+          grep -Fxq 'RUNNER_SERVICE=active' <<<"$output"
+          grep -Fxq 'RUNNER_LISTENER_COUNT=1' <<<"$output"
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
