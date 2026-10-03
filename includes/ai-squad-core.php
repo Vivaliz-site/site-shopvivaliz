@@ -220,7 +220,7 @@ function svais_codex_bridge_health(): array
 
 function svais_claude_bridge_url(): string
 {
-    $url = trim((string)(getenv('AI_SQUAD_CLAUDE_BRIDGE_URL') ?: 'http://127.0.0.1:17657'));
+    $url = trim((string)(getenv('AI_SQUAD_CLAUDE_BRIDGE_URL') ?: 'http://127.0.0.1:17659'));
     return rtrim($url, '/');
 }
 
@@ -811,7 +811,7 @@ function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bo
             . '/locations/global/publishers/google/models/' . $model . ':generateContent',
         [
             'Content-Type: application/json',
-            'Authorization: Bearer ' . (string)$oauth['access_token'],
+            'Authorization: Bearer [REDACTED] . (string)$oauth['access_token'],
         ],
         $payload,
         max(5, min(240, $timeout))
