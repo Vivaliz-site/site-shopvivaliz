@@ -925,6 +925,9 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('StandardError=journal', unit_text)
         self.assertIn('service_session_recovery_disabled', setup_text)
         self.assertIn('systemctl show "$SERVICE" -p ExecStart --value', setup_text)
+        self.assertIn('service_previously_installed=false', setup_text)
+        self.assertIn('CLAUDE_REMOTE_CONTROL_CONSENT=SKIP reason=existing_service', setup_text)
+        self.assertIn('if [[ "$service_previously_installed" = true ]]; then', setup_text)
 
     def test_remote_access_can_install_and_verify_claude_remote_control(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")

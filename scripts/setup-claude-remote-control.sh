@@ -15,6 +15,7 @@ SETUP_TARGET="/usr/local/sbin/shopvivaliz-setup-claude-remote-control"
 SUDOERS_FILE="/etc/sudoers.d/shopvivaliz-claude-mcp"
 UNIT_TARGET="/etc/systemd/system/shopvivaliz-claude-remote-control.service"
 SERVICE="shopvivaliz-claude-remote-control.service"
+service_previously_installed=false
 
 die(){ echo "CLAUDE_REMOTE_CONTROL_SETUP=FAIL reason=$1" >&2; exit "${2:-1}"; }
 require_backend(){ [ "$(hostname)" = "$BACKEND_HOST" ] || die backend_host_mismatch 21; }
@@ -273,11 +274,18 @@ case "$MODE" in
     configure_mcp
     echo "CLAUDE_REMOTE_CONTROL_PHASE=bridge_verify"
     verify_bridge
+    if [ -f "$UNIT_TARGET" ] || systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+      service_previously_installed=true
+    fi
     if systemctl is-active --quiet "$SERVICE"; then
       systemctl stop "$SERVICE"
     fi
     echo "CLAUDE_REMOTE_CONTROL_PHASE=consent"
-    accept_consent
+    if [[ "$service_previously_installed" = true ]]; then
+      echo "CLAUDE_REMOTE_CONTROL_CONSENT=SKIP reason=existing_service"
+    else
+      accept_consent
+    fi
     echo "CLAUDE_REMOTE_CONTROL_PHASE=service"
     install_service
     echo "CLAUDE_REMOTE_CONTROL_INSTALL=PASS"
