@@ -83,17 +83,20 @@ def test_ai_prompts():
     return len(prompts) == 4
 
 def test_upload_config():
-    """8. UPLOAD - Check FTP configuration"""
-    ftp_vars = ['FTP_HOST', 'FTP_USER', 'FTP_PASS']
-    missing = [v for v in ftp_vars if not os.environ.get(v)]
-
-    if missing:
-        logger.warning(f"⚠️  FTP vars missing: {', '.join(missing)}")
-        logger.info("💡 Set: FTP_HOST, FTP_USER, FTP_PASS for upload step")
-        return True  # Not critical for testing
-
-    logger.info(f"✅ FTP Host: {os.environ.get('FTP_HOST', 'NOT SET')[:20]}...")
-    return True
+    """8. PUBLICAÇÃO - Check persistent local public storage."""
+    try:
+        from site_public_storage import project_root
+        root = project_root()
+        uploads = root / 'uploads'
+        uploads.mkdir(parents=True, exist_ok=True)
+        probe = uploads / '.pipeline-write-probe'
+        probe.write_text('ok', encoding='utf-8')
+        probe.unlink()
+        logger.info(f"✅ Public storage writable: {uploads}")
+        return True
+    except Exception as exc:
+        logger.error(f"❌ Public storage unavailable: {exc}")
+        return False
 
 def test_email_config():
     """9. PUBLICAÇÃO - Check email configuration"""

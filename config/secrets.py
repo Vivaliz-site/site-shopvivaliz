@@ -160,30 +160,9 @@ TIKTOK_REFRESH_TOKEN = first_env("TIKTOK_REFRESH_TOKEN")
 TIKTOK_SHOP_CIPHER = first_env("TIKTOK_SHOP_CIPHER")
 TIKTOK_SHOP_ID = first_env("TIKTOK_SHOP_ID")
 
-FTP_SERVER = first_env("FTP_SERVER", "FTP_HOST")
-FTP_USERNAME = first_env("FTP_USERNAME", "FTP_USER")
-FTP_PASSWORD = first_env("FTP_PASSWORD", "FTP_PASS")
-FTP_PORT = env_int("FTP_PORT", default=21)
-FTP_REMOTE_DIR = first_env("FTP_REMOTE_DIR", "FTP_REMOTE_PATH", default="/public_html")
-FTP_HOST = FTP_SERVER
-FTP_USER = FTP_USERNAME
-FTP_PASS = FTP_PASSWORD
-FTP_REMOTE_PATH = FTP_REMOTE_DIR
-
-SMTP_HOST = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST")
-SMTP_PORT = env_int("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT", default=0)
-SMTP_USER = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER")
-SMTP_PASS = first_env("SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS")
+BREVO_API_KEY = first_env("BREVO_API_KEY")
 EMAIL_FROM = "atendimento@shopvivaliz.com.br"
 EMAIL_TO = first_env("EMAIL_TO")
-MAIL_HOST = SMTP_HOST
-MAIL_PORT = SMTP_PORT
-MAIL_USER = SMTP_USER
-MAIL_PASS = SMTP_PASS
-EMAIL_SMTP_HOST = SMTP_HOST
-EMAIL_SMTP_PORT = SMTP_PORT
-EMAIL_USER = SMTP_USER
-EMAIL_PASSWORD = SMTP_PASS
 
 MELHORENVIO_ACCESS_TOKEN = first_env("MELHORENVIO_ACCESS_TOKEN", "MELHORENVIO_API_KEY")
 MELHORENVIO_API_KEY = MELHORENVIO_ACCESS_TOKEN
@@ -219,18 +198,10 @@ REQUIRED_SECRETS = {
     "ANTHROPIC_API_KEY": "Claude API",
     "SHOPEE_PARTNER_ID": "Shopee Partner ID",
     "SHOPEE_PARTNER_KEY": "Shopee Partner Key",
-    "FTP_SERVER": "FTP Server",
-    "FTP_USERNAME": "FTP Username",
-    "FTP_PASSWORD": "FTP Password",
-    "SMTP_PASS": "Email Password",
+    "BREVO_API_KEY": "Brevo transactional email API",
 }
 
-REQUIRED_SECRET_ALIASES = {
-    "FTP_SERVER": ["FTP_SERVER", "FTP_HOST"],
-    "FTP_USERNAME": ["FTP_USERNAME", "FTP_USER"],
-    "FTP_PASSWORD": ["FTP_PASSWORD", "FTP_PASS"],
-    "SMTP_PASS": ["SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS"],
-}
+REQUIRED_SECRET_ALIASES: dict[str, list[str]] = {}
 
 
 def get_all_secrets() -> dict[str, Any]:
@@ -250,13 +221,9 @@ def get_all_secrets() -> dict[str, Any]:
         "TINY_ACCESS_TOKEN": mask_secret(TINY_ACCESS_TOKEN),
         "AMAZON_LWA_CLIENT_ID": mask_secret(AMAZON_LWA_CLIENT_ID),
         "AMAZON_AWS_ACCESS_KEY_ID": mask_secret(AMAZON_AWS_ACCESS_KEY_ID),
-        "FTP_SERVER": FTP_SERVER,
-        "FTP_USERNAME": FTP_USERNAME,
-        "FTP_PASSWORD": mask_secret(FTP_PASSWORD),
-        "FTP_PORT": FTP_PORT,
-        "SMTP_HOST": SMTP_HOST,
-        "SMTP_USER": SMTP_USER,
-        "SMTP_PASS": mask_secret(SMTP_PASS),
+        "BREVO_API_KEY": mask_secret(BREVO_API_KEY),
+        "EMAIL_FROM": EMAIL_FROM,
+        "EMAIL_TO": EMAIL_TO,
         "SESSION_SECRET": mask_secret(SESSION_SECRET),
         "JWT_SECRET": mask_secret(JWT_SECRET),
         "APP_ENV": APP_ENV,

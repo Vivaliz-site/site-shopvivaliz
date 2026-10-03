@@ -55,19 +55,20 @@ class SecretsCanonicalizationTest(unittest.TestCase):
         self.assertEqual(module.TINY_ACCESS_TOKEN, "tiny-value")
         self.assertNotEqual(module.OLIST_ACCESS_TOKEN, module.TINY_ACCESS_TOKEN)
 
-    def test_ftp_and_smtp_canonical_names_precede_legacy_aliases(self):
+    def test_email_provider_is_brevo_only(self):
         module = self.load_module(
             {
-                "FTP_SERVER": "canonical-ftp",
-                "FTP_HOST": "legacy-ftp",
-                "SMTP_USER": "canonical-mail",
-                "EMAIL_USER": "legacy-mail",
+                "BREVO_API_KEY": "brevo-value",
+                "EMAIL_TO": "ops@example.test",
+                "FTP_SERVER": "legacy-ftp-ignored",
+                "SMTP_USER": "legacy-smtp-ignored",
             }
         )
-        self.assertEqual(module.FTP_SERVER, "canonical-ftp")
-        self.assertEqual(module.FTP_HOST, "canonical-ftp")
-        self.assertEqual(module.SMTP_USER, "canonical-mail")
-        self.assertEqual(module.EMAIL_USER, "canonical-mail")
+        self.assertEqual(module.BREVO_API_KEY, "brevo-value")
+        self.assertEqual(module.EMAIL_FROM, "atendimento@shopvivaliz.com.br")
+        self.assertEqual(module.EMAIL_TO, "ops@example.test")
+        self.assertFalse(hasattr(module, "FTP_SERVER"))
+        self.assertFalse(hasattr(module, "SMTP_USER"))
 
     def test_mask_secret_never_returns_full_value(self):
         module = self.load_module({})

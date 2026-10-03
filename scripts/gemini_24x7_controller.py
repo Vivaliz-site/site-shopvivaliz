@@ -49,6 +49,7 @@ CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
 CHATGPT_BROWSER_HEALTH_STATE_FILE = "_chatgpt-browser-health.json"
 DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS = 90
 DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS = 180
+CLAUDE_REMOTE_CONTROL_POINTER_FILE = "/home/ubuntu/.claude/projects/-home-ubuntu-shopvivaliz-claude-workspace-site-shopvivaliz/bridge-pointer.json"
 
 
 def utc_now() -> str:
@@ -214,6 +215,42 @@ def _chatgpt_browser_health(root: Path) -> dict[str, Any]:
     }
 
 
+def _claude_remote_control_health() -> dict[str, Any]:
+    pointer_path = Path(
+        os.environ.get("CLAUDE_REMOTE_CONTROL_POINTER_FILE", CLAUDE_REMOTE_CONTROL_POINTER_FILE)
+    ).expanduser()
+    state = _read_json(pointer_path)
+    try:
+        pid = int(state.get("pid"))
+    except (TypeError, ValueError):
+        pid = 0
+    expected_start = str(state.get("procStart", "")).strip()
+    actual_start = _process_start_ticks(pid) if pid > 0 else ""
+    source = str(state.get("source", "")).strip()
+    pointer_present = bool(state)
+    process_alive = bool(actual_start)
+    identity_match = bool(expected_start and actual_start and expected_start == actual_start)
+    session_present = bool(str(state.get("sessionId", "")).strip())
+    environment_present = bool(str(state.get("environmentId", "")).strip())
+    connected = bool(
+        pointer_present
+        and process_alive
+        and identity_match
+        and source == "standalone"
+        and session_present
+        and environment_present
+    )
+    return {
+        "connected": connected,
+        "pointer_present": pointer_present,
+        "process_alive": process_alive,
+        "identity_match": identity_match,
+        "source": source,
+        "session_present": session_present,
+        "environment_present": environment_present,
+    }
+
+
 def _append_event(root: Path, event: str, **fields: Any) -> None:
     row = {"at": utc_now(), "event": event}
     row.update({key: value for key, value in fields.items() if value not in (None, "", {}, [])})
@@ -370,6 +407,7 @@ def run_once(
         failed = int(resumed.get("failed") or 0)
         monitor = _chatgpt_monitor_health(root)
         browser_health = _chatgpt_browser_health(root)
+        claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
@@ -394,6 +432,14 @@ def run_once(
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
             else:
                 degraded_reasons.append("chatgpt_browser_auth_unknown")
+        if claude_health.get("pointer_present") is not True:
+            degraded_reasons.append("claude_remote_control_pointer_missing")
+        elif claude_health.get("process_alive") is not True:
+            degraded_reasons.append("claude_remote_control_process_missing")
+        elif claude_health.get("identity_match") is not True:
+            degraded_reasons.append("claude_remote_control_pointer_stale")
+        elif claude_health.get("connected") is not True:
+            degraded_reasons.append("claude_remote_control_not_connected")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -411,6 +457,7 @@ def run_once(
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,
+            "claude_remote_control": claude_health,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)

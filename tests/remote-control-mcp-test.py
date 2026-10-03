@@ -928,6 +928,10 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('service_previously_installed=false', setup_text)
         self.assertIn('CLAUDE_REMOTE_CONTROL_CONSENT=SKIP reason=existing_service', setup_text)
         self.assertIn('if [[ "$service_previously_installed" = true ]]; then', setup_text)
+        self.assertIn('CLAUDE_REMOTE_CONTROL_ELIGIBILITY=remote_control_help', setup_text)
+        self.assertIn('remote_control_help_missing', setup_text)
+        self.assertIn('help_rc', setup_text)
+        self.assertIn("grep -Fq -- '--spawn <mode>'", setup_text)
 
     def test_remote_access_can_install_and_verify_claude_remote_control(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
@@ -1509,7 +1513,8 @@ class BootstrapContractTests(unittest.TestCase):
     def test_claude_setup_clears_return_trap_before_leaving_auth_probe(self):
         setup = (ROOT / "scripts" / "setup-claude-remote-control.sh").read_text(encoding="utf-8")
         probe = setup.split("probe_auth_and_command(){", 1)[1].split("\n}", 1)[0]
-        self.assertIn('trap \'rm -f "$tmp"\' RETURN', probe)
+        self.assertIn('trap \'rm -f "$tmp" "$help_out"\' RETURN', probe)
+        self.assertIn('help_out="$(mktemp)" || die claude_help_tmpfile_failed 34', probe)
         self.assertIn('trap - RETURN', probe)
         self.assertLess(probe.index('trap - RETURN'), probe.index('CLAUDE_REMOTE_CONTROL_ELIGIBLE=PASS'))
 
