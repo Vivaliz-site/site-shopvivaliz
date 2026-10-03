@@ -376,6 +376,41 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertTrue(result["chatgpt_monitor"]["degraded"])
         self.assertEqual(result["chatgpt_monitor"]["action"], "sent_unconfirmed")
 
+    def test_newer_worker_fallback_health_supersedes_stale_runtime_health(self) -> None:
+        controller = load_controller()
+        self.assertTrue(hasattr(controller, "CHATGPT_MONITOR_FALLBACK_FILE"))
+        primary = self.runtime / controller.CHATGPT_MONITOR_STATE_FILE
+        primary.write_text(
+            json.dumps({
+                "schema_version": 1,
+                "updated_at": "2026-10-02T12:52:25.493Z",
+                "degraded": True,
+                "action": "send_failed",
+                "progress_confirmed": False,
+            }),
+            encoding="utf-8",
+        )
+        fallback = self.runtime / "worker-fallback-health.json"
+        fallback.write_text(
+            json.dumps({
+                "schema_version": 1,
+                "updated_at": "2026-10-02T15:04:51.000Z",
+                "degraded": False,
+                "action": "self_resolved",
+                "progress_confirmed": True,
+            }),
+            encoding="utf-8",
+        )
+        original = controller.CHATGPT_MONITOR_FALLBACK_FILE
+        controller.CHATGPT_MONITOR_FALLBACK_FILE = fallback
+        try:
+            health = controller._chatgpt_monitor_health(self.runtime)
+        finally:
+            controller.CHATGPT_MONITOR_FALLBACK_FILE = original
+        self.assertFalse(health["degraded"])
+        self.assertEqual(health["action"], "self_resolved")
+        self.assertEqual(health["updated_at"], "2026-10-02T15:04:51.000Z")
+
     def test_idle_cycle_does_not_spam_event_ledger(self) -> None:
         controller = load_controller()
         with (
