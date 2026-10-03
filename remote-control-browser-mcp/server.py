@@ -43,9 +43,10 @@ if spec is None or spec.loader is None:
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 
-VERSION = "1.0.0-browser"
+VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
 BROWSER_TOOLS = {
+    "browser_health",
     "browser_tabs",
     "browser_open",
     "browser_navigate",
@@ -173,6 +174,19 @@ def selected_url(window: str) -> str:
     if copied.returncode != 0:
         return ""
     return safe_url(copied.stdout or "")
+
+
+def browser_health() -> dict[str, Any]:
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
+    windows = browser_windows() if dependencies["xdotool"] else []
+    return {
+        "ok": all(dependencies.values()) and bool(windows),
+        "host": BROWSER_HOST,
+        "display": DISPLAY,
+        "gui_user": GUI_USER,
+        "dependencies": dependencies,
+        "window_count": len(windows),
+    }
 
 
 def browser_tabs() -> dict[str, Any]:
@@ -327,6 +341,8 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name == "browser_health":
+        return browser_health()
     if name == "browser_tabs":
         return browser_tabs()
     if name == "browser_open":
@@ -354,6 +370,12 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "browser_health",
+        "description": "Check graphical backend browser dependencies and visible browser window availability.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
     {
         "name": "browser_tabs",
         "description": "List Chrome/Chromium tabs from the authenticated graphical backend session using GUI automation only.",
@@ -426,17 +448,15 @@ class BrowserHandler(base.Handler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
-            self._json(200, {
-                "ok": True,
+            health = browser_health()
+            health.update({
                 "endpoint": "shopvivaliz-remote-control-browser-mcp",
                 "version": VERSION,
                 "base_endpoint": "shopvivaliz-remote-control-mcp",
                 "browser_host": BROWSER_HOST,
-                "display": DISPLAY,
-                "dependencies": dependencies,
                 "timestamp": base.now(),
             })
+            self._json(200, health)
             return
         self._json(405, {"error": "method_not_allowed"})
 

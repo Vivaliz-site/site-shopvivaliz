@@ -65,14 +65,153 @@ class RemoteControlMcpTests(unittest.TestCase):
             "hosts_list", "host_health", "processes_list", "service_status",
             "service_action", "file_read", "file_list", "logs_tail",
             "admin_command_run", "task_submit", "task_status", "task_wait", "task_cancel", "audit_recent",
+            "controller_status", "controller_promote", "continuity_status", "continuity_e2e",
+            "claude_remote_control_status", "claude_remote_control_reconcile",
         }:
             self.assertIn(required, names)
+
+    def test_mcp_tool_names_are_unique(self):
+        names = [item["name"] for item in m.tool_specs()]
+        self.assertEqual(len(names), len(set(names)))
 
     def test_admin_tools_are_annotated_mutating(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertFalse(specs["admin_command_run"]["annotations"]["readOnlyHint"])
         self.assertTrue(specs["admin_command_run"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["host_health"]["annotations"]["readOnlyHint"])
+
+    def test_controller_and_continuity_tools_have_safe_annotations(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertTrue(specs["controller_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["controller_status"]["annotations"]["destructiveHint"])
+        self.assertTrue(specs["continuity_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["continuity_status"]["annotations"]["destructiveHint"])
+        self.assertFalse(specs["controller_promote"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["controller_promote"]["annotations"]["destructiveHint"])
+        self.assertFalse(specs["continuity_e2e"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["continuity_e2e"]["annotations"]["destructiveHint"])
+        self.assertTrue(specs["claude_remote_control_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["claude_remote_control_status"]["annotations"]["destructiveHint"])
+        self.assertFalse(specs["claude_remote_control_reconcile"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["claude_remote_control_reconcile"]["annotations"]["destructiveHint"])
+
+    def test_controller_promote_requires_full_expected_sha(self):
+        with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
+            m.execute_tool("controller_promote", {"expected_sha": "abc123"})
+
+    def test_continuity_e2e_requires_valid_conversation_id(self):
+        with self.assertRaisesRegex(ValueError, "invalid_conversation_id"):
+            m.execute_tool("continuity_e2e", {"conversation_id": "bad/value"})
+
+    def test_claude_reconcile_requires_full_expected_sha(self):
+        with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
+            m.execute_tool("claude_remote_control_reconcile", {"expected_sha": "abc123"})
+
+    def test_claude_status_is_sanitized(self):
+        pointer = Path(self.tmp.name) / "bridge-pointer.json"
+        process_fields = Path(f"/proc/{os.getpid()}/stat").read_text(encoding="utf-8").split()
+        pointer.write_text(json.dumps({
+            "sessionId": "secret-session-id",
+            "environmentId": "secret-environment-id",
+            "source": "standalone",
+            "pid": os.getpid(),
+            "procStart": process_fields[21],
+        }), encoding="utf-8")
+        old = m.CLAUDE_REMOTE_CONTROL_POINTER_FILE
+        m.CLAUDE_REMOTE_CONTROL_POINTER_FILE = pointer
+        try:
+            def fake_run(argv, *, timeout=60):
+                if "is-active" in argv:
+                    return mock.Mock(returncode=0, stdout=b"active\n", stderr=b"")
+                if "ExecStart" in argv:
+                    return mock.Mock(returncode=0, stdout=b"/home/ubuntu/.local/bin/claude remote-control --spawn worktree", stderr=b"")
+                return mock.Mock(returncode=0, stdout=b"", stderr=b"")
+            with mock.patch.object(m, "_run_local", side_effect=fake_run):
+                status = m.claude_remote_control_status()
+        finally:
+            m.CLAUDE_REMOTE_CONTROL_POINTER_FILE = old
+
+        self.assertTrue(status["ok"])
+        self.assertTrue(status["service_active"])
+        self.assertTrue(status["identity_match"])
+        self.assertTrue(status["session_present"])
+        self.assertTrue(status["environment_present"])
+        self.assertTrue(status["session_recovery_enabled"])
+        for forbidden in ("sessionId", "environmentId", "pid", "procStart"):
+            self.assertNotIn(forbidden, status)
+
+    def test_controller_state_strips_internal_identifiers(self):
+        original = m.CONTROLLER_STATE_FILE
+        state = Path(self.tmp.name) / "controller-state.json"
+        state.write_text(json.dumps({
+            "continuity_ready": False,
+            "degraded_reasons": ["example"],
+            "claude_remote_control": {
+                "connected": True,
+                "sessionId": "session-secret",
+                "environmentId": "environment-secret",
+                "pid": 123,
+                "procStart": "456",
+            },
+        }), encoding="utf-8")
+        m.CONTROLLER_STATE_FILE = state
+        try:
+            result = m._read_controller_state()
+        finally:
+            m.CONTROLLER_STATE_FILE = original
+        claude = result["claude_remote_control"]
+        self.assertTrue(claude["connected"])
+        self.assertNotIn("sessionId", claude)
+        self.assertNotIn("environmentId", claude)
+        self.assertNotIn("pid", claude)
+        self.assertNotIn("procStart", claude)
+
+    def test_controller_promote_rejects_sha_not_current_main_before_worktree(self):
+        requested = "a" * 40
+        with mock.patch.object(m, "_controller_origin_main_sha", return_value="b" * 40),              mock.patch.object(m, "_controller_worktree") as worktree:
+            with self.assertRaisesRegex(ValueError, "expected_sha_not_origin_main"):
+                m.controller_promote(requested)
+        worktree.assert_not_called()
+
+    def test_controller_promote_is_persisted_as_durable_task(self):
+        sha = "a" * 40
+        with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha),              mock.patch.object(m, "controller_status", return_value={"active_sha": "b" * 40, "service_active": True}):
+            result = m.controller_promote(sha, timeout=120)
+        self.assertTrue(result["durable"])
+        self.assertEqual(result["state"], "queued")
+        row = m.load_task(result["task_id"])
+        self.assertIn("--controller-promote-run", row["command"])
+        self.assertIn(sha, row["command"])
+
+    def test_continuity_e2e_is_persisted_as_durable_task(self):
+        sha = "a" * 40
+        cid = "conversation_12345678"
+        with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha),              mock.patch.object(m, "controller_status", return_value={"active_sha": sha, "service_active": True}):
+            result = m.continuity_e2e(cid, timeout_seconds=120)
+        self.assertTrue(result["durable"])
+        self.assertEqual(result["state"], "queued")
+        row = m.load_task(result["task_id"])
+        self.assertIn("--continuity-e2e-run", row["command"])
+        self.assertIn(cid, row["command"])
+
+    def test_claude_reconcile_is_persisted_as_durable_task(self):
+        sha = "a" * 40
+        with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha),              mock.patch.object(m, "claude_remote_control_status", return_value={"ok": False}):
+            result = m.claude_remote_control_reconcile(sha, timeout=120)
+        self.assertTrue(result["durable"])
+        self.assertEqual(result["state"], "queued")
+        row = m.load_task(result["task_id"])
+        self.assertIn("--claude-reconcile-run", row["command"])
+        self.assertIn(sha, row["command"])
+
+    def test_continuity_status_is_fail_closed_until_ready(self):
+        with mock.patch.object(m, "controller_status", return_value={
+            "service_active": True,
+            "state": {"liveness_ok": True, "continuity_ready": False, "degraded": True, "degraded_reasons": ["auth"]},
+        }):
+            status = m.continuity_status()
+        self.assertFalse(status["ok"])
+        self.assertFalse(status["continuity_ready"])
 
     def test_secret_redaction(self):
         sample = "Authorization: Bearer abcdefghijklmnopqrstuvwxyz sk-projectsecret123456"
