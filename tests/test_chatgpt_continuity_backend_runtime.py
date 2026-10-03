@@ -293,6 +293,18 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('document.querySelector("input[name=code]")', probe)
         self.assertIn("residualAuthTerminal && !validOpenAiAuthFlow", probe)
 
+    def test_chatgpt_browser_guardian_active_openai_verification_precedes_stale_openai_terminal(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        self.assertIn(marker, body)
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        self.assertIn("validOpenAiAuthFlow", probe)
+        self.assertIn(
+            "authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;",
+            probe,
+        )
+
     def test_chatgpt_browser_guardian_authenticated_chatgpt_precedes_residual_oauth(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
