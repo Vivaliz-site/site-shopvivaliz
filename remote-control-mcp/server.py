@@ -866,6 +866,18 @@ def execute_tool(
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
         result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
+    elif name == "controller_status":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), controller_status_command(), timeout, cancel_check)
+    elif name == "controller_promote":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), controller_promote_command(str(args.get("ref") or "")), timeout, cancel_check)
+    elif name == "claude_remote_control_status":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), claude_remote_control_status_command(), timeout, cancel_check)
+    elif name == "claude_remote_control_install":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), claude_remote_control_install_command(str(args.get("ref") or "")), timeout, cancel_check)
     elif name == "processes_list":
         result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
     elif name == "service_status":
@@ -909,6 +921,10 @@ def execute_tool(
 TOOLS = [
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
+    ("controller_status", "Inspect the ShopVivaliz 24x7 continuity controller release and sanitized readiness state on the backend.", {"host": {"type": "string", "enum": [BACKEND_HOST]}}, True, False),
+    ("controller_promote", "Promote an exact main-ancestor commit to the backend 24x7 continuity controller and verify the active process uses that commit.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "ref": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("claude_remote_control_status", "Inspect the canonical Claude Remote Control service on the backend.", {"host": {"type": "string", "enum": [BACKEND_HOST]}}, True, False),
+    ("claude_remote_control_install", "Install the canonical Claude Remote Control service from an exact main-ancestor commit and verify it is active.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "ref": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
     ("service_action", "Start, stop or restart a service with administrative privilege.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}, "action": {"type": "string", "enum": ["start", "stop", "restart"]}}, False, True),
