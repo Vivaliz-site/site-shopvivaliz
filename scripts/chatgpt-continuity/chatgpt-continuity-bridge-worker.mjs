@@ -2084,6 +2084,20 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
         })()`);
         if (String(insertedDraft || '').trim() !== expected) return false;
         if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
+        if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+        try {
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'rawKeyDown', key: 'Enter', code: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+          });
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'keyUp', key: 'Enter', code: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+          });
+          return true;
+        } catch {
+          return false;
+        }
       }
       return false;
     }
