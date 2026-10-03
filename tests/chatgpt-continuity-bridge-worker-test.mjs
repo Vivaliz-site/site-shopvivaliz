@@ -39,6 +39,8 @@ const {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementLoop,
+  hasActiveContinuityCheckpoint,
+  browserSessionReadyForReinforcement,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,
@@ -75,7 +77,10 @@ function fakeCdp({
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('continuity-error-banner-probe')) {
-        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar|nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|request timed out|request timeout|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao)/i.test(pageText);
+      }
+      if (expression.includes('continuity-additional-checks-probe')) {
+        return /(nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|try again with a faster model)/i.test(pageText);
       }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
@@ -777,7 +782,7 @@ async function run() {
     const cdp = {
       async evaluate(expression) {
         const source = String(expression);
-        if (source.includes('data-message-author-role')) {
+        if (source.includes('data-message-author-role=\"assistant\"')) {
           snapshots += 1;
           return {
             count: 0,
@@ -810,7 +815,7 @@ async function run() {
     let snapshotNumber = 0;
     cdp.evaluate = async expression => {
       const source = String(expression);
-      if (source.includes('data-message-author-role')) {
+      if (source.includes('data-message-author-role=\"assistant\"')) {
         snapshotNumber += 1;
         return {
           count: 0,
@@ -1351,6 +1356,48 @@ async function run() {
   assert.equal(await transmissionErrorPresent(fakeCdp({ pageText: 'normal completed answer' })), false);
 
   console.log('conversationIsGenerating/composerIsUsable/errorBannerPresent/transmissionErrorPresent: PASS');
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const outcome = await attemptNudge(
+      'task-additional-checks-no-send',
+      async () => cdp,
+      async () => false,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'additional_checks');
+    assert.equal(outcome.sent, false);
+    assert.equal(cdp.calls.some(call => call.includes('location.reload')), false, 'additional checks must not reload the turn');
+    assert.equal(cdp.calls.some(call => call.includes('insertText') || call.includes('b.click()')), false, 'additional checks must not submit continue');
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const outcome = await reinforcementCheckOnce(
+      async () => cdp,
+      0,
+      async () => false,
+      async () => ({ action: 'unused' }),
+      { allowCrossDeviceDiscovery: false },
+    );
+    assert.equal(outcome.action, 'additional_checks_cooldown');
+    assert.equal(outcome.sent, false);
+    assert.equal(cdp.calls.some(call => call.includes('location.reload')), false);
+    assert.equal(cdp.calls.some(call => call.includes('insertText') || call.includes('b.click()')), false);
+  }
 
   {
     const cdp = fakeCdp({
@@ -2720,6 +2767,106 @@ async function run() {
       { allowCrossDeviceDiscovery: true },
       'the fifth argument must remain the options object, not a helper function',
     );
+  }
+
+  {
+    const checkpointDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-idle-gate-'));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
+    fs.writeFileSync(path.join(checkpointDir, 'done.json'), JSON.stringify({status: 'CONCLUIDO'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true);
+  }
+
+  {
+    const authDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-auth-gate-'));
+    const health = path.join(authDir, '_chatgpt-browser-health.json');
+    const now = Date.now();
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTHENTICATED',
+      authenticated: true,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), true);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTH_TERMINAL',
+      authenticated: false,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTH_FLOW',
+      authenticated: false,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now - 5 * 60_000).toISOString(),
+      session_state: 'AUTHENTICATED',
+      authenticated: true,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false, 'stale auth health must fail closed');
+  }
+
+  {
+    let checks = 0;
+    const stop = new Error('stop-after-auth-quiescent-cycle');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => { checks += 1; return { action: 'unexpected' }; },
+        () => 0,
+        async () => { throw stop; },
+        async () => true,
+        async () => false,
+      ),
+      error => error === stop,
+    );
+    assert.equal(checks, 0, 'unauthenticated browser health must make zero reinforcement/browser/account-discovery calls');
+  }
+
+  // Idle continuity must be completely passive: with no non-terminal
+  // checkpoint, the reinforcement loop must not attach to ChatGPT or query
+  // account-scoped conversation lists.
+  {
+    let checks = 0;
+    const stop = new Error('stop-after-idle-cycle');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => { checks += 1; return { action: 'unexpected' }; },
+        () => 0,
+        async () => { throw stop; },
+        async () => false,
+      ),
+      error => error === stop,
+    );
+    assert.equal(checks, 0, 'idle continuity must make zero reinforcement/browser/account-discovery calls');
+  }
+
+  {
+    const calls = [];
+    let waits = 0;
+    const stop = new Error('stop-after-additional-checks-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'additional_checks_cooldown',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'additional_checks',
+            cross_device_discovery: false,
+          };
+        },
+        () => 0,
+        async () => {
+          waits += 1;
+          if (waits >= 2) throw stop;
+        },
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'additional checks must suppress repeated reinforcement attempts during cooldown');
   }
 
   // A 429 must back off only the account-scoped API, not the local sidebar

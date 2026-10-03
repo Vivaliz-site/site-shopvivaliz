@@ -115,6 +115,17 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertNotIn('systemctl --user restart "$tunnel_unit"\n', body)
         self.assertNotIn('systemctl --user restart "$unit"\n', body)
 
+    def test_backend_installer_retires_legacy_browser_healthcheck(self) -> None:
+        installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
+        body = installer.read_text(encoding="utf-8")
+        self.assertIn("shopvivaliz-browser-healthcheck.timer", body)
+        self.assertIn("shopvivaliz-browser-healthcheck.service", body)
+        self.assertIn('sudo -n systemctl disable --now "$legacy_browser_healthcheck_timer"', body)
+        self.assertIn('sudo -n systemctl stop "$legacy_browser_healthcheck_service"', body)
+        self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_timer_path"', body)
+        self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_service_path"', body)
+        self.assertIn('sudo -n rm -f "$legacy_browser_healthcheck_script"', body)
+
     def test_canonical_chatgpt_browser_is_supervised_by_systemd(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
         unit = ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser.service"

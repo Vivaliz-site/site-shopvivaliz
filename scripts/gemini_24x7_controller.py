@@ -152,8 +152,15 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
-    primary = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
-    fallback = _read_json(Path(CHATGPT_MONITOR_FALLBACK_FILE))
+    runtime_root = Path(root).resolve()
+    primary = _read_json(runtime_root / CHATGPT_MONITOR_STATE_FILE)
+    fallback_path = Path(CHATGPT_MONITOR_FALLBACK_FILE).resolve()
+    canonical_runtime = Path(RUNTIME_DIR).resolve()
+    # The installed worker fallback belongs to the canonical production runtime.
+    # Never let it leak into an isolated/test runtime unless that runtime
+    # explicitly points the fallback inside its own directory.
+    fallback_allowed = runtime_root == canonical_runtime or fallback_path.parent == runtime_root
+    fallback = _read_json(fallback_path) if fallback_allowed else {}
     primary_updated = _parse_utc(primary.get("updated_at"))
     fallback_updated = _parse_utc(fallback.get("updated_at"))
     state = primary
