@@ -965,6 +965,21 @@ def execute_tool(
     elif name == "claude_remote_control_install":
         require_backend_host(str(host))
         result = run_host_command(str(host), claude_remote_control_install_command(str(args.get("ref") or "")), timeout, cancel_check)
+    elif name == "browser_tabs":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), browser_tabs_command(), timeout, cancel_check)
+    elif name == "browser_controls":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), browser_controls_command(str(args.get("tab_id") or "")), timeout, cancel_check)
+    elif name == "browser_navigate":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), browser_navigate_command(str(args.get("tab_id") or ""), str(args.get("url") or "")), timeout, cancel_check)
+    elif name == "browser_click":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), browser_click_command(str(args.get("tab_id") or ""), str(args.get("selector") or "")), timeout, cancel_check)
+    elif name == "browser_type":
+        require_backend_host(str(host))
+        result = run_host_command(str(host), browser_type_command(str(args.get("tab_id") or ""), str(args.get("selector") or ""), str(args.get("text") or ""), bool(args.get("submit", False))), timeout, cancel_check)
     elif name == "processes_list":
         result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
     elif name == "service_status":
@@ -1012,6 +1027,11 @@ TOOLS = [
     ("controller_promote", "Promote an exact main-ancestor commit to the backend 24x7 continuity controller and verify the active process uses that commit.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "ref": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
     ("claude_remote_control_status", "Inspect the canonical Claude Remote Control service on the backend.", {"host": {"type": "string", "enum": [BACKEND_HOST]}}, True, False),
     ("claude_remote_control_install", "Install the canonical Claude Remote Control service from an exact main-ancestor commit and verify it is active.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "ref": {"type": "string", "pattern": "^[0-9a-fA-F]{40}$"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}}, False, True),
+    ("browser_tabs", "List browser tabs from the canonical backend Chrome debug session without exposing full URLs.", {"host": {"type": "string", "enum": [BACKEND_HOST]}}, True, False),
+    ("browser_controls", "Inspect sanitized interactive controls on one canonical backend browser tab; values are never returned.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "tab_id": {"type": "string"}}, True, False),
+    ("browser_navigate", "Navigate one canonical backend browser tab to an allowlisted HTTPS origin.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "tab_id": {"type": "string"}, "url": {"type": "string"}}, False, True),
+    ("browser_click", "Click an explicit CSS selector in one canonical backend browser tab.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "tab_id": {"type": "string"}, "selector": {"type": "string"}}, False, True),
+    ("browser_type", "Type into an explicit CSS selector in one canonical backend browser tab. Input text is hashed, never stored in audit records.", {"host": {"type": "string", "enum": [BACKEND_HOST]}, "tab_id": {"type": "string"}, "selector": {"type": "string"}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("service_status", "Inspect a service on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}}, True, False),
     ("service_action", "Start, stop or restart a service with administrative privilege.", {"host": {"type": "string", "enum": list(HOSTS)}, "service": {"type": "string"}, "action": {"type": "string", "enum": ["start", "stop", "restart"]}}, False, True),
@@ -1035,7 +1055,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable"}],
+                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "submit"}],
                 "additionalProperties": False,
             },
             "annotations": {
