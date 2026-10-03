@@ -154,14 +154,6 @@ define('SHOPEE_ENABLED', true);
 define('SHOPEE_API_URL', 'https://partner.shopeemall.com/api');
 define('MELHORENVIO_ENABLED', true);
 
-// Legacy FTP deployment was retired with HostGator.
-define('FTP_ENABLED', false);
-define('FTP_HOST', '');
-define('FTP_USER', '');
-define('FTP_PASS', '');
-define('FTP_PORT', 0);
-define('FTP_DIR', '');
-
 // Frete
 define('FREE_SHIPPING_THRESHOLD', (float)(getenv('FREE_SHIPPING_THRESHOLD') ?: 299));
 
