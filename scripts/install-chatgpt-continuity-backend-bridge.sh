@@ -6,6 +6,11 @@ tunnel_unit='shopvivaliz-chatgpt-continuity-a1-tunnel.service'
 browser_unit='shopvivaliz-chatgpt-browser.service'
 browser_guardian_service='shopvivaliz-chatgpt-browser-guardian.service'
 browser_guardian_timer='shopvivaliz-chatgpt-browser-guardian.timer'
+legacy_browser_healthcheck_timer='shopvivaliz-browser-healthcheck.timer'
+legacy_browser_healthcheck_service='shopvivaliz-browser-healthcheck.service'
+legacy_browser_healthcheck_timer_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.timer'
+legacy_browser_healthcheck_service_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.service'
+legacy_browser_healthcheck_script='/usr/local/sbin/shopvivaliz-browser-healthcheck.sh'
 tunnel_key='/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor'
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -158,6 +163,29 @@ fi
 
 sudo -n install -d -m 755 /usr/local/libexec
 system_units_changed=false
+
+# A legacy one-minute CDP-only healthcheck predates the canonical guardian and
+# can race it by restarting the same authenticated browser. Retire it before
+# installing/enabling the single guardian owner.
+if sudo -n systemctl is-enabled --quiet "$legacy_browser_healthcheck_timer" 2>/dev/null \
+  || sudo -n systemctl is-active --quiet "$legacy_browser_healthcheck_timer" 2>/dev/null; then
+  sudo -n systemctl disable --now "$legacy_browser_healthcheck_timer" >/dev/null
+fi
+if sudo -n systemctl is-active --quiet "$legacy_browser_healthcheck_service" 2>/dev/null; then
+  sudo -n systemctl stop "$legacy_browser_healthcheck_service" >/dev/null
+fi
+if sudo -n test -e "$legacy_browser_healthcheck_timer_path"; then
+  sudo -n rm -f "$legacy_browser_healthcheck_timer_path"
+  system_units_changed=true
+fi
+if sudo -n test -e "$legacy_browser_healthcheck_service_path"; then
+  sudo -n rm -f "$legacy_browser_healthcheck_service_path"
+  system_units_changed=true
+fi
+if sudo -n test -e "$legacy_browser_healthcheck_script"; then
+  sudo -n rm -f "$legacy_browser_healthcheck_script"
+fi
+
 browser_unit_changed=false
 if sudo_install_if_changed "$browser_unit_source" "$browser_unit_target" 644; then
   browser_unit_changed=true
