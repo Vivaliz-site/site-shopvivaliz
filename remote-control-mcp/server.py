@@ -467,6 +467,11 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
+    for secret_key in ("text", "otp", "secret"):
+        if secret_key in safe_args:
+            secret_value = str(safe_args.pop(secret_key))
+            safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
+            safe_args[f"{secret_key}_length"] = len(secret_value)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
