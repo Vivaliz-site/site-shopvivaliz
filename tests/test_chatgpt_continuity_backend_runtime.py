@@ -82,7 +82,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertTrue(installer.is_file(), "backend continuity installer must exist")
         body = installer.read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-chatgpt-continuity.service", body)
-        self.assertIn("http://127.0.0.1:9556", body)
+        self.assertIn("http://127.0.0.1:9555", body)
         self.assertIn("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", body)
         self.assertIn("systemctl --user enable --now", body)
         self.assertIn(
@@ -125,14 +125,14 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("cdp_ready", body)
         self.assertIn("CDP endpoint did not become ready", body)
 
-    def test_remote_workflows_copy_atendimento_browser_unit(self) -> None:
+    def test_remote_workflows_copy_canonical_browser_unit(self) -> None:
         for rel in [
             ".github/workflows/shopvivaliz-remote-access.yml",
             ".github/workflows/oci-bastion-private-access-bootstrap.yml",
         ]:
             body = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertIn("ops/systemd/shopvivaliz-atendimento-browser.service", body)
-            self.assertNotIn("ops/systemd/shopvivaliz-chatgpt-browser.service", body)
+            self.assertIn("ops/systemd/shopvivaliz-chatgpt-browser.service", body)
+            self.assertNotIn("ops/systemd/shopvivaliz-atendimento-browser.service", body)
 
     def test_backend_installer_retires_legacy_browser_healthcheck(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
@@ -149,7 +149,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
     def test_canonical_chatgpt_browser_is_supervised_by_systemd(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
-        unit = ROOT / "ops" / "systemd" / "shopvivaliz-atendimento-browser.service"
+        unit = ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser.service"
         self.assertTrue(unit.is_file(), "canonical ChatGPT browser systemd unit must exist")
         body = unit.read_text(encoding="utf-8")
         self.assertIn("User=fredrdp", body)
@@ -160,12 +160,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("ExecStart=/usr/bin/dbus-run-session -- /opt/shopvivaliz-browser/chrome-linux/chrome", body)
         self.assertIn("PrivateTmp=true", body)
         self.assertIn("BindReadOnlyPaths=/tmp/.X11-unix", body)
-        self.assertIn("--remote-debugging-port=9556", body)
-        self.assertIn("--user-data-dir=/home/fredrdp/.config/shopvivaliz-atendimento-chromium", body)
+        self.assertIn("--remote-debugging-port=9555", body)
+        self.assertIn("--user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium", body)
         self.assertIn("Restart=always", body)
         self.assertIn("ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X99", body)
         install_body = installer.read_text(encoding="utf-8")
-        self.assertIn("shopvivaliz-atendimento-browser.service", install_body)
+        self.assertIn("shopvivaliz-chatgpt-browser.service", install_body)
         self.assertIn("sudo -n systemctl enable", install_body)
         self.assertIn("sudo_install_if_changed()", install_body)
 
@@ -178,7 +178,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertTrue(service.is_file())
         self.assertTrue(timer.is_file())
         guardian_body = guardian.read_text(encoding="utf-8")
-        self.assertIn("http://127.0.0.1:9556/json/version", guardian_body)
+        self.assertIn("http://127.0.0.1:9555/json/version", guardian_body)
         self.assertIn('curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null', guardian_body)
         self.assertIn("pgrep -u fredrdp", guardian_body)
         self.assertIn('systemctl start "$browser_unit"', guardian_body)
