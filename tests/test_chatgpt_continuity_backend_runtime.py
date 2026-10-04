@@ -167,8 +167,11 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('kill -TERM "$canonical_pid"', guardian_body)
         self.assertNotIn("pkill", guardian_body)
         self.assertNotIn("kill -KILL", guardian_body)
-        self.assertNotIn("exit 0", guardian_body)
-        self.assertIn('exit "$status"', guardian_body)
+        # Cached observations and real recovery share the same final status.
+        # Behavioral tests retain transport-failure coverage during deferral.
+        self.assertIn('QUIESCENT_AUTH_CACHE', guardian_body)
+        self.assertNotIn('exit 0', guardian_body)
+        self.assertEqual(guardian_body.count('exit "$status"'), 1)
         timer_body = timer.read_text(encoding="utf-8")
         self.assertIn("OnUnitActiveSec=30s", timer_body)
         self.assertIn("AccuracySec=1s", timer_body)
@@ -219,7 +222,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=AUTH_PENDING", result.stdout)
             self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_FLOW", result.stdout)
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
@@ -426,6 +429,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("start shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_UNMANAGED_TAKEOVER", result.stdout)
+            # The process may exit before signalling. Record that outcome and
+            # still require the existing absence check before starting a browser.
+            self.assertIn("CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED", result.stderr)
 
     def test_chatgpt_browser_guardian_requires_runtime_evaluate_health(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
