@@ -128,6 +128,31 @@ browser_session_state() {
         }
       }
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
+      const probeChatgptSessionState = async candidate => candidate.evaluate(`(async()=>{
+        try {
+          const sessionResponse = await fetch("/api/auth/session", {
+            credentials: "same-origin",
+            cache: "no-store",
+            signal: AbortSignal.timeout(2000),
+          });
+          if (sessionResponse.ok) {
+            let session = null;
+            try { session = await sessionResponse.json(); } catch {}
+            const hasIdentity = Boolean(session?.account || session?.user);
+            const hasAccessToken = Boolean(session?.accessToken || session?.access_token);
+            if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
+          }
+        } catch {}
+        const body = String(document.body?.innerText || "").toLowerCase();
+        const path = String(location.pathname || "");
+        const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
+          || body.includes("log in or sign up")
+          || body.includes("log in to get answers");
+        if (loggedOut) return "LOGGED_OUT";
+        if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
+        return "UNKNOWN";
+      })()`);
+
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         let ws;
         let candidate;
@@ -151,36 +176,24 @@ browser_session_state() {
           try { ws?.close(); } catch {}
           throw error;
         }
+      }, async candidate => {
+        /* CONTINUITY_BROWSER_PREFER_AUTHENTICATED_TAB */
+        try {
+          const state = await Promise.race([
+            probeChatgptSessionState(candidate),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("session probe timeout")), 2500)),
+          ]);
+          return state === "AUTHENTICATED";
+        } catch {
+          return false;
+        }
       });
       if (!c) {
         console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
         process.exit(0);
       }
       try {
-        const state = await c.evaluate(`(async()=>{
-          try {
-            const sessionResponse = await fetch("/api/auth/session", {
-              credentials: "same-origin",
-              cache: "no-store",
-              signal: AbortSignal.timeout(2000),
-            });
-            if (sessionResponse.ok) {
-              let session = null;
-              try { session = await sessionResponse.json(); } catch {}
-              const hasIdentity = Boolean(session?.account || session?.user);
-              const hasAccessToken = Boolean(session?.accessToken || session?.access_token);
-              if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
-            }
-          } catch {}
-          const body = String(document.body?.innerText || "").toLowerCase();
-          const path = String(location.pathname || "");
-          const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
-            || body.includes("log in or sign up")
-            || body.includes("log in to get answers");
-          if (loggedOut) return "LOGGED_OUT";
-          if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
-          return "UNKNOWN";
-        })()`);
+        const state = await probeChatgptSessionState(c);
         if (state === "AUTHENTICATED") {
           console.log("AUTHENTICATED");
         } else if (authTerminal) {
