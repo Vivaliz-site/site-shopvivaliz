@@ -45,9 +45,10 @@ def _load_env_file() -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
+        key = key.strip()
         clean = value.strip().strip('"').strip("'")
-        if clean:
-            config[key.strip()] = clean
+        if key in STATIC_KEYS and clean:
+            config[key] = clean
     return config
 
 
