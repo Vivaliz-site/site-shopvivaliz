@@ -1566,7 +1566,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "ops/systemd/shopvivaliz-atendimento-browser.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         )
