@@ -537,6 +537,20 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("c.evaluate", body)
         self.assertNotIn("Cdp.connectToChatgptTab", body)
 
+    def test_chatgpt_browser_guardian_runtime_eval_prefers_chatgpt_before_stale_auth_tab(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        probe = body.split("runtime_eval_ready() {", 1)[1].split("browser_session_state() {", 1)[0]
+        chatgpt_first = "let c = await connectFirstUsableChatgptTab(tabs, connect);"
+        auth_fallback = "if (!c && authPage)"
+        self.assertIn(chatgpt_first, probe)
+        self.assertIn(auth_fallback, probe)
+        self.assertLess(probe.index(chatgpt_first), probe.index(auth_fallback))
+        self.assertNotIn(
+            "authPage ? await connect(authPage) : await connectFirstUsableChatgptTab(tabs, connect)",
+            probe,
+        )
+
     def test_chatgpt_browser_guardian_restarts_managed_browser_when_runtime_evaluate_fails(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
