@@ -39,6 +39,7 @@ const {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementSweepAllowed,
+  withBrowserRecoveryLock,
   reinforcementLoop,
   hasActiveContinuityCheckpoint,
   browserSessionReadyForReinforcement,
@@ -2786,6 +2787,60 @@ async function run() {
       reinforcementSweepAllowed(true, { http_status: 200, cross_device_discovery: true }),
       true,
       'a successful account-discovery cycle may sweep its fresh candidates',
+    );
+  }
+
+  // Checkpoint-driven recovery and reinforcement share one canonical
+  // browser. They must never mutate/navigate that browser concurrently.
+  {
+    assert.equal(
+      typeof withBrowserRecoveryLock,
+      'function',
+      'worker must expose the shared browser recovery serializer',
+    );
+    const events = [];
+    let releaseFirst;
+    let markFirstStarted;
+    const firstStarted = new Promise(resolve => { markFirstStarted = resolve; });
+    const first = withBrowserRecoveryLock(async () => {
+      events.push('checkpoint:start');
+      markFirstStarted();
+      await new Promise(resolve => { releaseFirst = resolve; });
+      events.push('checkpoint:end');
+    });
+    await firstStarted;
+    const second = withBrowserRecoveryLock(async () => {
+      events.push('reinforcement:start');
+      events.push('reinforcement:end');
+    });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(
+      events,
+      ['checkpoint:start'],
+      'second browser recovery must remain queued until the first releases the lock',
+    );
+    releaseFirst();
+    await Promise.all([first, second]);
+    assert.deepEqual(events, [
+      'checkpoint:start',
+      'checkpoint:end',
+      'reinforcement:start',
+      'reinforcement:end',
+    ]);
+
+    const workerSource = fs.readFileSync(
+      new URL('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs', import.meta.url),
+      'utf8',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => attemptNudge\(/,
+      'checkpoint-driven nudge must use the shared browser recovery lock',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => check\(/,
+      'reinforcement recovery must use the shared browser recovery lock',
     );
   }
 
