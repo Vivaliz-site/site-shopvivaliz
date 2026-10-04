@@ -445,6 +445,16 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("session?.accessToken", probe)
         self.assertLess(probe.index("/api/auth/session"), probe.index("document.querySelector(\"[contenteditable=true]\")"))
 
+    def test_chatgpt_browser_guardian_session_probe_skips_unresponsive_target(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        connector = probe.split("const c = await connectFirstUsableChatgptTab", 1)[1]
+        self.assertIn('candidate.evaluate("true")', connector)
+        self.assertIn('evaluate timeout', connector)
+        self.assertIn('candidate?.close()', connector)
+
     def test_chatgpt_browser_guardian_requires_runtime_evaluate_health(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
