@@ -111,6 +111,14 @@ Não declarar verde por evidência apenas estrutural. Produção funcional exige
 - Usar `fredmourao-ai/solange-rolla-consultorio` como canônico.
 - Não retomar trabalho novo no repositório legado.
 
+## Daybreak / uso defensivo
+
+O uso do Daybreak deve permanecer exclusivamente defensivo e autorizado em ativos próprios da ShopVivaliz ou em ambientes com autorização explícita.
+
+Casos de uso permitidos incluem revisão de segurança de código, análise de vulnerabilidades, threat modeling, investigação de incidentes, hardening, criação/revisão/validação de patches, segurança de infraestrutura e CI/CD, revisão de APIs e integrações e testes defensivos em e-commerce, marketplaces, automações e agentes.
+
+Nunca incluir em formulários, chats ou evidências externas senhas, tokens, chaves, seeds TOTP, cookies ou conteúdo de secrets.
+
 ## Checklist E2E de onboarding da conta Atendimento
 
 Uma configuração só é considerada validada quando, em uma conversa nova da conta `atendimento@shopvivaliz.com.br`, a própria conta consegue:
@@ -127,6 +135,21 @@ Uma configuração só é considerada validada quando, em uma conversa nova da c
 10. distinguir claramente plugin instalado de conector autenticado;
 11. executar um teste remoto inofensivo e apresentar evidência fresca;
 12. concluir como `CONCLUIDO` apenas se os testes acima forem reais.
+
+## Prompt de inicialização recomendado
+
+```text
+Use o repositório Vivaliz-site/site-shopvivaliz (main) como fonte primária.
+Leia primeiro:
+1. docs/knowledge/atendimento-chatgpt-bootstrap.md
+2. docs/knowledge/host-access.md
+3. docs/knowledge/README.md
+4. docs/knowledge/agent-rules.md
+5. docs/knowledge/project.md
+6. docs/knowledge/dev-agent-briefing.md quando houver trabalho de engenharia.
+
+Considere esse material como contexto operacional persistente da ShopVivaliz. Não exponha secrets. Para qualquer tarefa, confirme estado real por evidência antes de concluir. Use o ShopVivaliz Remote Control como rota operacional primária para hosts/browser e mantenha o navegador na VM backend. Aplique o ciclo diagnosticar -> corrigir -> prevenir -> testar -> validar e mantenha continuidade até CONCLUIDO validado ou bloqueio externo real. Quando eu pedir algo relacionado a um projeto, leia também a documentação específica antes de agir.
+```
 
 ## Estado de conectores
 
