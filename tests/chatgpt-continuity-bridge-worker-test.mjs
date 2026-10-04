@@ -1820,6 +1820,42 @@ async function run() {
   );
   assert.match(generating.detail, /active generation/i);
 
+  // Live reproduction 2026-10-03: current ChatGPT UI can keep the
+  // composer usable and omit data-testid=stop-button while the backend
+  // stream_status is still IS_STREAMING ("ChatGPT is responding"). That is
+  // active generation, not an idle conversation, and must never be reloaded
+  // or receive a duplicate continuation.
+  {
+    const activeWithoutStop = fakeCdp({
+      generating: false,
+      composerUsable: true,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'ChatGPT is responding',
+      sendSucceeds: true,
+    });
+    const outcome = await attemptNudge(
+      'task-active-stream-without-stop-button',
+      async () => activeWithoutStop,
+      async () => false,
+    );
+    assert.equal(
+      outcome.result_status,
+      'STALLED_NOT_CONFIRMED',
+      'backend IS_STREAMING must fail closed even when the Stop button is absent',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('location.reload')),
+      false,
+      'backend-active generation without Stop must not be reloaded',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('b.click()')),
+      false,
+      'backend-active generation without Stop must not receive a duplicate continuation',
+    );
+    assert.match(outcome.detail, /active generation|stream/i);
+  }
+
   const recoveredCdp = fakeCdp({ generating: true, pageText: 'Streaming interrupted' });
   const recoveredByReattach = await attemptNudge(
     'task-passive-reattach',
