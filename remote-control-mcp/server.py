@@ -1308,7 +1308,7 @@ def processes_command(platform: str) -> str:
     return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
 
 
-BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "claude.ai"}
+BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}
 BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
 BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
 
@@ -1326,7 +1326,7 @@ def browser_tabs_command() -> str:
         "import json,urllib.request,urllib.parse\n"
         "with urllib.request.urlopen('http://127.0.0.1:9555/json',timeout=5) as r: a=json.load(r)\n"
         "out=[]\n"
-        "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','claude.ai'}\n"
+        "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
         "for x in a:\n"
         " if x.get('type')!='page': continue\n"
         " u=urllib.parse.urlparse(x.get('url',''))\n"
@@ -1349,7 +1349,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
         "const tabs=await (await fetch('http://127.0.0.1:9555/json')).json(); "
         "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
-        "const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']); "
+        "const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']); "
         "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
         "const ws=new WebSocket(t.webSocketDebuggerUrl); "
         "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
@@ -1410,7 +1410,7 @@ for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
 const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
 const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found');
-const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']);
+const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
 const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
 const ws=new WebSocket(t.webSocketDebuggerUrl);
 await Promise.race([
@@ -1440,7 +1440,7 @@ let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
 const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
-const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']);
+const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
 const candidates=[];
 for(const t of tabs){
   if(t?.type!=='page'||!t?.webSocketDebuggerUrl) continue;
