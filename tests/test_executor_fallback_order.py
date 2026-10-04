@@ -25,6 +25,15 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         codex_auto_block = script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0]
         self.assertLess(codex_auto_block.index("--ask-for-approval never"), codex_auto_block.index("exec -"))
 
+    def test_background_human_authorized_claude_precedes_codex_auto(self) -> None:
+        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK", script)
+        self.assertIn("BACKGROUND_ORDER+=(anthropic)", script)
+        self.assertIn("background_claude_fallback_authorized=true", script)
+        self.assertLess(script.index("BACKGROUND_ORDER+=(anthropic)"), script.index("BACKGROUND_ORDER+=(codex_auto)"))
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
+
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
         for rel in (
