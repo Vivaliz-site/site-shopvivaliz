@@ -52,6 +52,7 @@ const {
   selectChatgptTab,
   safeConversationId,
   selectBoundConversationTabs,
+  selectBoundConversationReentryTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
@@ -176,6 +177,32 @@ async function run() {
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
+  }
+
+  {
+    assert.equal(
+      typeof selectBoundConversationReentryTab,
+      'function',
+      'bound-conversation recovery must expose deterministic neutral-tab selection',
+    );
+    const homeA = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-a' };
+    const homeB = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-b' };
+    const synthetic = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://synthetic-home' };
+    let created = 0;
+    const selected = await selectBoundConversationReentryTab(
+      [homeA, homeB],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(created, 1, 'multiple neutral home tabs must create one isolated neutral target');
+    assert.equal(selected, synthetic, 'bound recovery must use the isolated neutral target');
+
+    created = 0;
+    const lone = await selectBoundConversationReentryTab(
+      [homeA],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(lone, homeA, 'a single neutral home tab remains the safe direct target');
+    assert.equal(created, 0, 'a lone neutral target must not create an unnecessary extra tab');
   }
 
   {
