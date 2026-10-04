@@ -424,7 +424,11 @@ async function selectBoundConversationReentryTab(
 ) {
   const neutralHomeTabs = (Array.isArray(tabs) ? tabs : [])
     .filter(tab => chatgptTabRank(tab) === 1);
-  if (neutralHomeTabs.length === 1) return neutralHomeTabs[0];
+  // Browser recovery is serialized by withBrowserRecoveryLock(), so an
+  // existing neutral Home target can be reused safely. Creating another tab
+  // whenever more than one Home target already exists causes an unbounded
+  // tab/process leak: once two Home tabs exist, every recovery cycle adds one.
+  if (neutralHomeTabs.length >= 1) return neutralHomeTabs[0];
   return await createNeutral();
 }
 
