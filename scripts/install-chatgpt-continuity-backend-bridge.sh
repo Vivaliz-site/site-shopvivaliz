@@ -244,8 +244,15 @@ if [[ -f "$restart_pending" ]]; then
   rm -f "$restart_pending"
 fi
 
-curl -fsS --connect-timeout 3 --max-time 5 "$cdp_url/json/version" >/dev/null \
-  || fail "canonical ChatGPT CDP endpoint is unavailable at $cdp_url"
+cdp_ready=false
+for _ in $(seq 1 30); do
+  if curl -fsS --connect-timeout 1 --max-time 2 "$cdp_url/json/version" >/dev/null 2>&1; then
+    cdp_ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$cdp_ready" = true ]] || fail "canonical ChatGPT CDP endpoint did not become ready at $cdp_url"
 
 # Authenticate a heartbeat without printing or persisting the token outside
 # its protected file. This proves that backend and production agree on the
