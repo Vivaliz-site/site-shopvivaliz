@@ -9,6 +9,18 @@ release_id="${2:-}"
 unit_name="shopvivaliz-gemini-24x7-controller.service"
 unit_source="$release_dir/deploy/systemd/$unit_name"
 unit_target="/etc/systemd/system/$unit_name"
+watchdog_service_name="shopvivaliz-continuity-watchdog.service"
+watchdog_timer_name="shopvivaliz-continuity-watchdog.timer"
+nudge_service_name="shopvivaliz-chatgpt-nudge-dispatcher.service"
+nudge_timer_name="shopvivaliz-chatgpt-nudge-dispatcher.timer"
+watchdog_service_source="$release_dir/deploy/systemd/$watchdog_service_name"
+watchdog_timer_source="$release_dir/deploy/systemd/$watchdog_timer_name"
+nudge_service_source="$release_dir/deploy/systemd/$nudge_service_name"
+nudge_timer_source="$release_dir/deploy/systemd/$nudge_timer_name"
+watchdog_service_target="/etc/systemd/system/$watchdog_service_name"
+watchdog_timer_target="/etc/systemd/system/$watchdog_timer_name"
+nudge_service_target="/etc/systemd/system/$nudge_service_name"
+nudge_timer_target="/etc/systemd/system/$nudge_timer_name"
 base_dir="/opt/shopvivaliz-gemini-24x7-controller"
 releases_dir="$base_dir/releases"
 environment_target="/etc/shopvivaliz-gemini-24x7-controller.env"
@@ -20,6 +32,10 @@ gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
 test -f "$unit_source"
+test -f "$watchdog_service_source"
+test -f "$watchdog_timer_source"
+test -f "$nudge_service_source"
+test -f "$nudge_timer_source"
 compile_cache="$(mktemp -d)"
 trap 'rm -rf "$compile_cache"' EXIT
 PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py"
@@ -84,14 +100,30 @@ fi
 
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
-printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' "$target_dir/scripts/gemini_24x7_controller.py" > "$environment_temp"
+printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
+  "$target_dir/scripts/gemini_24x7_controller.py" \
+  "$target_dir/scripts/task_continuation_watchdog.py" \
+  "$target_dir/scripts/chatgpt_continuity_nudge_dispatcher.py" > "$environment_temp"
 sudo install -o root -g root -m 0640 "$environment_temp" "$environment_target"
 rm -f "$environment_temp"
 trap - EXIT
 sudo install -o root -g root -m 0644 "$unit_source" "$unit_target"
-sudo systemd-analyze verify "$unit_target"
+sudo install -o root -g root -m 0644 "$watchdog_service_source" "$watchdog_service_target"
+sudo install -o root -g root -m 0644 "$watchdog_timer_source" "$watchdog_timer_target"
+sudo install -o root -g root -m 0644 "$nudge_service_source" "$nudge_service_target"
+sudo install -o root -g root -m 0644 "$nudge_timer_source" "$nudge_timer_target"
+sudo systemd-analyze verify \
+  "$unit_target" \
+  "$watchdog_service_target" "$watchdog_timer_target" \
+  "$nudge_service_target" "$nudge_timer_target"
 sudo systemctl daemon-reload
 sudo systemctl enable "$unit_name"
+sudo systemctl enable --now "$watchdog_timer_name" "$nudge_timer_name"
 sudo systemctl restart "$unit_name"
+sudo systemctl start "$watchdog_service_name" "$nudge_service_name"
 sudo systemctl is-enabled --quiet "$unit_name"
+sudo systemctl is-enabled --quiet "$watchdog_timer_name"
+sudo systemctl is-enabled --quiet "$nudge_timer_name"
 sudo systemctl is-active --quiet "$unit_name"
+sudo systemctl is-active --quiet "$watchdog_timer_name"
+sudo systemctl is-active --quiet "$nudge_timer_name"
