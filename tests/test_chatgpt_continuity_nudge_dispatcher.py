@@ -158,6 +158,99 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1, "the bridge must be called exactly once for the same fingerprint")
 
+    def test_same_conversation_dispatches_only_newest_running_checkpoint(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        for task_id, updated_at in (("task-old", "2020-01-01T00:00:00Z"), ("task-new", "2020-01-02T00:00:00Z")):
+            state.start_task(task_id, "goal", "gpt")
+            state.bind_conversation(task_id, conversation_id=conversation_id)
+            state.record_progress(task_id, next_action="keep going")
+            path = self.runtime / f"{task_id}.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["updated_at"] = updated_at
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(result.get("skipped_conversation_coalesced"), 1)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0]["task_id"], "task-new")
+        self.assertEqual(self.calls[0]["conversation_id"], conversation_id)
+
+    def test_inflight_same_conversation_keeps_ownership_until_terminal(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        state.start_task("task-old", "goal", "gpt")
+        state.bind_conversation("task-old", conversation_id=conversation_id)
+        state.record_progress("task-old", next_action="keep going")
+        old_path = self.runtime / "task-old.json"
+        old_payload = json.loads(old_path.read_text(encoding="utf-8"))
+        old_payload["updated_at"] = "2020-01-01T00:00:00Z"
+        old_path.write_text(json.dumps(old_payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+        self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(len(self.calls), 1)
+
+        state.start_task("task-new", "goal", "gpt")
+        state.bind_conversation("task-new", conversation_id=conversation_id)
+        state.record_progress("task-new", next_action="keep going")
+        new_path = self.runtime / "task-new.json"
+        new_payload = json.loads(new_path.read_text(encoding="utf-8"))
+        new_payload["updated_at"] = "2020-01-02T00:00:00Z"
+        new_path.write_text(json.dumps(new_payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+            query_status=lambda **unused: {"ok": True, "body": {"nudge": {"status": "CLAIMED"}}},
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_conversation_coalesced"], 1)
+        self.assertEqual(len(self.calls), 1, "new checkpoint must not overlap an accepted browser attempt")
+
+    def test_failed_older_same_conversation_does_not_poison_new_owner_health(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        for task_id, updated_at in (("task-old", "2020-01-01T00:00:00Z"), ("task-new", "2020-01-02T00:00:00Z")):
+            state.start_task(task_id, "goal", "gpt")
+            state.bind_conversation(task_id, conversation_id=conversation_id)
+            state.record_progress(task_id, next_action="keep going")
+            path = self.runtime / f"{task_id}.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["updated_at"] = updated_at
+            path.write_text(json.dumps(payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+        requests = watchdog.read_requests(self.runtime)
+        old_request = next(row for row in requests if row.get("task_id") == "task-old")
+        self.dispatcher._append_ledger(self.runtime, {
+            "fingerprint": old_request["fingerprint"],
+            "task_id": "task-old",
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": "2020-01-01T00:00:00Z",
+            "bridge_ok": True,
+            "worker_status": "ERROR",
+            "attempt_count": 1,
+            "send_attempt_count": 0,
+            "conversation_id": conversation_id,
+        })
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["failed"], 0, "superseded same-conversation failure must not poison readiness")
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(self.calls[0]["task_id"], "task-new")
+
     def test_live_dispatch_lock_blocks_parallel_nudge_effect(self) -> None:
         self._stale_checkpoint_and_request()
         with self.dispatcher._dispatcher_lock(self.runtime) as acquired:
