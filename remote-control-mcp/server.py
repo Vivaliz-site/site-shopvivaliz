@@ -1379,6 +1379,31 @@ def browser_navigate_command(tab_id: str, url: str) -> str:
     return _browser_cdp_command(tab_id, expression)
 
 
+def browser_focused_navigate_command(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    encoded = base64.b64encode(url.encode()).decode()
+    allowed = json.dumps(sorted(BROWSER_ALLOWED_HOSTS))
+    return (
+        f"export SHOPVIVALIZ_NAV_URL_B64={encoded}; "
+        "node --input-type=module <<'JS'\n"
+        f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
+        "const url=Buffer.from(process.env.SHOPVIVALIZ_NAV_URL_B64,'base64').toString(); "
+        "const tabs=await (await fetch('http://127.0.0.1:9556/json')).json(); "
+        f"const allowed=new Set({allowed}); "
+        "const focused=[]; "
+        "for(const t of tabs){if(t?.type!=='page'||!t?.webSocketDebuggerUrl)continue; let u;try{u=new URL(String(t.url||''));}catch{continue;} if(!allowed.has(u.hostname))continue; "
+        "let ws;let c;try{ws=new WebSocket(t.webSocketDebuggerUrl);await Promise.race([new Promise((res,rej)=>{ws.addEventListener('open',res,{once:true});ws.addEventListener('error',rej,{once:true});}),new Promise((_,rej)=>setTimeout(()=>rej(new Error('websocket_open_timeout')),2500))]);c=new Cdp(ws);const r=await c.send('Runtime.evaluate',{expression:'document.hasFocus()',returnByValue:true,awaitPromise:true});if(!r.exceptionDetails&&r.result?.value===true)focused.push(t);}finally{try{if(c?.close)c.close();}catch{} try{if(ws?.close)ws.close();}catch{}}} "
+        "if(focused.length===0)throw new Error('focused_tab_not_found'); if(focused.length>1)throw new Error('focused_tab_ambiguous'); "
+        "const t=focused[0]; const ws=new WebSocket(t.webSocketDebuggerUrl); await Promise.race([new Promise((res,rej)=>{ws.addEventListener('open',res,{once:true});ws.addEventListener('error',rej,{once:true});}),new Promise((_,rej)=>setTimeout(()=>rej(new Error('websocket_open_timeout')),2500))]); const c=new Cdp(ws); "
+        "const expression='(()=>{location.href='+JSON.stringify(url)+';return {navigated:true}})()'; const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); if(r.exceptionDetails)throw new Error('browser_runtime_exception'); if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
+        "JS"
+    )
+
+
 def browser_click_command(tab_id: str, selector: str) -> str:
     selector = _safe_browser_token(selector, "selector")
     expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
@@ -1539,9 +1564,12 @@ def execute_tool(
             cancel_check,
         ))
     if name == "browser_navigate":
+        tab_id = str(args.get("tab_id") or "")
+        url = str(args.get("url") or "")
+        command = browser_navigate_command(tab_id, url) if tab_id else browser_focused_navigate_command(url)
         return _browser_result(run_host_command(
             CONTROLLER_BACKEND_HOST,
-            browser_navigate_command(str(args.get("tab_id") or ""), str(args.get("url") or "")),
+            command,
             DEFAULT_TIMEOUT,
             cancel_check,
         ))
@@ -1762,12 +1790,15 @@ TOOLS = [
 def tool_specs() -> list[dict[str, Any]]:
     specs = []
     for name, desc, props, readonly, destructive in TOOLS:
+        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}
+        if name == "browser_navigate":
+            optional.add("tab_id")
         specs.append({
             "name": name,
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}],
+                "required": [k for k in props if k not in optional],
                 "additionalProperties": False,
             },
             "annotations": {
