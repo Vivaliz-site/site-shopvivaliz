@@ -183,6 +183,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
         self.assertIn("accounts.google.com", body)
+        self.assertIn("login.microsoftonline.com", body)
         self.assertIn("auth.openai.com", body)
         self.assertIn("CONTINUITY_BROWSER_SESSION_STATE_PROBE", body)
         self.assertIn("_chatgpt-browser-health.json", body)

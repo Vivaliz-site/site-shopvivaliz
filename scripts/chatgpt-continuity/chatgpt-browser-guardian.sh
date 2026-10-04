@@ -22,7 +22,7 @@ runtime_eval_ready() {
       const response = await fetch(base + "/json", { signal: AbortSignal.timeout(2500) });
       if (!response.ok) process.exit(1);
       const tabs = await response.json();
-      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "appleid.apple.com"]);
+      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "login.microsoftonline.com", "appleid.apple.com"]);
       const authPage = tabs.find(page => {
         if (!page || page.type !== "page" || !page.webSocketDebuggerUrl) return false;
         try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }
@@ -79,7 +79,7 @@ browser_session_state() {
       const response = await fetch(base + "/json", { signal: AbortSignal.timeout(2500) });
       if (!response.ok) { console.log("UNREACHABLE"); process.exit(0); }
       const tabs = await response.json();
-      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "appleid.apple.com"]);
+      const authHosts = new Set(["auth.openai.com", "accounts.google.com", "login.microsoftonline.com", "appleid.apple.com"]);
       const authPages = tabs.filter(page => {
         if (!page || page.type !== "page" || !page.webSocketDebuggerUrl) return false;
         try { return authHosts.has(new URL(String(page.url || "")).hostname); } catch { return false; }

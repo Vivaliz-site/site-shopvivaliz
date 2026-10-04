@@ -73,6 +73,9 @@ class RemoteControlMcpTests(unittest.TestCase):
         }:
             self.assertIn(required, names)
 
+    def test_browser_allows_microsoft_oauth_host(self):
+        self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
+
     def test_mcp_tool_names_are_unique(self):
         names = [item["name"] for item in m.tool_specs()]
         self.assertEqual(len(names), len(set(names)))
