@@ -287,7 +287,11 @@ else
         # The process matched the fully anchored canonical browser command and
         # there is exactly one candidate. Terminate only that PID, never a broad
         # process class, then relaunch the same profile under systemd supervision.
-        kill -TERM "$canonical_pid" 2>/dev/null || true
+        if ! kill -TERM "$canonical_pid" 2>/dev/null; then
+        # A concurrent exit is possible; the bounded absence check below is
+        # still authoritative and rejects takeover while the process is live.
+        echo "CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED" >&2
+      fi
         terminated=false
         for _ in $(seq 1 10); do
           if ! pid_is_live "$canonical_pid"; then
