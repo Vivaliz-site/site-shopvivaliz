@@ -408,6 +408,7 @@ async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
 }
 
 async function boundConversationRecoveryReady(cdp) {
+  try { if (await conversationUnavailablePresent(cdp)) return false; } catch {}
   try { if (await composerIsUsable(cdp)) return true; } catch {}
   try { if (await conversationIsGenerating(cdp)) return true; } catch {}
   try { if (await recoverableFailureReason(cdp)) return true; } catch {}
@@ -2115,6 +2116,20 @@ async function errorBannerPresent(cdp) {
   );
 }
 
+async function conversationUnavailablePresent(cdp) {
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* continuity-conversation-unavailable-probe */
+    if(!/^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(String(location.pathname||''))) return false;
+    const text=String(document.body?.innerText||'').toLowerCase();
+    return [
+      'could not load this chatgpt conversation',
+      'unable to load this chatgpt conversation',
+      'não foi possível carregar esta conversa',
+      'nao foi possivel carregar esta conversa',
+    ].some(value=>text.includes(value));
+  })()`));
+}
+
 async function recoverableFailureReason(cdp) {
   if (!(await errorBannerPresent(cdp))) return '';
 
@@ -2615,6 +2630,13 @@ async function attemptNudge(
       const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
+    if (await conversationUnavailablePresent(cdp)) {
+      return {
+        result_status: 'CONVERSATION_NOT_FOUND',
+        detail: 'bound conversation surface is unavailable; deferred to detached recovery without sending continuation',
+        ...recoveryMetadata(),
+      };
+    }
     detectedFailureReason = await recoverableFailureReason(cdp);
     if (detectedFailureReason === 'additional_checks') {
       return {
@@ -3399,6 +3421,7 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
