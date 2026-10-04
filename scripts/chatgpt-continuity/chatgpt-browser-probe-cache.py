@@ -151,7 +151,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=['check', 'record', 'verify-ready'])
     parser.add_argument('--health', required=True, type=Path)
-    parser.add_argument('--base', default='http://127.0.0.1:9556')
+    parser.add_argument('--base', default='http://127.0.0.1:9555')
     parser.add_argument('--tasks', type=Path, default=Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state'))
     parser.add_argument('--state', default='UNKNOWN', choices=sorted(STATES))
     args = parser.parse_args()
