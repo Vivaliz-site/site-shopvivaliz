@@ -1920,11 +1920,14 @@ async function run() {
     },
   );
   assert.equal(sentOk.result_status, 'PROGRESS_CONFIRMED');
-  assert.ok(sentOkCdp.calls.findIndex(call => call.includes('location.reload')) >= 0);
+  assert.equal(
+    sentOkCdp.calls.some(call => call.includes('location.reload')),
+    false,
+    'healthy idle conversation with usable composer must not reload before continuation',
+  );
   assert.ok(
-    sentOkCdp.calls.findIndex(call => call.includes('b.click()'))
-      > sentOkCdp.calls.findIndex(call => call.includes('location.reload')),
-    'send path must remain available after passive reattach found no progress',
+    sentOkCdp.calls.findIndex(call => call.includes('b.click()')) >= 0,
+    'healthy idle conversation must keep the direct continuation send path',
   );
 
   const sentButNoProgress = await attemptNudge('task-no-progress', async () => fakeCdp({ sendSucceeds: true }), async () => false);
