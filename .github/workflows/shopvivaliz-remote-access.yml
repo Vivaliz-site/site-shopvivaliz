@@ -601,7 +601,9 @@ jobs:
               done
               "${SSH[@]}" "dd of='$remote_dir/AGENTS.md' status=none" < AGENTS.md
               "${SSH[@]}" "dd of='$remote_dir/docs/knowledge/task-continuity.md' status=none" < docs/knowledge/task-continuity.md
-              "${SSH[@]}" "dd of='$remote_dir/deploy/systemd/shopvivaliz-gemini-24x7-controller.service' status=none" < deploy/systemd/shopvivaliz-gemini-24x7-controller.service
+              for unit in shopvivaliz-gemini-24x7-controller.service shopvivaliz-continuity-watchdog.service shopvivaliz-continuity-watchdog.timer shopvivaliz-chatgpt-nudge-dispatcher.service shopvivaliz-chatgpt-nudge-dispatcher.timer; do
+                "${SSH[@]}" "dd of='$remote_dir/deploy/systemd/$unit' status=none" < "deploy/systemd/$unit"
+              done
               if ! "${SSH[@]}" "bash '$remote_dir/scripts/install-gemini-24x7-controller.sh' '$remote_dir' '$GITHUB_SHA'"; then
                 "${SSH[@]}" "sudo -n journalctl -u shopvivaliz-gemini-24x7-controller.service -n 40 --no-pager | sed -E 's/(GEMINI_API_KEY|GOOGLE_API_KEY|GOOGLE_GEMINI_API_KEY)=([^[:space:]]+)/\\1=***/g'"
                 exit 1
