@@ -51,7 +51,13 @@ runtime_eval_ready() {
           throw error;
         }
       };
-      const c = authPage ? await connect(authPage) : await connectFirstUsableChatgptTab(tabs, connect);
+      // Prefer a usable ChatGPT renderer. Stale OAuth/auth tabs must not make
+      // a healthy authenticated ChatGPT browser look unreachable. Auth pages
+      // remain a transport fallback only when no ChatGPT target is usable.
+      let c = await connectFirstUsableChatgptTab(tabs, connect);
+      if (!c && authPage) {
+        try { c = await connect(authPage); } catch {}
+      }
       if (!c) process.exit(1);
       try {
         const value = await c.evaluate("(()=>42)()");
