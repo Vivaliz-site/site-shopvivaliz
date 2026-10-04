@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 // Execute the real injected browser program. Only HTTP and the minimal editor
 // surface are fixtures: no account, browser, message or provider is contacted.
 function browserFixture({ pathname = '/c/read-budget-thread', sessionDelay = 0, readDelay = 0, status = 200 } = {}) {
-  const state = { calls: [], aborted: 0, timerDelays: [], clicks: 0, text: '' };
+  const state = { calls: [], requests: [], aborted: 0, timerDelays: [], clicks: 0, text: '' };
   const delay = (ms, signal) => new Promise((resolve, reject) => {
     const cleanup = () => signal?.removeEventListener('abort', abort);
     const timer = setTimeout(() => { cleanup(); resolve(); }, ms);
@@ -24,6 +24,7 @@ function browserFixture({ pathname = '/c/read-budget-thread', sessionDelay = 0, 
     },
     async fetch(url, options = {}) {
       state.calls.push(url);
+      state.requests.push({ url, headers: options.headers || {} });
       const session = url === '/api/auth/session';
       await delay(session ? sessionDelay : readDelay, options.signal);
       const code = session ? 200 : status;
@@ -60,6 +61,14 @@ export async function runCanonicalReadBudgetTests({ conversationTurnState, conve
       assert.equal((await conversationTurnState(cdp)).http_status, 200);
       assert.equal((await conversationStreamStatus(cdp)).status, 'COMPLETE');
       assert.ok(cdp.state.calls.includes('/backend-api/conversation/read-budget-thread'));
+    }],
+    ['stream status uses the authenticated account context', async () => {
+      const cdp = browserFixture();
+      assert.equal((await conversationStreamStatus(cdp)).status, 'COMPLETE');
+      const request = cdp.state.requests.find(item => String(item.url).endsWith('/stream_status'));
+      assert.ok(request, 'stream-status request must be issued');
+      assert.equal(request.headers['ChatGPT-Account-Id'], 'fixture-account');
+      assert.ok(cdp.state.calls.includes('/api/auth/session'), 'stream status must resolve the active account first');
     }],
     ['uc conversation identity is verified before the existing send path', async () => {
       const cdp = browserFixture({ pathname: '/uc/read-budget-thread' });
