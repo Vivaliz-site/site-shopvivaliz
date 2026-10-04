@@ -576,3 +576,19 @@ O instalador conclui a copia, reload e restart do worker antes da verificacao
 final da sessao autenticada. `CHATGPT_CONTINUITY_BACKEND_INSTALLED=PASS` prova
 somente instalacao; o `BACKEND_SERVICE=PASS` continua atras do guardian real.
 Auth expirada mantem falha de readiness, mas nao mantem codigo antigo rodando.
+
+
+## Canonical conversation read budget (2026-10-04)
+
+The authenticated full-conversation endpoint was observed returning HTTP 200
+after 6135 ms while the same bound conversation timed out with the previous
+5000 ms stream-status budget. The full turn-state read now has a separate
+10000 ms default (`CHATGPT_CONTINUITY_TURN_STATE_TIMEOUT_MS`), capped at
+12000 ms including session lookup, below the unchanged 15000 ms CDP timeout.
+Authentication consumes that total budget; timeout aborts the HTTP request.
+
+Both `/c/` and `/uc/` routes must reach the same canonical conversation API,
+and the send identity guard must recognize either exact route. Tests execute
+the injected browser programs against isolated HTTP/editor fixtures and are
+part of the bridge worker gate. HTTP 200, stream COMPLETE or a tool/thought
+node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
