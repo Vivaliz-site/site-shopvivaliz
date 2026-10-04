@@ -545,6 +545,13 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("command_sha256", payload)
         self.assertNotIn(raw, row["args_json"])
 
+    def test_run_host_command_cleans_isolated_scope_after_success(self):
+        with mock.patch.object(m, "isolated_invocation", return_value=["bash", "-lc", "printf ok"]), \
+             mock.patch.object(m, "_cleanup_isolated_scope") as cleanup:
+            result = m.run_host_command("always-free-arm-1787907847-26", "printf ok", timeout=5)
+        self.assertEqual(result["exit_code"], 0)
+        cleanup.assert_called_once()
+
     def test_task_submit_persists_without_executing_inline(self):
         result = m.execute_tool("task_submit", {
             "host": "always-free-arm-1787907847-26",
@@ -562,6 +569,59 @@ class RemoteControlMcpTests(unittest.TestCase):
         second = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"sleep 1","timeout":30})
         self.assertEqual(first["task_id"], second["task_id"])
         self.assertTrue(second["deduplicated"])
+
+    def test_backend_reserves_second_durable_slot_for_control_work(self):
+        first = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "sleep 30",
+            "timeout": 60,
+        })
+        second = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "printf diagnostic",
+            "timeout": 30,
+        })
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='running',execution_unit=?,started_at=?,execution_started_at=? WHERE id=?",
+                (m.task_unit_name(first["task_id"]), m.now(), m.now(), first["task_id"]),
+            )
+        launched = []
+        old_reconcile = m.reconcile_tasks
+        old_launch = m.launch_task_service
+        m.reconcile_tasks = lambda: []
+        m.launch_task_service = lambda task_id, timeout: launched.append(task_id)
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        deadline = time.time() + 2
+        while second["task_id"] not in launched and time.time() < deadline:
+            time.sleep(0.05)
+        m.STOP_EVENT.set()
+        worker.join(timeout=2)
+        m.reconcile_tasks = old_reconcile
+        m.launch_task_service = old_launch
+        self.assertIn(second["task_id"], launched)
+
+    def test_backend_durable_concurrency_is_bounded(self):
+        self.assertEqual(m.HOST_DURABLE_LIMITS["always-free-arm-1787907847-26"], 2)
+        self.assertEqual(m.HOST_DURABLE_LIMITS["shopvivaliz-free-a1"], 2)
+        self.assertEqual(m.HOST_DURABLE_LIMITS["Fred-Win"], 1)
+        self.assertEqual(m.HOST_DURABLE_LIMITS["KOCEPSV"], 1)
+
+    def test_control_plane_and_agent_units_have_pressure_guardrails(self):
+        controller = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
+        claude = (ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service").read_text(encoding="utf-8")
+        browser = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        chatgpt = (ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser.service").read_text(encoding="utf-8")
+        for needle in ("CPUWeight=1000", "IOWeight=1000", "Nice=-5", "TasksMax=512"):
+            self.assertIn(needle, controller)
+        for needle in ("--capacity 1", "CPUQuota=100%", "MemoryHigh=2G", "MemoryMax=3G", "TasksMax=128"):
+            self.assertIn(needle, claude)
+        for needle in ("CPUQuota=100%", "MemoryHigh=2G", "MemoryMax=3G", "TasksMax=256"):
+            self.assertIn(needle, browser)
+        for needle in ("CPUQuota=120%", "MemoryHigh=3G", "MemoryMax=4G", "TasksMax=256"):
+            self.assertIn(needle, chatgpt)
 
     def test_task_wait_is_bounded_and_returns_terminal_task(self):
         submitted = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"printf waited","timeout":30})
@@ -1995,15 +2055,19 @@ class DurableExecutorV2Tests(unittest.TestCase):
             self.submit(request_id="immutable-request", timeout=31)
 
     def test_task_wait_detaches_immediately_when_same_host_is_backlogged(self):
-        active_id = self.submit(command="sleep 30")["task_id"]
-        self.claim(active_id, state="running", started=True)
-        queued_id = self.submit(command="printf second")["task_id"]
+        first_id = self.submit(command="sleep 30")["task_id"]
+        second_id = self.submit(command="sleep 31")["task_id"]
+        self.claim(first_id, state="running", started=True)
+        self.claim(second_id, state="running", started=True)
+        queued_id = self.submit(command="printf third")["task_id"]
         started = time.monotonic()
         result = m.execute_tool("task_wait", {"task_id": queued_id, "wait_seconds": 5})
         elapsed = time.monotonic() - started
         self.assertEqual(result["state"], "queued")
         self.assertTrue(result["detached"])
         self.assertTrue(result["blocked_by_active"])
+        self.assertEqual(result["active_for_host"], 2)
+        self.assertEqual(result["host_concurrency_limit"], 2)
         self.assertEqual(result["queue_position"], 1)
         self.assertLess(elapsed, 0.5)
 

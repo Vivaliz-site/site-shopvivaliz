@@ -27,6 +27,12 @@ PrivateTmp=false
 ProtectSystem=false
 ProtectHome=false
 ReadWritePaths=/var/lib/shopvivaliz-remote-control /tmp
+CPUQuota=100%
+CPUWeight=100
+IOWeight=100
+MemoryHigh=2G
+MemoryMax=3G
+TasksMax=256
 
 [Install]
 WantedBy=multi-user.target
