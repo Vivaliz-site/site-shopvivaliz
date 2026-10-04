@@ -591,10 +591,9 @@ def deny_sensitive_path(path: str) -> None:
 @contextmanager
 def db_conn():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA busy_timeout=30000")
     try:
         with conn:
             yield conn
@@ -604,6 +603,9 @@ def db_conn():
 
 def init_db() -> None:
     with db_conn() as db:
+        # Set WAL once during schema initialization. Reissuing journal_mode=WAL on
+        # every concurrent connection can itself require a database lock.
+        db.execute("PRAGMA journal_mode=WAL")
         db.executescript("""
         CREATE TABLE IF NOT EXISTS audit (
           id TEXT PRIMARY KEY,
