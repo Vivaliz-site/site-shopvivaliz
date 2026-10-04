@@ -371,6 +371,7 @@ def _prepare_workspace(task_id: str, repository: str) -> Path:
 
 _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
+    "background_claude_fallback_authorized",
     "background_codex_fallback_authorized",
     "background_gemini_error",
     "background_gemini_exit_code",

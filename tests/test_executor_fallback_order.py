@@ -33,6 +33,10 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("background_claude_fallback_authorized=true", script)
         self.assertLess(script.index("BACKGROUND_ORDER+=(anthropic)"), script.index("BACKGROUND_ORDER+=(codex_auto)"))
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
+        self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)
+        self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
+        self.assertIn("run_claude()", script)
+        self.assertIn("try_provider anthropic run_claude", script)
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
@@ -68,7 +72,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("command -v gemini", script)
         self.assertIn("command -v claude", script)
         self.assertIn("env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini", script)
-        self.assertIn("env -u ANTHROPIC_API_KEY claude", script)
+        self.assertIn("unset ANTHROPIC_API_KEY", script)
+        self.assertIn('launcher="$CLAUDE_BIN"', script)
 
     def test_continuity_validator_enforces_codex_last_resort(self) -> None:
         validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
