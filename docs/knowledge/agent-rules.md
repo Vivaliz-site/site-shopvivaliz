@@ -185,3 +185,14 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - The dispatcher must classify each authorized comment into at most one route. Explicit slash commands take precedence over generic mentions such as `@claude`.
 - Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
 - Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.
+
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
+## Credencial do ChatGPT — atendimento@shopvivaliz.com.br
+
+- A conta `atendimento@shopvivaliz.com.br` possui senha própria já criada pelo usuário.
+- O valor da senha **não deve ser versionado, escrito em docs, logs, issues, comentários, memória de agente ou mensagens**.
+- Agentes devem reutilizar primeiro a credencial segura já provisionada no perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e demais fontes seguras autorizadas.
+- **Não pedir novamente a senha ao usuário como primeira ação.** Antes de solicitar intervenção humana, comprovar que a credencial segura existente está ausente, revogada ou inválida.
+- Se a credencial precisar ser reprovisionada, fazê-lo apenas por canal seguro que não persista o valor em auditoria ou Git.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
