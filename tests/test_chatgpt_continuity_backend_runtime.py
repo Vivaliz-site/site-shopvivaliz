@@ -128,14 +128,14 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("cdp_ready", body)
         self.assertIn("CDP endpoint did not become ready", body)
 
-    def test_remote_workflows_copy_atendimento_browser_unit(self) -> None:
+    def test_remote_workflows_copy_canonical_browser_unit(self) -> None:
         for rel in [
             ".github/workflows/shopvivaliz-remote-access.yml",
             ".github/workflows/oci-bastion-private-access-bootstrap.yml",
         ]:
             body = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertIn("ops/systemd/shopvivaliz-atendimento-browser.service", body)
-            self.assertNotIn("ops/systemd/shopvivaliz-chatgpt-browser.service", body)
+            self.assertIn("ops/systemd/shopvivaliz-chatgpt-browser.service", body)
+            self.assertNotIn("ops/systemd/shopvivaliz-atendimento-browser.service", body)
 
     def test_backend_installer_retires_legacy_browser_healthcheck(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
