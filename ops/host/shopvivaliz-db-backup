@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+HELPER=/home/ubuntu/.local/bin/shopvivaliz-db-backup.py
+[ -x "$HELPER" ] || { echo "missing canonical backup helper: $HELPER" >&2; exit 1; }
+if [ "$(id -u)" -eq 0 ]; then
+  exec /usr/sbin/runuser -u ubuntu -- "$HELPER" --profile main --target mei-email
+fi
+exec "$HELPER" --profile main --target mei-email
