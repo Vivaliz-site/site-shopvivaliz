@@ -144,6 +144,23 @@ def validate_host(host: str) -> dict[str, Any]:
     return HOSTS[host]
 
 
+BROWSER_MCP_DROPIN_DIR = "/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d"
+BROWSER_MCP_FORBIDDEN_DROPIN = BROWSER_MCP_DROPIN_DIR + "/40-authenticated-session.conf"
+
+
+def validate_admin_command_policy(host: str, command: str) -> None:
+    """Reject shell commands that can re-couple general browser MCP to continuity."""
+    if host != CONTROLLER_BACKEND_HOST:
+        return
+    normalized = command.lower()
+    if BROWSER_MCP_FORBIDDEN_DROPIN.lower() in normalized:
+        raise ValueError("browser_mcp_session_coupling_forbidden")
+    if BROWSER_MCP_DROPIN_DIR.lower() in normalized and any(
+        marker in normalized for marker in ("fredrdp", "display=:99", "shopvivaliz-atendimento")
+    ):
+        raise ValueError("browser_mcp_session_coupling_forbidden")
+
+
 def _decode_output(value: bytes | str | None) -> str:
     if value is None:
         return ""
@@ -1538,6 +1555,7 @@ def execute_tool(
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
+        validate_admin_command_policy(str(host), command)
         timeout = validate_timeout(args.get("timeout", 300))
         digest = hashlib.sha256(command.encode()).hexdigest()
         request_id = str(args.get("request_id") or "").strip() or None
@@ -1604,6 +1622,7 @@ def execute_tool(
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
+        validate_admin_command_policy(str(host), command)
         if bool(args.get("durable", False)):
             durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
             durable["durable"] = True
