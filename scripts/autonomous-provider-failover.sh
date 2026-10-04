@@ -14,7 +14,7 @@ CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
-CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
+CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"\nCLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"
 SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK:-0}"
 SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK:-0}"
 mkdir -p "$LOG_DIR"
@@ -97,6 +97,16 @@ try_provider() {
   return 1
 }
 
+run_claude() (
+  unset ANTHROPIC_API_KEY
+  local launcher="$CLAUDE_BIN"
+  if [ ! -x "$launcher" ]; then
+    launcher="$(command -v claude || true)"
+  fi
+  [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
+  "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+)
+
 run_codex_auto() (
   unset OPENAI_API_KEY CODEX_API_KEY
   local launcher="$CODEX_AUTO_BIN"
@@ -164,8 +174,7 @@ for provider in "${ORDER[@]}"; do
       try_provider gemini env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
       ;;
     anthropic)
-      command -v claude >/dev/null 2>&1 || { record anthropic missing_cli 127; continue; }
-      try_provider anthropic env -u ANTHROPIC_API_KEY claude --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT" && exit 0
+      try_provider anthropic run_claude && exit 0
       ;;
     codex_auto)
       try_provider codex_auto run_codex_auto && exit 0
