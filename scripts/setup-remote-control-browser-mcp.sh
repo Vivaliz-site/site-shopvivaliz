@@ -48,7 +48,9 @@ effective_exec="$(systemctl show shopvivaliz-remote-control-browser-mcp.service 
 for needle in   "SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole"   "SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0"   "SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general"; do
   if [[ "$effective_exec" != *"$needle"* ]]; then
     echo "ERROR=browser_mcp_session_isolation_drift missing=$needle" >&2
-    systemctl cat shopvivaliz-remote-control-browser-mcp.service --no-pager >&2 || true
+    if ! systemctl cat shopvivaliz-remote-control-browser-mcp.service --no-pager >&2; then
+      echo "WARN=browser_mcp_unit_dump_failed" >&2
+    fi
     exit 8
   fi
 done

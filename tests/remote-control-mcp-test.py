@@ -376,6 +376,25 @@ class RemoteControlMcpTests(unittest.TestCase):
         runner.assert_called_once()
         self.assertEqual(runner.call_args.args[1], "sample-sensitive-input")
 
+    def test_browser_type_accepts_legacy_focused_input_schema(self):
+        with mock.patch.object(m, "run_local_command_with_stdin", return_value={
+            "host": m.CONTROLLER_BACKEND_HOST,
+            "exit_code": 0,
+            "stdout": '{"typed":true,"submitted":true,"mode":"focused"}',
+            "stderr": "",
+            "duration_ms": 1,
+        }) as runner:
+            result = m.execute_tool(
+                "browser_type",
+                {"text": "sample-sensitive-input", "press_enter": True},
+            )
+        self.assertTrue(result["ok"])
+        runner.assert_called_once()
+        argv, stdin_text = runner.call_args.args[:2]
+        self.assertIn("process.stdin", " ".join(argv))
+        self.assertEqual(stdin_text, "sample-sensitive-input")
+        self.assertNotIn("sample-sensitive-input", " ".join(argv))
+
     def test_linux_service_status_is_fail_closed_and_checks_user_scope(self):
         command = m.service_command(
             "linux",
