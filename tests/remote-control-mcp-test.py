@@ -620,7 +620,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             self.assertIn(needle, claude)
         for needle in ("CPUQuota=100%", "MemoryHigh=2G", "MemoryMax=3G", "TasksMax=256"):
             self.assertIn(needle, browser)
-        for needle in ("CPUQuota=120%", "MemoryHigh=3G", "MemoryMax=4G", "TasksMax=256"):
+        for needle in ("CPUQuota=120%", "MemoryHigh=3G", "MemoryMax=4G", "TasksMax=512"):
             self.assertIn(needle, chatgpt)
 
     def test_task_wait_is_bounded_and_returns_terminal_task(self):
