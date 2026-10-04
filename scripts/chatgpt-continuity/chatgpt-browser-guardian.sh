@@ -158,12 +158,6 @@ browser_session_state() {
       }
       try {
         const state = await c.evaluate(`(async()=>{
-          const body = String(document.body?.innerText || "").toLowerCase();
-          const path = String(location.pathname || "");
-          const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
-            || body.includes("log in or sign up")
-            || body.includes("log in to get answers");
-          if (loggedOut) return "LOGGED_OUT";
           try {
             const sessionResponse = await fetch("/api/auth/session", {
               credentials: "same-origin",
@@ -178,6 +172,12 @@ browser_session_state() {
               if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
             }
           } catch {}
+          const body = String(document.body?.innerText || "").toLowerCase();
+          const path = String(location.pathname || "");
+          const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
+            || body.includes("log in or sign up")
+            || body.includes("log in to get answers");
+          if (loggedOut) return "LOGGED_OUT";
           if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
           return "UNKNOWN";
         })()`);

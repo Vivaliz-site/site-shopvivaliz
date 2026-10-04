@@ -445,6 +445,17 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("session?.accessToken", probe)
         self.assertLess(probe.index("/api/auth/session"), probe.index("document.querySelector(\"[contenteditable=true]\")"))
 
+    def test_chatgpt_browser_guardian_authenticated_session_precedes_residual_logout_dom(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        self.assertLess(
+            probe.index('/api/auth/session'),
+            probe.index('const loggedOut'),
+            "authoritative authenticated session must be checked before residual logout URL/DOM markers",
+        )
+
     def test_chatgpt_browser_guardian_session_probe_skips_unresponsive_target(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
