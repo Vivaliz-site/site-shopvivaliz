@@ -328,19 +328,38 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
-async function connectFirstUsableChatgptTab(tabs, connector) {
+async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
   if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
   const ranked = tabs
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => Number.isFinite(row.rank))
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+  let fallback = null;
   for (const { tab } of ranked) {
     try {
       const connected = await connector(tab);
-      if (connected) return connected;
+      if (!connected) continue;
+      if (typeof preferred !== 'function') return connected;
+      let accepted = false;
+      try { accepted = Boolean(await preferred(connected, tab)); } catch {}
+      if (accepted) {
+        if (fallback && fallback !== connected) {
+          try { fallback.close(); } catch {}
+        }
+        return connected;
+      }
+      if (!fallback) fallback = connected;
+      else { try { connected.close(); } catch {} }
     } catch {}
   }
-  return null;
+  return fallback;
+}
+
+async function boundConversationRecoveryReady(cdp) {
+  try { if (await composerIsUsable(cdp)) return true; } catch {}
+  try { if (await conversationIsGenerating(cdp)) return true; } catch {}
+  try { if (await recoverableFailureReason(cdp)) return true; } catch {}
+  return false;
 }
 
 function safeConversationId(value) {
@@ -540,6 +559,7 @@ class Cdp {
       (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
     let candidateTabs = tabs;
+    let preferredCandidate = null;
     const boundConversationId = safeConversationId(targetConversationId);
     const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
     if (boundConversationId) {
@@ -566,6 +586,7 @@ class Cdp {
         if (!navigated) throw new Error('bound conversation could not be opened');
         candidateTabs = [neutralHomeTab];
       }
+      if (candidateTabs.length > 1) preferredCandidate = boundConversationRecoveryReady;
     } else if (allowLatestDisambiguation && checkpointTargetMs > 0) {
       // Checkpoint-driven recovery must bind to the intended conversation
       // even when the persistent browser currently has only a neutral home
@@ -592,7 +613,7 @@ class Cdp {
         0,
       );
     }
-    const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget);
+    const connected = await connectFirstUsableChatgptTab(candidateTabs, connectCdpTarget, preferredCandidate);
     if (!connected) {
       throw new Error('no usable open chatgpt.com tab found in the attached browser');
     }
