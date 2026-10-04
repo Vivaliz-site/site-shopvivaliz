@@ -173,3 +173,10 @@ Ao validar os quatro hosts, exigir evidência real de:
 4. execução de tarefa durável via controller;
 5. recuperação de status/resultado sem usar GitHub como transporte de runtime.
 <!-- /REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
+
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->
+## ChatGPT corporativo — referência de credencial
+
+A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. O segredo não é versionado neste repositório. Para autenticação, reutilizar primeiro o perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e as fontes seguras autorizadas. Não solicitar novamente a senha ao usuário sem evidência de que a credencial provisionada está ausente, revogada ou inválida.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->
