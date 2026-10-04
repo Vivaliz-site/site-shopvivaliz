@@ -40,6 +40,7 @@ const {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementSweepAllowed,
+  withBrowserRecoveryLock,
   reinforcementLoop,
   hasActiveContinuityCheckpoint,
   browserSessionReadyForReinforcement,
@@ -89,6 +90,9 @@ function fakeCdp({
       }
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
+      if (expression.includes('continuity-responding-indicator-probe')) {
+        return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
       }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
@@ -1821,6 +1825,42 @@ async function run() {
   );
   assert.match(generating.detail, /active generation/i);
 
+  // Live reproduction 2026-10-03: current ChatGPT UI can keep the
+  // composer usable and omit data-testid=stop-button while the backend
+  // stream_status is still IS_STREAMING ("ChatGPT is responding"). That is
+  // active generation, not an idle conversation, and must never be reloaded
+  // or receive a duplicate continuation.
+  {
+    const activeWithoutStop = fakeCdp({
+      generating: false,
+      composerUsable: true,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'ChatGPT is responding',
+      sendSucceeds: true,
+    });
+    const outcome = await attemptNudge(
+      'task-active-stream-without-stop-button',
+      async () => activeWithoutStop,
+      async () => false,
+    );
+    assert.equal(
+      outcome.result_status,
+      'STALLED_NOT_CONFIRMED',
+      'backend IS_STREAMING must fail closed even when the Stop button is absent',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('location.reload')),
+      false,
+      'backend-active generation without Stop must not be reloaded',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('b.click()')),
+      false,
+      'backend-active generation without Stop must not receive a duplicate continuation',
+    );
+    assert.match(outcome.detail, /active generation|stream/i);
+  }
+
   const recoveredCdp = fakeCdp({ generating: true, pageText: 'Streaming interrupted' });
   const recoveredByReattach = await attemptNudge(
     'task-passive-reattach',
@@ -2820,6 +2860,60 @@ async function run() {
       reinforcementSweepAllowed(true, { http_status: 200, cross_device_discovery: true }),
       true,
       'a successful account-discovery cycle may sweep its fresh candidates',
+    );
+  }
+
+  // Checkpoint-driven recovery and reinforcement share one canonical
+  // browser. They must never mutate/navigate that browser concurrently.
+  {
+    assert.equal(
+      typeof withBrowserRecoveryLock,
+      'function',
+      'worker must expose the shared browser recovery serializer',
+    );
+    const events = [];
+    let releaseFirst;
+    let markFirstStarted;
+    const firstStarted = new Promise(resolve => { markFirstStarted = resolve; });
+    const first = withBrowserRecoveryLock(async () => {
+      events.push('checkpoint:start');
+      markFirstStarted();
+      await new Promise(resolve => { releaseFirst = resolve; });
+      events.push('checkpoint:end');
+    });
+    await firstStarted;
+    const second = withBrowserRecoveryLock(async () => {
+      events.push('reinforcement:start');
+      events.push('reinforcement:end');
+    });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(
+      events,
+      ['checkpoint:start'],
+      'second browser recovery must remain queued until the first releases the lock',
+    );
+    releaseFirst();
+    await Promise.all([first, second]);
+    assert.deepEqual(events, [
+      'checkpoint:start',
+      'checkpoint:end',
+      'reinforcement:start',
+      'reinforcement:end',
+    ]);
+
+    const workerSource = fs.readFileSync(
+      new URL('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs', import.meta.url),
+      'utf8',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => attemptNudge\(/,
+      'checkpoint-driven nudge must use the shared browser recovery lock',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => check\(/,
+      'reinforcement recovery must use the shared browser recovery lock',
     );
   }
 

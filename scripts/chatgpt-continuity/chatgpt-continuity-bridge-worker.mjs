@@ -292,6 +292,21 @@ let REINFORCEMENT_RECENT_CANDIDATES = [];
 let REINFORCEMENT_RECENT_CURSOR = 0;
 let REINFORCEMENT_LATEST_ID = '';
 
+// The checkpoint-driven bridge and reinforcement monitor share one canonical
+// ChatGPT browser. Serialize only browser recovery/mutation operations so one
+// path cannot navigate/reload the conversation while the other is confirming
+// or sending a continuation.
+let BROWSER_RECOVERY_TAIL = Promise.resolve();
+
+async function withBrowserRecoveryLock(operation) {
+  if (typeof operation !== 'function') {
+    throw new TypeError('browser recovery operation must be a function');
+  }
+  const run = BROWSER_RECOVERY_TAIL.then(() => operation());
+  BROWSER_RECOVERY_TAIL = run.catch(() => undefined);
+  return run;
+}
+
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -1143,6 +1158,18 @@ async function conversationIsGenerating(cdp) {
   return cdp.evaluate(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);
 }
 
+async function conversationRespondingIndicatorPresent(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'chatgpt is responding',
+      'chatgpt está respondendo',
+      'chatgpt esta respondendo',
+    ],
+    'continuity-responding-indicator-probe',
+  );
+}
+
 async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
   const requestedTimeout = Number(timeoutMs);
   const boundedTimeoutMs = Number.isFinite(requestedTimeout)
@@ -1455,11 +1482,9 @@ async function assistantSnapshot(cdp) {
       ? String(keyed?.getAttribute?.('data-turn-key')||'')
       : (nodes.length ? 'action-controls-'+String(nodes.length) : '');
 
-    // Progress during reasoning/tool use may not yet have final action
-    // controls. Capture the current conversation surface as a secondary
-    // fingerprint. It is consumed only from a post-send baseline so the
-    // worker's own "continue" message cannot be mistaken for assistant
-    // progress.
+    // Capture the current conversation surface for diagnostics only. Generic
+    // surface growth is never sufficient to certify recovery because it can
+    // reflect tool activity, Thinking UI, banners, or our own continuation.
     const main=document.querySelector('main');
     const surfaceText=(main?.innerText||main?.textContent||'').trim();
     return {
@@ -1505,14 +1530,6 @@ function assistantProgressed(before, after) {
   return currentText.length > priorText.length && currentText !== priorText;
 }
 
-function assistantSurfaceProgressed(before, after) {
-  if (!sameConversationSnapshot(before, after)) return false;
-  const priorText=String(before?.surfaceText||'');
-  const currentText=String(after?.surfaceText||'');
-  if(!priorText || !currentText) return false;
-  return currentText.length > priorText.length && currentText !== priorText;
-}
-
 async function postSendConfirmationBaseline(cdp, before) {
   await sleep(POST_SEND_BASELINE_SETTLE_MS);
   const after=await assistantSnapshot(cdp);
@@ -1555,7 +1572,10 @@ async function confirmAssistantProgress(
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    const domAdvanced = assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current);
+    // DOM assistant-turn growth is only a cue to query canonical state. It is
+    // never the success proof itself; only a completed backend assistant reply
+    // can certify recovery.
+    const domAdvanced = assistantProgressed(baseline, current);
     const nowMs = Date.now();
     if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
       const turn = await conversationTurnState(cdp);
@@ -2494,7 +2514,10 @@ async function attemptNudge(
     // stream is never reloaded solely because the checkpoint age crossed the
     // watchdog threshold.
     const wasGenerating = await conversationIsGenerating(cdp);
-    if (wasGenerating && !detectedFailureReason) {
+    const respondingIndicator = !wasGenerating && !detectedFailureReason
+      ? await conversationRespondingIndicatorPresent(cdp)
+      : false;
+    if ((wasGenerating || respondingIndicator) && !detectedFailureReason) {
       const liveStream = await conversationStreamStatus(cdp);
       const liveStatus = String(liveStream?.status || '').toUpperCase();
       const streamComplete = Number(liveStream?.http_status || 0) === 200 && liveStatus === 'COMPLETE';
@@ -2711,13 +2734,13 @@ async function pollBridgeOnce() {
   const taskId = response.nudge?.task_id;
   if (!taskId) return;
   const conversationId = safeConversationId(response.nudge?.conversation_id || '');
-  const outcome = await attemptNudge(
+  const outcome = await withBrowserRecoveryLock(() => attemptNudge(
     taskId,
     null,
     confirmAssistantProgress,
     waitForComposerUsable,
     conversationId,
-  );
+  ));
   const failureReason = text(outcome.failure_reason);
   const persistedDetail = failureReason
     ? `failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=${failureReason};recovery_attempt=${Number(outcome.recovery_attempt || 1)};recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}; ${text(outcome.detail).slice(0, 360)}`
@@ -3077,13 +3100,13 @@ async function reinforcementLoop(
     let outcome;
     try {
       outcome = await withReinforcementHeartbeat(
-        () => check(
+        () => withBrowserRecoveryLock(() => check(
           () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
           REINFORCEMENT_CONFIRM_DELAY_MS,
           confirmAssistantProgress,
           alignLatest,
           { allowCrossDeviceDiscovery: true },
-        ),
+        )),
         heartbeatIntervalMs,
       );
     } catch (error) {
@@ -3152,7 +3175,7 @@ async function reinforcementLoop(
       for (const candidate of sweep.batch) {
         try {
           const candidateOutcome = await withReinforcementHeartbeat(
-            () => check(
+            () => withBrowserRecoveryLock(() => check(
               () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
               REINFORCEMENT_CONFIRM_DELAY_MS,
               confirmAssistantProgress,
@@ -3163,7 +3186,7 @@ async function reinforcementLoop(
                 CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
               ),
               { allowCrossDeviceDiscovery: true },
-            ),
+            )),
             heartbeatIntervalMs,
           );
           persistReinforcementHealth(candidateOutcome);
@@ -3248,6 +3271,7 @@ export {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementSweepAllowed,
+  withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
   authorizationButtonTarget,
