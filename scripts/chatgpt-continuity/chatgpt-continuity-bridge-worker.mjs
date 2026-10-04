@@ -2966,6 +2966,13 @@ function reinforcementDiscoveryDelayMs(result) {
   return REINFORCEMENT_DISCOVERY_INTERVAL_MS;
 }
 
+function reinforcementSweepAllowed(allowAccountDiscovery, outcome) {
+  if (!allowAccountDiscovery) return false;
+  if (outcome?.cross_device_discovery !== true) return false;
+  if (Number(outcome?.http_status) === 429) return false;
+  return true;
+}
+
 async function bridgeLoop(
   poll = pollBridgeOnce,
   wait = sleep,
@@ -3081,8 +3088,11 @@ async function reinforcementLoop(
       if (discoveryDelayMs > 0) {
         nextAccountDiscoveryAt = now() + discoveryDelayMs;
         if (Number(outcome?.http_status) === 429) {
+          REINFORCEMENT_RECENT_CANDIDATES = [];
+          REINFORCEMENT_RECENT_CURSOR = 0;
+          REINFORCEMENT_LATEST_ID = '';
           console.log(
-            `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)} local_sidebar_continues=true`,
+            `chatgpt_continuity_reinforcement latest_discovery_backoff_ms=${discoveryDelayMs} action=${text(outcome?.action)} local_sidebar_continues=true cached_sweep_suspended=true`,
           );
         }
       }
@@ -3093,7 +3103,11 @@ async function reinforcementLoop(
     // Project gizmo lists. Keep this inside the same loop so browser navigation
     // stays serialized; tests that inject a custom check retain the historical
     // single-call contract.
-    if (check === reinforcementCheckOnce && REINFORCEMENT_RECENT_CANDIDATES.length > 1) {
+    if (
+      check === reinforcementCheckOnce
+      && reinforcementSweepAllowed(allowAccountDiscovery, outcome)
+      && REINFORCEMENT_RECENT_CANDIDATES.length > 1
+    ) {
       const sweep = reinforcementSweepCandidates(
         REINFORCEMENT_RECENT_CANDIDATES,
         REINFORCEMENT_LATEST_ID,
@@ -3196,6 +3210,7 @@ export {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementSweepAllowed,
   bridgeLoop,
   reinforcementLoop,
   authorizationButtonTarget,
