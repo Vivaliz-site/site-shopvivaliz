@@ -8,21 +8,15 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
     def test_codex_is_last_provider_in_finite_failover(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("ORDER=(gemini anthropic codex)", script)
-        self.assertLess(script.index("
-    gemini)"), script.index("
-    anthropic)"))
-        self.assertLess(script.index("
-    anthropic)"), script.index("
-    codex)"))
+        self.assertLess(script.index("\n    gemini)"), script.index("\n    anthropic)"))
+        self.assertLess(script.index("\n    anthropic)"), script.index("\n    codex)"))
 
     def test_background_controller_can_fallback_to_codex_auto_after_gemini(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("BACKGROUND_ORDER=(gemini)", script)
         self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
-        self.assertLess(script.index("
-    gemini)"), script.index("
-    codex_auto)"))
+        self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
         self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
         self.assertIn("--sandbox danger-full-access", script)
         self.assertIn("--ask-for-approval never", script)
@@ -57,8 +51,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
 
     def test_codex_policy_does_not_require_hash_pinned_global_blobs(self) -> None:
         validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
-        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")
-REQUIRED_TOKENS", 1)[0]
+        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")\nREQUIRED_TOKENS", 1)[0]
         self.assertNotIn("REGRAS-AGENTES-CENTRALIZADAS.md", codex_block)
         self.assertNotIn("AGENTS.override.md", codex_block)
 
