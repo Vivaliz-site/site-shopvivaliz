@@ -563,6 +563,91 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(first["task_id"], second["task_id"])
         self.assertTrue(second["deduplicated"])
 
+    def test_task_worker_does_not_head_of_line_block_other_host(self):
+        first = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "sleep 30",
+            "timeout": 60,
+        })
+        second = m.execute_tool("task_submit", {
+            "host": "shopvivaliz-free-a1",
+            "command": "printf site",
+            "timeout": 30,
+        })
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='running',execution_unit=?,started_at=?,execution_started_at=? WHERE id=?",
+                (m.task_unit_name(first["task_id"]), m.now(), m.now(), first["task_id"]),
+            )
+        launched = []
+        old_reconcile = m.reconcile_tasks
+        old_launch = m.launch_task_service
+        m.reconcile_tasks = lambda: []
+        m.launch_task_service = lambda task_id, timeout: launched.append(task_id)
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        deadline = time.time() + 2
+        while second["task_id"] not in launched and time.time() < deadline:
+            time.sleep(0.05)
+        m.STOP_EVENT.set()
+        worker.join(timeout=2)
+        m.reconcile_tasks = old_reconcile
+        m.launch_task_service = old_launch
+        self.assertIn(second["task_id"], launched)
+
+    def test_backend_reserves_second_durable_slot_for_control_work(self):
+        first = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "sleep 30",
+            "timeout": 60,
+        })
+        second = m.execute_tool("task_submit", {
+            "host": "always-free-arm-1787907847-26",
+            "command": "printf diagnostic",
+            "timeout": 30,
+        })
+        with m.db_conn() as db:
+            db.execute(
+                "UPDATE tasks SET state='running',execution_unit=?,started_at=?,execution_started_at=? WHERE id=?",
+                (m.task_unit_name(first["task_id"]), m.now(), m.now(), first["task_id"]),
+            )
+        launched = []
+        old_reconcile = m.reconcile_tasks
+        old_launch = m.launch_task_service
+        m.reconcile_tasks = lambda: []
+        m.launch_task_service = lambda task_id, timeout: launched.append(task_id)
+        m.STOP_EVENT.clear()
+        worker = threading.Thread(target=m.task_worker, daemon=True)
+        worker.start()
+        deadline = time.time() + 2
+        while second["task_id"] not in launched and time.time() < deadline:
+            time.sleep(0.05)
+        m.STOP_EVENT.set()
+        worker.join(timeout=2)
+        m.reconcile_tasks = old_reconcile
+        m.launch_task_service = old_launch
+        self.assertIn(second["task_id"], launched)
+
+    def test_backend_durable_concurrency_is_bounded(self):
+        self.assertEqual(m.HOST_DURABLE_LIMITS["always-free-arm-1787907847-26"], 2)
+        self.assertLessEqual(sum(m.HOST_DURABLE_LIMITS.values()), 6)
+
+    def test_control_plane_and_agent_units_have_pressure_guardrails(self):
+        controller = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-mcp.service").read_text(encoding="utf-8")
+        claude = (ROOT / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service").read_text(encoding="utf-8")
+        browser = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        chatgpt = (ROOT / "ops" / "systemd" / "shopvivaliz-chatgpt-browser.service").read_text(encoding="utf-8")
+
+        for needle in ("CPUWeight=1000", "IOWeight=1000", "Nice=-5"):
+            self.assertIn(needle, controller)
+        for needle in ("--capacity 1", "CPUQuota=100%", "MemoryHigh=2G", "MemoryMax=3G", "TasksMax=128"):
+            self.assertIn(needle, claude)
+        for needle in ("CPUQuota=100%", "MemoryHigh=2G", "MemoryMax=3G", "TasksMax=256"):
+            self.assertIn(needle, browser)
+        for needle in ("CPUQuota=120%", "MemoryHigh=3G", "MemoryMax=4G", "TasksMax=256"):
+            self.assertIn(needle, chatgpt)
+
     def test_task_wait_is_bounded_and_returns_terminal_task(self):
         submitted = m.execute_tool("task_submit", {"host":"always-free-arm-1787907847-26","command":"printf waited","timeout":30})
         m.STOP_EVENT.clear()
