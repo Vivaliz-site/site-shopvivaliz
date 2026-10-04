@@ -129,15 +129,28 @@ browser_session_state() {
       }
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
-        const ws = new WebSocket(page.webSocketDebuggerUrl);
-        await Promise.race([
-          new Promise((resolve, reject) => {
-            ws.addEventListener("open", resolve, { once: true });
-            ws.addEventListener("error", reject, { once: true });
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
-        ]);
-        return new Cdp(ws);
+        let ws;
+        let candidate;
+        try {
+          ws = new WebSocket(page.webSocketDebuggerUrl);
+          await Promise.race([
+            new Promise((resolve, reject) => {
+              ws.addEventListener("open", resolve, { once: true });
+              ws.addEventListener("error", reject, { once: true });
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2000)),
+          ]);
+          candidate = new Cdp(ws);
+          await Promise.race([
+            candidate.evaluate("true"),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("evaluate timeout")), 1500)),
+          ]);
+          return candidate;
+        } catch (error) {
+          try { candidate?.close(); } catch {}
+          try { ws?.close(); } catch {}
+          throw error;
+        }
       });
       if (!c) {
         console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
