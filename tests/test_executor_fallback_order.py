@@ -8,15 +8,21 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
     def test_codex_is_last_provider_in_finite_failover(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("ORDER=(gemini anthropic codex)", script)
-        self.assertLess(script.index("\n    gemini)"), script.index("\n    anthropic)"))
-        self.assertLess(script.index("\n    anthropic)"), script.index("\n    codex)"))
+        self.assertLess(script.index("
+    gemini)"), script.index("
+    anthropic)"))
+        self.assertLess(script.index("
+    anthropic)"), script.index("
+    codex)"))
 
     def test_background_controller_can_fallback_to_codex_auto_after_gemini(self) -> None:
         script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("BACKGROUND_ORDER=(gemini)", script)
         self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
-        self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
+        self.assertLess(script.index("
+    gemini)"), script.index("
+    codex_auto)"))
         self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
         self.assertIn("--sandbox danger-full-access", script)
         self.assertIn("--ask-for-approval never", script)
@@ -32,7 +38,11 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("BACKGROUND_ORDER+=(anthropic)", script)
         self.assertIn("background_claude_fallback_authorized=true", script)
         self.assertLess(script.index("BACKGROUND_ORDER+=(anthropic)"), script.index("BACKGROUND_ORDER+=(codex_auto)"))
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)\n        self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)\n        self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)\n        self.assertIn("run_claude()", script)\n        self.assertIn("try_provider anthropic run_claude", script)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
+        self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)
+        self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
+        self.assertIn("run_claude()", script)
+        self.assertIn("try_provider anthropic run_claude", script)
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
@@ -47,7 +57,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
 
     def test_codex_policy_does_not_require_hash_pinned_global_blobs(self) -> None:
         validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
-        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")\nREQUIRED_TOKENS", 1)[0]
+        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")
+REQUIRED_TOKENS", 1)[0]
         self.assertNotIn("REGRAS-AGENTES-CENTRALIZADAS.md", codex_block)
         self.assertNotIn("AGENTS.override.md", codex_block)
 
@@ -68,7 +79,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("command -v gemini", script)
         self.assertIn("command -v claude", script)
         self.assertIn("env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini", script)
-        self.assertIn("env -u ANTHROPIC_API_KEY claude", script)
+        self.assertIn("unset ANTHROPIC_API_KEY", script)
+        self.assertIn('launcher="$CLAUDE_BIN"', script)
 
     def test_continuity_validator_enforces_codex_last_resort(self) -> None:
         validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
