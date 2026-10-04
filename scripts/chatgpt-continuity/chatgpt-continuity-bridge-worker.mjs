@@ -1425,11 +1425,9 @@ async function assistantSnapshot(cdp) {
       ? String(keyed?.getAttribute?.('data-turn-key')||'')
       : (nodes.length ? 'action-controls-'+String(nodes.length) : '');
 
-    // Progress during reasoning/tool use may not yet have final action
-    // controls. Capture the current conversation surface as a secondary
-    // fingerprint. It is consumed only from a post-send baseline so the
-    // worker's own "continue" message cannot be mistaken for assistant
-    // progress.
+    // Capture the current conversation surface for diagnostics only. Generic
+    // surface growth is never sufficient to certify recovery because it can
+    // reflect tool activity, Thinking UI, banners, or our own continuation.
     const main=document.querySelector('main');
     const surfaceText=(main?.innerText||main?.textContent||'').trim();
     return {
@@ -1475,14 +1473,6 @@ function assistantProgressed(before, after) {
   return currentText.length > priorText.length && currentText !== priorText;
 }
 
-function assistantSurfaceProgressed(before, after) {
-  if (!sameConversationSnapshot(before, after)) return false;
-  const priorText=String(before?.surfaceText||'');
-  const currentText=String(after?.surfaceText||'');
-  if(!priorText || !currentText) return false;
-  return currentText.length > priorText.length && currentText !== priorText;
-}
-
 async function postSendConfirmationBaseline(cdp, before) {
   await sleep(POST_SEND_BASELINE_SETTLE_MS);
   const after=await assistantSnapshot(cdp);
@@ -1525,7 +1515,10 @@ async function confirmAssistantProgress(
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    const domAdvanced = assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current);
+    // DOM assistant-turn growth is only a cue to query canonical state. It is
+    // never the success proof itself; only a completed backend assistant reply
+    // can certify recovery.
+    const domAdvanced = assistantProgressed(baseline, current);
     const nowMs = Date.now();
     if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
       const turn = await conversationTurnState(cdp);
