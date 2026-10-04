@@ -106,6 +106,21 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
         self.assertIn("SCRIPT_DIR=", failover)
         self.assertIn('python3 "$SCRIPT_DIR/run_background_gemini.py"', failover)
 
+
+    def test_remote_gemini_controller_install_bundles_all_required_systemd_units(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
+        block = workflow.split("            gemini_24x7_controller_install)", 1)[1].split("            chatgpt_continuity_repair)", 1)[0]
+        for unit in (
+            "shopvivaliz-gemini-24x7-controller.service",
+            "shopvivaliz-continuity-watchdog.service",
+            "shopvivaliz-continuity-watchdog.timer",
+            "shopvivaliz-chatgpt-nudge-dispatcher.service",
+            "shopvivaliz-chatgpt-nudge-dispatcher.timer",
+        ):
+            self.assertIn(f"deploy/systemd/{unit}", block, unit)
+
+
     def test_production_e2e_accepts_and_reports_repository(self) -> None:
         root = Path(__file__).resolve().parents[1]
         probe = (root / "scripts" / "task_continuity_e2e.py").read_text()
