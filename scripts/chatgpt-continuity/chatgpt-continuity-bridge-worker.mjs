@@ -353,7 +353,7 @@ function chatgptTabRank(tab) {
     return Number.POSITIVE_INFINITY;
   }
   if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com') return Number.POSITIVE_INFINITY;
-  if (/^\/c\/[^/]+/.test(url.pathname)) return 0;
+  if (/^\/(?:c|uc)\/[^/]+/.test(url.pathname)) return 0;
   if (url.pathname === '/' || url.pathname === '') return 1;
   if (/^\/(?:auth|login|logout)(?:\/|$)/.test(url.pathname)) return 3;
   return 2;
@@ -435,7 +435,7 @@ async function selectBoundConversationReentryTab(
 function conversationIdFromTab(tab) {
   if (chatgptTabRank(tab) !== 0) return '';
   try {
-    return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
+    return new URL(String(tab.url || '')).pathname.match(/^\/(?:c|uc)\/([^/]+)/)?.[1] || '';
   } catch {
     return '';
   }
@@ -974,21 +974,21 @@ async function sidebarLatestConversationId(cdp) {
     // sidebar-latest-conversation: local, already-synchronized fallback only.
     const unique=[];
     const seen=new Set();
-    for(const anchor of document.querySelectorAll('a[href^="/c/"]')){
+    for(const anchor of document.querySelectorAll('a[href]')){
       const value=String(anchor.getAttribute('href')||'').trim();
-      if(!/^\\/c\\/[A-Za-z0-9_-]{8,160}$/.test(value) || seen.has(value)) continue;
+      if(!/^\\/(?:c|uc)\\/[A-Za-z0-9_-]{8,160}$/.test(value) || seen.has(value)) continue;
       seen.add(value);
       unique.push(value);
     }
     return unique[0]||'';
   })()`);
-  const match = String(href || '').match(/^\/c\/([A-Za-z0-9_-]{8,160})$/);
+  const match = String(href || '').match(/^\/(?:c|uc)\/([A-Za-z0-9_-]{8,160})$/);
   return match?.[1] || '';
 }
 
 async function alignToSidebarLatestConversation(cdp) {
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  const currentConversation = /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
+  const currentConversation = /^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
   const homeContext = currentPath === '/';
   const uniqueConversationContext = currentConversation && (
     SINGLE_SAFE_REINFORCEMENT_CDPS.has(cdp)
@@ -1029,7 +1029,7 @@ async function alignToSidebarLatestConversation(cdp) {
 function safeReinforcementRestorePath(value) {
   const path = String(value || '');
   if (path === '/') return path;
-  return /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
+  return /^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
 }
 
 async function restoreReinforcementPath(cdp, requestedPath) {
@@ -1062,7 +1062,6 @@ async function navigateNeutralTabToConversation(
     cdp = await connector(tab);
     if (!cdp) return false;
 
-    const target = '/c/' + id;
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
     const totalTimeoutMs = Number.isFinite(requestedTimeout)
@@ -1073,46 +1072,57 @@ async function navigateNeutralTabToConversation(
       : 250;
     const startedAt = Date.now();
     const deadline = startedAt + totalTimeoutMs;
+    const readBoundId = async () => {
+      try {
+        const pathname = String(await cdp.evaluate('location.pathname') || '');
+        return pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '';
+      } catch {
+        return '';
+      }
+    };
 
     // A freshly created neutral CDP target can be connected before the
-    // authenticated ChatGPT shell/sidebar has hydrated. Wait a bounded window
-    // for the exact existing conversation link instead of immediately falling
-    // back to direct /c/<id> navigation, which can render an unavailable shell.
+    // authenticated ChatGPT shell/sidebar has hydrated. Prefer the exact
+    // existing sidebar route, whether ChatGPT exposes it as /c/<id> or
+    // /uc/<id>, before trying direct navigation.
     const sidebarDeadline = Math.min(deadline, startedAt + Math.min(5000, totalTimeoutMs));
     let route = 'waiting';
     while (Date.now() < sidebarDeadline) {
       route = await cdp.evaluate(
         `(()=>{
           /* continuity-bound-sidebar-route */
-          const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
+          const id=${JSON.stringify(id)};
           const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
-            try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
+            try {
+              const pathname=new URL(anchor.href,location.href).pathname;
+              const match=pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
+              return match?.[1]===id;
+            } catch { return false; }
           });
           if(!link) return 'waiting';
+          const pathname=new URL(link.href,location.href).pathname;
           link.click();
-          return 'sidebar';
+          return pathname;
         })()`,
       );
-      if (route === 'sidebar') break;
+      if (typeof route === 'string' && /^\/(?:c|uc)\//.test(route)) break;
+      if (await readBoundId() === id) return true;
       await sleep(intervalMs);
     }
 
-    if (route !== 'sidebar') {
-      route = await cdp.evaluate(
-        `(()=>{location.assign(${JSON.stringify(target)});return 'direct';})()`,
+    if (await readBoundId() === id) return true;
+
+    // Direct /c is the long-standing route. Some current ChatGPT surfaces use
+    // /uc instead, so fail over to /uc when /c redirects to Home/unavailable.
+    for (const prefix of ['/c/', '/uc/']) {
+      if (Date.now() >= deadline) break;
+      await cdp.evaluate(
+        `(()=>{location.assign(${JSON.stringify(prefix + id)});return true;})()`,
       );
-    }
-    if (route !== 'sidebar' && route !== 'direct') return false;
-
-    while (Date.now() < deadline) {
-      await sleep(intervalMs);
-      try {
-        const pathname = await cdp.evaluate('location.pathname');
-        const currentId = String(pathname || '').match(/^\/c\/([^/?#]+)/)?.[1] || '';
-        if (currentId === id) return true;
-      } catch {
-        // Navigation can transiently detach the execution context. Keep the
-        // check bounded and fail closed if the target never becomes readable.
+      const routeDeadline = Math.min(deadline, Date.now() + Math.max(750, Math.floor((deadline - Date.now()) / 2)));
+      while (Date.now() < routeDeadline) {
+        await sleep(intervalMs);
+        if (await readBoundId() === id) return true;
       }
     }
     return false;
@@ -1509,7 +1519,7 @@ async function assistantSnapshot(cdp) {
   })()`);
   if (snapshot && Object.hasOwn(snapshot, 'conversationPath')) {
     const { conversationPath, ...content } = snapshot;
-    const path = String(conversationPath || '').match(/^\/c\/[^/]+/)?.[0] || '';
+    const path = String(conversationPath || '').match(/^\/(?:c|uc)\/[^/]+/)?.[0] || '';
     return { ...content, conversationFingerprint: path ? sha(path) : '' };
   }
   // Older injected adapters may lack route metadata; live snapshots always
@@ -1871,7 +1881,7 @@ async function alignToLatestConversation(
   }
 
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  const currentMatch = currentPath.match(/^\/c\/([^/?#]+)/);
+  const currentMatch = currentPath.match(/^\/(?:c|uc)\/([^/?#]+)/);
   if (currentMatch && currentMatch[1] === latest.id) {
     return { action: 'already_latest', restore_path: '' };
   }
@@ -2501,7 +2511,7 @@ async function attemptNudge(
     cdp = await connector();
     try {
       const pathname = String(await cdp.evaluate('location.pathname') || '');
-      const actualConversationId = safeConversationId(pathname.match(/^\/c\/([^/?#]+)/)?.[1] || '');
+      const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
     detectedFailureReason = await recoverableFailureReason(cdp);
