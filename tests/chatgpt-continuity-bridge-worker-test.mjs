@@ -2036,7 +2036,7 @@ async function run() {
 
   const noComposer = await attemptNudge(
     'task-1',
-    async () => fakeCdp({ composerUsable: false }),
+    async () => fakeCdp({ composerUsable: false, streamStatus: 'COMPLETE' }),
     async () => false,
     async () => false,
   );
@@ -2044,7 +2044,7 @@ async function run() {
 
   {
     let waitCalls = 0;
-    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true });
+    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true, streamStatus: 'COMPLETE' });
     const transientComposer = await attemptNudge(
       'task-transient-composer-after-reattach',
       async () => transientComposerCdp,
