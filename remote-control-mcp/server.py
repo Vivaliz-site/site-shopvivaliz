@@ -1410,6 +1410,71 @@ def browser_type_invocation(tab_id: str, selector: str, submit: bool) -> list[st
     return [BROWSER_NODE_BIN, "--input-type=module", "-e", BROWSER_TYPE_NODE_SCRIPT, tab_id, selector, "1" if submit else "0"]
 
 
+BROWSER_FOCUSED_TYPE_NODE_SCRIPT = r"""
+const mod='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+const {Cdp}=await import('file://'+mod);
+const [submitRaw]=process.argv.slice(1);
+let secret='';
+for await (const chunk of process.stdin) secret += chunk;
+if(secret.length>4096) throw new Error('browser_text_too_long');
+const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
+const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','claude.ai']);
+const candidates=[];
+for(const t of tabs){
+  if(t?.type!=='page'||!t?.webSocketDebuggerUrl) continue;
+  let u; try{u=new URL(String(t.url||''));}catch{continue;}
+  if(!allowed.has(u.hostname)) continue;
+  let ws; let c;
+  try{
+    ws=new WebSocket(t.webSocketDebuggerUrl);
+    await Promise.race([
+      new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+    ]);
+    c=new Cdp(ws);
+    const probe=await c.send('Runtime.evaluate',{
+      expression:"(()=>{const e=document.activeElement;const editable=!!e&&((e.matches?.('input,textarea'))||e.isContentEditable);return {focused:document.hasFocus(),editable}})()",
+      returnByValue:true,
+      awaitPromise:true
+    });
+    if(!probe.exceptionDetails&&probe.result?.value?.editable){
+      candidates.push({t,focused:probe.result.value.focused===true});
+    }
+  } finally {
+    try{if(c?.close)c.close();}catch{}
+    try{if(ws?.close)ws.close();}catch{}
+  }
+}
+let chosen=null;
+const focused=candidates.filter(x=>x.focused);
+if(focused.length===1) chosen=focused[0];
+else if(candidates.length===1) chosen=candidates[0];
+else if(candidates.length===0) throw new Error('focused_editable_not_found');
+else throw new Error('focused_editable_ambiguous');
+const ws=new WebSocket(chosen.t.webSocketDebuggerUrl);
+await Promise.race([
+  new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+]);
+const c=new Cdp(ws);
+const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
+const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+if(r.exceptionDetails) throw new Error('browser_runtime_exception');
+if(c.close)c.close();
+console.log(JSON.stringify(r.result?.value ?? null));
+"""
+
+
+def browser_focused_type_invocation(press_enter: bool) -> list[str]:
+    return [
+        BROWSER_NODE_BIN,
+        "--input-type=module",
+        "-e",
+        BROWSER_FOCUSED_TYPE_NODE_SCRIPT,
+        "1" if press_enter else "0",
+    ]
+
+
 def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     result["ok"] = result["exit_code"] == 0
     return result
@@ -1474,14 +1539,22 @@ def execute_tool(
         ))
     if name == "browser_type":
         text_value = str(args.get("text") or "")
+        if not text_value:
+            raise ValueError("browser_text_required")
         if len(text_value) > 4096:
             raise ValueError("browser_text_too_long")
-        return _browser_result(run_local_command_with_stdin(
-            browser_type_invocation(
-                str(args.get("tab_id") or ""),
-                str(args.get("selector") or ""),
+        tab_id = str(args.get("tab_id") or "")
+        selector = str(args.get("selector") or "")
+        if tab_id or selector:
+            invocation = browser_type_invocation(
+                tab_id,
+                selector,
                 bool(args.get("submit", False)),
-            ),
+            )
+        else:
+            invocation = browser_focused_type_invocation(bool(args.get("press_enter", False)))
+        return _browser_result(run_local_command_with_stdin(
+            invocation,
             text_value,
             DEFAULT_TIMEOUT,
             cancel_check,
