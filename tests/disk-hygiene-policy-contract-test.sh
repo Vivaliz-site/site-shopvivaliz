@@ -53,4 +53,10 @@ else
   fail=1
 fi
 
+check_fixed 'ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"' "$HOUSE" 'abandoned clones default to seven-day TTL'
+check_fixed 'canonical_clone()' "$HOUSE" 'canonical clones are explicitly protected'
+check_fixed 'clone_has_unpushed_commits()' "$HOUSE" 'clones with unpushed local commits are protected'
+check_fixed 'linked_worktrees' "$HOUSE" 'clones with linked worktrees are protected'
+check_fixed 'abandoned_clone_removed' "$HOUSE" 'abandoned clone removals are persisted in state and logs'
+
 exit "$fail"
