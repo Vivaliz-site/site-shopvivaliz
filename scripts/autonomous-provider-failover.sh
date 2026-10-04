@@ -15,7 +15,7 @@ GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
 CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
-SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK:-0}"
+SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK:-0}"\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK:-0}"
 mkdir -p "$LOG_DIR"
 : > "$ATTEMPTS"
 : > "$OUTPUT"
@@ -124,14 +124,23 @@ if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
 fi
 
 # Esta e a terceira camada (CLI) da politica de retomada.
-# Em recovery de background, a politica recorrente permite apenas IA gratuita/local
-# aprovada. Claude/Codex continuam exigindo gatilho humano explicito.
+# Em recovery de background, provedores pagos/subscription só entram quando a
+# autorização humana foi materializada explicitamente pelo instalador.
+# A ordem preserva Codex como última opção: Gemini -> Claude -> Codex.
 BACKGROUND_ORDER=(gemini)
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  background_paid_fallback_enabled=false
+  if [ "$SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK" = "1" ]; then
+    BACKGROUND_ORDER+=(anthropic)
+    background_paid_fallback_enabled=true
+    echo "background_claude_fallback_authorized=true" | tee -a "$OUTPUT"
+  fi
   if [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
     BACKGROUND_ORDER+=(codex_auto)
+    background_paid_fallback_enabled=true
     echo "background_codex_fallback_authorized=true" | tee -a "$OUTPUT"
-  else
+  fi
+  if [ "$background_paid_fallback_enabled" != "true" ]; then
     echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
   fi
   ORDER=("${BACKGROUND_ORDER[@]}")
