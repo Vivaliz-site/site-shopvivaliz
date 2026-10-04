@@ -102,6 +102,35 @@ class ShopeeDaemonTokenCacheTest(unittest.TestCase):
         self.assertEqual(config["SHOPEE_ACCESS_TOKEN"], "canonical-access")
         self.assertEqual(config["SHOPEE_REFRESH_TOKEN"], "canonical-refresh")
 
+    def test_daemon_refuses_legacy_env_tokens_when_cache_is_missing(self):
+        module = load_module("shopee_daemon_no_legacy_fallback_test", "daemon-shopee-token-renewer.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_file = root / ".env"
+            env_file.write_text(
+                "SHOPEE_PARTNER_ID=123\n"
+                "SHOPEE_PARTNER_KEY=partner-key-value\n"
+                "SHOPEE_SHOP_ID=456\n"
+                "SHOPEE_ACCESS_TOKEN=legacy-access\n"
+                "SHOPEE_REFRESH_TOKEN=legacy-refresh\n",
+                encoding="utf-8",
+            )
+            module.ENV_PATH = env_file
+            module.TOKEN_PATH = root / "missing-token-cache.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "SHOPEE_PARTNER_ID": "",
+                    "SHOPEE_PARTNER_KEY": "",
+                    "SHOPEE_SHOP_ID": "",
+                },
+                clear=False,
+            ):
+                config = module.get_config()
+
+        self.assertNotIn("SHOPEE_ACCESS_TOKEN", config)
+        self.assertNotIn("SHOPEE_REFRESH_TOKEN", config)
+
     def test_daemon_updates_cache_atomically_preserving_mode_and_metadata(self):
         module = load_module("shopee_daemon_cache_write_test", "daemon-shopee-token-renewer.py")
         with tempfile.TemporaryDirectory() as tmp:
