@@ -348,6 +348,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "browser_url_query_not_allowed"):
             m.browser_navigate_command("ABC123", "https://auth.openai.com/log-in?state=opaque")
 
+    def test_browser_focused_navigate_targets_atendimento_and_requires_focused_tab(self):
+        command = m.browser_focused_navigate_command("https://openai.com/form/enterprise-trusted-access-for-cyber/")
+        self.assertIn("127.0.0.1:9556/json", command)
+        self.assertIn("document.hasFocus()", command)
+        self.assertIn("focused_tab_not_found", command)
+        self.assertIn("focused_tab_ambiguous", command)
+        self.assertIn("openai.com", command)
+
+    def test_browser_navigate_tab_id_is_optional_for_focused_atendimento_route(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        required = specs["browser_navigate"]["inputSchema"]["required"]
+        self.assertIn("url", required)
+        self.assertNotIn("tab_id", required)
+
     def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
         command = m._browser_cdp_command("ABC123", "(()=>true)()")
         self.assertIn("new WebSocket(t.webSocketDebuggerUrl)", command)
