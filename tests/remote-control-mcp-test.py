@@ -83,6 +83,33 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(specs["admin_command_run"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["host_health"]["annotations"]["readOnlyHint"])
 
+    def test_admin_command_rejects_browser_mcp_continuity_session_coupling(self):
+        command = (
+            "cp /etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/"
+            "40-authenticated-session.conf.disabled "
+            "/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/"
+            "40-authenticated-session.conf && systemctl daemon-reload"
+        )
+        with self.assertRaisesRegex(ValueError, "browser_mcp_session_coupling_forbidden"):
+            m.execute_tool("admin_command_run", {
+                "host": "always-free-arm-1787907847-26",
+                "command": command,
+                "timeout": 20,
+            })
+
+    def test_durable_task_rejects_browser_mcp_continuity_session_coupling(self):
+        command = (
+            "install -m 0644 /tmp/override "
+            "/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/"
+            "40-authenticated-session.conf"
+        )
+        with self.assertRaisesRegex(ValueError, "browser_mcp_session_coupling_forbidden"):
+            m.execute_tool("task_submit", {
+                "host": "always-free-arm-1787907847-26",
+                "command": command,
+                "timeout": 60,
+            })
+
     def test_controller_and_continuity_tools_have_safe_annotations(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertTrue(specs["controller_status"]["annotations"]["readOnlyHint"])
