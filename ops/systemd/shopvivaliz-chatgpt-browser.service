@@ -22,6 +22,12 @@ TimeoutStopSec=20
 NoNewPrivileges=true
 PrivateTmp=true
 BindReadOnlyPaths=/tmp/.X11-unix
+CPUQuota=120%
+CPUWeight=200
+IOWeight=100
+MemoryHigh=3G
+MemoryMax=4G
+TasksMax=256
 
 [Install]
 WantedBy=multi-user.target

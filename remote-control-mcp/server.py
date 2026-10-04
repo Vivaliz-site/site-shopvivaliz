@@ -89,6 +89,16 @@ HOSTS = {
     },
 }
 
+# Durable jobs are bounded per host so one slow task cannot block the entire
+# control plane. Backend and production retain one spare lane for diagnostics
+# while Windows relays stay strictly serialized.
+HOST_DURABLE_LIMITS = {
+    "always-free-arm-1787907847-26": 2,
+    "shopvivaliz-free-a1": 2,
+    "Fred-Win": 1,
+    "KOCEPSV": 1,
+}
+
 SENSITIVE_PATH_PARTS = (
     "/.ssh/", "\\.ssh\\", ".env", "credential", "secret", "token", "cookie",
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
@@ -963,6 +973,26 @@ def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
     ]
 
 
+def _cleanup_isolated_scope(invocation: list[str]) -> None:
+    """Stop residual descendants from a bounded systemd scope after command completion."""
+    if not invocation or invocation[0] != SYSTEMD_RUN or "--scope" not in invocation:
+        return
+    try:
+        idx = invocation.index("--unit")
+        unit = invocation[idx + 1]
+    except (ValueError, IndexError):
+        return
+    if not unit.endswith(".scope"):
+        unit = unit + ".scope"
+    subprocess.run(
+        [SYSTEMCTL, "stop", unit],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=10,
+    )
+
+
 def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
     """Terminate an inline command and every local descendant in its process group."""
     if proc.poll() is not None:
@@ -1051,6 +1081,7 @@ def run_host_command(
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
     finally:
+        _cleanup_isolated_scope(args)
         INLINE_COMMAND_SLOTS.release()
 
 
@@ -1107,6 +1138,7 @@ def run_local_command_with_stdin(
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
     finally:
+        _cleanup_isolated_scope(invocation)
         INLINE_COMMAND_SLOTS.release()
 
 
@@ -1605,14 +1637,22 @@ def task_worker() -> None:
         try:
             reconcile_tasks()
             with db_conn() as db:
-                active = db.execute(
-                    "SELECT 1 FROM tasks WHERE state IN ('starting','running','cancel_requested') LIMIT 1"
-                ).fetchone()
-                if active:
-                    continue
-                row = db.execute(
-                    "SELECT id,timeout FROM tasks WHERE state='queued' ORDER BY created_at LIMIT 1"
-                ).fetchone()
+                active_rows = db.execute(
+                    "SELECT host,COUNT(*) AS count FROM tasks "
+                    "WHERE state IN ('starting','running','cancel_requested') GROUP BY host"
+                ).fetchall()
+                active_counts = {str(item["host"]): int(item["count"]) for item in active_rows}
+                candidates = db.execute(
+                    "SELECT id,host,timeout FROM tasks WHERE state='queued' ORDER BY created_at"
+                ).fetchall()
+                row = next(
+                    (
+                        item for item in candidates
+                        if active_counts.get(str(item["host"]), 0)
+                        < HOST_DURABLE_LIMITS.get(str(item["host"]), 1)
+                    ),
+                    None,
+                )
                 if not row:
                     continue
                 result_dir = str(ensure_task_result_dir(str(row["id"])))
@@ -1626,7 +1666,7 @@ def task_worker() -> None:
                 continue
             tid = str(row["id"])
             if launch_claimed_task(tid, int(row["timeout"])):
-                audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
+                audit("task_worker", str(row["host"]), {"task_id": tid}, True, "durable_task_service_launched")
         except Exception as exc:
             try:
                 if tid:
