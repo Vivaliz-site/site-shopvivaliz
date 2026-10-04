@@ -32,7 +32,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("BACKGROUND_ORDER+=(anthropic)", script)
         self.assertIn("background_claude_fallback_authorized=true", script)
         self.assertLess(script.index("BACKGROUND_ORDER+=(anthropic)"), script.index("BACKGROUND_ORDER+=(codex_auto)"))
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)\n        self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)\n        self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)\n        self.assertIn("run_claude()", script)\n        self.assertIn("try_provider anthropic run_claude", script)
 
     def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
         marker = "CODEX_LAST_RESORT_V1"
