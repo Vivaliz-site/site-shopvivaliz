@@ -393,6 +393,13 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     if name == "browser_click" and "x" in args and "y" in args:
         return browser_click(args)
     if name == "browser_type" and "tab_id" not in args and "selector" not in args:
+        # Prefer the canonical atendimento/continuity browser when exactly one
+        # editable element is focused there. This keeps secret typing inside
+        # the CDP stdin-safe path; fall back to the isolated GUI helper only
+        # when the canonical focused route is unavailable.
+        canonical = BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
+        if not (isinstance(canonical, dict) and canonical.get("ok") is False):
+            return canonical
         return browser_type(args)
 
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
