@@ -1235,12 +1235,32 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
       cdp.evaluate(`(async()=>{
         const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
         if(!match) return {http_status:0,status:'NO_CONVERSATION'};
+        const deadline=Date.now()+${boundedTimeoutMs};
+        let accountId='';
+        let accessToken='';
+        try{
+          const remaining=Math.max(1,deadline-Date.now());
+          const sessionResponse=await fetch('/api/auth/session',{
+            credentials:'same-origin',
+            cache:'no-store',
+            signal:AbortSignal.timeout(remaining)
+          });
+          if(sessionResponse.ok){
+            let session=null;
+            try{session=await sessionResponse.json();}catch{}
+            accountId=String(session?.account?.id||'').trim();
+            accessToken=String(session?.accessToken||session?.access_token||'').trim();
+          }
+        }catch{}
+        const headers={Accept:'application/json'};
+        if(accessToken) headers.Authorization='Bearer '+accessToken;
+        if(accountId) headers['ChatGPT-Account-Id']=accountId;
         const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        const timer=setTimeout(()=>controller.abort(), Math.max(1,deadline-Date.now()));
         try{
           const response=await fetch(
             '/backend-api/conversation/'+encodeURIComponent(match[1])+'/stream_status',
-            {credentials:'same-origin',cache:'no-store',signal:controller.signal}
+            {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
           let body=null;
           try{body=await response.json();}catch{}
