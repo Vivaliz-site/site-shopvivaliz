@@ -242,6 +242,23 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("--continuity-e2e-run", row["command"])
         self.assertIn(cid, row["command"])
 
+    def test_continuity_e2e_report_parser_accepts_multiline_json_after_probe_output(self):
+        stdout = (
+            "checkpoint created\n"
+            "{\n"
+            '  "pass": false,\n'
+            '  "observed_request": true,\n'
+            '  "final_state": {"status": "RUNNING"}\n'
+            "}\n"
+        )
+        report = m._parse_trailing_json_report(stdout)
+        self.assertFalse(report["pass"])
+        self.assertTrue(report["observed_request"])
+        self.assertEqual(report["final_state"]["status"], "RUNNING")
+
+    def test_continuity_e2e_report_parser_fails_closed_on_non_json_output(self):
+        self.assertEqual(m._parse_trailing_json_report("checkpoint only\nnot json\n"), {})
+
     def test_claude_reconcile_is_persisted_as_durable_task(self):
         sha = "a" * 40
         with mock.patch.object(m, "_controller_origin_main_sha", return_value=sha),              mock.patch.object(m, "claude_remote_control_status", return_value={"ok": False}):

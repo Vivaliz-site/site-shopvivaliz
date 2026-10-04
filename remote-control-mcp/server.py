@@ -411,6 +411,26 @@ def continuity_status() -> dict[str, Any]:
     }
 
 
+def _parse_trailing_json_report(stdout: str) -> dict[str, Any]:
+    """Return the final JSON object even when earlier probe output precedes it."""
+    text = str(stdout or "").strip()
+    if not text:
+        return {}
+    decoder = json.JSONDecoder()
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] != "{":
+            continue
+        try:
+            value, end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if text[index + end :].strip():
+            continue
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
     cid = _validate_conversation_id(conversation_id)
     timeout_seconds = max(30, min(int(timeout_seconds), 600))
@@ -437,10 +457,7 @@ def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) ->
         )
         stdout = _decode_output(completed.stdout).strip()
         stderr = redact_text(_decode_output(completed.stderr))
-        try:
-            report = json.loads(stdout.splitlines()[-1]) if stdout else {}
-        except json.JSONDecodeError:
-            report = {}
+        report = _parse_trailing_json_report(stdout)
         ok = (
             completed.returncode == 0
             and report.get("pass") is True
@@ -451,6 +468,9 @@ def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) ->
             "ok": ok,
             "controller_sha": active_sha,
             "report": report,
+            "probe_returncode": completed.returncode,
+            "probe_output_parse_error": bool(stdout and not report),
+            "probe_stdout_tail": redact_text(stdout[-4096:]) if (not ok and not report) else "",
             "stderr": stderr if not ok else "",
         }
     finally:
