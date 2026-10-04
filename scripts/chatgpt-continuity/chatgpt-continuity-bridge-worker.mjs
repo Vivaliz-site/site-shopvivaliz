@@ -262,6 +262,21 @@ let REINFORCEMENT_RECENT_CANDIDATES = [];
 let REINFORCEMENT_RECENT_CURSOR = 0;
 let REINFORCEMENT_LATEST_ID = '';
 
+// The checkpoint-driven bridge and reinforcement monitor share one canonical
+// ChatGPT browser. Serialize only browser recovery/mutation operations so one
+// path cannot navigate/reload the conversation while the other is confirming
+// or sending a continuation.
+let BROWSER_RECOVERY_TAIL = Promise.resolve();
+
+async function withBrowserRecoveryLock(operation) {
+  if (typeof operation !== 'function') {
+    throw new TypeError('browser recovery operation must be a function');
+  }
+  const run = BROWSER_RECOVERY_TAIL.then(() => operation());
+  BROWSER_RECOVERY_TAIL = run.catch(() => undefined);
+  return run;
+}
+
 
 function token() {
   const value = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
@@ -2619,13 +2634,13 @@ async function pollBridgeOnce() {
   const taskId = response.nudge?.task_id;
   if (!taskId) return;
   const conversationId = safeConversationId(response.nudge?.conversation_id || '');
-  const outcome = await attemptNudge(
+  const outcome = await withBrowserRecoveryLock(() => attemptNudge(
     taskId,
     null,
     confirmAssistantProgress,
     waitForComposerUsable,
     conversationId,
-  );
+  ));
   const failureReason = text(outcome.failure_reason);
   const persistedDetail = failureReason
     ? `failure_class=RECOVERABLE_CHAT_FAILURE;failure_reason=${failureReason};recovery_attempt=${Number(outcome.recovery_attempt || 1)};recovery_latency_ms=${Math.max(0, Number(outcome.recovery_latency_ms || 0))}; ${text(outcome.detail).slice(0, 360)}`
@@ -2975,13 +2990,13 @@ async function reinforcementLoop(
 
     let outcome;
     try {
-      outcome = await check(
+      outcome = await withBrowserRecoveryLock(() => check(
         () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
         REINFORCEMENT_CONFIRM_DELAY_MS,
         confirmAssistantProgress,
         alignLatest,
         { allowCrossDeviceDiscovery: true },
-      );
+      ));
     } catch (error) {
       console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
       outcome = {
@@ -3047,7 +3062,7 @@ async function reinforcementLoop(
       REINFORCEMENT_RECENT_CURSOR = sweep.next_cursor;
       for (const candidate of sweep.batch) {
         try {
-          const candidateOutcome = await check(
+          const candidateOutcome = await withBrowserRecoveryLock(() => check(
             () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
             REINFORCEMENT_CONFIRM_DELAY_MS,
             confirmAssistantProgress,
@@ -3058,7 +3073,7 @@ async function reinforcementLoop(
               CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
             ),
             { allowCrossDeviceDiscovery: true },
-          );
+          ));
           persistReinforcementHealth(candidateOutcome);
           if (candidateOutcome?.action === 'additional_checks_cooldown') {
             nextReinforcementCheckAt = Math.max(
@@ -3140,6 +3155,7 @@ export {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementSweepAllowed,
+  withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
   authorizationButtonTarget,
