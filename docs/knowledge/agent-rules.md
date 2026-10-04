@@ -196,3 +196,14 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - **Não pedir novamente a senha ao usuário como primeira ação.** Antes de solicitar intervenção humana, comprovar que a credencial segura existente está ausente, revogada ou inválida.
 - Se a credencial precisar ser reprovisionada, fazê-lo apenas por canal seguro que não persista o valor em auditoria ou Git.
 <!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
+
+<!-- BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+## Vínculo obrigatório entre sessão de navegador e conta
+
+- Fonte canônica: `docs/knowledge/browser-sessions.md`.
+- `shopvivaliz-chromium` / CDP `9555` é dedicado a `fredmourao@gmail.com`.
+- `shopvivaliz-atendimento-chromium` / CDP `9556` é dedicado a `atendimento@shopvivaliz.com.br`.
+- É proibido fazer logout para trocar de conta, autenticar a outra conta no perfil errado ou migrar cookies/storage entre esses perfis.
+- Se a sessão correta falhar, reparar/reabrir o mesmo perfil; nunca usar a outra sessão como atalho.
+- Preservar os logins existentes e validar perfil/porta antes de qualquer ação de autenticação.
+<!-- /BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
