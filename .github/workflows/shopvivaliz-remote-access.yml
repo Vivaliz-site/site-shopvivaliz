@@ -850,7 +850,7 @@ jobs:
               if "${SSH[@]}" 'runtime="/run/user/$(id -u)"; XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service'; then backend_worker=true; fi
 
               cdp_reachable=false
-              if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9556/json/version >/dev/null'; then cdp_reachable=true; fi
+              if "${SSH[@]}" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null'; then cdp_reachable=true; fi
 
               latest_conversation_discoverable=false
               latest_probe_output=''

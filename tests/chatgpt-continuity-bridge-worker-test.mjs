@@ -159,6 +159,7 @@ async function run() {
     const tabs = [
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
       { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://uc', url: 'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
@@ -172,8 +173,17 @@ async function run() {
       'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
       'explicit binding must select only the requested conversation',
     );
+    const ucBound = selectBoundConversationTabs(
+      tabs,
+      '99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(ucBound.length, 1, '/uc conversation routes must be first-class bound tabs');
     assert.equal(
-      selectBoundConversationTabs(tabs, '99999999-2222-3333-4444-555555555555').length,
+      ucBound[0].url,
+      'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(
+      selectBoundConversationTabs(tabs, '77777777-2222-3333-4444-555555555555').length,
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
@@ -237,8 +247,8 @@ async function run() {
       async evaluate(expression) {
         expressions.push(String(expression));
         if (String(expression).includes('continuity-bound-sidebar-route')) {
-          pathname = `/c/${id}`;
-          return 'sidebar';
+          pathname = `/uc/${id}`;
+          return `/uc/${id}`;
         }
         if (String(expression) === 'location.pathname') return pathname;
         return null;
@@ -252,7 +262,7 @@ async function run() {
       600,
       50,
     );
-    assert.equal(ok, true);
+    assert.equal(ok, true, 'bound recovery must accept a /uc sidebar route');
     assert.ok(
       expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
       'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
@@ -3458,6 +3468,7 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   console.log('reinforcementCheckOnce branches: PASS');
 }
 

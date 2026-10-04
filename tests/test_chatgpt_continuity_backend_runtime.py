@@ -94,6 +94,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             body,
         )
         self.assertNotIn("C:\\ShopVivaliz", body)
+        self.assertIn("90-atendimento-cdp.conf", body)
+        self.assertIn("90-atendimento-browser.conf", body)
+        self.assertIn("rm -f", body)
 
     def test_backend_installer_persists_restart_intent_across_partial_failures(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
@@ -246,7 +249,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=AUTH_PENDING", result.stdout)
             self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_FLOW", result.stdout)
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
-            self.assertNotIn("restart shopvivaliz-atendimento-browser.service", calls)
+            self.assertNotIn("restart shopvivaliz-chatgpt-browser.service", calls)
             state = json.loads(health_file.read_text(encoding="utf-8"))
             self.assertEqual(state["session_state"], "AUTH_FLOW")
             self.assertFalse(state["authenticated"])
@@ -298,7 +301,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_TERMINAL", result.stdout)
             self.assertIn("CHATGPT_BROWSER_SESSION=AUTH_TERMINAL", result.stdout)
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
-            self.assertNotIn("restart shopvivaliz-atendimento-browser.service", calls)
+            self.assertNotIn("restart shopvivaliz-chatgpt-browser.service", calls)
             state = json.loads(health_file.read_text(encoding="utf-8"))
             self.assertEqual(state["session_state"], "AUTH_TERMINAL")
             self.assertFalse(state["authenticated"])
@@ -405,8 +408,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(health_file.exists())
             calls = systemctl_log.read_text(encoding="utf-8")
-            self.assertIn("is-active --quiet shopvivaliz-atendimento-browser.service", calls)
-            self.assertIn("restart shopvivaliz-atendimento-browser.service", calls)
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
 
     def test_chatgpt_browser_guardian_restarts_active_managed_browser_despite_profile_command_drift(self) -> None:
@@ -457,9 +460,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("is-active --quiet shopvivaliz-atendimento-browser.service", calls)
-            self.assertIn("restart shopvivaliz-atendimento-browser.service", calls)
-            self.assertNotIn("\nstart shopvivaliz-atendimento-browser.service\n", "\n" + calls)
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
+            self.assertNotIn("\nstart shopvivaliz-chatgpt-browser.service\n", "\n" + calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
 
     def test_chatgpt_browser_guardian_takes_over_single_hung_unmanaged_browser(self) -> None:
@@ -510,8 +513,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(health_file.exists())
-            self.assertIn("is-active --quiet shopvivaliz-atendimento-browser.service", calls)
-            self.assertIn("start shopvivaliz-atendimento-browser.service", calls)
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("start shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_UNMANAGED_TAKEOVER", result.stdout)
             # The process may exit before signalling. Record that outcome and
             # still require the existing absence check before starting a browser.
@@ -618,8 +621,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(health_file.exists())
-            self.assertIn("is-active --quiet shopvivaliz-atendimento-browser.service", calls)
-            self.assertIn("restart shopvivaliz-atendimento-browser.service", calls)
+            self.assertIn("is-active --quiet shopvivaliz-chatgpt-browser.service", calls)
+            self.assertIn("restart shopvivaliz-chatgpt-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
 
     def test_php_bridge_supports_file_backed_secret(self) -> None:
@@ -631,7 +634,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         docs = (ROOT / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
         rules = (ROOT / "docs" / "knowledge" / "agent-rules.md").read_text(encoding="utf-8")
         self.assertIn("CHATGPT_SESSION_REENTRY_V10", docs)
-        self.assertIn("127.0.0.1:9556", docs)
+        self.assertIn("127.0.0.1:9555", docs)
         self.assertIn("always-free-arm-1787907847-26", rules)
         self.assertIn("shopvivaliz-chatgpt-continuity.service", rules)
 
