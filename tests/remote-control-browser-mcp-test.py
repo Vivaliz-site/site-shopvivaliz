@@ -27,7 +27,7 @@ class BrowserMcpTests(unittest.TestCase):
         base_names = {item["name"] for item in m.base.tool_specs()}
         self.assertTrue(base_names <= names)
         self.assertEqual(
-            {"browser_health", "browser_tabs", "browser_open", "browser_navigate", "browser_screenshot", "browser_click", "browser_type"},
+            {"browser_health", "browser_gui_tabs", "browser_open", "browser_gui_navigate", "browser_screenshot", "browser_gui_click", "browser_gui_type"},
             m.BROWSER_TOOLS,
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
@@ -43,7 +43,7 @@ class BrowserMcpTests(unittest.TestCase):
             captured.update(args)
             return "audit-id"
         with mock.patch.object(m, "BASE_AUDIT", fake_audit):
-            aid = m.audit("browser_type", None, {"text": "top-secret-value", "press_enter": True}, True, "ok")
+            aid = m.audit("browser_gui_type", None, {"text": "top-secret-value", "press_enter": True}, True, "ok")
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(len("top-secret-value"), captured["text_length"])
@@ -86,6 +86,18 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
             self.assertEqual(names.count(name), 1)
+
+        specs = {spec["name"]: spec for spec in m.tool_specs()}
+        base_specs = {spec["name"]: spec for spec in m.base.tool_specs()}
+        for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
+            self.assertEqual(specs[name]["inputSchema"], base_specs[name]["inputSchema"])
+
+    def test_gui_browser_actions_are_explicitly_namespaced(self):
+        specs = {spec["name"]: spec for spec in m.tool_specs()}
+        for name in ("browser_gui_tabs", "browser_gui_navigate", "browser_gui_click", "browser_gui_type"):
+            self.assertIn(name, specs)
+        self.assertIn("tab_id", specs["browser_type"]["inputSchema"]["properties"])
+        self.assertNotIn("tab_id", specs["browser_gui_type"]["inputSchema"]["properties"])
 
     def test_unit_is_loopback_and_separate_port(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")

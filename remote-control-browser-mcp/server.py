@@ -50,12 +50,12 @@ VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
 BROWSER_TOOLS = {
     "browser_health",
-    "browser_tabs",
+    "browser_gui_tabs",
     "browser_open",
-    "browser_navigate",
+    "browser_gui_navigate",
     "browser_screenshot",
-    "browser_click",
-    "browser_type",
+    "browser_gui_click",
+    "browser_gui_type",
 }
 URL_RE = re.compile(r"^https?://", re.I)
 
@@ -360,28 +360,28 @@ BASE_AUDIT = base.audit
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     if name == "browser_health":
         return browser_health()
-    if name == "browser_tabs":
+    if name == "browser_gui_tabs":
         return browser_tabs()
     if name == "browser_open":
         return browser_open(args)
-    if name == "browser_navigate":
+    if name == "browser_gui_navigate":
         return browser_navigate(args)
     if name == "browser_screenshot":
         return browser_screenshot()
-    if name == "browser_click":
+    if name == "browser_gui_click":
         return browser_click(args)
-    if name == "browser_type":
+    if name == "browser_gui_type":
         return browser_type(args)
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool == "browser_type" and "text" in safe:
+    if tool == "browser_gui_type" and "text" in safe:
         raw = str(safe.pop("text"))
         safe["text_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
         safe["text_length"] = len(raw)
-    if tool in {"browser_open", "browser_navigate"} and "url" in safe:
+    if tool in {"browser_open", "browser_gui_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
 
@@ -394,8 +394,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
     },
     {
-        "name": "browser_tabs",
-        "description": "List Chrome/Chromium tabs from the authenticated graphical backend session using GUI automation only.",
+        "name": "browser_gui_tabs",
+        "description": "List tabs from the isolated graphical helper browser; canonical continuity tabs use browser_tabs.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
     },
@@ -406,8 +406,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
     },
     {
-        "name": "browser_navigate",
-        "description": "Navigate the active graphical Chrome/Chromium tab to an http(s) URL.",
+        "name": "browser_gui_navigate",
+        "description": "Navigate the isolated graphical helper browser; canonical continuity navigation uses browser_navigate.",
         "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
         "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
     },
@@ -418,8 +418,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
     },
     {
-        "name": "browser_click",
-        "description": "Click absolute screen coordinates only when they fall inside the active browser window.",
+        "name": "browser_gui_click",
+        "description": "Click absolute coordinates in the isolated graphical helper browser.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -434,8 +434,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
     },
     {
-        "name": "browser_type",
-        "description": "Type text into the focused element of the active graphical browser. Typed text is never persisted in audit logs.",
+        "name": "browser_gui_type",
+        "description": "Type text into the focused element of the isolated graphical helper browser. Typed text is never persisted in audit logs.",
         "inputSchema": {
             "type": "object",
             "properties": {
