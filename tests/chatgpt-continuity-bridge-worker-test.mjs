@@ -1793,17 +1793,17 @@ async function run() {
   assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never inject a continuation into an unconfirmed active stream');
   assert.equal(
     activeCdp.calls.some(call => call.includes('location.reload')),
-    true,
-    'stale checkpoint plus apparent active stream must attempt one passive reattach before deferring',
+    false,
+    'healthy active generation must not be reloaded merely because the checkpoint is stale',
   );
   assert.equal(
     activeCdp.calls.some(call => call.includes('b.click()')),
     false,
     'passive reattach must not inject a duplicate continue message',
   );
-  assert.match(generating.detail, /passive reattach/i);
+  assert.match(generating.detail, /active generation/i);
 
-  const recoveredCdp = fakeCdp({ generating: true });
+  const recoveredCdp = fakeCdp({ generating: true, pageText: 'Streaming interrupted' });
   const recoveredByReattach = await attemptNudge(
     'task-passive-reattach',
     async () => recoveredCdp,
