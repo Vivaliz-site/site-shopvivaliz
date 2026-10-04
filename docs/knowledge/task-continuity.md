@@ -100,14 +100,16 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 <!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
 ## Confirmação real da retomada do ChatGPT
 
-Policy: `CHATGPT_PROGRESS_CONFIRMATION_V11`.
+Policy: `CHATGPT_PROGRESS_CONFIRMATION_V12`.
 
 Para a reentrada da conversa ChatGPT, **enviar/clicar em `continue` não é
 sucesso**. O worker deve distinguir:
 
-- `PROGRESS_CONFIRMED`: surgiu progresso observável do assistente após o
-  envio; este é o único resultado de sucesso da camada ChatGPT para o mesmo
-  fingerprint;
+- `PROGRESS_CONFIRMED`: existe uma resposta real da conversa vinculada no
+  backend canônico do ChatGPT: novo nó `assistant` concluído, ou o mesmo nó
+  previamente incompleto que passou a `end_turn=true`, com conteúdo textual
+  visível não vazio. Crescimento de DOM, `Pensando`, tool activity, spinner,
+  hidratação da UI ou saúde do bridge **não** certificam sucesso;
 - `SENT_UNCONFIRMED`: o envio foi aceito pela UI, mas não surgiu progresso
   observável dentro da janela de confirmação; continua retryable;
 - `STALLED_NOT_CONFIRMED`, `CONVERSATION_NOT_FOUND` e `ERROR`: falhas

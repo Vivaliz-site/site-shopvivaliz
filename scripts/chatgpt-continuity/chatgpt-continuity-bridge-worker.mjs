@@ -1169,9 +1169,11 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         if(!match) {
           return {
             http_status:0,
+            node_id:'',
             role:'',
             end_turn:null,
             child_count:-1,
+            content_text_length:0,
             message_status:'NO_CONVERSATION'
           };
         }
@@ -1202,9 +1204,11 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
           if(!response.ok){
             return {
               http_status:Number(response.status||0),
+              node_id:'',
               role:'',
               end_turn:null,
               child_count:-1,
+              content_text_length:0,
               message_status:'HTTP_ERROR'
             };
           }
@@ -1212,19 +1216,32 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
           const node=current && body?.mapping ? body.mapping[current] : null;
           const message=node?.message||null;
           const endTurn=message?.end_turn;
+          const parts=Array.isArray(message?.content?.parts)?message.content.parts:[];
+          const contentTextLength=parts.reduce((total,part)=>{
+            if(typeof part==='string') return total+part.trim().length;
+            if(part&&typeof part==='object'){
+              const value=String(part?.text||part?.content||'').trim();
+              return total+value.length;
+            }
+            return total;
+          },0);
           return {
             http_status:Number(response.status||0),
+            node_id:current,
             role:String(message?.author?.role||''),
             end_turn:endTurn===true?true:(endTurn===false?false:null),
             child_count:Array.isArray(node?.children)?node.children.length:-1,
+            content_text_length:contentTextLength,
             message_status:String(message?.status||'')
           };
         }catch(error){
           return {
             http_status:0,
+            node_id:'',
             role:'',
             end_turn:null,
             child_count:-1,
+            content_text_length:0,
             message_status:String(error?.name||'')==='AbortError'?'FETCH_TIMEOUT':'FETCH_FAILED'
           };
         }finally{
@@ -1235,9 +1252,11 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         outerTimeoutHandle = setTimeout(
           () => resolve({
             http_status: 0,
+            node_id: '',
             role: '',
             end_turn: null,
             child_count: -1,
+            content_text_length: 0,
             message_status: 'FETCH_TIMEOUT',
           }),
           boundedTimeoutMs + 250,
@@ -1247,6 +1266,18 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
   } finally {
     if (outerTimeoutHandle) clearTimeout(outerTimeoutHandle);
   }
+}
+
+function realAssistantResponseCompletedSince(before, after) {
+  if (Number(after?.http_status || 0) !== 200) return false;
+  if (String(after?.role || '').toLowerCase() !== 'assistant') return false;
+  if (after?.end_turn !== true) return false;
+  if (Number(after?.content_text_length || 0) <= 0) return false;
+  const priorNode = String(before?.node_id || '');
+  const currentNode = String(after?.node_id || '');
+  if (!priorNode || !currentNode) return false;
+  if (currentNode !== priorNode) return true;
+  return before?.end_turn === false;
 }
 
 async function localIncompleteTurnPresent(cdp) {
@@ -1465,11 +1496,18 @@ async function confirmAfterSend(
   cdp,
   beforeSend,
   confirmProgress = confirmAssistantProgress,
+  turnBaseline = null,
 ) {
+  const canonicalBaseline = turnBaseline || await conversationTurnState(cdp);
   const settled = await postSendConfirmationBaseline(cdp, beforeSend);
   if (!sameConversationSnapshot(beforeSend, settled.baseline)) return false;
-  if (settled.progressed) return true;
-  return confirmProgress(cdp, settled.baseline);
+  return confirmProgress(
+    cdp,
+    settled.baseline,
+    PROGRESS_CONFIRM_MS,
+    PROGRESS_POLL_MS,
+    canonicalBaseline,
+  );
 }
 
 async function confirmAssistantProgress(
@@ -1477,25 +1515,36 @@ async function confirmAssistantProgress(
   baseline,
   timeoutMs = PROGRESS_CONFIRM_MS,
   pollMs = PROGRESS_POLL_MS,
+  turnBaseline = null,
 ) {
+  const canonicalBaseline = turnBaseline || await conversationTurnState(cdp);
+  if (!String(canonicalBaseline?.node_id || '')) return false;
   const deadline = Date.now() + Math.max(1000, Number(timeoutMs || PROGRESS_CONFIRM_MS));
+  let lastCanonicalProbeAt = 0;
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    if (assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current)) return true;
+    const domAdvanced = assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current);
+    const nowMs = Date.now();
+    if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
+      const turn = await conversationTurnState(cdp);
+      lastCanonicalProbeAt = nowMs;
+      if (realAssistantResponseCompletedSince(canonicalBaseline, turn)) return true;
+    }
 
     // An explicit transmission failure is terminal for this send attempt;
     // do not burn the full progress-confirmation window before recovery.
     if (await transmissionErrorPresent(cdp)) return false;
 
-    // If ChatGPT has already finalized the stream and no assistant content
-    // advanced, waiting longer cannot turn a click into a successful resume.
+    // Once the transport is COMPLETE, take one final canonical response probe.
+    // UI growth alone (Pensando/tool activity/hydration) is never sufficient.
     const generating = await conversationIsGenerating(cdp);
     if (!generating) {
       const stream = await conversationStreamStatus(cdp);
       if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
-        return false;
+        const turn = await conversationTurnState(cdp);
+        return realAssistantResponseCompletedSince(canonicalBaseline, turn);
       }
     }
   }
@@ -2440,6 +2489,7 @@ async function attemptNudge(
     const passiveRecoveryEligible = wasGenerating
       || Boolean(detectedFailureReason)
       || silentStallBeforeReattach;
+    const passiveTurnBaseline = await conversationTurnState(cdp);
     const passiveBaseline = await assistantSnapshot(cdp);
     await cdp.evaluate(`(()=>{location.reload();return true})()`);
     await sleep(1200);
@@ -2448,6 +2498,7 @@ async function attemptNudge(
       passiveBaseline,
       PASSIVE_REATTACH_CONFIRM_MS,
       PROGRESS_POLL_MS,
+      passiveTurnBaseline,
     );
     if (passiveProgressed && passiveRecoveryEligible) {
       return {
@@ -2510,6 +2561,7 @@ async function attemptNudge(
     }
     let baseline = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
+    let turnBaseline = await conversationTurnState(cdp);
     let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
     continuationSent = Boolean(sent);
     if (!sent) {
@@ -2528,6 +2580,7 @@ async function attemptNudge(
       }
       baseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
+      turnBaseline = await conversationTurnState(cdp);
       sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
@@ -2539,15 +2592,16 @@ async function attemptNudge(
       }
     }
 
-    let progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
+    let progressed = await confirmAfterSend(cdp, baseline, confirmProgress, turnBaseline);
     if (!progressed && await transmissionErrorPresent(cdp)) {
       // A real iOS capture shows an explicit "Erro na transmissão de mensagem".
       // Treat this as a transport failure, not as an ambiguous unconfirmed send:
       // reload/reattach once and retry only after the UI still reports the error.
+      const retryTurnBaseline = await conversationTurnState(cdp);
       const retryBaseline = await assistantSnapshot(cdp);
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
-      if (await confirmProgress(cdp, retryBaseline, PASSIVE_REATTACH_CONFIRM_MS, PROGRESS_POLL_MS)) {
+      if (await confirmProgress(cdp, retryBaseline, PASSIVE_REATTACH_CONFIRM_MS, PROGRESS_POLL_MS, retryTurnBaseline)) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
           detail: 'transmission error recovered during passive reattach without duplicate continuation',
@@ -2563,6 +2617,7 @@ async function attemptNudge(
       }
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
+      const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
       const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       if (!retrySent) {
         return {
@@ -2571,7 +2626,7 @@ async function attemptNudge(
           ...recoveryMetadata(),
         };
       }
-      progressed = await confirmAfterSend(cdp, retryAfterReattachBaseline, confirmProgress);
+      progressed = await confirmAfterSend(cdp, retryAfterReattachBaseline, confirmProgress, retryAfterReattachTurnBaseline);
       if (progressed) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
@@ -2670,6 +2725,7 @@ async function reinforcementCheckOnce(
   let failureSignal = '';
   let failureReason = '';
   let failureBaseline = null;
+  let failureTurnBaseline = null;
   const recoveryStartedAtMs = Date.now();
   try {
     cdp = await connect();
@@ -2681,6 +2737,7 @@ async function reinforcementCheckOnce(
       failureSignal = 'banner';
       failureReason = await recoverableFailureReason(cdp) || 'generation_error';
       failureBaseline = await assistantSnapshot(cdp);
+      failureTurnBaseline = await conversationTurnState(cdp);
     } else {
       if (!allowCrossDeviceDiscovery) {
         return { action: 'no_banner', cross_device_discovery: false };
@@ -2712,6 +2769,8 @@ async function reinforcementCheckOnce(
         failureSignal = 'banner';
         failureReason = await recoverableFailureReason(cdp) || 'generation_error';
         failureBaseline = await assistantSnapshot(cdp);
+        failureTurnBaseline = await conversationTurnState(cdp);
+        failureTurnBaseline = await conversationTurnState(cdp);
       } else if (await silentStallPresent(cdp)) {
         // The iOS client can show "Transmissão interrompida" while the same
         // latest conversation has no banner in the canonical VM. Only the
@@ -2762,6 +2821,7 @@ async function reinforcementCheckOnce(
         failureBaseline,
         PASSIVE_REATTACH_CONFIRM_MS,
         PROGRESS_POLL_MS,
+        failureTurnBaseline,
       );
       if (selfRecoveryProgressed) {
         console.log(
@@ -2785,6 +2845,7 @@ async function reinforcementCheckOnce(
     }
 
     if (failureSignal === 'silent_stall' && failureStillPresent) {
+      const passiveTurnBaseline = await conversationTurnState(cdp);
       const passiveBaseline = await assistantSnapshot(cdp);
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
@@ -2793,6 +2854,7 @@ async function reinforcementCheckOnce(
         passiveBaseline,
         PASSIVE_REATTACH_CONFIRM_MS,
         PROGRESS_POLL_MS,
+        passiveTurnBaseline,
       );
       if (passiveProgressed) {
         console.log('chatgpt_continuity_reinforcement silent_stall_passive_reattach_progress=true');
@@ -2823,6 +2885,7 @@ async function reinforcementCheckOnce(
       }
 
       const baseline = await assistantSnapshot(cdp);
+      const turnBaseline = await conversationTurnState(cdp);
       const sent = await sendContinueMessage(cdp, baseline?.conversationFingerprint);
       if (!sent) {
         console.log('chatgpt_continuity_reinforcement silent_stall_confirmed sent=false');
@@ -2835,7 +2898,7 @@ async function reinforcementCheckOnce(
         };
       }
 
-      const progressed = await confirmAfterSend(cdp, baseline, confirmProgress);
+      const progressed = await confirmAfterSend(cdp, baseline, confirmProgress, turnBaseline);
       const action = progressed ? 'confirmed_progress' : 'sent_unconfirmed';
       console.log(`chatgpt_continuity_reinforcement silent_stall_confirmed sent=true progress=${progressed}`);
       return {
@@ -3105,6 +3168,7 @@ export {
   conversationIsGenerating,
   conversationStreamStatus,
   conversationTurnState,
+  realAssistantResponseCompletedSince,
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
