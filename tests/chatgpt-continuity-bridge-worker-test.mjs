@@ -52,6 +52,7 @@ const {
   selectChatgptTab,
   safeConversationId,
   selectBoundConversationTabs,
+  selectBoundConversationReentryTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
@@ -176,6 +177,39 @@ async function run() {
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
+  }
+
+  {
+    assert.equal(
+      typeof selectBoundConversationReentryTab,
+      'function',
+      'bound recovery needs a deterministic neutral reentry selector',
+    );
+    const homes = [
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://stale-home-a' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://stale-home-b' },
+    ];
+    let createCalls = 0;
+    const selected = await selectBoundConversationReentryTab(
+      homes,
+      async () => {
+        createCalls += 1;
+        return { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://fresh-isolated-home' };
+      },
+    );
+    assert.equal(createCalls, 1, 'multiple neutral home tabs must use one fresh isolated reentry tab');
+    assert.equal(selected?.webSocketDebuggerUrl, 'ws://fresh-isolated-home');
+
+    let singleCreateCalls = 0;
+    const single = await selectBoundConversationReentryTab(
+      [homes[0]],
+      async () => {
+        singleCreateCalls += 1;
+        return null;
+      },
+    );
+    assert.equal(singleCreateCalls, 0, 'a single neutral home tab should be reused directly');
+    assert.equal(single?.webSocketDebuggerUrl, 'ws://stale-home-a');
   }
 
   {
