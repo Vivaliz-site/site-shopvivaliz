@@ -5,6 +5,8 @@ SOURCE_SERVER="${1:-remote-control-browser-mcp/server.py}"
 SOURCE_UNIT="${2:-deploy/systemd/shopvivaliz-remote-control-browser-mcp.service}"
 INSTALL_DIR="/opt/shopvivaliz-remote-control-browser"
 UNIT_PATH="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service"
+UNIT_DROPIN_DIR="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d"
+CONFLICTING_SESSION_DROPIN="$UNIT_DROPIN_DIR/40-authenticated-session.conf"
 
 test "$(id -u)" = 0 || { echo "ERROR=root_required" >&2; exit 2; }
 test -f "$SOURCE_SERVER" || { echo "ERROR=server_source_missing" >&2; exit 3; }
@@ -27,9 +29,27 @@ install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
 python3 -m py_compile "$INSTALL_DIR/server.py"
 
+# The Browser MCP must never inherit or retain a drop-in that points it at the
+# authenticated ChatGPT continuity profile. General browsing and continuity are
+# isolated sessions; keeping this override makes browser_open create tabs in
+# the continuity Chrome cgroup and can exhaust its task budget.
+rm -f "$CONFLICTING_SESSION_DROPIN"
+if [ -d "$UNIT_DROPIN_DIR" ] && [ -z "$(find "$UNIT_DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+  rmdir "$UNIT_DROPIN_DIR"
+fi
+
 systemctl daemon-reload
 systemctl enable shopvivaliz-remote-control-browser-mcp.service
 systemctl restart shopvivaliz-remote-control-browser-mcp.service
+
+effective_exec="$(systemctl show shopvivaliz-remote-control-browser-mcp.service -p ExecStart --value)"
+for needle in   "SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole"   "SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0"   "SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general"; do
+  if [[ "$effective_exec" != *"$needle"* ]]; then
+    echo "ERROR=browser_mcp_session_isolation_drift missing=$needle" >&2
+    systemctl cat shopvivaliz-remote-control-browser-mcp.service --no-pager >&2 || true
+    exit 8
+  fi
+done
 
 for _ in $(seq 1 20); do
   if curl -fsS http://127.0.0.1:5581/health > /tmp/shopvivaliz-browser-mcp-health.json; then
