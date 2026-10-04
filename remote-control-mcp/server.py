@@ -1326,7 +1326,7 @@ def browser_tabs_command() -> str:
         "import json,urllib.request,urllib.parse\n"
         "with urllib.request.urlopen('http://127.0.0.1:9556/json',timeout=5) as r: a=json.load(r)\n"
         "out=[]\n"
-        "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
+        "allowed={'chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
         "for x in a:\n"
         " if x.get('type')!='page': continue\n"
         " u=urllib.parse.urlparse(x.get('url',''))\n"
@@ -1421,7 +1421,8 @@ def browser_click_control_command(tab_id: str, index: int) -> str:
     expression = (
         "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
         f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
-        f"e.click();return {{clicked:true,index:{idx}}}}})()"
+        "if(typeof e.focus==='function')e.focus({preventScroll:true});"
+        f"e.click();if(typeof e.focus==='function')e.focus({{preventScroll:true}});return {{clicked:true,index:{idx}}}}})()"
     )
     return _browser_cdp_command(tab_id, expression)
 
