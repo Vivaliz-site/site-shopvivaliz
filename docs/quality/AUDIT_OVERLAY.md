@@ -51,5 +51,14 @@ Toda auditoria extrema deve:
 3. Validar o health check (`?health=1`) de cada endpoint de agente/IA, verificando `env_loaded: true` em produção.
 4. Verificar o `dirname(__DIR__, N)` em endpoints que carregam `.env` — o N deve corresponder ao número de diretórios de profundidade do arquivo em relação à raiz do release.
 
+
+### ESC-2026-003 (2026-10-03) — health persistido exige freshness e prova de avanço
+Toda auditoria extrema de watchdog, monitor, worker, bridge, fila ou serviço assíncrono deve:
+1. Validar não apenas o último valor do health, mas também a idade/freshness do heartbeat e provar que ele avança por pelo menos dois ciclos reais.
+2. Tratar heartbeat ausente ou stale como falha fechada; processo ativo não substitui progresso observável.
+3. Quando existir estado degradado persistido, provar que ciclo neutro não o limpa e que somente recuperação confirmada remove a degradação.
+4. Exercitar pelo menos um negativo controlado de heartbeat stale/ausente e um positivo de renovação real pós-restart/deploy.
+5. Verificar todos os caminhos paralelos de execução (loop principal, sweep, retry, backoff e fallback) para garantir que nenhum deles omita atualização da telemetria canônica.
+
 ## Mudança deste overlay
 Quando uma auditoria revelar uma regra estrutural e duradoura que não está adequadamente documentada em outra fonte autoritativa, atualize este overlay no mesmo fluxo de PR. Não copie detalhes temporários, secrets ou estado operacional volátil.

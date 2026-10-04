@@ -8,6 +8,15 @@ require_once __DIR__ . '/pdo-database.php';
  * @param array<string,list<string>> $imagesBySku
  * @return list<array<string,mixed>>
  */
+function svcie_is_erp_tiny_image_url(mixed $url): bool
+{
+    if (!is_string($url) || !filter_var($url, FILTER_VALIDATE_URL)) return false;
+    if (strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: '')) !== 'https') return false;
+    $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+    $path = (string)(parse_url($url, PHP_URL_PATH) ?: '');
+    return $host === 's3.amazonaws.com' && str_starts_with($path, '/tiny-anexos-');
+}
+
 function svcie_apply_image_map(array $products, array $imagesBySku): array
 {
     foreach ($products as $index => $product) {
@@ -16,6 +25,15 @@ function svcie_apply_image_map(array $products, array $imagesBySku): array
 
         $images = array_values(array_unique(array_filter($imagesBySku[$sku], static fn($url): bool => is_string($url) && preg_match('~^https?://~i', $url) === 1)));
         if ($images === []) continue;
+
+        // O runtime pode carregar a galeria diretamente do detalhe Tiny v3
+        // mesmo quando o marcador sync_source foi normalizado/omitido. Mescle
+        // somente URLs do bucket canonico Tiny para que um espelho local de
+        // midia parcialmente sincronizado nao reduza a galeria autoritativa.
+        foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $erpImage) {
+            if (!svcie_is_erp_tiny_image_url($erpImage)) continue;
+            if (!in_array($erpImage, $images, true)) $images[] = $erpImage;
+        }
 
         // Regra de mídia pública: a imagem da vitrine deve vir do produto no ERP.
         // Não usar fallback manual, storage local ou imagem da tabela products.

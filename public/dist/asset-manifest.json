@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T16:27:16.943Z",
+  "generated_at": "2026-10-03T13:06:19.259Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -97,9 +97,9 @@
       "source_bytes": 6871
     },
     "/js/first-purchase-popup-v1.js": {
-      "file": "/public/dist/js/first-purchase-popup-v1.0805dde65a.min.js",
-      "bytes": 488,
-      "source_bytes": 889
+      "file": "/public/dist/js/first-purchase-popup-v1.c22f2d6eb3.min.js",
+      "bytes": 774,
+      "source_bytes": 1501
     },
     "/js/home-image-rotator-v1.js": {
       "file": "/public/dist/js/home-image-rotator-v1.c394ca106e.min.js",
@@ -162,9 +162,9 @@
       "source_bytes": 20159
     },
     "/js/sales-conversion-v1.js": {
-      "file": "/public/dist/js/sales-conversion-v1.04fe5a94fe.min.js",
-      "bytes": 16200,
-      "source_bytes": 18183
+      "file": "/public/dist/js/sales-conversion-v1.513b731b42.min.js",
+      "bytes": 16102,
+      "source_bytes": 18069
     },
     "/js/shipping-request-dedupe-v1.js": {
       "file": "/public/dist/js/shipping-request-dedupe-v1.27fa88e116.min.js",
@@ -271,6 +271,11 @@
       "bytes": 2515,
       "source_bytes": 3147
     },
+    "/css/home-merchandising-v1.css": {
+      "file": "/public/dist/css/home-merchandising-v1.fadef70d8d.min.css",
+      "bytes": 2497,
+      "source_bytes": 3333
+    },
     "/css/home-mobile-compact.css": {
       "file": "/public/dist/css/home-mobile-compact.858ba5966d.min.css",
       "bytes": 7882,
@@ -307,9 +312,9 @@
       "source_bytes": 342
     },
     "/css/paid-mobile-funnel-v1.css": {
-      "file": "/public/dist/css/paid-mobile-funnel-v1.b873d4053d.min.css",
-      "bytes": 1904,
-      "source_bytes": 3017
+      "file": "/public/dist/css/paid-mobile-funnel-v1.237649b599.min.css",
+      "bytes": 2211,
+      "source_bytes": 3480
     },
     "/css/premium-theme.css": {
       "file": "/public/dist/css/premium-theme.2a8a8ba3ab.min.css",

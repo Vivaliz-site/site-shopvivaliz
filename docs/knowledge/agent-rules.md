@@ -1,3 +1,9 @@
+<!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
+## Auditoria externa também é corretiva
+- Auditoria externa/independente segue o mesmo ciclo de investigação, correção, prevenção e validação.
+- Com autorização operacional, o auditor corrige, testa e reaudita; se for read-only, o relatório é intermediário e os achados seguem para executor autorizado até correção e revalidação independente ou bloqueio externo comprovado.
+<!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
+
 <!-- GEPETO_EVERY_TASK_V1 -->
 ## Gepeto obrigatorio em toda tarefa
 Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova mencao do usuario. Leia e cumpra `../../GEPETO-POLICY.md`. Se o runtime nao expuser o plugin, registre `GEPETO_UNAVAILABLE`, informe a limitacao e continue o trabalho autorizado sem simular participacao. Aplicar um plugin nao comprova delegacao nem revisao independente.
@@ -49,6 +55,29 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 - Nunca assumir uma resposta sem evidência.
 - Informar claramente quando a evidência estiver incompleta, ambígua ou desatualizada.
 
+<!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+## Auditoria corretiva obrigatória
+
+- Todo pedido de auditoria implica **investigar, corrigir, prevenir e validar**; não encerrar apenas relacionando erros.
+- Todo achado material corrigível e autorizado deve ter causa raiz investigada, correção aplicada, prevenção pertinente, teste e reauditoria.
+- Relatório de achados, recomendação, issue ou plano são estados intermediários enquanto existir ação segura executável.
+- APTO/CONCLUIDO só com evidência fresca pós-correção e E2E real quando aplicável; sem falso-verde.
+- Pendência só é aceitável após esgotar alternativas seguras e registrar evidência, causa e ação exata necessária para continuidade.
+- A coleta inicial é não invasiva; a remediação subsequente deve corrigir o que estiver dentro do escopo autorizado.
+- Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`, policy `AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`.
+<!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+## Diagnóstico corretivo obrigatório em qualquer tarefa
+
+- Todo diagnóstico, investigação, troubleshooting, health check ou apuração de falha é **etapa de execução**, não estado final: identificar o defeito não conclui a tarefa.
+- Ao confirmar um problema material dentro do escopo autorizado, o agente deve seguir o ciclo **reproduzir/confirmar → investigar causa raiz → corrigir → aplicar prevenção pertinente → testar → validar no runtime/E2E quando aplicável → revalidar o diagnóstico**.
+- Enquanto existir correção segura e executável, o estado permanece `RUNNING`. Relatório, recomendação, issue, hipótese confirmada, serviço `active`, health verde ou HTTP 200 não autorizam `CONCLUIDO`/`APTO`.
+- `CONCLUIDO` exige evidência fresca pós-correção de que o comportamento afetado funciona. Para fluxos de UI, integração, automação, fila, worker, deploy ou continuidade, validar o caminho real ponta a ponta quando tecnicamente aplicável.
+- Só é aceitável terminar sem correção como `BLOCKED_EXTERNAL` quando o impedimento for externo, objetivo e comprovado **depois de esgotar alternativas seguras autorizadas**, registrando evidência e a ação exata necessária.
+- Esta regra vale para **qualquer tarefa e qualquer agente/subagente/controlador**, inclusive debugging, infraestrutura, navegador, integrações, deploy, auditoria e diagnósticos rotineiros.
+- Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`, policy `DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`.
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## Diagnóstico
 
 - Identificar o erro antes de sugerir a solução.
@@ -127,7 +156,7 @@ Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações 
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois usar SSH privado/Tailscale e, para bootstrap/recovery, GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Nenhuma dessas rotas deve consumir Codex por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->
@@ -156,3 +185,14 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - The dispatcher must classify each authorized comment into at most one route. Explicit slash commands take precedence over generic mentions such as `@claude`.
 - Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
 - Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.
+
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
+## Credencial do ChatGPT — atendimento@shopvivaliz.com.br
+
+- A conta `atendimento@shopvivaliz.com.br` possui senha própria já criada pelo usuário.
+- O valor da senha **não deve ser versionado, escrito em docs, logs, issues, comentários, memória de agente ou mensagens**.
+- Agentes devem reutilizar primeiro a credencial segura já provisionada no perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e demais fontes seguras autorizadas.
+- **Não pedir novamente a senha ao usuário como primeira ação.** Antes de solicitar intervenção humana, comprovar que a credencial segura existente está ausente, revogada ou inválida.
+- Se a credencial precisar ser reprovisionada, fazê-lo apenas por canal seguro que não persista o valor em auditoria ou Git.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->

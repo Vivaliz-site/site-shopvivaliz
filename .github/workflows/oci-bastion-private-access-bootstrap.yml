@@ -22,6 +22,7 @@ jobs:
           github.event.issue.body == 'action=validate-rustdesk-via-fredwin' ||
           github.event.issue.body == 'action=bootstrap-remote-control-mcp' ||
           github.event.issue.body == 'action=e2e-remote-control-mcp' ||
+          github.event.issue.body == 'action=durable-mcp-v2-production-e2e' ||
           github.event.issue.body == 'action=runtime-proof-submit' ||
           github.event.issue.body == 'action=runtime-proof-verify' ||
           github.event.issue.body == 'action=secure-mcp-tunnel-probe' ||
@@ -322,8 +323,8 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh ubuntu@127.0.0.1:/tmp/
-          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh'
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
           PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
           test -n "$PUBKEY"
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
@@ -513,6 +514,158 @@ jobs:
           print('REMOTE_CONTROL_FOUR_HOST_E2E=PASS')
           PY
 
+      - name: Durable MCP V2 backup, recovery, and adversarial restart E2E
+        if: github.event.issue.body == 'action=durable-mcp-v2-production-e2e'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
+          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          expected_server="$(sha256sum remote-control-mcp/server.py | awk '{print $1}')"
+          expected_unit="$(sha256sum deploy/systemd/shopvivaliz-remote-control-mcp.service | awk '{print $1}')"
+          "${BACKEND_SSH[@]}" "sudo -n env EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' python3 -" <<'PY'
+          import json, os, sqlite3, subprocess, time, urllib.request, uuid
+          from pathlib import Path
+
+          state = Path('/var/lib/shopvivaliz-remote-control')
+          db_path = state / 'state.db'
+          backup_dir = state / 'backups'
+          backup_dir.mkdir(mode=0o700, exist_ok=True)
+          backup = backup_dir / ('state-' + time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '.db')
+          source = sqlite3.connect(db_path)
+          destination = sqlite3.connect(backup)
+          try:
+              source.backup(destination)
+          finally:
+              destination.close(); source.close()
+          backup.chmod(0o600)
+          if backup.stat().st_size <= 0 or backup.stat().st_mode & 0o077:
+              raise RuntimeError('sqlite_backup_not_root_only')
+          print('DURABLE_V2_SQLITE_BACKUP=PASS')
+
+          with sqlite3.connect(db_path) as db:
+              states = dict(db.execute('SELECT state, COUNT(*) FROM tasks GROUP BY state').fetchall())
+          print('DURABLE_V2_TASK_INVENTORY=' + ','.join(f'{k}:{states[k]}' for k in sorted(states)))
+          legacy = subprocess.run(
+              ['systemctl', 'list-units', '--all', '--no-legend', 'shopvivaliz-remote-command-task-*.scope'],
+              check=True, text=True, capture_output=True,
+          ).stdout.strip()
+          if legacy:
+              raise RuntimeError('legacy_scope_present_before_recovery')
+          print('DURABLE_V2_LEGACY_SCOPES=0')
+
+          expected_server, expected_unit = os.environ['EXPECTED_SERVER'], os.environ['EXPECTED_UNIT']
+          installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+          installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              subprocess.run([
+                  'bash', '/tmp/setup-remote-control-access.sh', 'install-controller',
+                  '/tmp/server.py', '/tmp/shopvivaliz-remote-control-mcp.service',
+              ], check=True)
+              installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
+              installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
+          if (installed_server, installed_unit) != (expected_server, expected_unit):
+              raise RuntimeError('installed_artifact_parity_failed')
+          print('DURABLE_V2_PARITY=PASS')
+
+          endpoint = 'http://127.0.0.1:5580/mcp'
+          token = (state / 'mcp-token').read_text(encoding='utf-8').strip()
+          def call(name, arguments):
+              body = json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':name,'arguments':arguments}}).encode()
+              request = urllib.request.Request(endpoint, data=body, headers={'Content-Type':'application/json','Authorization':'Bearer '+token}, method='POST')
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = json.load(response)
+              result = (payload.get('result') or {}).get('structuredContent') or {}
+              if (payload.get('result') or {}).get('isError') or result.get('error'):
+                  raise RuntimeError(name + '_failed')
+              return result
+          def wait_health(url):
+              deadline = time.time() + 45
+              while time.time() < deadline:
+                  try:
+                      with urllib.request.urlopen(url, timeout=3) as response:
+                          if response.status == 200: return
+                  except OSError: pass
+                  time.sleep(1)
+              raise RuntimeError('health_timeout')
+
+          run = uuid.uuid4().hex
+          marker_dir = state / 'e2e' / run
+          request_id = 'durable-v2-' + run
+          command = "mkdir -p {d}; printf 'START\\n' >> {d}/count.log; printf 'TASK_START\\n'; sleep 35; printf 'DONE\\n' >> {d}/count.log; printf 'TASK_DONE\\n'".format(d=marker_dir)
+          submitted = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          task_id = submitted.get('task_id')
+          if not task_id: raise RuntimeError('missing_task_id')
+          deadline = time.time() + 35
+          status = {}
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'running' and status.get('execution_unit'):
+                  subprocess.run(['systemctl', 'is-active', '--quiet', status['execution_unit']], check=True)
+                  break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_not_running_before_restart')
+              time.sleep(1)
+          else: raise RuntimeError('task_start_timeout')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-remote-control-mcp.service'], check=True)
+          wait_health('http://127.0.0.1:5580/health')
+          after_controller = call('task_status', {'task_id':task_id})
+          if after_controller.get('id') != task_id or after_controller.get('state') not in {'running','starting'}:
+              raise RuntimeError('controller_restart_task_continuity_failed')
+          print('DURABLE_V2_CONTROLLER_RESTART=PASS')
+
+          duplicate = call('task_submit', {'host':'always-free-arm-1787907847-26','command':command,'timeout':120,'request_id':request_id})
+          if duplicate.get('task_id') != task_id:
+              raise RuntimeError('request_id_dedup_failed')
+          print('DURABLE_V2_DEDUP=PASS')
+
+          subprocess.run(['systemctl', 'restart', 'shopvivaliz-secure-mcp-tunnel.service'], check=True)
+          wait_health('http://127.0.0.1:8080/healthz'); wait_health('http://127.0.0.1:8080/readyz')
+          after_tunnel = call('task_status', {'task_id':task_id})
+          if after_tunnel.get('id') != task_id or after_tunnel.get('state') not in {'running','starting'}:
+              raise RuntimeError('tunnel_restart_task_continuity_failed')
+          print('DURABLE_V2_TUNNEL_RESTART=PASS')
+
+          deadline = time.time() + 100
+          while time.time() < deadline:
+              status = call('task_status', {'task_id':task_id})
+              if status.get('state') == 'succeeded': break
+              if status.get('state') in {'failed','cancelled','expired','indeterminate'}:
+                  raise RuntimeError('task_terminal_failure')
+              time.sleep(1)
+          else: raise RuntimeError('task_completion_timeout')
+          if status.get('exit_code') != 0 or 'TASK_START' not in str(status.get('stdout')) or 'TASK_DONE' not in str(status.get('stdout')) or not isinstance(status.get('stderr'), str):
+              raise RuntimeError('persisted_result_fields_failed')
+          result_path = Path(status['result_dir']) / 'result.json'
+          result = json.loads(result_path.read_text(encoding='utf-8'))
+          if result.get('state') != 'succeeded' or result.get('exit_code') != 0:
+              raise RuntimeError('persisted_result_json_failed')
+          counts = (marker_dir / 'count.log').read_text(encoding='utf-8').splitlines()
+          if counts.count('START') != 1 or counts.count('DONE') != 1:
+              raise RuntimeError('physical_marker_count_failed')
+          print('DURABLE_V2_MARKERS=PASS')
+
+          for path in ('/health',): wait_health('http://127.0.0.1:5580' + path)
+          for path in ('/healthz','/readyz'): wait_health('http://127.0.0.1:8080' + path)
+          tunnel_pids = [p for p in subprocess.run(['pgrep','-u','ubuntu','-x','tunnel-client'], text=True, capture_output=True).stdout.splitlines() if p]
+          if len(tunnel_pids) != 1: raise RuntimeError('tunnel_client_count_failed')
+          remaining_legacy = subprocess.run(['systemctl','list-units','--all','--no-legend','shopvivaliz-remote-command-task-*.scope'], text=True, capture_output=True, check=True).stdout.strip()
+          if remaining_legacy: raise RuntimeError('legacy_scope_remained')
+          with sqlite3.connect(db_path) as db:
+              request_count = db.execute('SELECT COUNT(*) FROM tasks WHERE request_id=?', (request_id,)).fetchone()[0]
+              active = db.execute("SELECT COUNT(*) FROM tasks WHERE id=? AND state IN ('queued','starting','running','cancel_requested')", (task_id,)).fetchone()[0]
+          if request_count != 1 or active != 0: raise RuntimeError('lost_or_duplicate_task_detected')
+          for host in ['always-free-arm-1787907847-26','shopvivaliz-free-a1','Fred-Win','KOCEPSV']:
+              health = call('host_health', {'host':host,'timeout':45})
+              if health.get('ok') is False: raise RuntimeError('four_host_smoke_failed')
+          print('DURABLE_V2_FOUR_HOST_SMOKE=PASS')
+          print('DURABLE_V2_PRODUCTION_E2E=PASS')
+          PY
+          "${BACKEND_SSH[@]}" 'rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
+
       - name: Submit disconnected runtime proof
         if: github.event.issue.body == 'action=runtime-proof-submit'
         shell: bash
@@ -585,6 +738,7 @@ jobs:
           "${BACKEND_SCP[@]}" scripts/install-chatgpt-continuity-backend-bridge.sh "ubuntu@127.0.0.1:$remote_dir/scripts/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-guardian.sh "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
+          "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
@@ -624,7 +778,7 @@ jobs:
           "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
           install_output=''
           install_rc=0
-          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
+          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9556'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
           then
             install_rc=0
           else
@@ -1357,7 +1511,7 @@ jobs:
           worker=false
           if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user is-active --quiet shopvivaliz-chatgpt-continuity.service; then worker=true; fi
           cdp=false
-          curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9555/json/version >/dev/null && cdp=true
+          curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:9556/json/version >/dev/null && cdp=true
           shape_probe_output="$(timeout 10s sudo -u ubuntu node --input-type=module -e 'import {Cdp} from "file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"; const c=await Cdp.connectToChatgptTab(); try { const p=await c.evaluate(`(async()=>{const kind=v=>Array.isArray(v)?"array":(v===null?"null":(typeof v==="object"?"object":"other"));const count=v=>Array.isArray(v)?Math.min(v.length,9999):0;const candidates=[{name:"filtered",url:"/backend-api/conversations?offset=0&limit=1&order=updated&is_archived=false&is_starred=false"},{name:"fallback",url:"/backend-api/conversations?offset=0&limit=1&order=updated"}];let selected={item_present:false,id_present:false,id_valid:false,update_present:false,update_valid:false,item_keys:[]};const observations=[];for(const candidate of candidates){const o={name:candidate.name,http_status:0,body_kind:"null",items_count:0,conversations_count:0,data_kind:"null",data_items_count:0,data_conversations_count:0};try{const response=await fetch(candidate.url,{credentials:"same-origin",cache:"no-store"});o.http_status=Number(response.status||0);let body=null;try{body=await response.json();}catch{}o.body_kind=kind(body);o.items_count=count(body?.items);o.conversations_count=count(body?.conversations);o.data_kind=kind(body?.data??null);o.data_items_count=count(body?.data?.items);o.data_conversations_count=count(body?.data?.conversations);const items=Array.isArray(body?.items)?body.items:(Array.isArray(body?.conversations)?body.conversations:(Array.isArray(body)?body:[]));if(response.ok&&items.length>0&&!selected.item_present){const item=items[0]||{};const id=String(item.id||item.conversation_id||"").trim();const rawUpdate=item.update_time??item.updateTime??item.updated_at??item.updatedAt??null;let updateNumber=Number(rawUpdate||0);if(!Number.isFinite(updateNumber)||updateNumber<=0){const parsed=Date.parse(String(rawUpdate||""));updateNumber=Number.isFinite(parsed)?parsed/1000:0;}const item_keys=Object.keys(item).map(key=>String(key).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32);selected={item_present:true,id_present:Boolean(id),id_valid:/^[A-Za-z0-9_-]{8,160}$/.test(id),update_present:rawUpdate!==null&&String(rawUpdate).trim()!=="",update_valid:Number.isFinite(updateNumber)&&updateNumber>0,item_keys};}}catch{}observations.push(o);}const path=String(location.pathname||"");const match=path.match(/^\\/c\\/([^/?#]+)/);const path_kind=match?"conversation":(path==="/"?"home":"other");let current_fetch_status=0;if(match){try{const response=await fetch("/backend-api/conversation/"+encodeURIComponent(match[1]),{credentials:"same-origin",cache:"no-store"});current_fetch_status=Number(response.status||0);}catch{}}return {...selected,observations,path_kind,current_fetch_status};})()`); const b=v=>v?"true":"false"; const keys=Array.isArray(p?.item_keys)?p.item_keys.map(k=>String(k).replace(/[^A-Za-z0-9_]/g,"").slice(0,64)).filter(Boolean).slice(0,32):[]; const obs=Object.fromEntries((Array.isArray(p?.observations)?p.observations:[]).map(o=>[String(o?.name||""),o])); const safeHttp=v=>Math.max(0,Math.min(599,Number(v||0))); const safeCount=v=>Math.max(0,Math.min(9999,Number(v||0))); const safeKind=v=>(["object","array","null","other"].includes(String(v))?String(v):"other"); const filtered=obs.filtered||{}; const fallback=obs.fallback||{}; console.log("CHATGPT_CONTINUITY_LATEST_ITEM_PRESENT="+b(p?.item_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_PRESENT="+b(p?.id_present)); console.log("CHATGPT_CONTINUITY_LATEST_ID_VALID="+b(p?.id_valid)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_PRESENT="+b(p?.update_present)); console.log("CHATGPT_CONTINUITY_LATEST_UPDATE_VALID="+b(p?.update_valid)); console.log("CHATGPT_CONTINUITY_LATEST_ITEM_KEYS="+(keys.length?keys.join(","):"NONE")); console.log("CHATGPT_CONTINUITY_LATEST_CONVERSATION_DISCOVERABLE="+b(p?.id_valid&&p?.update_valid)); console.log("CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS="+safeHttp(filtered.http_status)); console.log("CHATGPT_CONTINUITY_FILTERED_BODY_KIND="+safeKind(filtered.body_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_ITEMS_COUNT="+safeCount(filtered.items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_CONVERSATIONS_COUNT="+safeCount(filtered.conversations_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_KIND="+safeKind(filtered.data_kind)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_ITEMS_COUNT="+safeCount(filtered.data_items_count)); console.log("CHATGPT_CONTINUITY_FILTERED_DATA_CONVERSATIONS_COUNT="+safeCount(filtered.data_conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_HTTP_STATUS="+safeHttp(fallback.http_status)); console.log("CHATGPT_CONTINUITY_FALLBACK_BODY_KIND="+safeKind(fallback.body_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_ITEMS_COUNT="+safeCount(fallback.items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_CONVERSATIONS_COUNT="+safeCount(fallback.conversations_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_KIND="+safeKind(fallback.data_kind)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_ITEMS_COUNT="+safeCount(fallback.data_items_count)); console.log("CHATGPT_CONTINUITY_FALLBACK_DATA_CONVERSATIONS_COUNT="+safeCount(fallback.data_conversations_count)); console.log("CHATGPT_CONTINUITY_CURRENT_PATH_KIND="+(["conversation","home","other"].includes(String(p?.path_kind))?String(p.path_kind):"other")); console.log("CHATGPT_CONTINUITY_CURRENT_CONVERSATION_FETCH_STATUS="+Math.max(0,Math.min(599,Number(p?.current_fetch_status||0)))); } finally { c.close(); }' 2>/dev/null || true)"
           if ! printf '%s\n' "$shape_probe_output" | grep -Fq 'CHATGPT_CONTINUITY_FILTERED_HTTP_STATUS='; then
             shape_probe_output="$(printf '%s\n' \
@@ -1656,7 +1810,7 @@ jobs:
           if [ -s "$state/mcp-token" ]; then local_auth=true; fi
 
           cdp=false
-          if curl -fsS --connect-timeout 3 --max-time 5 -o /dev/null http://127.0.0.1:9555/json/version; then cdp=true; fi
+          if curl -fsS --connect-timeout 3 --max-time 5 -o /dev/null http://127.0.0.1:9556/json/version; then cdp=true; fi
 
           outbound=false
           if curl -sS --connect-timeout 8 --max-time 15 -o /dev/null https://openai.com/; then outbound=true; fi

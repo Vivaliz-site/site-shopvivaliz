@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ShopVivaliz ChatGPT nudge independently of heavy dispatch
+
+[Timer]
+OnBootSec=20s
+OnUnitInactiveSec=30s
+AccuracySec=1s
+Unit=shopvivaliz-chatgpt-nudge-dispatcher.service
+
+[Install]
+WantedBy=timers.target

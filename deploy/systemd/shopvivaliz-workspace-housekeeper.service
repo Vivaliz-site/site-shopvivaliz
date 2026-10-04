@@ -1,0 +1,12 @@
+[Unit]
+Description=ShopVivaliz safe workspace lifecycle housekeeper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shopvivaliz-workspace-housekeeper
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=15min

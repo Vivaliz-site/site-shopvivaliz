@@ -14,9 +14,6 @@ import hashlib
 import subprocess
 import os
 from threading import Thread
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # ============ CONFIGURAÇÃO ============
 BASE_URL = "https://shopvivaliz.com.br"
@@ -28,7 +25,6 @@ CACHE_FILE = "/tmp/shopvivaliz-audit-cache.json"
 
 # Email para alertas
 EMAIL_TO = "fredmourao@gmail.com"
-EMAIL_FROM = "alertas@shopvivaliz.com.br"
 
 # Configurar logging
 logging.basicConfig(

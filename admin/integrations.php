@@ -34,7 +34,7 @@ $integrations = [
         'fields' => [
             'analytics_id' => ['label' => 'Analytics ID', 'env' => 'GOOGLE_ANALYTICS_ID', 'value' => getenv('GOOGLE_ANALYTICS_ID') ?: 'G-1H55K1TZ5D'],
             'merchant_id' => ['label' => 'Merchant ID', 'env' => 'GOOGLE_MERCHANT_ID', 'value' => getenv('GOOGLE_MERCHANT_ID') ?: '5381803710'],
-            'tag_manager_id' => ['label' => 'Tag Manager ID', 'env' => 'GOOGLE_TAG_MANAGER_ID', 'value' => getenv('GOOGLE_TAG_MANAGER_ID') ?: 'GTM-PHZ55CP3'],
+            'tag_manager_id' => ['label' => 'Tag Manager ID', 'env' => 'GOOGLE_TAG_MANAGER_ID', 'value' => getenv('GOOGLE_TAG_MANAGER_ID') ?: ''],
         ]
     ],
     'communication' => [

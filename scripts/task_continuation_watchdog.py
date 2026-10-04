@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import fcntl
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,11 +25,28 @@ except ImportError:  # direct CLI execution from repository root
     import task_resume_queue as resume_queue
 
 REQUESTS_FILE = resume_queue.REQUESTS_FILE
+LOCK_FILE = "_continuity-watchdog.lock"
 DEFAULT_STALE_SECONDS = 120
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+@contextmanager
+def _watchdog_lock(root: Path):
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / LOCK_FILE
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -73,7 +92,7 @@ def _append_request(runtime_dir: Path, row: dict[str, Any]) -> None:
     resume_queue.append_request(runtime_dir, row)
 
 
-def run_once(
+def _run_once_locked(
     *,
     stale_seconds: int = DEFAULT_STALE_SECONDS,
     runtime_dir: Path | None = None,
@@ -164,6 +183,33 @@ def run_once(
         },
         "generated_at": utc_now(),
     }
+
+
+def run_once(
+    *,
+    stale_seconds: int = DEFAULT_STALE_SECONDS,
+    runtime_dir: Path | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    root = Path(runtime_dir or RUNTIME_DIR)
+    cutoff = max(1, int(stale_seconds))
+    with _watchdog_lock(root) as acquired:
+        if not acquired:
+            return {
+                "ok": True,
+                "runtime_dir": str(root),
+                "stale_seconds": cutoff,
+                "scanned": 0,
+                "eligible": 0,
+                "dispatched": 0,
+                "locked": True,
+                "generated_at": utc_now(),
+            }
+        return _run_once_locked(
+            stale_seconds=cutoff,
+            runtime_dir=root,
+            now=now,
+        )
 
 
 def main() -> int:

@@ -142,7 +142,53 @@ function gm_optional(array $product, array $fields, int $max = 100): string
     return '';
 }
 
+/** @return array<string,array<string,mixed>> */
+function gm_shipping_source_map(string $root): array
+{
+    $path = $root . '/api/catalog/fallback-products.json';
+    if (!is_file($path) || !is_readable($path)) return [];
+    $payload = json_decode((string)file_get_contents($path), true);
+    if (!is_array($payload)) return [];
+    $rows = isset($payload['products']) && is_array($payload['products']) ? $payload['products'] : $payload;
+
+    $map = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) continue;
+        $sku = trim((string)($row['sku'] ?? ''));
+        if ($sku === '') continue;
+        $source = strtolower(trim((string)($row['sync_source'] ?? '')));
+        if ($source !== '' && $source !== 'tiny_v3') continue;
+        $map[$sku] = $row;
+    }
+    return $map;
+}
+
+/** @return array{weight:float,length:float,width:float,height:float} */
+function gm_shipping_package(array $product, array $erpFallback = []): array
+{
+    $dimensions = is_array($product['dimensions'] ?? null) ? $product['dimensions'] : [];
+    $fallbackDimensions = is_array($erpFallback['dimensions'] ?? null) ? $erpFallback['dimensions'] : [];
+
+    $weight = (float)($product['gross_weight'] ?? $product['shipping_weight'] ?? $product['weight'] ?? $product['peso'] ?? $dimensions['gross_weight'] ?? $dimensions['net_weight'] ?? $fallbackDimensions['gross_weight'] ?? $fallbackDimensions['net_weight'] ?? 0);
+    $length = (float)($product['shipping_length'] ?? $product['length'] ?? $product['comprimento'] ?? $dimensions['length'] ?? $fallbackDimensions['length'] ?? 0);
+    $width = (float)($product['shipping_width'] ?? $product['width'] ?? $product['largura'] ?? $dimensions['width'] ?? $fallbackDimensions['width'] ?? 0);
+    $height = (float)($product['shipping_height'] ?? $product['height'] ?? $product['altura'] ?? $dimensions['height'] ?? $fallbackDimensions['height'] ?? 0);
+
+    return [
+        'weight' => max(0.0, $weight),
+        'length' => max(0.0, $length),
+        'width' => max(0.0, $width),
+        'height' => max(0.0, $height),
+    ];
+}
+
+function gm_measure(float $value): string
+{
+    return rtrim(rtrim(number_format($value, 3, '.', ''), '0'), '.');
+}
+
 $merchantIdMap = gm_unique_id_map($products);
+$shippingSourceMap = gm_shipping_source_map(__DIR__);
 $emittedProductIdentities = [];
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
@@ -211,6 +257,7 @@ foreach ($products as $product) {
     $material = gm_optional($product, ['material']);
     $size = gm_optional($product, ['size', 'tamanho']);
     $itemGroupId = gm_optional($product, ['item_group_id', 'variant_group_id'], 50);
+    $shippingPackage = gm_shipping_package($product, $shippingSourceMap[$rawSku] ?? []);
 
     echo '<item>' . PHP_EOL;
     echo '<g:id>' . gm_xml($id) . '</g:id>' . PHP_EOL;
@@ -251,6 +298,10 @@ foreach ($products as $product) {
     if ($material !== '') echo '<g:material>' . gm_xml($material) . '</g:material>' . PHP_EOL;
     if ($size !== '') echo '<g:size>' . gm_xml($size) . '</g:size>' . PHP_EOL;
     if ($itemGroupId !== '') echo '<g:item_group_id>' . gm_xml($itemGroupId) . '</g:item_group_id>' . PHP_EOL;
+    if ($shippingPackage['weight'] > 0) echo '<g:shipping_weight>' . gm_xml(gm_measure($shippingPackage['weight']) . ' kg') . '</g:shipping_weight>' . PHP_EOL;
+    if ($shippingPackage['length'] > 0) echo '<g:shipping_length>' . gm_xml(gm_measure($shippingPackage['length']) . ' cm') . '</g:shipping_length>' . PHP_EOL;
+    if ($shippingPackage['width'] > 0) echo '<g:shipping_width>' . gm_xml(gm_measure($shippingPackage['width']) . ' cm') . '</g:shipping_width>' . PHP_EOL;
+    if ($shippingPackage['height'] > 0) echo '<g:shipping_height>' . gm_xml(gm_measure($shippingPackage['height']) . ' cm') . '</g:shipping_height>' . PHP_EOL;
     echo '<g:custom_label_0>' . gm_xml($productType) . '</g:custom_label_0>' . PHP_EOL;
     echo '<g:custom_label_1>' . gm_xml(svseo_price_band($price)) . '</g:custom_label_1>' . PHP_EOL;
     echo '<g:custom_label_2>' . gm_xml($stock > 5 ? 'estoque-alto' : ($stock > 0 ? 'estoque-baixo' : 'sem-estoque')) . '</g:custom_label_2>' . PHP_EOL;

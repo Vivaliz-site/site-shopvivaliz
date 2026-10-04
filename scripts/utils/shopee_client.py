@@ -140,7 +140,11 @@ class ShopeeClient:
         if not self.refresh_token:
             return
         now = time.monotonic()
-        time_due = self._last_refresh_attempt_monotonic == 0.0 or now - self._last_refresh_attempt_monotonic >= TOKEN_REFRESH_INTERVAL_SECONDS
+        if self._last_refresh_attempt_monotonic == 0.0:
+            self._last_refresh_attempt_monotonic = now
+            time_due = False
+        else:
+            time_due = now - self._last_refresh_attempt_monotonic >= TOKEN_REFRESH_INTERVAL_SECONDS
         expiry_due = self.access_expires_at > 0 and self.access_expires_at <= int(time.time()) + 600
         if time_due or expiry_due:
             self._refresh_access_token(required=not bool(self.access_token) or expiry_due)

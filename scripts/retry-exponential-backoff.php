@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 🔄 Retry with Exponential Backoff - Resilência contra falhas transitórias
  * Trata: Timeouts, rate limits, temporary failures
@@ -111,15 +112,17 @@ class RetryExponentialBackoff {
 
         file_put_contents('.dead-letter-queue.json', json_encode($dlq, JSON_PRETTY_PRINT));
 
-        // Notificar admin
-        mail(
+        $body = "Task: {$task['task_id']}\n"
+            . "Ação: {$task['action']}\n"
+            . "Erro: $error\n\n"
+            . "Requer investigação manual.";
+        $html = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        send_email(
             'fredmourao@gmail.com',
             "[SHOPVIVALIZ DLQ] Task {$task['task_id']} falhou permanentemente",
-            "Task: {$task['task_id']}\n" .
-            "Ação: {$task['action']}\n" .
-            "Erro: $error\n\n" .
-            "Requer investigação manual.",
-            'From: retry@shopvivaliz.com.br'
+            $html
         );
     }
 }

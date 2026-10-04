@@ -13,6 +13,7 @@ jobs:
       contents: read
     outputs:
       route: ${{ steps.route.outputs.route }}
+      conversation_id: ${{ steps.route.outputs.conversation_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +57,16 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/task-continuity-production-e2e.yml
+    with:
+      conversation_id: ${{ needs.classify.outputs.conversation_id }}
     secrets: inherit
+
+  backend-continuity-recovery:
+    needs: classify
+    if: needs.classify.outputs.route == 'backend_continuity_recovery'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/backend-continuity-direct-recovery.yml
 
   provision-backend-runners:
     needs: classify

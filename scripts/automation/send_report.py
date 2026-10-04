@@ -4,18 +4,16 @@ Enviar relatório de automação por email
 """
 
 import os
+import sys
 import json
 import csv
-import smtplib
-import ssl
-from email.mime.text import MIMEText
 from datetime import datetime
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shopvivaliz_mail import send_text
 
 class ReportSender:
     def __init__(self):
-        self.smtp_host = os.getenv('SMTP_HOST') or os.getenv('EMAIL_SMTP_HOST') or os.getenv('MAIL_HOST') or ''
-        self.smtp_user = os.getenv('SMTP_USER') or os.getenv('EMAIL_USER') or os.getenv('MAIL_USER') or ''
-        self.smtp_pass = os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASSWORD') or os.getenv('MAIL_PASS') or ''
         self.email_to = os.getenv('EMAIL_TO', '')
 
     def send_daily_report(self):
@@ -35,37 +33,30 @@ class ReportSender:
         print("-"*70)
         self._persist_report(email_body)
 
-        sent = self._send_smtp(subject, email_body)
+        sent = self._send_email(subject, email_body)
         if sent:
-            print("\n[OK] Email enviado com sucesso via SMTP")
+            print("\n[OK] Email enviado com sucesso via Brevo API")
         else:
             print("\n[ERRO] Email NAO foi enviado (ver mensagem de erro acima)")
         print("="*70)
         return sent
 
-    def _send_smtp(self, subject: str, body: str) -> bool:
-        """Envia o relatorio por SMTP real. Retorna False honestamente (nao
-        finge sucesso) se faltar config ou a conexao falhar."""
-        if not (self.smtp_host and self.smtp_user and self.smtp_pass and self.email_to):
-            print("[ERRO] SMTP nao configurado (faltam SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_TO)")
+    def _send_email(self, subject: str, body: str) -> bool:
+        """Envia o relatório pelo provider transacional ShopVivaliz."""
+        recipients = [item.strip() for item in self.email_to.split(",") if item.strip()]
+        if not recipients:
+            print("[ERRO] EMAIL_TO não configurado")
             return False
-
-        smtp_port = int(os.getenv('SMTP_PORT') or os.getenv('MAIL_PORT') or 587)
-        msg = MIMEText(body, 'plain', 'utf-8')
-        msg['Subject'] = subject
-        msg['From'] = self.smtp_user
-        msg['To'] = self.email_to
-
-        try:
-            context = ssl.create_default_context()
-            with smtplib.SMTP(self.smtp_host, smtp_port, timeout=20) as server:
-                server.starttls(context=context)
-                server.login(self.smtp_user, self.smtp_pass)
-                server.sendmail(self.smtp_user, [self.email_to], msg.as_string())
-            return True
-        except Exception as e:
-            print(f"[ERRO] Falha ao enviar email via SMTP: {e}")
+        result = send_text(
+            recipients,
+            subject,
+            body,
+            tags=["shopvivaliz-transactional", "automation-report"],
+        )
+        if not result.success:
+            print(f"[ERRO] Falha ao enviar email via Brevo API: {result.error}")
             return False
+        return True
 
     def _generate_report(self):
         """Gera dados do relatório"""

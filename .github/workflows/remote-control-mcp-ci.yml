@@ -23,6 +23,7 @@ on:
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
+      - 'tests/test_claude_mcp_stdio_transport.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
       - 'tests/test_chatgpt_freeze_successor.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
@@ -52,6 +53,7 @@ on:
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
       - 'tests/remote-control-mcp-test.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
+      - 'tests/test_claude_mcp_stdio_transport.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
       - 'tests/test_chatgpt_freeze_successor.py'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
@@ -77,6 +79,7 @@ jobs:
           python3 tests/iphone-private-ssh-relay-contract-test.py
           python3 tests/test_chatgpt_freeze_successor.py
           python3 tests/test_secure_mcp_tunnel_stability.py
+          python3 tests/test_claude_mcp_stdio_transport.py
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax

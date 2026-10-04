@@ -39,6 +39,8 @@ class SecureMcpTunnelStabilityTests(unittest.TestCase):
             self.assertIn(marker, text)
         self.assertIn("MCP_STDIO_SEND_INITIALIZED_NOTIFICATION=true", text)
         self.assertIn("MCP_CONNECTION_MAX_TTL=30m", text)
+        self.assertIn("MCP_MAX_CONCURRENT_REQUESTS=4", text)
+        self.assertIn("MCP_STARTUP_WAIT_TIMEOUT=60s", text)
         self.assertIn("HEALTH_LISTEN_ADDR=127.0.0.1:8080", text)
         self.assertIn("/healthz", setup)
         self.assertIn("/readyz", setup)
