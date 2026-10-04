@@ -588,15 +588,31 @@ async function resolveAmbiguousConversationTabs(
 }
 
 class Cdp {
-  constructor(ws) {
+  constructor(ws, { commandTimeoutMs = 15_000 } = {}) {
     this.ws = ws;
     this.id = 0;
     this.pending = new Map();
+    this.closed = false;
+    this.commandTimeoutMs = Number.isFinite(commandTimeoutMs) && commandTimeoutMs > 0
+      ? commandTimeoutMs : 15_000;
+    const disconnected = () => {
+      this.closed = true;
+      for (const waiter of this.pending.values()) {
+        clearTimeout(waiter.timer);
+        waiter.reject(new Error('CDP connection closed'));
+      }
+      this.pending.clear();
+    };
+    this.disconnect = disconnected;
+    ws.addEventListener('close', disconnected);
+    ws.addEventListener('error', disconnected);
     ws.addEventListener('message', event => {
-      const message = JSON.parse(event.data);
-      if (!message.id || !this.pending.has(message.id)) return;
+      let message;
+      try { message = JSON.parse(event.data); } catch { return; }
+      if (!message?.id || !this.pending.has(message.id)) return;
       const waiter = this.pending.get(message.id);
       this.pending.delete(message.id);
+      clearTimeout(waiter.timer);
       message.error ? waiter.reject(new Error(message.error.message || 'CDP error')) : waiter.resolve(message.result);
     });
   }
@@ -675,10 +691,21 @@ class Cdp {
   }
 
   send(method, params = {}) {
+    if (this.closed) return Promise.reject(new Error('CDP connection closed'));
     return new Promise((resolve, reject) => {
       const id = ++this.id;
-      this.pending.set(id, { resolve, reject });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error('CDP command timed out'));
+      }, this.commandTimeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
 
@@ -694,6 +721,7 @@ class Cdp {
   }
 
   close() {
+    this.disconnect();
     try { this.ws.close(); } catch {}
   }
 }

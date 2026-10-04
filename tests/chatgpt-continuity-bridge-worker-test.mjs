@@ -3458,6 +3458,7 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
