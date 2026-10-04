@@ -2415,16 +2415,30 @@ async function attemptNudge(
     // stream is never reloaded solely because the checkpoint age crossed the
     // watchdog threshold.
     const wasGenerating = await conversationIsGenerating(cdp);
-    if (wasGenerating && !detectedFailureReason) {
+    if (!detectedFailureReason) {
       const liveStream = await conversationStreamStatus(cdp);
       const liveStatus = String(liveStream?.status || '').toUpperCase();
-      const streamComplete = Number(liveStream?.http_status || 0) === 200 && liveStatus === 'COMPLETE';
-      if (!streamComplete) {
+      const liveHttpStatus = Number(liveStream?.http_status || 0);
+      const streamActive = liveHttpStatus === 200
+        && ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(liveStatus);
+      const streamComplete = liveHttpStatus === 200 && liveStatus === 'COMPLETE';
+
+      // Live 2026-10-03/04 production evidence: the current ChatGPT web UI can
+      // omit data-testid=stop-button and leave the composer usable while the
+      // authoritative backend stream remains IS_STREAMING ("ChatGPT is
+      // responding"). Never reload or inject a continuation into that state.
+      if (streamActive) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
-          detail: ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(liveStatus)
-            ? 'active generation is still in progress; deferred without reload or continuation'
-            : 'generation is active and stream completion is unconfirmed; deferred without reload or continuation',
+          detail: 'active generation is still in progress; deferred without reload or continuation',
+          ...recoveryMetadata(),
+        };
+      }
+
+      if (wasGenerating && !streamComplete) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'generation is active and stream completion is unconfirmed; deferred without reload or continuation',
           ...recoveryMetadata(),
         };
       }
