@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
+continuity_user="${CHATGPT_CONTINUITY_USER:-ubuntu}"
+continuity_unit="${CHATGPT_CONTINUITY_UNIT:-shopvivaliz-chatgpt-continuity.service}"
 cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
@@ -286,6 +288,25 @@ pid_is_live() {
   [[ -n "$state" && "$state" != Z* ]]
 }
 
+continuity_worker_active() {
+  systemctl --user --machine="${continuity_user}@" is-active --quiet "$continuity_unit"
+}
+
+ensure_continuity_worker() {
+  if continuity_worker_active; then
+    return 0
+  fi
+  if ! systemctl --user --machine="${continuity_user}@" start "$continuity_unit"; then
+    echo "CHATGPT_CONTINUITY_WORKER=START_FAILED" >&2
+    return 1
+  fi
+  if ! continuity_worker_active; then
+    echo "CHATGPT_CONTINUITY_WORKER=NOT_ACTIVE_AFTER_START" >&2
+    return 1
+  fi
+  echo "CHATGPT_CONTINUITY_WORKER=RECOVERED"
+}
+
 status=0
 
 # Keep the timer and transport liveness checks enabled. Reuse only a negative
@@ -366,6 +387,15 @@ else
       status=1
     fi
   fi
+fi
+
+# The browser and continuity bridge are a single recovery path. An explicit
+# browser/profile reset can stop the user bridge with SIGTERM; Restart=always
+# does not undo an administrative stop. The existing 30-second guardian is the
+# sole supervisor, so once browser transport/session handling completes
+# successfully it also ensures the already-enabled bridge is running.
+if [[ "$status" -eq 0 ]] && ! ensure_continuity_worker; then
+  status=1
 fi
 
 exit "$status"

@@ -181,6 +181,50 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.run_guardian()
         self.assertGreater(self.probes(), before)
 
+    def test_healthy_browser_recovers_stopped_continuity_worker(self):
+        self.session_file.write_text('AUTHENTICATED')
+        worker_state = self.root / 'worker.active'
+        self.executable(
+            'systemctl',
+            f"""printf '%s\\n' "$*" >> "$FIXTURE_SYSTEM_LOG"
+if [[ "$*" == *"--user --machine=ubuntu@ is-active --quiet shopvivaliz-chatgpt-continuity.service"* ]]; then
+  [[ -f "{worker_state}" ]] && exit 0 || exit 3
+fi
+if [[ "$*" == *"--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service"* ]]; then
+  : > "{worker_state}"
+  exit 0
+fi
+exit 0
+""",
+        )
+        result = self.run_guardian()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
+        self.assertTrue(worker_state.exists())
+
+    def test_healthy_browser_does_not_restart_active_continuity_worker(self):
+        self.session_file.write_text('AUTHENTICATED')
+        worker_state = self.root / 'worker.active'
+        worker_state.write_text('active')
+        self.executable(
+            'systemctl',
+            f"""printf '%s\\n' "$*" >> "$FIXTURE_SYSTEM_LOG"
+if [[ "$*" == *"--user --machine=ubuntu@ is-active --quiet shopvivaliz-chatgpt-continuity.service"* ]]; then
+  [[ -f "{worker_state}" ]] && exit 0 || exit 3
+fi
+if [[ "$*" == *"--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service"* ]]; then
+  : > "{worker_state}"
+  exit 0
+fi
+exit 0
+""",
+        )
+        result = self.run_guardian()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertNotIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
+
     def test_failed_transport_is_not_hidden_by_negative_cache(self):
         self.run_guardian()
         self.assert_cache_skip()
