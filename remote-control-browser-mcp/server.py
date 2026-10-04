@@ -57,6 +57,16 @@ BROWSER_TOOLS = {
     "browser_gui_click",
     "browser_gui_type",
 }
+
+ATTENDIMENTO_TOOL_MAP = {
+    "browser_atendimento_tabs": "browser_tabs",
+    "browser_atendimento_controls": "browser_controls",
+    "browser_atendimento_navigate": "browser_navigate",
+    "browser_atendimento_click": "browser_click",
+    "browser_atendimento_click_control": "browser_click_control",
+    "browser_atendimento_type": "browser_type",
+}
+ATTENDIMENTO_TOOLS = set(ATTENDIMENTO_TOOL_MAP)
 URL_RE = re.compile(r"^https?://", re.I)
 
 
@@ -358,6 +368,8 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name in ATTENDIMENTO_TOOL_MAP:
+        return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
     if name == "browser_health":
         return browser_health()
     if name == "browser_gui_tabs":
@@ -388,11 +400,11 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool in {"browser_gui_type", "browser_type"} and "text" in safe:
+    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type"} and "text" in safe:
         raw = str(safe.pop("text"))
         safe["text_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
         safe["text_length"] = len(raw)
-    if tool in {"browser_open", "browser_gui_navigate"} and "url" in safe:
+    if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
 
@@ -461,10 +473,23 @@ BROWSER_TOOL_SPECS = [
 ]
 
 
+def atendimento_tool_specs() -> list[dict[str, Any]]:
+    base_specs = {spec["name"]: spec for spec in BASE_TOOL_SPECS()}
+    out = []
+    for public_name, base_name in ATTENDIMENTO_TOOL_MAP.items():
+        src = base_specs[base_name]
+        spec = dict(src)
+        spec["name"] = public_name
+        spec["description"] = f"Use the isolated atendimento ChatGPT session: {src['description']}"
+        out.append(spec)
+    return out
+
+
 def tool_specs() -> list[dict[str, Any]]:
     browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
-    inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names]
-    return inherited + BROWSER_TOOL_SPECS
+    atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
+    inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
+    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
 
 
 base.execute_tool = execute_tool
@@ -519,7 +544,7 @@ class BrowserHandler(base.Handler):
                 params = req.get("params") or {}
                 name = str(params.get("name") or "")
                 args = params.get("arguments") or {}
-                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS else None)
+                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS or name in ATTENDIMENTO_TOOLS else None)
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None

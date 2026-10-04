@@ -32,6 +32,29 @@ class BrowserMcpTests(unittest.TestCase):
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
 
+    def test_atendimento_browser_tools_are_explicit_and_preserve_base_contracts(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        base_specs = {item["name"]: item for item in m.base.tool_specs()}
+        expected = {
+            "browser_atendimento_tabs": "browser_tabs",
+            "browser_atendimento_controls": "browser_controls",
+            "browser_atendimento_navigate": "browser_navigate",
+            "browser_atendimento_click": "browser_click",
+            "browser_atendimento_click_control": "browser_click_control",
+            "browser_atendimento_type": "browser_type",
+        }
+        self.assertEqual(expected, m.ATTENDIMENTO_TOOL_MAP)
+        for public_name, base_name in expected.items():
+            self.assertIn(public_name, specs)
+            self.assertEqual(specs[public_name]["inputSchema"], base_specs[base_name]["inputSchema"])
+
+    def test_atendimento_tools_route_only_to_canonical_base_browser(self):
+        args = {"tab_id": "tab-one", "selector": "input[name=Company]", "text": "sample"}
+        with mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base:
+            result = m.execute_tool("browser_atendimento_type", args)
+        self.assertEqual({"route": "base"}, result)
+        base.assert_called_once_with("browser_type", args, cancel_check=None)
+
     def test_browser_health_is_read_only(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
