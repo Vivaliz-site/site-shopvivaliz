@@ -37,7 +37,7 @@ check_fixed 'rapid_growth=1' "$GUARD" 'disk guard detects rapid growth'
 check_fixed '[ "$rapid_growth" -eq 1 ]' "$GUARD" 'rapid growth triggers guarded cleanup before percentage threshold'
 check_fixed 'WORKTREE_PRESSURE_COUNT=' "$GUARD" 'disk guard defines a worktree pressure threshold'
 check_fixed 'worktree_count()' "$GUARD" 'disk guard counts worktree directories'
-check_fixed 'FULL_TTL_HOURS=1 CACHE_TTL_HOURS=1' "$GUARD" 'pressure cleanup uses one-hour delivered-worktree TTL'
+check_fixed 'FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1' "$GUARD" 'pressure cleanup removes clean delivered inactive worktrees immediately'
 if [ "$(grep -c '^EOF2$' "$GUARD")" -eq 1 ]; then
   printf 'PASS: disk guard state heredoc is well formed
 '
