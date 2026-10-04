@@ -89,6 +89,15 @@ HOSTS = {
     },
 }
 
+# Keep enough durable capacity for a control/diagnostic task even when one
+# long job is active. Windows relay work stays serialized.
+HOST_DURABLE_LIMITS = {
+    "always-free-arm-1787907847-26": 2,
+    "shopvivaliz-free-a1": 2,
+    "Fred-Win": 1,
+    "KOCEPSV": 1,
+}
+
 SENSITIVE_PATH_PARTS = (
     "/.ssh/", "\\.ssh\\", ".env", "credential", "secret", "token", "cookie",
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
@@ -668,18 +677,22 @@ def queued_task_context(task_id: str) -> dict[str, Any]:
         ).fetchone()
         if not row or row["state"] != "queued":
             return {}
-        active = db.execute(
-            "SELECT 1 FROM tasks WHERE host=? AND state IN ('starting','running','cancel_requested') LIMIT 1",
+        active_count = int(db.execute(
+            "SELECT COUNT(*) FROM tasks WHERE host=? "
+            "AND state IN ('starting','running','cancel_requested')",
             (row["host"],),
-        ).fetchone()
+        ).fetchone()[0])
         ahead = db.execute(
             "SELECT COUNT(*) FROM tasks WHERE host=? AND state='queued' "
             "AND (created_at < ? OR (created_at = ? AND id < ?))",
             (row["host"], row["created_at"], row["created_at"], row["id"]),
         ).fetchone()[0]
+    limit = HOST_DURABLE_LIMITS.get(str(row["host"]), 1)
     return {
         "queue_position": int(ahead) + 1,
-        "blocked_by_active": bool(active),
+        "blocked_by_active": active_count >= limit,
+        "active_for_host": active_count,
+        "host_concurrency_limit": limit,
     }
 
 
@@ -987,6 +1000,26 @@ def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
     ]
 
 
+def _cleanup_isolated_scope(invocation: list[str]) -> None:
+    """Stop residual descendants left by a bounded systemd scope."""
+    if not invocation or invocation[0] != SYSTEMD_RUN or "--scope" not in invocation:
+        return
+    try:
+        idx = invocation.index("--unit")
+        unit = invocation[idx + 1]
+    except (ValueError, IndexError):
+        return
+    if not unit.endswith(".scope"):
+        unit += ".scope"
+    subprocess.run(
+        [SYSTEMCTL, "stop", unit],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=10,
+    )
+
+
 def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
     """Terminate an inline command and every local descendant in its process group."""
     if proc.poll() is not None:
@@ -1075,6 +1108,7 @@ def run_host_command(
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
     finally:
+        _cleanup_isolated_scope(args)
         INLINE_COMMAND_SLOTS.release()
 
 
@@ -1131,6 +1165,7 @@ def run_local_command_with_stdin(
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
     finally:
+        _cleanup_isolated_scope(invocation)
         INLINE_COMMAND_SLOTS.release()
 
 
@@ -1636,14 +1671,22 @@ def task_worker() -> None:
         try:
             reconcile_tasks()
             with db_conn() as db:
-                row = db.execute(
-                    "SELECT q.id,q.timeout FROM tasks q "
-                    "WHERE q.state='queued' "
-                    "AND NOT EXISTS ("
-                    "SELECT 1 FROM tasks a WHERE a.host=q.host "
-                    "AND a.state IN ('starting','running','cancel_requested')"
-                    ") ORDER BY q.created_at LIMIT 1"
-                ).fetchone()
+                active_rows = db.execute(
+                    "SELECT host,COUNT(*) AS count FROM tasks "
+                    "WHERE state IN ('starting','running','cancel_requested') GROUP BY host"
+                ).fetchall()
+                active_counts = {str(item["host"]): int(item["count"]) for item in active_rows}
+                candidates = db.execute(
+                    "SELECT id,host,timeout FROM tasks WHERE state='queued' ORDER BY created_at"
+                ).fetchall()
+                row = next(
+                    (
+                        item for item in candidates
+                        if active_counts.get(str(item["host"]), 0)
+                        < HOST_DURABLE_LIMITS.get(str(item["host"]), 1)
+                    ),
+                    None,
+                )
                 if not row:
                     continue
                 result_dir = str(ensure_task_result_dir(str(row["id"])))
@@ -1657,7 +1700,7 @@ def task_worker() -> None:
                 continue
             tid = str(row["id"])
             if launch_claimed_task(tid, int(row["timeout"])):
-                audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
+                audit("task_worker", str(row["host"]), {"task_id": tid}, True, "durable_task_service_launched")
         except Exception as exc:
             try:
                 if tid:
