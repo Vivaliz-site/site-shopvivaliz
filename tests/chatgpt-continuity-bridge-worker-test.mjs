@@ -38,6 +38,7 @@ const {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementSweepAllowed,
   reinforcementLoop,
   hasActiveContinuityCheckpoint,
   browserSessionReadyForReinforcement,
@@ -2764,6 +2765,28 @@ async function run() {
     assert.ok(rateLimitedDelay >= 60_000, '429 backoff must be measured in minutes');
     assert.ok(rateLimitedDelay > normalDelay, '429 must back off longer than the normal discovery window');
     assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
+  }
+
+  // A 429 must freeze the expensive recent-conversation sweep as well as
+  // account discovery. Local sidebar inspection may continue during backoff,
+  // but cached conversation candidates must not be navigated until account
+  // discovery is allowed again.
+  {
+    assert.equal(
+      reinforcementSweepAllowed(true, { http_status: 429, cross_device_discovery: true }),
+      false,
+      '429 must suppress the recent-conversation sweep in the rate-limited cycle',
+    );
+    assert.equal(
+      reinforcementSweepAllowed(false, { http_status: 0, cross_device_discovery: true }),
+      false,
+      'API backoff must keep the sweep disabled even while local sidebar checks continue',
+    );
+    assert.equal(
+      reinforcementSweepAllowed(true, { http_status: 200, cross_device_discovery: true }),
+      true,
+      'a successful account-discovery cycle may sweep its fresh candidates',
+    );
   }
 
   // The reinforcement scheduler must call its check with exactly the public
