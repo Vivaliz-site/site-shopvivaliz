@@ -7,6 +7,7 @@ INSTALL_DIR="/opt/shopvivaliz-remote-control-browser"
 UNIT_PATH="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service"
 UNIT_DROPIN_DIR="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d"
 CONFLICTING_SESSION_DROPIN="$UNIT_DROPIN_DIR/40-authenticated-session.conf"
+CONFLICTING_SESSION_BACKUP="$UNIT_DROPIN_DIR/40-authenticated-session.conf.disabled"
 
 test "$(id -u)" = 0 || { echo "ERROR=root_required" >&2; exit 2; }
 test -f "$SOURCE_SERVER" || { echo "ERROR=server_source_missing" >&2; exit 3; }
@@ -33,7 +34,7 @@ python3 -m py_compile "$INSTALL_DIR/server.py"
 # authenticated ChatGPT continuity profile. General browsing and continuity are
 # isolated sessions; keeping this override makes browser_open create tabs in
 # the continuity Chrome cgroup and can exhaust its task budget.
-rm -f "$CONFLICTING_SESSION_DROPIN"
+rm -f "$CONFLICTING_SESSION_DROPIN" "$CONFLICTING_SESSION_BACKUP"
 if [ -d "$UNIT_DROPIN_DIR" ] && [ -z "$(find "$UNIT_DROPIN_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
   rmdir "$UNIT_DROPIN_DIR"
 fi
