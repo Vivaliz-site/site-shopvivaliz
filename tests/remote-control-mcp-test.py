@@ -636,6 +636,13 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn("PrivateTmp=true", unit)
         self.assertIn("UNIT_SOURCE", setup)
 
+    def test_controller_install_refreshes_active_browser_mcp_after_base_tool_changes(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
+        self.assertIn('BROWSER_SERVICE="shopvivaliz-remote-control-browser-mcp.service"', setup)
+        self.assertIn('systemctl try-restart "$BROWSER_SERVICE"', setup)
+        self.assertIn("http://127.0.0.1:5581/health", setup)
+        self.assertIn("REMOTE_CONTROL_BROWSER_DEPENDENT_REFRESH=PASS", setup)
+
     def test_windows_bootstrap_requires_administrator(self):
         text = (ROOT / "scripts" / "setup-remote-control-windows.ps1").read_text(encoding="utf-8")
         self.assertIn("administrator_required", text)
