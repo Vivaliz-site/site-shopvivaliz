@@ -87,6 +87,12 @@ function fakeCdp({
       if (expression.includes('continuity-additional-checks-probe')) {
         return /(nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|try again with a faster model)/i.test(pageText);
       }
+      if (expression.includes('continuity-stopped-thinking-probe')) {
+        return /(stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-streaming-interrupted-probe')) {
+        return /(streaming interrupted|transmissão interrompida|transmissao interrompida)/i.test(pageText);
+      }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
