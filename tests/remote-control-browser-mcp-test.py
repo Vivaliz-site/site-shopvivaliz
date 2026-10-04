@@ -92,6 +92,47 @@ class BrowserMcpTests(unittest.TestCase):
         for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
             self.assertEqual(specs[name]["inputSchema"], base_specs[name]["inputSchema"])
 
+    def test_public_gui_aliases_route_by_argument_shape(self):
+        with (
+            mock.patch.object(m, "browser_navigate", return_value={"route": "gui-navigate"}) as navigate,
+            mock.patch.object(m, "browser_click", return_value={"route": "gui-click"}) as click,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as type_,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base,
+        ):
+            self.assertEqual(
+                {"route": "gui-navigate"},
+                m.execute_tool("browser_navigate", {"url": "https://chatgpt.com/"}),
+            )
+            self.assertEqual(
+                {"route": "gui-click"},
+                m.execute_tool("browser_click", {"x": 10, "y": 20}),
+            )
+            self.assertEqual(
+                {"route": "gui-type"},
+                m.execute_tool("browser_type", {"text": "123456", "press_enter": False}),
+            )
+            self.assertEqual(
+                {"route": "base"},
+                m.execute_tool("browser_type", {"tab_id": "abc", "selector": "#code", "text": "123456"}),
+            )
+
+        navigate.assert_called_once()
+        click.assert_called_once()
+        type_.assert_called_once()
+        base.assert_called_once()
+
+    def test_public_browser_type_alias_audit_redacts_text(self):
+        captured = {}
+        def fake_audit(tool, host, args, ok, summary):
+            captured.update(args)
+            return "audit-id"
+        with mock.patch.object(m, "BASE_AUDIT", fake_audit):
+            aid = m.audit("browser_type", None, {"text": "458170", "press_enter": False}, True, "ok")
+        self.assertEqual("audit-id", aid)
+        self.assertNotIn("text", captured)
+        self.assertEqual(6, captured["text_length"])
+        self.assertIn("text_sha256", captured)
+
     def test_gui_browser_actions_are_explicitly_namespaced(self):
         specs = {spec["name"]: spec for spec in m.tool_specs()}
         for name in ("browser_gui_tabs", "browser_gui_navigate", "browser_gui_click", "browser_gui_type"):

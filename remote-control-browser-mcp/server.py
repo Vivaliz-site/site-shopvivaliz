@@ -372,12 +372,23 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         return browser_click(args)
     if name == "browser_gui_type":
         return browser_type(args)
+
+    # Compatibility shim for connectors that expose the graphical browser
+    # contracts under the legacy public names. Preserve the canonical CDP
+    # actions when their tab_id/selector arguments are present.
+    if name == "browser_navigate" and "tab_id" not in args:
+        return browser_navigate(args)
+    if name == "browser_click" and "x" in args and "y" in args:
+        return browser_click(args)
+    if name == "browser_type" and "tab_id" not in args and "selector" not in args:
+        return browser_type(args)
+
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool == "browser_gui_type" and "text" in safe:
+    if tool in {"browser_gui_type", "browser_type"} and "text" in safe:
         raw = str(safe.pop("text"))
         safe["text_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
         safe["text_length"] = len(raw)
