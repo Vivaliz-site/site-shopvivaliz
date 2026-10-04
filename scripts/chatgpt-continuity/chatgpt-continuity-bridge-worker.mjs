@@ -109,6 +109,13 @@ const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_STREAM_STATUS_TIMEOUT_MS || 5000),
 );
+// Full conversation reads can exceed the lightweight stream probe budget.
+// Keep their total deadline below the 15s CDP command timeout.
+const requestedTurnStateTimeoutMs = Number(process.env.CHATGPT_CONTINUITY_TURN_STATE_TIMEOUT_MS || 10000);
+const CONVERSATION_TURN_TIMEOUT_MS = Math.min(
+  12_000,
+  Math.max(1000, Number.isFinite(requestedTurnStateTimeoutMs) ? requestedTurnStateTimeoutMs : 10000),
+);
 const REINFORCEMENT_SWEEP_BATCH_SIZE = Math.max(
   1,
   Math.min(6, Number(process.env.CHATGPT_CONTINUITY_SWEEP_BATCH_SIZE || 3)),
@@ -1226,7 +1233,7 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
   try {
     return await Promise.race([
       cdp.evaluate(`(async()=>{
-        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
         if(!match) return {http_status:0,status:'NO_CONVERSATION'};
         const controller=new AbortController();
         const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
@@ -1259,17 +1266,19 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
   }
 }
 
-async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
+async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_MS) {
   const requestedTimeout = Number(timeoutMs);
-  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
-    ? Math.max(10, requestedTimeout)
-    : STREAM_STATUS_TIMEOUT_MS;
+  const boundedTimeoutMs = Math.min(
+    12_000,
+    Number.isFinite(requestedTimeout) ? Math.max(10, requestedTimeout) : CONVERSATION_TURN_TIMEOUT_MS,
+  );
   let outerTimeoutHandle;
   try {
     return await Promise.race([
       cdp.evaluate(`(async()=>{
         /* conversation-turn-state */
-        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        const deadline = Date.now() + ${boundedTimeoutMs};
+        const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
         if(!match) {
           return {
             http_status:0,
@@ -1284,7 +1293,7 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         let accountId='';
         let accessToken='';
         try{
-          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
+          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${Math.min(LATEST_CONVERSATION_FETCH_TIMEOUT_MS, boundedTimeoutMs)})});
           if(sessionResponse.ok){
             let session=null;
             try{session=await sessionResponse.json();}catch{}
@@ -1297,7 +1306,7 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         if(accountId) headers['ChatGPT-Account-Id']=accountId;
 
         const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        const timer=setTimeout(()=>controller.abort(), Math.max(1, deadline - Date.now()));
         try{
           const response=await fetch(
             '/backend-api/conversation/'+encodeURIComponent(match[1]),
@@ -2149,7 +2158,7 @@ async function conversationMatchesFingerprint(cdp, expectedFingerprint) {
   if (!expectedFingerprint) return true;
   const path = await cdp.evaluate(`(()=>{
     /* continuity-conversation-identity-probe */
-    return String(location.pathname||'').match(/^\\/c\\/[^/]+/)?.[0]||'';
+    return String(location.pathname||'').match(/^\\/(?:c|uc)\\/[^/]+/)?.[0]||'';
   })()`);
   return Boolean(path) && sha(path) === expectedFingerprint;
 }

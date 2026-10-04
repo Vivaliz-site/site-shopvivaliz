@@ -3469,6 +3469,9 @@ async function run() {
   }
 
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
+  await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
+    conversationTurnState, conversationStreamStatus, sendContinueMessage,
+  });
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
