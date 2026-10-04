@@ -255,6 +255,25 @@ jobs:
           if ! previous="$(readlink -f "$current" 2>/dev/null)"; then
             previous=''
           fi
+          case "$release" in
+            "$releases"/*) ;;
+            *) echo "invalid release directory: $release" >&2; exit 2 ;;
+          esac
+          test -d "$release"
+
+          # Safe Sync and the Master Pipeline intentionally share the same
+          # production lock. If Safe Sync won the race for this exact SHA,
+          # discard this run-scoped duplicate package and reconcile the already
+          # active immutable release instead of retaining two copies.
+          if [ -n "$previous" ] && [ -d "$previous" ]; then
+            active_release_sha="$(cat "$previous/.release-sha" 2>/dev/null || true)"
+            if [ "$active_release_sha" = "$sha" ] && [ "$previous" != "$release" ]; then
+              echo 'MASTER_DEPLOY_REUSE_ACTIVE_SHA=true'
+              rm -rf -- "$release"
+              release="$previous"
+            fi
+          fi
+
           ai_squad_runtime_changed=true
           if [ -n "$previous" ] && [ -d "$previous" ]; then
             if ai_squad_runtime_changed_between_releases "$previous" "$release"; then
@@ -263,11 +282,6 @@ jobs:
               ai_squad_runtime_changed=false
             fi
           fi
-          case "$release" in
-            "$releases"/*) ;;
-            *) echo "invalid release directory: $release" >&2; exit 2 ;;
-          esac
-          test -d "$release"
           printf '%s\n' "$sha" > "$release/.release-sha"
           for name in .env tasks-queue.json logs storage cache uploads sessions; do
             rm -rf "$release/$name"
