@@ -1106,6 +1106,7 @@ async function navigateNeutralTabToConversation(
         })()`,
       );
       if (typeof route === 'string' && /^\/(?:c|uc)\//.test(route)) break;
+      if (await readBoundId() === id) return true;
       await sleep(intervalMs);
     }
 
