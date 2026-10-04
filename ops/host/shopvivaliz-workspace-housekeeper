@@ -5,8 +5,8 @@ ROOT=/home/ubuntu/chat-workspaces
 STATE_DIR=/var/lib/shopvivaliz-workspace-housekeeper
 LOG=/var/log/shopvivaliz-workspace-housekeeper.log
 LOCK=/run/lock/shopvivaliz-workspace-housekeeper.lock
-FULL_TTL_HOURS=24
-CACHE_TTL_HOURS=12
+FULL_TTL_HOURS="${FULL_TTL_HOURS:-24}"
+CACHE_TTL_HOURS="${CACHE_TTL_HOURS:-12}"
 DRY_RUN="${DRY_RUN:-0}"
 
 mkdir -p "$STATE_DIR"
@@ -151,13 +151,13 @@ root_pct_pre="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
 TEMP_TTL_HOURS=24
 SNAPSHOT_TTL_HOURS=24
 if [ "$root_pct_pre" -ge 70 ]; then
-  FULL_TTL_HOURS=4
-  CACHE_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
+  [ "$CACHE_TTL_HOURS" -le 1 ] || CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=12
   SNAPSHOT_TTL_HOURS=12
 fi
 if [ "$root_pct_pre" -ge 80 ]; then
-  FULL_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
   CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=6
   SNAPSHOT_TTL_HOURS=6
@@ -168,7 +168,7 @@ if [ "$root_pct_pre" -ge 85 ]; then
 fi
 
 temp_removed=0
-for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
+for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/shopvivaliz-db-backup-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
 do
   for d in $pattern; do
     [ -d "$d" ] || continue
