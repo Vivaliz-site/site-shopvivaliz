@@ -1994,6 +1994,40 @@ class DurableExecutorV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "request_id_conflict"):
             self.submit(request_id="immutable-request", timeout=31)
 
+    def test_task_wait_detaches_immediately_when_same_host_is_backlogged(self):
+        active_id = self.submit(command="sleep 30")["task_id"]
+        self.claim(active_id, state="running", started=True)
+        queued_id = self.submit(command="printf second")["task_id"]
+        started = time.monotonic()
+        result = m.execute_tool("task_wait", {"task_id": queued_id, "wait_seconds": 5})
+        elapsed = time.monotonic() - started
+        self.assertEqual(result["state"], "queued")
+        self.assertTrue(result["detached"])
+        self.assertTrue(result["blocked_by_active"])
+        self.assertEqual(result["queue_position"], 1)
+        self.assertLess(elapsed, 0.5)
+
+    def test_worker_allows_one_durable_task_per_host_in_parallel(self):
+        active_id = self.submit(command="sleep 30")["task_id"]
+        self.claim(active_id, state="running", started=True)
+        site = m.execute_tool("task_submit", {
+            "host": "shopvivaliz-free-a1",
+            "command": "printf site",
+            "timeout": 30,
+        })
+        with mock.patch.object(m, "systemd_unit_state", return_value="active"), \
+             mock.patch.object(m, "launch_task_service") as launch:
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start()
+            deadline = time.monotonic() + 1
+            while time.monotonic() < deadline and not launch.called:
+                time.sleep(0.02)
+            m.STOP_EVENT.set()
+            worker.join(timeout=2)
+        self.assertTrue(launch.called)
+        launched_ids = [call.args[0] for call in launch.call_args_list]
+        self.assertIn(site["task_id"], launched_ids)
+
     def test_worker_does_not_launch_duplicate_when_live_unit_exists(self):
         task_id = self.submit()["task_id"]
         unit = self.claim(task_id, state="running", started=True)
