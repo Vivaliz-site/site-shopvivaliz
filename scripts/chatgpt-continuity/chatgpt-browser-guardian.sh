@@ -144,13 +144,27 @@ browser_session_state() {
         process.exit(0);
       }
       try {
-        const state = await c.evaluate(`(()=>{
+        const state = await c.evaluate(`(async()=>{
           const body = String(document.body?.innerText || "").toLowerCase();
           const path = String(location.pathname || "");
           const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
             || body.includes("log in or sign up")
             || body.includes("log in to get answers");
           if (loggedOut) return "LOGGED_OUT";
+          try {
+            const sessionResponse = await fetch("/api/auth/session", {
+              credentials: "same-origin",
+              cache: "no-store",
+              signal: AbortSignal.timeout(2000),
+            });
+            if (sessionResponse.ok) {
+              let session = null;
+              try { session = await sessionResponse.json(); } catch {}
+              const hasIdentity = Boolean(session?.account || session?.user);
+              const hasAccessToken = Boolean(session?.accessToken || session?.access_token);
+              if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
+            }
+          } catch {}
           if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
           return "UNKNOWN";
         })()`);
