@@ -206,12 +206,23 @@ def _chatgpt_browser_health(root: Path) -> dict[str, Any]:
     updated_at = str(state.get("updated_at", "")).strip()
     updated = _parse_utc(updated_at)
     try:
-        max_age_seconds = max(
-            30,
-            int(os.environ.get("CHATGPT_BROWSER_HEALTH_MAX_AGE_SECONDS", DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS)),
+        configured_max_age = int(
+            os.environ.get("CHATGPT_BROWSER_HEALTH_MAX_AGE_SECONDS", DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS)
         )
     except (TypeError, ValueError):
-        max_age_seconds = DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS
+        configured_max_age = DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS
+    try:
+        probe_interval_seconds = max(0, int(state.get("probe_interval_seconds") or 0))
+    except (TypeError, ValueError):
+        probe_interval_seconds = 0
+    # A health sample must remain fresh for at least one full probe interval.
+    # Otherwise a healthy authenticated browser oscillates to AUTH_UNKNOWN
+    # between probes (production probes currently run every 300 seconds).
+    max_age_seconds = max(
+        30,
+        configured_max_age,
+        probe_interval_seconds + 60 if probe_interval_seconds else 0,
+    )
     age_seconds: int | None = None
     fresh = False
     if updated is not None:
