@@ -295,6 +295,11 @@ watchdog → fila → bridge/worker → conversa ChatGPT explicitamente vinculad
 - O dispatcher reconhece estritamente esse contrato e **não libera fallback
   detached/Gemini/CLI para `continuity-e2e-*`**. Esse isolamento é restrito ao
   probe de browser e não desabilita a retomada automática das tarefas reais.
+- Um `conversation_id` confirmado pelo browser em `PROGRESS_CONFIRMED` deve ser
+  persistido no checkpoint durável. Esse binding é metadado de roteamento: não
+  avança `updated_at` nem cria um novo fingerprint de retomada. Sucessores
+  explícitos herdam o binding imutável do predecessor, evitando retornar à
+  descoberta ambígua por horário/API após uma conversa já ter sido provada.
 - PASS exige o mesmo `task_id`, fingerprint e `conversation_id` no request e no
   nudge, `worker_status=PROGRESS_CONFIRMED`, checkpoint final
   `CONCLUIDO`, `verification=continuity_e2e_pass`, histórico contendo
