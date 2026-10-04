@@ -320,17 +320,8 @@ jobs:
           sudo chgrp www-data "$shared/tasks-queue.json"
           sudo chmod g+rw "$shared/tasks-queue.json"
 
-          catalog_service_changed=true
           amazon_service_changed=true
           if [ -n "$previous" ] && [ -d "$previous" ]; then
-            if cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-token-renewer.service" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-shopee-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-shopee-token-renewer.service" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-catalog-reconcile.service" "$previous/deploy/systemd/shopvivaliz-catalog-reconcile.service" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-catalog-reconcile.timer" "$previous/deploy/systemd/shopvivaliz-catalog-reconcile.timer"; then
-              catalog_service_changed=false
-            fi
             if cmp -s "$release/scripts/install-amazon-returns-service.sh" "$previous/scripts/install-amazon-returns-service.sh" \
               && cmp -s "$release/deploy/systemd/shopvivaliz-amazon-returns.service" "$previous/deploy/systemd/shopvivaliz-amazon-returns.service"; then
               amazon_service_changed=false
@@ -357,10 +348,12 @@ jobs:
             echo 'safe_repo_sync_install_failed=true' >&2
             fail=1
           fi
-          if [ "$catalog_service_changed" = true ]; then
-            sudo bash "$current/scripts/install-catalog-sync-service.sh"
-          else
-            echo 'catalog_token_services_unchanged=true'
+          # Always reconcile catalog/runtime units against the active release.
+          # Comparing release-to-release is insufficient when another deploy path
+          # has already created the same SHA while /etc/systemd/system is stale.
+          if ! sudo bash "$current/scripts/install-catalog-sync-service.sh"; then
+            echo 'catalog_runtime_unit_reconcile_failed=true' >&2
+            fail=1
           fi
           if [ "$amazon_service_changed" = true ]; then
             sudo bash "$current/scripts/install-amazon-returns-service.sh"
@@ -437,6 +430,15 @@ jobs:
                 fi
               else
                 echo 'ai_squad_runtime_rollback_reconcile_skipped=true'
+              fi
+              if [ -f "$current/scripts/install-catalog-sync-service.sh" ]; then
+                if ! sudo bash "$current/scripts/install-catalog-sync-service.sh"; then
+                  echo 'catalog_runtime_rollback_reconcile_failed=true' >&2
+                  fail=1
+                fi
+              else
+                echo 'catalog_runtime_rollback_installer_missing=true' >&2
+                fail=1
               fi
               if [ -f "$current/scripts/install-abandoned-cart-recovery-service.sh" ]; then
                 sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"
