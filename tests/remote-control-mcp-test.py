@@ -545,6 +545,13 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("command_sha256", payload)
         self.assertNotIn(raw, row["args_json"])
 
+    def test_run_host_command_cleans_isolated_scope_after_success(self):
+        with mock.patch.object(m, "isolated_invocation", return_value=["bash", "-lc", "printf ok"]), \
+             mock.patch.object(m, "_cleanup_isolated_scope") as cleanup:
+            result = m.run_host_command("always-free-arm-1787907847-26", "printf ok", timeout=5)
+        self.assertEqual(result["exit_code"], 0)
+        cleanup.assert_called_once()
+
     def test_task_submit_persists_without_executing_inline(self):
         result = m.execute_tool("task_submit", {
             "host": "always-free-arm-1787907847-26",
