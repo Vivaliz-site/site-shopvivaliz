@@ -35,6 +35,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
+- [`chatgpt-vm-auth.md`](chatgpt-vm-auth.md) — autenticação ChatGPT na VM, OTPClient, regra de TOTP local e digitação segura de senha/OTP.
+
 ## Bootstrap obrigatório de nova sessão
 
 Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta ordem:
