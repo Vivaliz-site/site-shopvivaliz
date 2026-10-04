@@ -340,6 +340,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("'title':", tabs)
         self.assertNotIn("document.title", expression)
         self.assertNotIn(".value", expression)
+        self.assertIn("openai.com", tabs)
         self.assertIn("[REDACTED_EMAIL]", expression)
         daybreak = m.browser_navigate_command("ABC123", "https://openai.com/form/enterprise-trusted-access-for-cyber/")
         self.assertIn("openai.com", daybreak)
@@ -382,6 +383,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("querySelectorAll('input,button,[role=button]')", expression)
         self.assertIn("controls[2]", expression)
         self.assertIn("control_index_not_found", expression)
+        self.assertIn(".focus({preventScroll:true})", expression)
+        self.assertLess(expression.index(".focus({preventScroll:true})"), expression.index("e.click()"))
         with self.assertRaisesRegex(ValueError, "invalid_control_index"):
             m.browser_click_control_command("ABC123", 120)
 
