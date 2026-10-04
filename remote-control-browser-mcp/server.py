@@ -28,8 +28,11 @@ BASE_SERVER = os.environ.get(
     "SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER",
     "/opt/shopvivaliz-remote-control/server.py",
 )
-GUI_USER = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_GUI_USER", "fredrdp")
+GUI_USER = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_GUI_USER", "fredconsole")
 DISPLAY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_DISPLAY", ":0")
+BROWSER_BINARY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome")
+BROWSER_PROFILE_DIR = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium")
+BROWSER_WINDOW_CLASS = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS", "shopvivaliz-general")
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
@@ -98,12 +101,11 @@ def require_binary(name: str) -> str:
 def browser_windows() -> list[str]:
     require_binary("xdotool")
     found: list[str] = []
-    for klass in ("google-chrome", "Google-chrome", "chromium", "Chromium"):
-        r = run_gui(["xdotool", "search", "--onlyvisible", "--class", klass], check=False)
-        if r.returncode == 0:
-            for item in (r.stdout or "").split():
-                if item.isdigit() and item not in found:
-                    found.append(item)
+    r = run_gui(["xdotool", "search", "--onlyvisible", "--class", BROWSER_WINDOW_CLASS], check=False)
+    if r.returncode == 0:
+        for item in (r.stdout or "").split():
+            if item.isdigit() and item not in found:
+                found.append(item)
     return found
 
 
@@ -178,13 +180,19 @@ def selected_url(window: str) -> str:
 
 def browser_health() -> dict[str, Any]:
     dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
-    windows = browser_windows() if dependencies["xdotool"] else []
+    display_accessible = False
+    if dependencies["xdotool"]:
+        display_accessible = run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
+    windows = browser_windows() if dependencies["xdotool"] and display_accessible else []
+    browser_launchable = os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK)
     return {
-        "ok": all(dependencies.values()) and bool(windows),
+        "ok": all(dependencies.values()) and display_accessible and (bool(windows) or browser_launchable),
         "host": BROWSER_HOST,
         "display": DISPLAY,
         "gui_user": GUI_USER,
         "dependencies": dependencies,
+        "display_accessible": display_accessible,
+        "browser_launchable": browser_launchable,
         "window_count": len(windows),
     }
 
@@ -229,11 +237,20 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
         key("Return")
         return {"ok": True, "host": BROWSER_HOST, "action": "new_tab", "url": safe_url(url)}
     candidates = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]
-    binary = next((name for name in candidates if shutil.which(name)), None)
+    binary = BROWSER_BINARY if os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK) else next((name for name in candidates if shutil.which(name)), None)
     if not binary:
         raise RuntimeError("browser_binary_not_found")
     subprocess.Popen(
-        gui_prefix() + [binary, "--new-window", url],
+        gui_prefix() + [
+            binary,
+            f"--user-data-dir={BROWSER_PROFILE_DIR}",
+            f"--class={BROWSER_WINDOW_CLASS}",
+            "--no-sandbox",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--new-window",
+            url,
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,

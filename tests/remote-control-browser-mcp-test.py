@@ -125,11 +125,74 @@ class BrowserMcpTests(unittest.TestCase):
             run.call_args_list,
         )
 
-    def test_browser_mcp_targets_canonical_chatgpt_xvfb_display(self):
+    def test_browser_mcp_is_isolated_from_chatgpt_continuity_session(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
-        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
-        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
-        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY=/opt/shopvivaliz-browser/chrome-linux/chrome", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general", unit)
+        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
+        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
+
+    def test_browser_mcp_execstart_overrides_shared_env_for_session_isolation(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        exec_line = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+        self.assertIn("/usr/bin/env", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general", exec_line)
+
+    def test_browser_windows_only_targets_dedicated_general_browser_class(self):
+        found = mock.Mock(returncode=0, stdout="123\n")
+        with (
+            mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m, "run_gui", return_value=found) as run,
+        ):
+            self.assertEqual(["123"], m.browser_windows())
+        run.assert_called_once_with(["xdotool", "search", "--onlyvisible", "--class", "shopvivaliz-general"], check=False)
+
+    def test_browser_health_is_ready_when_general_browser_is_launchable_without_window(self):
+        with (
+            mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+        ):
+            result = m.browser_health()
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["browser_launchable"], result)
+        self.assertEqual(0, result["window_count"])
+
+    def test_browser_open_uses_configured_binary_when_general_session_has_no_window(self):
+        launched = {}
+        class FakeProcess:
+            pass
+        def fake_popen(argv, **kwargs):
+            launched["argv"] = argv
+            launched["kwargs"] = kwargs
+            return FakeProcess()
+        with (
+            mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
+            mock.patch.object(m, "BROWSER_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium", create=True),
+            mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=fake_popen),
+        ):
+            result = m.browser_open({"url": "https://example.com/"})
+        self.assertEqual("new_window", result["action"])
+        self.assertIn("/opt/shopvivaliz-browser/chrome-linux/chrome", launched["argv"])
+        self.assertIn("--new-window", launched["argv"])
+        self.assertIn("--no-sandbox", launched["argv"])
+        self.assertIn("--class=shopvivaliz-general", launched["argv"])
+        self.assertIn("--user-data-dir=/home/fredconsole/.config/shopvivaliz-general-chromium", launched["argv"])
 
     def test_setup_restarts_existing_browser_service_after_install(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")

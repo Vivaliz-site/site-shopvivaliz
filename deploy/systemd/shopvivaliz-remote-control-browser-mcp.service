@@ -13,10 +13,13 @@ Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
 Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5581
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
 Environment=SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER=/opt/shopvivaliz-remote-control/server.py
-Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp
-Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99
+Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole
+Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0
+Environment=SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY=/opt/shopvivaliz-browser/chrome-linux/chrome
+Environment=SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium
+Environment=SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general
 EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
-ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control-browser/server.py
+ExecStart=/usr/bin/env SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0 SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY=/opt/shopvivaliz-browser/chrome-linux/chrome SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general /usr/bin/python3 /opt/shopvivaliz-remote-control-browser/server.py
 Restart=always
 RestartSec=3
 NoNewPrivileges=false
