@@ -225,6 +225,19 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('[ "$service" = "$ML_RENEWER_SERVICE" ]', reconcile)
         self.assertIn('disable --now "$ML_RENEWER_SERVICE"', reconcile)
 
+    def test_master_pipeline_discards_duplicate_release_when_same_sha_wins_race(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+
+        self.assertIn('active_release_sha="$(cat "$previous/.release-sha" 2>/dev/null || true)"', activation)
+        self.assertIn(
+            'if [ "$active_release_sha" = "$sha" ] && [ "$previous" != "$release" ]; then',
+            activation,
+        )
+        self.assertIn("MASTER_DEPLOY_REUSE_ACTIVE_SHA=true", activation)
+        self.assertIn('rm -rf -- "$release"', activation)
+        self.assertIn('release="$previous"', activation)
+
     def test_master_pipeline_always_reconciles_catalog_runtime_units_on_real_deploy(self) -> None:
         workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
