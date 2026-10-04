@@ -131,7 +131,7 @@ class BrowserMcpTests(unittest.TestCase):
                 m.execute_tool("browser_click", {"x": 10, "y": 20}),
             )
             self.assertEqual(
-                {"route": "gui-type"},
+                {"route": "base"},
                 m.execute_tool("browser_type", {"text": "123456", "press_enter": False}),
             )
             self.assertEqual(
@@ -141,8 +141,8 @@ class BrowserMcpTests(unittest.TestCase):
 
         navigate.assert_called_once()
         click.assert_called_once()
-        type_.assert_called_once()
-        base.assert_called_once()
+        type_.assert_not_called()
+        self.assertEqual(2, base.call_count)
 
     def test_public_browser_type_prefers_canonical_focused_cdp_before_gui(self):
         args = {"text": "123456", "press_enter": False}
