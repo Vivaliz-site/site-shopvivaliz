@@ -2448,21 +2448,32 @@ async function attemptNudge(
     const passiveRecoveryEligible = wasGenerating
       || Boolean(detectedFailureReason)
       || silentStallBeforeReattach;
+    // A healthy idle conversation with an already-usable composer does not
+    // need a reload before checkpoint continuation. Live ChatGPT can keep a
+    // conversation usable in the hydrated SPA while a hard reload fails to
+    // rehydrate that same route; reloading here destroys the composer and
+    // turns an otherwise recoverable checkpoint into SEND_FAILED_AFTER_REATTACH.
+    // Preserve the bounded reattach for real recovery signals and for an idle
+    // surface whose composer is actually missing.
+    const idleComposerReady = !passiveRecoveryEligible && await composerIsUsable(cdp);
+    const shouldPassiveReattach = passiveRecoveryEligible || !idleComposerReady;
     const passiveBaseline = await assistantSnapshot(cdp);
-    await cdp.evaluate(`(()=>{location.reload();return true})()`);
-    await sleep(1200);
-    const passiveProgressed = await confirmProgress(
-      cdp,
-      passiveBaseline,
-      PASSIVE_REATTACH_CONFIRM_MS,
-      PROGRESS_POLL_MS,
-    );
-    if (passiveProgressed && passiveRecoveryEligible) {
-      return {
-        result_status: 'PROGRESS_CONFIRMED',
-        detail: 'passive reattach restored assistant progress without sending continuation',
-        ...recoveryMetadata(),
-      };
+    if (shouldPassiveReattach) {
+      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      await sleep(1200);
+      const passiveProgressed = await confirmProgress(
+        cdp,
+        passiveBaseline,
+        PASSIVE_REATTACH_CONFIRM_MS,
+        PROGRESS_POLL_MS,
+      );
+      if (passiveProgressed && passiveRecoveryEligible) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'passive reattach restored assistant progress without sending continuation',
+          ...recoveryMetadata(),
+        };
+      }
     }
 
     const postReattachFailureReason = await recoverableFailureReason(cdp);
