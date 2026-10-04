@@ -115,6 +115,25 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertNotIn('systemctl --user restart "$tunnel_unit"\n', body)
         self.assertNotIn('systemctl --user restart "$unit"\n', body)
 
+
+    def test_backend_installer_waits_for_canonical_cdp_readiness(self) -> None:
+        installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
+        body = installer.read_text(encoding="utf-8")
+        self.assertIn("cdp_ready=false", body)
+        self.assertIn("for _ in $(seq 1 30); do", body)
+        self.assertIn("--connect-timeout 1 --max-time 2", body)
+        self.assertIn("cdp_ready", body)
+        self.assertIn("CDP endpoint did not become ready", body)
+
+    def test_remote_workflows_copy_atendimento_browser_unit(self) -> None:
+        for rel in [
+            ".github/workflows/shopvivaliz-remote-access.yml",
+            ".github/workflows/oci-bastion-private-access-bootstrap.yml",
+        ]:
+            body = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("ops/systemd/shopvivaliz-atendimento-browser.service", body)
+            self.assertNotIn("ops/systemd/shopvivaliz-chatgpt-browser.service", body)
+
     def test_backend_installer_retires_legacy_browser_healthcheck(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
         body = installer.read_text(encoding="utf-8")
