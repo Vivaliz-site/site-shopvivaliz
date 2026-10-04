@@ -56,7 +56,7 @@ class RuntimeStatusPolicyContractTests(unittest.TestCase):
             "shopvivaliz-gemini-24x7-controller.service",
             "shopvivaliz-chatgpt-continuity.service",
             "http://127.0.0.1:5580/health",
-            "http://127.0.0.1:9556/json/version",
+            "http://127.0.0.1:9555/json/version",
             "/var/lib/mei-mg-email/sender_blocked.pause",
             "EXPECTED=inactive-sender-block",
             "EXPECTED=active-no-sender-block",
