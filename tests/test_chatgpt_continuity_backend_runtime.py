@@ -354,7 +354,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_CURL_COUNT_FILE"; '
                 'if [[ "$count" -ge 3 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
             )
-            executable("pgrep", "printf \'424242\\n\'\n")
+            executable("pgrep", "exit 1\n")
             executable(
                 "systemctl",
                 'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '

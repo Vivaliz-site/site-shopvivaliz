@@ -322,21 +322,21 @@ else
 
   if cdp_ready; then
     validate_browser_session "HEALTHY" || status=1
-  elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
-    if systemctl is-active --quiet "$browser_unit"; then
-      sleep 5
-      if cdp_ready; then
-        validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
+  elif systemctl is-active --quiet "$browser_unit"; then
+    sleep 5
+    if cdp_ready; then
+      validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
+    else
+      systemctl restart "$browser_unit"
+      if wait_for_cdp; then
+        validate_browser_session "RECOVERED_MANAGED_RESTART" || status=1
       else
-        systemctl restart "$browser_unit"
-        if wait_for_cdp; then
-          validate_browser_session "RECOVERED_MANAGED_RESTART" || status=1
-        else
-          echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
-          status=1
-        fi
+        echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+        status=1
       fi
-    elif [[ "${#canonical_pids[@]}" -eq 1 ]]; then
+    fi
+  elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
+    if [[ "${#canonical_pids[@]}" -eq 1 ]]; then
       canonical_pid="${canonical_pids[0]}"
       if [[ ! "$canonical_pid" =~ ^[0-9]+$ ]]; then
         echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_INVALID_CANONICAL_PID" >&2
@@ -349,10 +349,10 @@ else
         # there is exactly one candidate. Terminate only that PID, never a broad
         # process class, then relaunch the same profile under systemd supervision.
         if ! kill -TERM "$canonical_pid" 2>/dev/null; then
-        # A concurrent exit is possible; the bounded absence check below is
-        # still authoritative and rejects takeover while the process is live.
-        echo "CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED" >&2
-      fi
+          # A concurrent exit is possible; the bounded absence check below is
+          # still authoritative and rejects takeover while the process is live.
+          echo "CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED" >&2
+        fi
         terminated=false
         for _ in $(seq 1 10); do
           if ! pid_is_live "$canonical_pid"; then
