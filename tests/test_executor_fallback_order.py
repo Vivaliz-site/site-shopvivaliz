@@ -36,7 +36,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)
         self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
         self.assertNotIn('"\\\\nCLAUDE_BIN=', script)
-        self.assertRegex(script, r'CODEX_AUTO_BIN="[^"\\n]+"\\nCLAUDE_BIN="[^"\\n]+"')
+        self.assertIn('CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"\nCLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
         self.assertIn("run_claude()", script)
         self.assertIn("try_provider anthropic run_claude", script)
 
