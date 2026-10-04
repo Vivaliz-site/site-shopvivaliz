@@ -17,12 +17,26 @@ SPEC.loader.exec_module(MODULE)
 def main() -> None:
     fields = [
         b"BREVO_API_KEY", b"valid-brevo-api-key",
-        b"EMAIL_USER", b"atendimento@example.test",
-        b"EMAIL_PASSWORD", b"valid-email-password",
+        b"EMAIL_TO", b"fredmourao@example.test",
         b"OLIST_CLIENT_SECRET", b"bad",
     ]
     email_values = MODULE.parse_payload_fields(fields, scope="email")
-    assert set(email_values) == {"BREVO_API_KEY", "EMAIL_USER", "EMAIL_PASSWORD"}
+    assert set(email_values) == {"BREVO_API_KEY", "EMAIL_TO"}
+
+    for retired_key in (
+        b"EMAIL_USER", b"EMAIL_PASSWORD", b"EMAIL_SMTP_HOST", b"EMAIL_SMTP_PORT",
+        b"SMTP_HOST", b"SMTP_PORT", b"SMTP_USER", b"SMTP_PASS",
+        b"MAIL_HOST", b"MAIL_PORT", b"MAIL_USER", b"MAIL_PASS",
+    ):
+        try:
+            MODULE.parse_payload_fields(
+                [retired_key, b"legacy-value-12345", b"BREVO_API_KEY", b"valid-brevo-api-key"],
+                scope="email",
+            )
+        except ValueError as exc:
+            assert "unsupported runtime credential key" in str(exc)
+        else:
+            raise AssertionError(f"retired email credential accepted: {retired_key!r}")
     melhorenvio_fields = [
         b"MELHORENVIO_CLIENTE_ID", b"26364-valid-client-id",
         b"MELHORENVIO_CLIENTE_SECRET", b"valid-melhorenvio-client-secret",

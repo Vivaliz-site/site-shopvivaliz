@@ -208,6 +208,29 @@ def append_request(runtime_dir: Path, row: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
 
 
+def _preserve_runtime_file_metadata(path: Path, *, root: Path, existing: Path | None = None) -> None:
+    """Keep queue files owned by the runtime owner even when maintenance runs as root."""
+    reference = existing if existing is not None and existing.exists() else root
+    try:
+        ref_stat = reference.stat()
+    except OSError:
+        ref_stat = None
+
+    mode = 0o600
+    if existing is not None and existing.exists() and ref_stat is not None:
+        mode = ref_stat.st_mode & 0o777
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+    if ref_stat is not None and hasattr(os, "geteuid") and os.geteuid() == 0:
+        try:
+            os.chown(path, ref_stat.st_uid, ref_stat.st_gid)
+        except OSError:
+            pass
+
+
 def _fsync_dir(root: Path) -> None:
     try:
         fd = os.open(root, os.O_RDONLY)
@@ -233,11 +256,13 @@ def compact_queue(
 
         if should_compact and removable:
             archive = root / ARCHIVE_FILE
+            archive_existed = archive.exists()
             with archive.open("a", encoding="utf-8") as handle:
-                try:
-                    os.chmod(archive, 0o600)
-                except OSError:
-                    pass
+                _preserve_runtime_file_metadata(
+                    archive,
+                    root=root,
+                    existing=archive if archive_existed else None,
+                )
                 for line in removable:
                     handle.write(line + "\n")
                 handle.flush()
@@ -252,10 +277,11 @@ def compact_queue(
                         handle.write(line + "\n")
                 handle.flush()
                 os.fsync(handle.fileno())
-            try:
-                os.chmod(temp, 0o600)
-            except OSError:
-                pass
+            _preserve_runtime_file_metadata(
+                temp,
+                root=root,
+                existing=target if target.exists() else None,
+            )
             os.replace(temp, target)
             _fsync_dir(root)
 

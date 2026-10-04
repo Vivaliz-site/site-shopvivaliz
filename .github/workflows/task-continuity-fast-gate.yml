@@ -9,7 +9,10 @@ on:
       - 'scripts/task_resume_queue.py'
       - 'scripts/task_continuity_actions_queue.py'
       - 'scripts/task_resume_dispatcher.py'
+      - 'scripts/gemini_24x7_controller.py'
+      - 'scripts/install-gemini-24x7-controller.sh'
       - 'scripts/task_continuity_e2e.py'
+      - 'scripts/chatgpt_continuity_proof_certifier.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'scripts/chatgpt_continuity_nudge_dispatcher.py'
       - 'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'
@@ -19,18 +22,23 @@ on:
       - 'scripts/autonomous-agent-loop.sh'
       - 'tests/test_task_continuity_enforcement.py'
       - 'tests/test_task_resume_dispatcher.py'
+      - 'tests/test_gemini_24x7_controller.py'
       - 'tests/test_task_continuation_watchdog.py'
       - 'tests/test_task_resume_queue.py'
       - 'tests/test_task_continuity_actions_queue.py'
       - 'tests/test_task_continuity_e2e.py'
+      - 'tests/test_chatgpt_continuity_proof_certifier.py'
       - 'tests/test_ci_feedback_optimization.py'
       - 'tests/test_pr_gate_scope.py'
       - 'tests/test_executor_fallback_order.py'
       - 'tests/test_remote_control_mcp_priority_policy.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-continuity-cooldown-test.mjs'
       - 'tests/chatgpt-continuity-pending-nudge-store-test.php'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
+      - 'tests/test_guardian_probe_budget.py'
+      - 'scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py'
       - 'tests/test_checkpoint_first_zero_window.py'
       - 'docs/knowledge/task-continuity.md'
       - 'docs/knowledge/agent-rules.md'
@@ -41,6 +49,7 @@ on:
       - '.github/copilot-instructions.md'
       - '.github/workflows/task-continuity-fast-gate.yml'
       - '.github/workflows/task-continuity-production-e2e.yml'
+      - 'deploy/systemd/shopvivaliz-gemini-24x7-controller.service'
       - '.github/workflows/task-continuity-actions-queue-hygiene.yml'
   push:
     branches: [main]
@@ -51,7 +60,10 @@ on:
       - 'scripts/task_resume_queue.py'
       - 'scripts/task_continuity_actions_queue.py'
       - 'scripts/task_resume_dispatcher.py'
+      - 'scripts/gemini_24x7_controller.py'
+      - 'scripts/install-gemini-24x7-controller.sh'
       - 'scripts/task_continuity_e2e.py'
+      - 'scripts/chatgpt_continuity_proof_certifier.py'
       - 'scripts/validate-task-continuity-enforcement.py'
       - 'scripts/chatgpt_continuity_nudge_dispatcher.py'
       - 'scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'
@@ -61,14 +73,19 @@ on:
       - 'scripts/autonomous-agent-loop.sh'
       - 'tests/test_task_continuity_enforcement.py'
       - 'tests/test_task_resume_dispatcher.py'
+      - 'tests/test_gemini_24x7_controller.py'
       - 'tests/test_task_continuation_watchdog.py'
       - 'tests/test_task_resume_queue.py'
       - 'tests/test_task_continuity_actions_queue.py'
       - 'tests/test_task_continuity_e2e.py'
+      - 'tests/test_chatgpt_continuity_proof_certifier.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-continuity-cooldown-test.mjs'
       - 'tests/chatgpt-continuity-pending-nudge-store-test.php'
       - 'tests/test_chatgpt_continuity_backend_runtime.py'
+      - 'tests/test_guardian_probe_budget.py'
+      - 'scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py'
       - 'tests/test_checkpoint_first_zero_window.py'
       - 'docs/knowledge/task-continuity.md'
       - 'docs/knowledge/agent-rules.md'
@@ -79,6 +96,7 @@ on:
       - '.github/copilot-instructions.md'
       - '.github/workflows/task-continuity-fast-gate.yml'
       - '.github/workflows/task-continuity-production-e2e.yml'
+      - 'deploy/systemd/shopvivaliz-gemini-24x7-controller.service'
       - '.github/workflows/task-continuity-actions-queue-hygiene.yml'
 
 permissions:
@@ -98,13 +116,15 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
       - name: Compile continuity runtime
-        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/task_resume_queue.py scripts/task_continuity_actions_queue.py scripts/task_continuity_e2e.py scripts/validate-task-continuity-enforcement.py scripts/chatgpt_continuity_nudge_dispatcher.py scripts/run_background_gemini.py scripts/safe_git_push.py
+        run: python3 -m py_compile scripts/agent_task_state.py scripts/agent-operations-worker.py scripts/task_resume_dispatcher.py scripts/task_resume_queue.py scripts/task_continuity_actions_queue.py scripts/task_continuity_e2e.py scripts/chatgpt_continuity_proof_certifier.py scripts/gemini_24x7_controller.py scripts/validate-task-continuity-enforcement.py scripts/chatgpt_continuity_nudge_dispatcher.py scripts/run_background_gemini.py scripts/safe_git_push.py
       - name: Run focused continuity regression
-        run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_task_resume_queue tests.test_task_continuity_actions_queue tests.test_task_continuity_e2e tests.test_ci_latency_contract tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order tests.test_remote_control_mcp_priority_policy tests.test_chatgpt_continuity_nudge_dispatcher tests.test_chatgpt_continuity_backend_runtime tests.test_checkpoint_first_zero_window -v
+        run: python3 -m unittest tests.test_task_continuity_enforcement tests.test_task_continuation_watchdog tests.test_task_resume_dispatcher tests.test_gemini_24x7_controller tests.test_task_resume_queue tests.test_task_continuity_actions_queue tests.test_task_continuity_e2e tests.test_chatgpt_continuity_proof_certifier tests.test_ci_latency_contract tests.test_ci_feedback_optimization tests.test_pr_gate_scope tests.test_executor_fallback_order tests.test_remote_control_mcp_priority_policy tests.test_chatgpt_continuity_nudge_dispatcher tests.test_chatgpt_continuity_backend_runtime tests.test_guardian_probe_budget tests.test_checkpoint_first_zero_window -v
       - name: Run background Gemini safety regression
         run: python3 -m unittest tests.test_background_gemini_runner -v
       - name: Run ChatGPT continuity bridge worker regression
         run: node tests/chatgpt-continuity-bridge-worker-test.mjs
+      - name: Run platform-wait safety regression
+        run: node --test tests/chatgpt-continuity-cooldown-test.mjs
       - name: Run ChatGPT continuity pending queue regression
         run: php tests/chatgpt-continuity-pending-nudge-store-test.php
       - name: Validate continuity policy

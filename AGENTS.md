@@ -1,3 +1,7 @@
+<!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
+> **AUDITORIA EXTERNA TAMBÉM É CORRETIVA:** auditoria interna, externa, independente, contraditória ou feita por outro agente/revisor segue o mesmo ciclo. Auditor externo com autorização deve corrigir, testar e reauditar. Se for read-only, o relatório não encerra: os achados corrigíveis seguem para executor autorizado e permanecem em andamento até correção + revalidação independente ou bloqueio externo comprovado.
+<!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
+
 <!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
 ## Acesso canônico aos hosts ShopVivaliz
 
@@ -43,6 +47,13 @@ Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs o
 
 ---
 
+<!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> 🛠️ **AUDITORIA É CORRETIVA:** qualquer pedido de auditoria, mesmo sem "extrema", obriga todos os agentes a investigar causa raiz, corrigir todo achado material seguro/autorizado, aplicar prevenção quando pertinente, testar e reauditar. Listar erros, recomendar ou abrir issue não conclui a auditoria. APTO/CONCLUIDO exige evidência fresca pós-correção e E2E real quando aplicável. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md` (`AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`).
+<!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> 🔧 **DIAGNÓSTICO É CORRETIVO EM QUALQUER TAREFA:** identificar a causa não conclui o trabalho. Todo agente/controlador deve continuar de defeito confirmado para **correção segura → prevenção pertinente → testes → validação real/E2E aplicável → revalidação**. Enquanto houver ação segura executável, o estado é `RUNNING`; `CONCLUIDO` exige evidência fresca pós-correção. Só `BLOCKED_EXTERNAL` comprovado, após esgotar alternativas autorizadas, permite encerrar sem corrigir. Fonte: `REGRAS-AGENTES-CENTRALIZADAS.md` (`DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`).
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## 🔴 Auditoria Extrema — cobertura universal obrigatória
 
 Quando houver auditoria completa/extrema, validação de release/apto ou condição definida em `AUDIT_POLICY.md`, todos os agentes (Claude, Codex, Gemini, GPT e demais) devem executar integralmente `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md`.
@@ -591,7 +602,7 @@ Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois SSH privado/Tailscale e somente para bootstrap/recovery GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Não consumir Codex para esse trabalho por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente. Codex só pode ser acionado em tarefa finita, explicitamente autorizada e como último recurso.
+- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->
@@ -615,7 +626,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ## Continuidade global multi-repositório
 O `site-shopvivaliz` é o controlador canônico de `GLOBAL_TASK_CONTINUITY_V8`.
 Todo estado persistido deve carregar `repository=owner/name`; o runtime canônico
-executa watchdog -> dispatcher -> Gemini e o background permanece Gemini-only.
+executa watchdog -> dispatcher -> Gemini primário; se Gemini não produzir progresso, o fallback finito `codex-auto` explicitamente autorizado pode assumir o mesmo fingerprint sem execução concorrente.
 A presença de adapter não certifica continuidade: somente `continuity_e2e_pass`
 real para o mesmo repositório autoriza APTO global.
 <!-- /GLOBAL_TASK_CONTINUITY_V8 -->

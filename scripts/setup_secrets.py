@@ -27,27 +27,9 @@ SECRETS_TO_ADD = {
     'CLIENT_SECRET_OLIST': 'Secret API Olist',
     'OLIST_REDIRECT_URI': 'Redirect Olist',
 
-    # FTP
-    'FTP_SERVER': 'Servidor FTP',
-    'FTP_HOST': 'Servidor FTP (alias)',
-    'FTP_USERNAME': 'Usuário FTP',
-    'FTP_USER': 'Usuário FTP (alias)',
-    'FTP_PASSWORD': 'Senha FTP',
-    'FTP_PASS': 'Senha FTP (alias)',
-    'FTP_PORT': '21 (porta FTP)',
-    'FTP_REMOTE_DIR': '/public_html (diretório remoto)',
-
     # Email
-    'EMAIL_FROM': 'Email remetente',
     'EMAIL_TO': 'Email destinatário',
-    'EMAIL_SMTP_HOST': 'Host SMTP',
-    'SMTP_HOST': 'Host SMTP (alias)',
-    'EMAIL_SMTP_PORT': '587 (porta SMTP)',
-    'SMTP_PORT': '587 (porta SMTP alias)',
-    'EMAIL_USER': 'Usuário SMTP',
-    'SMTP_USER': 'Usuário SMTP (alias)',
-    'EMAIL_PASSWORD': 'Senha SMTP',
-    'SMTP_PASS': 'Senha SMTP (alias)',
+    'BREVO_API_KEY': 'Chave API transacional Brevo',
 
     # Database
     'DB_HOST': 'Host Database',
@@ -75,7 +57,6 @@ SECRETS_TO_ADD = {
     # Tokens
     'GH_REPO_TOKEN': 'Token GitHub',
     'SQUAD_TOKEN': 'Token Squad',
-    'EMAIL_AGENTES_SECRET': 'Secret Agentes Email',
 }
 
 def check_gh_installed() -> bool:

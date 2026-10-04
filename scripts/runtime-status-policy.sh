@@ -165,6 +165,7 @@ case "$role" in
     ;;
   backend)
     report_required_active shopvivaliz-remote-control-mcp.service
+    report_required_active shopvivaliz-gemini-24x7-controller.service
     report_user_required_active shopvivaliz-chatgpt-continuity.service
     report_http_health remote-control-mcp http://127.0.0.1:5580/health
     report_http_health chatgpt-cdp http://127.0.0.1:9555/json/version

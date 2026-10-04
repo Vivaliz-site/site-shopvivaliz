@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -56,6 +58,72 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.calls.append(kwargs)
         return {"ok": True, "http_status": 200, "body": {"status": "OK", "enqueued": True}}
 
+    def test_worker_error_remains_degraded_during_retry_cooldown(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        status = {"ok": True, "body": {"nudge": {"status": "ERROR"}}}
+        kwargs["query_status"] = lambda **unused: status
+        result = self.dispatcher.run_once(**kwargs)
+        later = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(later["failed"], 1)
+        self.assertEqual(len(self.calls), 1)
+        state.record_progress("task-1", next_action="repair transport", evidence="changed checkpoint")
+        result = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 0, "obsolete failed fingerprint must not degrade current work")
+
+    def test_confirmed_progress_clears_browser_failure(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        result = self.dispatcher.run_once(**kwargs, query_status=lambda **unused: {
+            "ok": True, "body": {"nudge": {"status": "PROGRESS_CONFIRMED"}}})
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_enqueue_failure_is_reported_without_disabling_retry(self) -> None:
+        self._stale_checkpoint_and_request()
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=lambda **unused: {"ok": False, "http_status": 503})
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["dispatched"], 0)
+
+    def test_confirmed_ledger_binding_is_reused_across_fingerprints(self) -> None:
+        ledger = {
+            "old-fingerprint": {
+                "task_id": "task-1",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:00:00Z",
+                "conversation_id": "12345678-2222-3333-4444-555555555555",
+            },
+            "other-task": {
+                "task_id": "task-2",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:01:00Z",
+                "conversation_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            },
+        }
+        self.assertEqual(
+            self.dispatcher._ledger_bound_conversation_id(ledger, "task-1"),
+            "12345678-2222-3333-4444-555555555555",
+        )
+        self.assertEqual(self.dispatcher._ledger_bound_conversation_id(ledger, "missing"), "")
+
+    def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
+        self.assertEqual(
+            self.dispatcher.DEFAULT_BRIDGE_URL,
+            "http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php",
+        )
+        self.assertEqual(
+            self.dispatcher.DEFAULT_TOKEN_FILE,
+            Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token"),
+        )
+        self.assertNotEqual(self.dispatcher.DEFAULT_TOKEN_FILE, self.dispatcher.LEGACY_TOKEN_FILE)
+
     def test_dispatches_new_chatgpt_common_request_to_the_bridge(self) -> None:
         self._stale_checkpoint_and_request()
         result = self.dispatcher.run_once(
@@ -81,6 +149,30 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         )
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1, "the bridge must be called exactly once for the same fingerprint")
+
+    def test_live_dispatch_lock_blocks_parallel_nudge_effect(self) -> None:
+        self._stale_checkpoint_and_request()
+        with self.dispatcher._dispatcher_lock(self.runtime) as acquired:
+            self.assertTrue(acquired)
+            blocked = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+
+        self.assertTrue(blocked["locked"])
+        self.assertEqual(blocked["dispatched"], 0)
+        self.assertEqual(len(self.calls), 0)
+
+        recovered = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(recovered["dispatched"], 1)
+        self.assertEqual(len(self.calls), 1)
 
     def test_confirmed_progress_is_the_only_terminal_success_for_same_fingerprint(self) -> None:
         self._stale_checkpoint_and_request()
@@ -329,10 +421,23 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_missing_token_skips_without_crashing_and_never_marks_the_ledger(self) -> None:
         self._stale_checkpoint_and_request()
-        result = self.dispatcher.run_once(
-            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
-            token="", enqueue=self._fake_enqueue_ok,
-        )
+        missing_token_file = self.runtime / "deliberately-missing-bridge.token"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_CONTINUITY_BRIDGE_TOKEN": "",
+                    "CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE": str(missing_token_file),
+                },
+                clear=False,
+            ),
+            patch.object(self.dispatcher, "DEFAULT_TOKEN_FILE", missing_token_file),
+            patch.object(self.dispatcher, "LEGACY_TOKEN_FILE", missing_token_file),
+        ):
+            result = self.dispatcher.run_once(
+                runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                token="", enqueue=self._fake_enqueue_ok,
+            )
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(result["skipped_no_token"], 1)
         self.assertEqual(len(self.calls), 0)

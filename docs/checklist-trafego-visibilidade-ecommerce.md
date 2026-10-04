@@ -4,7 +4,7 @@ Documento-base para priorizar implementação de rastreamento, aquisição de tr
 
 ## 1. Estrutura Técnica e Configurações de Rastreamento
 
-- [x] Google Tag Manager (GTM): instalação centralizada para gerenciar tags sem reduzir a velocidade do site.
+- [ ] Google Tag Manager (GTM): opcional. O container web legado foi desativado após auditoria V5; o GA4 oficial continua pelo carregamento direto/first-party.
 - [x] Google Analytics 4 (GA4): configuração do funil de E-commerce Avançado: `view_item -> add_to_cart -> begin_checkout -> purchase`.
 - [ ] Acompanhamento de Conversões Otimizado (Enhanced Conversions): ativação no Google Ads para enviar dados criptografados e reduzir perda de rastreamento por cookies.
 - [ ] Meta API de Conversão (CAPI): configuração do rastreamento do lado do servidor para Instagram/Facebook Ads.
@@ -64,13 +64,14 @@ Documento-base para priorizar implementação de rastreamento, aquisição de tr
 - [x] MCP local `google-ads-readonly` configurado para diagnóstico e revisão via API.
 - [ ] Revisão da campanha ativa no Google Ads pendente por bloqueio de política em `ads.google.com` neste PC e ausência de credenciais API reais no `.env`.
 
-## Status Atualizado em 2026-07-19
+## Status Atualizado em 2026-10-03
 
 | Item | Status | Evidência / bloqueio |
 |---|---:|---|
-| GTM | IMPLEMENTADO | Container `GTM-PHZ55CP3` presente no site. |
+| GTM | DESATIVADO_INTENCIONALMENTE | O container legado `GTM-PHZ55CP3` publicava o stream divergente `G-QWYPLYMZ9`. A auditoria V5 preserva o GA4 oficial `G-1H55K1TZ5D` via tag direta/first-party e só permite GTM quando explicitamente configurado. |
 | GA4 | IMPLEMENTADO | Stream `G-1H55K1TZ5D` acessível e recebendo tráfego. |
 | Funil GA4 e-commerce | IMPLEMENTADO | Eventos `view_item`, `add_to_cart`, `begin_checkout`, `purchase` presentes no código. |
+| Purchase GA4 server-side | BLOQUEADO_POR_CREDENCIAL | `GA4_SECRET` não está materializado no runtime; a credencial OAuth disponível não possui permissão de Analytics Admin para criar o secret. O funil browser permanece ativo, mas o webhook de pagamento aprovado não consegue publicar `purchase` server-side até o secret existir. |
 | Enhanced Conversions | BLOQUEADO_POR_CREDENCIAL | Código existe, mas faltam `GOOGLE_ADS_ID` e `GOOGLE_ADS_CONVERSION_LABEL` reais. |
 | Google Merchant Center | IMPLEMENTADO | Feed dedicado por URL cadastrado; 177 produtos adicionados; arquivo sem problema básico. |
 | Google Shopping / PMax | BLOQUEADO_POR_APROVACAO | Não ativar campanha paga sem aprovação de orçamento e conta Ads liberada. |

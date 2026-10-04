@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
-import smtplib
 import subprocess
 import sys
 from datetime import datetime, timezone
-from email.message import EmailMessage
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shopvivaliz_mail import send_text
 
 
 def load_env_files(paths: list[str]) -> None:
@@ -80,38 +81,24 @@ def build_report() -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-class SmtpNotConfiguredError(Exception):
-    """Raised when SMTP secrets are missing — not a real failure."""
-
+class ProviderNotConfiguredError(Exception):
+    """Raised when the ShopVivaliz transactional provider is not configured."""
 
 def send_email(subject: str, body: str) -> None:
-    smtp_host = env("SMTP_HOST", env("EMAIL_SMTP_HOST", env("MAIL_HOST")))
-    smtp_port = int(env("SMTP_PORT", env("EMAIL_SMTP_PORT", env("MAIL_PORT") or "465")))
-    smtp_user = env("SMTP_USER", env("EMAIL_USER", env("MAIL_USER")))
-    smtp_pass = env("SMTP_PASS", env("EMAIL_PASSWORD", env("MAIL_PASS")))
-    email_from = env("EMAIL_FROM", smtp_user)
     email_to = env("EMAIL_TO", "fredmourao@gmail.com")
-
-    if not all([smtp_host, smtp_user, smtp_pass, email_to]):
-        raise SmtpNotConfiguredError("SMTP/EMAIL secrets não configurados — impossível enviar email")
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = email_from
-    msg["To"] = email_to
-    msg.set_content(body)
-
-    if smtp_port == 465:
-        server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-    else:
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-
-    with server:
-        if smtp_port != 465:
-            server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
-
+    recipients = [item.strip() for item in email_to.split(",") if item.strip()]
+    if not recipients:
+        raise ProviderNotConfiguredError("EMAIL_TO não configurado")
+    result = send_text(
+        recipients,
+        subject,
+        body,
+        tags=["shopvivaliz-transactional", "hourly-status"],
+    )
+    if not result.success:
+        if result.error == "provider_not_configured":
+            raise ProviderNotConfiguredError("BREVO_API_KEY não configurada")
+        raise RuntimeError(f"Falha no provider ShopVivaliz: {result.error}")
 
 def main() -> int:
     load_env_files([".env", ".env.local"])
@@ -123,9 +110,9 @@ def main() -> int:
         send_email(subject, report)
         print("Email enviado com sucesso.")
         return 0
-    except SmtpNotConfiguredError as exc:
+    except ProviderNotConfiguredError as exc:
         print(f"[ERRO] {exc}", file=sys.stderr)
-        print("[ERRO] Secrets SMTP não configurados — impossível enviar email.", file=sys.stderr)
+        print("[ERRO] Provider Brevo da ShopVivaliz não configurado.", file=sys.stderr)
         return 1
     except Exception as exc:
         print(f"[ERRO] Falha ao enviar email: {exc}", file=sys.stderr)

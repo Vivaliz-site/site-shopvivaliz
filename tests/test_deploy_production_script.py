@@ -295,6 +295,9 @@ def test_deploy_restores_chatgpt_continuity_token_access_after_storage_reconcile
     assert 'sudo chmod 0750 "$token_dir"' in text
     assert 'sudo chmod 0640 "$token_file"' in text
     assert 'sudo -u ubuntu test -r "$token_file"' in text
+    assert 'sudo test -e "$token_file"' in text
+    assert 'sudo test -d "$token_dir"' in text
+    assert 'if [ ! -e "$token_file" ]; then' not in text
     assert 'sha256sum -- "$token_file"' in text
     assert re.search(
         r"reconcile_shared_runtime_permissions; then.*?reconcile_chatgpt_continuity_dispatcher_token_access",
@@ -303,3 +306,15 @@ def test_deploy_restores_chatgpt_continuity_token_access_after_storage_reconcile
     )
     aligned = text.split('if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then', 1)[1].split("RELEASE_TIME=", 1)[0]
     assert "reconcile_chatgpt_continuity_dispatcher_token_access" in aligned
+
+
+def test_deploy_enters_canonical_repo_dir_before_find_audits() -> None:
+    """Caller cwd may be unreadable by ubuntu; deploy must normalize it first."""
+    text = _text()
+    marker = 'if ! cd -- "$REPO_DIR"; then'
+    assert marker in text, (
+        'deploy must cd to REPO_DIR so GNU find does not fail restoring an inaccessible caller cwd'
+    )
+    validate = 'git -C "$REPO_DIR" rev-parse --is-inside-work-tree'
+    audit_call = 'if ! ensure_release_tree_cleanup_safe "$NEW_RELEASE_PATH"; then'
+    assert text.index(validate) < text.index(marker) < text.index(audit_call)

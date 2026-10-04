@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 🔐 Disaster Recovery - Backup automático + Restauração
  * Backup BD, Git, Arquivos críticos com teste semanal
@@ -225,12 +226,11 @@ class DisasterRecovery {
 
         // Notificar se falha
         if (!$log['all_success']) {
-            mail(
-                'fredmourao@gmail.com',
-                '[SHOPVIVALIZ] ⚠️ Backup falhou',
-                json_encode($log, JSON_PRETTY_PRINT),
-                'From: backup@shopvivaliz.com.br'
-            );
+            $body = json_encode($log, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            $html = '<pre style="white-space:pre-wrap;font-family:monospace">'
+                . htmlspecialchars((string)$body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '</pre>';
+            send_email('fredmourao@gmail.com', '[SHOPVIVALIZ] ⚠️ Backup falhou', $html);
         }
     }
 }

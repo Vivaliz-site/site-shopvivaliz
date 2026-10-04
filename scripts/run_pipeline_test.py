@@ -67,7 +67,7 @@ def main():
         ("5️⃣  MARKETPLACE - Upload Shopee/TikTok", "shopee_full_pipeline.py", None),
         ("6️⃣  A/B TEST - Teste de Variantes", "ab_test_images.py", None),
         ("7️⃣  AUTO OTIMIZAÇÃO - Detecção de Imagens Ruins", "auto_optimize_images.py", None),
-        ("8️⃣  UPLOAD - Via FTP", "upload_images.py", None),
+        ("8️⃣  PUBLICAÇÃO - Webroot persistente", "upload_images.py", None),
     ]
 
     executed_steps = 0
@@ -87,11 +87,11 @@ def main():
             continue
 
         # Only run scripts that can run without external dependencies
-        if script in ['upload_images.py', 'send_email.py']:
+        if script in ['send_email.py']:
             logger.warning(f"⏭️  SKIPPED (requires external config): {step_name}")
             results['pipeline_steps'][step_name] = {
                 'status': 'SKIP',
-                'reason': 'requires FTP/SMTP configuration',
+                'reason': 'requires external email configuration',
                 'timestamp': datetime.now().isoformat()
             }
             continue
@@ -172,7 +172,7 @@ def main():
 ║  ⏭️  5. MARKETPLACE (Requires Config)                              ║
 ║  ✅ 6. A/B TEST (Analysis Completed)                                ║
 ║  ✅ 7. AUTO OTIMIZAÇÃO (Quality Check Completed)                    ║
-║  ⏭️  8. UPLOAD (Requires FTP Config)                               ║
+║  ✅ 8. PUBLICAÇÃO (Persistent webroot)                              ║
 ║  ✅ 9. PUBLICAÇÃO (Structure Ready)                                 ║
 ║  ✅ 10. AUTOMAÇÃO (31 Workflows)                                    ║
 ║  ✅ 11. PAINEL WEB (Admin Panel Ready)                              ║

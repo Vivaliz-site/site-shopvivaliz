@@ -262,6 +262,164 @@ class ShopeeClient:
             )
         )
 
+    def search_packages(
+        self,
+        *,
+        package_status: int = 2,
+        fulfillment_type: int = 2,
+        invoice_pending: bool = False,
+        logistics_channel_ids: list[int] | None = None,
+        page_size: int = 100,
+    ) -> list[dict]:
+        """Search package-level shipment work using Shopee's current nested payload."""
+        results: list[dict] = []
+        cursor = ""
+        while True:
+            filters: dict[str, object] = {
+                "package_status": int(package_status),
+                "fulfillment_type": int(fulfillment_type),
+                "invoice_pending": bool(invoice_pending),
+            }
+            if logistics_channel_ids:
+                filters["logistics_channel_ids"] = [int(value) for value in logistics_channel_ids]
+            body = {
+                "filter": filters,
+                "pagination": {
+                    "page_size": min(max(int(page_size), 1), 100),
+                    "cursor": cursor,
+                },
+                "sort": {"sort_type": 1, "ascending": True},
+            }
+            data = self._post("/order/search_package_list", body)
+            response = data.get("response") or {}
+            packages = response.get("packages_list") or response.get("package_list") or []
+            results.extend(packages)
+            pagination = response.get("pagination") or {}
+            if not pagination.get("more"):
+                break
+            next_cursor = str(pagination.get("next_cursor") or "")
+            if not next_cursor or next_cursor == cursor:
+                break
+            cursor = next_cursor
+            time.sleep(0.2)
+        return results
+
+    def search_ready_packages(self, page_size: int = 100) -> list[dict]:
+        """Return seller-fulfilled, invoice-ready packages that need arranging."""
+        return self.search_packages(package_status=2, fulfillment_type=2, invoice_pending=False, page_size=page_size)
+
+    def get_order_details(self, order_sns: list[str], response_optional_fields: str = "package_list,shipping_carrier") -> list[dict]:
+        results: list[dict] = []
+        for index in range(0, len(order_sns), 50):
+            batch = [str(value).strip() for value in order_sns[index : index + 50] if str(value).strip()]
+            if not batch:
+                continue
+            params = {"order_sn_list": ",".join(batch)}
+            if response_optional_fields:
+                params["response_optional_fields"] = response_optional_fields
+            data = self._get("/order/get_order_detail", params)
+            results.extend((data.get("response") or {}).get("order_list") or [])
+        return results
+
+    def get_package_details(self, package_numbers: list[str]) -> list[dict]:
+        results: list[dict] = []
+        for index in range(0, len(package_numbers), 50):
+            batch = [str(value).strip() for value in package_numbers[index : index + 50] if str(value).strip()]
+            if not batch:
+                continue
+            data = self._get("/order/get_package_detail", {"package_number_list": ",".join(batch)})
+            results.extend((data.get("response") or {}).get("package_list") or [])
+        return results
+
+    def get_shipping_parameter(self, order_sn: str, package_number: str | None = None) -> dict:
+        params: dict[str, object] = {"order_sn": str(order_sn)}
+        if package_number:
+            params["package_number"] = str(package_number)
+        data = self._get("/logistics/get_shipping_parameter", params)
+        return data.get("response") or {}
+
+    def ship_order(self, body: dict) -> dict:
+        if not body.get("order_sn"):
+            raise ValueError("order_sn is required")
+        methods = [name for name in ("pickup", "dropoff", "non_integrated") if name in body]
+        if len(methods) != 1:
+            raise ValueError("ship_order requires exactly one shipping method")
+        return self._post("/logistics/ship_order", body)
+
+    def get_tracking_number(self, order_sn: str, package_number: str | None = None) -> str:
+        params: dict[str, object] = {"order_sn": str(order_sn)}
+        if package_number:
+            params["package_number"] = str(package_number)
+        data = self._get("/logistics/get_tracking_number", params)
+        response = data.get("response") or {}
+        return str(response.get("tracking_number") or "").strip()
+
+    @staticmethod
+    def _document_order(order_sn: str, package_number: str | None = None, **extra: object) -> dict:
+        row: dict[str, object] = {"order_sn": str(order_sn)}
+        if package_number:
+            row["package_number"] = str(package_number)
+        for key, value in extra.items():
+            if value not in (None, ""):
+                row[key] = value
+        return row
+
+    def get_shipping_document_parameter(self, order_sn: str, package_number: str | None = None) -> dict:
+        body = {"order_list": [self._document_order(order_sn, package_number)]}
+        data = self._post("/logistics/get_shipping_document_parameter", body)
+        results = (data.get("response") or {}).get("result_list") or []
+        if not results:
+            raise RuntimeError("Shopee returned no shipping document parameter")
+        row = results[0]
+        if row.get("fail_error"):
+            raise RuntimeError(f"Shopee shipping document parameter {row.get('fail_error')}: {row.get('fail_message')}")
+        return row
+
+    def create_shipping_document(
+        self,
+        order_sn: str,
+        package_number: str | None,
+        tracking_number: str,
+        shipping_document_type: str,
+    ) -> dict:
+        row = self._document_order(
+            order_sn,
+            package_number,
+            tracking_number=tracking_number,
+            shipping_document_type=shipping_document_type,
+        )
+        return self._post("/logistics/create_shipping_document", {"order_list": [row]})
+
+    def get_shipping_document_result(self, order_sn: str, package_number: str | None = None) -> dict:
+        row = self._document_order(order_sn, package_number)
+        data = self._post("/logistics/get_shipping_document_result", {"order_list": [row]})
+        results = (data.get("response") or {}).get("result_list") or []
+        if not results:
+            raise RuntimeError("Shopee returned no shipping document result")
+        return results[0]
+
+    def download_shipping_document(
+        self,
+        order_sn: str,
+        package_number: str | None,
+        shipping_document_type: str,
+    ) -> bytes:
+        row = self._document_order(order_sn, package_number, shipping_document_type=shipping_document_type)
+        resp = self._send_with_refresh(
+            "POST",
+            "/logistics/download_shipping_document",
+            json_body={"order_list": [row]},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        content_type = (resp.headers.get("Content-Type") or "").lower()
+        if "json" in content_type:
+            self._decode(resp)
+            raise RuntimeError("Shopee returned JSON instead of a shipping document")
+        if not resp.content:
+            raise RuntimeError("Shopee returned an empty shipping document")
+        return bytes(resp.content)
+
     def iter_all_products(self, page_size: int = 100) -> Generator[dict, None, None]:
         path = "/product/get_item_list"
         offset = 0

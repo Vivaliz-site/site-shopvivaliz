@@ -710,7 +710,7 @@ $svNavCurrent = 'catalogo';
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
     <script src="/js/catalog-conversion-v4.js?v=<?= filemtime(__DIR__ . '/js/catalog-conversion-v4.js') ?: '1' ?>"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script>
     (function(){
         try {

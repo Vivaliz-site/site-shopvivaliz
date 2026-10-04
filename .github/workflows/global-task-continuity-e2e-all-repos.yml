@@ -2,11 +2,12 @@ name: Global Task Continuity E2E All Repositories
 # certification-trigger: CHECKPOINT_FIRST_V9-POST-GEMINI-FIX-20260927
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/global-task-continuity-e2e-all-repos.yml"
-
+  workflow_dispatch:
+    inputs:
+      conversation_id:
+        description: "Explicit ChatGPT conversation id for fail-closed E2E binding"
+        required: true
+        type: string
 permissions:
   contents: read
 
@@ -33,7 +34,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+          conversation_id="${{ inputs.conversation_id }}"
           test -d "$runtime_dir"
+          test -n "$conversation_id"
           mkdir -p continuity-e2e-reports
           repositories=(
             "Vivaliz-site/site-shopvivaliz"
@@ -58,6 +61,7 @@ jobs:
             python3 scripts/task_continuity_e2e.py \
               --runtime-dir "$runtime_dir" \
               --repository "$repository" \
+              --conversation-id "$conversation_id" \
               --timeout-seconds 480 \
               --poll-interval-seconds 10 \
               --report-path "$report" \
@@ -74,13 +78,12 @@ jobs:
           assert report.get("observed_request") is True, report
           assert report.get("final_status") == "CONCLUIDO", report
           assert report.get("final_verification") == "continuity_e2e_pass", report
-          execution = report.get("execution") or {}
-          assert execution.get("result") != "no_progress", report
-          diagnostic = execution.get("diagnostic") or {}
-          assert diagnostic.get("provider") == "gemini", report
-          assert diagnostic.get("background_paid_fallback_forbidden") is True, report
-          assert diagnostic.get("provider_status") == "task_state_advanced", report
-          assert diagnostic.get("background_gemini_exit_code") == 0, report
+          conversation_id = report.get("conversation_id")
+          assert conversation_id, report
+          nudge = report.get("chatgpt_nudge") or {}
+          assert nudge.get("worker_status") == "PROGRESS_CONFIRMED", report
+          assert nudge.get("conversation_id") == conversation_id, report
+          assert nudge.get("fingerprint") == report.get("request_fingerprint"), report
           print(f"GLOBAL_CONTINUITY_E2E=PASS repository={repository} task_id={report.get('task_id')}")
           PY
             else

@@ -5,13 +5,15 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "runtime-service-status.sh"
+SCRIPT = ROOT / "scripts" / "runtime-status-policy.sh"
+LEGACY_SCRIPT = ROOT / "scripts" / "runtime-service-status.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml"
 
 
-class RuntimeServiceStatusContractTests(unittest.TestCase):
+class RuntimeStatusPolicyContractTests(unittest.TestCase):
     def test_policy_aware_runtime_status_script_exists_and_is_valid_bash(self) -> None:
         self.assertTrue(SCRIPT.is_file(), "runtime_status must have a checked-in policy-aware diagnostic script")
+        self.assertFalse(LEGACY_SCRIPT.exists(), "removed runtime-service-status.sh must not be resurrected")
         result = subprocess.run(
             ["bash", "-n", str(SCRIPT)],
             text=True,
@@ -20,13 +22,14 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_remote_access_uses_same_checked_in_runtime_status_for_both_linux_roles(self) -> None:
+    def test_remote_access_uses_same_policy_script_for_both_linux_roles(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertGreaterEqual(workflow.count("scripts/runtime-service-status.sh"), 2)
-        self.assertIn("bash scripts/runtime-service-status.sh site", workflow)
-        self.assertIn("'bash -s -- backend' < scripts/runtime-service-status.sh", workflow)
+        self.assertGreaterEqual(workflow.count("scripts/runtime-status-policy.sh"), 2)
+        self.assertIn("bash scripts/runtime-status-policy.sh site", workflow)
+        self.assertIn("'bash -s -- backend' < scripts/runtime-status-policy.sh", workflow)
+        self.assertNotIn("scripts/runtime-service-status.sh", workflow)
 
-    def test_site_policy_tracks_current_required_services_and_continuity(self) -> None:
+    def test_site_policy_tracks_current_required_services(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
         for unit in (
             "apache2.service",
@@ -34,28 +37,25 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
             "shopvivaliz-token-renewer.service",
             "shopvivaliz-shopee-token-renewer.service",
             "shopvivaliz-agent.service",
+            "shopvivaliz-catalog-reconcile.timer",
+            "shopvivaliz-sync-safe.timer",
+            "shopvivaliz-abandoned-cart-recovery.timer",
         ):
             self.assertIn(f"report_required_active {unit}", body)
 
-        for marker in (
-            "CHATGPT_CONTINUITY_QUEUE_CERTIFIED=",
-            "CHATGPT_CONTINUITY_QUEUE_ACTIONABLE_ROWS=",
-            "CHATGPT_CONTINUITY_NUDGE_LEDGER_PRESENT=",
-            "AGENT_LAST_AUTONOMOUS_CYCLE_ERROR_AT=",
-            "AGENT_LAST_WATCHDOG_COMPLETED_AT=",
-            "AGENT_LAST_CHATGPT_DISPATCHER_COMPLETED_AT=",
-            "AGENT_CONTINUITY_PATH_BLOCKED_BY_PRESTEP=",
+        for unit in (
+            "shopvivaliz-catalog-reconcile.service",
+            "shopvivaliz-sync-safe.service",
         ):
-            self.assertIn(marker, body)
+            self.assertIn(f"report_oneshot_success {unit}", body)
 
     def test_backend_policy_tracks_current_chatgpt_runtime_and_stop_line(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
         for marker in (
+            "shopvivaliz-remote-control-mcp.service",
+            "shopvivaliz-gemini-24x7-controller.service",
             "shopvivaliz-chatgpt-continuity.service",
-            "shopvivaliz-chatgpt-continuity-a1-tunnel.service",
-            "CHATGPT_CONTINUITY_BACKEND_WORKER_ACTIVE=",
-            "CHATGPT_CONTINUITY_A1_TUNNEL_ACTIVE=",
-            "CHATGPT_CONTINUITY_CDP_REACHABLE=",
+            "http://127.0.0.1:5580/health",
             "http://127.0.0.1:9555/json/version",
             "/var/lib/mei-mg-email/sender_blocked.pause",
             "EXPECTED=inactive-sender-block",
@@ -63,13 +63,17 @@ class RuntimeServiceStatusContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, body)
 
-    def test_missing_log_marker_is_safe_under_pipefail(self) -> None:
+    def test_policy_emits_explicit_health_envelope(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8")
-        marker_body = body.split("last_marker_time() {", 1)[1].split("last_json_number()", 1)[0]
-        self.assertIn('awk -v marker="$marker"', marker_body)
-        self.assertIn('END { print (value == "" ? "NONE" : value) }', marker_body)
-        self.assertIn(r'^\\[[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\\]', marker_body)
-        self.assertNotIn("|| true", marker_body)
+        for marker in (
+            'echo "RUNTIME_STATUS_BEGIN"',
+            'echo "POLICY=runtime-status-policy-v1"',
+            'echo "RUNTIME_HEALTH=$health"',
+            'echo "RUNTIME_STATUS_END"',
+        ):
+            self.assertIn(marker, body)
+        self.assertIn('if [ "$health" = "degraded" ]; then', body)
+        self.assertIn("exit 1", body)
 
     def test_runtime_status_does_not_restore_legacy_control_plane_dependencies(self) -> None:
         body = SCRIPT.read_text(encoding="utf-8").lower()

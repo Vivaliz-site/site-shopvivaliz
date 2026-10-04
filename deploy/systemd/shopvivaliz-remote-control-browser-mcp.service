@@ -1,0 +1,29 @@
+[Unit]
+Description=ShopVivaliz Remote Control Browser MCP
+After=network-online.target graphical.target shopvivaliz-remote-control-mcp.service
+Wants=network-online.target shopvivaliz-remote-control-mcp.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/shopvivaliz-remote-control-browser
+Environment=PYTHONUNBUFFERED=1
+Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
+Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5581
+Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
+Environment=SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER=/opt/shopvivaliz-remote-control/server.py
+Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp
+Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99
+EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control-browser/server.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=false
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+ReadWritePaths=/var/lib/shopvivaliz-remote-control /tmp
+
+[Install]
+WantedBy=multi-user.target

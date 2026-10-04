@@ -591,6 +591,7 @@ if ($notFound) {
     </script>
     <?php endif; ?>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
+    <link rel="stylesheet" href="/css/paid-mobile-funnel-v1.css?v=<?= filemtime(__DIR__ . '/css/paid-mobile-funnel-v1.css') ?: '1' ?>">
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
@@ -614,6 +615,36 @@ if ($notFound) {
         </section>
         <?php else: ?>
         <div class="product-detail" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
+            <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
+            <section class="sv-paid-mobile-offer" aria-label="Compra rápida do produto">
+                <div class="sv-paid-mobile-offer-top">
+                    <p class="sv-paid-mobile-offer-name"><?= sv_esc($name) ?></p>
+                    <span class="sv-paid-mobile-offer-stock">Em estoque</span>
+                </div>
+                <div class="sv-paid-mobile-offer-price"><?= sv_esc($priceLabel) ?></div>
+                <?php
+                    $svPaidCouponPreview = is_array($svPrimaryCoupon ?? null)
+                        ? sv_active_coupon_preview_price($priceRaw, $svPrimaryCoupon)
+                        : null;
+                ?>
+                <?php if (is_array($svPrimaryCoupon ?? null) && trim((string)($svPrimaryCoupon['code'] ?? '')) !== ''): ?>
+                    <div class="sv-paid-mobile-offer-coupon">
+                        <?= sv_esc((string)($svPrimaryCoupon['label'] ?? 'Oferta ativa')) ?>
+                        · cupom <strong><?= sv_esc((string)$svPrimaryCoupon['code']) ?></strong>
+                    </div>
+                    <?php if ($svPaidCouponPreview !== null): ?>
+                        <div class="sv-paid-mobile-offer-effective-price">
+                            Preço com cupom:
+                            <strong>R$ <?= sv_esc(number_format($svPaidCouponPreview, 2, ',', '.')) ?></strong>
+                            <span>após validação no checkout</span>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <button class="sv-paid-mobile-offer-buy" type="button" onclick="document.getElementById('buy-now').click()">Comprar agora</button>
+                <div class="sv-paid-mobile-offer-note">Frete e prazo calculados pelo CEP antes do pagamento.</div>
+            </section>
+            <?php endif; ?>
+
             <!-- Coluna da Esquerda: Galeria de Imagens -->
             <div class="product-gallery-column">
                 <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
@@ -1126,8 +1157,8 @@ if ($notFound) {
     </script>
 
     <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
-    <script src="/js/cro-interactions.js"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
+    <script src="/js/cro-interactions.js?v=<?= filemtime(__DIR__ . '/js/cro-interactions.js') ?: '1' ?>"></script>
+    <script src="/js/first-purchase-popup-v1.js?v=<?= filemtime(__DIR__ . '/js/first-purchase-popup-v1.js') ?: '1' ?>" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>

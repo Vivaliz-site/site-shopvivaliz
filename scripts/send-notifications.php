@@ -12,7 +12,7 @@ class TriaNotifier {
 
     public function __construct() {
         $this->emailTo = getenv('EMAIL_TO') ?: getenv('NOTIFY_EMAIL_TO') ?: '';
-        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
+        $this->emailFrom = 'atendimento@shopvivaliz.com.br';
         $this->logFile = __DIR__ . '/../logs/notifications.log';
         @mkdir(dirname($this->logFile), 0755, true);
     }
@@ -128,12 +128,8 @@ class TriaNotifier {
         // Log da tentativa
         $this->log($type, $title, $subject);
 
-        // Enviar email (usar função mail do PHP ou SMTP)
-        if (function_exists('send_email')) {
-            $result = send_email($this->emailTo, $subject, $body);
-        } else {
-            $result = @mail($this->emailTo, $subject, $body, $headerStr);
-        }
+        // Central mailer is mandatory; no native mail()/SMTP fallback.
+        $result = send_email($this->emailTo, $subject, $body);
 
         if ($result) {
             $this->log($type, $title, 'Email enviado com sucesso');
