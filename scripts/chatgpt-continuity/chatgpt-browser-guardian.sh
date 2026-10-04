@@ -128,7 +128,7 @@ browser_session_state() {
         }
       }
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
-      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+      const connectChatgptTab = async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
           new Promise((resolve, reject) => {
@@ -138,22 +138,29 @@ browser_session_state() {
           new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
         ]);
         return new Cdp(ws);
-      });
+      };
+      const chatgptSessionState = cdp => cdp.evaluate(`(()=>{
+        const body = String(document.body?.innerText || "").toLowerCase();
+        const path = String(location.pathname || "");
+        const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
+          || body.includes("log in or sign up")
+          || body.includes("log in to get answers");
+        if (loggedOut) return "LOGGED_OUT";
+        if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
+        return "UNKNOWN";
+      })()`);
+      const preferAuthenticatedTab = async candidate => {
+        // CONTINUITY_BROWSER_AUTHENTICATED_TAB_PREFERENCE
+        const state = await chatgptSessionState(candidate);
+        return state === "AUTHENTICATED";
+      };
+      const c = await connectFirstUsableChatgptTab(tabs, connectChatgptTab, preferAuthenticatedTab);
       if (!c) {
         console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
         process.exit(0);
       }
       try {
-        const state = await c.evaluate(`(()=>{
-          const body = String(document.body?.innerText || "").toLowerCase();
-          const path = String(location.pathname || "");
-          const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
-            || body.includes("log in or sign up")
-            || body.includes("log in to get answers");
-          if (loggedOut) return "LOGGED_OUT";
-          if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
-          return "UNKNOWN";
-        })()`);
+        const state = await chatgptSessionState(c);
         if (state === "AUTHENTICATED") {
           console.log("AUTHENTICATED");
         } else if (authTerminal) {

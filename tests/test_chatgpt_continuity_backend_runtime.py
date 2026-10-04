@@ -322,6 +322,16 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('console.log("AUTHENTICATED")', probe)
         self.assertIn('console.log("AUTH_FLOW")', probe)
 
+    def test_chatgpt_browser_guardian_prefers_authenticated_target_among_multiple_chatgpt_tabs(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        self.assertIn(marker, body)
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        self.assertIn("CONTINUITY_BROWSER_AUTHENTICATED_TAB_PREFERENCE", probe)
+        self.assertIn("connectFirstUsableChatgptTab(tabs, connectChatgptTab, preferAuthenticatedTab)", probe)
+        self.assertIn('return state === "AUTHENTICATED"', probe)
+
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
