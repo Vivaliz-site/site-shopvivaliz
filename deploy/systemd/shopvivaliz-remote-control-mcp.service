@@ -13,6 +13,11 @@ Environment=SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1
 Environment=SHOPVIVALIZ_REMOTE_MCP_PORT=5580
 Environment=SHOPVIVALIZ_REMOTE_MCP_STATE=/var/lib/shopvivaliz-remote-control
 EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
+Environment=SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS=2
+CPUWeight=1000
+IOWeight=1000
+Nice=-5
+TasksMax=512
 ExecStart=/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py
 Restart=always
 RestartSec=3
