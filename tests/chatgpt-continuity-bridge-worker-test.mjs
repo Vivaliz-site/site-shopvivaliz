@@ -193,8 +193,8 @@ async function run() {
       [homeA, homeB],
       async () => { created += 1; return synthetic; },
     );
-    assert.equal(created, 1, 'multiple neutral home tabs must create one isolated neutral target');
-    assert.equal(selected, synthetic, 'bound recovery must use the isolated neutral target');
+    assert.equal(created, 0, 'multiple neutral home tabs must reuse an existing target');
+    assert.equal(selected, homeA, 'bound recovery must deterministically reuse the first neutral target');
 
     created = 0;
     const lone = await selectBoundConversationReentryTab(
@@ -203,6 +203,14 @@ async function run() {
     );
     assert.equal(lone, homeA, 'a single neutral home tab remains the safe direct target');
     assert.equal(created, 0, 'a lone neutral target must not create an unnecessary extra tab');
+
+    created = 0;
+    const createdWhenMissing = await selectBoundConversationReentryTab(
+      [],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(created, 1, 'a neutral target must be created only when none exists');
+    assert.equal(createdWhenMissing, synthetic, 'missing neutral target must create exactly one replacement');
   }
 
   {
