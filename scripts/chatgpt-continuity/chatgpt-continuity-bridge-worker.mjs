@@ -1128,6 +1128,18 @@ async function conversationIsGenerating(cdp) {
   return cdp.evaluate(`Boolean(document.querySelector('[data-testid="stop-button"]'))`);
 }
 
+async function conversationRespondingIndicatorPresent(cdp) {
+  return currentConversationSurfaceContains(
+    cdp,
+    [
+      'chatgpt is responding',
+      'chatgpt está respondendo',
+      'chatgpt esta respondendo',
+    ],
+    'continuity-responding-indicator-probe',
+  );
+}
+
 async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
   const requestedTimeout = Number(timeoutMs);
   const boundedTimeoutMs = Number.isFinite(requestedTimeout)
@@ -2472,7 +2484,10 @@ async function attemptNudge(
     // stream is never reloaded solely because the checkpoint age crossed the
     // watchdog threshold.
     const wasGenerating = await conversationIsGenerating(cdp);
-    if (wasGenerating && !detectedFailureReason) {
+    const respondingIndicator = !wasGenerating && !detectedFailureReason
+      ? await conversationRespondingIndicatorPresent(cdp)
+      : false;
+    if ((wasGenerating || respondingIndicator) && !detectedFailureReason) {
       const liveStream = await conversationStreamStatus(cdp);
       const liveStatus = String(liveStream?.status || '').toUpperCase();
       const streamComplete = Number(liveStream?.http_status || 0) === 200 && liveStatus === 'COMPLETE';
