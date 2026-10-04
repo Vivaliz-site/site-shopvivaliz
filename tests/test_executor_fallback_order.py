@@ -35,6 +35,8 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
         self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)
         self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
+        self.assertNotIn('"\\\\nCLAUDE_BIN=', script)
+        self.assertIn('CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"\nCLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
         self.assertIn("run_claude()", script)
         self.assertIn("try_provider anthropic run_claude", script)
 
