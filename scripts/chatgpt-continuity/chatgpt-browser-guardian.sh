@@ -277,7 +277,10 @@ cdp_ready() {
 }
 
 wait_for_cdp() {
-  for _ in $(seq 1 15); do
+  # Chromium on the backend can need more than 20 seconds to expose a usable
+  # CDP target after systemd reports the service active. Give it a full startup
+  # grace window before classifying the managed browser as hung.
+  for _ in $(seq 1 30); do
     sleep 1
     if cdp_ready; then
       return 0
@@ -332,9 +335,9 @@ else
     # Managed-service liveness is authoritative for recovery. The active
     # ExecStart may legitimately be customized by a systemd drop-in (for
     # example, a different authenticated profile), so a command-pattern miss
-    # must never turn an active hung service into a no-op "start".
-    sleep 5
-    if cdp_ready; then
+    # must never turn an active browser that is still starting into a restart
+    # loop. Wait through the normal Chromium startup window first.
+    if wait_for_cdp; then
       validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
     else
       systemctl restart "$browser_unit"
