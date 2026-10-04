@@ -2409,10 +2409,26 @@ async function attemptNudge(
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
-    // tool/thought branch with end_turn=false. Therefore every checkpoint
-    // resume gets exactly one passive reattach before any continuation send,
-    // not only turns whose DOM still looks generating.
+    // tool/thought branch with end_turn=false. Passive reattach remains the
+    // bounded recovery for that state, for explicit recoverable failures, and
+    // for stale UI whose backend stream is already COMPLETE. A healthy active
+    // stream is never reloaded solely because the checkpoint age crossed the
+    // watchdog threshold.
     const wasGenerating = await conversationIsGenerating(cdp);
+    if (wasGenerating && !detectedFailureReason) {
+      const liveStream = await conversationStreamStatus(cdp);
+      const liveStatus = String(liveStream?.status || '').toUpperCase();
+      const streamComplete = Number(liveStream?.http_status || 0) === 200 && liveStatus === 'COMPLETE';
+      if (!streamComplete) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(liveStatus)
+            ? 'active generation is still in progress; deferred without reload or continuation'
+            : 'generation is active and stream completion is unconfirmed; deferred without reload or continuation',
+          ...recoveryMetadata(),
+        };
+      }
+    }
     // A passive reload is only allowed to certify recovery when there was a
     // real pre-existing signal to recover. An idle conversation can hydrate
     // extra DOM after reload; treating that surface growth as assistant
