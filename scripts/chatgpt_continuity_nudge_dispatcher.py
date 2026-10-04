@@ -33,10 +33,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .agent_task_state import RUNTIME_DIR
+    from .agent_task_state import RUNTIME_DIR, bind_conversation
     from .task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
-    from agent_task_state import RUNTIME_DIR
+    from agent_task_state import RUNTIME_DIR, bind_conversation
     from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
@@ -357,6 +357,11 @@ def _run_once_locked(
                                 and re.fullmatch(r"[A-Za-z0-9_-]{8,160}", confirmed_conversation_id)
                             ):
                                 observed["conversation_id"] = confirmed_conversation_id
+                                if (
+                                    not _bound_conversation_id(root, task_id)
+                                    and Path(root).resolve() == Path(RUNTIME_DIR).resolve()
+                                ):
+                                    bind_conversation(task_id, conversation_id=confirmed_conversation_id)
                             has_send_counter = "send_attempt_count" in previous
                             prior_send_attempts = int(previous.get("send_attempt_count") or 0)
                             if not has_send_counter and worker_status in {"SENT", "SENT_UNCONFIRMED"}:

@@ -383,6 +383,9 @@ def start_successor_task(
             "predecessor_task_id": str(predecessor.get("task_id", "")).strip(),
         }],
     }
+    inherited_conversation_id = str(predecessor.get("conversation_id", "")).strip()
+    if inherited_conversation_id:
+        payload["conversation_id"] = _safe_conversation_id(inherited_conversation_id)
     _atomic_write(path, payload)
     return payload
 
@@ -544,7 +547,13 @@ def bind_conversation(task_id: str, *, conversation_id: str) -> dict[str, Any]:
     if existing == bound:
         return payload
     payload["conversation_id"] = bound
-    _history(payload, "conversation_bound", conversation_id=bound)
+    # Conversation binding is routing metadata, not task progress. Preserve
+    # updated_at so the watchdog checkpoint fingerprint does not manufacture
+    # a fresh resume request solely because an exact route was learned.
+    row = {"at": utc_now(), "event": "conversation_bound", "conversation_id": bound}
+    if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        row["resume_request_id"] = os.getenv("SHOPVIVALIZ_RESUME_REQUEST_ID", "")
+    payload.setdefault("history", []).append(row)
     _atomic_write(_path(task_id), payload)
     return payload
 

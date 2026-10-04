@@ -80,9 +80,17 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
                       token="test-token", enqueue=self._fake_enqueue_ok)
         self.dispatcher.run_once(**kwargs)
         result = self.dispatcher.run_once(**kwargs, query_status=lambda **unused: {
-            "ok": True, "body": {"nudge": {"status": "PROGRESS_CONFIRMED"}}})
+            "ok": True, "body": {"nudge": {
+                "status": "PROGRESS_CONFIRMED",
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+            }}})
         self.assertEqual(result["failed"], 0)
         self.assertEqual(len(self.calls), 1)
+        self.assertEqual(
+            state.load_task("task-1")["conversation_id"],
+            "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+            "confirmed browser progress must persist the exact conversation binding in the checkpoint",
+        )
 
     def test_enqueue_failure_is_reported_without_disabling_retry(self) -> None:
         self._stale_checkpoint_and_request()

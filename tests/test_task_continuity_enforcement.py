@@ -75,9 +75,17 @@ class AgentTaskStateTests(unittest.TestCase):
             self.assertEqual(state.complete_task("owned-proof-checked")["status"], "CONCLUIDO")
 
     def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
-        state.start_task("bound-task", "verify", "work")
-        bound = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        with mock.patch.object(
+            state, "utc_now",
+            side_effect=["2026-10-04T00:00:00Z", "2026-10-04T00:00:01Z"],
+        ):
+            started = state.start_task("bound-task", "verify", "work")
+            bound = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
         self.assertEqual(bound["conversation_id"], "6abe0e00-42d4-83e9-b145-57b927e1b89b")
+        self.assertEqual(
+            bound["updated_at"], started["updated_at"],
+            "conversation binding is routing metadata, not task progress and must not create a new resume fingerprint",
+        )
         same = state.bind_conversation("bound-task", conversation_id="6abe0e00-42d4-83e9-b145-57b927e1b89b")
         self.assertEqual(same, bound)
         with self.assertRaisesRegex(state.TaskStateError, "cannot be replaced"):
@@ -247,6 +255,7 @@ class AgentTaskStateTests(unittest.TestCase):
 
     def test_completed_task_starts_explicit_successor_without_mutating_predecessor(self) -> None:
         state.start_task("task-v1", "Investigar falha original", "gpt")
+        state.bind_conversation("task-v1", conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
         state.mark_ready(
             "task-v1",
             evidence=["evidencia original"],
@@ -265,6 +274,7 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(successor["status"], "RUNNING")
         self.assertEqual(successor["predecessor_task_id"], "task-v1")
         self.assertEqual(successor["predecessor_status"], "CONCLUIDO")
+        self.assertEqual(successor["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
         self.assertTrue(successor["next_action"])
         self.assertEqual(successor["history"][0]["event"], "started_successor")
 
