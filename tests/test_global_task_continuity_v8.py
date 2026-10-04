@@ -118,7 +118,9 @@ class GlobalTaskContinuityV8Tests(unittest.TestCase):
             "shopvivaliz-chatgpt-nudge-dispatcher.service",
             "shopvivaliz-chatgpt-nudge-dispatcher.timer",
         ):
-            self.assertIn(f"deploy/systemd/{unit}", block, unit)
+            self.assertIn(unit, block, unit)
+        self.assertIn("dd of='$remote_dir/deploy/systemd/$unit'", block)
+        self.assertIn('< "deploy/systemd/$unit"', block)
 
 
     def test_production_e2e_accepts_and_reports_repository(self) -> None:
