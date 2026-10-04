@@ -19,6 +19,7 @@ const {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
   reinforcementHealthPayload,
@@ -1470,6 +1471,46 @@ async function run() {
     assert.equal(outcome.sent, false);
     assert.equal(cdp.calls.some(call => call.includes('location.reload')), false);
     assert.equal(cdp.calls.some(call => call.includes('insertText') || call.includes('b.click()')), false);
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Parou de pensar',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-stopped-thinking-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.sent, false, 'native Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'stopped-thinking recovery must click Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful native Retry must recover without writing a continue draft',
+    );
   }
 
   {
