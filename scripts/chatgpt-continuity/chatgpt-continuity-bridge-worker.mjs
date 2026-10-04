@@ -65,6 +65,10 @@ const COMPOSER_READY_POLL_MS = Math.max(
   250,
   Number(process.env.CHATGPT_CONTINUITY_COMPOSER_READY_POLL_MS || 500),
 );
+const REINFORCEMENT_RESTORE_TIMEOUT_MS = Math.max(
+  250,
+  Number(process.env.CHATGPT_CONTINUITY_RESTORE_TIMEOUT_MS || 2500),
+);
 const POST_SEND_BASELINE_SETTLE_MS = Math.max(
   250,
   Number(process.env.CHATGPT_CONTINUITY_POST_SEND_BASELINE_SETTLE_MS || 600),
@@ -978,13 +982,37 @@ function safeReinforcementRestorePath(value) {
   return /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
 }
 
-async function restoreReinforcementPath(cdp, requestedPath) {
+async function restoreReinforcementPath(
+  cdp,
+  requestedPath,
+  timeoutMs = REINFORCEMENT_RESTORE_TIMEOUT_MS,
+) {
   const path = safeReinforcementRestorePath(requestedPath);
   if (!cdp || !path) return false;
+  const requestedTimeout = Number(timeoutMs);
+  const budgetMs = Number.isFinite(requestedTimeout)
+    ? Math.max(50, requestedTimeout)
+    : REINFORCEMENT_RESTORE_TIMEOUT_MS;
+  const evaluate = async expression => {
+    let timer;
+    try {
+      return await Promise.race([
+        cdp.evaluate(expression),
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('reinforcement restore evaluate timeout')),
+            budgetMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
   try {
-    const currentPath = String(await cdp.evaluate('location.pathname') || '');
+    const currentPath = String(await evaluate('location.pathname') || '');
     if (currentPath === path) return true;
-    return Boolean(await cdp.evaluate(
+    return Boolean(await evaluate(
       `(()=>{location.assign(${JSON.stringify(path)});return true})()`,
     ));
   } catch {
@@ -3140,6 +3168,7 @@ export {
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
   reinforcementSweepAllowed,
+  restoreReinforcementPath,
   bridgeLoop,
   reinforcementLoop,
   authorizationButtonTarget,
