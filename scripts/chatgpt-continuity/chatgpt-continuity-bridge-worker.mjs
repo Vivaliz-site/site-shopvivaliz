@@ -2735,8 +2735,13 @@ async function attemptNudge(
     }
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
-    if (wasGenerating || generatingAfterReattach) {
-      // Re-read server bookkeeping only after the passive recovery window.
+    if (wasGenerating || generatingAfterReattach || silentStallBeforeReattach) {
+      // Re-read server bookkeeping after the passive recovery window for both
+      // visible generation and detached/silent stalls. A live 2026-10-04
+      // reproduction had no Stop button and no composer after reattach while
+      // the account-scoped backend still reported IS_STREAMING. Without this
+      // guard the worker fell through to a continuation send against an
+      // authoritative active stream.
       // Anything other than a confirmed COMPLETE remains potentially active
       // and must not receive a duplicate continuation.
       const stream = await conversationStreamStatus(cdp);
