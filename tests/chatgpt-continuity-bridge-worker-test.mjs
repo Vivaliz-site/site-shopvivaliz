@@ -173,6 +173,22 @@ async function run() {
   }
 
   {
+    const stale = { ready: false, closed: false, close() { this.closed = true; } };
+    const healthy = { ready: true, closed: false, close() { this.closed = true; } };
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555', webSocketDebuggerUrl: 'ws://stale', target: stale },
+      { type: 'page', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555', webSocketDebuggerUrl: 'ws://healthy', target: healthy },
+    ];
+    const selected = await connectFirstUsableChatgptTab(
+      tabs,
+      async tab => tab.target,
+      async cdp => cdp.ready,
+    );
+    assert.equal(selected, healthy, 'duplicate bound tabs must prefer the recovery-ready target');
+    assert.equal(stale.closed, true, 'a rejected duplicate target must be closed');
+  }
+
+  {
     const id = '11111111-2222-3333-4444-555555555555';
     const expressions = [];
     let pathname = '/';
