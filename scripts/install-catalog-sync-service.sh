@@ -13,11 +13,19 @@ shopee_unit_source="${repo_dir}/deploy/systemd/shopvivaliz-shopee-token-renewer.
 shopee_unit_target="/etc/systemd/system/shopvivaliz-shopee-token-renewer.service"
 ml_unit_source="${repo_dir}/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service"
 ml_unit_target="/etc/systemd/system/shopvivaliz-mercadolivre-token-renewer.service"
+queue_unit_source="${repo_dir}/deploy/systemd/shopvivaliz-queue-worker.service"
+queue_unit_target="/etc/systemd/system/shopvivaliz-queue-worker.service"
 reconcile_service_source="${repo_dir}/deploy/systemd/shopvivaliz-catalog-reconcile.service"
 reconcile_service_target="/etc/systemd/system/shopvivaliz-catalog-reconcile.service"
 reconcile_timer_source="${repo_dir}/deploy/systemd/shopvivaliz-catalog-reconcile.timer"
 reconcile_timer_target="/etc/systemd/system/shopvivaliz-catalog-reconcile.timer"
 shared_env=/home/ubuntu/shopvivaliz-deploy/shared/.env
+restart_runtime_services="${SHOPVIVALIZ_RESTART_RUNTIME_SERVICES:-true}"
+
+case "$restart_runtime_services" in
+  true|false) ;;
+  *) echo "SHOPVIVALIZ_RESTART_RUNTIME_SERVICES deve ser true ou false" >&2; exit 2 ;;
+esac
 
 if [[ ${repo_dir} != /home/ubuntu/shopvivaliz-deploy/* ]]; then
   echo "Diretório de produção inesperado: ${repo_dir}" >&2
@@ -41,12 +49,14 @@ fi
 install -o root -g root -m 0644 "${token_unit_source}" "${token_unit_target}"
 install -o root -g root -m 0644 "${shopee_unit_source}" "${shopee_unit_target}"
 install -o root -g root -m 0644 "${ml_unit_source}" "${ml_unit_target}"
+install -o root -g root -m 0644 "${queue_unit_source}" "${queue_unit_target}"
 install -o root -g root -m 0644 "${reconcile_service_source}" "${reconcile_service_target}"
 install -o root -g root -m 0644 "${reconcile_timer_source}" "${reconcile_timer_target}"
-systemd-analyze verify "${token_unit_target}" "${shopee_unit_target}" "${ml_unit_target}" "${reconcile_service_target}" "${reconcile_timer_target}"
+systemd-analyze verify "${token_unit_target}" "${shopee_unit_target}" "${ml_unit_target}" "${queue_unit_target}" "${reconcile_service_target}" "${reconcile_timer_target}"
 systemctl daemon-reload
 systemctl enable shopvivaliz-token-renewer.service
 systemctl enable shopvivaliz-shopee-token-renewer.service
+systemctl enable shopvivaliz-queue-worker.service
 ml_owner="$(shared_ml_token_owner)"
 if [ "$ml_owner" = "mlrr" ]; then
   if systemctl list-unit-files shopvivaliz-mercadolivre-token-renewer.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-mercadolivre-token-renewer\.service'; then
@@ -54,18 +64,26 @@ if [ "$ml_owner" = "mlrr" ]; then
   fi
 else
   systemctl enable shopvivaliz-mercadolivre-token-renewer.service
-  systemctl restart shopvivaliz-mercadolivre-token-renewer.service
 fi
-systemctl restart shopvivaliz-token-renewer.service
-systemctl restart shopvivaliz-shopee-token-renewer.service
+if [ "$restart_runtime_services" = true ]; then
+  if [ "$ml_owner" != "mlrr" ]; then
+    systemctl restart shopvivaliz-mercadolivre-token-renewer.service
+  fi
+  systemctl restart shopvivaliz-token-renewer.service
+  systemctl restart shopvivaliz-shopee-token-renewer.service
+  systemctl restart shopvivaliz-queue-worker.service
+fi
 systemctl enable --now shopvivaliz-catalog-reconcile.timer
 if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
   systemctl disable --now shopvivaliz-sync-products.service
 fi
-systemctl is-active --quiet shopvivaliz-token-renewer.service
-systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
-if [ "$ml_owner" != "mlrr" ]; then
-  systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service
+if [ "$restart_runtime_services" = true ]; then
+  systemctl is-active --quiet shopvivaliz-token-renewer.service
+  systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
+  systemctl is-active --quiet shopvivaliz-queue-worker.service
+  if [ "$ml_owner" != "mlrr" ]; then
+    systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service
+  fi
 fi
 systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer
 systemctl is-enabled --quiet shopvivaliz-catalog-reconcile.timer
