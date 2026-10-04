@@ -341,6 +341,8 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("document.title", expression)
         self.assertNotIn(".value", expression)
         self.assertIn("[REDACTED_EMAIL]", expression)
+        daybreak = m.browser_navigate_command("ABC123", "https://openai.com/form/enterprise-trusted-access-for-cyber/")
+        self.assertIn("openai.com", daybreak)
         with self.assertRaisesRegex(ValueError, "browser_url_not_allowlisted"):
             m.browser_navigate_command("ABC123", "https://mail.google.com/mail/u/0/")
         with self.assertRaisesRegex(ValueError, "browser_url_query_not_allowed"):
@@ -1547,7 +1549,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-atendimento-browser.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         )
