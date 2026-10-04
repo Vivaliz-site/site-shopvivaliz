@@ -1643,35 +1643,23 @@ async function confirmAssistantProgress(
   const canonicalBaseline = turnBaseline || await conversationTurnState(cdp);
   if (!String(canonicalBaseline?.node_id || '')) return false;
   const deadline = Date.now() + Math.max(1000, Number(timeoutMs || PROGRESS_CONFIRM_MS));
-  let lastCanonicalProbeAt = 0;
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    // DOM assistant-turn growth is only a cue to query canonical state. It is
-    // never the success proof itself; only a completed backend assistant reply
-    // can certify recovery.
-    const domAdvanced = assistantProgressed(baseline, current);
-    const nowMs = Date.now();
-    if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
-      const turn = await conversationTurnState(cdp);
-      lastCanonicalProbeAt = nowMs;
-      if (realAssistantResponseCompletedSince(canonicalBaseline, turn)) return true;
-    }
 
-    // An explicit transmission failure is terminal for this send attempt;
-    // do not burn the full progress-confirmation window before recovery.
+    // UI growth is diagnostic only. Re-reading the full conversation while a
+    // response is still streaming can issue dozens of expensive history reads
+    // during a single 90s confirmation window and drive the account into 429.
+    // Poll the lightweight account-scoped stream endpoint instead.
     if (await transmissionErrorPresent(cdp)) return false;
-
-    // Once the transport is COMPLETE, take one final canonical response probe.
-    // UI growth alone (Pensando/tool activity/hydration) is never sufficient.
-    const generating = await conversationIsGenerating(cdp);
-    if (!generating) {
-      const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
-        const turn = await conversationTurnState(cdp);
-        return realAssistantResponseCompletedSince(canonicalBaseline, turn);
-      }
+    const stream = await conversationStreamStatus(cdp);
+    if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
+      // The user's requirement is a real response, not bridge activity: take
+      // exactly one canonical history read after transport completion and
+      // require a completed assistant turn with content.
+      const turn = await conversationTurnState(cdp);
+      return realAssistantResponseCompletedSince(canonicalBaseline, turn);
     }
   }
   return false;
