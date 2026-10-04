@@ -2844,6 +2844,24 @@ async function run() {
     );
   }
 
+  // Recovery cleanup after a confirmed result must be bounded. The runtime
+  // contract requires an explicit restore timeout so a degraded renderer
+  // cannot freeze the reinforcement heartbeat in finally{}.
+  {
+    const workerSource = fs.readFileSync(
+      new URL('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs', import.meta.url),
+      'utf8',
+    );
+    assert.ok(
+      workerSource.includes('REINFORCEMENT_RESTORE_TIMEOUT_MS'),
+      'reinforcement restore must have an explicit timeout budget',
+    );
+    assert.ok(
+      workerSource.includes('restoreReinforcementPath(cdp, requestedPath, timeoutMs'),
+      'restore helper must accept a timeout budget',
+    );
+  }
+
   // The reinforcement scheduler must call its check with exactly the public
   // five-argument contract. Extra positional arguments can silently replace
   // the options object in JavaScript and disable the 429 discovery backoff.
