@@ -256,6 +256,36 @@ function persistReinforcementHealth(outcome) {
   return payload;
 }
 
+async function withReinforcementHeartbeat(
+  work,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
+) {
+  const requestedIntervalMs = Number(heartbeatIntervalMs);
+  const intervalMs = Number.isFinite(requestedIntervalMs)
+    ? Math.max(1, requestedIntervalMs)
+    : REINFORCEMENT_POLL_MS;
+  const timer = setInterval(() => {
+    try {
+      persistReinforcementHealth({
+        action: 'heartbeat',
+        sent: false,
+        progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+    } catch (error) {
+      console.error(
+        `chatgpt_continuity_reinforcement_heartbeat_error ${text(error?.message)}`,
+      );
+    }
+  }, intervalMs);
+  timer.unref?.();
+  try {
+    return await work();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 const SINGLE_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 const SIDEBAR_CONSENSUS_SAFE_REINFORCEMENT_CDPS = new WeakSet();
 let REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -2993,6 +3023,7 @@ async function reinforcementLoop(
   wait = sleep,
   checkpointActive = check === reinforcementCheckOnce ? hasActiveContinuityCheckpoint : null,
   browserSessionReady = check === reinforcementCheckOnce ? browserSessionReadyForReinforcement : null,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
 ) {
   let nextAccountDiscoveryAt = 0;
   let nextReinforcementCheckAt = 0;
@@ -3045,12 +3076,15 @@ async function reinforcementLoop(
 
     let outcome;
     try {
-      outcome = await check(
-        () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
-        REINFORCEMENT_CONFIRM_DELAY_MS,
-        confirmAssistantProgress,
-        alignLatest,
-        { allowCrossDeviceDiscovery: true },
+      outcome = await withReinforcementHeartbeat(
+        () => check(
+          () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
+          REINFORCEMENT_CONFIRM_DELAY_MS,
+          confirmAssistantProgress,
+          alignLatest,
+          { allowCrossDeviceDiscovery: true },
+        ),
+        heartbeatIntervalMs,
       );
     } catch (error) {
       console.error(`chatgpt_continuity_reinforcement_error ${text(error?.message)}`);
@@ -3117,17 +3151,20 @@ async function reinforcementLoop(
       REINFORCEMENT_RECENT_CURSOR = sweep.next_cursor;
       for (const candidate of sweep.batch) {
         try {
-          const candidateOutcome = await check(
-            () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
-            REINFORCEMENT_CONFIRM_DELAY_MS,
-            confirmAssistantProgress,
-            cdp => alignToLatestConversation(
-              cdp,
-              async () => candidate,
-              now(),
-              CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+          const candidateOutcome = await withReinforcementHeartbeat(
+            () => check(
+              () => connectReinforcementChatgptTab({ allowCrossDeviceDiscovery: true }),
+              REINFORCEMENT_CONFIRM_DELAY_MS,
+              confirmAssistantProgress,
+              cdp => alignToLatestConversation(
+                cdp,
+                async () => candidate,
+                now(),
+                CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+              ),
+              { allowCrossDeviceDiscovery: true },
             ),
-            { allowCrossDeviceDiscovery: true },
+            heartbeatIntervalMs,
           );
           persistReinforcementHealth(candidateOutcome);
           if (candidateOutcome?.action === 'additional_checks_cooldown') {
