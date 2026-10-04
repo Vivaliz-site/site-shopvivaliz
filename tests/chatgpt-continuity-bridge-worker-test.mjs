@@ -827,8 +827,8 @@ async function run() {
         1100,
         10,
       ),
-      true,
-      'current UI main-surface growth must confirm assistant/tool progress when legacy turn selectors are absent',
+      false,
+      'generic main-surface/tool growth must not certify a real assistant response',
     );
   }
 

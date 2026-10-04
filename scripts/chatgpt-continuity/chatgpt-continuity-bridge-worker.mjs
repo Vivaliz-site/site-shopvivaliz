@@ -1394,11 +1394,9 @@ async function assistantSnapshot(cdp) {
       ? String(keyed?.getAttribute?.('data-turn-key')||'')
       : (nodes.length ? 'action-controls-'+String(nodes.length) : '');
 
-    // Progress during reasoning/tool use may not yet have final action
-    // controls. Capture the current conversation surface as a secondary
-    // fingerprint. It is consumed only from a post-send baseline so the
-    // worker's own "continue" message cannot be mistaken for assistant
-    // progress.
+    // Capture the current conversation surface for diagnostics only. Generic
+    // surface growth is never sufficient to certify recovery because it can
+    // reflect tool activity, Thinking UI, banners, or our own continuation.
     const main=document.querySelector('main');
     const surfaceText=(main?.innerText||main?.textContent||'').trim();
     return {
@@ -1444,14 +1442,6 @@ function assistantProgressed(before, after) {
   return currentText.length > priorText.length && currentText !== priorText;
 }
 
-function assistantSurfaceProgressed(before, after) {
-  if (!sameConversationSnapshot(before, after)) return false;
-  const priorText=String(before?.surfaceText||'');
-  const currentText=String(after?.surfaceText||'');
-  if(!priorText || !currentText) return false;
-  return currentText.length > priorText.length && currentText !== priorText;
-}
-
 async function postSendConfirmationBaseline(cdp, before) {
   await sleep(POST_SEND_BASELINE_SETTLE_MS);
   const after=await assistantSnapshot(cdp);
@@ -1483,7 +1473,10 @@ async function confirmAssistantProgress(
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    if (assistantProgressed(baseline, current) || assistantSurfaceProgressed(baseline, current)) return true;
+    // Only an actual assistant turn may certify recovery. Generic <main> growth
+    // can be caused by our own CONTINUE message, tool activity, Thinking UI,
+    // banners, or other chrome and is diagnostic-only.
+    if (assistantProgressed(baseline, current)) return true;
 
     // An explicit transmission failure is terminal for this send attempt;
     // do not burn the full progress-confirmation window before recovery.
