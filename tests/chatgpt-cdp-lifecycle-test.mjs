@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 class Socket extends EventTarget {
   send(value) { this.last = JSON.parse(value); }
   reply(result) { this.dispatchEvent(new MessageEvent('message', {data:JSON.stringify({id:this.last.id,result})})); }
-  close() { this.dispatchEvent(new Event('close')); }
+  close() {} // Real WebSocket.close may wait for a peer handshake.
 }
 const bounded = promise => Promise.race([promise.then(() => 'resolved', e => e.message), new Promise(r => setTimeout(() => r('test_deadline'), 150))]);
 export async function runCdpLifecycleTests(Cdp) {
