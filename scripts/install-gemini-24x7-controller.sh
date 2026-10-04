@@ -28,6 +28,7 @@ runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
 e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"
 gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"
 gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
+gemini_cli_package_json="/home/ubuntu/.local/lib/node_modules/@google/gemini-cli/package.json"
 
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
@@ -84,23 +85,30 @@ if ! command -v npm >/dev/null 2>&1; then
   echo "ERROR: npm is required to install Gemini CLI" >&2
   exit 69
 fi
-installed_gemini_version=""
-if [ -x "$gemini_cli_bin" ]; then
-  installed_gemini_version="$("$gemini_cli_bin" --version 2>/dev/null | head -n1 | tr -d '[:space:]' || true)"
-fi
+
+# Do not execute the Gemini CLI merely to inspect its installed version.
+# A live incident proved that `gemini --version` can hang indefinitely and
+# block an otherwise healthy immutable controller promotion. Read package
+# metadata instead; the CLI itself remains validated by the runtime path.
+read_gemini_package_version() {
+  [ -r "$gemini_cli_package_json" ] || return 1
+  node -e 'const fs=require("fs");try{const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(p.version||""));}catch(e){process.exit(1)}' "$gemini_cli_package_json"
+}
+
+installed_gemini_version="$(read_gemini_package_version || true)"
 if [ "$installed_gemini_version" != "$gemini_cli_version" ]; then
   npm install -g "@google/gemini-cli@$gemini_cli_version" --prefix /home/ubuntu/.local --no-audit --no-fund
 fi
 test -x "$gemini_cli_bin"
-installed_gemini_version="$("$gemini_cli_bin" --version | head -n1 | tr -d '[:space:]')"
+installed_gemini_version="$(read_gemini_package_version || true)"
 if [ "$installed_gemini_version" != "$gemini_cli_version" ]; then
-  echo "ERROR: Gemini CLI version mismatch after install" >&2
+  echo "ERROR: Gemini CLI package version mismatch after install" >&2
   exit 70
 fi
 
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
-printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
+printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
   "$target_dir/scripts/gemini_24x7_controller.py" \
   "$target_dir/scripts/task_continuation_watchdog.py" \
   "$target_dir/scripts/chatgpt_continuity_nudge_dispatcher.py" > "$environment_temp"

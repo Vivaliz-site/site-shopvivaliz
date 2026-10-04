@@ -50,6 +50,10 @@ const ADDITIONAL_CHECKS_COOLDOWN_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_ADDITIONAL_CHECKS_COOLDOWN_MS || 5 * 60_000),
 );
+const REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS || 5 * 60_000),
+);
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
@@ -171,6 +175,7 @@ function reinforcementHealthPayload(
     || action === 'error'
     || action === 'auth_quiescent'
     || action === 'additional_checks_cooldown'
+    || action === 'recovery_retry_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
@@ -408,6 +413,7 @@ async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
 }
 
 async function boundConversationRecoveryReady(cdp) {
+  try { if (await conversationUnavailablePresent(cdp)) return false; } catch {}
   try { if (await composerIsUsable(cdp)) return true; } catch {}
   try { if (await conversationIsGenerating(cdp)) return true; } catch {}
   try { if (await recoverableFailureReason(cdp)) return true; } catch {}
@@ -1643,35 +1649,23 @@ async function confirmAssistantProgress(
   const canonicalBaseline = turnBaseline || await conversationTurnState(cdp);
   if (!String(canonicalBaseline?.node_id || '')) return false;
   const deadline = Date.now() + Math.max(1000, Number(timeoutMs || PROGRESS_CONFIRM_MS));
-  let lastCanonicalProbeAt = 0;
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    // DOM assistant-turn growth is only a cue to query canonical state. It is
-    // never the success proof itself; only a completed backend assistant reply
-    // can certify recovery.
-    const domAdvanced = assistantProgressed(baseline, current);
-    const nowMs = Date.now();
-    if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
-      const turn = await conversationTurnState(cdp);
-      lastCanonicalProbeAt = nowMs;
-      if (realAssistantResponseCompletedSince(canonicalBaseline, turn)) return true;
-    }
 
-    // An explicit transmission failure is terminal for this send attempt;
-    // do not burn the full progress-confirmation window before recovery.
+    // UI growth is diagnostic only. Re-reading the full conversation while a
+    // response is still streaming can issue dozens of expensive history reads
+    // during a single 90s confirmation window and drive the account into 429.
+    // Poll the lightweight account-scoped stream endpoint instead.
     if (await transmissionErrorPresent(cdp)) return false;
-
-    // Once the transport is COMPLETE, take one final canonical response probe.
-    // UI growth alone (Pensando/tool activity/hydration) is never sufficient.
-    const generating = await conversationIsGenerating(cdp);
-    if (!generating) {
-      const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
-        const turn = await conversationTurnState(cdp);
-        return realAssistantResponseCompletedSince(canonicalBaseline, turn);
-      }
+    const stream = await conversationStreamStatus(cdp);
+    if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
+      // The user's requirement is a real response, not bridge activity: take
+      // exactly one canonical history read after transport completion and
+      // require a completed assistant turn with content.
+      const turn = await conversationTurnState(cdp);
+      return realAssistantResponseCompletedSince(canonicalBaseline, turn);
     }
   }
   return false;
@@ -2125,6 +2119,22 @@ async function errorBannerPresent(cdp) {
     ],
     'continuity-error-banner-probe',
   );
+}
+
+async function conversationUnavailablePresent(cdp) {
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* continuity-conversation-unavailable-probe */
+    const path=String(location.pathname||'');
+    const parts=path.split('/');
+    if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
+    const text=String(document.body?.innerText||'').toLowerCase();
+    return [
+      'could not load this chatgpt conversation',
+      'unable to load this chatgpt conversation',
+      'não foi possível carregar esta conversa',
+      'nao foi possivel carregar esta conversa',
+    ].some(value=>text.includes(value));
+  })()`));
 }
 
 async function recoverableFailureReason(cdp) {
@@ -2627,6 +2637,13 @@ async function attemptNudge(
       const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
+    if (await conversationUnavailablePresent(cdp)) {
+      return {
+        result_status: 'CONVERSATION_NOT_FOUND',
+        detail: 'bound conversation surface is unavailable; deferred to detached recovery without sending continuation',
+        ...recoveryMetadata(),
+      };
+    }
     detectedFailureReason = await recoverableFailureReason(cdp);
     if (detectedFailureReason === 'additional_checks') {
       return {
@@ -3217,6 +3234,8 @@ async function reinforcementLoop(
 ) {
   let nextAccountDiscoveryAt = 0;
   let nextReinforcementCheckAt = 0;
+  let nextRecoveryRetryAt = 0;
+  let recoveryRetryFailureReason = '';
   for (;;) {
     if (checkpointActive && !(await checkpointActive())) {
       REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -3240,6 +3259,21 @@ async function reinforcementLoop(
         action: 'auth_quiescent',
         sent: false,
         progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
+    if (now() < nextRecoveryRetryAt) {
+      // The checkpoint-driven dispatcher remains fully enabled during this
+      // cooldown. This only prevents the secondary reinforcement loop from
+      // repeatedly reloading/sending against the same persistent failed turn.
+      persistReinforcementHealth({
+        action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_reason: recoveryRetryFailureReason,
         cross_device_discovery: false,
       });
       await wait(REINFORCEMENT_POLL_MS);
@@ -3285,6 +3319,19 @@ async function reinforcementLoop(
     }
 
     persistReinforcementHealth(outcome);
+
+    if (outcome?.action === 'send_failed' || outcome?.action === 'sent_unconfirmed') {
+      recoveryRetryFailureReason = text(outcome?.failure_reason);
+      nextRecoveryRetryAt = Math.max(
+        nextRecoveryRetryAt,
+        now() + REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS,
+      );
+      console.log(
+        `chatgpt_continuity_reinforcement recovery_retry_backoff_ms=${REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS} action=${text(outcome?.action)} checkpoint_dispatcher_remains_enabled=true`,
+      );
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
 
     if (outcome?.action === 'additional_checks_cooldown') {
       nextReinforcementCheckAt = Math.max(
@@ -3416,6 +3463,7 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
