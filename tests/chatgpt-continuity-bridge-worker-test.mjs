@@ -89,6 +89,9 @@ function fakeCdp({
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
       }
+      if (expression.includes('continuity-responding-indicator-probe')) {
+        return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
+      }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
         return staleStopClearSucceeds;
