@@ -40,7 +40,7 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
-TASK_WAIT_MAX_SECONDS = 25
+TASK_WAIT_MAX_SECONDS = 5
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
 SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
@@ -660,6 +660,29 @@ def load_task(task_id: str) -> sqlite3.Row:
         raise ValueError("task_not_found")
     return row
 
+def queued_task_context(task_id: str) -> dict[str, Any]:
+    with db_conn() as db:
+        row = db.execute(
+            "SELECT id,host,created_at,state FROM tasks WHERE id=?",
+            (task_id,),
+        ).fetchone()
+        if not row or row["state"] != "queued":
+            return {}
+        active = db.execute(
+            "SELECT 1 FROM tasks WHERE host=? AND state IN ('starting','running','cancel_requested') LIMIT 1",
+            (row["host"],),
+        ).fetchone()
+        ahead = db.execute(
+            "SELECT COUNT(*) FROM tasks WHERE host=? AND state='queued' "
+            "AND (created_at < ? OR (created_at = ? AND id < ?))",
+            (row["host"], row["created_at"], row["created_at"], row["id"]),
+        ).fetchone()[0]
+    return {
+        "queue_position": int(ahead) + 1,
+        "blocked_by_active": bool(active),
+    }
+
+
 
 def systemd_unit_state(unit: str) -> str:
     completed = subprocess.run(
@@ -817,7 +840,8 @@ def launch_task_service(task_id: str, timeout: int) -> None:
     unit = task_unit_name(task_id)
     args = [
         SYSTEMD_RUN, f"--unit={unit[:-8]}", "--collect", "--quiet", "--service-type=exec",
-        "--property=CPUWeight=50", "--property=IOWeight=50", "--property=KillMode=control-group",
+        "--property=CPUWeight=25", "--property=IOWeight=25", "--property=CPUQuota=80%",
+        "--property=Nice=5", "--property=KillMode=control-group",
         "--property=Restart=no", f"--property=RuntimeMaxSec={int(timeout) + 30}s", "--",
         "/usr/bin/python3", "/opt/shopvivaliz-remote-control/server.py", "--run-task", task_id,
     ]
@@ -1427,6 +1451,8 @@ def execute_tool(
             reconcile_task(row)
             row = load_task(tid)
         result = dict(row)
+        if result["state"] == "queued":
+            result.update(queued_task_context(tid))
         heartbeat = result.get("heartbeat_at")
         if heartbeat:
             try:
@@ -1448,6 +1474,11 @@ def execute_tool(
         while True:
             result = execute_tool("task_status", {"task_id": tid})
             if result["state"] in TERMINAL_STATES or time.monotonic() >= deadline:
+                return result
+            if result["state"] == "queued" and (
+                result.get("blocked_by_active") or int(result.get("queue_position", 1)) > 1
+            ):
+                result["detached"] = True
                 return result
             if cancel_check and cancel_check():
                 return {"id": tid, "state": result["state"], "detached": True}
@@ -1605,13 +1636,13 @@ def task_worker() -> None:
         try:
             reconcile_tasks()
             with db_conn() as db:
-                active = db.execute(
-                    "SELECT 1 FROM tasks WHERE state IN ('starting','running','cancel_requested') LIMIT 1"
-                ).fetchone()
-                if active:
-                    continue
                 row = db.execute(
-                    "SELECT id,timeout FROM tasks WHERE state='queued' ORDER BY created_at LIMIT 1"
+                    "SELECT q.id,q.timeout FROM tasks q "
+                    "WHERE q.state='queued' "
+                    "AND NOT EXISTS ("
+                    "SELECT 1 FROM tasks a WHERE a.host=q.host "
+                    "AND a.state IN ('starting','running','cancel_requested')"
+                    ") ORDER BY q.created_at LIMIT 1"
                 ).fetchone()
                 if not row:
                     continue
