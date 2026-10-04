@@ -50,6 +50,10 @@ const ADDITIONAL_CHECKS_COOLDOWN_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_ADDITIONAL_CHECKS_COOLDOWN_MS || 5 * 60_000),
 );
+const REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS || 5 * 60_000),
+);
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
 const PROGRESS_POLL_MS = Math.max(1000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_POLL_MS || 2000));
@@ -171,6 +175,7 @@ function reinforcementHealthPayload(
     || action === 'error'
     || action === 'auth_quiescent'
     || action === 'additional_checks_cooldown'
+    || action === 'recovery_retry_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
@@ -3222,6 +3227,8 @@ async function reinforcementLoop(
 ) {
   let nextAccountDiscoveryAt = 0;
   let nextReinforcementCheckAt = 0;
+  let nextRecoveryRetryAt = 0;
+  let recoveryRetryFailureReason = '';
   for (;;) {
     if (checkpointActive && !(await checkpointActive())) {
       REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -3245,6 +3252,21 @@ async function reinforcementLoop(
         action: 'auth_quiescent',
         sent: false,
         progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
+    if (now() < nextRecoveryRetryAt) {
+      // The checkpoint-driven dispatcher remains fully enabled during this
+      // cooldown. This only prevents the secondary reinforcement loop from
+      // repeatedly reloading/sending against the same persistent failed turn.
+      persistReinforcementHealth({
+        action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_reason: recoveryRetryFailureReason,
         cross_device_discovery: false,
       });
       await wait(REINFORCEMENT_POLL_MS);
@@ -3290,6 +3312,19 @@ async function reinforcementLoop(
     }
 
     persistReinforcementHealth(outcome);
+
+    if (outcome?.action === 'send_failed' || outcome?.action === 'sent_unconfirmed') {
+      recoveryRetryFailureReason = text(outcome?.failure_reason);
+      nextRecoveryRetryAt = Math.max(
+        nextRecoveryRetryAt,
+        now() + REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS,
+      );
+      console.log(
+        `chatgpt_continuity_reinforcement recovery_retry_backoff_ms=${REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS} action=${text(outcome?.action)} checkpoint_dispatcher_remains_enabled=true`,
+      );
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
 
     if (outcome?.action === 'additional_checks_cooldown') {
       nextReinforcementCheckAt = Math.max(

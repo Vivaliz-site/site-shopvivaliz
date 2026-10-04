@@ -3212,6 +3212,40 @@ async function run() {
     assert.equal(calls.length, 1, 'additional checks must suppress repeated reinforcement attempts during cooldown');
   }
 
+  // A failed direct reinforcement recovery must not hammer the same browser
+  // every ~30 seconds. The checkpoint-driven dispatcher remains enabled and
+  // owns durable retries while reinforcement observes a bounded cooldown.
+  {
+    const calls = [];
+    let waits = 0;
+    let nowMs = 0;
+    const stop = new Error('stop-after-recovery-retry-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'send_failed',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'stopped_thinking',
+            cross_device_discovery: false,
+          };
+        },
+        () => nowMs,
+        async () => {
+          waits += 1;
+          nowMs += 30_000;
+          if (waits >= 2) throw stop;
+        },
+        async () => true,
+        async () => true,
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'failed reinforcement recovery must enter cooldown instead of retrying every poll');
+  }
+
   // A 429 must back off only the account-scoped API, not the local sidebar
   // inspection. The live iPhone failure on 2026-09-30 appeared ~3 minutes
   // after a no_banner+429 cycle; suppressing all cross-device inspection for
