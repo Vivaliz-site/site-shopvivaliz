@@ -2119,7 +2119,9 @@ async function errorBannerPresent(cdp) {
 async function conversationUnavailablePresent(cdp) {
   return Boolean(await cdp.evaluate(`(()=>{
     /* continuity-conversation-unavailable-probe */
-    if(!/^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(String(location.pathname||''))) return false;
+    const path=String(location.pathname||'');
+    const parts=path.split('/');
+    if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
     const text=String(document.body?.innerText||'').toLowerCase();
     return [
       'could not load this chatgpt conversation',

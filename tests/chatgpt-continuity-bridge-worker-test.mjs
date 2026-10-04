@@ -2018,6 +2018,20 @@ async function run() {
   );
 
   {
+    let unavailableProbeExpression = '';
+    await conversationUnavailablePresent({
+      evaluate: async expression => {
+        unavailableProbeExpression = String(expression);
+        return false;
+      },
+    });
+    assert.doesNotThrow(
+      () => new Function(`return ${unavailableProbeExpression}`),
+      'the browser-side unavailable-conversation probe must be valid JavaScript',
+    );
+  }
+
+  {
     const unavailableCdp = fakeCdp({
       composerUsable: true,
       pageText: 'Could not load this ChatGPT conversation. Try again',
