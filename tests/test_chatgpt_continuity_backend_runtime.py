@@ -328,10 +328,10 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        connect_idx = probe.index("const c = await connectFirstUsableChatgptTab")
-        authenticated_idx = probe.index('state === "AUTHENTICATED"')
+        scan_idx = probe.index("for (const page of chatgptPages)")
+        authenticated_idx = probe.index("if (authenticatedChatgpt)")
         oauth_fallback_idx = probe.rindex('if (authFlow)')
-        self.assertLess(connect_idx, oauth_fallback_idx)
+        self.assertLess(scan_idx, authenticated_idx)
         self.assertLess(authenticated_idx, oauth_fallback_idx)
         self.assertIn('console.log("AUTHENTICATED")', probe)
         self.assertIn('console.log("AUTH_FLOW")', probe)
@@ -464,10 +464,11 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         body = guardian.read_text(encoding="utf-8")
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        connector = probe.split("const c = await connectFirstUsableChatgptTab", 1)[1]
-        self.assertIn('candidate.evaluate("true")', connector)
-        self.assertIn('evaluate timeout', connector)
-        self.assertIn('candidate?.close()', connector)
+        scan = probe.split("for (const page of chatgptPages)", 1)[1]
+        self.assertIn('c.evaluate("true")', scan)
+        self.assertIn('evaluate timeout', scan)
+        self.assertIn('c?.close()', scan)
+        self.assertIn('ws?.close()', scan)
 
     def test_chatgpt_browser_guardian_requires_runtime_evaluate_health(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
