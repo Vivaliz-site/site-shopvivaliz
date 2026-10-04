@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -217,6 +217,28 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertFalse(result["continuity_ready"])
         self.assertIn("chatgpt_browser_auth_in_progress", result["degraded_reasons"])
         self.assertNotIn("chatgpt_browser_not_authenticated", result["degraded_reasons"])
+
+    def test_browser_health_freshness_covers_declared_probe_interval(self) -> None:
+        controller = load_controller()
+        observed = datetime.now(timezone.utc) - timedelta(seconds=120)
+        (self.runtime / controller.CHATGPT_BROWSER_HEALTH_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": observed.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "session_state": "AUTHENTICATED",
+                    "authenticated": True,
+                    "probe_interval_seconds": 300,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        health = controller._chatgpt_browser_health(self.runtime)
+
+        self.assertTrue(health["fresh"])
+        self.assertTrue(health["authenticated"])
+        self.assertGreaterEqual(health["max_age_seconds"], 360)
 
     def test_stale_browser_auth_health_fails_readiness_closed(self) -> None:
         controller = load_controller()
