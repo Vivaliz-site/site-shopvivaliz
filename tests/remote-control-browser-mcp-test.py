@@ -144,6 +144,17 @@ class BrowserMcpTests(unittest.TestCase):
         type_.assert_called_once()
         base.assert_called_once()
 
+    def test_public_browser_type_prefers_canonical_focused_cdp_before_gui(self):
+        args = {"text": "123456", "press_enter": False}
+        with (
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui_type,
+        ):
+            result = m.execute_tool("browser_type", args)
+        self.assertEqual({"route": "base"}, result)
+        base.assert_called_once_with("browser_type", args, cancel_check=None)
+        gui_type.assert_not_called()
+
     def test_public_browser_type_alias_audit_redacts_text(self):
         captured = {}
         def fake_audit(tool, host, args, ok, summary):
