@@ -13,6 +13,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
 - [`dev-agent-briefing.md`](dev-agent-briefing.md) — onboarding canônico do `@dev`: projetos, hosts, regras, pesquisa técnica na web e padrão de engenharia.
+- [`browser-sessions.md`](browser-sessions.md) — vínculo obrigatório entre perfis Chromium, portas CDP e contas ChatGPT; proíbe logout/troca cruzada de conta.
 - [`atendimento-chatgpt-bootstrap.md`](atendimento-chatgpt-bootstrap.md) — bootstrap canônico e não secreto da conta corporativa `atendimento@shopvivaliz.com.br`, incluindo plugins mínimos e checklist E2E.
 - [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
 - [`structure-policy.md`](structure-policy.md) — política de reorganização por lotes e critérios de conclusão.
