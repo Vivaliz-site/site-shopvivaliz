@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
+browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-atendimento-browser.service}"
 continuity_user="${CHATGPT_CONTINUITY_USER:-ubuntu}"
 continuity_unit="${CHATGPT_CONTINUITY_UNIT:-shopvivaliz-chatgpt-continuity.service}"
-cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
+cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9556/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"

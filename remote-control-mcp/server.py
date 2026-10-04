@@ -1324,7 +1324,7 @@ def browser_tabs_command() -> str:
     return (
         "python3 - <<'PY'\n"
         "import json,urllib.request,urllib.parse\n"
-        "with urllib.request.urlopen('http://127.0.0.1:9555/json',timeout=5) as r: a=json.load(r)\n"
+        "with urllib.request.urlopen('http://127.0.0.1:9556/json',timeout=5) as r: a=json.load(r)\n"
         "out=[]\n"
         "allowed={'chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
         "for x in a:\n"
@@ -1347,7 +1347,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
-        "const tabs=await (await fetch('http://127.0.0.1:9555/json')).json(); "
+        "const tabs=await (await fetch('http://127.0.0.1:9556/json')).json(); "
         "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
         "const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']); "
         "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
@@ -1408,7 +1408,7 @@ const [id,selector,submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
+const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
 const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found');
 const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
 const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
@@ -1439,7 +1439,7 @@ const [submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const tabs=await (await fetch('http://127.0.0.1:9555/json')).json();
+const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
 const allowed=new Set(['chatgpt.com','auth.openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
 const candidates=[];
 for(const t of tabs){
