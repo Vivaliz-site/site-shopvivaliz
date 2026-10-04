@@ -19,6 +19,7 @@ const {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
@@ -98,6 +99,9 @@ function fakeCdp({
       }
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
+      if (expression.includes('continuity-conversation-unavailable-probe')) {
+        return /(could not load this chatgpt conversation|unable to load this chatgpt conversation|não foi possível carregar esta conversa|nao foi possivel carregar esta conversa)/i.test(pageText);
       }
       if (expression.includes('continuity-responding-indicator-probe')) {
         return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
@@ -2012,6 +2016,27 @@ async function run() {
     false,
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
+
+  {
+    const unavailableCdp = fakeCdp({
+      composerUsable: true,
+      pageText: 'Could not load this ChatGPT conversation. Try again',
+      sendSucceeds: true,
+    });
+    assert.equal(await conversationUnavailablePresent(unavailableCdp), true);
+    const unavailable = await attemptNudge(
+      'task-bound-conversation-unavailable',
+      async () => unavailableCdp,
+      async () => false,
+    );
+    assert.equal(unavailable.result_status, 'CONVERSATION_NOT_FOUND');
+    assert.match(unavailable.detail, /unavailable/i);
+    assert.equal(
+      unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
+      false,
+      'unavailable bound conversation must never consume a send attempt',
+    );
+  }
 
   const noComposer = await attemptNudge(
     'task-1',
