@@ -573,6 +573,24 @@ async function resolveAmbiguousConversationTabs(
   }
 }
 
+
+async function selectBoundConversationReentryTab(
+  tabs,
+  createNeutral = createNeutralChatgptTab,
+) {
+  const sourceTabs = Array.isArray(tabs) ? tabs : [];
+  const neutralHomeTabs = sourceTabs.filter(tab => chatgptTabRank(tab) === 1);
+  if (neutralHomeTabs.length === 1) return neutralHomeTabs[0];
+
+  // Multiple home tabs are neutral contexts, not competing conversation
+  // targets. Create one fresh isolated home target so bound reentry never
+  // guesses among stale DOM surfaces. Zero-home cases use the same path.
+  const syntheticNeutralTab = await createNeutral();
+  return syntheticNeutralTab && chatgptTabRank(syntheticNeutralTab) === 1
+    ? syntheticNeutralTab
+    : null;
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -610,19 +628,10 @@ class Cdp {
     if (boundConversationId) {
       candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
       if (candidateTabs.length === 0) {
-        let neutralHomeTabs = (Array.isArray(tabs) ? tabs : []).filter(tab => chatgptTabRank(tab) === 1);
-        if (neutralHomeTabs.length === 0) {
-          // Never repurpose another real conversation. When every attached
-          // ChatGPT tab is already a conversation, create one isolated neutral
-          // tab through the existing CDP endpoint and use only that tab for
-          // exact bound-conversation reentry.
-          const syntheticNeutralTab = await createNeutralChatgptTab();
-          if (syntheticNeutralTab) neutralHomeTabs = [syntheticNeutralTab];
-        }
-        if (neutralHomeTabs.length !== 1) {
+        const neutralHomeTab = await selectBoundConversationReentryTab(tabs);
+        if (!neutralHomeTab) {
           throw new Error('bound conversation is not available in the attached browser');
         }
-        const [neutralHomeTab] = neutralHomeTabs;
         const navigated = await navigateNeutralTabToConversation(
           neutralHomeTab,
           boundConversationId,
@@ -3230,6 +3239,7 @@ export {
   selectChatgptTab,
   safeConversationId,
   selectBoundConversationTabs,
+  selectBoundConversationReentryTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
