@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT=/home/ubuntu/chat-workspaces
+STATE_DIR=/var/lib/shopvivaliz-workspace-housekeeper
+LOG=/var/log/shopvivaliz-workspace-housekeeper.log
+LOCK=/run/lock/shopvivaliz-workspace-housekeeper.lock
+FULL_TTL_HOURS=24
+CACHE_TTL_HOURS=12
+DRY_RUN="${DRY_RUN:-0}"
+
+mkdir -p "$STATE_DIR"
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+now_epoch="$(date +%s)"
+removed=0
+cache_cleaned=0
+preserved=0
+freed_bytes=0
+
+log() {
+  printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"
+}
+
+ACTIVE_CWDS="$(
+  for c in /proc/[0-9]*/cwd; do
+    readlink -f "$c" 2>/dev/null || true
+  done | sort -u
+)"
+
+path_active() {
+  local p="$1" q
+  if ps -eo args= | grep -F -- "$p" | grep -v -F -- "grep -F" >/dev/null 2>&1; then
+    return 0
+  fi
+  while IFS= read -r q; do
+    case "$q" in "$p"|"$p"/*) return 0;; esac
+  done <<< "$ACTIVE_CWDS"
+  return 1
+}
+
+git_root() {
+  local d="$1"
+  if [ -e "$d/.git" ]; then printf '%s\n' "$d"; return 0; fi
+  if [ -e "$d/repo/.git" ]; then printf '%s\n' "$d/repo"; return 0; fi
+  return 1
+}
+
+repo_slug() {
+  local root="$1" url slug
+  url="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" remote get-url origin 2>/dev/null || true)"
+  [ -n "$url" ] || return 1
+  slug="$(printf '%s' "$url" | sed -E 's#^https://github.com/##; s#^git@github.com:##; s#^ssh://git@github.com/##; s#\.git$##')"
+  [[ "$slug" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
+  printf '%s\n' "$slug"
+}
+
+delivered() {
+  local root="$1" head slug result
+  if sudo -u ubuntu git -c safe.directory="$root" -C "$root" show-ref --verify --quiet refs/remotes/origin/main 2>/dev/null &&
+     sudo -u ubuntu git -c safe.directory="$root" -C "$root" merge-base --is-ancestor HEAD refs/remotes/origin/main 2>/dev/null; then
+    return 0
+  fi
+  if sudo -u ubuntu git -c safe.directory="$root" -C "$root" show-ref --verify --quiet refs/remotes/origin/master 2>/dev/null &&
+     sudo -u ubuntu git -c safe.directory="$root" -C "$root" merge-base --is-ancestor HEAD refs/remotes/origin/master 2>/dev/null; then
+    return 0
+  fi
+  head="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse HEAD 2>/dev/null || true)"
+  [ -n "$head" ] || return 1
+  slug="$(repo_slug "$root" || true)"
+  [ -n "$slug" ] || return 1
+  result="$(timeout 20s sudo -u ubuntu -H gh api "repos/$slug/commits/$head/pulls" --jq 'any(.[]; .merged_at != null)' 2>/dev/null || true)"
+  [ "$result" = true ]
+}
+
+cleanup_cache() {
+  local root="$1" x b
+  for x in node_modules .next test-results coverage .pytest_cache .eslintcache; do
+    [ -e "$root/$x" ] || continue
+    b="$(du -sx -B1 "$root/$x" 2>/dev/null | awk '{print $1}' || echo 0)"
+    if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root/$x"; fi
+    freed_bytes=$((freed_bytes+b))
+    cache_cleaned=$((cache_cleaned+1))
+    log "cache_cleanup path=$(basename "$(dirname "$root")")/$(basename "$root")/$x bytes=$b dry_run=$DRY_RUN"
+  done
+  if [ -f "$root/tsconfig.tsbuildinfo" ]; then
+    if sudo -u ubuntu git -c safe.directory="$root" -C "$root" ls-files --error-unmatch -- tsconfig.tsbuildinfo >/dev/null 2>&1; then
+      log "cache_preserved_tracked path=$(basename "$(dirname "$root")")/$(basename "$root")/tsconfig.tsbuildinfo"
+    else
+      b="$(stat -c %s "$root/tsconfig.tsbuildinfo" 2>/dev/null || echo 0)"
+      if [ "$DRY_RUN" = 0 ]; then rm -f -- "$root/tsconfig.tsbuildinfo"; fi
+      freed_bytes=$((freed_bytes+b))
+      cache_cleaned=$((cache_cleaned+1))
+    fi
+  fi
+}
+
+if [ -d "$ROOT" ]; then
+  for d in "$ROOT"/*; do
+    [ -d "$d" ] || continue
+    age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+    if path_active "$d"; then
+      preserved=$((preserved+1))
+      continue
+    fi
+    root="$(git_root "$d" || true)"
+    if [ "$age" -ge "$CACHE_TTL_HOURS" ] && [ -n "$root" ]; then
+      cleanup_cache "$root"
+    fi
+    [ "$age" -ge "$FULL_TTL_HOURS" ] || { preserved=$((preserved+1)); continue; }
+    [ -n "$root" ] || { preserved=$((preserved+1)); continue; }
+    if [ -n "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ]; then
+      preserved=$((preserved+1))
+      continue
+    fi
+    if delivered "$root"; then
+      b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+      if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+      freed_bytes=$((freed_bytes+b))
+      removed=$((removed+1))
+      log "workspace_removed name=$(basename "$d") bytes=$b dry_run=$DRY_RUN"
+    else
+      preserved=$((preserved+1))
+    fi
+  done
+fi
+
+for d in /tmp/shopvivaliz-claude-oci-*; do
+  [ -d "$d" ] || continue
+  age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge 2 ] || continue
+  path_active "$d" && continue
+  b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+  freed_bytes=$((freed_bytes+b))
+  log "oci_temp_removed name=$(basename "$d") bytes=$b dry_run=$DRY_RUN"
+done
+
+for repo in /home/ubuntu/shopvivaliz-deploy/repo /home/ubuntu/solange-rolla-consultorio /home/ubuntu/mei-mg-email; do
+  [ -d "$repo/.git" ] || continue
+  if [ "$DRY_RUN" = 0 ]; then sudo -u ubuntu git -c safe.directory="$repo" -C "$repo" worktree prune --expire now >/dev/null 2>&1 || true; fi
+done
+
+
+# SHOPVIVALIZ_DEEP_ARTIFACT_HYGIENE_V1
+# Known ephemeral artifacts may be removed only after TTL and only while no
+# process/cwd references them. Under filesystem pressure >=85%, shorten the
+# temp TTL; never auto-delete dirty or undelivered Git work.
+root_pct_pre="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
+TEMP_TTL_HOURS=24
+SNAPSHOT_TTL_HOURS=24
+if [ "$root_pct_pre" -ge 70 ]; then
+  FULL_TTL_HOURS=4
+  CACHE_TTL_HOURS=2
+  TEMP_TTL_HOURS=12
+  SNAPSHOT_TTL_HOURS=12
+fi
+if [ "$root_pct_pre" -ge 80 ]; then
+  FULL_TTL_HOURS=2
+  CACHE_TTL_HOURS=1
+  TEMP_TTL_HOURS=6
+  SNAPSHOT_TTL_HOURS=6
+fi
+if [ "$root_pct_pre" -ge 85 ]; then
+  TEMP_TTL_HOURS=4
+  SNAPSHOT_TTL_HOURS=4
+fi
+
+temp_removed=0
+for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
+do
+  for d in $pattern; do
+    [ -d "$d" ] || continue
+    age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+    [ "$age" -ge "$TEMP_TTL_HOURS" ] || continue
+    path_active "$d" && continue
+    b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+    if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+    freed_bytes=$((freed_bytes+b))
+    temp_removed=$((temp_removed+1))
+    log "temp_removed path=$d age_hours=$age bytes=$b pressure_root_pct=$root_pct_pre dry_run=$DRY_RUN"
+  done
+done
+
+snapshot_removed=0
+for d in /home/ubuntu/worktrees/continuity-deploy-* /home/ubuntu/worktrees/remote-mcp-deploy-*; do
+  [ -d "$d" ] || continue
+  [ ! -e "$d/.git" ] || continue
+  age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge "$SNAPSHOT_TTL_HOURS" ] || continue
+  path_active "$d" && continue
+  b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+  freed_bytes=$((freed_bytes+b))
+  snapshot_removed=$((snapshot_removed+1))
+  log "metadata_snapshot_removed path=$d age_hours=$age bytes=$b pressure_root_pct=$root_pct_pre dry_run=$DRY_RUN"
+done
+
+worktree_removed=0
+if [ -d /home/ubuntu/worktrees ]; then
+  while IFS= read -r root; do
+    [ -d "$root" ] || continue
+    path_active "$root" && continue
+    age=$(( (now_epoch-$(stat -c %Y "$root" 2>/dev/null || echo "$now_epoch"))/3600 ))
+    if [ "$age" -ge "$CACHE_TTL_HOURS" ]; then cleanup_cache "$root"; fi
+    [ "$age" -ge "$FULL_TTL_HOURS" ] || continue
+    [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
+    if delivered "$root"; then
+      b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
+      if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
+      freed_bytes=$((freed_bytes+b))
+      worktree_removed=$((worktree_removed+1))
+      log "delivered_worktree_removed path=$root age_hours=$age bytes=$b dry_run=$DRY_RUN"
+    fi
+  done < <(find /home/ubuntu/worktrees -mindepth 2 -maxdepth 4 \( -type f -o -type d \) -name .git -printf '%h\n' 2>/dev/null | sort -u)
+fi
+
+for repo in   /home/ubuntu/shopvivaliz-deploy/repo   /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz   /home/ubuntu/src/site-shopvivaliz-remote-control-codex   /home/ubuntu/solange-rolla-consultorio   /home/ubuntu/shopvivaliz-revenue-recovery-20260911   /home/ubuntu/mei-mg-email
+do
+  [ -d "$repo/.git" ] || continue
+  if [ "$DRY_RUN" = 0 ]; then
+    sudo -u ubuntu git -c safe.directory="$repo" -C "$repo" worktree prune --expire now >/dev/null 2>&1 || true
+  fi
+done
+# /SHOPVIVALIZ_DEEP_ARTIFACT_HYGIENE_V1
+
+root_pct="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
+workspace_count=0
+[ -d "$ROOT" ] && workspace_count="$(find "$ROOT" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+cat > "$STATE_DIR/state.env" <<STATE
+timestamp=$(date -u +%FT%TZ)
+root_pct=$root_pct
+workspace_count=$workspace_count
+removed=$removed
+cache_cleaned=$cache_cleaned
+preserved=$preserved
+freed_bytes=$freed_bytes
+temp_removed=$temp_removed
+snapshot_removed=$snapshot_removed
+worktree_removed=$worktree_removed
+dry_run=$DRY_RUN
+STATE
+log "summary root_pct=$root_pct workspaces=$workspace_count removed=$removed cache_cleaned=$cache_cleaned preserved=$preserved temp_removed=$temp_removed snapshot_removed=$snapshot_removed worktree_removed=$worktree_removed freed_bytes=$freed_bytes dry_run=$DRY_RUN"
+if [ "$root_pct" -ge 80 ] || [ "$workspace_count" -ge 30 ]; then
+  logger -p daemon.warning -t shopvivaliz-workspace-housekeeper "storage pressure root=${root_pct}% workspaces=$workspace_count"
+fi
+printf 'root_pct=%s workspaces=%s removed=%s cache_cleaned=%s preserved=%s temp_removed=%s snapshot_removed=%s worktree_removed=%s freed_bytes=%s dry_run=%s\n' "$root_pct" "$workspace_count" "$removed" "$cache_cleaned" "$preserved" "$temp_removed" "$snapshot_removed" "$worktree_removed" "$freed_bytes" "$DRY_RUN"
