@@ -5,6 +5,8 @@ Wants=network-online.target display-manager.service
 
 [Service]
 Type=simple
+CPUWeight=700
+IOWeight=700
 User=fredrdp
 Group=fredrdp
 Environment=HOME=/home/fredrdp
