@@ -52,12 +52,12 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         state.record_progress("task-locked", next_action="executar proxima etapa")
         self._age_task("task-locked", seconds=600)
 
-        lock_path = self.runtime / watchdog.LOCK_FILE
+        lock_path = self.runtime / "_continuity-watchdog.lock"
         with lock_path.open("a+", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
 
-        self.assertTrue(result["locked"])
+        self.assertTrue(result.get("locked", False))
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(watchdog.read_requests(self.runtime), [])
 
