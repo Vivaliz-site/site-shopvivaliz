@@ -19,6 +19,8 @@ const {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
   reinforcementHealthPayload,
@@ -86,11 +88,20 @@ function fakeCdp({
       if (expression.includes('continuity-additional-checks-probe')) {
         return /(nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|try again with a faster model)/i.test(pageText);
       }
+      if (expression.includes('continuity-stopped-thinking-probe')) {
+        return /(stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-streaming-interrupted-probe')) {
+        return /(streaming interrupted|transmissão interrompida|transmissao interrompida)/i.test(pageText);
+      }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
+      if (expression.includes('continuity-conversation-unavailable-probe')) {
+        return /(could not load this chatgpt conversation|unable to load this chatgpt conversation|não foi possível carregar esta conversa|nao foi possivel carregar esta conversa)/i.test(pageText);
       }
       if (expression.includes('continuity-responding-indicator-probe')) {
         return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
@@ -1475,6 +1486,46 @@ async function run() {
   {
     const cdp = fakeCdp({
       pageText: 'Parou de pensar',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-stopped-thinking-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.sent, false, 'native Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'stopped-thinking recovery must click Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful native Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Parou de pensar',
       generating: true,
       composerUsable: true,
       sendSucceeds: true,
@@ -1965,6 +2016,41 @@ async function run() {
     false,
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
+
+  {
+    let unavailableProbeExpression = '';
+    await conversationUnavailablePresent({
+      evaluate: async expression => {
+        unavailableProbeExpression = String(expression);
+        return false;
+      },
+    });
+    assert.doesNotThrow(
+      () => new Function(`return ${unavailableProbeExpression}`),
+      'the browser-side unavailable-conversation probe must be valid JavaScript',
+    );
+  }
+
+  {
+    const unavailableCdp = fakeCdp({
+      composerUsable: true,
+      pageText: 'Could not load this ChatGPT conversation. Try again',
+      sendSucceeds: true,
+    });
+    assert.equal(await conversationUnavailablePresent(unavailableCdp), true);
+    const unavailable = await attemptNudge(
+      'task-bound-conversation-unavailable',
+      async () => unavailableCdp,
+      async () => false,
+    );
+    assert.equal(unavailable.result_status, 'CONVERSATION_NOT_FOUND');
+    assert.match(unavailable.detail, /unavailable/i);
+    assert.equal(
+      unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
+      false,
+      'unavailable bound conversation must never consume a send attempt',
+    );
+  }
 
   const noComposer = await attemptNudge(
     'task-1',
@@ -3140,6 +3226,40 @@ async function run() {
     assert.equal(calls.length, 1, 'additional checks must suppress repeated reinforcement attempts during cooldown');
   }
 
+  // A failed direct reinforcement recovery must not hammer the same browser
+  // every ~30 seconds. The checkpoint-driven dispatcher remains enabled and
+  // owns durable retries while reinforcement observes a bounded cooldown.
+  {
+    const calls = [];
+    let waits = 0;
+    let nowMs = 0;
+    const stop = new Error('stop-after-recovery-retry-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'send_failed',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'stopped_thinking',
+            cross_device_discovery: false,
+          };
+        },
+        () => nowMs,
+        async () => {
+          waits += 1;
+          nowMs += 30_000;
+          if (waits >= 2) throw stop;
+        },
+        async () => true,
+        async () => true,
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'failed reinforcement recovery must enter cooldown instead of retrying every poll');
+  }
+
   // A 429 must back off only the account-scoped API, not the local sidebar
   // inspection. The live iPhone failure on 2026-09-30 appeared ~3 minutes
   // after a no_banner+429 cycle; suppressing all cross-device inspection for
@@ -3469,6 +3589,9 @@ async function run() {
   }
 
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
+  await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
+    conversationTurnState, conversationStreamStatus, sendContinueMessage,
+  });
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
