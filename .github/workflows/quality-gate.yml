@@ -159,4 +159,7 @@ jobs:
           php tests/retired-e2-endpoints-contract-test.php
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
           test -f .github/workflows/public-layout-audit.yml
-          grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
+          grep -q 'workflow_dispatch:' .github/workflows/public-layout-audit.yml
+          grep -q 'schedule:' .github/workflows/public-layout-audit.yml
+          ! grep -q 'workflow_run:' .github/workflows/public-layout-audit.yml
+          ! grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
