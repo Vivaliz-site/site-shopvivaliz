@@ -186,7 +186,6 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
 - Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.
 
-
 <!-- CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
 ## Credencial do ChatGPT — atendimento@shopvivaliz.com.br
 
@@ -207,3 +206,14 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - Se a sessão correta falhar, reparar/reabrir o mesmo perfil; nunca usar a outra sessão como atalho.
 - Preservar os logins existentes e validar perfil/porta antes de qualquer ação de autenticação.
 <!-- /BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+
+<!-- CHATGPT_VM_AUTH_V1 -->
+## ChatGPT VM: autenticação local obrigatória
+
+- Existem dois TOTPs ChatGPT provisionados localmente na VM: `fredmourao` e `atendimento@shopvivaliz.com.br`.
+- A fonte operacional é o OTPClient da sessão `fredrdp` em `DISPLAY=:99`; seeds, senhas e códigos nunca podem ser versionados ou impressos.
+- O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
+- Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.
+- Se faltar capacidade segura de digitação em aplicação desktop, tratar como lacuna do Remote Control MCP a ser corrigida, mantendo a tarefa em andamento até existir rota segura.
+- Runbook: `docs/knowledge/chatgpt-vm-auth.md`.
+<!-- /CHATGPT_VM_AUTH_V1 -->
