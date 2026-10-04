@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -336,6 +337,55 @@ state_path.write_text(json.dumps(state))
                 executor=self._executor(advance=True),
                 timeout_seconds=30,
                 max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
+    def test_new_failed_chatgpt_nudge_bypasses_detached_retry_cooldown(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        now = datetime.now(timezone.utc)
+        previous_at = (now - timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
+        failed_at = now.isoformat().replace("+00:00", "Z")
+        (self.runtime / "_resume-executions.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "result": "no_progress",
+                "created_at": previous_at,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "dispatched_at": failed_at,
+                "worker_status_observed_at": failed_at,
+                "bridge_ok": True,
+                "http_status": 200,
+                "worker_status": "SENT_UNCONFIRMED",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+                retry_after_seconds=900,
             )
         finally:
             if old_capture is None:
