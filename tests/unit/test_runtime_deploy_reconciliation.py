@@ -201,5 +201,45 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn("https://shopvivaliz.com.br/auth/login.php", text)
 
 
+    def test_safe_sync_reconciles_every_versioned_runtime_unit_before_restart(self) -> None:
+        text = (ROOT / "scripts" / "deploy-production.sh").read_text(encoding="utf-8")
+        reconcile = text.split("reconcile_runtime_service_units() {", 1)[1].split(
+            "reconcile_ai_squad_codex_bridge_unit() {", 1
+        )[0]
+
+        for service in (
+            "shopvivaliz-token-renewer.service",
+            "shopvivaliz-shopee-token-renewer.service",
+            "shopvivaliz-mercadolivre-token-renewer.service",
+            "shopvivaliz-queue-worker.service",
+        ):
+            self.assertIn(f'"{service}"', text)
+
+        self.assertIn('for service in "${RUNTIME_SERVICES[@]}"; do', reconcile)
+        self.assertIn('source="$release_path/deploy/systemd/$service"', reconcile)
+        self.assertIn('target="/etc/systemd/system/$service"', reconcile)
+        self.assertIn('sudo install -o root -g root -m 0644 "$source" "$target"', reconcile)
+        self.assertIn('sudo systemd-analyze verify "$target"', reconcile)
+        self.assertIn('sudo systemctl daemon-reload', reconcile)
+        self.assertIn('owner="$(shared_ml_token_owner)"', reconcile)
+        self.assertIn('[ "$service" = "$ML_RENEWER_SERVICE" ]', reconcile)
+        self.assertIn('disable --now "$ML_RENEWER_SERVICE"', reconcile)
+
+    def test_master_pipeline_always_reconciles_catalog_runtime_units_on_real_deploy(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
+
+        self.assertIn(
+            'sudo bash "$current/scripts/install-catalog-sync-service.sh"',
+            activation,
+        )
+        self.assertNotIn("catalog_service_changed=", activation)
+        self.assertNotIn("catalog_token_services_unchanged=true", activation)
+        self.assertNotIn(
+            'cmp -s "$release/deploy/systemd/shopvivaliz-shopee-token-renewer.service"',
+            activation,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
