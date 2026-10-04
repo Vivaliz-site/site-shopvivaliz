@@ -2163,6 +2163,62 @@ async function conversationMatchesFingerprint(cdp, expectedFingerprint) {
   return Boolean(path) && sha(path) === expectedFingerprint;
 }
 
+async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
+  const target = await cdp.evaluate(`(()=>{
+    /* continuity-retry-button-target */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const candidates=[];
+    for(const button of document.querySelectorAll('button')){
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      if(!accepted.has(label)) continue;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) continue;
+      const style=getComputedStyle(button);
+      if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
+      candidates.push({x:rect.left+rect.width/2,y:rect.top+rect.height/2});
+    }
+    return candidates.length===1 ? candidates[0] : null;
+  })()`);
+  if (!target) return false;
+  if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+
+  if (typeof cdp?.send === 'function') {
+    try {
+      const x=Number(target.x);
+      const y=Number(target.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
+      await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x,y,button:'none'});
+      await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
+      await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Legacy/mock compatibility only. Production Cdp exposes send() and uses
+  // trusted pointer events above.
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* continuity-retry-button-click-legacy */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const candidates=[...document.querySelectorAll('button')].filter(button=>{
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') return false;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      return accepted.has(label);
+    });
+    if(candidates.length!==1) return false;
+    candidates[0].click();
+    return true;
+  })()`));
+}
+
 async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
   for (let attempt=0; attempt<8; attempt += 1) {
     const submitTarget = await cdp.evaluate(`(()=>{
@@ -2619,6 +2675,37 @@ async function attemptNudge(
 
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
+
+    // "Stopped thinking" exposes a native Retry action in the current ChatGPT
+    // UI. Prefer that platform-native retry once before writing a new
+    // continuation message. This preserves the exact conversation and avoids
+    // accumulating duplicate "continue" turns when generation itself failed.
+    if (detectedFailureReason === 'stopped_thinking') {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryClicked = await clickRecoverableRetryButton(
+        cdp,
+        retryBaseline?.conversationFingerprint,
+      );
+      if (retryClicked) {
+        const retryProgressed = await confirmProgress(
+          cdp,
+          retryBaseline,
+          PROGRESS_CONFIRM_MS,
+          PROGRESS_POLL_MS,
+          retryTurnBaseline,
+        );
+        if (retryProgressed) {
+          return {
+            result_status: 'PROGRESS_CONFIRMED',
+            detail: 'native Retry restored assistant progress without sending continuation',
+            ...recoveryMetadata(),
+          };
+        }
+        detectedFailureReason = await recoverableFailureReason(cdp) || detectedFailureReason;
+      }
+    }
+
     if (detectedFailureReason === 'additional_checks') {
       return {
         result_status: 'STALLED_NOT_CONFIRMED',
@@ -2878,7 +2965,6 @@ async function reinforcementCheckOnce(
         failureSignal = 'banner';
         failureReason = await recoverableFailureReason(cdp) || 'generation_error';
         failureBaseline = await assistantSnapshot(cdp);
-        failureTurnBaseline = await conversationTurnState(cdp);
         failureTurnBaseline = await conversationTurnState(cdp);
       } else if (await silentStallPresent(cdp)) {
         // The iOS client can show "Transmissão interrompida" while the same
@@ -3305,6 +3391,7 @@ export {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
