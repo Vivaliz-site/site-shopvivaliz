@@ -68,7 +68,7 @@ printf '%s root_before=%s%% level=%s inode_before=%s%% inode_level=%s used_bytes
 # workspace lifecycle cleanup. It only removes inactive, clean, delivered
 # worktrees and known regenerable temp/cache artifacts.
 if { [ "$before" -ge 70 ] || [ "$rapid_growth" -eq 1 ] || [ "$worktrees_now" -ge "$WORKTREE_PRESSURE_COUNT" ]; } && [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
-  FULL_TTL_HOURS=1 CACHE_TTL_HOURS=1 /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
+  FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
   before="$(pct)"
 fi
 
