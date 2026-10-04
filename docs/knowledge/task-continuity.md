@@ -398,7 +398,7 @@ operacional:
    autenticação Bearer; o token pode vir de env ou de arquivo protegido;
 4. `shopvivaliz-chatgpt-continuity.service` roda em
    `always-free-arm-1787907847-26` e anexa ao browser canônico por
-   `http://127.0.0.1:9555`;
+   `http://127.0.0.1:9556`;
 5. o worker só envia `continue` quando não há geração ativa. O monitor de
    reforço só atua quando existe checkpoint não terminal (`RUNNING` ou
    `READY_TO_COMPLETE`) **e** o health do browser canônico está recente e
@@ -435,7 +435,7 @@ outro perfil do navegador.
 
 Não executar probes sintéticos repetitivos para “testar” a conta. A prova
 operacional preferida é: heartbeat autenticado do bridge + serviço backend
-ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
+ativo + CDP 9556 alcançável + um nudge real correlacionado a uma interrupção
 natural chegando a `PROGRESS_CONFIRMED` na mesma conversa. `SENT` ou
 `SENT_UNCONFIRMED` não certificam retomada. Enquanto faltar a última
 evidência, declarar a mitigação instalada/armada, não “continuidade E2E
