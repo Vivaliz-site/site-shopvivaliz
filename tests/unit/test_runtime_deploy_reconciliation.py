@@ -229,10 +229,11 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         activation = workflow.split("- name: Activate release atomically", 1)[1].split("  monitor:", 1)[0]
 
-        self.assertIn(
-            'sudo bash "$current/scripts/install-catalog-sync-service.sh"',
-            activation,
+        self.assertGreaterEqual(
+            activation.count('sudo bash "$current/scripts/install-catalog-sync-service.sh"'),
+            2,
         )
+        self.assertIn("catalog_runtime_rollback_reconcile_failed=true", activation)
         self.assertNotIn("catalog_service_changed=", activation)
         self.assertNotIn("catalog_token_services_unchanged=true", activation)
         self.assertNotIn(
