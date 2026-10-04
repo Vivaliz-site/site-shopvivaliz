@@ -167,13 +167,11 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('kill -TERM "$canonical_pid"', guardian_body)
         self.assertNotIn("pkill", guardian_body)
         self.assertNotIn("kill -KILL", guardian_body)
-        # Only the bounded negative-cache branch may finish before CDP recovery.
-        # Behavioral tests cover transport failure even while this cache exists.
-        cache_branch = guardian_body.split('cached_state="$(python3', 1)[1].split('mapfile -t canonical_pids', 1)[0]
-        self.assertIn('QUIESCENT_AUTH_CACHE', cache_branch)
-        self.assertIn('exit 0', cache_branch)
-        self.assertNotIn('exit 0', guardian_body.split('mapfile -t canonical_pids', 1)[1])
-        self.assertIn('exit "$status"', guardian_body)
+        # Cached observations and real recovery share the same final status.
+        # Behavioral tests retain transport-failure coverage during deferral.
+        self.assertIn('QUIESCENT_AUTH_CACHE', guardian_body)
+        self.assertNotIn('exit 0', guardian_body)
+        self.assertEqual(guardian_body.count('exit "$status"'), 1)
         timer_body = timer.read_text(encoding="utf-8")
         self.assertIn("OnUnitActiveSec=30s", timer_body)
         self.assertIn("AccuracySec=1s", timer_body)
