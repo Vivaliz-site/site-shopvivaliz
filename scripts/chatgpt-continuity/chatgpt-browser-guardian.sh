@@ -6,6 +6,8 @@ cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
+probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgpt-browser-probe-cache.py}"
+task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
 
 runtime_eval_ready() {
@@ -125,7 +127,7 @@ browser_session_state() {
           try { authCdp?.close(); } catch {}
         }
       }
-      authTerminal = authTerminal || (residualAuthTerminal && !validOpenAiAuthFlow);
+      authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const c = await connectFirstUsableChatgptTab(tabs, async page => {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await Promise.race([
@@ -173,16 +175,8 @@ persist_browser_health() {
     AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
     *) state="UNKNOWN" ;;
   esac
-  local authenticated=false
-  [[ "$state" == "AUTHENTICATED" ]] && authenticated=true
-  local dir temp
-  dir="$(dirname "$browser_health_file")"
-  mkdir -p "$dir"
-  temp="$browser_health_file.tmp.$$"
-  printf '{"schema_version":1,"updated_at":"%s","session_state":"%s","authenticated":%s}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$state" "$authenticated" >"$temp"
-  chmod 0644 "$temp"
-  mv -f "$temp" "$browser_health_file"
+  python3 "$probe_cache_helper" record --health "$browser_health_file" \
+    --base "$cdp_base" --tasks "$task_state_dir" --state "$state"
 }
 
 report_browser_state() {
@@ -207,7 +201,7 @@ validate_browser_session() {
       ;;
     AUTH_FLOW)
       report_browser_state "AUTH_PENDING" "$session_state"
-      return 1
+      return 0
       ;;
     AUTH_TERMINAL)
       # Authentication reached a terminal page. The browser/CDP runtime is
@@ -218,7 +212,7 @@ validate_browser_session() {
       ;;
     LOGGED_OUT)
       report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"
-      return 1
+      return 0
       ;;
     *)
       report_browser_state "DEGRADED_SESSION" "${session_state:-UNKNOWN}"
@@ -252,70 +246,85 @@ pid_is_live() {
   [[ -n "$state" && "$state" != Z* ]]
 }
 
-mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
-
 status=0
-if cdp_ready; then
-  validate_browser_session "HEALTHY" || status=1
-elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
-  if systemctl is-active --quiet "$browser_unit"; then
-    sleep 5
-    if cdp_ready; then
-      validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
-    else
-      systemctl restart "$browser_unit"
-      if wait_for_cdp; then
-        validate_browser_session "RECOVERED_MANAGED_RESTART" || status=1
+
+# Keep the timer and transport liveness checks enabled. Reuse only a negative
+# session observation, for a bounded window, when browser/task context agrees.
+# No renderer evaluation or account request is made on this path.
+if [[ "${CHATGPT_BROWSER_FORCE_SESSION_PROBE:-0}" != 1 ]] && \
+  cached_state="$(python3 "$probe_cache_helper" check --health "$browser_health_file" \
+    --base "$cdp_base" --tasks "$task_state_dir")"; then
+  echo "CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_CACHE"
+  echo "CHATGPT_BROWSER_SESSION=$cached_state"
+else
+  mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
+
+  if cdp_ready; then
+    validate_browser_session "HEALTHY" || status=1
+  elif [[ "${#canonical_pids[@]}" -gt 0 ]]; then
+    if systemctl is-active --quiet "$browser_unit"; then
+      sleep 5
+      if cdp_ready; then
+        validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
       else
-        echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
-        status=1
-      fi
-    fi
-  elif [[ "${#canonical_pids[@]}" -eq 1 ]]; then
-    canonical_pid="${canonical_pids[0]}"
-    if [[ ! "$canonical_pid" =~ ^[0-9]+$ ]]; then
-      echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_INVALID_CANONICAL_PID" >&2
-      status=1
-    elif ! systemctl is-enabled --quiet "$browser_unit"; then
-      echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_UNIT_NOT_ENABLED" >&2
-      status=1
-    else
-      # The process matched the fully anchored canonical browser command and
-      # there is exactly one candidate. Terminate only that PID, never a broad
-      # process class, then relaunch the same profile under systemd supervision.
-      kill -TERM "$canonical_pid" 2>/dev/null || true
-      terminated=false
-      for _ in $(seq 1 10); do
-        if ! pid_is_live "$canonical_pid"; then
-          terminated=true
-          break
-        fi
-        sleep 1
-      done
-      if [[ "$terminated" != true ]]; then
-        echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_TIMEOUT" >&2
-        status=1
-      else
-        systemctl start "$browser_unit"
+        systemctl restart "$browser_unit"
         if wait_for_cdp; then
-          validate_browser_session "RECOVERED_UNMANAGED_TAKEOVER" || status=1
+          validate_browser_session "RECOVERED_MANAGED_RESTART" || status=1
         else
           echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
           status=1
         fi
       fi
+    elif [[ "${#canonical_pids[@]}" -eq 1 ]]; then
+      canonical_pid="${canonical_pids[0]}"
+      if [[ ! "$canonical_pid" =~ ^[0-9]+$ ]]; then
+        echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_INVALID_CANONICAL_PID" >&2
+        status=1
+      elif ! systemctl is-enabled --quiet "$browser_unit"; then
+        echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_UNIT_NOT_ENABLED" >&2
+        status=1
+      else
+        # The process matched the fully anchored canonical browser command and
+        # there is exactly one candidate. Terminate only that PID, never a broad
+        # process class, then relaunch the same profile under systemd supervision.
+        if ! kill -TERM "$canonical_pid" 2>/dev/null; then
+        # A concurrent exit is possible; the bounded absence check below is
+        # still authoritative and rejects takeover while the process is live.
+        echo "CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED" >&2
+      fi
+        terminated=false
+        for _ in $(seq 1 10); do
+          if ! pid_is_live "$canonical_pid"; then
+            terminated=true
+            break
+          fi
+          sleep 1
+        done
+        if [[ "$terminated" != true ]]; then
+          echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_UNMANAGED_TAKEOVER_TIMEOUT" >&2
+          status=1
+        else
+          systemctl start "$browser_unit"
+          if wait_for_cdp; then
+            validate_browser_session "RECOVERED_UNMANAGED_TAKEOVER" || status=1
+          else
+            echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+            status=1
+          fi
+        fi
+      fi
+    else
+      echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_MULTIPLE_CANONICAL_PROCESSES" >&2
+      status=1
     fi
   else
-    echo "CHATGPT_BROWSER_GUARDIAN=DEGRADED_MULTIPLE_CANONICAL_PROCESSES" >&2
-    status=1
-  fi
-else
-  systemctl start "$browser_unit"
-  if wait_for_cdp; then
-    validate_browser_session "RECOVERED" || status=1
-  else
-    echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
-    status=1
+    systemctl start "$browser_unit"
+    if wait_for_cdp; then
+      validate_browser_session "RECOVERED" || status=1
+    else
+      echo "CHATGPT_BROWSER_GUARDIAN=RECOVERY_FAILED" >&2
+      status=1
+    fi
   fi
 fi
 

@@ -271,6 +271,18 @@ class AlertSender:
         return self._send_brevo(subject, body, attachment)
 
 
+def ship_order_with_unsplit_retry(client: ShopeeClient, body: dict) -> Any:
+    """Retry once without package_number when Shopee identifies an unsplit order."""
+    try:
+        return client.ship_order(body)
+    except RuntimeError as exc:
+        if "logistics.ship_order_not_need_pacakge_number" not in str(exc) or "package_number" not in body:
+            raise
+        retry_body = dict(body)
+        retry_body.pop("package_number", None)
+        return client.ship_order(retry_body)
+
+
 def _package_key(package: dict) -> str:
     return str(package.get("package_number") or package.get("order_sn") or "").strip()
 
@@ -433,7 +445,7 @@ def run(
             if not apply:
                 store.event("dry_run_ship", order_sn=order_sn, package_number=package_number, channel=channel, method=next(k for k in ("pickup", "dropoff", "non_integrated") if k in request))
                 continue
-            client.ship_order(request)
+            ship_order_with_unsplit_retry(client, request)
             store.state.setdefault("arranged", {})[key] = {"at": current, "order_sn": order_sn, "channel": channel}
             store.save()
             store.event("ship_order", order_sn=order_sn, package_number=package_number, channel=channel, ok=True)
@@ -453,6 +465,10 @@ def run(
                 "Abra a Shopee e organize o envio imediatamente.",
             )
         except Exception as exc:
+            if "logistics.lack_of_invoice_data" in str(exc):
+                summary["deferred_by_shopee"] += 1
+                store.event("invoice_deferred", order_sn=order_sn, package_number=package_number, channel=channel, message=str(exc)[:500])
+                continue
             summary["errors"] += 1
             store.event("error", order_sn=order_sn, package_number=package_number, channel=channel, error=type(exc).__name__, message=str(exc)[:500])
             _alert_once(
