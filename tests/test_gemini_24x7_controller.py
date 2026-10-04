@@ -567,6 +567,31 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("os.replace(temp, path)", source)
         self.assertIn("_fsync_dir(path.parent)", source)
 
+    def test_watchdog_and_chatgpt_nudge_have_independent_systemd_timers(self) -> None:
+        watchdog_service = ROOT / "deploy" / "systemd" / "shopvivaliz-continuity-watchdog.service"
+        watchdog_timer = ROOT / "deploy" / "systemd" / "shopvivaliz-continuity-watchdog.timer"
+        nudge_service = ROOT / "deploy" / "systemd" / "shopvivaliz-chatgpt-nudge-dispatcher.service"
+        nudge_timer = ROOT / "deploy" / "systemd" / "shopvivaliz-chatgpt-nudge-dispatcher.timer"
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+
+        for path in (watchdog_service, watchdog_timer, nudge_service, nudge_timer):
+            self.assertTrue(path.is_file(), f"independent continuity unit missing: {path.name}")
+
+        watchdog_body = watchdog_service.read_text(encoding="utf-8")
+        nudge_body = nudge_service.read_text(encoding="utf-8")
+        watchdog_timer_body = watchdog_timer.read_text(encoding="utf-8")
+        nudge_timer_body = nudge_timer.read_text(encoding="utf-8")
+
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY", watchdog_body)
+        self.assertIn("--stale-seconds 120", watchdog_body)
+        self.assertIn("SHOPVIVALIZ_CHATGPT_NUDGE_ENTRY", nudge_body)
+        self.assertIn("OnUnitInactiveSec=30s", watchdog_timer_body)
+        self.assertIn("OnUnitInactiveSec=30s", nudge_timer_body)
+        self.assertIn("shopvivaliz-continuity-watchdog.timer", installer)
+        self.assertIn("shopvivaliz-chatgpt-nudge-dispatcher.timer", installer)
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=", installer)
+        self.assertIn("SHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=", installer)
+
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
