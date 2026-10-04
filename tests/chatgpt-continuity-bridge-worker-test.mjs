@@ -2823,6 +2823,59 @@ async function run() {
     );
   }
 
+  // A long-running recovery check must keep the monitor heartbeat fresh.
+  // Live production reproduction: the browser remained authenticated and the
+  // worker stayed active while one recovery check outlived the controller's
+  // monitor freshness window, producing chatgpt_browser_monitor_stale.
+  {
+    const monitorFile = path.join(
+      testTaskStateDir,
+      '_chatgpt-continuity-monitor-state.json',
+    );
+    persistReinforcementHealth({
+      action: 'no_banner',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    const before = JSON.parse(fs.readFileSync(monitorFile, 'utf8'));
+
+    let releaseCheck;
+    const pendingCheck = new Promise(resolve => {
+      releaseCheck = resolve;
+    });
+    const stop = new Error('stop-after-long-check-heartbeat');
+    const loopPromise = reinforcementLoop(
+      async () => pendingCheck,
+      () => 0,
+      async () => { throw stop; },
+      async () => true,
+      async () => true,
+      10,
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 45));
+    const during = JSON.parse(fs.readFileSync(monitorFile, 'utf8'));
+    assert.notEqual(
+      during.updated_at,
+      before.updated_at,
+      'an in-flight recovery check must refresh monitor updated_at before the check completes',
+    );
+    assert.equal(
+      during.action,
+      'no_banner',
+      'heartbeat liveness must preserve the prior semantic monitor action',
+    );
+
+    releaseCheck({
+      action: 'no_banner',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await assert.rejects(loopPromise, error => error === stop);
+  }
+
   // The reinforcement scheduler must call its check with exactly the public
   // five-argument contract. Extra positional arguments can silently replace
   // the options object in JavaScript and disable the 429 discovery backoff.
