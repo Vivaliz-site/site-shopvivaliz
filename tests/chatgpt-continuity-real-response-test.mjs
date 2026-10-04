@@ -22,7 +22,18 @@ test('generic main-surface growth cannot certify a real assistant response', asy
 
   const cdp = {
     async evaluate(source) {
-      if (String(source).includes('conversationPath:String')) {
+      const expression = String(source);
+      if (expression.includes('conversation-turn-state')) {
+        return {
+          http_status: 200,
+          node_id: 'assistant-old',
+          role: 'assistant',
+          end_turn: true,
+          content_text_length: 17,
+          message_status: 'finished_successfully',
+        };
+      }
+      if (expression.includes('conversationPath:String')) {
         return {
           count: 0,
           lastText: '',
@@ -56,9 +67,31 @@ test('new assistant-turn content certifies a real response on the bound conversa
     },
   });
 
+  let turnProbe = 0;
   const cdp = {
     async evaluate(source) {
-      if (String(source).includes('conversationPath:String')) {
+      const expression = String(source);
+      if (expression.includes('conversation-turn-state')) {
+        turnProbe += 1;
+        return turnProbe === 1
+          ? {
+              http_status: 200,
+              node_id: 'user-continue',
+              role: 'user',
+              end_turn: true,
+              content_text_length: 8,
+              message_status: 'finished_successfully',
+            }
+          : {
+              http_status: 200,
+              node_id: 'assistant-new',
+              role: 'assistant',
+              end_turn: true,
+              content_text_length: 31,
+              message_status: 'finished_successfully',
+            };
+      }
+      if (expression.includes('conversationPath:String')) {
         return {
           count: 2,
           lastText: 'nova resposta real do assistente',
@@ -74,5 +107,5 @@ test('new assistant-turn content certifies a real response on the bound conversa
   };
 
   const confirmed = await confirmAssistantProgress(cdp, baseline, 1000, 10);
-  assert.equal(confirmed, true, 'a new assistant turn on the bound conversation must certify progress');
+  assert.equal(confirmed, true, 'a completed backend assistant response on the bound conversation must certify progress');
 });

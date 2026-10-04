@@ -13,6 +13,7 @@ const {
   conversationIsGenerating,
   conversationStreamStatus,
   conversationTurnState,
+  realAssistantResponseCompletedSince,
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
@@ -829,7 +830,7 @@ async function run() {
         10,
       ),
       false,
-      'generic main-surface/tool growth must not certify a real assistant response',
+      'surface growth such as Pensando/tool activity must never certify a real assistant response',
     );
   }
 
@@ -2559,6 +2560,39 @@ async function run() {
     assert.match(expression, /\/api\/auth\/session/, 'turn-state probe must load the authenticated ChatGPT session');
     assert.match(expression, /Authorization/, 'turn-state probe must forward the bearer token when available');
     assert.match(expression, /ChatGPT-Account-Id/, 'turn-state probe must bind the request to the active ChatGPT account');
+  }
+
+  {
+    const previousComplete = { http_status: 200, node_id: 'assistant-old', role: 'assistant', end_turn: true, content_text_length: 20 };
+    assert.equal(
+      realAssistantResponseCompletedSince(previousComplete, { ...previousComplete, content_text_length: 25 }),
+      false,
+      'growth on an already-completed assistant node is not a new response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'user-new', role: 'user', end_turn: true, content_text_length: 8 },
+        { http_status: 200, node_id: 'assistant-new', role: 'assistant', end_turn: true, content_text_length: 42 },
+      ),
+      true,
+      'a new completed assistant node with visible text is a real response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'assistant-stream', role: 'assistant', end_turn: false, content_text_length: 12 },
+        { http_status: 200, node_id: 'assistant-stream', role: 'assistant', end_turn: true, content_text_length: 48 },
+      ),
+      true,
+      'the same assistant node becoming end_turn=true is a completed response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'user-new', role: 'user', end_turn: true, content_text_length: 8 },
+        { http_status: 200, node_id: 'assistant-thinking', role: 'assistant', end_turn: false, content_text_length: 7 },
+      ),
+      false,
+      'Pensando/incomplete assistant state never certifies a response',
+    );
   }
 
   // Current UI fallback when the canonical conversation metadata endpoint is
