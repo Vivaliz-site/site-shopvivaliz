@@ -3,6 +3,8 @@ set -eu
 LOG=/var/log/shopvivaliz-disk-guard.log
 STATE_DIR=/var/lib/shopvivaliz-ops
 STATE="$STATE_DIR/disk-status.env"
+RAPID_GROWTH_BPH="${RAPID_GROWTH_BPH:-2147483648}"
+WORKTREE_PRESSURE_COUNT="${WORKTREE_PRESSURE_COUNT:-20}"
 mkdir -p "$STATE_DIR"
 
 pct() {
@@ -11,6 +13,17 @@ pct() {
 inode_pct() {
   df -Pi / | awk 'NR==2 {gsub("%","",$5); print $5}'
 }
+used_bytes() {
+  df -PB1 / | awk 'NR==2 {print $3}'
+}
+worktree_count() {
+  if [ -d /home/ubuntu/worktrees ]; then
+    find /home/ubuntu/worktrees -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l
+  else
+    echo 0
+  fi
+}
+
 classify() {
   value="$1"
   if [ "$value" -ge 90 ]; then echo critical
@@ -22,16 +35,40 @@ classify() {
 
 before=$(pct)
 inode_before=$(inode_pct)
+used_now=$(used_bytes)
+worktrees_now=$(worktree_count)
+sample_epoch=$(date +%s)
+growth_bytes_per_hour=0
+rapid_growth=0
+prev_epoch=""
+prev_used=""
+if [ -r "$STATE" ]; then
+  prev_epoch=$(awk -F= '$1 == "sample_epoch" {print $2; exit}' "$STATE" 2>/dev/null || true)
+  prev_used=$(awk -F= '$1 == "used_bytes" {print $2; exit}' "$STATE" 2>/dev/null || true)
+fi
+case "$prev_epoch:$prev_used" in
+  *[!0-9:]*|:|*:) ;;
+  *)
+    elapsed=$((sample_epoch - prev_epoch))
+    growth=$((used_now - prev_used))
+    if [ "$elapsed" -gt 0 ] && [ "$growth" -gt 0 ]; then
+      growth_bytes_per_hour=$((growth * 3600 / elapsed))
+      if [ "$growth_bytes_per_hour" -ge "$RAPID_GROWTH_BPH" ]; then
+        rapid_growth=1
+      fi
+    fi
+    ;;
+esac
 now=$(date -u +%FT%TZ)
 level=$(classify "$before")
 inode_level=$(classify "$inode_before")
-printf '%s root_before=%s%% level=%s inode_before=%s%% inode_level=%s\n' "$now" "$before" "$level" "$inode_before" "$inode_level" >> "$LOG"
+printf '%s root_before=%s%% level=%s inode_before=%s%% inode_level=%s used_bytes=%s growth_bytes_per_hour=%s rapid_growth=%s\n' "$now" "$before" "$level" "$inode_before" "$inode_level" "$used_now" "$growth_bytes_per_hour" "$rapid_growth" >> "$LOG"
 
 # Close the feedback loop early: once root reaches 70%, run the guarded
 # workspace lifecycle cleanup. It only removes inactive, clean, delivered
 # worktrees and known regenerable temp/cache artifacts.
-if [ "$before" -ge 70 ] && [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
-  /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
+if { [ "$before" -ge 70 ] || [ "$rapid_growth" -eq 1 ] || [ "$worktrees_now" -ge "$WORKTREE_PRESSURE_COUNT" ]; } && [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
+  ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
   before="$(pct)"
 fi
 
@@ -75,6 +112,8 @@ fi
 
 after=$(pct)
 inode_after=$(inode_pct)
+used_after=$(used_bytes)
+worktrees_after=$(worktree_count)
 level=$(classify "$after")
 inode_level=$(classify "$inode_after")
 docker_state=$(systemctl is-active docker 2>/dev/null || true)
@@ -83,6 +122,11 @@ load1=$(awk '{print $1}' /proc/loadavg)
 
 cat > "$STATE" <<EOF2
 timestamp=$(date -u +%FT%TZ)
+sample_epoch=$sample_epoch
+used_bytes=$used_after
+growth_bytes_per_hour=$growth_bytes_per_hour
+rapid_growth=$rapid_growth
+worktree_count=$worktrees_after
 root_pct=$after
 level=$level
 inode_pct=$inode_after
@@ -92,8 +136,11 @@ zram_active=$zram_state
 load1=$load1
 EOF2
 
-printf '%s root_after=%s%% level=%s inode_after=%s%% inode_level=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$level" "$inode_after" "$inode_level" "$docker_state" "$zram_state" "$load1" >> "$LOG"
+printf '%s root_after=%s%% level=%s inode_after=%s%% inode_level=%s used_bytes=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$level" "$inode_after" "$inode_level" "$used_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
 
+if [ "$rapid_growth" -eq 1 ]; then
+  logger -p daemon.warning -t shopvivaliz-disk-guard "root filesystem growing rapidly: ${growth_bytes_per_hour} bytes/hour (threshold ${RAPID_GROWTH_BPH})"
+fi
 if [ "$after" -ge 90 ]; then
   logger -p daemon.crit -t shopvivaliz-disk-guard "root filesystem critical: $after%"
 elif [ "$after" -ge 80 ]; then

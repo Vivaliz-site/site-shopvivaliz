@@ -5,8 +5,10 @@ ROOT=/home/ubuntu/chat-workspaces
 STATE_DIR=/var/lib/shopvivaliz-workspace-housekeeper
 LOG=/var/log/shopvivaliz-workspace-housekeeper.log
 LOCK=/run/lock/shopvivaliz-workspace-housekeeper.lock
-FULL_TTL_HOURS=24
-CACHE_TTL_HOURS=12
+FULL_TTL_HOURS="${FULL_TTL_HOURS:-24}"
+CACHE_TTL_HOURS="${CACHE_TTL_HOURS:-12}"
+ORPHAN_WORKTREE_TTL_HOURS="${ORPHAN_WORKTREE_TTL_HOURS:-2}"
+ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"
 DRY_RUN="${DRY_RUN:-0}"
 
 mkdir -p "$STATE_DIR"
@@ -37,6 +39,28 @@ path_active() {
   while IFS= read -r q; do
     case "$q" in "$p"|"$p"/*) return 0;; esac
   done <<< "$ACTIVE_CWDS"
+  return 1
+}
+
+canonical_clone() {
+  case "$1" in
+    /home/ubuntu/shopvivaliz-deploy/repo|    /home/ubuntu/solange-rolla-consultorio|    /home/ubuntu/mei-mg-email|    /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz|    /home/ubuntu/src/site-shopvivaliz-remote-control-codex|    /home/ubuntu/shopvivaliz-revenue-recovery-20260911)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+clone_has_unpushed_commits() {
+  local root="$1" ref sha
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    sha="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse "$ref" 2>/dev/null || true)"
+    [ -n "$sha" ] || continue
+    if ! sudo -u ubuntu git -c safe.directory="$root" -C "$root" branch -r --contains "$sha" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+  done < <(sudo -u ubuntu git -c safe.directory="$root" -C "$root" for-each-ref --format='%(refname)' refs/heads 2>/dev/null || true)
   return 1
 }
 
@@ -151,13 +175,13 @@ root_pct_pre="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
 TEMP_TTL_HOURS=24
 SNAPSHOT_TTL_HOURS=24
 if [ "$root_pct_pre" -ge 70 ]; then
-  FULL_TTL_HOURS=4
-  CACHE_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
+  [ "$CACHE_TTL_HOURS" -le 1 ] || CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=12
   SNAPSHOT_TTL_HOURS=12
 fi
 if [ "$root_pct_pre" -ge 80 ]; then
-  FULL_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
   CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=6
   SNAPSHOT_TTL_HOURS=6
@@ -168,7 +192,7 @@ if [ "$root_pct_pre" -ge 85 ]; then
 fi
 
 temp_removed=0
-for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
+for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/shopvivaliz-db-backup-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
 do
   for d in $pattern; do
     [ -d "$d" ] || continue
@@ -196,6 +220,46 @@ for d in /home/ubuntu/worktrees/continuity-deploy-* /home/ubuntu/worktrees/remot
   snapshot_removed=$((snapshot_removed+1))
   log "metadata_snapshot_removed path=$d age_hours=$age bytes=$b pressure_root_pct=$root_pct_pre dry_run=$DRY_RUN"
 done
+
+orphan_worktree_removed=0
+for d in \
+  /home/ubuntu/worktrees/browser-type-fix-* \
+  /home/ubuntu/worktrees/continuity-report-* \
+  /home/ubuntu/worktrees/guardian-drift-* \
+  /home/ubuntu/worktrees/guardian-runtime-* \
+  /home/ubuntu/worktrees/remote-report-deploy-* \
+  /home/ubuntu/worktrees/sqlite-lock-fix-*
+do
+  [ -d "$d" ] || continue
+  [ ! -e "$d/.git" ] || continue
+  age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge "$ORPHAN_WORKTREE_TTL_HOURS" ] || continue
+  path_active "$d" && continue
+  b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+  freed_bytes=$((freed_bytes+b))
+  orphan_worktree_removed=$((orphan_worktree_removed+1))
+  log "orphan_worktree_copy_removed path=$d age_hours=$age bytes=$b dry_run=$DRY_RUN"
+done
+
+abandoned_clone_removed=0
+while IFS= read -r root; do
+  [ -d "$root/.git" ] || continue
+  canonical_clone "$root" && continue
+  path_active "$root" && continue
+  age=$(( (now_epoch-$(stat -c %Y "$root" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge "$ABANDONED_CLONE_TTL_HOURS" ] || continue
+  [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
+  linked_worktrees="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || true)"
+  [ "$linked_worktrees" -le 1 ] || continue
+  clone_has_unpushed_commits "$root" && continue
+  b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
+  freed_bytes=$((freed_bytes+b))
+  abandoned_clone_removed=$((abandoned_clone_removed+1))
+  log "abandoned_clone_removed path=$root age_hours=$age bytes=$b dry_run=$DRY_RUN"
+done < <(find /home/ubuntu -mindepth 2 -maxdepth 4 -type d -name .git -printf '%h
+' 2>/dev/null | sort -u)
 
 worktree_removed=0
 if [ -d /home/ubuntu/worktrees ]; then
@@ -238,11 +302,13 @@ preserved=$preserved
 freed_bytes=$freed_bytes
 temp_removed=$temp_removed
 snapshot_removed=$snapshot_removed
+orphan_worktree_removed=$orphan_worktree_removed
+abandoned_clone_removed=$abandoned_clone_removed
 worktree_removed=$worktree_removed
 dry_run=$DRY_RUN
 STATE
-log "summary root_pct=$root_pct workspaces=$workspace_count removed=$removed cache_cleaned=$cache_cleaned preserved=$preserved temp_removed=$temp_removed snapshot_removed=$snapshot_removed worktree_removed=$worktree_removed freed_bytes=$freed_bytes dry_run=$DRY_RUN"
+log "summary root_pct=$root_pct workspaces=$workspace_count removed=$removed cache_cleaned=$cache_cleaned preserved=$preserved temp_removed=$temp_removed snapshot_removed=$snapshot_removed orphan_worktree_removed=$orphan_worktree_removed abandoned_clone_removed=$abandoned_clone_removed worktree_removed=$worktree_removed freed_bytes=$freed_bytes dry_run=$DRY_RUN"
 if [ "$root_pct" -ge 80 ] || [ "$workspace_count" -ge 30 ]; then
   logger -p daemon.warning -t shopvivaliz-workspace-housekeeper "storage pressure root=${root_pct}% workspaces=$workspace_count"
 fi
-printf 'root_pct=%s workspaces=%s removed=%s cache_cleaned=%s preserved=%s temp_removed=%s snapshot_removed=%s worktree_removed=%s freed_bytes=%s dry_run=%s\n' "$root_pct" "$workspace_count" "$removed" "$cache_cleaned" "$preserved" "$temp_removed" "$snapshot_removed" "$worktree_removed" "$freed_bytes" "$DRY_RUN"
+printf 'root_pct=%s workspaces=%s removed=%s cache_cleaned=%s preserved=%s temp_removed=%s snapshot_removed=%s orphan_worktree_removed=%s abandoned_clone_removed=%s worktree_removed=%s freed_bytes=%s dry_run=%s\n' "$root_pct" "$workspace_count" "$removed" "$cache_cleaned" "$preserved" "$temp_removed" "$snapshot_removed" "$orphan_worktree_removed" "$abandoned_clone_removed" "$worktree_removed" "$freed_bytes" "$DRY_RUN"

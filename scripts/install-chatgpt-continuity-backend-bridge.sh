@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 unit='shopvivaliz-chatgpt-continuity.service'
 tunnel_unit='shopvivaliz-chatgpt-continuity-a1-tunnel.service'
-browser_unit='shopvivaliz-atendimento-browser.service'
+browser_unit='shopvivaliz-chatgpt-browser.service'
 browser_guardian_service='shopvivaliz-chatgpt-browser-guardian.service'
 browser_guardian_timer='shopvivaliz-chatgpt-browser-guardian.timer'
 legacy_browser_healthcheck_timer='shopvivaliz-browser-healthcheck.timer'
@@ -11,6 +11,8 @@ legacy_browser_healthcheck_service='shopvivaliz-browser-healthcheck.service'
 legacy_browser_healthcheck_timer_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.timer'
 legacy_browser_healthcheck_service_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.service'
 legacy_browser_healthcheck_script='/usr/local/sbin/shopvivaliz-browser-healthcheck.sh'
+legacy_continuity_atendimento_override="$HOME/.config/systemd/user/$unit.d/90-atendimento-cdp.conf"
+legacy_guardian_atendimento_override="/etc/systemd/system/$browser_guardian_service.d/90-atendimento-browser.conf"
 tunnel_key='/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor'
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -31,7 +33,7 @@ restart_pending="$install_root/.continuity-restart-required"
 config_root='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity'
 worker="$install_root/chatgpt-continuity-bridge-worker.mjs"
 token_file='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
-cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9556}"
+cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9555}"
 bridge_endpoint="${CHATGPT_CONTINUITY_BRIDGE_ENDPOINT:-http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php}"
 bridge_host_header="${CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER:-shopvivaliz.com.br}"
 poll_ms="${CHATGPT_CONTINUITY_POLL_MS:-15000}"
@@ -90,6 +92,11 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${runtime
 [[ -S "${runtime_dir}/bus" ]] || fail 'user systemd bus unavailable; linger/user manager must be active'
 
 install -d -m 700 "$install_root" "$config_root" "$HOME/.config/systemd/user"
+continuity_override_removed=false
+if [[ -e "$legacy_continuity_atendimento_override" ]]; then
+  rm -f "$legacy_continuity_atendimento_override"
+  continuity_override_removed=true
+fi
 worker_changed=false
 if install_if_changed "$worker_source" "$worker" 700; then
   worker_changed=true
@@ -167,6 +174,10 @@ fi
 
 sudo -n install -d -m 755 /usr/local/libexec
 system_units_changed=false
+if sudo -n test -e "$legacy_guardian_atendimento_override"; then
+  sudo -n rm -f "$legacy_guardian_atendimento_override"
+  system_units_changed=true
+fi
 
 # A legacy one-minute CDP-only healthcheck predates the canonical guardian and
 # can race it by restarting the same authenticated browser. Retire it before
@@ -216,7 +227,7 @@ if sudo -n systemctl is-active --quiet "$browser_unit" && [[ "$browser_unit_chan
 fi
 sudo -n systemctl enable --now "$browser_guardian_timer" >/dev/null
 
-if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true ]]; then
+if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true || "$continuity_override_removed" = true ]]; then
   systemctl --user daemon-reload
 fi
 systemctl --user enable --now "$tunnel_unit" >/dev/null

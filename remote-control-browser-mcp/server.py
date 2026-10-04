@@ -389,11 +389,19 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     # contracts under the legacy public names. Preserve the canonical CDP
     # actions when their tab_id/selector arguments are present.
     if name == "browser_navigate" and "tab_id" not in args:
-        return browser_navigate(args)
+        return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
     if name == "browser_click" and "x" in args and "y" in args:
         return browser_click(args)
     if name == "browser_type" and "tab_id" not in args and "selector" not in args:
-        return browser_type(args)
+        # Prefer the canonical Atendimento browser. Fall back to the isolated
+        # graphical helper only when there is no unambiguous focused editable
+        # element in the canonical session. Other canonical failures stay visible.
+        result = BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
+        if isinstance(result, dict) and result.get("ok") is False:
+            detail = str(result.get("stderr") or result.get("stdout") or result.get("error") or "")
+            if "focused_editable_not_found" in detail or "focused_editable_ambiguous" in detail:
+                return browser_type(args)
+        return result
 
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
