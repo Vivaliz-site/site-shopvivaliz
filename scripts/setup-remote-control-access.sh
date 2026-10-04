@@ -10,6 +10,7 @@ SITE_HOST="shopvivaliz-free-a1"
 STATE_DIR="/var/lib/shopvivaliz-remote-control"
 INSTALL_DIR="/opt/shopvivaliz-remote-control"
 SERVICE="shopvivaliz-remote-control-mcp.service"
+BROWSER_SERVICE="shopvivaliz-remote-control-browser-mcp.service"
 REMOTE_USER="shopvivaliz-remote"
 PUBKEY="${SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY:-}"
 
@@ -55,6 +56,23 @@ install_controller() {
   sleep 2
   systemctl is-active --quiet "$SERVICE"
   curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
+
+  # The browser MCP imports the base controller module at process start.
+  # Refresh an already-active browser MCP whenever the base tool catalog changes.
+  if systemctl is-active --quiet "$BROWSER_SERVICE"; then
+    systemctl try-restart "$BROWSER_SERVICE"
+    browser_ready=0
+    for _ in $(seq 1 20); do
+      if curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5581/health >/dev/null; then
+        browser_ready=1
+        break
+      fi
+      sleep 1
+    done
+    [ "$browser_ready" = "1" ] || die browser_dependent_refresh_failed 24
+    echo "REMOTE_CONTROL_BROWSER_DEPENDENT_REFRESH=PASS"
+  fi
+
   echo "REMOTE_CONTROL_CONTROLLER_INSTALL=PASS"
   echo "REMOTE_CONTROL_PUBLIC_KEY_FILE=$STATE_DIR/id_ed25519.pub"
 }
