@@ -2055,15 +2055,19 @@ class DurableExecutorV2Tests(unittest.TestCase):
             self.submit(request_id="immutable-request", timeout=31)
 
     def test_task_wait_detaches_immediately_when_same_host_is_backlogged(self):
-        active_id = self.submit(command="sleep 30")["task_id"]
-        self.claim(active_id, state="running", started=True)
-        queued_id = self.submit(command="printf second")["task_id"]
+        first_id = self.submit(command="sleep 30")["task_id"]
+        second_id = self.submit(command="sleep 31")["task_id"]
+        self.claim(first_id, state="running", started=True)
+        self.claim(second_id, state="running", started=True)
+        queued_id = self.submit(command="printf third")["task_id"]
         started = time.monotonic()
         result = m.execute_tool("task_wait", {"task_id": queued_id, "wait_seconds": 5})
         elapsed = time.monotonic() - started
         self.assertEqual(result["state"], "queued")
         self.assertTrue(result["detached"])
         self.assertTrue(result["blocked_by_active"])
+        self.assertEqual(result["active_for_host"], 2)
+        self.assertEqual(result["host_concurrency_limit"], 2)
         self.assertEqual(result["queue_position"], 1)
         self.assertLess(elapsed, 0.5)
 
