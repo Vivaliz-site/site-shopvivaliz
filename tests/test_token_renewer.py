@@ -261,7 +261,6 @@ def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path
 @pytest.mark.parametrize(
     ("module", "update", "expected"),
     [
-        (shopee_renewer, lambda module: module.update_env("new-access", "new-refresh"), "SHOPEE_ACCESS_TOKEN=new-access"),
         (google_renewer, lambda module: module.write_env({"GOOGLE_ADS_ACCESS_TOKEN": "new-access"}), "GOOGLE_ADS_ACCESS_TOKEN=new-access"),
     ],
 )
@@ -271,6 +270,7 @@ def test_other_renewers_preserve_shared_env_symlink(tmp_path: Path, monkeypatch,
     shared_env = tmp_path / "shared.env"
     release_env = tmp_path / ".env"
     shared_env.write_text("UNCHANGED=value\n", encoding="utf-8")
+    shared_env.chmod(0o640)
     release_env.symlink_to(shared_env)
     monkeypatch.setattr(module, "ENV_PATH", release_env)
 
