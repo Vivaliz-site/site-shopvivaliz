@@ -27,6 +27,7 @@ except ImportError:  # direct CLI execution from repository root
 REQUESTS_FILE = resume_queue.REQUESTS_FILE
 LOCK_FILE = "_continuity-watchdog.lock"
 DEFAULT_STALE_SECONDS = 120
+DEFAULT_TASK_ANALYSIS_WINDOW_DAYS = 10
 
 
 def utc_now() -> str:
@@ -112,12 +113,23 @@ def _run_once_locked(
     scanned = 0
     eligible = 0
     dispatched = 0
+    ignored_outside_window = 0
+    analysis_window_seconds = DEFAULT_TASK_ANALYSIS_WINDOW_DAYS * 24 * 60 * 60
 
     for path in _state_files(root):
-        scanned += 1
         payload = _read_state(path)
         if not payload:
             continue
+
+        updated = _parse_time(payload.get("updated_at"))
+        if updated is None:
+            continue
+        age_seconds = (current - updated).total_seconds()
+        if age_seconds > analysis_window_seconds:
+            ignored_outside_window += 1
+            continue
+
+        scanned += 1
         if str(payload.get("status", "")).strip() != "RUNNING":
             continue
 
@@ -125,11 +137,6 @@ def _run_once_locked(
         if not next_action:
             continue
 
-        updated = _parse_time(payload.get("updated_at"))
-        if updated is None:
-            continue
-
-        age_seconds = (current - updated).total_seconds()
         if age_seconds < cutoff:
             continue
 
@@ -172,7 +179,9 @@ def _run_once_locked(
         "ok": True,
         "runtime_dir": str(root),
         "stale_seconds": cutoff,
+        "analysis_window_days": DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
         "scanned": scanned,
+        "ignored_outside_window": ignored_outside_window,
         "eligible": eligible,
         "dispatched": dispatched,
         "queue": {
@@ -199,7 +208,9 @@ def run_once(
                 "ok": True,
                 "runtime_dir": str(root),
                 "stale_seconds": cutoff,
+                "analysis_window_days": DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
                 "scanned": 0,
+                "ignored_outside_window": 0,
                 "eligible": 0,
                 "dispatched": 0,
                 "locked": True,
