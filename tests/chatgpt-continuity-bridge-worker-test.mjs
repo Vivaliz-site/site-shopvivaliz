@@ -12,6 +12,7 @@ const {
   Cdp,
   conversationIsGenerating,
   anotherConversationActiveInSession,
+  boundBrowserAccountMatches,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
@@ -3700,7 +3701,7 @@ async function run() {
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
   });
-  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, anotherConversationActiveInSession }, testTaskStateDir);
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, anotherConversationActiveInSession, boundBrowserAccountMatches }, testTaskStateDir);
   await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
   await (await import('./chatgpt-canonical-read-backoff-test.mjs')).runCanonicalReadBackoffTests({ conversationTurnState });
   console.log('reinforcementCheckOnce branches: PASS');
