@@ -147,6 +147,17 @@ HOST_DURABLE_LIMITS = {
     "KOCEPSV": 1,
 }
 
+REVERSE_SSH_RECOVERABLE_ERRORS = (
+    "connection timed out during banner exchange",
+    "connection closed by remote host",
+    "connection reset by peer",
+    "kex_exchange_identification",
+)
+REVERSE_SSH_RECONNECT_WAIT_SECONDS = max(
+    1,
+    min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_REVERSE_SSH_RECONNECT_WAIT", "12")), 60),
+)
+
 SENSITIVE_PATH_PARTS = (
     "/.ssh/", "\\.ssh\\", ".env", "credential", "secret", "token", "cookie",
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
@@ -1095,6 +1106,68 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
+def is_recoverable_reverse_ssh_error(host: str, stderr: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    lowered = str(stderr or "").lower()
+    return any(marker in lowered for marker in REVERSE_SSH_RECOVERABLE_ERRORS)
+
+
+def reverse_ssh_listener_pid(port: int) -> int | None:
+    try:
+        result = subprocess.run(
+            ["ss", "-ltnp"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    port_re = re.compile(rf"(?:127\.0\.0\.1|\[::1\]):{int(port)}\b")
+    pid_re = re.compile(r'users:\(\("sshd",pid=(\d+)')
+    for line in result.stdout.splitlines():
+        if not port_re.search(line):
+            continue
+        match = pid_re.search(line)
+        if not match:
+            continue
+        pid = int(match.group(1))
+        try:
+            if Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip() != "sshd":
+                continue
+        except (OSError, UnicodeError):
+            continue
+        return pid
+    return None
+
+
+def recover_reverse_ssh_transport(host: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    port = int(cfg.get("port", 0))
+    if port <= 0:
+        return False
+    old_pid = reverse_ssh_listener_pid(port)
+    if old_pid is None:
+        return False
+    try:
+        os.kill(old_pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        return False
+    deadline = time.monotonic() + REVERSE_SSH_RECONNECT_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        new_pid = reverse_ssh_listener_pid(port)
+        if new_pid is not None and new_pid != old_pid:
+            return True
+    return False
+
+
 def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
     """Run command payload outside the controller cgroup when systemd is available."""
     if os.geteuid() != 0 or not Path(SYSTEMD_RUN).is_file():
@@ -1171,54 +1244,70 @@ def run_host_command(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    args = isolated_invocation(remote_invocation(host, command))
     started = time.monotonic()
     deadline = started + timeout
     if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
         raise RuntimeError("controller_busy_retry_or_use_task_submit")
-    proc = None
+
+    def run_once() -> dict[str, Any]:
+        invocation = isolated_invocation(remote_invocation(host, command))
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                invocation,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            stdout = b""
+            stderr = b""
+            while True:
+                if cancel_check is not None and cancel_check():
+                    terminate_process_group(proc)
+                    try:
+                        proc.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc, grace_seconds=0.2)
+                    raise ClientDisconnected("client_disconnected")
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    terminate_process_group(proc)
+                    try:
+                        proc.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc, grace_seconds=0.2)
+                    raise subprocess.TimeoutExpired(invocation, timeout)
+
+                try:
+                    stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+
+            return {
+                "host": host,
+                "exit_code": proc.returncode,
+                "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+                "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
+                "duration_ms": int((time.monotonic() - started) * 1000),
+            }
+        finally:
+            _cleanup_isolated_scope(invocation)
+
     try:
-        proc = subprocess.Popen(
-            args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-        stdout = b""
-        stderr = b""
-        while True:
-            if cancel_check is not None and cancel_check():
-                terminate_process_group(proc)
-                try:
-                    proc.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    terminate_process_group(proc, grace_seconds=0.2)
-                raise ClientDisconnected("client_disconnected")
-
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                terminate_process_group(proc)
-                try:
-                    proc.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    terminate_process_group(proc, grace_seconds=0.2)
-                raise subprocess.TimeoutExpired(args, timeout)
-
-            try:
-                stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
-                break
-            except subprocess.TimeoutExpired:
-                continue
-
-        return {
-            "host": host,
-            "exit_code": proc.returncode,
-            "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
-            "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
-            "duration_ms": int((time.monotonic() - started) * 1000),
-        }
+        result = run_once()
+        if (
+            result["exit_code"] != 0
+            and is_recoverable_reverse_ssh_error(host, str(result.get("stderr") or ""))
+            and deadline - time.monotonic() > 1
+            and recover_reverse_ssh_transport(host)
+            and deadline - time.monotonic() > 1
+        ):
+            result = run_once()
+            result["transport_recovered"] = True
+        return result
     finally:
-        _cleanup_isolated_scope(args)
         INLINE_COMMAND_SLOTS.release()
 
 
