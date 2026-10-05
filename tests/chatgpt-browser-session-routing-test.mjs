@@ -88,6 +88,7 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
         if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
         if (source.includes('continuity-conversation-unavailable-probe')) return false;
+        if (source.includes('continuity-retry-button-target')) return null;
         throw Error('active stream must prevent all recovery effects');
       } };
       const result = await api.attemptNudge(id, async () => cdp, undefined, undefined, conversation);
@@ -96,8 +97,8 @@ export async function runBrowserSessionRoutingTests(api, directory) {
       assert.match(result.detail, /active|unconfirmed/);
       assert.equal(
         evaluated.length,
-        3,
-        'active bound stream should only probe account, stream status, and unavailable-conversation UI',
+        4,
+        'active bound stream may add only the read-only native Retry discriminator before deferring',
       );
     }],
     ['same-session activity probe ignores target and recognizes an active sibling', async () => {
