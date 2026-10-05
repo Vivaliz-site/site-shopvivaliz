@@ -408,6 +408,14 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("--no-sandbox", launched["argv"])
         self.assertIn("--class=shopvivaliz-general", launched["argv"])
         self.assertIn("--user-data-dir=/home/fredconsole/.config/shopvivaliz-general-chromium", launched["argv"])
+        self.assertEqual("isolated_gui", result["surface"])
+
+    def test_browser_open_tool_description_disambiguates_helper_surface(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        description = specs["browser_open"]["description"]
+        self.assertIn("isolated graphical helper browser", description)
+        self.assertIn("browser_gui_tabs", description)
+        self.assertIn("browser_tabs", description)
 
     def test_setup_restarts_existing_browser_service_after_install(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
