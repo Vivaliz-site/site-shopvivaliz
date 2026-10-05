@@ -1,0 +1,27 @@
+name: OKX PAPER Simulator
+on:
+  pull_request:
+    paths:
+      - 'services/okx-trading-pilot/**'
+      - '.github/workflows/okx-paper.yml'
+  push:
+    branches:
+      - 'feat/okx-paper-autonomous-20261005'
+    paths:
+      - 'services/okx-trading-pilot/**'
+      - '.github/workflows/okx-paper.yml'
+permissions:
+  contents: read
+jobs:
+  paper-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest
+      - name: Prove PAPER-only core
+        working-directory: services/okx-trading-pilot
+        run: python -m pytest -q
