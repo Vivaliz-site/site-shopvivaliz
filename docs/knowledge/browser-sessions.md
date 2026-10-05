@@ -8,6 +8,8 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 |---|---:|---|
 | `/home/fredrdp/.config/shopvivaliz-chromium` | `9555` | `fredmourao@gmail.com` |
 | `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `atendimento@shopvivaliz.com.br` |
+| `/home/fredrdp/.config/shopvivaliz-atendimento-mcp-chromium` | `9557` | `atendimento@shopvivaliz.com.br` (perfil MCP dedicado) |
+| `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9558` | `dev@shopvivaliz.com.br` |
 
 ## Regras obrigatórias
 
@@ -16,6 +18,8 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 - Nunca reutilizar cookies, storage, perfil ou porta CDP de uma conta para a outra.
 - Para tarefa destinada a `atendimento@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-atendimento-chromium` / porta `9556`.
 - Para tarefa destinada a `fredmourao@gmail.com`, usar exclusivamente `shopvivaliz-chromium` / porta `9555`.
+- Para tarefa destinada a `dev@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-dev-chromium` / porta `9558`.
+- O perfil `shopvivaliz-atendimento-mcp-chromium` / porta `9557` pertence à conta Atendimento e não pode ser reutilizado pela conta `dev`.
 - Se a sessão correta estiver indisponível, reparar ou reabrir o perfil correspondente; não usar a outra sessão como atalho.
 - Preservar login e cookies existentes. Reinício de navegador só é permitido preservando o mesmo `user-data-dir`.
 - Antes de qualquer autenticação, validar qual perfil/porta está sendo controlado.
@@ -59,3 +63,8 @@ de ambiente globais. Testes exercitam o endpoint realmente solicitado, a
 expressao de identidade injetada, concorrencia, heranca e falha fechada.
 Fonte de implementacao: Node.js `AsyncLocalStorage.run` (documentacao oficial:
 https://nodejs.org/api/async_context.html#asynclocalstoragerunstore-callback-args).
+
+
+## Migração para conta Dev
+
+Em 2026-10-05 foi confirmado no runtime que o perfil `/home/fredrdp/.config/shopvivaliz-dev-chromium` é isolado e reservado a `dev@shopvivaliz.com.br`, com CDP `9558`. O perfil estava provisionado, mas a autenticação ainda exigia verificação por e-mail; portanto, existência do processo/porta não equivale a sessão autenticada. A remoção da conta `fredmourao` do workspace Business só deve ocorrer depois de validar a identidade da sessão Dev e o bootstrap operacional.
