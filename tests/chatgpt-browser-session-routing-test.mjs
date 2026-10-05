@@ -83,6 +83,7 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         evaluated.push(source);
         if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
         if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+        if (source.includes('continuity-conversation-unavailable-probe')) return false;
         throw Error('active stream must prevent all recovery effects');
       } };
       const result = await api.attemptNudge(id, async () => cdp, undefined, undefined, conversation);
