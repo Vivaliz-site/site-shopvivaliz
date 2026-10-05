@@ -372,7 +372,7 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
         key("ctrl+t")
         type_text(url)
         key("Return")
-        return {"ok": True, "host": BROWSER_HOST, "action": "new_tab", "url": safe_url(url)}
+        return {"ok": True, "host": BROWSER_HOST, "surface": "isolated_gui", "action": "new_tab", "url": safe_url(url)}
     candidates = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]
     binary = BROWSER_BINARY if os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK) else next((name for name in candidates if shutil.which(name)), None)
     if not binary:
@@ -392,7 +392,7 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    return {"ok": True, "host": BROWSER_HOST, "action": "new_window", "url": safe_url(url)}
+    return {"ok": True, "host": BROWSER_HOST, "surface": "isolated_gui", "action": "new_window", "url": safe_url(url)}
 
 
 def browser_navigate(args: dict[str, Any]) -> dict[str, Any]:
@@ -577,7 +577,7 @@ BROWSER_TOOL_SPECS = [
     },
     {
         "name": "browser_open",
-        "description": "Open an http(s) URL in a new Chrome/Chromium tab on the authenticated graphical backend session.",
+        "description": "Open an http(s) URL in the isolated graphical helper browser. The returned surface is isolated_gui; browser_tabs lists the canonical continuity session, while browser_gui_tabs lists this helper.",
         "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
         "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
     },
