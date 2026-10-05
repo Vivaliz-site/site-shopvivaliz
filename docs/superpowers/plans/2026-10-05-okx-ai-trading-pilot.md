@@ -95,6 +95,7 @@ Each file has one responsibility: `domain.py` owns shared immutable types; `scan
 - **Ambiguous submit timeout:** a retry must reconcile by `order_intent_id`/exchange identifiers before any resend; pin this in Task 8.
 - **Partial fill followed by protection failure:** new entries must block while defensive close/reduction remains allowed; pin this in Task 8.
 - **Restart with local state behind OKX:** exchange positions/orders win and risk budgets are reconstructed before new exposure; pin this in Task 7.
+- **CI false-green:** the repository has pytest tests that historically were not guaranteed to run in GitHub Actions; pin `services/okx-trading-pilot/tests/**` to a path-scoped CI job before merge.
 
 ---
 
@@ -547,9 +548,10 @@ git add scripts/install/okx-trading-pilot.sh services/okx-trading-pilot/README.m
 git commit -m "ops(okx): add safe pilot runtime installation and validation"
 ```
 
-### Task 12: PAPER evidence, independent review, merge, and LIVE_PILOT readiness gate
+### Task 12: CI gate, PAPER evidence, independent review, merge, and LIVE_PILOT readiness gate
 
 **Files:**
+- Modify: `.github/workflows/shopvivaliz-qa.yml`
 - Create: `reports/okx-pilot-shadow-validation.md`
 - Create: `reports/okx-pilot-paper-validation.md`
 - Create: `reports/okx-pilot-live-readiness.md`
@@ -558,35 +560,39 @@ git commit -m "ops(okx): add safe pilot runtime installation and validation"
 - Consumes: SHADOW evidence, PAPER runs, repository/runtime tests.
 - Produces: reviewable readiness evidence; no implicit live enablement.
 
-- [ ] **Step 1: Run PAPER validation long enough to exercise all deterministic gates**
+- [ ] **Step 1: Add and prove a path-scoped CI gate**
+
+Make changes under `services/okx-trading-pilot/**`, `systemd/shopvivaliz-okx-*.service`, or `scripts/install/okx-trading-pilot.sh` run the pilot pytest suite in `.github/workflows/shopvivaliz-qa.yml`. Validate the workflow definition and prove the job actually executes; a test file existing without CI execution is not evidence.
+
+- [ ] **Step 2: Run PAPER validation long enough to exercise all deterministic gates**
 
 Capture expectancy, profit factor, drawdown, win rate, payoff, predicted/realized slippage, results by instrument/confidence/regime, gateway rejection reasons, fees and funding.
 
-- [ ] **Step 2: Verify the full acceptance matrix**
+- [ ] **Step 3: Verify the full acceptance matrix**
 
 Map each of the spec's 14 acceptance criteria and all approved financial limits to fresh test/runtime evidence. Any missing evidence is FAIL, not “assumed”.
 
-- [ ] **Step 3: Run secret/governance checks**
+- [ ] **Step 4: Run secret/governance checks**
 
 Run relevant repository governance plus secret scans. Expected: PASS and no OKX secret values in Git/log evidence.
 
-- [ ] **Step 4: Request independent code/reliability review**
+- [ ] **Step 5: Request independent code/reliability review**
 
 Reviewer focuses on numerical boundary errors, fail-open paths, idempotency, restart reconciliation, protection failure, mode promotion, and secret leakage. Correct all actionable findings and rerun affected tests.
 
-- [ ] **Step 5: Open PR and require checks/review**
+- [ ] **Step 6: Open PR and require checks/review**
 
 The PR must contain code, tests, spec/plan references and SHADOW/PAPER evidence. Do not enable LIVE_PILOT as part of merge.
 
-- [ ] **Step 6: Merge only after green checks and review, then post-merge validate SHADOW/PAPER runtime**
+- [ ] **Step 7: Merge only after green checks and review, then post-merge validate SHADOW/PAPER runtime**
 
 Expected: deployed merged commit matches repository; fresh runtime validation PASS.
 
-- [ ] **Step 7: Produce LIVE_PILOT readiness report**
+- [ ] **Step 8: Produce LIVE_PILOT readiness report**
 
 Report exact pinned MCP version, all hard limits, credential permission check (trade/read only, no withdrawal), current mode, acceptance evidence and remaining risks. `LIVE_PILOT` remains disabled until a separate explicit enable action after this readiness evidence is reviewed.
 
-- [ ] **Step 8: Commit evidence**
+- [ ] **Step 9: Commit evidence**
 
 ```bash
 git add reports/okx-pilot-*.md
