@@ -128,7 +128,9 @@ jobs:
       - name: Run background Gemini safety regression
         run: python3 -m unittest tests.test_background_gemini_runner -v
       - name: Run ChatGPT continuity bridge worker regression
-        run: node tests/chatgpt-continuity-bridge-worker-test.mjs
+        run: |
+          node tests/chatgpt-continuity-bridge-worker-test.mjs
+          node --test tests/chatgpt-unavailable-canonical-state-test.mjs
       - name: Run platform-wait safety regression
         run: node --test tests/chatgpt-continuity-cooldown-test.mjs
       - name: Run ChatGPT continuity pending queue regression
