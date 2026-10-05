@@ -1,0 +1,19 @@
+[Unit]
+Description=ShopVivaliz OKX Trading Pilot
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current/services/okx-trading-pilot
+EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot.env
+ExecStart=/usr/bin/python3 -m okx_pilot.cli status
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot
+
+[Install]
+WantedBy=multi-user.target

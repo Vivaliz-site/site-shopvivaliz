@@ -1,0 +1,9 @@
+{
+  "name": "shopvivaliz-okx-read-bridge",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@okx_ai/okx-trade-mcp": "1.4.8"
+  }
+}

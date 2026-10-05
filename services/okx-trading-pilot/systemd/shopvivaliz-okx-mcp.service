@@ -1,0 +1,23 @@
+[Unit]
+Description=ShopVivaliz OKX MCP Read-Only Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+EnvironmentFile=-/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot.env
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot/runtime
+ExecStart=/usr/bin/node /home/ubuntu/shopvivaliz-deploy/shared/okx-pilot/runtime/mcp-bridge.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot
+
+[Install]
+WantedBy=multi-user.target
