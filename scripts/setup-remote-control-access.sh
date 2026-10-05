@@ -4,6 +4,9 @@ set -Eeuo pipefail
 ACTION="${1:-status}"
 SERVER_SOURCE="${2:-}"
 UNIT_SOURCE="${3:-}"
+AGENT_TASK_STATE_SOURCE="${4:-}"
+CONTINUITY_SOURCE_DIR="${5:-}"
+SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
 SITE_HOST="shopvivaliz-free-a1"
@@ -22,10 +25,18 @@ install_controller() {
   [ "$HOST" = "$BACKEND_HOST" ] || die controller_host_mismatch 21
   [ -n "$SERVER_SOURCE" ] && [ -f "$SERVER_SOURCE" ] || die server_source_required 22
   [ -n "$UNIT_SOURCE" ] && [ -f "$UNIT_SOURCE" ] || die unit_source_required 23
+  [ -n "$AGENT_TASK_STATE_SOURCE" ] && [ -f "$AGENT_TASK_STATE_SOURCE" ] || die agent_task_state_source_required 24
+  [ -n "$CONTINUITY_SOURCE_DIR" ] && [ -d "$CONTINUITY_SOURCE_DIR" ] || die continuity_source_dir_required 25
+  for required in conversation_lease.py runtime_lock.py mutation_gate.py foreground_handoff.py; do
+    [ -f "$CONTINUITY_SOURCE_DIR/$required" ] || die "continuity_dependency_missing:$required" 26
+  done
 
   install -d -m 700 -o root -g root "$STATE_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR"
+  install -d -m 755 -o root -g root "$INSTALL_DIR/scripts/continuity"
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  install -m 0755 -o root -g root "$AGENT_TASK_STATE_SOURCE" "$INSTALL_DIR/scripts/agent_task_state.py"
+  install -m 0644 -o root -g root "$CONTINUITY_SOURCE_DIR"/*.py "$INSTALL_DIR/scripts/continuity/"
 
   if [ ! -s "$STATE_DIR/id_ed25519" ]; then
     ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-remote-control -f "$STATE_DIR/id_ed25519"
@@ -45,6 +56,8 @@ install_controller() {
   {
     printf 'SHOPVIVALIZ_REMOTE_MCP_TOKEN='
     cat "$token_file"
+    printf 'SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\n' "$SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"
+    printf 'SHOPVIVALIZ_CONTINUITY_LIB_DIR=%s\n' "$INSTALL_DIR/scripts/continuity"
   } > "$env_file"
   chmod 600 "$env_file"
 

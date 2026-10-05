@@ -13,6 +13,8 @@ on:
     paths:
       - 'remote-control-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/agent_task_state.py'
+      - 'scripts/continuity/**'
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
@@ -59,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity
           sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub > /tmp/shopvivaliz-remote-control.pub
           test -s /tmp/shopvivaliz-remote-control.pub
           chmod 600 /tmp/shopvivaliz-remote-control.pub
