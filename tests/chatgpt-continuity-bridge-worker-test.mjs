@@ -1903,6 +1903,27 @@ async function run() {
     );
   }
 
+  // Regression: a detached/silent stall can remain server-side
+  // IS_STREAMING after the passive reattach. In that state the Web path must
+  // remain fail-closed and must not claim a continuation send.
+  {
+    const detachedStreaming = fakeCdp({
+      generating: false,
+      composerUsable: false,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'normal reply',
+      sendSucceeds: true,
+    });
+    const outcome = await attemptNudge(
+      'task-detached-stream-post-reattach',
+      async () => detachedStreaming,
+      async () => false,
+    );
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.sent, false);
+    assert.match(outcome.detail, /active stream|unconfirmed/i);
+  }
+
   // The explicitly authorized checkpoint-driven resume path must stay live.
   // Safety is enforced by stream/composer/checkpoint guards, not by globally
   // disabling Web turn submission.
@@ -2054,7 +2075,7 @@ async function run() {
 
   const noComposer = await attemptNudge(
     'task-1',
-    async () => fakeCdp({ composerUsable: false }),
+    async () => fakeCdp({ composerUsable: false, streamStatus: 'COMPLETE' }),
     async () => false,
     async () => false,
   );
@@ -2062,7 +2083,7 @@ async function run() {
 
   {
     let waitCalls = 0;
-    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true });
+    const transientComposerCdp = fakeCdp({ composerUsable: false, sendSucceeds: true, streamStatus: 'COMPLETE' });
     const transientComposer = await attemptNudge(
       'task-transient-composer-after-reattach',
       async () => transientComposerCdp,
