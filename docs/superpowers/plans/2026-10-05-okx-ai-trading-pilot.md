@@ -6,7 +6,7 @@
 
 **Architecture:** Use a Python pilot service for scanning, decision validation, risk, state, paper/live execution, and reconciliation. Put the official OKX Agent Trade Kit behind two small local Node MCP bridges: an always-read-only bridge and a separately gated write bridge. Reuse the existing local AI Squad Codex bridge at `127.0.0.1:17656` as the initial DecisionProvider so raw OKX credentials never enter the model context; the model receives only normalized market/account/risk snapshots and returns strict JSON.
 
-**Tech Stack:** Python >=3.10 stdlib (`decimal`, `dataclasses`, `enum`, `sqlite3`, `zoneinfo`, `urllib`), pytest; Node.js >=18; `@okx_ai/okx-trade-mcp@1.4.8`; `@modelcontextprotocol/sdk@1.32.0`; `zod@4.6.4`; SQLite; systemd; existing ShopVivaliz Codex bridge.
+**Tech Stack:** Python >=3.10 stdlib (`decimal`, `dataclasses`, `enum`, `sqlite3`, `zoneinfo`, `urllib`), pytest; Node.js >=18; `@okx_ai/okx-trade-mcp@1.4.8`; dev-only `@okx_ai/okx-trade-cli@1.4.8` for credential-free tool-registry export; `@modelcontextprotocol/sdk@1.32.0`; `zod@4.6.4`; SQLite; systemd; existing ShopVivaliz Codex bridge.
 
 **Spec:** `docs/superpowers/specs/2026-10-05-okx-private-plugin-design.md`
 
@@ -182,9 +182,9 @@ SHADOW/PAPER evidence may justify tightening these defaults before LIVE_PILOT. N
 - POST `/v1/call` accepts `{request_id, tool, arguments}`; write bridge additionally requires the protected bearer token.
 - Bridge child command is the local lockfile-installed `okx-trade-mcp`, never `npx -y ...@latest`.
 
-- [ ] **Step 1: Create package metadata with exact dependencies `@okx_ai/okx-trade-mcp=1.4.8`, `@modelcontextprotocol/sdk=1.32.0`, `zod=4.6.4`; generate and commit lockfile.**
+- [ ] **Step 1: Create package metadata with exact runtime dependencies `@okx_ai/okx-trade-mcp=1.4.8`, `@modelcontextprotocol/sdk=1.32.0`, `zod=4.6.4` and dev dependency `@okx_ai/okx-trade-cli=1.4.8`; generate and commit lockfile.**
 - [ ] **Step 2: Write RED Node tests with an injected fake MCP transport.** Assert read bridge launches upstream with `--profile live --modules market,account,spot,swap,futures,option --read-only`; write bridge omits `--read-only` but rejects calls without its token and rejects transfer/earn/bot/event/news/smartmoney write surfaces.
-- [ ] **Step 3: Add a catalog test that obtains `tools/list` from the pinned package, writes only tool names/input schemas to `tool-catalog-1.4.8.json`, and asserts every logical operation used later maps to exactly one tool.** Catalog generation must not authenticate or contain credentials.
+- [ ] **Step 3: Generate the credential-free registry with the pinned CLI `okx list-tools --json`, normalize it to only tool names/input schemas in `tool-catalog-1.4.8.json`, and test that every logical operation used later maps to exactly one tool.** During Task 11, compare this committed registry with sanitized live MCP `tools/list`; any drift blocks runtime readiness.
 - [ ] **Step 4: Implement the minimal loopback-only bridge with the official SDK `Client` + `StdioClientTransport`.** Any tool absent from the committed catalog is rejected; write calls must also be in `tool-policy.mjs`'s exact execution allowlist.
 - [ ] **Step 5: Run:** `npm ci --prefix ops/okx-trading-pilot && node --test tests/okx-trading-mcp-bridge-test.mjs`  
   **Expected:** PASS.
@@ -416,7 +416,7 @@ SHADOW/PAPER evidence may justify tightening these defaults before LIVE_PILOT. N
 - [ ] **Step 2: Run PAPER fault matrix:** stale market/book, AI timeout/malformed/missing layer, MCP outage, auth failure, exact/over risk limits, leverage >20, rho cluster breach, order timeout after acceptance, partial fill, protection failure, service restart, position divergence, São Paulo daily reset, daily stop, cumulative kill switch.
 - [ ] **Step 3: Capture PAPER metrics:** expectancy, profit factor, drawdown, win rate, payoff, modeled vs realized-simulation slippage, instrument/confidence/regime breakdown, RiskGateway rejections, fees/funding.
 - [ ] **Step 4: Generate readiness evidence only if every acceptance criterion has fresh evidence.** Missing evidence => `ready=false`.
-- [ ] **Step 5: Run secret/governance scans and request independent review focused on numerical boundaries, fail-open paths, tool policy, idempotency, reconciliation, mode promotion, and secret leakage; fix all actionable findings and rerun impacted tests.
+- [ ] **Step 5: Run secret/governance scans and request independent review focused on numerical boundaries, fail-open paths, tool policy, idempotency, reconciliation, mode promotion, and secret leakage; fix all actionable findings and rerun impacted tests.**
 - [ ] **Step 6: Open PR, require green checks/review, merge, then post-merge revalidate SHADOW/PAPER on the merged SHA.**
 - [ ] **Step 7: Verify `shopvivaliz-okx-mcp-write.service` remains disabled/stopped and the live marker remains absent.**
 - [ ] **Step 8: Commit final evidence:** `docs(okx): record trading pilot validation and readiness`.
