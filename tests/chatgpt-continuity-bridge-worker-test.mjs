@@ -26,6 +26,7 @@ const {
   persistReinforcementHealth,
   reinforcementHealthPayload,
   bridgeResultPayload,
+  recoveryStateForOutcome,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -138,7 +139,7 @@ async function run() {
     assert.equal(errorPayload.conversation_id, undefined);
     const confirmedPayload = bridgeResultPayload(
       'task-1',
-      { result_status: 'PROGRESS_CONFIRMED', conversation_id: bound, detail: 'ok' },
+      { result_status: 'PROGRESS_CONFIRMED', real_response_observed: true, conversation_id: bound, detail: 'ok' },
       'ok',
     );
     assert.equal(confirmedPayload.conversation_id, bound);

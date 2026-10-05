@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -332,6 +333,21 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(status_calls), 1)
+
+    def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
+        self._stale_checkpoint_and_request(task_id="foreground-blocked")
+        state.bind_browser_session("foreground-blocked", browser_session="fred")
+        state.acquire_foreground_lease_for_task("foreground-blocked", owner_id="turn-live", ttl_seconds=60)
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            result = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_foreground_active"], 1)
+        self.assertEqual(self.calls, [])
 
     def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
         f = self.dispatcher.recovery_state_for_worker_status

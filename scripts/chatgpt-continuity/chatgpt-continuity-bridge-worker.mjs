@@ -3918,7 +3918,6 @@ export {
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
-  bridgeResultPayload,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
