@@ -94,8 +94,8 @@ def _states(
         payload = _load_state(path)
         if not payload:
             continue
-        updated = _parse_time(payload.get("updated_at"))
-        if updated is None or updated < oldest_allowed:
+        created = _parse_time(payload.get("created_at"))
+        if created is None or created < oldest_allowed:
             continue
         task_id = str(payload.get("task_id", "")).strip()
         if task_id:
