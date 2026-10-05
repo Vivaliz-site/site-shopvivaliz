@@ -1,5 +1,7 @@
 # Migração curada de contexto ChatGPT — ShopVivaliz
 
+**Destino atual:** `dev@shopvivaliz.com.br` substituindo `fredmourao@gmail.com` em um assento do workspace Business, após validação completa da conta destino.
+
 Este documento define o pacote canônico de migração de contexto entre contas ChatGPT da ShopVivaliz.
 
 Objetivo: permitir que uma conta nova retome o trabalho com o mesmo contexto operacional necessário, sem importar ruído, conversas irrelevantes, credenciais ou estados históricos não verificados.
@@ -39,16 +41,16 @@ Se um chat histórico divergir de evidência viva ou da documentação canônica
 
 ## Bootstrap mínimo da conta nova
 
-A conta nova deve ler nesta ordem:
+Para `dev@shopvivaliz.com.br`, a conta nova deve ler nesta ordem:
 
-1. `docs/knowledge/atendimento-chatgpt-bootstrap.md`;
+1. `docs/knowledge/dev-chatgpt-bootstrap.md`;
 2. `docs/knowledge/host-access.md`;
 3. `docs/knowledge/README.md`;
 4. `docs/knowledge/agent-rules.md`;
 5. `docs/knowledge/project.md`;
 6. `docs/knowledge/browser-sessions.md`;
 7. `docs/knowledge/chatgpt-account-migration-curated.md`;
-8. `docs/knowledge/dev-agent-briefing.md` quando houver engenharia;
+8. `docs/knowledge/dev-agent-briefing.md`;
 9. documentação específica do projeto ou rotina afetada.
 
 ## Conhecimento durável que deve ser preservado
@@ -293,3 +295,8 @@ Quando uma regra ou decisão mudar:
 - remover referências superadas em vez de empilhar versões contraditórias.
 
 A meta é que a nova conta carregue **menos informação, porém mais confiável** do que o histórico bruto.
+
+
+## Troca de assento Business — fredmourao -> dev
+
+A conta `fredmourao@gmail.com` não deve ser removida do workspace Business até que `dev@shopvivaliz.com.br` esteja autenticada, adicionada ao mesmo workspace, com bootstrap e ferramentas validados. O perfil dedicado da Dev é `/home/fredrdp/.config/shopvivaliz-dev-chromium` / CDP `9558`. A existência do perfil não prova login; exigir evidência de identidade antes da troca do assento.
