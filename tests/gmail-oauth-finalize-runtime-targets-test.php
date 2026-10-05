@@ -10,6 +10,7 @@ $checks=[
     'legacy/site service not restarted'=>!str_contains($workflow, 'systemctl restart shopvivaliz-amazon-returns.service'),
     'preserve original mode'=>str_contains($workflow, 'stat.S_IMODE'),
     'preserve original owner'=>str_contains($workflow, 'os.chown'),
+    'workflow change does not replay stale OAuth job'=>!str_contains($workflow, '- ".github/workflows/gmail-finalize-oauth.yml"'),
 ];
 
 foreach($checks as $name=>$ok){
