@@ -61,16 +61,33 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(watchdog.read_requests(self.runtime), [])
 
-    def test_watchdog_analyzes_only_tasks_updated_within_last_10_days(self) -> None:
+    def test_watchdog_analyzes_only_tasks_created_within_last_10_days(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
         state.start_task("recent-task", "recent", "gpt")
         state.record_progress("recent-task", next_action="continue recent work")
-        self._age_task("recent-task", seconds=9 * 24 * 60 * 60)
+        recent_path = self.runtime / "recent-task.json"
+        recent = json.loads(recent_path.read_text(encoding="utf-8"))
+        recent["created_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=9)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        recent["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=600)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        recent_path.write_text(json.dumps(recent), encoding="utf-8")
 
         state.start_task("historical-task", "historical", "gpt")
         state.record_progress("historical-task", next_action="do not revisit old work")
-        self._age_task("historical-task", seconds=11 * 24 * 60 * 60)
+        historical_path = self.runtime / "historical-task.json"
+        historical = json.loads(historical_path.read_text(encoding="utf-8"))
+        historical["created_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=11)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        # Prove a recent update cannot bring an old task back into scope.
+        historical["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=600)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        historical_path.write_text(json.dumps(historical), encoding="utf-8")
 
         result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
 
