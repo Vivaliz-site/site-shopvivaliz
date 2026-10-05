@@ -3652,6 +3652,8 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
+  (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,

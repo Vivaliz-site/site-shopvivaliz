@@ -23,6 +23,8 @@ test('generic main-surface growth cannot certify a real assistant response', asy
   const cdp = {
     async evaluate(source) {
       const expression = String(source);
+      // The current confirmer reads canonical completion only after stream COMPLETE.
+      if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (expression.includes('conversation-turn-state')) {
         return {
           http_status: 200,
@@ -71,6 +73,8 @@ test('new assistant-turn content certifies a real response on the bound conversa
   const cdp = {
     async evaluate(source) {
       const expression = String(source);
+      // The current confirmer reads canonical completion only after stream COMPLETE.
+      if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (expression.includes('conversation-turn-state')) {
         turnProbe += 1;
         return turnProbe === 1
