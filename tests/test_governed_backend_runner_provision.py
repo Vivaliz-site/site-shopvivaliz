@@ -33,6 +33,7 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         self.assertIn("GOVERNED_BACKEND_RUNNERS=PASS", text)
         dispatcher = (ROOT / '.github/workflows/issue-comment-dispatcher.yml').read_text()
         self.assertIn('uses: ./.github/workflows/provision-governed-backend-ci-runners.yml', dispatcher)
+        self.assertIn("if: needs.classify.outputs.route == 'provision_backend_runners'", dispatcher)
 
 if __name__ == "__main__":
     unittest.main()

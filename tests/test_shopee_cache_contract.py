@@ -18,6 +18,8 @@ def load_renewer(filename):
 
 def test_shopee_cache_preserves_environment_and_metadata(tmp_path, monkeypatch):
     module = load_renewer('daemon-shopee-token-renewer.py')
+    assert not hasattr(module, 'update_env')
+    assert not hasattr(module, 'write_env')
     environment = tmp_path / 'shared.env'
     environment.write_text('UNCHANGED=value\n')
     environment.chmod(0o640)
