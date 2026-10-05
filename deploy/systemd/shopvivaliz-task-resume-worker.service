@@ -1,0 +1,26 @@
+[Unit]
+Description=ShopVivaliz detached task-resume worker
+Documentation=file:/opt/shopvivaliz-gemini-24x7-controller/README
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=/etc/shopvivaliz-gemini-24x7-controller.env
+WorkingDirectory=/opt/shopvivaliz-gemini-24x7-controller
+ExecStart=/usr/bin/python3 ${SHOPVIVALIZ_RESUME_WORKER_ENTRY} --daemon --interval-seconds 5
+Restart=on-failure
+RestartSec=10
+CPUWeight=700
+IOWeight=700
+KillMode=control-group
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

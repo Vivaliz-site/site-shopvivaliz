@@ -498,6 +498,51 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         events = self.runtime / controller.EVENTS_FILE
         self.assertFalse(events.exists(), "idle 30-second cycles must not grow an unbounded event ledger")
 
+    def test_in_flight_resume_does_not_block_or_degrade_controller_cycle(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 1, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "scanned": 0, "eligible": 0, "dispatched": 0, "skipped_no_token": 0,
+                "skipped_stale_checkpoint": 0, "failed": 0, "skipped_attempt_limit": 0,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 1, "executed": 0, "launched": 1,
+                "in_flight": 1, "reconciled": 0, "recovered": 0,
+                "progressed": 0, "terminal": 0, "no_progress": 0, "failed": 0,
+                "deferred_chatgpt": 0,
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="in-flight-owner")
+
+        self.assertTrue(result["continuity_ready"])
+        self.assertFalse(result["degraded"])
+        self.assertEqual(result["degraded_reasons"], [])
+        self.assertEqual(result["dispatcher"]["launched"], 1)
+        self.assertEqual(result["dispatcher"]["in_flight"], 1)
+
+    def test_worker_failure_degrades_without_staling_controller_health(self) -> None:
+        controller = load_controller()
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "scanned": 0, "eligible": 0, "dispatched": 0, "skipped_no_token": 0,
+                "skipped_stale_checkpoint": 0, "failed": 0, "skipped_attempt_limit": 0,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 1, "executed": 0, "launched": 0,
+                "in_flight": 0, "reconciled": 1, "recovered": 0,
+                "progressed": 0, "terminal": 0, "no_progress": 0, "failed": 1,
+                "deferred_chatgpt": 0,
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="worker-failure-owner")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("dispatcher_failed", result["degraded_reasons"])
+        self.assertTrue(result["generated_at"])
+        self.assertEqual(result["dispatcher"]["reconciled"], 1)
+
     def test_no_progress_cycle_is_live_but_not_continuity_ready(self) -> None:
         controller = load_controller()
         with (
@@ -642,6 +687,30 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-nudge-dispatcher.timer", installer)
         self.assertIn("SHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=", installer)
         self.assertIn("SHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=", installer)
+
+    def test_resume_worker_service_is_installed_from_immutable_release(self) -> None:
+        worker_unit = ROOT / "deploy" / "systemd" / "shopvivaliz-task-resume-worker.service"
+        installer_path = ROOT / "scripts" / "install-gemini-24x7-controller.sh"
+        installer = installer_path.read_text(encoding="utf-8")
+
+        self.assertTrue(worker_unit.is_file(), "detached resume worker unit missing")
+        body = worker_unit.read_text(encoding="utf-8")
+        self.assertIn("User=ubuntu", body)
+        self.assertIn("Group=ubuntu", body)
+        self.assertIn("EnvironmentFile=/etc/shopvivaliz-gemini-24x7-controller.env", body)
+        self.assertIn("${SHOPVIVALIZ_RESUME_WORKER_ENTRY} --daemon --interval-seconds 5", body)
+        self.assertIn("Restart=on-failure", body)
+        self.assertIn("KillMode=control-group", body)
+        self.assertNotIn("PartOf=shopvivaliz-gemini-24x7-controller.service", body)
+
+        self.assertIn('resume_worker_service_name="shopvivaliz-task-resume-worker.service"', installer)
+        self.assertIn('task_resume_worker.py', installer)
+        self.assertIn('SHOPVIVALIZ_RESUME_WORKER_ENTRY=', installer)
+        self.assertIn('sudo install -o root -g root -m 0644 "$resume_worker_service_source" "$resume_worker_service_target"', installer)
+        self.assertIn('"$resume_worker_service_target"', installer)
+        self.assertIn('sudo systemctl enable "$resume_worker_service_name"', installer)
+        self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
+        self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
