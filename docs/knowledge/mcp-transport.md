@@ -58,7 +58,7 @@ never share a graphical session, Chrome profile, or target window.
   the desktop display is accessible and its configured browser binary is
   executable; `browser_open` then creates the dedicated general window.
 - Deployment verification must open/navigate a benign page through the general
-  browser MCP and prove that the CDP 9555 target set is unchanged. A browser MCP
+  browser MCP and prove that the CDP 9559 Dev target set is unchanged. A browser MCP
   health result alone is not sufficient evidence of isolation.
 
 This boundary is mandatory because sharing `:99` previously allowed unrelated

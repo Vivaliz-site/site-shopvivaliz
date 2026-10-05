@@ -748,7 +748,7 @@ jobs:
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-guardian.sh "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
-          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-dev-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 

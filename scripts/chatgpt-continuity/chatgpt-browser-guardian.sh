@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-chatgpt-browser.service}"
+browser_unit="${CHATGPT_BROWSER_UNIT:-shopvivaliz-dev-browser.service}"
 continuity_user="${CHATGPT_CONTINUITY_USER:-ubuntu}"
 continuity_unit="${CHATGPT_CONTINUITY_UNIT:-shopvivaliz-chatgpt-continuity.service}"
-cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9555/json/version}"
+cdp_url="${CHATGPT_BROWSER_CDP_URL:-http://127.0.0.1:9559/json/version}"
 cdp_base="${CHATGPT_BROWSER_CDP_BASE:-${cdp_url%/json/version}}"
 worker_module="${CHATGPT_CONTINUITY_WORKER_MODULE:-/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
 probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgpt-browser-probe-cache.py}"
 task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
-browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-chromium .*--remote-debugging-port=9555'
+browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium .*--remote-debugging-port=9559'
 
 runtime_eval_ready() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \

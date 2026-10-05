@@ -442,7 +442,7 @@ outro perfil do navegador.
 
 Não executar probes sintéticos repetitivos para “testar” a conta. A prova
 operacional preferida é: heartbeat autenticado do bridge + serviço backend
-ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
+ativo + CDP 9559 Dev alcançável + um nudge real correlacionado a uma interrupção
 natural chegando a `PROGRESS_CONFIRMED` na mesma conversa. `SENT` ou
 `SENT_UNCONFIRMED` não certificam retomada. Enquanto faltar a última
 evidência, declarar a mitigação instalada/armada, não “continuidade E2E
@@ -639,7 +639,7 @@ recovery still never sends a continuation and cannot certify an old answer.
 HTTP429, missing canonical presence and unknown stream state remain fail-closed.
 
 Here, profile means a distinct Chromium `--user-data-dir`, not a ChatGPT
-workspace: Fred uses `shopvivaliz-chromium`/CDP9555 and Atendimento uses
+workspace: Dev uses `shopvivaliz-dev-chromium`/CDP9559 and Atendimento uses
 `shopvivaliz-atendimento-chromium`/CDP9556, as enforced in browser-sessions.md.
 Each contains one authorized login; the two localStorage namespaces are not
 shared. A longer Retry-After is never shortened to the five-minute default

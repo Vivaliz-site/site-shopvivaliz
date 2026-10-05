@@ -336,7 +336,7 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
         self._stale_checkpoint_and_request(task_id="foreground-blocked")
-        state.bind_browser_session("foreground-blocked", browser_session="fred")
+        state.bind_browser_session("foreground-blocked", browser_session="dev")
         state.acquire_foreground_lease_for_task("foreground-blocked", owner_id="turn-live", ttl_seconds=60)
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
             result = self.dispatcher.run_once(

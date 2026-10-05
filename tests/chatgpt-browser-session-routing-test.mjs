@@ -47,11 +47,11 @@ export async function runBrowserSessionRoutingTests(api, directory) {
       assert.equal(result.urls[0], 'http://127.0.0.1:9556/json/version');
       assert.ok(result.urls.every(url => !url.includes(':9555/')));
     }],
-    ['explicit personal checkpoint preserves CDP9555', async () => {
-      assert.equal((await capture({ browser_session: 'fred' })).urls[0], 'http://127.0.0.1:9555/json/version');
+    ['dev checkpoint reaches CDP9559', async () => {
+      assert.equal((await capture({ browser_session: 'dev' })).urls[0], 'http://127.0.0.1:9559/json/version');
     }],
-    ['legacy checkpoint preserves existing route', async () => {
-      assert.equal((await capture({ browser_session: undefined })).urls[0], 'http://127.0.0.1:9555/json/version');
+    ['pre-cutover fred checkpoint remains compatible on CDP9555', async () => {
+      assert.equal((await capture({ browser_session: 'fred' })).urls[0], 'http://127.0.0.1:9555/json/version');
     }],
     ['invalid account fails before any browser request', async () => {
       const result = await capture({ browser_session: 'another-account' });
