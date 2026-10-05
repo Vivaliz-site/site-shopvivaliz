@@ -43,6 +43,10 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             watchdog.RUNTIME_DIR = root
             try:
                 task_state.start_task("task-1", "goal", "gpt")
+                task_state.bind_conversation(
+                    "task-1",
+                    conversation_id="12345678-2222-3333-4444-555555555555",
+                )
                 task_state.record_progress("task-1", next_action="continue safely")
                 state_path = root / "task-1.json"
                 payload = json.loads(state_path.read_text(encoding="utf-8"))
