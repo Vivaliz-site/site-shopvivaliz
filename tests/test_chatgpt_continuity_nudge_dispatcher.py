@@ -44,8 +44,10 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
 
-    def _stale_checkpoint_and_request(self, task_id: str = "task-1") -> None:
+    def _stale_checkpoint_and_request(self, task_id: str = "task-1", *, bind: bool = True) -> None:
         state.start_task(task_id, "goal", "gpt")
+        if bind:
+            state.bind_conversation(task_id, conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
         state.record_progress(task_id, next_action="keep going")
         # Force staleness directly on disk so the watchdog treats it as due.
         path = self.runtime / f"{task_id}.json"
@@ -131,6 +133,18 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
             Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token"),
         )
         self.assertNotEqual(self.dispatcher.DEFAULT_TOKEN_FILE, self.dispatcher.LEGACY_TOKEN_FILE)
+
+    def test_unbound_checkpoint_is_deferred_without_browser_dispatch(self) -> None:
+        self._stale_checkpoint_and_request(bind=False)
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result.get("skipped_unbound"), 1)
+        self.assertEqual(len(self.calls), 0)
 
     def test_dispatches_new_chatgpt_common_request_to_the_bridge(self) -> None:
         self._stale_checkpoint_and_request()

@@ -361,6 +361,7 @@ def _run_once_locked(
     skipped_no_token = 0
     skipped_stale_checkpoint = 0
     skipped_conversation_coalesced = 0
+    skipped_unbound = 0
     retry_attempted = 0
     skipped_attempt_limit = 0
 
@@ -390,6 +391,9 @@ def _run_once_locked(
             _bound_conversation_id(root, task_id)
             or _ledger_bound_conversation_id(ledger, task_id)
         )
+        if not resolved_conversation_id:
+            skipped_unbound += 1
+            continue
         if (
             resolved_conversation_id
             and conversation_owners.get(resolved_conversation_id) != fingerprint
@@ -566,6 +570,7 @@ def _run_once_locked(
         "skipped_no_token": skipped_no_token,
         "skipped_stale_checkpoint": skipped_stale_checkpoint,
         "skipped_conversation_coalesced": skipped_conversation_coalesced,
+        "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
         "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
@@ -592,6 +597,7 @@ def run_once(
                 "skipped_no_token": 0,
                 "skipped_stale_checkpoint": 0,
                 "skipped_conversation_coalesced": 0,
+                "skipped_unbound": 0,
                 "retry_attempted": 0,
                 "skipped_attempt_limit": 0,
                 "locked": True,
