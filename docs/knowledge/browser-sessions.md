@@ -8,7 +8,7 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 |---|---:|---|
 | `/home/fredrdp/.config/shopvivaliz-chromium` | `9555` | `fredmourao@gmail.com` |
 | `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `atendimento@shopvivaliz.com.br` |
-| `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9557` | `dev@shopvivaliz.com.br` |
+| `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9559` | `dev@shopvivaliz.com.br` |
 
 ## Regras obrigatórias
 
@@ -17,7 +17,7 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 - Nunca reutilizar cookies, storage, perfil ou porta CDP de uma conta para a outra.
 - Para tarefa destinada a `atendimento@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-atendimento-chromium` / porta `9556`.
 - Para tarefa destinada a `fredmourao@gmail.com`, usar exclusivamente `shopvivaliz-chromium` / porta `9555`.
-- Para tarefa destinada a `dev@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-dev-chromium` / porta `9557`; nunca reutilizar os perfis pessoal ou Atendimento.
+- Para tarefa destinada a `dev@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-dev-chromium` / porta `9559`; nunca reutilizar os perfis pessoal ou Atendimento.
 - Se a sessão correta estiver indisponível, reparar ou reabrir o perfil correspondente; não usar a outra sessão como atalho.
 - Preservar login e cookies existentes. Reinício de navegador só é permitido preservando o mesmo `user-data-dir`.
 - Antes de qualquer autenticação, validar qual perfil/porta está sendo controlado.
@@ -31,7 +31,7 @@ Em 2026-10-04, o backend `always-free-arm-1787907847-26` apresentava processos C
 
 A conta de cada perfil deve permanecer conforme a tabela acima.
 
-O perfil `shopvivaliz-dev-chromium` / CDP 9557 foi reservado em 2026-10-05 para a migração curada `fredmourao -> dev`. Sua existência documental não prova login ativo; autenticação deve ser validada ao vivo antes de retirar a conta pessoal do workspace.
+O perfil `shopvivaliz-dev-chromium` / CDP 9559 foi reservado em 2026-10-05 para a migração curada `fredmourao -> dev`. Sua existência documental não prova login ativo; autenticação deve ser validada ao vivo antes de retirar a conta pessoal do workspace.
 
 
 ## Roteamento da retomada por checkpoint
