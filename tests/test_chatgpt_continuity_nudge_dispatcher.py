@@ -230,7 +230,11 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_failed_older_same_conversation_does_not_poison_new_owner_health(self) -> None:
         conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
-        for task_id, updated_at in (("task-old", "2020-01-01T00:00:00Z"), ("task-new", "2020-01-02T00:00:00Z")):
+        now = datetime.now(timezone.utc)
+        for task_id, updated_at in (
+            ("task-old", (now - timedelta(days=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+            ("task-new", (now - timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+        ):
             state.start_task(task_id, "goal", "gpt")
             state.bind_conversation(task_id, conversation_id=conversation_id)
             state.record_progress(task_id, next_action="keep going")
