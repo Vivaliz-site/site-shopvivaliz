@@ -1,0 +1,108 @@
+name: Provision Amazon Returns Email Ingress
+
+on:
+  push:
+    branches:
+      - amazon-returns-email-ingress
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    if: contains(github.event.head_commit.message, '[provision-amazon-email]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: workers/amazon-returns-email-ingress
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install worker dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Provision Access and deploy worker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+          api="https://api.cloudflare.com/client/v4"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+
+          org="$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/organizations")"
+          test "$(jq -r '.success' <<<"$org")" = "true"
+          auth_domain="$(jq -r '.result.auth_domain // empty' <<<"$org")"
+          test -n "$auth_domain"
+          case "$auth_domain" in
+            https://*) team_domain="$auth_domain" ;;
+            *) team_domain="https://$auth_domain" ;;
+          esac
+
+          apps="$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps?per_page=100")"
+          test "$(jq -r '.success' <<<"$apps")" = "true"
+          app_id="$(jq -r '.result[] | select(.name=="Amazon Returns Email Ingress") | .id' <<<"$apps" | head -n1)"
+
+          if [ -z "$app_id" ]; then
+            app_payload='{"name":"Amazon Returns Email Ingress","type":"self_hosted","destinations":[{"type":"public","uri":"returns.shopvivaliz.com.br/api/amazon-returns/email-ingress.php"}],"session_duration":"24h","service_auth_401_redirect":true}'
+            app="$(curl -fsS "${auth[@]}" -X POST "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps" --data "$app_payload")"
+            test "$(jq -r '.success' <<<"$app")" = "true"
+            app_id="$(jq -r '.result.id // empty' <<<"$app")"
+            aud="$(jq -r '.result.aud // empty' <<<"$app")"
+          else
+            app="$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps/$app_id")"
+            test "$(jq -r '.success' <<<"$app")" = "true"
+            aud="$(jq -r '.result.aud // empty' <<<"$app")"
+          fi
+          test -n "$app_id"
+          test -n "$aud"
+
+          token_payload="$(jq -cn --arg name "amazon-returns-email-worker-$GITHUB_RUN_ID" '{name:$name,duration:"8760h",enabled:true}')"
+          token="$(curl -fsS "${auth[@]}" -X POST "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/service_tokens" --data "$token_payload")"
+          test "$(jq -r '.success' <<<"$token")" = "true"
+          token_id="$(jq -r '.result.id // empty' <<<"$token")"
+          client_id="$(jq -r '.result.client_id // empty' <<<"$token")"
+          client_secret="$(jq -r '.result.client_secret // empty' <<<"$token")"
+          test -n "$token_id"
+          test -n "$client_id"
+          test -n "$client_secret"
+          echo "::add-mask::$client_id"
+          echo "::add-mask::$client_secret"
+
+          policies="$(curl -fsS "${auth[@]}" "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps/$app_id/policies")"
+          test "$(jq -r '.success' <<<"$policies")" = "true"
+          old_policy_ids="$(jq -r '.result[] | select(.name=="Amazon Returns Email Worker") | .id' <<<"$policies")"
+          while IFS= read -r old_policy_id; do
+            [ -n "$old_policy_id" ] || continue
+            curl -fsS "${auth[@]}" -X DELETE "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps/$app_id/policies/$old_policy_id" >/dev/null
+          done <<<"$old_policy_ids"
+
+          policy_payload="$(jq -cn --arg token_id "$token_id" '{name:"Amazon Returns Email Worker",precedence:1,decision:"non_identity",include:[{service_token:{token_id:$token_id}}]}')"
+          policy="$(curl -fsS "${auth[@]}" -X POST "$api/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps/$app_id/policies" --data "$policy_payload")"
+          test "$(jq -r '.success' <<<"$policy")" = "true"
+
+          npx wrangler deploy --config wrangler.bootstrap.toml
+          printf '%s' "$client_id" | npx wrangler secret put CF_ACCESS_CLIENT_ID --config wrangler.bootstrap.toml
+          printf '%s' "$client_secret" | npx wrangler secret put CF_ACCESS_CLIENT_SECRET --config wrangler.bootstrap.toml
+          npx wrangler deploy --config wrangler.toml
+
+          unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' "https://returns.shopvivaliz.com.br/api/amazon-returns/email-ingress.php")"
+          auth_status="$(curl -sS -o /dev/null -w '%{http_code}' -H "CF-Access-Client-Id: $client_id" -H "CF-Access-Client-Secret: $client_secret" "https://returns.shopvivaliz.com.br/api/amazon-returns/email-ingress.php")"
+          test "$unauth_status" = "401"
+          case "$auth_status" in
+            404|405|503) ;;
+            *) echo "Unexpected authenticated pre-receiver status: $auth_status" >&2; exit 1 ;;
+          esac
+
+          echo "CLOUDFLARE_ACCESS_TEAM_DOMAIN=$team_domain"
+          echo "CLOUDFLARE_ACCESS_AUD=$aud"
+          echo "cloudflare_email_ingress_provisioned=true"
