@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
       - name: Apply verified patch
@@ -43,7 +43,7 @@ jobs:
           git diff --binary -- .htaccess catalogo.php produto.php tests/google-indexing-canonical-regression-test.php tests/legacy-product-seo-test.php > artifacts/gsc-indexing-fix/gsc-indexing-fix.patch
           test -s artifacts/gsc-indexing-fix/gsc-indexing-fix.patch
       - name: Upload verified patch preview
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gsc-indexing-fix-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/gsc-indexing-fix/

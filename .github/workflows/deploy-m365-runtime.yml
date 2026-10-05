@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Checkout exact private M365 revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: Vivaliz-site/shopvivaliz-m365
           ref: ${{ steps.target.outputs.sha }}

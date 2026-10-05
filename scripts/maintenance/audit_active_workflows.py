@@ -44,6 +44,11 @@ WRITE_PERMISSION = re.compile(r"(?m)^\s{2}(contents|issues|pull-requests|actions
 AUTOMATIC_TRIGGERS = {"push", "schedule", "issues", "workflow_run", "repository_dispatch"}
 MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:create|edit|close|comment))"), re.I)
 PRODUCTION_NAME = re.compile(r"production|deploy|publish|apply", re.I)
+EXTERNAL_ACTION_USE = re.compile(
+    r"(?m)^[ \t]*(?:-[ \t]*)?uses:[ \t]*[\'\"]?"
+    r"(?P<target>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^\s\'\"#]+)?@(?P<ref>[^\s\'\"#]+))"
+)
+FULL_COMMIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 ON_LINE = re.compile(r"(?m)^on:[ \t]*(?P<inline>[^\n#]*)(?:#.*)?$")
 
 
@@ -195,6 +200,18 @@ def audit_workflow(path: Path) -> list[Finding]:
             if rule == "set_plus_e" and match.start() in safe_set_plus_e:
                 continue
             findings.append(Finding(severity, rule, relative, line_number(text, match.start()), message, excerpt(match.group(0))))
+
+    for match in EXTERNAL_ACTION_USE.finditer(text):
+        ref = match.group("ref")
+        if not FULL_COMMIT_SHA.fullmatch(ref):
+            findings.append(Finding(
+                "high",
+                "unpinned_external_action",
+                relative,
+                line_number(text, match.start()),
+                "External GitHub Action or reusable workflow is not pinned to a full commit SHA.",
+                excerpt(match.group("target")),
+            ))
 
     write_permissions = list(WRITE_PERMISSION.finditer(text))
     triggers = workflow_trigger_names(text)

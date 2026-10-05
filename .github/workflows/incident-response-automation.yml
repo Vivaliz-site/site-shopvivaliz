@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout without persisted credentials
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -123,7 +123,7 @@ jobs:
 
       - name: Notify on detected incident
         if: steps.incident.outputs.response_status != '0' && steps.notification.outputs.configured == 'true'
-        uses: 8398a7/action-slack@v3
+        uses: 8398a7/action-slack@77eaa4f1c608a7d68b38af4e3f739dcd8cba273e
         with:
           status: failure
           text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão necessária.'
@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload incident evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: incident-detection-${{ github.run_id }}
           path: artifacts/incidents/

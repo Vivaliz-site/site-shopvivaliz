@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify Desktop Commander control-plane contracts
         run: |
           set -Eeuo pipefail
@@ -148,7 +148,7 @@ jobs:
     env:
       ALLOW_REPAIR: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Configure verified VM SSH
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -427,7 +427,7 @@ jobs:
 
       - name: Upload immutable control-plane evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-commander-24h-health-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/desktop-commander-24h-health/

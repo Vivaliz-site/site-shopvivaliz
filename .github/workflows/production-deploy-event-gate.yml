@@ -41,7 +41,7 @@ jobs:
       should_run: ${{ steps.gate.outputs.should_run }}
       production_sha: ${{ steps.gate.outputs.production_sha }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 1

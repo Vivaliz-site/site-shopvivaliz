@@ -21,7 +21,7 @@ jobs:
       MERCADOPAGO_WEBHOOK_SECRET_VALUE: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
       - name: Validate provider secrets

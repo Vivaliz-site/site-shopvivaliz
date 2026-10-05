@@ -17,7 +17,7 @@ def violations(*, enforcer: str, ecommerce: str, token: str, event_gate: str, st
     if 'sleep ' in event_gate:
         found.append('event_gate_polling_present')
     for fragment in (
-        'uses: actions/cache@v4',
+        'uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830',
         'path: ~/.ollama/models',
         'ollama show "$OLLAMA_MODEL"',
         'ollama pull "$OLLAMA_MODEL"',

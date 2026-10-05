@@ -43,13 +43,13 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout exact commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
 
@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload static audit evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ecommerce-static-audit-${{ github.sha }}
           path: |
@@ -181,7 +181,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout exact commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ needs.production-audit-gate.outputs.production_sha }}
           persist-credentials: false
@@ -273,7 +273,7 @@ jobs:
 
       - name: Upload live production evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ecommerce-live-audit-${{ needs.production-audit-gate.outputs.production_sha }}
           path: |

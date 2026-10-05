@@ -59,7 +59,7 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
             text = self.text(name)
             self.assertNotRegex(text, r"(?m)^\s{2}issues:\s*write\s*$", name)
             self.assertNotRegex(text, r"\bgh\s+issue\s+(?:create|edit|comment)\b", name)
-            self.assertIn("actions/upload-artifact@v4", text, name)
+            self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", text, name)
             self.assertRegex(text, r"if-no-files-found:\s*error", name)
 
 
