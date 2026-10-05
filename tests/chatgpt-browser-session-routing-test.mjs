@@ -94,7 +94,11 @@ export async function runBrowserSessionRoutingTests(api, directory) {
       assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
       assert.equal(result.sent, false);
       assert.match(result.detail, /active|unconfirmed/);
-      assert.equal(evaluated.length, 2);
+      assert.equal(
+        evaluated.length,
+        3,
+        'active bound stream should only probe account, stream status, and unavailable-conversation UI',
+      );
     }],
     ['bound active stream with unavailable UI is treated as hydration recovery, not generic active deferral', async () => {
       write(); const evaluated = [];
