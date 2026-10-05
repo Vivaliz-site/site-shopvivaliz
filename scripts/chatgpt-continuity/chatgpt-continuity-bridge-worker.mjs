@@ -2074,11 +2074,17 @@ async function alignLatestForReinforcement(
   };
 }
 
-async function currentConversationSurfaceContains(cdp, markers, probeToken) {
+async function currentConversationSurfaceContains(cdp, markers, probeToken, requireConversationPath = false) {
   const normalized = markers.map(marker => String(marker || '').toLowerCase()).filter(Boolean);
   return Boolean(await cdp.evaluate(`(()=>{
     /* ${probeToken} */
     const needles=${JSON.stringify(normalized)};
+    const requireConversationPath=${JSON.stringify(Boolean(requireConversationPath))};
+    if(requireConversationPath){
+      const path=String(location.pathname||'');
+      const parts=path.split('/');
+      if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
+    }
     const body=document.body;
     if(!body||needles.length===0) return false;
 
@@ -2170,19 +2176,17 @@ async function errorBannerPresent(cdp) {
 }
 
 async function conversationUnavailablePresent(cdp) {
-  return Boolean(await cdp.evaluate(`(()=>{
-    /* continuity-conversation-unavailable-probe */
-    const path=String(location.pathname||'');
-    const parts=path.split('/');
-    if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
-    const text=String(document.body?.innerText||'').toLowerCase();
-    return [
+  return currentConversationSurfaceContains(
+    cdp,
+    [
       'could not load this chatgpt conversation',
       'unable to load this chatgpt conversation',
       'não foi possível carregar esta conversa',
       'nao foi possivel carregar esta conversa',
-    ].some(value=>text.includes(value));
-  })()`));
+    ],
+    'continuity-conversation-unavailable-probe',
+    true,
+  );
 }
 
 async function recoverableFailureReason(cdp) {
