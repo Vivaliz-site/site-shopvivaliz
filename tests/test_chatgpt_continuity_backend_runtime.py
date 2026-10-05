@@ -102,6 +102,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             "ReadWritePaths=$install_root $config_root /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
             body,
         )
+        self.assertIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0", body)
+        self.assertNotIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1", body)
         self.assertNotIn("C:\\ShopVivaliz", body)
         self.assertIn("90-atendimento-cdp.conf", body)
         self.assertIn("90-atendimento-browser.conf", body)
