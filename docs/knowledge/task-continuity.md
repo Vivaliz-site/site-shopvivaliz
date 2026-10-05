@@ -485,6 +485,8 @@ seguintes.
 <!-- RESUME_QUEUE_CERTIFICATION_V12 -->
 ### Certificacao e compactacao da fila de retomada
 
+O controlador limita a analise operacional aos checkpoints com `updated_at` nos ultimos **10 dias**. Checkpoints mais antigos ficam fora da varredura do watchdog e nao podem manter requests acionaveis na fila; requests correspondentes sao arquivados pela compactacao. O limite de 10 dias e uma janela de atividade, nao uma regra de exclusao dos arquivos historicos.
+
 `_resume-requests.jsonl` e a **fila operacional ativa**, nao o historico completo.
 Cada ciclo do watchdog certifica a fila contra os checkpoints duraveis atuais.
 Somente uma linha `queued` unica cujo `task_id`, repositorio,
