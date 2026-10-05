@@ -1,0 +1,96 @@
+name: Tracking Policy Regression
+on:
+  pull_request:
+    paths:
+      - 'includes/analytics-gtm-policy.php'
+      - 'includes/analytics-tracking.php'
+      - 'includes/head-analytics.php'
+      - 'tests/google-ads-v5-regression-test.php'
+      - 'tests/test_ecommerce_live_production_scope.py'
+      - '.github/workflows/tracking-policy-regression.yml'
+      - 'scripts/codex-native-profile-failover.py'
+      - 'scripts/google_ads/client.py'
+      - 'ai_collaboration.py'
+      - 'scripts/ai/retired_executor.py'
+      - 'daemon-token-renewer.py'
+      - 'daemon-shopee-token-renewer.py'
+      - 'daemon-google-token-renewer.py'
+      - 'scripts/env_keyset_guard.py'
+      - '.github/workflows/ecommerce-excellence-audit.yml'
+      - '.github/workflows/provision-governed-backend-ci-runners.yml'
+      - '.github/workflows/issue-comment-dispatcher.yml'
+      - 'tests/test_tracking_ci_coverage.py'
+      - 'tests/test_codex_native_profile_failover.py'
+      - 'tests/test_env_loading.py'
+      - 'tests/test_env_writer_monotonic_policy.py'
+      - 'tests/test_governed_backend_runner_provision.py'
+      - 'tests/test_token_renewer.py'
+      - 'tests/test_shopee_cache_contract.py'
+      - 'tests/unit/test_workflow_private_transport.py'
+      - 'tests/google-ads-ga4-health-test.php'
+      - 'config/bootstrap-env.php'
+      - 'admin/integrations.php'
+      - 'js/sales-conversion-v1.js'
+  push:
+    branches: [main]
+    paths:
+      - 'includes/analytics-gtm-policy.php'
+      - 'includes/analytics-tracking.php'
+      - 'includes/head-analytics.php'
+      - 'tests/google-ads-v5-regression-test.php'
+      - 'tests/test_ecommerce_live_production_scope.py'
+      - '.github/workflows/tracking-policy-regression.yml'
+      - 'scripts/codex-native-profile-failover.py'
+      - 'scripts/google_ads/client.py'
+      - 'ai_collaboration.py'
+      - 'scripts/ai/retired_executor.py'
+      - 'daemon-token-renewer.py'
+      - 'daemon-shopee-token-renewer.py'
+      - 'daemon-google-token-renewer.py'
+      - 'scripts/env_keyset_guard.py'
+      - '.github/workflows/ecommerce-excellence-audit.yml'
+      - '.github/workflows/provision-governed-backend-ci-runners.yml'
+      - '.github/workflows/issue-comment-dispatcher.yml'
+      - 'tests/test_tracking_ci_coverage.py'
+      - 'tests/test_codex_native_profile_failover.py'
+      - 'tests/test_env_loading.py'
+      - 'tests/test_env_writer_monotonic_policy.py'
+      - 'tests/test_governed_backend_runner_provision.py'
+      - 'tests/test_token_renewer.py'
+      - 'tests/test_shopee_cache_contract.py'
+      - 'tests/unit/test_workflow_private_transport.py'
+      - 'tests/google-ads-ga4-health-test.php'
+      - 'config/bootstrap-env.php'
+      - 'admin/integrations.php'
+      - 'js/sales-conversion-v1.js'
+permissions:
+  contents: read
+concurrency:
+  group: tracking-policy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tracking-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Lint and verify tracking without network or purchase events
+        run: |
+          set -euo pipefail
+          php -l includes/analytics-gtm-policy.php
+          php -l includes/analytics-tracking.php
+          php -l includes/head-analytics.php
+          php tests/google-ads-v5-regression-test.php
+          php tests/google-ads-ga4-health-test.php
+          python3 tests/test_ecommerce_live_production_scope.py
+          python3 tests/test_ecommerce_excellence_deploy_wait_retry.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated test dependencies
+        run: python -m pip install --disable-pip-version-check pytest requests PyYAML==6.0.3
+      - name: Full Python regression suite
+        run: python -m pytest -q --tb=short

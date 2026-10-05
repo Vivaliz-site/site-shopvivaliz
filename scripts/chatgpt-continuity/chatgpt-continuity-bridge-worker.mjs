@@ -19,6 +19,7 @@
 // remote-debugging port open. If that port is not reachable, the worker
 // fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
@@ -29,6 +30,39 @@ const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
 const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
   || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
+// Keep one queue consumer. Scope each explicitly bound checkpoint to its own
+// browser without changing the concurrent legacy reinforcement context.
+const BROWSER_SESSION_CONTEXT = new AsyncLocalStorage();
+const BROWSER_SESSIONS = Object.freeze({
+  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com' }),
+  atendimento: Object.freeze({ cdpBase: 'http://127.0.0.1:9556', expectedEmail: 'atendimento@shopvivaliz.com.br' }),
+});
+function browserCdpBase() {
+  return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
+}
+function taskBrowserSession(taskId, requestedConversationId = '') {
+  if (!/^[A-Za-z0-9._-]{1,160}$/.test(String(taskId)) || String(taskId).includes('..')) {
+    throw new Error('invalid browser session checkpoint identity');
+  }
+  let checkpoint;
+  try { checkpoint = JSON.parse(fs.readFileSync(`${TASK_STATE_DIR}/${taskId}.json`, 'utf8')); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return Object.freeze({ cdpBase: CDP_BASE });
+    throw new Error('browser session checkpoint unreadable');
+  }
+  if (!Object.hasOwn(checkpoint || {}, 'browser_session')) return Object.freeze({ cdpBase: CDP_BASE });
+  const name = checkpoint.browser_session;
+  if (typeof name !== 'string' || !Object.hasOwn(BROWSER_SESSIONS, name)) {
+    throw new Error('invalid browser session binding');
+  }
+  const bound = safeConversationId(checkpoint.conversation_id);
+  if (!['RUNNING', 'READY_TO_COMPLETE'].includes(checkpoint.status) || !bound
+      || (requestedConversationId && requestedConversationId !== bound)) {
+    throw new Error('browser session checkpoint conversation mismatch or terminal state');
+  }
+  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+}
+
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
@@ -346,7 +380,7 @@ async function bridge(operation, payload = {}) {
 
 async function cdpReady() {
   try {
-    const response = await fetch(`${CDP_BASE}/json/version`, { signal: AbortSignal.timeout(2500) });
+    const response = await fetch(`${browserCdpBase()}/json/version`, { signal: AbortSignal.timeout(2500) });
     if (!response.ok) return false;
     const data = await response.json();
     return typeof data?.webSocketDebuggerUrl === 'string'
@@ -473,6 +507,11 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('_')) continue;
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
+        // The reinforcement loop belongs only to the legacy/personal browser.
+        // Global/detached tasks without a bound browser conversation must not
+        // keep the Fred browser hot with account-scoped reinforcement sweeps.
+        if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
+        if (!safeConversationId(payload?.conversation_id)) continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
       } catch {
@@ -637,12 +676,12 @@ class Cdp {
   } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
-        `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
+        `CDP endpoint unreachable at ${browserCdpBase()}. This worker never launches its own browser -- `
         + 'it only attaches to one you already have open and logged into ChatGPT. Launch it with '
-        + `--remote-debugging-port=${new URL(CDP_BASE).port} (see docs/AGENT-VM-PROMPTS.md).`
+        + `--remote-debugging-port=${new URL(browserCdpBase()).port} (see docs/AGENT-VM-PROMPTS.md).`
       );
     }
-    const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+    const tabs = await (await fetch(`${browserCdpBase()}/json`)).json();
     const conversationIds = new Set(
       (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
@@ -791,7 +830,7 @@ async function clickAuthorizationIfPresent(cdp) {
 async function authorizationCheckOnce(
   listTabs = async () => {
     if (!(await cdpReady())) return [];
-    const response = await fetch(`${CDP_BASE}/json`, { signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`${browserCdpBase()}/json`, { signal: AbortSignal.timeout(3000) });
     return response.ok ? await response.json() : [];
   },
   connector = connectCdpTarget,
@@ -857,10 +896,10 @@ async function connectReinforcementChatgptTab({
   if (!Array.isArray(tabs)) {
     if (!(await cdpReady())) {
       throw new Error(
-        `CDP endpoint unreachable at ${CDP_BASE}. This worker only attaches to the canonical authenticated browser.`,
+        `CDP endpoint unreachable at ${browserCdpBase()}. This worker only attaches to the canonical authenticated browser.`,
       );
     }
-    tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+    tabs = await (await fetch(`${browserCdpBase()}/json`)).json();
   }
 
   const ranked = (Array.isArray(tabs) ? tabs : [])
@@ -1176,7 +1215,7 @@ async function navigateNeutralTabToConversation(
 
 async function createNeutralChatgptTab(fetcher = fetch) {
   try {
-    const response = await fetcher(`${CDP_BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    const response = await fetcher(`${browserCdpBase()}/json/new?https://chatgpt.com/`, { method: 'PUT' });
     if (!response?.ok) return null;
     const tab = await response.json();
     return chatgptTabRank(tab) === 1 ? tab : null;
@@ -2606,7 +2645,32 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   }
 }
 
-async function attemptNudge(
+// Returns only a boolean: no credentials, cookies or session payload leave
+// the authenticated tab. A changed path is rejected before touching the UI.
+async function boundBrowserAccountMatches(cdp, session) {
+  return (await cdp.evaluate(`(async()=>{
+    /* continuity-browser-account-match */
+    const id=String(location.pathname||'').match(/^\\/(?:c|uc)\\/([^/?#]+)/)?.[1]||'';
+    if(id!==${JSON.stringify(session.conversationId)}) return false;
+    try{
+      const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(2000)});
+      if(!r.ok) return false;
+      const d=await r.json();
+      return String(d?.user?.email||'').toLowerCase()===${JSON.stringify(session.expectedEmail)};
+    }catch{return false;}
+  })()`)) === true;
+}
+
+async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '') {
+  let session;
+  try { session = taskBrowserSession(taskId, conversationId); }
+  catch (error) { return { result_status: 'ERROR', sent: false, detail: text(error?.message) }; }
+  return BROWSER_SESSION_CONTEXT.run(session, () => attemptNudgeInSession(
+    taskId, connect, confirmProgress, waitComposer, session.conversationId || conversationId,
+  ));
+}
+
+async function attemptNudgeInSession(
   taskId,
   connect = null,
   confirmProgress = confirmAssistantProgress,
@@ -2636,6 +2700,17 @@ async function attemptNudge(
       targetConversationId: conversationId,
     }));
     cdp = await connector();
+    const browserSession = BROWSER_SESSION_CONTEXT.getStore();
+    if (browserSession?.expectedEmail) {
+      if (!(await boundBrowserAccountMatches(cdp, browserSession))) {
+        return { result_status: 'ERROR', detail: 'browser session account mismatch or bound conversation mismatch', ...recoveryMetadata() };
+      }
+      // A missing DOM Stop does not prove an inactive server stream.
+      const stream = await conversationStreamStatus(cdp);
+      if (stream?.http_status !== 200 || String(stream?.status || '').toUpperCase() !== 'COMPLETE') {
+        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+      }
+    }
     try {
       const pathname = String(await cdp.evaluate('location.pathname') || '');
       const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
