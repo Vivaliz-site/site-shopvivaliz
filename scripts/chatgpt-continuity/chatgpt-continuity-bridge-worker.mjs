@@ -2714,13 +2714,38 @@ async function attemptNudgeInSession(
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
     if (await conversationUnavailablePresent(cdp)) {
-      return {
-        result_status: 'CONVERSATION_NOT_FOUND',
-        detail: 'bound conversation surface is unavailable; deferred to detached recovery without sending continuation',
-        ...recoveryMetadata(),
-      };
+      const unavailableTurn = await conversationTurnState(cdp);
+      const unavailableStream = await conversationStreamStatus(cdp);
+      const canonicalStatus = Number(unavailableTurn?.http_status || 0);
+      const canonicalPresent = canonicalStatus === 200 && Boolean(String(unavailableTurn?.node_id || ''));
+      const canonicalMissing = canonicalStatus === 404 || canonicalStatus === 410;
+      if (canonicalMissing) {
+        return {
+          result_status: 'CONVERSATION_NOT_FOUND',
+          detail: 'bound conversation is unavailable in the UI and canonically confirmed missing',
+          ...recoveryMetadata(),
+        };
+      }
+      if (!canonicalPresent) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation UI is unavailable but canonical presence could not be confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const streamStatus = String(unavailableStream?.status || '').toUpperCase();
+      const canonicalActive = unavailableTurn?.end_turn === false
+        || ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus);
+      if (!canonicalActive) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation exists canonically but no unfinished response is confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      detectedFailureReason = 'conversation_hydration_error';
     }
-    detectedFailureReason = await recoverableFailureReason(cdp);
+    if (!detectedFailureReason) detectedFailureReason = await recoverableFailureReason(cdp);
     if (detectedFailureReason === 'additional_checks') {
       return {
         result_status: 'STALLED_NOT_CONFIRMED',
@@ -2782,6 +2807,14 @@ async function attemptNudgeInSession(
       return {
         result_status: 'PROGRESS_CONFIRMED',
         detail: 'passive reattach restored assistant progress without sending continuation',
+        ...recoveryMetadata(),
+      };
+    }
+
+    if (detectedFailureReason === 'conversation_hydration_error') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'canonical conversation remains recoverable after passive reattach; deferred without sending continuation',
         ...recoveryMetadata(),
       };
     }
