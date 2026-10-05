@@ -3080,6 +3080,7 @@ async function attemptNudgeInSession(
     if (passiveProgressed && passiveRecoveryEligible) {
       return {
         result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
         detail: 'passive reattach restored assistant progress without sending continuation',
         ...recoveryMetadata(),
       };
@@ -3136,6 +3137,7 @@ async function attemptNudgeInSession(
         if (retryProgressed) {
           return {
             result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
             detail: 'native Retry restored assistant progress without sending continuation',
             ...recoveryMetadata(),
           };
@@ -3237,6 +3239,7 @@ async function attemptNudgeInSession(
       if (await confirmProgress(cdp, retryBaseline, PASSIVE_REATTACH_CONFIRM_MS, PROGRESS_POLL_MS, retryTurnBaseline)) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
           detail: 'transmission error recovered during passive reattach without duplicate continuation',
           ...recoveryMetadata(),
         };
@@ -3269,6 +3272,7 @@ async function attemptNudgeInSession(
       if (progressed) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
           detail: 'transmission error recovered by one bounded reattach and retry',
           ...recoveryMetadata(),
         };
@@ -3292,6 +3296,7 @@ async function attemptNudgeInSession(
     }
     return {
       result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
       detail: recoveredStaleComplete
         ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
         : 'continuation produced assistant progress',
@@ -3304,9 +3309,28 @@ async function attemptNudgeInSession(
   }
 }
 
+function recoveryStateForOutcome(outcome) {
+  const status = text(outcome?.result_status).toUpperCase();
+  if (status === 'PROGRESS_CONFIRMED' && outcome?.real_response_observed === true) return 'PROGRESS_CONFIRMED';
+  if (status === 'SENT' || status === 'SENT_UNCONFIRMED') return 'WAITING_FOR_REAL_RESPONSE';
+  if (status === 'PROGRESS_CONFIRMED') return 'WAITING_FOR_REAL_RESPONSE';
+  if (status === 'ERROR' || status === 'CONVERSATION_NOT_FOUND') return 'RECOVERY_EXHAUSTED';
+  return 'RECOVERY_ACTIONED';
+}
+
 function bridgeResultPayload(taskId, outcome, persistedDetail) {
-  const payload = { task_id: taskId, ...outcome, detail: persistedDetail };
-  if (outcome?.result_status !== 'PROGRESS_CONFIRMED') delete payload.conversation_id;
+  const normalized = { ...(outcome || {}) };
+  if (normalized.result_status === 'PROGRESS_CONFIRMED' && normalized.real_response_observed !== true) {
+    normalized.result_status = normalized.sent === true ? 'SENT_UNCONFIRMED' : 'STALLED_NOT_CONFIRMED';
+    delete normalized.conversation_id;
+  }
+  const payload = {
+    task_id: taskId,
+    ...normalized,
+    recovery_state: recoveryStateForOutcome(normalized),
+    detail: persistedDetail,
+  };
+  if (payload.result_status !== 'PROGRESS_CONFIRMED') delete payload.conversation_id;
   return payload;
 }
 
@@ -3861,6 +3885,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export {
+  recoveryStateForOutcome,
+  bridgeResultPayload,
   mutationAuthorizationAllows,
   guardedRecoveryMutation,
   Cdp,

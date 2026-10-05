@@ -333,6 +333,14 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(status_calls), 1)
 
+    def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
+        f = self.dispatcher.recovery_state_for_worker_status
+        self.assertEqual(f("CLAIMED", 0, 2), "RECOVERY_CLAIMED")
+        self.assertEqual(f("SENT_UNCONFIRMED", 1, 2), "WAITING_FOR_REAL_RESPONSE")
+        self.assertEqual(f("PROGRESS_CONFIRMED", 1, 2), "PROGRESS_CONFIRMED")
+        self.assertEqual(f("SENT_UNCONFIRMED", 2, 2), "RECOVERY_EXHAUSTED")
+        self.assertNotEqual(f("STALLED_NOT_CONFIRMED", 0, 2), "PROGRESS_CONFIRMED")
+
     def test_sent_unconfirmed_becomes_retryable_after_cooldown(self) -> None:
         self._stale_checkpoint_and_request()
         self.dispatcher.run_once(

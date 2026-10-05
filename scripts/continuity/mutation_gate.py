@@ -48,7 +48,7 @@ def authorize_current(task_id: str, conversation_id: str, checkpoint_version: in
     task=_task_state(task_id)
     if str(task.get('conversation_id','')).strip()!=str(conversation_id).strip(): return _deny('conversation_mismatch')
     if str(task.get('browser_session','')).strip()!=str(session_identity).strip(): return _deny('session_mismatch')
-    if len(task.get('history',[]))!=int(checkpoint_version): return _deny('stale_checkpoint')
+    if int(task.get('checkpoint_version') or max(1, len(task.get('history',[]))))!=int(checkpoint_version): return _deny('stale_checkpoint')
     if not conversation_lease_id or conversation_fencing_token is None: return _deny('conversation_lease_identity_required')
     if not runtime_lease_id or runtime_fencing_token is None: return _deny('runtime_lock_identity_required')
     try:

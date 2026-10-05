@@ -31,13 +31,13 @@ def handoff_foreground(task_id: str, conversation_id: str, checkpoint_version: i
     bound = str(state.get('conversation_id', '')).strip()
     effective_version = int(checkpoint_version)
     if not bound:
-        if len(state.get('history', [])) != effective_version:
+        if int(state.get('checkpoint_version') or max(1, len(state.get('history', [])))) != effective_version:
             raise agent_task_state.TaskStateError('foreground handoff checkpoint version is stale')
         state = agent_task_state.bind_conversation(task_id, conversation_id=conversation_id)
-        effective_version = len(state.get('history', []))
+        effective_version = int(state.get('checkpoint_version') or max(1, len(state.get('history', []))))
     elif bound != conversation_id:
         raise agent_task_state.TaskStateError('foreground handoff conversation does not match task binding')
-    elif len(state.get('history', [])) != effective_version:
+    elif int(state.get('checkpoint_version') or max(1, len(state.get('history', [])))) != effective_version:
         raise agent_task_state.TaskStateError('foreground handoff checkpoint version is stale')
     lease = conversation_lease.acquire_conversation_lease(
         conversation_id, 'foreground', f'foreground:{task_id}', effective_version,

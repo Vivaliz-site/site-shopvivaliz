@@ -48,6 +48,21 @@ LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
 
+
+def recovery_state_for_worker_status(worker_status: str, send_attempt_count: int, max_web_attempts: int) -> str:
+    status = str(worker_status or '').strip().upper()
+    sends = max(0, int(send_attempt_count or 0))
+    budget = max(1, int(max_web_attempts or 1))
+    if status in {'PENDING', 'CLAIMED'}:
+        return 'RECOVERY_CLAIMED'
+    if status == 'PROGRESS_CONFIRMED':
+        return 'PROGRESS_CONFIRMED'
+    if status in {'SENT', 'SENT_UNCONFIRMED'}:
+        return 'RECOVERY_EXHAUSTED' if sends >= budget else 'WAITING_FOR_REAL_RESPONSE'
+    if status in {'ERROR', 'CONVERSATION_NOT_FOUND'} and sends >= budget:
+        return 'RECOVERY_EXHAUSTED'
+    return 'RECOVERY_ACTIONED' if sends > 0 else 'RECOVERY_CLAIMED'
+
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
     if direct:
@@ -460,6 +475,9 @@ def _run_once_locked(
                                     observed["send_attempt_count"] = int(previous.get("attempt_count") or 1)
                             else:
                                 observed["send_attempt_count"] = prior_send_attempts
+                            observed["recovery_state"] = recovery_state_for_worker_status(
+                                observed_status, int(observed.get("send_attempt_count") or 0), max_web_attempts
+                            )
                             _append_ledger(root, observed)
                             ledger[fingerprint] = observed
                             previous = observed
@@ -529,6 +547,7 @@ def _run_once_locked(
             "http_status": result.get("http_status"),
             "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
             "worker_status": "",
+            "recovery_state": "RECOVERY_CLAIMED",
             "attempt_count": previous_attempt_count + 1,
             "send_attempt_count": previous_send_attempt_count,
         }

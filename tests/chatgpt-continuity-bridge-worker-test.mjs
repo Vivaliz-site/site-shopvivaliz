@@ -3727,6 +3727,29 @@ async function run() {
     assert.equal(allowed.value, 'sent');
     assert.equal(mutated, 1);
   }
+  {
+    const falseGreen = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: false,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'Thinking tool activity sidebar HTTP 200 Retry click',
+    }, 'diagnostic-only');
+    assert.notEqual(falseGreen.result_status, 'PROGRESS_CONFIRMED');
+    assert.notEqual(falseGreen.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(falseGreen.conversation_id, undefined);
+    const real = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: true,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'new assistant turn observed',
+    }, 'new assistant turn observed');
+    assert.equal(real.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(real.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(real.conversation_id, 'conversation_12345678');
+    assert.equal(recoveryStateForOutcome({ result_status: 'SENT_UNCONFIRMED', sent: true }), 'WAITING_FOR_REAL_RESPONSE');
+  }
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
