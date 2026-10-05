@@ -42,6 +42,7 @@ function transport(options = {}) {
       }
       if (source.includes('location.reload')) { state.reloads += 1; return true; }
       if (source.includes('continuity-retry-button-target')) {
+        if (options.retryTargetAbsent) return null;
         if (options.activateOnRetryTarget) state.becameActive = true;
         return { x: 10, y: 20 };
       }
@@ -147,6 +148,55 @@ export async function runStreamActuatorGuardTests(api, directory) {
     }],
     ['bound corporate COMPLETE can become active after reattach', {
       bound: true, stream: state => state.reloads ? active : complete,
+    }],
+    ['bound orphaned finished assistant leaf may use exactly one native Retry despite stale IS_STREAMING', {
+      bound: true,
+      trusted: true,
+      stream: active,
+      turn: () => ({
+        http_status: 200,
+        node_id: 'orphaned-finished-assistant',
+        role: 'assistant',
+        end_turn: false,
+        child_count: 0,
+        content_text_length: 0,
+        message_status: 'finished_successfully',
+      }),
+      wantStatus: 'PROGRESS_CONFIRMED',
+      wantRetries: 1,
+      confirmProgress: (_cdp, _baseline, _timeout, _poll, _turn, calls) => calls >= 1,
+    }],
+    ['bound finished assistant leaf with live DOM generation stays fail closed', {
+      bound: true,
+      trusted: true,
+      generating: true,
+      stream: active,
+      turn: () => ({
+        http_status: 200,
+        node_id: 'still-live-assistant',
+        role: 'assistant',
+        end_turn: false,
+        child_count: 0,
+        content_text_length: 0,
+        message_status: 'finished_successfully',
+      }),
+      wantRetries: 0,
+    }],
+    ['bound stale stream without a native Retry stays fail closed', {
+      bound: true,
+      trusted: true,
+      stream: active,
+      retryTargetAbsent: true,
+      turn: () => ({
+        http_status: 200,
+        node_id: 'orphaned-without-retry',
+        role: 'assistant',
+        end_turn: false,
+        child_count: 0,
+        content_text_length: 0,
+        message_status: 'finished_successfully',
+      }),
+      wantRetries: 0,
     }],
     ['HTTP 401 cannot authorize a continuation', { stream: { http_status: 401, status: 'COMPLETE' } }],
     ['HTTP 429 cannot authorize a continuation', { stream: { http_status: 429, status: 'COMPLETE' } }],

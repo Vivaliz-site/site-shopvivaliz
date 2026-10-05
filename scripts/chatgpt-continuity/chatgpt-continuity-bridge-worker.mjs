@@ -2294,8 +2294,8 @@ async function conversationMatchesFingerprint(cdp, expectedFingerprint) {
   return Boolean(path) && sha(path) === expectedFingerprint;
 }
 
-async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
-  const target = await cdp.evaluate(`(()=>{
+async function recoverableRetryButtonTarget(cdp) {
+  return cdp.evaluate(`(()=>{
     /* continuity-retry-button-target */
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
@@ -2316,9 +2316,39 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
     }
     return candidates.length===1 ? candidates[0] : null;
   })()`);
+}
+
+async function orphanedFinishedAssistantRetryReady(cdp, stream = null, turn = null) {
+  try {
+    const observedStream = stream || await conversationStreamStatus(cdp);
+    const streamStatus = String(observedStream?.status || '').toUpperCase();
+    if (Number(observedStream?.http_status || 0) !== 200
+        || !['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus)) return false;
+    // A native Retry is the first fail-closed discriminator: ordinary active
+    // generations without a recovery control never incur extra canonical reads.
+    if (!(await recoverableRetryButtonTarget(cdp))) return false;
+    if (await conversationIsGenerating(cdp)) return false;
+    if (!(await composerIsUsable(cdp))) return false;
+    const observedTurn = turn || await conversationTurnState(cdp);
+    return Number(observedTurn?.http_status || 0) === 200
+      && Boolean(String(observedTurn?.node_id || ''))
+      && String(observedTurn?.role || '').toLowerCase() === 'assistant'
+      && observedTurn?.end_turn === false
+      && Number(observedTurn?.child_count) === 0
+      && Number(observedTurn?.content_text_length || 0) === 0
+      && String(observedTurn?.message_status || '').toLowerCase() === 'finished_successfully';
+  } catch {
+    return false;
+  }
+}
+
+async function clickRecoverableRetryButton(cdp, expectedFingerprint = '', { allowOrphanedFinishedAssistant = false } = {}) {
+  const target = await recoverableRetryButtonTarget(cdp);
   if (!target) return false;
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
-  if (!(await conversationStreamComplete(cdp))) return false;
+  if (!(await conversationStreamComplete(cdp))) {
+    if (!allowOrphanedFinishedAssistant || !(await orphanedFinishedAssistantRetryReady(cdp))) return false;
+  }
 
   if (typeof cdp?.send === 'function') {
     try {
@@ -2810,6 +2840,7 @@ async function attemptNudgeInSession(
     : {})});
   let cdp;
   let boundSessionStream = null;
+  let boundOrphanedFinishedRetry = false;
   const canonicalRateLimitDeferral = turn => {
     if (Number(turn?.http_status || 0) !== 429) return null;
     return {
@@ -2843,7 +2874,12 @@ async function attemptNudgeInSession(
       if (boundSessionStream?.http_status !== 200
           || String(boundSessionStream?.status || '').toUpperCase() !== 'COMPLETE') {
         if (!(await conversationUnavailablePresent(cdp))) {
-          return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+          boundOrphanedFinishedRetry = await orphanedFinishedAssistantRetryReady(cdp, boundSessionStream);
+          if (boundOrphanedFinishedRetry) {
+            detectedFailureReason = 'orphaned_finished_assistant_leaf';
+          } else {
+            return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+          }
         }
       }
       if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
@@ -2859,6 +2895,44 @@ async function attemptNudgeInSession(
       const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
+    if (boundOrphanedFinishedRetry) {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
+      if (!(await orphanedFinishedAssistantRetryReady(cdp, boundSessionStream, retryTurnBaseline))) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'orphaned finished assistant leaf changed before native Retry; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const retryClicked = await clickRecoverableRetryButton(
+        cdp, retryBaseline?.conversationFingerprint, { allowOrphanedFinishedAssistant: true },
+      );
+      if (!retryClicked) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'orphaned finished assistant leaf could not be retried safely; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const retryProgressed = await confirmProgress(
+        cdp, retryBaseline, PROGRESS_CONFIRM_MS, PROGRESS_POLL_MS, retryTurnBaseline,
+      );
+      if (retryProgressed) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'native Retry resumed orphaned finished assistant leaf without sending continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'native Retry issued for orphaned finished assistant leaf but assistant progress is unconfirmed',
+        ...recoveryMetadata(),
+      };
+    }
     if (await conversationUnavailablePresent(cdp)) {
       const unavailableTurn = await conversationTurnState(cdp);
       const unavailableStream = boundSessionStream || await conversationStreamStatus(cdp);
