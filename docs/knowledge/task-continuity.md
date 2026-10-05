@@ -605,7 +605,6 @@ the injected browser programs against isolated HTTP/editor fixtures and are
 part of the bridge worker gate. HTTP 200, stream COMPLETE or a tool/thought
 node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
 
-
 ## Unavailable-conversation classification and proof
 
 The unavailable-conversation UI detector must inspect the current `main`
@@ -671,3 +670,14 @@ The regression executes the injected detector code with isolated status and
 Range fixtures. Recognizing this error is not proof that a provider failure
 has been fixed or that automatic recovery completed. Require correlated
 browser-worker progress on the bound task and conversation for that claim.
+
+## Foreground curto, handoff durável e single-writer
+
+Quando `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`, o turno interativo do ChatGPT é apenas coordenador: vincula `conversation_id`, persiste o checkpoint, adquire o lease foreground, submete uma única execução durável e retorna. O foreground não pode esperar CI/deploy, chamar `task_wait`, dormir aguardando fila, nem manter o stream aberto por trabalho operacional longo.
+
+Toda mutação de browser ou runtime compartilhado exige ownership atual, checkpoint version compatível e fencing token válido. Um lease foreground vivo torna recovery background somente leitura para a conversa. Promotion/restart/browser mutation passam pelo runtime lock; escritor stale falha fechado.
+
+`PROGRESS_CONFIRMED` continua significando exclusivamente uma nova resposta real do assistente na `conversation_id` vinculada após o baseline de recovery. Bridge healthy, HTTP 200, clique bem-sucedido, `Thinking`, tool activity, mudança de stream flag ou controller promotion são apenas evidência diagnóstica e nunca certificam conclusão E2E.
+
+Auditoria operacional registra somente metadados de ownership/execução necessários para correlação (`lease_id`, owner kind/id, fencing token, checkpoint version, durable execution id, queue position, foreground duration, mutation rejection e tipo de evidência E2E). Prompt, mensagem, body, credencial, token e cookie não são persistidos em claro.
+

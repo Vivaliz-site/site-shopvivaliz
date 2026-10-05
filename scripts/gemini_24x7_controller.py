@@ -475,6 +475,7 @@ def run_once(
         elif claude_health.get("connected") is not True:
             degraded_reasons.append("claude_remote_control_not_connected")
         continuity_ready = not degraded_reasons
+        durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
             # daemon that is alive but unable to advance continuity must fail
@@ -486,8 +487,10 @@ def run_once(
             "degraded_reasons": degraded_reasons,
             "owner_id": owner,
             "lease_recovered": lease.recovered,
+            "durable_handoff_enabled": durable_handoff_enabled,
+            "single_writer_enforced": durable_handoff_enabled,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_foreground_active", "skipped_ownership_busy")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,

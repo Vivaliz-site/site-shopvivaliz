@@ -984,12 +984,20 @@ def run_task_entrypoint(task_id: str) -> int:
         return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
+AUDIT_RESULT_METADATA_KEYS = (
+    "queue_position", "foreground_duration_ms", "mutation_rejection_reason",
+    "e2e_evidence_type", "owner_kind", "owner_id", "checkpoint_version",
+    "lease_id", "conversation_lease_id", "runtime_lease_id",
+    "fencing_token", "conversation_fencing_token", "runtime_fencing_token",
+)
+
+
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
         if secret_key in safe_args:
             secret_value = str(safe_args.pop(secret_key))
             safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
@@ -1003,9 +1011,16 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     return safe_args
 
 
-def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str, *, output: dict[str, Any] | None = None) -> str:
     aid = str(uuid.uuid4())
     safe_args = sanitize_audit_args(tool, args)
+    result = output if isinstance(output, dict) else {}
+    durable_execution_id = str(result.get("task_id") or "").strip()
+    if durable_execution_id:
+        safe_args["durable_execution_id"] = durable_execution_id
+    for key in AUDIT_RESULT_METADATA_KEYS:
+        if key in result and result.get(key) not in (None, ""):
+            safe_args[key] = result.get(key)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
@@ -2072,7 +2087,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {

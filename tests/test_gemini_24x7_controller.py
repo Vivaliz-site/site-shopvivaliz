@@ -80,6 +80,23 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
+    def test_controller_reports_single_writer_ownership_counters(self) -> None:
+        controller = load_controller()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 1, "dispatched": 0,
+                "skipped_foreground_active": 1, "skipped_ownership_busy": 2,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={"scanned": 1, "eligible": 0, "executed": 0}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="single-writer-observer")
+        self.assertTrue(result["single_writer_enforced"])
+        self.assertTrue(result["durable_handoff_enabled"])
+        self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
+        self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
+
     def test_expired_durable_lease_is_recovered_and_recorded(self) -> None:
         controller = load_controller()
         lease = self.runtime / controller.LEASE_FILE

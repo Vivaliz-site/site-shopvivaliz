@@ -755,6 +755,55 @@ class RemoteControlMcpTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 m.deny_sensitive_path(path)
 
+    def test_audit_records_ownership_and_result_metadata_without_content(self):
+        args = {
+            "command": "printf secret-payload",
+            "prompt": "private prompt body",
+            "owner_kind": "foreground",
+            "owner_id": "turn-1",
+            "runtime_lease_id": "runtime-lease-1",
+            "runtime_fencing_token": 4,
+            "checkpoint_version": 7,
+        }
+        output = {
+            "task_id": "durable-1",
+            "queue_position": 9,
+            "foreground_duration_ms": 41,
+            "e2e_evidence_type": "real_assistant_response",
+        }
+        aid = m.audit("task_submit", "always-free-arm-1787907847-26", args, True, "ok", output=output)
+        with m.db_conn() as db:
+            raw = db.execute("SELECT args_json FROM audit WHERE id=?", (aid,)).fetchone()[0]
+        payload = json.loads(raw)
+        self.assertEqual(payload["owner_kind"], "foreground")
+        self.assertEqual(payload["owner_id"], "turn-1")
+        self.assertEqual(payload["runtime_lease_id"], "runtime-lease-1")
+        self.assertEqual(payload["runtime_fencing_token"], 4)
+        self.assertEqual(payload["checkpoint_version"], 7)
+        self.assertEqual(payload["durable_execution_id"], "durable-1")
+        self.assertEqual(payload["queue_position"], 9)
+        self.assertEqual(payload["foreground_duration_ms"], 41)
+        self.assertEqual(payload["e2e_evidence_type"], "real_assistant_response")
+        self.assertNotIn("private prompt body", raw)
+        self.assertNotIn("secret-payload", raw)
+
+    def test_controller_promotion_and_continuity_restart_require_runtime_lock_when_enabled(self):
+        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.execute_tool("controller_promote", {"expected_sha": "a" * 40, "timeout": 120})
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.execute_tool("service_action", {
+                    "host": "always-free-arm-1787907847-26",
+                    "service": "shopvivaliz-chatgpt-continuity.service",
+                    "action": "restart",
+                    "timeout": 20,
+                })
+        finally:
+            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+
     def test_audit_does_not_store_raw_command(self):
         raw = "echo super-sensitive-command-value"
         aid = m.audit("admin_command_run", "shopvivaliz-free-a1", {"command": raw}, True, "ok")
