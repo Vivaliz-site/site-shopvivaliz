@@ -5,6 +5,7 @@
  */
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
+require_once __DIR__ . '/analytics-gtm-policy.php';
 
 class AnalyticsTracking {
     private $ga4_id = '';
@@ -23,7 +24,7 @@ class AnalyticsTracking {
         // GTM is optional and must be explicitly configured. The official GA4 tag
         // has its own direct/first-party loader; a hard-coded GTM fallback can
         // silently send customer events to an unrelated measurement stream.
-        $this->gtm_id = trim((string)(getenv('GOOGLE_TAG_MANAGER_ID') ?: (getenv('GTM_ID') ?: (getenv('TAG_MANAGER') ?: ''))));
+        $this->gtm_id = svat_google_tag_manager_id();
         $this->google_site_verification = getenv('GOOGLE_SITE_VERIFICATION') ?: '';
         $id = getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '');
         if ($id !== '' && !str_starts_with($id, 'AW-') && is_numeric($id)) {

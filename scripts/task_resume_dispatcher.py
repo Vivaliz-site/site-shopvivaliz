@@ -26,10 +26,10 @@ from typing import Any, Sequence
 
 try:
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from .task_continuation_watchdog import read_requests
+    from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 except ImportError:
     from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from task_continuation_watchdog import read_requests
+    from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
@@ -177,6 +177,44 @@ def _recent_successful_chatgpt_nudge(
     return False
 
 
+def _failed_chatgpt_nudge_after(
+    runtime_dir: Path,
+    request: dict[str, Any],
+    previous_at: datetime,
+) -> bool:
+    """Return true when ChatGPT definitively failed after the last detached attempt."""
+    fingerprint = str(request.get("fingerprint", "")).strip()
+    task_id = str(request.get("task_id", "")).strip()
+    repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+    if not fingerprint or not task_id:
+        return False
+
+    failed_statuses = {
+        "SENT",
+        "SENT_UNCONFIRMED",
+        "STALLED_NOT_CONFIRMED",
+        "CONVERSATION_NOT_FOUND",
+        "ERROR",
+    }
+    for row in reversed(_read_jsonl(runtime_dir / CHATGPT_NUDGE_LEDGER_FILE)):
+        if str(row.get("fingerprint", "")).strip() != fingerprint:
+            continue
+        if str(row.get("task_id", "")).strip() != task_id:
+            continue
+        row_repository = str(row.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+        if row_repository != repository:
+            continue
+        if str(row.get("worker_status", "")).strip().upper() not in failed_statuses:
+            continue
+        observed_at = _parse_utc(str(row.get("worker_status_observed_at", "")))
+        if observed_at is None:
+            observed_at = _parse_utc(str(row.get("dispatched_at", "")))
+        if observed_at is None:
+            continue
+        return observed_at > previous_at
+    return False
+
+
 def _browser_only_e2e_probe(request: dict[str, Any], state: dict[str, Any]) -> bool:
     """Recognize the strict browser E2E sentinel contract.
 
@@ -273,6 +311,11 @@ def _restore_executor_owned_no_progress(
 
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
+        return False
+    created_at = _parse_utc(str(state.get("created_at", "")))
+    if created_at is None:
+        return False
+    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
@@ -371,6 +414,7 @@ def _prepare_workspace(task_id: str, repository: str) -> Path:
 
 _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
+    "background_claude_fallback_authorized",
     "background_codex_fallback_authorized",
     "background_gemini_error",
     "background_gemini_exit_code",
@@ -589,7 +633,7 @@ def run_once(
                 cooldown = max(0, int(retry_after_seconds))
                 if previous_at is not None and cooldown > 0:
                     elapsed = (datetime.now(timezone.utc) - previous_at).total_seconds()
-                    if elapsed < cooldown:
+                    if elapsed < cooldown and not _failed_chatgpt_nudge_after(runtime, request, previous_at):
                         continue
 
             state = _load_json(_state_path(runtime, task_id))

@@ -35,4 +35,33 @@ $explicitGtm = new AnalyticsTracking();
 $explicitTracking = $explicitGtm->getTrackingCode();
 gav5_assert(str_contains($explicitTracking, 'GTM-TEST123'), 'explicit GTM configuration must still be honored');
 
+// An explicitly configured retired container must not be revived by aliases.
+$gtmKeys = ['GOOGLE_TAG_MANAGER_ID', 'GTM_ID', 'TAG_MANAGER'];
+foreach ($gtmKeys as $selectedKey) {
+    foreach ($gtmKeys as $key) { putenv($key); }
+    putenv($selectedKey . '=GTM-PHZ55CP3');
+    $retiredTracking = (new AnalyticsTracking())->getTrackingCode();
+    gav5_assert(!str_contains($retiredTracking, 'googletagmanager.com/gtm.js'), 'retired GTM must not load through ' . $selectedKey);
+    gav5_assert(str_contains($retiredTracking, 'googletagmanager.com/gtag/js?id=G-1H55K1TZ5D'), 'official GA4 must survive retired ' . $selectedKey);
+}
+foreach ($gtmKeys as $key) { putenv($key); }
+foreach (['  GTM-PHZ55CP3  ', 'bad-container', "GTM-TEST123';alert(1);//"] as $invalidId) {
+    putenv('GOOGLE_TAG_MANAGER_ID=' . $invalidId);
+    $invalidTracking = (new AnalyticsTracking())->getTrackingCode();
+    gav5_assert(!str_contains($invalidTracking, 'googletagmanager.com/gtm.js'), 'retired or malformed GTM must fail closed');
+}
+putenv('GOOGLE_TAG_MANAGER_ID=GTM-PHZ55CP3');
+putenv('GTM_ID=GTM-TEST123');
+$precedenceTracking = (new AnalyticsTracking())->getTrackingCode();
+gav5_assert(!str_contains($precedenceTracking, 'googletagmanager.com/gtm.js'), 'retired primary must not select a lower-priority alias');
+putenv('GTM_ID');
+$GLOBALS['analytics'] = new AnalyticsTracking();
+$_SERVER['REQUEST_URI'] = '/tracking-regression';
+ob_start();
+require $root . '/includes/head-analytics.php';
+$renderedHead = (string)ob_get_clean();
+gav5_assert(!str_contains($renderedHead, 'googletagmanager.com/gtm.js'), 'public head must reject retired GTM');
+gav5_assert(str_contains($renderedHead, 'googletagmanager.com/gtag/js?id=G-1H55K1TZ5D'), 'public head must preserve official direct GA4');
+putenv('GOOGLE_TAG_MANAGER_ID');
+
 fwrite(STDOUT, "google_ads_v5_regression=ok\n");
