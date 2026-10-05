@@ -81,6 +81,31 @@ export async function runBrowserSessionRoutingTests(api, directory) {
       assert.match(result.detail, /browser session account mismatch/);
       assert.equal(evaluated.length, 1);
     }],
+    ['403 session endpoint can use exact inert hydration session email for the same bound conversation', async () => {
+      const source = String.raw`(async()=>true)()`;
+      const cdp = { async evaluate() {
+        const scripts = [{
+          textContent: JSON.stringify({ session: { user: { email: 'atendimento@shopvivaliz.com.br' } } }),
+        }];
+        return vm.runInNewContext(
+          await api.boundBrowserAccountMatches.sourceForTest(conversation, 'atendimento@shopvivaliz.com.br'),
+          {
+            location: { pathname: '/c/' + conversation },
+            document: { scripts },
+            AbortSignal,
+            fetch: async () => ({ ok: false, status: 403 }),
+          },
+        );
+      } };
+      assert.equal(
+        await api.boundBrowserAccountMatches(cdp, {
+          conversationId: conversation,
+          expectedEmail: 'atendimento@shopvivaliz.com.br',
+        }),
+        true,
+      );
+      assert.ok(source);
+    }],
     ['server-side active stream is deferred even when DOM Stop is absent', async () => {
       write(); const evaluated = [];
       const cdp = { close() {}, async evaluate(source) {
