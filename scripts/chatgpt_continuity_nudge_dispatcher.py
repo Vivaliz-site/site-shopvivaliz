@@ -211,10 +211,10 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
         return False
     if not isinstance(payload, dict) or str(payload.get("status", "")).strip() != "RUNNING":
         return False
-    updated_at = _parse_time(payload.get("updated_at"))
-    if updated_at is None:
+    created_at = _parse_time(payload.get("created_at"))
+    if created_at is None:
         return False
-    if (datetime.now(timezone.utc) - updated_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
+    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if not str(payload.get("next_action", "")).strip():
         return False
