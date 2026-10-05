@@ -4,6 +4,7 @@ from pathlib import Path
 def test_tracking_ci_covers_changed_runtime_contract_inputs():
     workflow = Path('.github/workflows/tracking-policy-regression.yml').read_text()
     assert 'run: python -m pytest -q --tb=short' in workflow
+    assert 'PyYAML==6.0.3' in workflow, 'full suite imports yaml during collection'
     paths = [
         'scripts/codex-native-profile-failover.py', 'scripts/google_ads/client.py',
         'ai_collaboration.py', 'scripts/ai/retired_executor.py',
