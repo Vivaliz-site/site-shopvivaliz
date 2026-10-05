@@ -18,7 +18,7 @@
 ## Identidade e sessão
 
 - Usar exclusivamente o perfil `/home/fredrdp/.config/shopvivaliz-dev-chromium`.
-- Porta CDP reservada: `9557`.
+- Porta CDP reservada: `9559`.
 - Nunca fazer logout, trocar conta ou copiar cookies/storage dos perfis `fredmourao` ou `atendimento`.
 - A existência deste documento não comprova autenticação; validar a identidade ao vivo antes de operar.
 
