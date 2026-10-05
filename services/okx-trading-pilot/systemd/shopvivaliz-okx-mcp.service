@@ -1,0 +1,17 @@
+[Unit]
+Description=ShopVivaliz OKX MCP Read-Only
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/okx-pilot.env
+ExecStart=/usr/bin/npx -y @okx_ai/okx-trade-mcp@1.4.8 --profile live --read-only --modules all
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
