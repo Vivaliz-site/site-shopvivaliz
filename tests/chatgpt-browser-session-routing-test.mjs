@@ -87,13 +87,49 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         evaluated.push(source);
         if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
         if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+        if (source.includes('continuity-conversation-unavailable-probe')) return false;
         throw Error('active stream must prevent all recovery effects');
       } };
       const result = await api.attemptNudge(id, async () => cdp, undefined, undefined, conversation);
       assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
       assert.equal(result.sent, false);
       assert.match(result.detail, /active|unconfirmed/);
-      assert.equal(evaluated.length, 2);
+      assert.equal(
+        evaluated.length,
+        3,
+        'active bound stream should only probe account, stream status, and unavailable-conversation UI',
+      );
+    }],
+    ['bound active stream with unavailable UI is treated as hydration recovery, not generic active deferral', async () => {
+      write(); const evaluated = [];
+      const cdp = { close() {}, async send() { throw Error('hydration recovery must not send trusted input'); }, async evaluate(source) {
+        evaluated.push(source);
+        if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
+        if (source === 'location.pathname') return '/c/' + conversation;
+        if (source.includes('continuity-conversation-unavailable-probe')) return true;
+        if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+        if (source.includes('conversation-turn-state')) return { http_status: 200, node_id: 'bound-active-assistant', role: 'assistant', end_turn: false, child_count: 0, content_text_length: 0, message_status: 'finished_successfully' };
+        if (source.includes('const candidates=[')) return { count: 1, lastText: 'prior reply', lastLength: 11, lastKey: 'assistant-prior', surfaceText: 'Could not load this ChatGPT conversation', surfaceLength: 39, conversationPath: '/c/' + conversation, snapshotSource: 'legacy' };
+        if (source.includes('location.reload')) return true;
+        if (source.includes('continuity-error-banner-probe')
+          || source.includes('continuity-additional-checks-probe')
+          || source.includes('continuity-stopped-thinking-probe')
+          || source.includes('continuity-streaming-interrupted-probe')
+          || source.includes('continuity-request-timeout-probe')
+          || source.includes('stop-button')) return false;
+        return false;
+      } };
+      const result = await api.attemptNudge(
+        id,
+        async () => cdp,
+        async () => true,
+        async () => { throw Error('composer path must not be reached'); },
+        conversation,
+      );
+      assert.equal(result.result_status, 'PROGRESS_CONFIRMED');
+      assert.equal(result.sent, false);
+      assert.ok(evaluated.some(source => source.includes('continuity-conversation-unavailable-probe')));
+      assert.ok(evaluated.some(source => source.includes('location.reload')));
     }],
     ['overlapping async sessions do not leak routes or alter legacy default', async () => {
       write(); const personal = path.join(directory, 'account-routing-personal.json');

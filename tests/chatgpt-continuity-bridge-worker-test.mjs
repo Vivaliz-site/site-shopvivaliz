@@ -2043,8 +2043,8 @@ async function run() {
       async () => unavailableCdp,
       async () => false,
     );
-    assert.equal(unavailable.result_status, 'CONVERSATION_NOT_FOUND');
-    assert.match(unavailable.detail, /unavailable/i);
+    assert.equal(unavailable.result_status, 'STALLED_NOT_CONFIRMED', unavailable.detail);
+    assert.match(unavailable.detail, /unavailable|canonical/i);
     assert.equal(
       unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
       false,
