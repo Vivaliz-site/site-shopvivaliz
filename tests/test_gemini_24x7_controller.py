@@ -729,6 +729,16 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_installer_consumes_same_durable_handoff_flag_and_preserves_state(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', installer)
+        self.assertIn('case "$durable_handoff" in 0|1)', installer)
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s', installer)
+        self.assertIn('"$durable_handoff"', installer)
+        self.assertNotIn('rm -rf "$runtime_dir/_conversation-leases"', installer)
+        self.assertNotIn('rm -rf "$runtime_dir/_runtime-lock"', installer)
+
+
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
