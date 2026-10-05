@@ -774,6 +774,13 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile', installer)
         self.assertIn('rm -rf "$compile_cache"', installer)
 
+    def test_controller_installer_printf_keeps_environment_arguments_attached(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        lines = installer.splitlines()
+        index = next(i for i, line in enumerate(lines) if line.startswith("printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY="))
+        self.assertTrue(lines[index].rstrip().endswith(chr(92)))
+        self.assertEqual(lines[index + 1].strip(), '"$target_dir/scripts/gemini_24x7_controller.py" ' + chr(92))
+
 
 if __name__ == "__main__":
     unittest.main()
