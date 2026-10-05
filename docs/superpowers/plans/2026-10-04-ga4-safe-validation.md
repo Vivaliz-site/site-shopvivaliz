@@ -34,3 +34,11 @@ https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1beta/pr
 - Full Python suite: task fe11e7e2-492c-47e7-9c6a-ddb2dc14e1f4, result must be checked before merge.
 - Independent read-only review: task b2ccaee8-6a28-495d-9564-7e1627aae19d, result must be checked before merge.
 - Ruling: this patch removes unsafe validation only. It cannot and does not override the earlier platform refusal to configure GA4_SECRET. That operation remains separate and unexecuted.
+
+## Independent review and fix pass
+- Full suite before review: 985 passed, 17 skipped, 237 subtests passed in 107.15s.
+- Independent review completed with no Critical defect. It requested verification of alias order, bootstrap fixtures and a precise network-proof claim.
+- A new test reproduced a real alias mismatch: whitespace in GA4_ID was incorrectly bypassed by the validator. Fixed selection to match AnalyticsTracking before trimming; this is a RED-to-GREEN correctness fix.
+- Added placeholder-precedence, final legacy alias, dotenv and runtime-array fixture coverage; disabled socket/cURL entrypoints in the isolated tests.
+- Replaced the hardcoded network-counter label with an explicit design policy and documented trust in the canonical configuration bootstrap.
+- Ruling: generic placeholder dictionaries, output-label rename, missing optional CI path and extra invalid-value logging cases are minor follow-ups, not delivery blockers. No secret provisioning or transaction behavior changes were introduced.

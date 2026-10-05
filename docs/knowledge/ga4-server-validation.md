@@ -26,3 +26,7 @@ Nunca executar o validador antigo: ele tentava enviar `purchase` sintetico por `
 https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1beta/properties.dataStreams.measurementProtocolSecrets/list
 https://developers.google.com/analytics/devguides/collection/protocol/ga4/validating-events
 https://developers.google.com/analytics/devguides/collection/protocol/ga4/reference
+
+## Limite da evidencia do diagnostico
+
+A ausencia de rede e uma propriedade do caminho de codigo revisado, nao uma metrica de captura de pacotes: a saida usa `NETWORK_POLICY=NO_REQUESTS_BY_DESIGN`. O bootstrap canonico executa `runtime-secrets.php`, que deve continuar sendo apenas um retorno de configuracao, sem efeitos colaterais. Os testes exercitam tanto `.env` quanto esse retorno de array em fixtures, com wrappers e funcoes de rede desabilitados. Nao ha carregamento do remetente de compras.

@@ -17,14 +17,10 @@ $missingOrPlaceholder = static function (string $value): bool {
         || preg_match('/^(?:g-)?x+$/D', $value) === 1;
 };
 
-$ga4Id = '';
-foreach (['GA4_ID', 'GOOGLE_ANALYTICS_ID', 'GOOGLE_ANALYTICS', 'GOOGLE_ANALITYCS'] as $key) {
-    $candidate = trim((string)(getenv($key) ?: ''));
-    if ($candidate !== '') {
-        $ga4Id = $candidate;
-        break;
-    }
-}
+// Choose the first truthy raw value exactly as AnalyticsTracking does;
+// trim only after selection so whitespace in a primary key fails, not falls back.
+$ga4Id = trim((string)(getenv('GA4_ID') ?: (getenv('GOOGLE_ANALYTICS_ID')
+    ?: (getenv('GOOGLE_ANALYTICS') ?: (getenv('GOOGLE_ANALITYCS') ?: '')))));
 $ga4Secret = trim((string)(getenv('GA4_SECRET') ?: ''));
 $errors = [];
 $idValid = !$missingOrPlaceholder($ga4Id) && preg_match('/^G-[A-Z0-9]+$/D', $ga4Id) === 1;
@@ -51,7 +47,7 @@ echo 'TRACKING_VERIFICATION=STRUCTURAL_ONLY' . PHP_EOL;
 echo 'CREDENTIAL_VALIDITY=NOT_VERIFIED' . PHP_EOL;
 echo 'PURCHASE_DELIVERY=NOT_VERIFIED' . PHP_EOL;
 echo 'EVENTS_SENT=0' . PHP_EOL;
-echo 'NETWORK_REQUESTS=0' . PHP_EOL;
+echo 'NETWORK_POLICY=NO_REQUESTS_BY_DESIGN' . PHP_EOL;
 echo 'TRACKING_CONFIG=' . ($errors === [] ? 'PASS' : 'FAIL') . PHP_EOL;
 foreach ($errors as $error) {
     echo 'CONFIG_ERROR=' . $error . PHP_EOL;
