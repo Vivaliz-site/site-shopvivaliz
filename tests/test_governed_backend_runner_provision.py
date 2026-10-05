@@ -24,12 +24,16 @@ class GovernedBackendRunnerProvisionTests(unittest.TestCase):
         self.assertIn("ubuntu@10.0.1.38", text)
         self.assertIn("persist-credentials: false", text)
         self.assertNotIn("pull_request:", text)
-        self.assertIn('cron: "7,22,37,52 * * * *"', text)
-        self.assertIn("workflow_dispatch:", text)
-        self.assertIn("for attempt in {1..12}", text)
-        self.assertIn("sleep 2", text)
-        self.assertIn("governed_runner=online", text)
-        self.assertIn("did not become online", text)
+        self.assertIn("workflow_call:", text)
+        for event in ('schedule:', 'push:', 'workflow_dispatch:', 'issue_comment:'):
+            self.assertNotIn(event, text.split('jobs:', 1)[0])
+        self.assertIn("for attempt in $(seq 1 12)", text)
+        self.assertIn("sleep 5", text)
+        self.assertIn('[[ "$online" == "$name" ]]', text)
+        self.assertIn("GOVERNED_BACKEND_RUNNERS=PASS", text)
+        dispatcher = (ROOT / '.github/workflows/issue-comment-dispatcher.yml').read_text()
+        self.assertIn('uses: ./.github/workflows/provision-governed-backend-ci-runners.yml', dispatcher)
+        self.assertIn("if: needs.classify.outputs.route == 'provision_backend_runners'", dispatcher)
 
 if __name__ == "__main__":
     unittest.main()

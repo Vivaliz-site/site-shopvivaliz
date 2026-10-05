@@ -3153,7 +3153,13 @@ async function run() {
     fs.writeFileSync(path.join(checkpointDir, 'done.json'), JSON.stringify({status: 'CONCLUIDO'}));
     assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING'}));
-    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true);
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'unbound global tasks must not activate the Fred reinforcement browser');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', conversation_id: 'legacyFredConversation1'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'legacy Fred tasks remain eligible only when bound to a conversation');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'fred', conversation_id: 'fredConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'explicit Fred browser tasks remain eligible');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'atendimento', conversation_id: 'atendimentoConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'Atendimento tasks must never activate the Fred reinforcement browser');
   }
 
   {
@@ -3613,6 +3619,7 @@ async function run() {
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
   });
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint }, testTaskStateDir);
   console.log('reinforcementCheckOnce branches: PASS');
 }
 

@@ -108,6 +108,13 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]{12,}"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----", re.S),
+    # Preserve existing Bearer/key scrubbing before consuming CLI flag values.
+    # Process inventories never collect argv; flag scrubbing is defense in depth.
+    re.compile(
+        r"(?i)((?<!\S)--?(?:setcookie|password|passwd|token|api[-_]?key|"
+        r"client[-_]?secret|access[-_]?token|refresh[-_]?token)(?:\s*=\s*|\s+))"
+        r"(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^\s]+)"
+    ),
 )
 STOP_EVENT = threading.Event()
 
@@ -1305,7 +1312,7 @@ def logs_tail_command(platform: str, path: str, lines: int) -> str:
 def processes_command(platform: str) -> str:
     if platform == "windows":
         return "Get-Process | Sort-Object CPU -Descending | Select-Object -First 100 Id,ProcessName,CPU,WorkingSet64 | ConvertTo-Json -Compress"
-    return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
+    return "ps -eo pid,user,pcpu,pmem,etime,comm --sort=-pcpu | head -n 101"
 
 
 BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}

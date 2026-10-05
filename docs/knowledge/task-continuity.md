@@ -1,3 +1,10 @@
+
+<!-- CONTINUITY_TASK_LOOKBACK_V1 -->
+## Janela de análise do controlador
+
+O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
+<!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
+
 # Task Continuity Enforcement
 
 **Policy:** `TASK_CONTINUITY_ENFORCEMENT_V3`
@@ -490,6 +497,11 @@ Cada ciclo do watchdog certifica a fila contra os checkpoints duraveis atuais.
 Somente uma linha `queued` unica cujo `task_id`, repositorio,
 `checkpoint_updated_at`, `next_action` e fingerprint coincidam com um
 checkpoint `RUNNING` atual permanece acionavel.
+
+A analise operacional usa uma janela de **10 dias desde a criacao da tarefa**, baseada em
+`created_at`. Atualizar uma tarefa antiga nao a recoloca na janela. Checkpoints mais antigos continuam preservados como historico,
+mas nao podem manter requests acionaveis na fila; a compactacao move esses
+requests para `_resume-requests-archive.jsonl`.
 
 Linhas de checkpoint terminal, superseded/mismatched, orfas, duplicadas,
 malformadas ou com status nao operacional saem da fila ativa e sao preservadas

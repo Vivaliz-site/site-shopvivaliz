@@ -5,6 +5,9 @@ import json
 import os
 import re
 import sqlite3
+import shlex
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -280,6 +283,63 @@ class RemoteControlMcpTests(unittest.TestCase):
             status = m.continuity_status()
         self.assertFalse(status["ok"])
         self.assertFalse(status["continuity_ready"])
+
+    def test_process_listing_omits_linux_arguments(self):
+        command = shlex.split(m.processes_command("linux"))
+        fields = command[command.index("-eo") + 1].split(",")
+        self.assertEqual(fields, ["pid", "user", "pcpu", "pmem", "etime", "comm"])
+
+    def test_process_metadata_does_not_include_child_argument(self):
+        sentinel = "audit-v5-synthetic-private-argument"
+        command = shlex.split(m.processes_command("linux"))
+        fields = command[command.index("-eo") + 1]
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)", sentinel],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(child.pid), "-o", fields],
+                capture_output=True, text=True, timeout=8, check=True,
+            )
+            self.assertIn(str(child.pid), result.stdout)
+            self.assertTrue(sentinel not in result.stdout,
+                            "process metadata includes private argv")
+        finally:
+            child.terminate()
+            child.wait(timeout=8)
+
+    def test_process_listing_windows_is_metadata_only(self):
+        command = m.processes_command("windows")
+        self.assertIn("Id,ProcessName,CPU,WorkingSet64", command)
+        self.assertNotIn("CommandLine", command)
+
+    def test_redaction_hides_sensitive_command_flags(self):
+        cases = (
+            ("beam.smp -setcookie synthetic_cookie_123 -name node@host", "synthetic_cookie_123"),
+            ("worker --password 'synthetic password' --workers 4", "synthetic password"),
+            ('worker --client-secret "synthetic client secret" --workers 4', "synthetic client secret"),
+            ("worker --api-key=synthetic_api_key --workers 4", "synthetic_api_key"),
+            ("worker --access-token synthetic_access_token --workers 4", "synthetic_access_token"),
+        )
+        for sample, sentinel in cases:
+            with self.subTest(flag=sample.split()[1]):
+                output = m.redact_text(sample)
+                self.assertTrue(sentinel not in output, "sensitive flag value was not redacted")
+                self.assertIn("[REDACTED]", output)
+        self.assertEqual(m.redact_text("worker --workers 4 -name node@host"),
+                         "worker --workers 4 -name node@host")
+
+    def test_cli_flag_redaction_preserves_bearer_protection(self):
+        sentinel = "synthetic_access_abcdefghijklmnop"
+        for flag in ("--token", "--access-token", "-token"):
+            with self.subTest(flag=flag):
+                output = m.redact_text(f"worker {flag} Bearer {sentinel}")
+                self.assertNotIn(sentinel, output)
+                self.assertIn("[REDACTED]", output)
+        self.assertNotIn(sentinel, m.redact_text(f"Authorization: Bearer {sentinel}"))
+        self.assertEqual(m.redact_text("worker --tokenizer normal"),
+                         "worker --tokenizer normal")
 
     def test_secret_redaction(self):
         sample = "Authorization: Bearer abcdefghijklmnopqrstuvwxyz sk-projectsecret123456"
@@ -1566,7 +1626,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "ops/systemd/shopvivaliz-atendimento-browser.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         )
