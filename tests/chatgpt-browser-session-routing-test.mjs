@@ -131,6 +131,60 @@ export async function runBrowserSessionRoutingTests(api, directory) {
       assert.ok(evaluated.some(source => source.includes('continuity-conversation-unavailable-probe')));
       assert.ok(evaluated.some(source => source.includes('location.reload')));
     }],
+    ['historical unavailable text in a prior turn does not mark the current conversation unavailable', async () => {
+      const oldMessage = { innerText: 'Unable to load this ChatGPT conversation', textContent: 'Unable to load this ChatGPT conversation' };
+      const body = {
+        innerText: 'Unable to load this ChatGPT conversation\nCurrent assistant reply completed normally',
+        textContent: 'Unable to load this ChatGPT conversation\nCurrent assistant reply completed normally',
+        querySelectorAll(selector) {
+          if (selector === '[data-message-author-role]') return [oldMessage];
+          return [];
+        },
+      };
+      const document = {
+        body,
+        createRange() {
+          return {
+            selectNodeContents() {},
+            setStartAfter() {},
+            toString() { return 'Current assistant reply completed normally'; },
+          };
+        },
+      };
+      const cdp = {
+        async evaluate(source) {
+          return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, document });
+        },
+      };
+      assert.equal(await api.conversationUnavailablePresent(cdp), false);
+    }],
+    ['live unavailable text after the latest turn is still detected', async () => {
+      const lastMessage = { innerText: 'prior reply', textContent: 'prior reply' };
+      const body = {
+        innerText: 'prior reply\nUnable to load this ChatGPT conversation',
+        textContent: 'prior reply\nUnable to load this ChatGPT conversation',
+        querySelectorAll(selector) {
+          if (selector === '[data-message-author-role]') return [lastMessage];
+          return [];
+        },
+      };
+      const document = {
+        body,
+        createRange() {
+          return {
+            selectNodeContents() {},
+            setStartAfter() {},
+            toString() { return 'Unable to load this ChatGPT conversation'; },
+          };
+        },
+      };
+      const cdp = {
+        async evaluate(source) {
+          return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, document });
+        },
+      };
+      assert.equal(await api.conversationUnavailablePresent(cdp), true);
+    }],
     ['overlapping async sessions do not leak routes or alter legacy default', async () => {
       write(); const personal = path.join(directory, 'account-routing-personal.json');
       fs.writeFileSync(personal, JSON.stringify({ schema_version: 1, task_id: 'account-routing-personal', status: 'RUNNING', browser_session: 'fred', conversation_id: 'personal-conversation' }));
