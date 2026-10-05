@@ -50,6 +50,37 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(state.load_task("race-proof")["status"], "RUNNING")
         self.assertEqual(state.load_task("race-proof")["next_action"], "deployment still missing")
 
+    def test_stale_fenced_resume_cannot_mutate_after_conversation_rebind(self) -> None:
+        state.start_task("fenced-resume", "continue durable work", "work")
+        state.bind_conversation("fenced-resume", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("fenced-resume", browser_session="fred")
+        before = state.load_task("fenced-resume")
+        claimed = state.claim_recovery_ownership(
+            "fenced-resume", owner_id="resume:old-request",
+            allowed_actions=["checkpoint_mutation"], ttl_seconds=60,
+        )
+        env = {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_OWNER_ID": "resume:old-request",
+            "SHOPVIVALIZ_RESUME_CONVERSATION_ID": claimed["conversation_id"],
+            "SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION": str(claimed["recovery_checkpoint_version"]),
+            "SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID": claimed["recovery_lease_id"],
+            "SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN": str(claimed["recovery_fencing_token"]),
+            "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID": claimed["runtime_lease_id"],
+            "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN": str(claimed["runtime_fencing_token"]),
+        }
+        state.rebind_conversation(
+            "fenced-resume", conversation_id="66666666-7777-8888-9999-aaaaaaaaaaaa",
+            expected_checkpoint_version=claimed["checkpoint_version"],
+        )
+        with mock.patch.dict(state.os.environ, env, clear=False):
+            with self.assertRaisesRegex(state.TaskStateError, "stale|ownership|conversation"):
+                state.record_progress("fenced-resume", next_action="stale writer attempted mutation")
+        current = state.load_task("fenced-resume")
+        self.assertNotEqual(current["conversation_id"], before["conversation_id"] if before.get("conversation_id") else "")
+        self.assertNotEqual(current["next_action"], "stale writer attempted mutation")
+
     def test_background_cannot_certify_terminal_without_pinned_completion_checks(self) -> None:
         state.start_task("owned-proof", "verify", "work")
         with mock.patch.dict(state.os.environ, {

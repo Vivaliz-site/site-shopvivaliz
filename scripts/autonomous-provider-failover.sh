@@ -22,6 +22,20 @@ mkdir -p "$LOG_DIR"
 : > "$ATTEMPTS"
 : > "$OUTPUT"
 
+if [ "${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}" = "1" ] && [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  required_resume_vars=(
+    SHOPVIVALIZ_RESUME_CONVERSATION_ID SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION SHOPVIVALIZ_RESUME_OWNER_ID
+    SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN
+    SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN
+  )
+  for required_var in "${required_resume_vars[@]}"; do
+    if [ -z "${!required_var:-}" ]; then
+      echo "durable resume ownership metadata missing: $required_var" >&2
+      exit 76
+    fi
+  done
+fi
+
 has_change() {
   ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]
 }

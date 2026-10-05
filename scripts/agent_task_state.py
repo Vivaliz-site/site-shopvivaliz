@@ -284,6 +284,35 @@ def _require_freeze_browser_progress(task_id: str) -> None:
 def _require_current_resume(payload: dict[str, Any]) -> None:
     if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") != "1":
         return
+    if os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1":
+        required = {
+            "owner_id": os.getenv("SHOPVIVALIZ_RESUME_OWNER_ID", "").strip(),
+            "conversation_id": os.getenv("SHOPVIVALIZ_RESUME_CONVERSATION_ID", "").strip(),
+            "checkpoint_version": os.getenv("SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION", "").strip(),
+            "conversation_lease_id": os.getenv("SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID", "").strip(),
+            "conversation_fencing_token": os.getenv("SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN", "").strip(),
+            "runtime_lease_id": os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID", "").strip(),
+            "runtime_fencing_token": os.getenv("SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN", "").strip(),
+        }
+        if not all(required.values()):
+            raise TaskStateError("durable background resume requires fenced ownership metadata")
+        if str(payload.get("conversation_id", "")).strip() != required["conversation_id"]:
+            raise TaskStateError("stale resume conversation ownership does not match current binding")
+        if str(payload.get("recovery_owner_id", "")).strip() != required["owner_id"]:
+            raise TaskStateError("stale resume ownership does not match current recovery owner")
+        if str(payload.get("recovery_checkpoint_version", "")) != required["checkpoint_version"]:
+            raise TaskStateError("stale resume checkpoint ownership does not match current recovery claim")
+        if str(payload.get("recovery_lease_id", "")) != required["conversation_lease_id"] or str(payload.get("recovery_fencing_token", "")) != required["conversation_fencing_token"]:
+            raise TaskStateError("stale resume conversation lease is no longer current")
+        if str(payload.get("runtime_lease_id", "")) != required["runtime_lease_id"] or str(payload.get("runtime_fencing_token", "")) != required["runtime_fencing_token"]:
+            raise TaskStateError("stale resume runtime lock is no longer current")
+        with _continuity_state_env():
+            try:
+                conversation_lease.assert_conversation_lease(required["conversation_id"], required["conversation_lease_id"], int(required["conversation_fencing_token"]), "checkpoint_mutation")
+                runtime_lock.assert_runtime_lock(required["runtime_lease_id"], int(required["runtime_fencing_token"]), "checkpoint_mutation")
+            except (conversation_lease.LeaseConflict, runtime_lock.RuntimeLockConflict, ValueError) as exc:
+                raise TaskStateError(f"stale resume fenced ownership rejected: {exc}") from exc
+        return
     expected = os.getenv("SHOPVIVALIZ_RESUME_HISTORY_LENGTH", "")
     request_id = os.getenv("SHOPVIVALIZ_RESUME_REQUEST_ID", "")
     history = payload.get("history", [])
@@ -749,6 +778,30 @@ def claim_recovery_ownership(task_id: str, *, owner_id: str, allowed_actions: It
     _append_recovery_state(payload, 'RECOVERY_CLAIMED', checkpoint_version=version)
     _atomic_write(_path(task_id), payload)
     return payload
+
+@_serialized_transition
+def release_recovery_ownership(task_id: str, *, owner_id: str, reason: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    expected_owner = str(owner_id).strip()
+    if str(payload.get("recovery_owner_id", "")).strip() != expected_owner:
+        raise TaskStateError("recovery ownership does not belong to this executor")
+    conversation_id = _safe_conversation_id(payload.get("conversation_id", ""))
+    with _continuity_state_env():
+        if payload.get("recovery_lease_id") and payload.get("recovery_fencing_token"):
+            try:
+                conversation_lease.release_conversation_lease(conversation_id, payload["recovery_lease_id"], int(payload["recovery_fencing_token"]), str(reason))
+            except conversation_lease.LeaseConflict:
+                pass
+        if payload.get("runtime_lease_id") and payload.get("runtime_fencing_token"):
+            try:
+                runtime_lock.release_runtime_lock(payload["runtime_lease_id"], int(payload["runtime_fencing_token"]), str(reason))
+            except runtime_lock.RuntimeLockConflict:
+                pass
+    payload["recovery_released_at"] = utc_now()
+    payload["recovery_release_reason"] = str(reason)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
 
 @_serialized_transition
 def record_recovery_state(task_id: str, *, state: str, expected_conversation_id: str,

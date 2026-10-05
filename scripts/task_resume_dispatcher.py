@@ -25,9 +25,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 try:
+    from . import agent_task_state as continuity_state
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 except ImportError:
+    import agent_task_state as continuity_state
     from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 
@@ -81,6 +83,48 @@ def _safe_repository(value: str) -> str:
     if repository not in ALLOWED_REPOSITORIES:
         raise ValueError("repository is not governed by global continuity")
     return repository
+
+
+def _durable_handoff_enabled() -> bool:
+    return os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1"
+
+
+def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
+    if not _durable_handoff_enabled():
+        return state
+    task_id = str(state.get("task_id", "")).strip()
+    request_id = str(request.get("id", "")).strip()
+    if not task_id or not request_id:
+        raise ValueError("durable resume ownership requires task and request ids")
+    owner_id = f"resume:{request_id}"
+    previous_runtime = continuity_state.RUNTIME_DIR
+    try:
+        continuity_state.RUNTIME_DIR = Path(runtime_dir)
+        claimed = continuity_state.claim_recovery_ownership(
+            task_id, owner_id=owner_id,
+            allowed_actions=["checkpoint_mutation", "continuation_send", "browser_mutation"],
+            ttl_seconds=max(30, int(os.getenv("SHOPVIVALIZ_RESUME_OWNERSHIP_TTL_SECONDS", "900"))),
+        )
+    finally:
+        continuity_state.RUNTIME_DIR = previous_runtime
+    if str(claimed.get("recovery_state", "")).strip().upper() == "FOREGROUND_ACTIVE":
+        return None
+    return claimed
+
+
+def _release_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any], reason: str) -> None:
+    if not _durable_handoff_enabled():
+        return
+    task_id = str(state.get("task_id", "")).strip()
+    owner_id = f"resume:{str(request.get('id', '')).strip()}"
+    previous_runtime = continuity_state.RUNTIME_DIR
+    try:
+        continuity_state.RUNTIME_DIR = Path(runtime_dir)
+        continuity_state.release_recovery_ownership(task_id, owner_id=owner_id, reason=reason)
+    except continuity_state.TaskStateError:
+        pass
+    finally:
+        continuity_state.RUNTIME_DIR = previous_runtime
 
 
 def _state_path(runtime_dir: Path, task_id: str) -> Path:
@@ -633,6 +677,14 @@ def _execute(
         env["SHOPVIVALIZ_RESUME_SOURCE"] = "task-continuation-watchdog"
         env["SHOPVIVALIZ_RESUME_REQUEST_ID"] = str(request.get("id", ""))
         env["SHOPVIVALIZ_RESUME_FINGERPRINT"] = str(request.get("fingerprint", ""))
+        if _durable_handoff_enabled():
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_ID"] = str(state.get("conversation_id", ""))
+            env["SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION"] = str(state.get("recovery_checkpoint_version", state.get("checkpoint_version", "")))
+            env["SHOPVIVALIZ_RESUME_OWNER_ID"] = str(state.get("recovery_owner_id", ""))
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID"] = str(state.get("recovery_lease_id", ""))
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN"] = str(state.get("recovery_fencing_token", ""))
+            env["SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID"] = str(state.get("runtime_lease_id", ""))
+            env["SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN"] = str(state.get("runtime_fencing_token", ""))
 
         completed = subprocess.run(
             command,
@@ -763,6 +815,11 @@ def run_once(
                 summary["deferred_browser_probe"] += 1
                 continue
 
+            claimed_state = _claim_resume_ownership(runtime, state, request)
+            if claimed_state is None:
+                summary["deferred_foreground"] = int(summary.get("deferred_foreground", 0)) + 1
+                continue
+            state = claimed_state
             summary["eligible"] += 1
             if executor is None:
                 record = enqueue_execution(runtime, project, request, state, timeout_seconds)
@@ -772,14 +829,17 @@ def run_once(
                 continue
 
             summary["executed"] += 1
-            result, exit_code, after_state, diagnostic = _execute(
-                runtime_dir=runtime,
-                project_dir=project,
-                request=request,
-                state=state,
-                executor=executor,
-                timeout_seconds=timeout_seconds,
-            )
+            try:
+                result, exit_code, after_state, diagnostic = _execute(
+                    runtime_dir=runtime,
+                    project_dir=project,
+                    request=request,
+                    state=state,
+                    executor=executor,
+                    timeout_seconds=timeout_seconds,
+                )
+            finally:
+                _release_resume_ownership(runtime, state, request, "resume_attempt_finished")
 
             row = {
                 "request_id": str(request.get("id", "")).strip(),
