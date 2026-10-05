@@ -759,6 +759,7 @@ def run_once(
         "deferred_chatgpt": 0,
         "deferred_browser_probe": 0,
         "deferred_unbound": 0,
+        "deferred_ownership_busy": 0,
         "generated_at": utc_now(),
     }
 
@@ -820,7 +821,19 @@ def run_once(
                 summary["deferred_unbound"] += 1
                 continue
 
-            claimed_state = _claim_resume_ownership(runtime, state, request)
+            try:
+                claimed_state = _claim_resume_ownership(runtime, state, request)
+            except continuity_state.TaskStateError as exc:
+                message = str(exc).strip().lower()
+                ownership_busy = (
+                    message == "conversation recovery ownership is busy"
+                    or message.startswith("cannot claim conversation recovery lease: conversation lease already held")
+                    or message.startswith("cannot claim runtime mutation lock: runtime lock already held")
+                )
+                if not ownership_busy:
+                    raise
+                summary["deferred_ownership_busy"] += 1
+                continue
             if claimed_state is None:
                 summary["deferred_foreground"] = int(summary.get("deferred_foreground", 0)) + 1
                 continue
