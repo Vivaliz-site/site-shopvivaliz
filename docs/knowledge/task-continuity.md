@@ -680,4 +680,3 @@ Toda mutação de browser ou runtime compartilhado exige ownership atual, checkp
 `PROGRESS_CONFIRMED` continua significando exclusivamente uma nova resposta real do assistente na `conversation_id` vinculada após o baseline de recovery. Bridge healthy, HTTP 200, clique bem-sucedido, `Thinking`, tool activity, mudança de stream flag ou controller promotion são apenas evidência diagnóstica e nunca certificam conclusão E2E.
 
 Auditoria operacional registra somente metadados de ownership/execução necessários para correlação (`lease_id`, owner kind/id, fencing token, checkpoint version, durable execution id, queue position, foreground duration, mutation rejection e tipo de evidência E2E). Prompt, mensagem, body, credencial, token e cookie não são persistidos em claro.
-
