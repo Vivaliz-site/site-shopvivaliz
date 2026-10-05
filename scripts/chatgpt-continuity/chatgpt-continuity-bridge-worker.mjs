@@ -177,6 +177,7 @@ function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
   if (normalized.includes('bound browser session stream active or unconfirmed')) return 'BOUND_STREAM_NOT_COMPLETE';
+  if (normalized.includes('another conversation in the same browser session is active')) return 'SIBLING_STREAM_ACTIVE';
   if (normalized.includes('canonical presence could not be confirmed')) return 'CONVERSATION_PRESENCE_UNCONFIRMED';
   if (normalized.includes('no unfinished response is confirmed')) return 'CANONICAL_NO_UNFINISHED_RESPONSE';
   if (normalized.includes('active stream remains unconfirmed')) return 'ACTIVE_STREAM_AFTER_REATTACH';
@@ -2678,6 +2679,51 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   }
 }
 
+// Check only sibling ChatGPT conversation tabs inside the browser profile
+// selected by BROWSER_SESSION_CONTEXT. A sibling Stop state is treated as
+// active unless the server explicitly proves that sibling stream COMPLETE.
+// Transport/probe failures do not invent activity; the bound conversation's
+// existing fail-closed checks still govern its own recovery.
+async function anotherConversationActiveInSession(
+  targetConversationId,
+  fetcher = fetch,
+  connector = connectCdpTarget,
+) {
+  const target = safeConversationId(targetConversationId);
+  if (!target) return false;
+  let tabs;
+  try {
+    const response = await fetcher(browserCdpBase() + '/json', {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response?.ok) return false;
+    tabs = await response.json();
+  } catch {
+    return false;
+  }
+
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const siblingId = safeConversationId(conversationIdFromTab(tab));
+    if (!siblingId || siblingId === target) continue;
+    let sibling;
+    try {
+      sibling = await connector(tab);
+      if (!sibling || !(await conversationIsGenerating(sibling))) continue;
+      const stream = await conversationStreamStatus(
+        sibling,
+        Math.min(2500, STREAM_STATUS_TIMEOUT_MS),
+      );
+      const status = String(stream?.status || '').toUpperCase();
+      if (Number(stream?.http_status || 0) === 200 && status === 'COMPLETE') continue;
+      return true;
+    } catch {
+      // One unreadable sibling must not disable recovery for the whole profile.
+    } finally {
+      try { sibling?.close(); } catch {}
+    }
+  }
+  return false;
+}
 // Returns only a boolean: no credentials, cookies or session payload leave
 // the authenticated tab. A changed path is rejected before touching the UI.
 async function boundBrowserAccountMatches(cdp, session) {
@@ -2694,12 +2740,13 @@ async function boundBrowserAccountMatches(cdp, session) {
   })()`)) === true;
 }
 
-async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '') {
+async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '', sameSessionBusy = anotherConversationActiveInSession) {
   let session;
   try { session = taskBrowserSession(taskId, conversationId); }
   catch (error) { return { result_status: 'ERROR', sent: false, detail: text(error?.message) }; }
   return BROWSER_SESSION_CONTEXT.run(session, () => attemptNudgeInSession(
     taskId, connect, confirmProgress, waitComposer, session.conversationId || conversationId,
+    sameSessionBusy,
   ));
 }
 
@@ -2709,6 +2756,7 @@ async function attemptNudgeInSession(
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
   conversationId = '',
+  sameSessionBusy = anotherConversationActiveInSession,
 ) {
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
@@ -2754,6 +2802,13 @@ async function attemptNudgeInSession(
         if (!(await conversationUnavailablePresent(cdp))) {
           return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
         }
+      }
+      if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'another conversation in the same browser session is active; deferred without reload or continuation',
+          ...recoveryMetadata(),
+        };
       }
     }
     try {
@@ -3622,6 +3677,7 @@ export {
   browserSessionReadyForReinforcement,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
