@@ -45,6 +45,8 @@ Responsibilities:
 - order lifecycle operations required by an approved operating mode;
 - reconciliation against the exchange.
 
+The implementation must verify and pin a reviewed Agent Trade Kit package version instead of depending on a floating `latest`. At the time this written spec was reviewed, the official npm distribution reported `@okx_ai/okx-trade-mcp` 1.4.8. A newer version may only be adopted after explicit compatibility review and validation.
+
 Credentials remain outside Git and outside prompts. Withdrawal permission is prohibited.
 
 ### 3.2 Market Scanner
@@ -64,7 +66,7 @@ It evaluates, as applicable:
 
 The universe is dynamic rather than a fixed BTC/ETH/SOL whitelist. Instrument eligibility is nevertheless deterministic: an instrument with insufficient liquidity, excessive spread/slippage, stale data, or inadequate risk information is rejected before deep analysis.
 
-The design may consider spot, perpetual swaps, futures, and options when the integration exposes adequate data and the Risk Gateway has an instrument-appropriate risk model.
+The design may consider spot, perpetual swaps, futures, and options when the integration exposes adequate data and the Risk Gateway has an instrument-appropriate risk model. Options are eligible only when maximum loss, contract multiplier, liquidity, spread, premium and the required risk inputs can be computed conservatively. Complex multi-leg option strategies are outside the initial implementation scope unless separately designed and tested.
 
 ### 3.3 AI Decision Engine
 
@@ -142,9 +144,17 @@ When the US$15 daily loss stop is reached:
 - existing positions are not closed solely because the daily stop was reached;
 - existing positions continue under their own protective stop/target/risk rules.
 
-The cumulative US$30 pilot kill switch blocks new exposure and requires review before the pilot may resume.
+The cumulative US$30 pilot kill switch blocks new exposure and requires explicit review before the pilot may resume. It does not by itself trigger blanket liquidation: existing positions remain under their own deterministic protective rules unless a separate emergency rule requires reduction or exit.
 
-Daily-loss and pilot-loss accounting must include the economic effects relevant to the position lifecycle, including realized PnL and applicable fees/funding. Unrealized exposure remains part of live risk accounting and cannot be ignored when deciding whether new exposure fits the simultaneous-risk budgets.
+Risk accounting is defined conservatively and deterministically:
+
+- **Per-trade risk** is the expected loss from the actual or intended entry to the protective stop, including estimated execution costs and fees where material.
+- **Open risk** is the sum of remaining stop-defined risk across active positions, recomputed from actual filled quantity and current protection.
+- **Correlated risk** groups positions that express materially the same directional/underlying market factor. The implementation plan must define and test a deterministic clustering rule. The model may propose a label, but the US$20 hard limit is enforced outside the model.
+- **Daily loss** is measured from the pilot-equity baseline at 00:00 `America/Sao_Paulo` and includes realized PnL, marked unrealized PnL, fees and funding attributable to the pilot.
+- **Cumulative pilot loss** is measured from the equity baseline established when `LIVE_PILOT` is enabled and includes realized/unrealized PnL, fees and funding.
+
+If any required value cannot be computed or reconciled conservatively, new exposure is blocked until reconciliation succeeds.
 
 ### 3.5 Execution & Position Manager
 
@@ -152,7 +162,9 @@ Only an authorization produced by the Risk Gateway can reach the executor.
 
 Responsibilities:
 - translate approved intents into supported OKX order operations;
+- require a valid protective stop or instrument-appropriate hard protection before accepting new exposure;
 - attach or establish protective risk controls required by the approved strategy;
+- verify protection after actual fills and resize it after partial fills;
 - track acknowledgement, partial fills, fills, cancellation and rejection;
 - recalculate exposure after actual fills;
 - monitor stops, targets, margin, fees, funding and position state;
