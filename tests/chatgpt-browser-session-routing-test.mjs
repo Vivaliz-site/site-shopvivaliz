@@ -100,6 +100,27 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         'active bound stream should only probe account, stream status, and unavailable-conversation UI',
       );
     }],
+    ['another active conversation in the same browser session defers bound recovery before reload or input', async () => {
+      write(); const evaluated = [];
+      const cdp = { close() {}, async evaluate(source) {
+        evaluated.push(source);
+        if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
+        if (source.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
+        throw Error('same-session active guard must prevent all recovery effects');
+      } };
+      const result = await api.attemptNudge(
+        id,
+        async () => cdp,
+        undefined,
+        undefined,
+        conversation,
+        async () => true,
+      );
+      assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+      assert.equal(result.sent, false);
+      assert.match(result.detail, /another conversation.*same browser session/i);
+      assert.equal(evaluated.length, 2, 'guard should run after account and bound-stream checks, before any recovery effect');
+    }],
     ['bound active stream with unavailable UI is treated as hydration recovery, not generic active deferral', async () => {
       write(); const evaluated = [];
       const cdp = { close() {}, async send() { throw Error('hydration recovery must not send trusted input'); }, async evaluate(source) {
