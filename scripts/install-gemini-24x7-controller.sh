@@ -119,7 +119,6 @@ fi
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
 printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_RESUME_WORKER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_MONITOR_REQUIRED=0\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCLAUDE_BIN=/home/ubuntu/.local/bin/claude\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
-
   "$target_dir/scripts/gemini_24x7_controller.py" \
   "$target_dir/scripts/task_resume_worker.py" \
   "$target_dir/scripts/task_continuation_watchdog.py" \
