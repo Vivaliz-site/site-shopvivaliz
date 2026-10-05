@@ -1135,7 +1135,6 @@ async function navigateNeutralTabToConversation(
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) return false;
 
   let cdp;
-  let boundSessionStream = null;
   try {
     cdp = await connector(tab);
     if (!cdp) return false;
@@ -2691,6 +2690,7 @@ async function attemptNudgeInSession(
       }
     : {})});
   let cdp;
+  let boundSessionStream = null;
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
