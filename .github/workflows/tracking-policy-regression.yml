@@ -20,6 +20,8 @@ on:
       - '.github/workflows/provision-governed-backend-ci-runners.yml'
       - '.github/workflows/issue-comment-dispatcher.yml'
       - 'tests/test_tracking_ci_coverage.py'
+      - 'scripts/validate-tracking-config.php'
+      - 'tests/test_tracking_config_readonly.py'
       - 'tests/test_codex_native_profile_failover.py'
       - 'tests/test_env_loading.py'
       - 'tests/test_env_writer_monotonic_policy.py'
@@ -52,6 +54,8 @@ on:
       - '.github/workflows/provision-governed-backend-ci-runners.yml'
       - '.github/workflows/issue-comment-dispatcher.yml'
       - 'tests/test_tracking_ci_coverage.py'
+      - 'scripts/validate-tracking-config.php'
+      - 'tests/test_tracking_config_readonly.py'
       - 'tests/test_codex_native_profile_failover.py'
       - 'tests/test_env_loading.py'
       - 'tests/test_env_writer_monotonic_policy.py'
@@ -80,6 +84,7 @@ jobs:
       - name: Lint and verify tracking without network or purchase events
         run: |
           set -euo pipefail
+          php -l scripts/validate-tracking-config.php
           php -l includes/analytics-gtm-policy.php
           php -l includes/analytics-tracking.php
           php -l includes/head-analytics.php
