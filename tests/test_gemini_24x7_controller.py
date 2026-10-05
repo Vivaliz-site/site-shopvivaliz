@@ -736,6 +736,14 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('"$stage_dir/scripts/continuity/$(basename "$source")"', installer)
         self.assertIn('sudo chmod 0755 "$stage_dir" "$stage_dir/scripts" "$stage_dir/scripts/continuity"', installer)
 
+    def test_controller_installer_repairs_shared_runtime_lock_permissions(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn('runtime_lock_dir="$runtime_dir/_runtime-lock"', installer)
+        self.assertIn('sudo install -d -o ubuntu -g ubuntu -m 2770 "$runtime_lock_dir"', installer)
+        self.assertIn('for artifact in lock.json lock.lock; do', installer)
+        self.assertIn('sudo chown ubuntu:ubuntu "$runtime_lock_dir/$artifact"', installer)
+        self.assertIn('sudo chmod 0660 "$runtime_lock_dir/$artifact"', installer)
+
     def test_controller_installer_consumes_same_durable_handoff_flag_and_preserves_state(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', installer)

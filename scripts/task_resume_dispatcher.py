@@ -758,6 +758,7 @@ def run_once(
         "recovered": 0,
         "deferred_chatgpt": 0,
         "deferred_browser_probe": 0,
+        "deferred_unbound": 0,
         "generated_at": utc_now(),
     }
 
@@ -813,6 +814,10 @@ def run_once(
 
             if _browser_only_e2e_probe(request, state):
                 summary["deferred_browser_probe"] += 1
+                continue
+
+            if _durable_handoff_enabled() and not str(state.get("conversation_id", "")).strip():
+                summary["deferred_unbound"] += 1
                 continue
 
             claimed_state = _claim_resume_ownership(runtime, state, request)
