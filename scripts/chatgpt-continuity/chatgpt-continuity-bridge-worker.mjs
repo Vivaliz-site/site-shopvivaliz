@@ -1135,6 +1135,7 @@ async function navigateNeutralTabToConversation(
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) return false;
 
   let cdp;
+  let boundSessionStream = null;
   try {
     cdp = await connector(tab);
     if (!cdp) return false;
@@ -2703,9 +2704,12 @@ async function attemptNudgeInSession(
         return { result_status: 'ERROR', detail: 'browser session account mismatch or bound conversation mismatch', ...recoveryMetadata() };
       }
       // A missing DOM Stop does not prove an inactive server stream.
-      const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status !== 200 || String(stream?.status || '').toUpperCase() !== 'COMPLETE') {
-        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+      boundSessionStream = await conversationStreamStatus(cdp);
+      if (boundSessionStream?.http_status !== 200
+          || String(boundSessionStream?.status || '').toUpperCase() !== 'COMPLETE') {
+        if (!(await conversationUnavailablePresent(cdp))) {
+          return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+        }
       }
     }
     try {
@@ -2715,7 +2719,7 @@ async function attemptNudgeInSession(
     } catch {}
     if (await conversationUnavailablePresent(cdp)) {
       const unavailableTurn = await conversationTurnState(cdp);
-      const unavailableStream = await conversationStreamStatus(cdp);
+      const unavailableStream = boundSessionStream || await conversationStreamStatus(cdp);
       const canonicalStatus = Number(unavailableTurn?.http_status || 0);
       const canonicalPresent = canonicalStatus === 200 && Boolean(String(unavailableTurn?.node_id || ''));
       const canonicalMissing = canonicalStatus === 404 || canonicalStatus === 410;
