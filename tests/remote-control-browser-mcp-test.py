@@ -206,6 +206,7 @@ class BrowserMcpTests(unittest.TestCase):
     def test_desktop_window_resolution_is_target_bound_and_ambiguous_fails_closed(self):
         search = mock.Mock(returncode=0, stdout="101\n202\n")
         with (
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"),
             mock.patch.object(m, "run_gui", return_value=search),
             mock.patch.object(m, "window_title", side_effect=lambda w: {"101": "DESKTOP-KOCEPSV - RustDesk", "202": "RustDesk"}[w]),
         ):
@@ -236,6 +237,7 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "active_desktop_window", return_value="123"),
             mock.patch.object(m, "focus"),
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xclip"),
             mock.patch.object(m, "run_gui") as run,
             mock.patch.object(m, "key") as key,
         ):
@@ -265,6 +267,9 @@ class BrowserMcpTests(unittest.TestCase):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "rustdesk_windows", side_effect=[[], ["901"]]),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
             mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
             mock.patch.object(m, "focus"),
             mock.patch.object(m.time, "sleep"),
