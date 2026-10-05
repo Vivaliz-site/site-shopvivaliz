@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,7 +46,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 task_state.record_progress("task-1", next_action="continue safely")
                 state_path = root / "task-1.json"
                 payload = json.loads(state_path.read_text(encoding="utf-8"))
-                payload["updated_at"] = "2020-01-01T00:00:00Z"
+                payload["updated_at"] = (
+                    datetime.now(timezone.utc) - timedelta(minutes=5)
+                ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                 state_path.write_text(json.dumps(payload), encoding="utf-8")
                 watchdog.run_once(stale_seconds=1, runtime_dir=root)
             finally:
