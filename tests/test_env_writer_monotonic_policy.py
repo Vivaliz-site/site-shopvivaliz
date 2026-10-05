@@ -11,7 +11,8 @@ class EnvWriterMonotonicPolicyTest(unittest.TestCase):
         protected = [
             ROOT / "scripts" / "configure-production-runtime.py",
             ROOT / "daemon-token-renewer.py",
-            ROOT / "daemon-shopee-token-renewer.py",
+            # Shopee writes its canonical JSON cache, never .env; the separate
+            # cache contract verifies that the shared environment is untouched.
             ROOT / "daemon-google-token-renewer.py",
         ]
         for path in protected:
