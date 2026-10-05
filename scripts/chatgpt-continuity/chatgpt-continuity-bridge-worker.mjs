@@ -508,7 +508,10 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
         // The reinforcement loop belongs only to the legacy/personal browser.
+        // Global/detached tasks without a bound browser conversation must not
+        // keep the Fred browser hot with account-scoped reinforcement sweeps.
         if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
+        if (!safeConversationId(payload?.conversation_id)) continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
       } catch {
@@ -1135,6 +1138,7 @@ async function navigateNeutralTabToConversation(
   if (!/^[A-Za-z0-9_-]{8,160}$/.test(id)) return false;
 
   let cdp;
+  let boundSessionStream = null;
   try {
     cdp = await connector(tab);
     if (!cdp) return false;
@@ -2690,7 +2694,6 @@ async function attemptNudgeInSession(
       }
     : {})});
   let cdp;
-  let boundSessionStream = null;
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
