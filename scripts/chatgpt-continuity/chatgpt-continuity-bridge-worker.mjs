@@ -176,6 +176,10 @@ const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FI
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
+  if (normalized.includes('bound browser session stream active or unconfirmed')) return 'BOUND_STREAM_NOT_COMPLETE';
+  if (normalized.includes('canonical presence could not be confirmed')) return 'CONVERSATION_PRESENCE_UNCONFIRMED';
+  if (normalized.includes('no unfinished response is confirmed')) return 'CANONICAL_NO_UNFINISHED_RESPONSE';
+  if (normalized.includes('active stream remains unconfirmed')) return 'ACTIVE_STREAM_AFTER_REATTACH';
   if (normalized.includes('failure_reason=additional_checks')) return 'RECOVERABLE_ADDITIONAL_CHECKS';
   if (normalized.includes('failure_reason=stopped_thinking')) return 'RECOVERABLE_STOPPED_THINKING';
   if (normalized.includes('failure_reason=streaming_interrupted')) return 'RECOVERABLE_STREAMING_INTERRUPTED';
@@ -2175,7 +2179,20 @@ async function conversationUnavailablePresent(cdp) {
     const path=String(location.pathname||'');
     const parts=path.split('/');
     if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
-    const text=String(document.body?.innerText||'').toLowerCase();
+    // Error strings quoted by the user/assistant, present in another chat,
+    // or left in a draft are not an unavailable conversation surface.
+    const main=document.querySelector('main');
+    if(!main) return false;
+    const surface=main.cloneNode(true);
+    const excluded=[
+      '[data-message-author-role]', '[data-conversation-role]', '[data-turn-key]',
+      '[data-testid^="conversation-turn-"]', 'article', 'pre', 'code', 'blockquote',
+      'nav', 'aside', '[role="navigation"]', '[role="dialog"]',
+      '[contenteditable="true"]', '[role="textbox"]', 'textarea',
+      '[hidden]', '[aria-hidden="true"]', 'script', 'style', 'template',
+    ].join(',');
+    for(const node of surface.querySelectorAll(excluded)) node.remove();
+    const text=String(surface.textContent||'').toLowerCase().replace(/\\s+/g,' ').trim();
     return [
       'could not load this chatgpt conversation',
       'unable to load this chatgpt conversation',
