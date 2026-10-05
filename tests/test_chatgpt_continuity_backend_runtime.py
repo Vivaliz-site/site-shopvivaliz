@@ -50,7 +50,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                     datetime.now(timezone.utc) - timedelta(minutes=5)
                 ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                 state_path.write_text(json.dumps(payload), encoding="utf-8")
-                watchdog.run_once(stale_seconds=1, runtime_dir=root)
+                watchdog_result = watchdog.run_once(stale_seconds=1, runtime_dir=root)
+                self.assertEqual(watchdog_result["dispatched"], 1, watchdog_result)
+                self.assertEqual(len(watchdog.read_requests(root)), 1)
             finally:
                 task_state.RUNTIME_DIR = original_state_runtime
                 watchdog.RUNTIME_DIR = original_watchdog_runtime
@@ -75,7 +77,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                     enqueue=fake_enqueue,
                 )
 
-            self.assertEqual(result["dispatched"], 1)
+            self.assertEqual(result["dispatched"], 1, result)
             self.assertEqual(result["skipped_no_token"], 0)
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
