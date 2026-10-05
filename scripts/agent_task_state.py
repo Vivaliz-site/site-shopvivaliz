@@ -386,6 +386,11 @@ def start_successor_task(
     inherited_conversation_id = str(predecessor.get("conversation_id", "")).strip()
     if inherited_conversation_id:
         payload["conversation_id"] = _safe_conversation_id(inherited_conversation_id)
+        inherited_session = predecessor.get("browser_session")
+        if inherited_session is not None:
+            if inherited_session not in {"fred", "atendimento"}:
+                raise TaskStateError("predecessor has invalid browser session binding")
+            payload["browser_session"] = inherited_session
     _atomic_write(path, payload)
     return payload
 
@@ -558,6 +563,31 @@ def bind_conversation(task_id: str, *, conversation_id: str) -> dict[str, Any]:
     return payload
 
 
+@_serialized_transition
+def bind_browser_session(task_id: str, *, browser_session: str) -> dict[str, Any]:
+    """Bind the account without changing progress or existing login."""
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot bind browser session")
+    _require_current_resume(payload)
+    session = str(browser_session).strip()
+    if session not in {"fred", "atendimento"}:
+        raise TaskStateError("browser_session must be fred or atendimento")
+    _safe_conversation_id(payload.get("conversation_id", ""))
+    existing = payload.get("browser_session")
+    if existing is not None and existing != session:
+        raise TaskStateError("browser session binding already exists and cannot be replaced implicitly")
+    if existing == session:
+        return payload
+    payload["browser_session"] = session
+    row = {"at": utc_now(), "event": "browser_session_bound", "browser_session": session}
+    if os.getenv("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        row["resume_request_id"] = os.getenv("SHOPVIVALIZ_RESUME_REQUEST_ID", "")
+    payload.setdefault("history", []).append(row)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 def load_task(task_id: str) -> dict[str, Any]:
     return _load(task_id)
 
@@ -608,6 +638,10 @@ def _parser() -> argparse.ArgumentParser:
     bind.add_argument("--task", required=True)
     bind.add_argument("--conversation-id", required=True)
 
+    browser = sub.add_parser("bind-browser-session")
+    browser.add_argument("--task", required=True)
+    browser.add_argument("--browser-session", required=True, choices=["fred", "atendimento"])
+
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
 
@@ -647,6 +681,8 @@ def main() -> int:
             payload = resume_task(args.task, next_action=args.next_action)
         elif args.command == "bind-conversation":
             payload = bind_conversation(args.task, conversation_id=args.conversation_id)
+        elif args.command == "bind-browser-session":
+            payload = bind_browser_session(args.task, browser_session=args.browser_session)
         elif args.command == "show":
             payload = load_task(args.task)
         elif args.command == "terminal":
