@@ -168,6 +168,12 @@ def reconcile_executions(runtime_dir: Path, project_dir: Path) -> dict[str, int]
             continue
 
         result = str(record.get("result", "")).strip()
+        diagnostic = record.get("diagnostic") if isinstance(record.get("diagnostic"), dict) else {}
+        evidence = record.get("evidence") if isinstance(record.get("evidence"), dict) else {
+            "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+            "checkpoint_after": str(record.get("checkpoint_after", "")).strip(),
+            "diagnostic": diagnostic,
+        }
         row = {
             "request_id": str(record.get("request_id", "")).strip(),
             "task_id": str(record.get("task_id", "")).strip(),
@@ -177,12 +183,14 @@ def reconcile_executions(runtime_dir: Path, project_dir: Path) -> dict[str, int]
             "executor_exit_code": record.get("executor_exit_code"),
             "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
             "checkpoint_after": str(record.get("checkpoint_after", "")).strip(),
-            "diagnostic": record.get("diagnostic") if isinstance(record.get("diagnostic"), dict) else {},
+            "diagnostic": diagnostic,
+            "evidence": evidence,
             "created_at": utc_now(),
         }
         _append_jsonl(ledger_path, row)
         now = utc_now()
         record["status"] = "reconciled"
+        record["evidence"] = evidence
         record["reconciled_at"] = now
         record["updated_at"] = now
         _atomic_json(path, record)

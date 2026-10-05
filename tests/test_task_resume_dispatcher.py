@@ -223,6 +223,8 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         ledger = [json.loads(line) for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines() if line.strip()]
         self.assertEqual(ledger[-1]["result"], "progress")
         self.assertEqual(ledger[-1]["fingerprint"], "fingerprint-v1")
+        self.assertEqual(ledger[-1]["evidence"]["checkpoint_after"], "2026-10-05T08:10:00Z")
+        self.assertEqual(ledger[-1]["evidence"]["diagnostic"]["provider"], "test")
         reconciled = json.loads(record_path.read_text())
         self.assertEqual(reconciled["status"], "reconciled")
         self.assertTrue(reconciled["reconciled_at"])

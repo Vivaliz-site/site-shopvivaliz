@@ -103,6 +103,8 @@ path.write_text(json.dumps(state))
         self.assertEqual(record["result"], "progress")
         self.assertEqual(record["checkpoint_before"], state["updated_at"])
         self.assertEqual(record["checkpoint_after"], "2026-10-05T08:10:00Z")
+        self.assertEqual(record["evidence"]["checkpoint_before"], state["updated_at"])
+        self.assertEqual(record["evidence"]["checkpoint_after"], "2026-10-05T08:10:00Z")
 
     def test_second_worker_cannot_claim_live_execution(self) -> None:
         worker = load_worker()

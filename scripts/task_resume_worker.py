@@ -127,10 +127,16 @@ def worker_run_once(
         state = dispatcher._load_json(dispatcher._state_path(runtime, task_id))
 
         if not request or not state:
+            diagnostic = {"worker_error": "execution_context_missing"}
             record.update(
                 status="completed",
                 result="executor_error",
-                diagnostic={"worker_error": "execution_context_missing"},
+                diagnostic=diagnostic,
+                evidence={
+                    "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+                    "checkpoint_after": "",
+                    "diagnostic": diagnostic,
+                },
                 updated_at=dispatcher.utc_now(),
             )
             dispatcher._atomic_json(record_path, record)
@@ -138,11 +144,18 @@ def worker_run_once(
             return summary
 
         if str(state.get("updated_at", "")).strip() != str(record.get("checkpoint_before", "")).strip():
+            checkpoint_after = str(state.get("updated_at", "")).strip()
+            diagnostic = {"worker_status": "checkpoint_already_advanced"}
             record.update(
                 status="completed",
                 result="superseded",
-                checkpoint_after=str(state.get("updated_at", "")).strip(),
-                diagnostic={"worker_status": "checkpoint_already_advanced"},
+                checkpoint_after=checkpoint_after,
+                diagnostic=diagnostic,
+                evidence={
+                    "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+                    "checkpoint_after": checkpoint_after,
+                    "diagnostic": diagnostic,
+                },
                 updated_at=dispatcher.utc_now(),
             )
             dispatcher._atomic_json(record_path, record)
@@ -166,12 +179,19 @@ def worker_run_once(
             executor=executor,
             timeout_seconds=max(1, int(record.get("timeout_seconds") or dispatcher.DEFAULT_TIMEOUT_SECONDS)),
         )
+        checkpoint_after = str(after_state.get("updated_at", "")).strip() if after_state else ""
+        diagnostic = diagnostic or {}
         record.update(
             status="completed",
             result=result,
             executor_exit_code=exit_code,
-            checkpoint_after=str(after_state.get("updated_at", "")).strip() if after_state else "",
-            diagnostic=diagnostic or {},
+            checkpoint_after=checkpoint_after,
+            diagnostic=diagnostic,
+            evidence={
+                "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+                "checkpoint_after": checkpoint_after,
+                "diagnostic": diagnostic,
+            },
             finished_at=dispatcher.utc_now(),
             updated_at=dispatcher.utc_now(),
         )
