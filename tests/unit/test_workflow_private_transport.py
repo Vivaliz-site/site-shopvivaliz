@@ -43,6 +43,8 @@ def reviewed_bootstrap_push(path: Path, text: str) -> bool:
         allowed.update({
             'remote-control-mcp/**',
             'scripts/setup-remote-control-access.sh',
+            'scripts/agent_task_state.py',
+            'scripts/continuity/**',
             'scripts/setup-remote-control-windows.ps1',
             'scripts/windows-openssh-recovery.ps1',
             'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1',
