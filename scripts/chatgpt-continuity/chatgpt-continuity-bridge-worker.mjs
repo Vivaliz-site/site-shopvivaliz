@@ -1540,6 +1540,112 @@ function realAssistantResponseCompletedSince(before, after) {
   return before?.end_turn === false;
 }
 
+function canonicalSubmissionOutcome(progressed, submissionState) {
+  if (progressed) {
+    return { result_status: 'PROGRESS_CONFIRMED', canonical_submission_confirmed: true };
+  }
+  if (Number(submissionState?.http_status || 0) === 200 && submissionState?.confirmed === false) {
+    return { result_status: 'STALLED_NOT_CONFIRMED', canonical_submission_confirmed: false };
+  }
+  if (submissionState?.confirmed === true) {
+    return { result_status: 'SENT_UNCONFIRMED', canonical_submission_confirmed: true };
+  }
+  return { result_status: 'SENT_UNCONFIRMED', canonical_submission_confirmed: null };
+}
+
+async function canonicalContinuationSubmissionState(
+  cdp,
+  beforeTurn,
+  expectedMessage = CONTINUE_MESSAGE,
+) {
+  const beforeStatus = Number(beforeTurn?.http_status || 0);
+  const baselineNodeId = String(beforeTurn?.node_id || '').trim();
+  const expected = String(expectedMessage || '').trim().toLowerCase();
+  if (beforeStatus !== 200 || !baselineNodeId || !expected) {
+    return { http_status: beforeStatus, confirmed: null };
+  }
+  try {
+    const result = await cdp.evaluate(`(async()=>{
+      /* canonical-continuation-submission-proof */
+      const baselineNodeId=${JSON.stringify(baselineNodeId)};
+      const expected=${JSON.stringify(expected)};
+      const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
+      if(!match) return {http_status:0,confirmed:null};
+
+      let accountId='';
+      let accessToken='';
+      try{
+        const sessionResponse=await fetch('/api/auth/session',{
+          credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(2000)
+        });
+        if(sessionResponse.ok){
+          let session=null;
+          try{session=await sessionResponse.json();}catch{}
+          accountId=String(session?.account?.id||'').trim();
+          accessToken=String(session?.accessToken||session?.access_token||'').trim();
+        }
+      }catch{}
+      const headers={Accept:'application/json'};
+      if(accessToken) headers.Authorization='Bearer '+accessToken;
+      if(accountId) headers['ChatGPT-Account-Id']=accountId;
+
+      let response;
+      try{
+        response=await fetch('/backend-api/conversation/'+encodeURIComponent(match[1]),{
+          credentials:'same-origin',cache:'no-store',headers,signal:AbortSignal.timeout(7000)
+        });
+      }catch{
+        return {http_status:0,confirmed:null};
+      }
+      if(response.status===429) return {http_status:429,confirmed:null};
+      if(!response.ok) return {http_status:Number(response.status||0),confirmed:null};
+
+      let body=null;
+      try{body=await response.json();}catch{}
+      const mapping=body?.mapping||{};
+      const baseline=mapping[baselineNodeId];
+      if(!baseline) return {http_status:200,confirmed:null};
+
+      const normalize=value=>String(value||'').trim().toLowerCase();
+      const messageText=message=>{
+        const parts=Array.isArray(message?.content?.parts)?message.content.parts:[];
+        return parts.map(part=>{
+          if(typeof part==='string') return part;
+          if(part&&typeof part==='object') return String(part?.text||part?.content||'');
+          return '';
+        }).join(' ').trim();
+      };
+      const stack=Array.isArray(baseline.children)?[...baseline.children]:[];
+      const seen=new Set();
+      while(stack.length){
+        const nodeId=String(stack.pop()||'');
+        if(!nodeId||seen.has(nodeId)) continue;
+        seen.add(nodeId);
+        const node=mapping[nodeId];
+        if(!node) continue;
+        const message=node.message;
+        if(
+          String(message?.author?.role||'').toLowerCase()==='user'
+          && normalize(messageText(message))===expected
+        ){
+          return {http_status:200,confirmed:true};
+        }
+        if(Array.isArray(node.children)) stack.push(...node.children);
+      }
+      return {http_status:200,confirmed:false};
+    })()`);
+    const status = Number(result?.http_status || 0);
+    const confirmed = result?.confirmed === true
+      ? true
+      : result?.confirmed === false
+        ? false
+        : null;
+    return { http_status: status, confirmed };
+  } catch {
+    return { http_status: 0, confirmed: null };
+  }
+}
+
 async function localIncompleteTurnPresent(cdp) {
   return cdp.evaluate(`(()=>{
     /* local-incomplete-turn */
@@ -3224,6 +3330,7 @@ async function attemptNudgeInSession(
       }
     }
 
+    let submissionTurnBaseline = turnBaseline;
     let progressed = await confirmAfterSend(cdp, baseline, confirmProgress, turnBaseline);
     if (!progressed && await transmissionErrorPresent(cdp)) {
       // A real iOS capture shows an explicit "Erro na transmissão de mensagem".
@@ -3254,6 +3361,7 @@ async function attemptNudgeInSession(
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
       const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
+      submissionTurnBaseline = retryAfterReattachTurnBaseline;
       const retryAfterReattachTurnBaselineRateLimit = canonicalRateLimitDeferral(retryAfterReattachTurnBaseline);
       if (retryAfterReattachTurnBaselineRateLimit) return retryAfterReattachTurnBaselineRateLimit;
       const transmissionStreamDeferral = await streamCompletionDeferral();
@@ -3286,11 +3394,24 @@ async function attemptNudgeInSession(
       }
     }
     if (!progressed) {
+      const submissionState = await canonicalContinuationSubmissionState(
+        cdp,
+        submissionTurnBaseline,
+      );
+      const submissionOutcome = canonicalSubmissionOutcome(false, submissionState);
+      if (submissionOutcome.result_status === 'STALLED_NOT_CONFIRMED') {
+        continuationSent = false;
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'continuation UI submit was not canonically persisted; retry remains allowed without consuming send budget',
+          ...recoveryMetadata(),
+        };
+      }
       return {
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
-          ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
-          : 'sent continuation, but no assistant progress was observed',
+          ? 'recovered stale COMPLETE stream and canonically submitted continuation, but no assistant progress was observed'
+          : 'canonically submitted continuation, but no assistant progress was observed',
         ...recoveryMetadata(),
       };
     }
@@ -3908,6 +4029,8 @@ export {
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
+  canonicalSubmissionOutcome,
+  canonicalContinuationSubmissionState,
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
