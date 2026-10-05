@@ -149,6 +149,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable "$unit_name"
 sudo systemctl enable "$resume_worker_service_name"
 sudo systemctl enable --now "$watchdog_timer_name" "$nudge_timer_name"
+sudo systemctl reset-failed "$unit_name" "$resume_worker_service_name"
 sudo systemctl restart "$unit_name"
 sudo systemctl restart "$resume_worker_service_name"
 sudo systemctl start "$watchdog_service_name" "$nudge_service_name"

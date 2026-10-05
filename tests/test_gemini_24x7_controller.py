@@ -736,6 +736,13 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('"$stage_dir/scripts/continuity/$(basename "$source")"', installer)
         self.assertIn('sudo chmod 0755 "$stage_dir" "$stage_dir/scripts" "$stage_dir/scripts/continuity"', installer)
 
+    def test_controller_installer_clears_systemd_start_limit_before_restart(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        reset = 'sudo systemctl reset-failed "$unit_name" "$resume_worker_service_name"'
+        self.assertIn(reset, installer)
+        self.assertLess(installer.index(reset), installer.index('sudo systemctl restart "$unit_name"'))
+        self.assertLess(installer.index(reset), installer.index('sudo systemctl restart "$resume_worker_service_name"'))
+
     def test_controller_installer_repairs_shared_runtime_lock_permissions(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('runtime_lock_dir="$runtime_dir/_runtime-lock"', installer)
