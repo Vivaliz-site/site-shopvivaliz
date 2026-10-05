@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,7 +53,9 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         # Force staleness directly on disk so the watchdog treats it as due.
         path = self.runtime / f"{task_id}.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
-        payload["updated_at"] = "2020-01-01T00:00:00Z"
+        payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=5)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         path.write_text(json.dumps(payload), encoding="utf-8")
         watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
 
@@ -174,7 +177,11 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_same_conversation_dispatches_only_newest_running_checkpoint(self) -> None:
         conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
-        for task_id, updated_at in (("task-old", "2020-01-01T00:00:00Z"), ("task-new", "2020-01-02T00:00:00Z")):
+        now = datetime.now(timezone.utc)
+        for task_id, updated_at in (
+            ("task-old", (now - timedelta(days=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+            ("task-new", (now - timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+        ):
             state.start_task(task_id, "goal", "gpt")
             state.bind_conversation(task_id, conversation_id=conversation_id)
             state.record_progress(task_id, next_action="keep going")
@@ -204,7 +211,9 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         state.record_progress("task-old", next_action="keep going")
         old_path = self.runtime / "task-old.json"
         old_payload = json.loads(old_path.read_text(encoding="utf-8"))
-        old_payload["updated_at"] = "2020-01-01T00:00:00Z"
+        old_payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=2)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         old_path.write_text(json.dumps(old_payload), encoding="utf-8")
         watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
         self.dispatcher.run_once(
@@ -218,7 +227,9 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         state.record_progress("task-new", next_action="keep going")
         new_path = self.runtime / "task-new.json"
         new_payload = json.loads(new_path.read_text(encoding="utf-8"))
-        new_payload["updated_at"] = "2020-01-02T00:00:00Z"
+        new_payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=1)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         new_path.write_text(json.dumps(new_payload), encoding="utf-8")
         watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
 
@@ -233,7 +244,11 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
     def test_failed_older_same_conversation_does_not_poison_new_owner_health(self) -> None:
         conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
-        for task_id, updated_at in (("task-old", "2020-01-01T00:00:00Z"), ("task-new", "2020-01-02T00:00:00Z")):
+        now = datetime.now(timezone.utc)
+        for task_id, updated_at in (
+            ("task-old", (now - timedelta(days=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+            ("task-new", (now - timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+        ):
             state.start_task(task_id, "goal", "gpt")
             state.bind_conversation(task_id, conversation_id=conversation_id)
             state.record_progress(task_id, next_action="keep going")

@@ -26,10 +26,10 @@ from typing import Any, Sequence
 
 try:
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from .task_continuation_watchdog import read_requests
+    from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 except ImportError:
     from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from task_continuation_watchdog import read_requests
+    from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
@@ -311,6 +311,11 @@ def _restore_executor_owned_no_progress(
 
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
+        return False
+    updated_at = _parse_utc(str(state.get("updated_at", "")))
+    if updated_at is None:
+        return False
+    if (datetime.now(timezone.utc) - updated_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
