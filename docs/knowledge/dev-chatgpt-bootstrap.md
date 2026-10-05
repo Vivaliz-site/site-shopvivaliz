@@ -47,13 +47,15 @@ Histórico migrado nunca substitui evidência atual.
 
 A conta `dev@shopvivaliz.com.br` deve possuir perfil Chromium dedicado e isolado na VM backend.
 
-Até que o perfil seja criado e validado com evidência fresca:
+Perfil provisionado e isolado:
+- `user-data-dir`: `/home/fredrdp/.config/shopvivaliz-dev-chromium`;
+- porta CDP dedicada: `9558`;
+- conta permitida: `dev@shopvivaliz.com.br`.
+
+O perfil só pode ser marcado como operacional depois da autenticação e validação de identidade. Enquanto isso:
 - não reutilizar o perfil `fredmourao`;
 - não reutilizar o perfil `atendimento`;
-- não marcar a conta `dev` como operacional no navegador;
 - não fazer logout de outra conta para entrar como `dev`.
-
-Depois da criação, registrar em `browser-sessions.md` o `user-data-dir`, porta CDP e evidência de identidade da sessão.
 
 ## Migração do assento Business
 
