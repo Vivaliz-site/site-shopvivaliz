@@ -66,3 +66,12 @@ def handoff_foreground(task_id: str, conversation_id: str, checkpoint_version: i
         except Exception:
             pass
         raise
+
+def renew_foreground(task_id: str, *, lease_id: str, fencing_token: int, ttl_seconds: int = 90) -> dict[str, Any]:
+    return agent_task_state.renew_foreground_lease_for_task(
+        task_id, lease_id=lease_id, fencing_token=int(fencing_token), ttl_seconds=int(ttl_seconds))
+
+
+def release_foreground(task_id: str, *, lease_id: str, fencing_token: int, reason: str) -> dict[str, Any]:
+    return agent_task_state.release_foreground_lease_for_task(
+        task_id, lease_id=lease_id, fencing_token=int(fencing_token), reason=str(reason))

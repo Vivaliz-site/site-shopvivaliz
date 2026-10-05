@@ -1706,6 +1706,10 @@ def execute_tool(
             DEFAULT_TIMEOUT,
             cancel_check,
         ))
+    if name == 'foreground_renew':
+        return foreground_handoff.renew_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), ttl_seconds=int(args.get('ttl_seconds')))
+    if name == 'foreground_release':
+        return foreground_handoff.release_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), reason=str(args.get('reason') or '').strip())
     if name == 'foreground_handoff':
         task_id = str(args.get('task_id') or '').strip()
         conversation_id = _validate_conversation_id(args.get('conversation_id'))
@@ -1890,6 +1894,8 @@ TOOLS = [
     ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
     ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
+    ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
+    ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),

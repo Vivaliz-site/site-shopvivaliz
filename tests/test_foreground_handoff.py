@@ -37,6 +37,30 @@ class ForegroundHandoffTests(unittest.TestCase):
         started=time.monotonic()
         out=m.handoff_foreground("task-a","conversation_12345678",1,["long","job"],_submitter=lambda cmd:{"task_id":"durable-9","queue_position":9,"state":"queued"})
         self.assertEqual(out["queue_position"],9); self.assertLess(time.monotonic()-started,1.0)
+    def test_explicit_release_allows_recovery_before_foreground_ttl(self):
+        m=load(HANDOFF_PATH,"foreground_handoff_test_release")
+        out=m.handoff_foreground("task-a","conversation_12345678",1,["job"],lease_ttl_seconds=300,_submitter=lambda cmd:{"task_id":"durable-release","queue_position":1,"state":"queued"})
+        self.agent.bind_browser_session("task-a",browser_session="fred")
+        released=m.release_foreground(
+            "task-a", lease_id=out["lease_id"], fencing_token=out["fencing_token"], reason="foreground_completed")
+        self.assertEqual(released["foreground_release_reason"],"foreground_completed")
+        claimed=self.agent.claim_recovery_ownership("task-a",owner_id="recovery-1",allowed_actions=["continuation_send"],ttl_seconds=30)
+        self.assertEqual(claimed["recovery_owner_id"],"recovery-1")
+        self.assertEqual(claimed["recovery_state"],"RECOVERY_CLAIMED")
+
+    def test_explicit_renew_extends_current_foreground_lease_and_rejects_stale_identity(self):
+        m=load(HANDOFF_PATH,"foreground_handoff_test_renew")
+        out=m.handoff_foreground("task-a","conversation_12345678",1,["job"],lease_ttl_seconds=5,_submitter=lambda cmd:{"task_id":"durable-renew","queue_position":1,"state":"queued"})
+        before=m.conversation_lease.get_conversation_lease("conversation_12345678")
+        renewed=m.renew_foreground(
+            "task-a", lease_id=out["lease_id"], fencing_token=out["fencing_token"], ttl_seconds=120)
+        after=m.conversation_lease.get_conversation_lease("conversation_12345678")
+        self.assertGreater(after["expires_at_epoch"],before["expires_at_epoch"]+100)
+        self.assertEqual(renewed["foreground_lease_id"],out["lease_id"])
+        with self.assertRaisesRegex(RuntimeError,"foreground lease"):
+            m.renew_foreground(
+                "task-a", lease_id="stale-lease", fencing_token=out["fencing_token"], ttl_seconds=120)
+
     def test_submission_failure_releases_new_lease_and_leaves_task_nonterminal(self):
         m=load(HANDOFF_PATH,"foreground_handoff_test_failure")
         def fail(_): raise RuntimeError("queue unavailable")

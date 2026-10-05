@@ -735,6 +735,46 @@ def acquire_foreground_lease_for_task(task_id: str, *, owner_id: str, ttl_second
     return payload
 
 @_serialized_transition
+def renew_foreground_lease_for_task(task_id: str, *, lease_id: str, fencing_token: int, ttl_seconds: int = 90) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError('terminal task cannot renew foreground lease')
+    expected_lease = str(payload.get('foreground_lease_id', '')).strip()
+    expected_token = payload.get('foreground_fencing_token')
+    if not expected_lease or expected_lease != str(lease_id).strip() or expected_token is None or int(expected_token) != int(fencing_token):
+        raise TaskStateError('foreground lease identity is stale')
+    conversation_id = _safe_conversation_id(payload.get('conversation_id', ''))
+    with _continuity_state_env():
+        try:
+            lease = conversation_lease.renew_conversation_lease(conversation_id, expected_lease, int(fencing_token), int(ttl_seconds))
+        except conversation_lease.LeaseConflict as exc:
+            raise TaskStateError(f'foreground lease cannot be renewed: {exc}') from exc
+    payload['foreground_lease_expires_at_epoch'] = lease['expires_at_epoch']
+    _history(payload, 'foreground_lease_renewed', lease_id=expected_lease, fencing_token=int(fencing_token), expires_at_epoch=lease['expires_at_epoch'])
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+@_serialized_transition
+def release_foreground_lease_for_task(task_id: str, *, lease_id: str, fencing_token: int, reason: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    expected_lease = str(payload.get('foreground_lease_id', '')).strip()
+    expected_token = payload.get('foreground_fencing_token')
+    if not expected_lease or expected_lease != str(lease_id).strip() or expected_token is None or int(expected_token) != int(fencing_token):
+        raise TaskStateError('foreground lease identity is stale')
+    conversation_id = _safe_conversation_id(payload.get('conversation_id', ''))
+    release_reason = str(reason).strip() or 'foreground_completed'
+    with _continuity_state_env():
+        try:
+            lease = conversation_lease.release_conversation_lease(conversation_id, expected_lease, int(fencing_token), release_reason)
+        except conversation_lease.LeaseConflict as exc:
+            raise TaskStateError(f'foreground lease cannot be released: {exc}') from exc
+    payload['foreground_released_at_epoch'] = lease['released_at']
+    payload['foreground_release_reason'] = release_reason
+    _history(payload, 'foreground_lease_released', lease_id=expected_lease, fencing_token=int(fencing_token), reason=release_reason)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+@_serialized_transition
 def claim_recovery_ownership(task_id: str, *, owner_id: str, allowed_actions: Iterable[str], ttl_seconds: int = 90) -> dict[str, Any]:
     payload = _load(task_id)
     if is_terminal(payload): raise TaskStateError('terminal task cannot claim recovery ownership')

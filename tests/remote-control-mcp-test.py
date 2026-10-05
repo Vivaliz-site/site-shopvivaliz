@@ -73,8 +73,27 @@ class RemoteControlMcpTests(unittest.TestCase):
             "controller_status", "controller_promote", "continuity_status", "continuity_e2e",
             "claude_remote_control_status", "claude_remote_control_reconcile",
             "browser_tabs", "browser_controls", "browser_navigate", "browser_click", "browser_click_control", "browser_type",
+            "foreground_handoff", "foreground_renew", "foreground_release",
         }:
             self.assertIn(required, names)
+
+    def test_foreground_lease_lifecycle_tools_have_bounded_schemas(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertFalse(specs["foreground_handoff"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["foreground_renew"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["foreground_release"]["annotations"]["readOnlyHint"])
+        self.assertEqual(set(specs["foreground_renew"]["inputSchema"]["required"]), {"task_id", "lease_id", "fencing_token", "ttl_seconds"})
+        self.assertEqual(set(specs["foreground_release"]["inputSchema"]["required"]), {"task_id", "lease_id", "fencing_token", "reason"})
+
+    def test_foreground_lifecycle_tools_dispatch_to_handoff_module(self):
+        with mock.patch.object(m.foreground_handoff, "renew_foreground", return_value={"task_id":"task-a","lease_id":"lease-a"}) as renew:
+            result=m.execute_tool("foreground_renew", {"task_id":"task-a","lease_id":"lease-a","fencing_token":3,"ttl_seconds":120})
+        self.assertEqual(result["lease_id"],"lease-a")
+        renew.assert_called_once_with("task-a", lease_id="lease-a", fencing_token=3, ttl_seconds=120)
+        with mock.patch.object(m.foreground_handoff, "release_foreground", return_value={"task_id":"task-a","foreground_release_reason":"foreground_completed"}) as release:
+            result=m.execute_tool("foreground_release", {"task_id":"task-a","lease_id":"lease-a","fencing_token":3,"reason":"foreground_completed"})
+        self.assertEqual(result["foreground_release_reason"],"foreground_completed")
+        release.assert_called_once_with("task-a", lease_id="lease-a", fencing_token=3, reason="foreground_completed")
 
     def test_browser_allows_microsoft_oauth_host(self):
         self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
