@@ -69,6 +69,11 @@ CLAUDE_REMOTE_CONTROL_POINTER_FILE = Path(os.environ.get(
 ))
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
+CONTINUITY_LIB_DIR = Path(os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", str(Path(__file__).resolve().parents[1] / "scripts" / "continuity")))
+if str(CONTINUITY_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(CONTINUITY_LIB_DIR))
+import runtime_lock
+
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -1535,12 +1540,38 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+MUTATING_RUNTIME_ACTIONS = {
+    "controller_promote": "controller_promote",
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+    "service_action": "service_action",
+}
+
+def _durable_handoff_enabled() -> bool:
+    return os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+def _assert_runtime_mutation(name: str, args: dict[str, Any]) -> None:
+    action = MUTATING_RUNTIME_ACTIONS.get(name)
+    if not action or not _durable_handoff_enabled():
+        return
+    lease_id = str(args.get("runtime_lease_id") or "").strip()
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("runtime_lock_required")
+    try:
+        runtime_lock.assert_runtime_lock(lease_id, int(token), action)
+    except (runtime_lock.RuntimeLockConflict, TypeError, ValueError) as exc:
+        raise ValueError("runtime_lock_invalid") from exc
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    _assert_runtime_mutation(name, args)
     if name == "claude_remote_control_status":
         return claude_remote_control_status()
     if name == "claude_remote_control_reconcile":
@@ -1801,11 +1832,17 @@ def tool_specs() -> list[dict[str, Any]]:
         optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}
         if name == "browser_navigate":
             optional.add("tab_id")
+        schema_props = dict(props)
+        if name in MUTATING_RUNTIME_ACTIONS:
+            schema_props.update({
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            })
         specs.append({
             "name": name,
             "description": desc,
             "inputSchema": {
-                "type": "object", "properties": props,
+                "type": "object", "properties": schema_props,
                 "required": [k for k in props if k not in optional],
                 "additionalProperties": False,
             },

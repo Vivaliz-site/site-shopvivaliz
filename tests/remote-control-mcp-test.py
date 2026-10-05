@@ -149,6 +149,40 @@ class RemoteControlMcpTests(unittest.TestCase):
             ["tab_id", "index"],
         )
 
+    def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
+        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
+        try:
+            with mock.patch.object(m, "run_host_command") as runner:
+                with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                    m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0})
+            runner.assert_not_called()
+        finally:
+            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+            if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
+            else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
+
+    def test_mutating_browser_tool_accepts_current_runtime_lock_and_rejects_stale_token(self):
+        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
+        try:
+            lock = m.runtime_lock.acquire_runtime_lock("durable-recovery", "worker-a", 30, ["browser_click_control"])
+            with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as runner:
+                m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0, "runtime_lease_id": lock["lease_id"], "runtime_fencing_token": lock["fencing_token"]})
+            self.assertTrue(runner.called)
+            with self.assertRaisesRegex(ValueError, "runtime_lock_invalid"):
+                m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0, "runtime_lease_id": lock["lease_id"], "runtime_fencing_token": lock["fencing_token"] - 1})
+        finally:
+            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+            if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
+            else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
+
     def test_controller_promote_requires_full_expected_sha(self):
         with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
             m.execute_tool("controller_promote", {"expected_sha": "abc123"})
