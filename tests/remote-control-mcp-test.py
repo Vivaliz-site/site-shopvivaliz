@@ -102,6 +102,10 @@ class RemoteControlMcpTests(unittest.TestCase):
         browser=(ROOT/"deploy"/"systemd"/"shopvivaliz-remote-control-browser-mcp.service").read_text()
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", browser)
 
+    def test_controller_service_env_points_agent_state_at_shared_runtime(self):
+        setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
+        self.assertIn("SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state", setup)
+
     def test_installed_server_resolves_colocated_continuity_runtime(self):
         with tempfile.TemporaryDirectory() as td:
             server_path=Path(td)/"shopvivaliz-remote-control"/"server.py"
