@@ -15,6 +15,7 @@ import json
 import os
 import re
 import signal
+import shlex
 import socket
 import sqlite3
 import subprocess
@@ -73,6 +74,7 @@ CONTINUITY_LIB_DIR = Path(os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", str(P
 if str(CONTINUITY_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(CONTINUITY_LIB_DIR))
 import runtime_lock
+import foreground_handoff
 
 
 HOSTS = {
@@ -1648,6 +1650,28 @@ def execute_tool(
             DEFAULT_TIMEOUT,
             cancel_check,
         ))
+    if name == 'foreground_handoff':
+        task_id = str(args.get('task_id') or '').strip()
+        conversation_id = _validate_conversation_id(args.get('conversation_id'))
+        checkpoint_version = int(args.get('checkpoint_version'))
+        durable_command = args.get('durable_command') or []
+        if not isinstance(durable_command, list) or not durable_command:
+            raise ValueError('durable_command_required')
+        def submitter(argv: list[str]) -> dict[str, Any]:
+            command = shlex.join([str(item) for item in argv])
+            result = execute_tool('task_submit', {
+                'host': CONTROLLER_BACKEND_HOST,
+                'command': command,
+                'timeout': int(args.get('durable_timeout', 300)),
+                'request_id': str(args.get('request_id') or '') or None,
+            })
+            if result.get('task_id'):
+                result.update(queued_task_context(str(result['task_id'])))
+            return result
+        return foreground_handoff.handoff_foreground(
+            task_id, conversation_id, checkpoint_version,
+            [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
+            _submitter=submitter)
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
     if name == "audit_recent":
@@ -1809,6 +1833,7 @@ TOOLS = [
     ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
     ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
+    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -1829,7 +1854,7 @@ TOOLS = [
 def tool_specs() -> list[dict[str, Any]]:
     specs = []
     for name, desc, props, readonly, destructive in TOOLS:
-        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}
+        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout"}
         if name == "browser_navigate":
             optional.add("tab_id")
         schema_props = dict(props)

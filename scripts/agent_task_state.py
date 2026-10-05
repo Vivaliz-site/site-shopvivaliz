@@ -588,6 +588,45 @@ def bind_browser_session(task_id: str, *, browser_session: str) -> dict[str, Any
     return payload
 
 
+
+@_serialized_transition
+def record_foreground_handoff(
+    task_id: str,
+    *,
+    conversation_id: str,
+    expected_checkpoint_version: int,
+    durable_execution_id: str,
+    lease_id: str,
+    fencing_token: int,
+    queue_position: int,
+    foreground_duration_ms: int,
+) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError('terminal task cannot record foreground handoff')
+    bound = _safe_conversation_id(conversation_id)
+    if str(payload.get('conversation_id', '')).strip() != bound:
+        raise TaskStateError('foreground handoff requires exact conversation binding')
+    current_version = len(payload.get('history', []))
+    if current_version != int(expected_checkpoint_version):
+        raise TaskStateError('foreground handoff checkpoint version is stale')
+    durable_id = str(durable_execution_id).strip()
+    if not durable_id:
+        raise TaskStateError('durable_execution_id is required')
+    payload['status'] = 'RUNNING'
+    payload['durable_execution_id'] = durable_id
+    payload['foreground_lease_id'] = str(lease_id).strip()
+    payload['foreground_fencing_token'] = int(fencing_token)
+    payload['foreground_queue_position'] = int(queue_position)
+    payload['foreground_duration_ms'] = int(foreground_duration_ms)
+    payload['handoff_checkpoint_version'] = int(expected_checkpoint_version)
+    _history(payload, 'foreground_handoff', durable_execution_id=durable_id,
+             conversation_id=bound, lease_id=str(lease_id).strip(),
+             fencing_token=int(fencing_token), checkpoint_version=int(expected_checkpoint_version),
+             queue_position=int(queue_position), foreground_duration_ms=int(foreground_duration_ms))
+    _atomic_write(_path(task_id), payload)
+    return payload
+
 def load_task(task_id: str) -> dict[str, Any]:
     return _load(task_id)
 
