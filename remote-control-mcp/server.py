@@ -15,6 +15,7 @@ import json
 import os
 import re
 import signal
+import shlex
 import socket
 import sqlite3
 import subprocess
@@ -69,6 +70,14 @@ CLAUDE_REMOTE_CONTROL_POINTER_FILE = Path(os.environ.get(
 ))
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
+CONTINUITY_LIB_DIR = Path(os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", str(Path(__file__).resolve().parents[1] / "scripts" / "continuity")))
+if str(CONTINUITY_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(CONTINUITY_LIB_DIR))
+import runtime_lock
+import conversation_lease
+import mutation_gate
+import foreground_handoff
+
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -975,12 +984,20 @@ def run_task_entrypoint(task_id: str) -> int:
         return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
+AUDIT_RESULT_METADATA_KEYS = (
+    "queue_position", "foreground_duration_ms", "mutation_rejection_reason",
+    "e2e_evidence_type", "owner_kind", "owner_id", "checkpoint_version",
+    "lease_id", "conversation_lease_id", "runtime_lease_id",
+    "fencing_token", "conversation_fencing_token", "runtime_fencing_token",
+)
+
+
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
         if secret_key in safe_args:
             secret_value = str(safe_args.pop(secret_key))
             safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
@@ -994,9 +1011,16 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     return safe_args
 
 
-def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str, *, output: dict[str, Any] | None = None) -> str:
     aid = str(uuid.uuid4())
     safe_args = sanitize_audit_args(tool, args)
+    result = output if isinstance(output, dict) else {}
+    durable_execution_id = str(result.get("task_id") or "").strip()
+    if durable_execution_id:
+        safe_args["durable_execution_id"] = durable_execution_id
+    for key in AUDIT_RESULT_METADATA_KEYS:
+        if key in result and result.get(key) not in (None, ""):
+            safe_args[key] = result.get(key)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
@@ -1535,12 +1559,77 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+MUTATING_RUNTIME_ACTIONS = {
+    "controller_promote": "controller_promote",
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+    "service_action": "service_action",
+}
+
+def _durable_handoff_enabled() -> bool:
+    return os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+def _assert_runtime_mutation(name: str, args: dict[str, Any]) -> None:
+    action = MUTATING_RUNTIME_ACTIONS.get(name)
+    if not action or not _durable_handoff_enabled():
+        return
+    lease_id = str(args.get("runtime_lease_id") or "").strip()
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("runtime_lock_required")
+    try:
+        runtime_lock.assert_runtime_lock(lease_id, int(token), action)
+    except (runtime_lock.RuntimeLockConflict, TypeError, ValueError) as exc:
+        raise ValueError("runtime_lock_invalid") from exc
+
+BROWSER_CONVERSATION_MUTATIONS = {
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+}
+
+def _assert_conversation_mutation(name: str, args: dict[str, Any]) -> None:
+    action = BROWSER_CONVERSATION_MUTATIONS.get(name)
+    if not action or not _durable_handoff_enabled():
+        return
+    required = {
+        "task_id": str(args.get("task_id") or "").strip(),
+        "conversation_id": str(args.get("conversation_id") or "").strip(),
+        "session_identity": str(args.get("session_identity") or "").strip(),
+        "conversation_lease_id": str(args.get("conversation_lease_id") or "").strip(),
+        "runtime_lease_id": str(args.get("runtime_lease_id") or "").strip(),
+    }
+    checkpoint_version = args.get("checkpoint_version")
+    conversation_token = args.get("conversation_fencing_token")
+    runtime_token = args.get("runtime_fencing_token")
+    if not all(required.values()) or checkpoint_version is None or conversation_token is None or runtime_token is None:
+        raise ValueError("conversation_mutation_gate_required")
+    conversation_id = _validate_conversation_id(required["conversation_id"])
+    try:
+        conversation_lease.assert_conversation_lease(
+            conversation_id, required["conversation_lease_id"], int(conversation_token), action
+        )
+        outcome = mutation_gate.authorize_current(
+            required["task_id"], conversation_id, int(checkpoint_version), action, required["session_identity"],
+            required["conversation_lease_id"], int(conversation_token), required["runtime_lease_id"], int(runtime_token),
+        )
+    except (conversation_lease.LeaseConflict, TypeError, ValueError, OSError) as exc:
+        raise ValueError("conversation_mutation_gate_invalid") from exc
+    if not outcome.get("authorized"):
+        raise ValueError(f"conversation_mutation_gate:{outcome.get('reason', 'rejected')}")
+
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    _assert_runtime_mutation(name, args)
+    _assert_conversation_mutation(name, args)
     if name == "claude_remote_control_status":
         return claude_remote_control_status()
     if name == "claude_remote_control_reconcile":
@@ -1617,6 +1706,32 @@ def execute_tool(
             DEFAULT_TIMEOUT,
             cancel_check,
         ))
+    if name == 'foreground_renew':
+        return foreground_handoff.renew_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), ttl_seconds=int(args.get('ttl_seconds')))
+    if name == 'foreground_release':
+        return foreground_handoff.release_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), reason=str(args.get('reason') or '').strip())
+    if name == 'foreground_handoff':
+        task_id = str(args.get('task_id') or '').strip()
+        conversation_id = _validate_conversation_id(args.get('conversation_id'))
+        checkpoint_version = int(args.get('checkpoint_version'))
+        durable_command = args.get('durable_command') or []
+        if not isinstance(durable_command, list) or not durable_command:
+            raise ValueError('durable_command_required')
+        def submitter(argv: list[str]) -> dict[str, Any]:
+            command = shlex.join([str(item) for item in argv])
+            result = execute_tool('task_submit', {
+                'host': CONTROLLER_BACKEND_HOST,
+                'command': command,
+                'timeout': int(args.get('durable_timeout', 300)),
+                'request_id': str(args.get('request_id') or '') or None,
+            })
+            if result.get('task_id'):
+                result.update(queued_task_context(str(result['task_id'])))
+            return result
+        return foreground_handoff.handoff_foreground(
+            task_id, conversation_id, checkpoint_version,
+            [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
+            _submitter=submitter)
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
     if name == "audit_recent":
@@ -1778,6 +1893,9 @@ TOOLS = [
     ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
     ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
+    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
+    ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
+    ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -1798,14 +1916,29 @@ TOOLS = [
 def tool_specs() -> list[dict[str, Any]]:
     specs = []
     for name, desc, props, readonly, destructive in TOOLS:
-        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit"}
+        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout"}
         if name == "browser_navigate":
             optional.add("tab_id")
+        schema_props = dict(props)
+        if name in MUTATING_RUNTIME_ACTIONS:
+            schema_props.update({
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            })
+        if name in BROWSER_CONVERSATION_MUTATIONS:
+            schema_props.update({
+                "task_id": {"type": "string", "maxLength": 200},
+                "conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"},
+                "checkpoint_version": {"type": "integer", "minimum": 1},
+                "session_identity": {"type": "string", "maxLength": 200},
+                "conversation_lease_id": {"type": "string", "maxLength": 200},
+                "conversation_fencing_token": {"type": "integer", "minimum": 1},
+            })
         specs.append({
             "name": name,
             "description": desc,
             "inputSchema": {
-                "type": "object", "properties": props,
+                "type": "object", "properties": schema_props,
                 "required": [k for k in props if k not in optional],
                 "additionalProperties": False,
             },
@@ -1960,7 +2093,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {

@@ -88,6 +88,14 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
 
+    def test_backend_installer_wires_single_durable_handoff_flag_default_off(self) -> None:
+        body = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text(encoding="utf-8")
+        self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', body)
+        self.assertIn('case "$durable_handoff" in 0|1)', body)
+        self.assertIn('Environment=SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff', body)
+        self.assertNotIn('rm -rf /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_conversation-leases', body)
+        self.assertNotIn('rm -rf /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_runtime-lock', body)
+
     def test_backend_installer_is_vm_native_and_attaches_to_canonical_cdp(self) -> None:
         installer = ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh"
         self.assertTrue(installer.is_file(), "backend continuity installer must exist")

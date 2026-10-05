@@ -32,6 +32,8 @@ e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-fa
 gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"
 gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 gemini_cli_package_json="/home/ubuntu/.local/lib/node_modules/@google/gemini-cli/package.json"
+durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"
+case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff" >&2; exit 64 ;; esac
 
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
@@ -112,11 +114,13 @@ fi
 
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
-printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_RESUME_WORKER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_MONITOR_REQUIRED=0\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCLAUDE_BIN=/home/ubuntu/.local/bin/claude\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
+printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_RESUME_WORKER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_MONITOR_REQUIRED=0\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCLAUDE_BIN=/home/ubuntu/.local/bin/claude\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
+
   "$target_dir/scripts/gemini_24x7_controller.py" \
   "$target_dir/scripts/task_resume_worker.py" \
   "$target_dir/scripts/task_continuation_watchdog.py" \
-  "$target_dir/scripts/chatgpt_continuity_nudge_dispatcher.py" > "$environment_temp"
+  "$target_dir/scripts/chatgpt_continuity_nudge_dispatcher.py" \
+  "$durable_handoff" > "$environment_temp"
 sudo install -o root -g root -m 0640 "$environment_temp" "$environment_target"
 rm -f "$environment_temp"
 trap - EXIT

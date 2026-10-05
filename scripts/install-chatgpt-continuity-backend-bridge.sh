@@ -37,6 +37,8 @@ cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9555}"
 bridge_endpoint="${CHATGPT_CONTINUITY_BRIDGE_ENDPOINT:-http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php}"
 bridge_host_header="${CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER:-shopvivaliz.com.br}"
 poll_ms="${CHATGPT_CONTINUITY_POLL_MS:-15000}"
+durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"
+case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff" >&2; exit 64 ;; esac
 
 fail() {
   printf 'ERROR %s\n' "$1" >&2
@@ -144,6 +146,7 @@ Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0
 Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
 Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
 Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+Environment=SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff
 ExecStart=$node_bin $worker
 Restart=always
 RestartSec=5

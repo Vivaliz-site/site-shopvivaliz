@@ -26,6 +26,7 @@ const {
   persistReinforcementHealth,
   reinforcementHealthPayload,
   bridgeResultPayload,
+  recoveryStateForOutcome,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -62,6 +63,8 @@ const {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
+  mutationAuthorizationAllows,
+  guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -136,7 +139,7 @@ async function run() {
     assert.equal(errorPayload.conversation_id, undefined);
     const confirmedPayload = bridgeResultPayload(
       'task-1',
-      { result_status: 'PROGRESS_CONFIRMED', conversation_id: bound, detail: 'ok' },
+      { result_status: 'PROGRESS_CONFIRMED', real_response_observed: true, conversation_id: bound, detail: 'ok' },
       'ok',
     );
     assert.equal(confirmedPayload.conversation_id, bound);
@@ -3699,6 +3702,55 @@ async function run() {
   await (await import('./chatgpt-thinking-failed-test.mjs')).runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage });
   await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
   (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
+
+  {
+    assert.equal(mutationAuthorizationAllows({ authorized: true }), true);
+    assert.equal(mutationAuthorizationAllows({ authorized: false, reason: 'foreground_active' }), false);
+    let mutated = 0;
+    const rejected = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: false, reason: 'foreground_active' }),
+    );
+    assert.equal(rejected.authorized, false);
+    assert.equal(rejected.reason, 'foreground_active');
+    assert.equal(mutated, 0, 'rejected mutation authorization must never execute callback');
+    const allowed = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: true, reason: 'authorized' }),
+    );
+    assert.equal(allowed.authorized, true);
+    assert.equal(allowed.value, 'sent');
+    assert.equal(mutated, 1);
+  }
+  {
+    const falseGreen = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: false,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'Thinking tool activity sidebar HTTP 200 Retry click',
+    }, 'diagnostic-only');
+    assert.notEqual(falseGreen.result_status, 'PROGRESS_CONFIRMED');
+    assert.notEqual(falseGreen.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(falseGreen.conversation_id, undefined);
+    const real = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: true,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'new assistant turn observed',
+    }, 'new assistant turn observed');
+    assert.equal(real.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(real.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(real.conversation_id, 'conversation_12345678');
+    assert.equal(recoveryStateForOutcome({ result_status: 'SENT_UNCONFIRMED', sent: true }), 'WAITING_FOR_REAL_RESPONSE');
+  }
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,

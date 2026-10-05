@@ -5,6 +5,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+import time
 from unittest import mock
 from pathlib import Path
 
@@ -49,6 +50,37 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(state.load_task("race-proof")["status"], "RUNNING")
         self.assertEqual(state.load_task("race-proof")["next_action"], "deployment still missing")
 
+    def test_stale_fenced_resume_cannot_mutate_after_conversation_rebind(self) -> None:
+        state.start_task("fenced-resume", "continue durable work", "work")
+        state.bind_conversation("fenced-resume", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("fenced-resume", browser_session="fred")
+        before = state.load_task("fenced-resume")
+        claimed = state.claim_recovery_ownership(
+            "fenced-resume", owner_id="resume:old-request",
+            allowed_actions=["checkpoint_mutation"], ttl_seconds=60,
+        )
+        env = {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_OWNER_ID": "resume:old-request",
+            "SHOPVIVALIZ_RESUME_CONVERSATION_ID": claimed["conversation_id"],
+            "SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION": str(claimed["recovery_checkpoint_version"]),
+            "SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID": claimed["recovery_lease_id"],
+            "SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN": str(claimed["recovery_fencing_token"]),
+            "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID": claimed["runtime_lease_id"],
+            "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN": str(claimed["runtime_fencing_token"]),
+        }
+        state.rebind_conversation(
+            "fenced-resume", conversation_id="66666666-7777-8888-9999-aaaaaaaaaaaa",
+            expected_checkpoint_version=claimed["checkpoint_version"],
+        )
+        with mock.patch.dict(state.os.environ, env, clear=False):
+            with self.assertRaisesRegex(state.TaskStateError, "stale|ownership|conversation"):
+                state.record_progress("fenced-resume", next_action="stale writer attempted mutation")
+        current = state.load_task("fenced-resume")
+        self.assertNotEqual(current["conversation_id"], before["conversation_id"] if before.get("conversation_id") else "")
+        self.assertNotEqual(current["next_action"], "stale writer attempted mutation")
+
     def test_background_cannot_certify_terminal_without_pinned_completion_checks(self) -> None:
         state.start_task("owned-proof", "verify", "work")
         with mock.patch.dict(state.os.environ, {
@@ -90,6 +122,51 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(same, bound)
         with self.assertRaisesRegex(state.TaskStateError, "cannot be replaced"):
             state.bind_conversation("bound-task", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    def test_recovery_state_machine_suppresses_foreground_and_claims_after_expiry(self) -> None:
+        state.start_task("recovery-state", "recover", "work")
+        state.bind_conversation("recovery-state", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("recovery-state", browser_session="fred")
+        version = state.load_task("recovery-state")["checkpoint_version"]
+        state.acquire_foreground_lease_for_task("recovery-state", owner_id="turn-1", ttl_seconds=1)
+        blocked = state.claim_recovery_ownership("recovery-state", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        self.assertEqual(blocked["recovery_state"], "FOREGROUND_ACTIVE")
+        time.sleep(1.05)
+        claimed = state.claim_recovery_ownership("recovery-state", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        self.assertEqual(claimed["recovery_state"], "RECOVERY_CLAIMED")
+        self.assertEqual(claimed["recovery_checkpoint_version"], version)
+        transitions = [row["state"] for row in claimed["recovery_history"]]
+        self.assertIn("LEASE_EXPIRED", transitions)
+        self.assertEqual(transitions[-1], "RECOVERY_CLAIMED")
+
+    def test_rebind_increments_checkpoint_and_invalidates_old_recovery_owner(self) -> None:
+        state.start_task("rebind-recovery", "recover", "work")
+        first = state.bind_conversation("rebind-recovery", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("rebind-recovery", browser_session="fred")
+        before = state.load_task("rebind-recovery")["checkpoint_version"]
+        state.acquire_foreground_lease_for_task("rebind-recovery", owner_id="turn-1", ttl_seconds=1)
+        time.sleep(1.05)
+        claimed = state.claim_recovery_ownership("rebind-recovery", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        old_lease = claimed["recovery_lease_id"]
+        rebound = state.rebind_conversation("rebind-recovery", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", expected_checkpoint_version=before)
+        self.assertGreater(rebound["checkpoint_version"], before)
+        self.assertNotIn("recovery_lease_id", rebound)
+        with self.assertRaisesRegex(state.TaskStateError, "conversation|checkpoint"):
+            state.record_recovery_state("rebind-recovery", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=before, real_response_observed=True)
+        self.assertTrue(old_lease)
+
+    def test_progress_confirmed_requires_real_assistant_response(self) -> None:
+        state.start_task("real-response", "recover", "work")
+        state.bind_conversation("real-response", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("real-response", browser_session="fred")
+        version = state.load_task("real-response")["checkpoint_version"]
+        state.record_recovery_state("real-response", state="RECOVERY_CLAIMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        state.record_recovery_state("real-response", state="RECOVERY_ACTIONED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        state.record_recovery_state("real-response", state="WAITING_FOR_REAL_RESPONSE", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        with self.assertRaisesRegex(state.TaskStateError, "real assistant response"):
+            state.record_recovery_state("real-response", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version, real_response_observed=False)
+        confirmed = state.record_recovery_state("real-response", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version, real_response_observed=True)
+        self.assertEqual(confirmed["recovery_state"], "PROGRESS_CONFIRMED")
 
     def test_duplicate_background_progress_is_exact_noop(self) -> None:
         state.start_task("duplicate-background", "verify", "work")

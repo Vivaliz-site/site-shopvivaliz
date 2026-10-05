@@ -33,10 +33,16 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .agent_task_state import RUNTIME_DIR, bind_conversation
+    from .agent_task_state import (
+        RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
+        load_task, record_recovery_state,
+    )
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
-    from agent_task_state import RUNTIME_DIR, bind_conversation
+    from agent_task_state import (
+        RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
+        load_task, record_recovery_state,
+    )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
@@ -47,6 +53,26 @@ DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/b
 LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
+
+
+def _durable_handoff_enabled() -> bool:
+    return os.getenv('SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF', '0').strip().lower() in {'1','true','yes','on'}
+
+
+
+def recovery_state_for_worker_status(worker_status: str, send_attempt_count: int, max_web_attempts: int) -> str:
+    status = str(worker_status or '').strip().upper()
+    sends = max(0, int(send_attempt_count or 0))
+    budget = max(1, int(max_web_attempts or 1))
+    if status in {'PENDING', 'CLAIMED'}:
+        return 'RECOVERY_CLAIMED'
+    if status == 'PROGRESS_CONFIRMED':
+        return 'PROGRESS_CONFIRMED'
+    if status in {'SENT', 'SENT_UNCONFIRMED'}:
+        return 'RECOVERY_EXHAUSTED' if sends >= budget else 'WAITING_FOR_REAL_RESPONSE'
+    if status in {'ERROR', 'CONVERSATION_NOT_FOUND'} and sends >= budget:
+        return 'RECOVERY_EXHAUSTED'
+    return 'RECOVERY_ACTIONED' if sends > 0 else 'RECOVERY_CLAIMED'
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
@@ -369,6 +395,8 @@ def _run_once_locked(
     skipped_unbound = 0
     retry_attempted = 0
     skipped_attempt_limit = 0
+    skipped_foreground_active = 0
+    skipped_ownership_busy = 0
 
     ledger = _read_ledger(root)
     requests = read_requests(root)
@@ -460,9 +488,29 @@ def _run_once_locked(
                                     observed["send_attempt_count"] = int(previous.get("attempt_count") or 1)
                             else:
                                 observed["send_attempt_count"] = prior_send_attempts
+                            observed["recovery_state"] = recovery_state_for_worker_status(
+                                observed_status, int(observed.get("send_attempt_count") or 0), max_web_attempts
+                            )
                             _append_ledger(root, observed)
                             ledger[fingerprint] = observed
                             previous = observed
+                            if _durable_handoff_enabled():
+                                try:
+                                    current_task = load_task(task_id)
+                                    current_conversation = str(current_task.get("conversation_id", "")).strip()
+                                    recovery_version = int(current_task.get("recovery_checkpoint_version") or current_task.get("checkpoint_version") or 0)
+                                    if current_conversation and recovery_version:
+                                        record_recovery_state(
+                                            task_id,
+                                            state=observed["recovery_state"],
+                                            expected_conversation_id=current_conversation,
+                                            expected_checkpoint_version=recovery_version,
+                                            real_response_observed=(observed["recovery_state"] == "PROGRESS_CONFIRMED"),
+                                        )
+                                except TaskStateError:
+                                    # Ownership/version changed while observing the bridge result;
+                                    # the stale worker outcome must not mutate current task state.
+                                    pass
                         worker_status = observed_status
 
             if worker_status == "PROGRESS_CONFIRMED":
@@ -504,6 +552,22 @@ def _run_once_locked(
             skipped_no_token += 1
             continue
 
+        claimed_state = None
+        if _durable_handoff_enabled():
+            try:
+                claimed_state = claim_recovery_ownership(
+                    task_id,
+                    owner_id=f"dispatcher:{fingerprint}",
+                    allowed_actions=["browser_reload", "browser_click", "browser_stop", "continuation_send"],
+                    ttl_seconds=max(90, retry_seconds),
+                )
+            except TaskStateError:
+                skipped_ownership_busy += 1
+                continue
+            if str(claimed_state.get("recovery_state", "")).strip() == "FOREGROUND_ACTIVE":
+                skipped_foreground_active += 1
+                continue
+
         result = enqueue(
             bridge_url=resolved_bridge_url,
             token=resolved_token,
@@ -529,6 +593,7 @@ def _run_once_locked(
             "http_status": result.get("http_status"),
             "enqueued": bool((result.get("body") or {}).get("enqueued")) if isinstance(result.get("body"), dict) else None,
             "worker_status": "",
+            "recovery_state": str((claimed_state or {}).get("recovery_state") or "RECOVERY_CLAIMED"),
             "attempt_count": previous_attempt_count + 1,
             "send_attempt_count": previous_send_attempt_count,
         }
@@ -578,6 +643,8 @@ def _run_once_locked(
         "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
         "skipped_attempt_limit": skipped_attempt_limit,
+        "skipped_foreground_active": skipped_foreground_active,
+        "skipped_ownership_busy": skipped_ownership_busy,
         "generated_at": utc_now(),
     }
 

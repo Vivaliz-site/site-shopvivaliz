@@ -80,6 +80,23 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
+    def test_controller_reports_single_writer_ownership_counters(self) -> None:
+        controller = load_controller()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 1, "dispatched": 0,
+                "skipped_foreground_active": 1, "skipped_ownership_busy": 2,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={"scanned": 1, "eligible": 0, "executed": 0}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="single-writer-observer")
+        self.assertTrue(result["single_writer_enforced"])
+        self.assertTrue(result["durable_handoff_enabled"])
+        self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
+        self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
+
     def test_expired_durable_lease_is_recovered_and_recorded(self) -> None:
         controller = load_controller()
         lease = self.runtime / controller.LEASE_FILE
@@ -711,6 +728,16 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl enable "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
+
+    def test_controller_installer_consumes_same_durable_handoff_flag_and_preserves_state(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', installer)
+        self.assertIn('case "$durable_handoff" in 0|1)', installer)
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s', installer)
+        self.assertIn('"$durable_handoff"', installer)
+        self.assertNotIn('rm -rf "$runtime_dir/_conversation-leases"', installer)
+        self.assertNotIn('rm -rf "$runtime_dir/_runtime-lock"', installer)
+
 
     def test_controller_service_and_installer_are_backend_safe(self) -> None:
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
