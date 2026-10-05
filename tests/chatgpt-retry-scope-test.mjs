@@ -7,6 +7,7 @@ test('conversation Retry is selected even when a sidebar history Retry is also v
   const cdp = {
     async evaluate(source) {
       const text = String(source);
+      if (text.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (text.includes('continuity-retry-button-target')) {
         // Reproduce the live DOM: the document has two visible Retry buttons,
         // but only one lives in the conversation <main> surface. The old
