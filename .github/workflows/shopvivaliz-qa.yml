@@ -17,6 +17,7 @@ on:
       - '.github/workflows/shopvivaliz-qa.yml'
       - '.github/actionlint.yaml'
       - '.github/workflows/public-layout-audit.yml'
+      - 'services/okx-trading-pilot/**'
   workflow_dispatch:
 
 concurrency:
@@ -219,6 +220,26 @@ jobs:
           php tests/admin-mobile-ai-ux-test.php
       - name: Contrato live do catalogo sem cache legado
         run: php tests/catalog-live-fallback-test.php
+
+
+  okx-trading-pilot:
+    name: OKX trading pilot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run OKX pilot tests
+        working-directory: services/okx-trading-pilot
+        run: |
+          python -m pip install --upgrade pip pytest
+          PYTHONPATH=. python -m pytest -q
+
 
 # Validacao de producao e evidencia canonica pertencem ao
 # Post-deploy Monitoring do Master Production Pipeline. O QA permanece
