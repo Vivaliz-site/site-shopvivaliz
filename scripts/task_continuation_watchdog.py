@@ -132,6 +132,11 @@ def _run_once_locked(
             skipped_outside_lookback += 1
             continue
         scanned += 1
+
+        updated = _parse_time(payload.get("updated_at"))
+        if updated is None:
+            skipped_invalid_timestamp += 1
+            continue
         if str(payload.get("status", "")).strip() != "RUNNING":
             continue
 
