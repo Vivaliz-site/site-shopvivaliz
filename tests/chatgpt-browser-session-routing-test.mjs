@@ -100,6 +100,30 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         'active bound stream should only probe account, stream status, and unavailable-conversation UI',
       );
     }],
+    ['same-session activity probe ignores target and recognizes an active sibling', async () => {
+      const target = conversation;
+      const sibling = 'active-sibling-conversation';
+      const closed = [];
+      const fetcher = async () => ({
+        ok: true,
+        async json() {
+          return [
+            { type: 'page', url: 'https://chatgpt.com/c/' + target, webSocketDebuggerUrl: 'ws://target' },
+            { type: 'page', url: 'https://chatgpt.com/c/' + sibling, webSocketDebuggerUrl: 'ws://sibling' },
+          ];
+        },
+      });
+      const connector = async tab => ({
+        async evaluate(source) {
+          if (source.includes('stop-button')) return tab.url.endsWith(sibling);
+          if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+          throw Error('unexpected sibling probe');
+        },
+        close() { closed.push(tab.url); },
+      });
+      assert.equal(await api.anotherConversationActiveInSession(target, fetcher, connector), true);
+      assert.deepEqual(closed, ['https://chatgpt.com/c/' + sibling]);
+    }],
     ['another active conversation in the same browser session defers bound recovery before reload or input', async () => {
       write(); const evaluated = [];
       const cdp = { close() {}, async evaluate(source) {
