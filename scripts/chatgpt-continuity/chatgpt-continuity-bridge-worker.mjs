@@ -2200,8 +2200,10 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
     const accepted=new Set(['retry','repetir','tentar novamente']);
+    const surface=document.querySelector('main');
+    if(!surface) return null;
     const candidates=[];
-    for(const button of document.querySelectorAll('button')){
+    for(const button of surface.querySelectorAll('button')){
       if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
       if(!accepted.has(label)) continue;
@@ -2238,7 +2240,9 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
     const accepted=new Set(['retry','repetir','tentar novamente']);
-    const candidates=[...document.querySelectorAll('button')].filter(button=>{
+    const surface=document.querySelector('main');
+    if(!surface) return false;
+    const candidates=[...surface.querySelectorAll('button')].filter(button=>{
       if(button.disabled||button.getAttribute('aria-disabled')==='true') return false;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
       return accepted.has(label);
