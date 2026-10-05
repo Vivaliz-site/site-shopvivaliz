@@ -33,6 +33,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
+EXECUTION_RECORD_PREFIX = "_resume-execution-"
 LOCK_FILE = "_continuity-execution.lock"
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
@@ -93,6 +94,108 @@ def _load_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    data = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=True) as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        dir_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _execution_record_path(runtime_dir: Path, fingerprint: str) -> Path:
+    digest = hashlib.sha256(str(fingerprint).encode("utf-8")).hexdigest()[:32]
+    return runtime_dir / f"{EXECUTION_RECORD_PREFIX}{digest}.json"
+
+
+def enqueue_execution(runtime_dir: Path, project_dir: Path, request: dict[str, Any], state: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
+    fingerprint = str(request.get("fingerprint", "")).strip()
+    if not fingerprint:
+        raise ValueError("execution fingerprint required")
+    record_path = _execution_record_path(runtime_dir, fingerprint)
+    existing = _load_json(record_path)
+    if str(existing.get("status", "")).strip() in {"queued", "running"}:
+        existing["_created"] = False
+        return existing
+    now = utc_now()
+    record = {
+        "schema_version": 1, "request_id": str(request.get("id", "")).strip(),
+        "task_id": str(state.get("task_id", "")).strip(),
+        "repository": str(state.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
+        "fingerprint": fingerprint, "checkpoint_before": str(state.get("updated_at", "")).strip(),
+        "project_dir": str(project_dir), "timeout_seconds": max(1, int(timeout_seconds)),
+        "status": "queued", "created_at": now, "updated_at": now,
+        "worker_pid": None, "worker_start_time": None, "result": None,
+        "executor_exit_code": None, "diagnostic": {},
+    }
+    _atomic_json(record_path, record)
+    record["_created"] = True
+    return record
+
+
+def reconcile_executions(runtime_dir: Path, project_dir: Path) -> dict[str, int]:
+    counts = {
+        "in_flight": 0,
+        "reconciled": 0,
+        "recovered": 0,
+        "progressed": 0,
+        "terminal": 0,
+        "no_progress": 0,
+        "failed": 0,
+    }
+    ledger_path = runtime_dir / EXECUTIONS_FILE
+    for path in runtime_dir.glob(f"{EXECUTION_RECORD_PREFIX}*.json"):
+        record = _load_json(path)
+        status = str(record.get("status", "")).strip()
+        if status in {"queued", "running"}:
+            counts["in_flight"] += 1
+            continue
+        if status != "completed":
+            continue
+
+        result = str(record.get("result", "")).strip()
+        row = {
+            "request_id": str(record.get("request_id", "")).strip(),
+            "task_id": str(record.get("task_id", "")).strip(),
+            "repository": str(record.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
+            "fingerprint": str(record.get("fingerprint", "")).strip(),
+            "result": result,
+            "executor_exit_code": record.get("executor_exit_code"),
+            "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+            "checkpoint_after": str(record.get("checkpoint_after", "")).strip(),
+            "diagnostic": record.get("diagnostic") if isinstance(record.get("diagnostic"), dict) else {},
+            "created_at": utc_now(),
+        }
+        _append_jsonl(ledger_path, row)
+        now = utc_now()
+        record["status"] = "reconciled"
+        record["reconciled_at"] = now
+        record["updated_at"] = now
+        _atomic_json(path, record)
+        counts["reconciled"] += 1
+        if result == "progress":
+            counts["progressed"] += 1
+        elif result == "terminal":
+            counts["terminal"] += 1
+        elif result == "no_progress":
+            counts["no_progress"] += 1
+        elif result not in {"superseded", ""}:
+            counts["failed"] += 1
+    return counts
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -589,6 +692,10 @@ def run_once(
         "terminal": 0,
         "no_progress": 0,
         "failed": 0,
+        "launched": 0,
+        "in_flight": 0,
+        "reconciled": 0,
+        "recovered": 0,
         "deferred_chatgpt": 0,
         "deferred_browser_probe": 0,
         "generated_at": utc_now(),
@@ -601,6 +708,10 @@ def run_once(
             summary["locked"] = True
             return summary
 
+        reconciliation = reconcile_executions(runtime, project)
+        for key in ("in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed"):
+            summary[key] += int(reconciliation.get(key) or 0)
+
         ledger_rows = _read_jsonl(ledger_path)
         latest_by_fingerprint: dict[str, dict[str, Any]] = {}
         for row in ledger_rows:
@@ -610,7 +721,7 @@ def run_once(
 
         for request in read_requests(runtime):
             summary["scanned"] += 1
-            if summary["executed"] >= max(1, int(max_requests)):
+            if summary["executed"] + summary["launched"] >= max(1, int(max_requests)):
                 break
             if str(request.get("status", "")).strip() != "queued":
                 continue
@@ -645,6 +756,13 @@ def run_once(
                 continue
 
             summary["eligible"] += 1
+            if executor is None:
+                record = enqueue_execution(runtime, project, request, state, timeout_seconds)
+                if bool(record.pop("_created", False)):
+                    summary["launched"] += 1
+                    summary["in_flight"] += 1
+                continue
+
             summary["executed"] += 1
             result, exit_code, after_state, diagnostic = _execute(
                 runtime_dir=runtime,

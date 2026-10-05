@@ -113,6 +113,120 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         script.write_text(body, encoding="utf-8")
         return [sys.executable, str(script)]
 
+    def test_dispatcher_enqueues_without_calling_provider_inline(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        original_execute = dispatcher._execute
+        dispatcher._execute = lambda **kwargs: (_ for _ in ()).throw(AssertionError("provider executed inline"))
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            dispatcher._execute = original_execute
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+        records = list(self.runtime.glob("_resume-execution-*.json"))
+        self.assertEqual(len(records), 1)
+        record = json.loads(records[0].read_text())
+        self.assertEqual(record["fingerprint"], "fingerprint-v1")
+        self.assertEqual(record["status"], "queued")
+
+    def test_live_execution_record_prevents_duplicate_launch(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        first = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        second = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(first["launched"], 1)
+        self.assertEqual(first["in_flight"], 1)
+        self.assertEqual(second["launched"], 0)
+        self.assertEqual(second["in_flight"], 1)
+        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
+
+    def test_task_older_than_ten_days_cannot_create_execution_record_after_recent_update(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=11)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(list(self.runtime.glob("_resume-execution-*.json")), [])
+
+    def test_task_at_ten_day_cutoff_keeps_current_boundary_semantics(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+
+    def test_completed_worker_execution_is_reconciled_into_ledger(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        request = json.loads((self.runtime / "_resume-requests.jsonl").read_text().splitlines()[0])
+        dispatcher.enqueue_execution(self.runtime, self.project, request, state, 30)
+        record_path = next(self.runtime.glob("_resume-execution-*.json"))
+        record = json.loads(record_path.read_text())
+        record.update(
+            status="completed",
+            result="progress",
+            executor_exit_code=0,
+            checkpoint_after="2026-10-05T08:10:00Z",
+            diagnostic={"provider": "test"},
+        )
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(result["reconciled"], 1)
+        self.assertEqual(result["progressed"], 1)
+        ledger = [json.loads(line) for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines() if line.strip()]
+        self.assertEqual(ledger[-1]["result"], "progress")
+        self.assertEqual(ledger[-1]["fingerprint"], "fingerprint-v1")
+        reconciled = json.loads(record_path.read_text())
+        self.assertEqual(reconciled["status"], "reconciled")
+        self.assertTrue(reconciled["reconciled_at"])
+
     def test_dispatcher_executes_matching_checkpoint_and_requires_real_state_advance(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
@@ -661,6 +775,7 @@ state_path.write_text(json.dumps(state))
             result = dispatcher.run_once(
                 runtime_dir=self.runtime,
                 project_dir=self.project,
+                executor=[sys.executable],
                 timeout_seconds=30,
                 max_requests=1,
             )

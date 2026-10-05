@@ -43,7 +43,7 @@ LOCK_FILE = "_gemini-24x7-controller.lock"
 DAEMON_LOCK_FILE = "_gemini-24x7-controller-daemon.lock"
 EVENTS_FILE = "_gemini-24x7-controller-events.jsonl"
 STATE_FILE = "_gemini-24x7-controller-state.json"
-DEFAULT_LEASE_SECONDS = 960
+DEFAULT_LEASE_SECONDS = 120
 DEFAULT_INTERVAL_SECONDS = 30
 CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
 CHATGPT_MONITOR_FALLBACK_FILE = Path(os.environ.get("CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE", "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/_chatgpt-continuity-monitor-state.json"))
@@ -400,6 +400,10 @@ def _has_material_activity(
     dispatched = (
         "eligible",
         "executed",
+        "launched",
+        "in_flight",
+        "reconciled",
+        "recovered",
         "progressed",
         "terminal",
         "no_progress",
@@ -421,15 +425,15 @@ def run_once(
     root = Path(runtime_dir or RUNTIME_DIR)
     root.mkdir(parents=True, exist_ok=True)
     owner = owner_id or f"gemini-24x7-{uuid.uuid4()}"
-    lease = acquire_lease(root, owner_id=owner, ttl_seconds=max(DEFAULT_LEASE_SECONDS, timeout_seconds + 60))
+    lease = acquire_lease(root, owner_id=owner, ttl_seconds=DEFAULT_LEASE_SECONDS)
     if not lease.acquired:
         _append_event(root, "duplicate_suppressed", reason=lease.reason)
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
         watch = watchdog.run_once(stale_seconds=max(1, int(stale_seconds)), runtime_dir=root)
         nudge = nudge_dispatcher.run_once(runtime_dir=root)
-        # The canonical dispatcher itself retains ChatGPT's first recovery
-        # window and owns the Gemini-only execution boundary.
+        # The dispatcher only enqueues/reconciles durable work. Provider execution
+        # runs in the independent resume worker and must never block this cycle.
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
@@ -484,7 +488,7 @@ def run_once(
             "lease_recovered": lease.recovered,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
-            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,
             "claude_remote_control": claude_health,
