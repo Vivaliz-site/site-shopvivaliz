@@ -124,11 +124,11 @@ def _run_once_locked(
         if not payload:
             continue
 
-        updated = _parse_time(payload.get("updated_at"))
-        if updated is None:
+        created = _parse_time(payload.get("created_at"))
+        if created is None:
             skipped_invalid_timestamp += 1
             continue
-        if updated < lookback_cutoff:
+        if created < lookback_cutoff:
             skipped_outside_lookback += 1
             continue
         scanned += 1
