@@ -176,6 +176,12 @@ const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FI
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
+  if (normalized.includes('canonical history read rate limited')) return 'CANONICAL_READ_RATE_LIMITED';
+  if (normalized.includes('bound browser session stream active or unconfirmed')) return 'BOUND_STREAM_NOT_COMPLETE';
+  if (normalized.includes('another conversation in the same browser session is active')) return 'SIBLING_STREAM_ACTIVE';
+  if (normalized.includes('canonical presence could not be confirmed')) return 'CONVERSATION_PRESENCE_UNCONFIRMED';
+  if (normalized.includes('no unfinished response is confirmed')) return 'CANONICAL_NO_UNFINISHED_RESPONSE';
+  if (normalized.includes('active stream remains unconfirmed')) return 'ACTIVE_STREAM_AFTER_REATTACH';
   if (normalized.includes('failure_reason=additional_checks')) return 'RECOVERABLE_ADDITIONAL_CHECKS';
   if (normalized.includes('failure_reason=stopped_thinking')) return 'RECOVERABLE_STOPPED_THINKING';
   if (normalized.includes('failure_reason=streaming_interrupted')) return 'RECOVERABLE_STREAMING_INTERRUPTED';
@@ -213,7 +219,8 @@ function reinforcementHealthPayload(
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
-    || action === 'idle_no_checkpoint';
+    || action === 'idle_no_checkpoint'
+    || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
@@ -390,6 +397,14 @@ async function cdpReady() {
   }
 }
 
+function classifyChatgptPath(pathname) {
+  const conversation = String(pathname || '').match(/^\/(?:g\/[^/]+\/)?(?:c|uc)\/([^/]+)/);
+  if (conversation) return { rank: 0, conversationId: conversation[1] };
+  if (pathname === '/' || pathname === '') return { rank: 1, conversationId: '' };
+  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(pathname)) return { rank: 3, conversationId: '' };
+  return { rank: 2, conversationId: '' };
+}
+
 function chatgptTabRank(tab) {
   if (!tab || tab.type !== 'page' || !tab.webSocketDebuggerUrl) return Number.POSITIVE_INFINITY;
   let url;
@@ -399,10 +414,7 @@ function chatgptTabRank(tab) {
     return Number.POSITIVE_INFINITY;
   }
   if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com') return Number.POSITIVE_INFINITY;
-  if (/^\/(?:c|uc)\/[^/]+/.test(url.pathname)) return 0;
-  if (url.pathname === '/' || url.pathname === '') return 1;
-  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(url.pathname)) return 3;
-  return 2;
+  return classifyChatgptPath(url.pathname).rank;
 }
 
 function selectChatgptTab(tabs) {
@@ -482,7 +494,7 @@ async function selectBoundConversationReentryTab(
 function conversationIdFromTab(tab) {
   if (chatgptTabRank(tab) !== 0) return '';
   try {
-    return new URL(String(tab.url || '')).pathname.match(/^\/(?:c|uc)\/([^/]+)/)?.[1] || '';
+    return classifyChatgptPath(new URL(String(tab.url || '')).pathname).conversationId;
   } catch {
     return '';
   }
@@ -1355,6 +1367,19 @@ async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_
             message_status:'NO_CONVERSATION'
           };
         }
+        // Persist only a non-secret deadline in this browser profile. A new
+        // tab or worker restart must not immediately repeat a throttled read.
+        const backoffKey='shopvivaliz.canonical-read-backoff-until.v1';
+        let backoffUntil=Number(globalThis.__shopvivalizCanonicalReadBackoffUntil||0);
+        if(!Number.isFinite(backoffUntil)) backoffUntil=0;
+        try{
+          const stored=Number(localStorage.getItem(backoffKey)||0);
+          if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+        }catch{}
+        const rateLimited=()=>({http_status:429,node_id:'',role:'',end_turn:null,
+          child_count:-1,content_text_length:0,message_status:'RATE_LIMIT_BACKOFF',
+          retry_after_ms:Math.max(0,backoffUntil-Date.now())});
+        if(backoffUntil>Date.now()) return rateLimited();
         let accountId='';
         let accessToken='';
         try{
@@ -1377,6 +1402,22 @@ async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_
             '/backend-api/conversation/'+encodeURIComponent(match[1]),
             {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
+          if(response.status===429){
+            const retryAfter=String(response.headers?.get?.('retry-after')||'').trim();
+            const seconds=Number(retryAfter);
+            const retryDate=Date.parse(retryAfter);
+            const requestedWait=retryAfter&&Number.isFinite(seconds)&&seconds>=0
+              ? seconds*1000 : (Number.isFinite(retryDate)?retryDate-Date.now():0);
+            const waitMs=Number.isFinite(requestedWait)?Math.max(300000,requestedWait):300000;
+            backoffUntil=Date.now()+waitMs;
+            globalThis.__shopvivalizCanonicalReadBackoffUntil=backoffUntil;
+            try{
+              const stored=Number(localStorage.getItem(backoffKey)||0);
+              if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+              localStorage.setItem(backoffKey,String(backoffUntil));
+            }catch{}
+            return {...rateLimited(),message_status:'HTTP_ERROR'};
+          }
           let body=null;
           try{body=await response.json();}catch{}
           if(!response.ok){
@@ -1517,7 +1558,15 @@ async function silentStallPresent(cdp) {
   return Boolean(await localIncompleteTurnPresent(cdp));
 }
 
+// Fresh server bookkeeping is required at the actuator boundary as well as
+// in callers: reinforcement and delayed keyboard fallbacks share these helpers.
+async function conversationStreamComplete(cdp) {
+  const stream = await conversationStreamStatus(cdp);
+  return stream?.http_status === 200 && String(stream?.status || '').toUpperCase() === 'COMPLETE';
+}
+
 async function clearStaleCompleteGeneration(cdp) {
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
     const button=document.querySelector('[data-testid="stop-button"]');
@@ -2166,7 +2215,20 @@ async function conversationUnavailablePresent(cdp) {
     const path=String(location.pathname||'');
     const parts=path.split('/');
     if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
-    const text=String(document.body?.innerText||'').toLowerCase();
+    // Error strings quoted by the user/assistant, present in another chat,
+    // or left in a draft are not an unavailable conversation surface.
+    const main=document.querySelector('main');
+    if(!main) return false;
+    const surface=main.cloneNode(true);
+    const excluded=[
+      '[data-message-author-role]', '[data-conversation-role]', '[data-turn-key]',
+      '[data-testid^="conversation-turn-"]', 'article', 'pre', 'code', 'blockquote',
+      'nav', 'aside', '[role="navigation"]', '[role="dialog"]',
+      '[contenteditable="true"]', '[role="textbox"]', 'textarea',
+      '[hidden]', '[aria-hidden="true"]', 'script', 'style', 'template',
+    ].join(',');
+    for(const node of surface.querySelectorAll(excluded)) node.remove();
+    const text=String(surface.textContent||'').toLowerCase().replace(/\\s+/g,' ').trim();
     return [
       'could not load this chatgpt conversation',
       'unable to load this chatgpt conversation',
@@ -2256,6 +2318,7 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
   })()`);
   if (!target) return false;
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
 
   if (typeof cdp?.send === 'function') {
     try {
@@ -2330,6 +2393,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
     if (submitTarget?.state === 'ready') {
       if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+      if (!(await conversationStreamComplete(cdp))) return false;
       try {
         const x=Number(submitTarget.x);
         const y=Number(submitTarget.y);
@@ -2359,6 +2423,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
 async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
@@ -2469,6 +2534,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
         if (String(insertedDraft || '').trim() !== expected) return false;
         if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
         if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+        if (!(await conversationStreamComplete(cdp))) return false;
         try {
           await cdp.send('Input.dispatchKeyEvent', {
             type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2563,6 +2629,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
 
     if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+    if (!(await conversationStreamComplete(cdp))) return false;
     try {
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2597,6 +2664,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (!typed) return false;
   await sleep(300);
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
@@ -2630,6 +2698,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (clicked) return true;
   if (typeof cdp?.send !== 'function') return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   try {
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyDown', key: 'Enter', code: 'Enter',
@@ -2645,6 +2714,51 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   }
 }
 
+// Check only sibling ChatGPT conversation tabs inside the browser profile
+// selected by BROWSER_SESSION_CONTEXT. A sibling Stop state is treated as
+// active unless the server explicitly proves that sibling stream COMPLETE.
+// Transport/probe failures do not invent activity; the bound conversation's
+// existing fail-closed checks still govern its own recovery.
+async function anotherConversationActiveInSession(
+  targetConversationId,
+  fetcher = fetch,
+  connector = connectCdpTarget,
+) {
+  const target = safeConversationId(targetConversationId);
+  if (!target) return false;
+  let tabs;
+  try {
+    const response = await fetcher(browserCdpBase() + '/json', {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response?.ok) return false;
+    tabs = await response.json();
+  } catch {
+    return false;
+  }
+
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const siblingId = safeConversationId(conversationIdFromTab(tab));
+    if (!siblingId || siblingId === target) continue;
+    let sibling;
+    try {
+      sibling = await connector(tab);
+      if (!sibling || !(await conversationIsGenerating(sibling))) continue;
+      const stream = await conversationStreamStatus(
+        sibling,
+        Math.min(2500, STREAM_STATUS_TIMEOUT_MS),
+      );
+      const status = String(stream?.status || '').toUpperCase();
+      if (Number(stream?.http_status || 0) === 200 && status === 'COMPLETE') continue;
+      return true;
+    } catch {
+      // One unreadable sibling must not disable recovery for the whole profile.
+    } finally {
+      try { sibling?.close(); } catch {}
+    }
+  }
+  return false;
+}
 // Returns only a boolean: no credentials, cookies or session payload leave
 // the authenticated tab. A changed path is rejected before touching the UI.
 async function boundBrowserAccountMatches(cdp, session) {
@@ -2661,12 +2775,13 @@ async function boundBrowserAccountMatches(cdp, session) {
   })()`)) === true;
 }
 
-async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '') {
+async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '', sameSessionBusy = anotherConversationActiveInSession) {
   let session;
   try { session = taskBrowserSession(taskId, conversationId); }
   catch (error) { return { result_status: 'ERROR', sent: false, detail: text(error?.message) }; }
   return BROWSER_SESSION_CONTEXT.run(session, () => attemptNudgeInSession(
     taskId, connect, confirmProgress, waitComposer, session.conversationId || conversationId,
+    sameSessionBusy,
   ));
 }
 
@@ -2676,6 +2791,7 @@ async function attemptNudgeInSession(
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
   conversationId = '',
+  sameSessionBusy = anotherConversationActiveInSession,
 ) {
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
@@ -2693,6 +2809,23 @@ async function attemptNudgeInSession(
       }
     : {})});
   let cdp;
+  let boundSessionStream = null;
+  const canonicalRateLimitDeferral = turn => {
+    if (Number(turn?.http_status || 0) !== 429) return null;
+    return {
+      result_status: continuationSent ? 'SENT_UNCONFIRMED' : 'STALLED_NOT_CONFIRMED',
+      detail: 'canonical history read rate limited; waiting without reload or continuation',
+      ...recoveryMetadata(),
+    };
+  };
+  const streamCompletionDeferral = async () => {
+    if (await conversationStreamComplete(cdp)) return null;
+    return {
+      result_status: 'STALLED_NOT_CONFIRMED',
+      detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+      ...recoveryMetadata(),
+    };
+  };
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
@@ -2706,9 +2839,19 @@ async function attemptNudgeInSession(
         return { result_status: 'ERROR', detail: 'browser session account mismatch or bound conversation mismatch', ...recoveryMetadata() };
       }
       // A missing DOM Stop does not prove an inactive server stream.
-      const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status !== 200 || String(stream?.status || '').toUpperCase() !== 'COMPLETE') {
-        return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+      boundSessionStream = await conversationStreamStatus(cdp);
+      if (boundSessionStream?.http_status !== 200
+          || String(boundSessionStream?.status || '').toUpperCase() !== 'COMPLETE') {
+        if (!(await conversationUnavailablePresent(cdp))) {
+          return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+        }
+      }
+      if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'another conversation in the same browser session is active; deferred without reload or continuation',
+          ...recoveryMetadata(),
+        };
       }
     }
     try {
@@ -2717,13 +2860,47 @@ async function attemptNudgeInSession(
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
     if (await conversationUnavailablePresent(cdp)) {
-      return {
-        result_status: 'CONVERSATION_NOT_FOUND',
-        detail: 'bound conversation surface is unavailable; deferred to detached recovery without sending continuation',
-        ...recoveryMetadata(),
-      };
+      const unavailableTurn = await conversationTurnState(cdp);
+      const unavailableStream = boundSessionStream || await conversationStreamStatus(cdp);
+      const canonicalStatus = Number(unavailableTurn?.http_status || 0);
+      const canonicalPresent = canonicalStatus === 200 && Boolean(String(unavailableTurn?.node_id || ''));
+      const canonicalMissing = canonicalStatus === 404 || canonicalStatus === 410;
+      if (canonicalMissing) {
+        return {
+          result_status: 'CONVERSATION_NOT_FOUND',
+          detail: 'bound conversation is unavailable in the UI and canonically confirmed missing',
+          ...recoveryMetadata(),
+        };
+      }
+      if (canonicalStatus === 429) {
+        return { result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'canonical history read rate limited; waiting without reload or continuation',
+          ...recoveryMetadata() };
+      }
+      if (!canonicalPresent) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation UI is unavailable but canonical presence could not be confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const streamStatus = String(unavailableStream?.status || '').toUpperCase();
+      const canonicalActive = unavailableTurn?.end_turn === false
+        || ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus);
+      // COMPLETE describes the server stream, not successful UI hydration.
+      // A tool leaf (end_turn=null), or even an existing final answer, can
+      // still need passive reattachment. This never authorizes a new send.
+      const canonicalComplete = unavailableStream?.http_status === 200 && streamStatus === 'COMPLETE';
+      if (!canonicalActive && !canonicalComplete) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation exists canonically but no unfinished response is confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      detectedFailureReason = 'conversation_hydration_error';
     }
-    detectedFailureReason = await recoverableFailureReason(cdp);
+    if (!detectedFailureReason) detectedFailureReason = await recoverableFailureReason(cdp);
     if (detectedFailureReason === 'additional_checks') {
       return {
         result_status: 'STALLED_NOT_CONFIRMED',
@@ -2732,7 +2909,6 @@ async function attemptNudgeInSession(
       };
     }
     let recoveredStaleComplete = false;
-    let recoveredTerminalFailure = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
@@ -2771,6 +2947,8 @@ async function attemptNudgeInSession(
       || Boolean(detectedFailureReason)
       || silentStallBeforeReattach;
     const passiveTurnBaseline = await conversationTurnState(cdp);
+    const passiveTurnBaselineRateLimit = canonicalRateLimitDeferral(passiveTurnBaseline);
+    if (passiveTurnBaselineRateLimit) return passiveTurnBaselineRateLimit;
     const passiveBaseline = await assistantSnapshot(cdp);
     await cdp.evaluate(`(()=>{location.reload();return true})()`);
     await sleep(1200);
@@ -2789,16 +2967,40 @@ async function attemptNudgeInSession(
       };
     }
 
+    if (detectedFailureReason === 'conversation_hydration_error') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'canonical conversation remains recoverable after passive reattach; deferred without sending continuation',
+        ...recoveryMetadata(),
+      };
+    }
+
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
 
-    // "Stopped thinking" exposes a native Retry action in the current ChatGPT
-    // UI. Prefer that platform-native retry once before writing a new
-    // continuation message. This preserves the exact conversation and avoids
-    // accumulating duplicate "continue" turns when generation itself failed.
-    if (detectedFailureReason === 'stopped_thinking') {
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks appeared after reattach; deferred without stop or continuation',
+        ...recoveryMetadata(),
+      };
+    }
+    // DOM controls and banners can be stale after reattach. Every recovery
+    // actuator needs fresh canonical COMPLETE evidence, including silent stalls.
+    const postReattachStreamDeferral = await streamCompletionDeferral();
+    if (postReattachStreamDeferral) return postReattachStreamDeferral;
+
+    // Recoverable generation failures can expose a native Retry action in the
+    // current ChatGPT UI. Prefer that platform-native retry once before writing
+    // a new continuation message. This preserves the exact conversation and
+    // avoids accumulating duplicate "continue" turns when generation failed.
+    if (['stopped_thinking', 'streaming_interrupted', 'request_timeout', 'generation_error'].includes(detectedFailureReason)) {
       const retryBaseline = await assistantSnapshot(cdp);
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
+      const retryStreamDeferral = await streamCompletionDeferral();
+      if (retryStreamDeferral) return retryStreamDeferral;
       const retryClicked = await clickRecoverableRetryButton(
         cdp,
         retryBaseline?.conversationFingerprint,
@@ -2832,37 +3034,16 @@ async function attemptNudgeInSession(
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
-      // Re-read server bookkeeping only after the passive recovery window.
-      // Anything other than a confirmed COMPLETE remains potentially active
-      // and must not receive a duplicate continuation.
-      const stream = await conversationStreamStatus(cdp);
-      const streamComplete = stream?.http_status === 200 && stream?.status === 'COMPLETE';
-      if (!streamComplete && !detectedFailureReason) {
+      const stopStreamDeferral = await streamCompletionDeferral();
+      if (stopStreamDeferral) return stopStreamDeferral;
+      if (generatingAfterReattach && !(await clearStaleCompleteGeneration(cdp))) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
-          detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+          detail: 'stale COMPLETE stream detected but Stop state did not clear',
           ...recoveryMetadata(),
         };
       }
-
-      // A persisted terminal/degraded failure is stronger evidence than a
-      // stale Stop control or server-side IN_PROGRESS bookkeeping. The
-      // reinforcement path already gives ChatGPT its own retry grace window;
-      // after no progress, clear only that stale UI control and resume the
-      // checkpoint on the same model.
-      if (generatingAfterReattach) {
-        if (!(await clearStaleCompleteGeneration(cdp))) {
-          return {
-            result_status: 'STALLED_NOT_CONFIRMED',
-            detail: detectedFailureReason
-              ? 'recoverable failure detected but stale Stop state did not clear'
-              : 'stale COMPLETE stream detected but Stop state did not clear',
-            ...recoveryMetadata(),
-          };
-        }
-      }
-      recoveredStaleComplete = streamComplete;
-      recoveredTerminalFailure = !streamComplete && Boolean(detectedFailureReason);
+      recoveredStaleComplete = true;
     }
     if (!(await waitComposer(cdp))) {
       return {
@@ -2874,6 +3055,10 @@ async function attemptNudgeInSession(
     let baseline = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
     let turnBaseline = await conversationTurnState(cdp);
+    const initialReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+    if (initialReadRateLimit) return initialReadRateLimit;
+    const sendStreamDeferral = await streamCompletionDeferral();
+    if (sendStreamDeferral) return sendStreamDeferral;
     let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
     continuationSent = Boolean(sent);
     if (!sent) {
@@ -2893,6 +3078,10 @@ async function attemptNudgeInSession(
       baseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
       turnBaseline = await conversationTurnState(cdp);
+      const resendReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+      if (resendReadRateLimit) return resendReadRateLimit;
+      const resendStreamDeferral = await streamCompletionDeferral();
+      if (resendStreamDeferral) return resendStreamDeferral;
       sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
@@ -2910,6 +3099,8 @@ async function attemptNudgeInSession(
       // Treat this as a transport failure, not as an ambiguous unconfirmed send:
       // reload/reattach once and retry only after the UI still reports the error.
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
       const retryBaseline = await assistantSnapshot(cdp);
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
@@ -2930,6 +3121,10 @@ async function attemptNudgeInSession(
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
       const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
+      const retryAfterReattachTurnBaselineRateLimit = canonicalRateLimitDeferral(retryAfterReattachTurnBaseline);
+      if (retryAfterReattachTurnBaselineRateLimit) return retryAfterReattachTurnBaselineRateLimit;
+      const transmissionStreamDeferral = await streamCompletionDeferral();
+      if (transmissionStreamDeferral) return transmissionStreamDeferral;
       const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       if (!retrySent) {
         return {
@@ -2959,9 +3154,7 @@ async function attemptNudgeInSession(
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
           ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
-          : recoveredTerminalFailure
-            ? 'recovered terminal generation state and sent continuation, but no assistant progress was observed'
-            : 'sent continuation, but no assistant progress was observed',
+          : 'sent continuation, but no assistant progress was observed',
         ...recoveryMetadata(),
       };
     }
@@ -2969,9 +3162,7 @@ async function attemptNudgeInSession(
       result_status: 'PROGRESS_CONFIRMED',
       detail: recoveredStaleComplete
         ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
-        : recoveredTerminalFailure
-          ? 'recovered terminal generation state; continuation produced assistant progress'
-          : 'continuation produced assistant progress',
+        : 'continuation produced assistant progress',
       ...recoveryMetadata(),
     };
   } catch (error) {
@@ -3496,15 +3687,36 @@ async function reinforcementLoop(
   }
 }
 
+async function disabledReinforcementHeartbeatLoop(
+  persist = persistReinforcementHealth,
+  wait = sleep,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
+) {
+  for (;;) {
+    persist({
+      action: 'monitor_disabled',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await wait(heartbeatIntervalMs);
+  }
+}
+
 async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
   runAuthorizationLoop = authorizationLoop,
   autoAllowEnabled = AUTO_ALLOW_ENABLED,
+  runDisabledMonitorHeartbeatLoop = disabledReinforcementHeartbeatLoop,
 ) {
   const loops = [runBridgeLoop()];
-  if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (reinforcementEnabled) {
+    loops.push(runReinforcementLoop());
+  } else {
+    loops.push(runDisabledMonitorHeartbeatLoop());
+  }
   if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
@@ -3529,6 +3741,7 @@ export {
   browserSessionReadyForReinforcement,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
@@ -3565,6 +3778,7 @@ export {
   withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
+  disabledReinforcementHeartbeatLoop,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,

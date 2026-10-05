@@ -87,13 +87,94 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         evaluated.push(source);
         if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
         if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+        if (source.includes('continuity-conversation-unavailable-probe')) return false;
         throw Error('active stream must prevent all recovery effects');
       } };
       const result = await api.attemptNudge(id, async () => cdp, undefined, undefined, conversation);
       assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
       assert.equal(result.sent, false);
       assert.match(result.detail, /active|unconfirmed/);
-      assert.equal(evaluated.length, 2);
+      assert.equal(
+        evaluated.length,
+        3,
+        'active bound stream should only probe account, stream status, and unavailable-conversation UI',
+      );
+    }],
+    ['same-session activity probe ignores target and recognizes an active sibling', async () => {
+      const target = conversation;
+      const sibling = 'active-sibling-conversation';
+      const closed = [];
+      const fetcher = async () => ({
+        ok: true,
+        async json() {
+          return [
+            { type: 'page', url: 'https://chatgpt.com/c/' + target, webSocketDebuggerUrl: 'ws://target' },
+            { type: 'page', url: 'https://chatgpt.com/c/' + sibling, webSocketDebuggerUrl: 'ws://sibling' },
+          ];
+        },
+      });
+      const connector = async tab => ({
+        async evaluate(source) {
+          if (source.includes('stop-button')) return tab.url.endsWith(sibling);
+          if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+          throw Error('unexpected sibling probe');
+        },
+        close() { closed.push(tab.url); },
+      });
+      assert.equal(await api.anotherConversationActiveInSession(target, fetcher, connector), true);
+      assert.deepEqual(closed, ['https://chatgpt.com/c/' + sibling]);
+    }],
+    ['another active conversation in the same browser session defers bound recovery before reload or input', async () => {
+      write(); const evaluated = [];
+      const cdp = { close() {}, async evaluate(source) {
+        evaluated.push(source);
+        if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
+        if (source.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
+        throw Error('same-session active guard must prevent all recovery effects');
+      } };
+      const result = await api.attemptNudge(
+        id,
+        async () => cdp,
+        undefined,
+        undefined,
+        conversation,
+        async () => true,
+      );
+      assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+      assert.equal(result.sent, false);
+      assert.match(result.detail, /another conversation.*same browser session/i);
+      assert.equal(evaluated.length, 2, 'guard should run after account and bound-stream checks, before any recovery effect');
+    }],
+    ['bound active stream with unavailable UI is treated as hydration recovery, not generic active deferral', async () => {
+      write(); const evaluated = [];
+      const cdp = { close() {}, async send() { throw Error('hydration recovery must not send trusted input'); }, async evaluate(source) {
+        evaluated.push(source);
+        if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, { location: { pathname: '/c/' + conversation }, AbortSignal, fetch: async () => ({ ok: true, json: async () => ({ user: { email: 'atendimento@shopvivaliz.com.br' } }) }) });
+        if (source === 'location.pathname') return '/c/' + conversation;
+        if (source.includes('continuity-conversation-unavailable-probe')) return true;
+        if (source.includes('/stream_status')) return { http_status: 200, status: 'IS_STREAMING' };
+        if (source.includes('conversation-turn-state')) return { http_status: 200, node_id: 'bound-active-assistant', role: 'assistant', end_turn: false, child_count: 0, content_text_length: 0, message_status: 'finished_successfully' };
+        if (source.includes('const candidates=[')) return { count: 1, lastText: 'prior reply', lastLength: 11, lastKey: 'assistant-prior', surfaceText: 'Could not load this ChatGPT conversation', surfaceLength: 39, conversationPath: '/c/' + conversation, snapshotSource: 'legacy' };
+        if (source.includes('location.reload')) return true;
+        if (source.includes('continuity-error-banner-probe')
+          || source.includes('continuity-additional-checks-probe')
+          || source.includes('continuity-stopped-thinking-probe')
+          || source.includes('continuity-streaming-interrupted-probe')
+          || source.includes('continuity-request-timeout-probe')
+          || source.includes('stop-button')) return false;
+        return false;
+      } };
+      const result = await api.attemptNudge(
+        id,
+        async () => cdp,
+        async () => true,
+        async () => { throw Error('composer path must not be reached'); },
+        conversation,
+      );
+      assert.equal(result.result_status, 'PROGRESS_CONFIRMED');
+      assert.equal(result.sent, false);
+      assert.ok(evaluated.some(source => source.includes('continuity-conversation-unavailable-probe')));
+      assert.ok(evaluated.some(source => source.includes('location.reload')));
     }],
     ['overlapping async sessions do not leak routes or alter legacy default', async () => {
       write(); const personal = path.join(directory, 'account-routing-personal.json');

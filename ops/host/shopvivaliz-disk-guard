@@ -95,16 +95,22 @@ cleanup_regenerable_node_cache() {
   done
 }
 
+cleanup_unused_docker_images() {
+  command -v docker >/dev/null 2>&1 || return 0
+  [ "$(systemctl is-active docker 2>/dev/null || true)" = active ] || return 0
+  docker image prune -af >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true
+}
+
 # Safe, bounded cleanup only. Never truncate Docker json-file logs in place.
 # Start with regenerable agent caches in observe state so disk does not drift into warning.
-if [ "$before" -ge 75 ]; then
+if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ]; then
   cleanup_regenerable_node_cache
+  cleanup_unused_docker_images
 fi
 if [ "$before" -ge 80 ]; then
   journalctl --vacuum-size=512M >/dev/null 2>&1 || true
   apt-get clean >/dev/null 2>&1 || true
-  docker image prune -af --filter until=168h >/dev/null 2>&1 || true
-  docker builder prune -af --filter until=168h >/dev/null 2>&1 || true
 fi
 if [ "$before" -ge 90 ]; then
   journalctl --vacuum-size=256M >/dev/null 2>&1 || true

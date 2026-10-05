@@ -11,6 +11,7 @@ process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE = testMonitorFallbackFile;
 const {
   Cdp,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
@@ -72,7 +73,7 @@ function fakeCdp({
   composerUsable = true,
   pageText = '',
   sendSucceeds = true,
-  streamStatus = 'IN_PROGRESS',
+  streamStatus = generating ? 'IN_PROGRESS' : 'COMPLETE',
   staleStopClearSucceeds = true,
 } = {}) {
   const calls = [];
@@ -171,6 +172,8 @@ async function run() {
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
       { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://uc', url: 'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-c', url: 'https://chatgpt.com/g/g-p-returns/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-uc', url: 'https://chatgpt.com/g/g-p-returns/uc/99999999-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
@@ -178,7 +181,7 @@ async function run() {
       tabs,
       '11111111-2222-3333-4444-555555555555',
     );
-    assert.equal(bound.length, 1);
+    assert.equal(bound.length, 2, 'plain and Project routes must share the same conversation identity');
     assert.equal(
       bound[0].url,
       'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
@@ -188,7 +191,7 @@ async function run() {
       tabs,
       '99999999-2222-3333-4444-555555555555',
     );
-    assert.equal(ucBound.length, 1, '/uc conversation routes must be first-class bound tabs');
+    assert.equal(ucBound.length, 2, 'plain and Project /uc routes must share the same conversation identity');
     assert.equal(
       ucBound[0].url,
       'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555',
@@ -818,6 +821,7 @@ async function run() {
     let composerProbes = 0;
     let platformChecks = 0;
     await sendContinueMessage({ async evaluate(source) {
+      if (String(source).includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (String(source).includes('continuity-conversation-identity-probe')) {
         return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
       }
@@ -1004,6 +1008,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(expression);
         if (expression.includes('insertText') || expression.includes('proto.value')) {
           return expression.includes('[role="textbox"][contenteditable="true"]');
@@ -1028,6 +1033,7 @@ async function run() {
     let sendEnabled = false;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1108,6 +1114,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1151,6 +1158,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1190,6 +1198,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1222,6 +1231,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1264,6 +1274,7 @@ async function run() {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         if (String(expression).includes('continuity-composer-draft-probe')) {
           return { usable: true, text: 'unsent customer draft' };
         }
@@ -1286,6 +1297,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(['evaluate', expression]);
         if (expression.includes('insertText') || expression.includes('proto.value')) return true;
         if (expression.includes('b.click()')) return false;
@@ -1313,6 +1325,7 @@ async function run() {
         return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
       },
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         evaluateCalls += 1;
         if (String(expression).includes('continuity-error-banner-probe')) return true;
         return false;
@@ -1525,6 +1538,47 @@ async function run() {
 
   {
     const cdp = fakeCdp({
+      pageText: 'Something went wrong',
+      generating: false,
+      composerUsable: false,
+      sendSucceeds: false,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-generation-error-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => false,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'generation_error');
+    assert.equal(outcome.sent, false, 'generation-error Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'generic generation error must click the unique native Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful generic Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
       pageText: 'Parou de pensar',
       generating: true,
       composerUsable: true,
@@ -1538,10 +1592,12 @@ async function run() {
       async () => false,
       async () => true,
     );
-    assert.notEqual(
-      outcome.result_status,
-      'STALLED_NOT_CONFIRMED',
-      'an explicit recoverable failure must outrank a stale Stop control / IN_PROGRESS bookkeeping signal',
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.sent, false, 'an error banner cannot authorize sending into an active stream');
+    assert.equal(
+      cdp.calls.some(call => call.includes('stale-complete-stop-clear')),
+      false,
+      'an error banner cannot authorize Stop without canonical COMPLETE',
     );
   }
 
@@ -2043,8 +2099,8 @@ async function run() {
       async () => unavailableCdp,
       async () => false,
     );
-    assert.equal(unavailable.result_status, 'CONVERSATION_NOT_FOUND');
-    assert.match(unavailable.detail, /unavailable/i);
+    assert.equal(unavailable.result_status, 'STALLED_NOT_CONFIRMED', unavailable.detail);
+    assert.match(unavailable.detail, /unavailable|canonical/i);
     assert.equal(
       unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
       false,
@@ -3456,6 +3512,52 @@ async function run() {
     await running;
   }
 
+  // Disabling the aggressive Fred reinforcement monitor must not disable
+  // the liveness heartbeat consumed by the controller.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      false,
+      async () => { events.push('authorization'); await blocked; },
+      true,
+      async () => { events.push('monitor-heartbeat'); await blocked; },
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'monitor-heartbeat']);
+    release();
+    await running;
+  }
+
+  // A neutral heartbeat for an intentionally disabled reinforcement monitor
+  // must clear stale reinforcement failure state instead of latching it forever.
+  {
+    const payload = reinforcementHealthPayload(
+      {
+        action: 'monitor_disabled',
+        sent: false,
+        progress_confirmed: false,
+      },
+      '2026-10-05T02:00:00.000Z',
+      {
+        degraded: true,
+        action: 'send_failed',
+        last_cycle_action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'old failure',
+        failure_reason: 'silent_stall',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'monitor_disabled');
+    assert.equal(payload.last_cycle_action, 'monitor_disabled');
+    assert.equal(payload.failure_reason, '');
+  }
+
   // Banner flashes then clears by the confirm re-check (client's own retry
   // succeeded) -> must NOT send a message.
   {
@@ -3594,11 +3696,15 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
+  (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
   });
-  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint }, testTaskStateDir);
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, anotherConversationActiveInSession }, testTaskStateDir);
+  await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
+  await (await import('./chatgpt-canonical-read-backoff-test.mjs')).runCanonicalReadBackoffTests({ conversationTurnState });
   console.log('reinforcementCheckOnce branches: PASS');
 }
 

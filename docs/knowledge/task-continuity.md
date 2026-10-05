@@ -604,3 +604,55 @@ and the send identity guard must recognize either exact route. Tests execute
 the injected browser programs against isolated HTTP/editor fixtures and are
 part of the bridge worker gate. HTTP 200, stream COMPLETE or a tool/thought
 node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
+
+
+## Unavailable-conversation classification and proof
+
+The unavailable-conversation UI detector must inspect the current `main`
+surface, excluding transcript turns, quoted code, drafts, hidden content,
+sidebars and other dialogs. A phrase in conversation history is diagnostic
+content, not a current application failure. The canonical presence check and
+all active-stream/input guards remain mandatory.
+
+A completed assistant response observed once is not evidence of automatic
+recovery. Before certifying same-conversation recovery, run `browser_proof`
+from `chatgpt_continuity_proof_certifier.py` against the actual checkpoint:
+it must find `PROGRESS_CONFIRMED` for that task, its bound conversation and
+one of its recorded checkpoint fingerprints. `continuity_ready=true` is an
+operational health result, not a substitute for that provenance check.
+
+
+## Canonical read cooldown and passive hydration (2026-10-05)
+
+Full-history HTTP429 responses start a five-minute minimum cooldown, honoring
+longer numeric or HTTP-date Retry-After values. Only its non-secret deadline
+is stored under `shopvivaliz.canonical-read-backoff-until.v1` in the same
+ChatGPT browser profile, so tabs and worker restarts share the pause without
+copying account data. A per-page in-memory fallback covers unavailable storage.
+During the pause the reader returns explicit HTTP429/RATE_LIMIT_BACKOFF without
+an auth/history fetch; expiry requires a fresh response, never cached proof.
+This does not modify cookies, provider limits, account routing or stream guards.
+
+Canonical HTTP200 plus a node and a confirmed COMPLETE stream permits one
+passive UI reattachment even for a tool leaf (`end_turn=null`) or an existing
+final answer. COMPLETE alone is not evidence of a loaded interface. Hydration
+recovery still never sends a continuation and cannot certify an old answer.
+HTTP429, missing canonical presence and unknown stream state remain fail-closed.
+
+Here, profile means a distinct Chromium `--user-data-dir`, not a ChatGPT
+workspace: Fred uses `shopvivaliz-chromium`/CDP9555 and Atendimento uses
+`shopvivaliz-atendimento-chromium`/CDP9556, as enforced in browser-sessions.md.
+Each contains one authorized login; the two localStorage namespaces are not
+shared. A longer Retry-After is never shortened to the five-minute default
+(RFC9110 section10.2.3). Browser UTC must remain synchronized for persisted
+deadlines, as for existing request timestamps; this does not cache responses.
+
+
+### Canonical429 is an actuator boundary, not only a reader pause
+
+Every full-history baseline inside a recovery attempt must reject HTTP429
+before the next reload, native Retry or continuation. Stream COMPLETE does
+not override a history-read cooldown. If a first continuation was already
+sent before a later read is rate-limited, preserve SENT_UNCONFIRMED and the
+send budget; never relabel it as an unsent deferral or send again. Existing
+stream, account and same-conversation progress guards remain mandatory.

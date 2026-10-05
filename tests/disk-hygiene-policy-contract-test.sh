@@ -16,6 +16,15 @@ check_fixed() {
     fail=1
   fi
 }
+check_absent() {
+  local pattern="$1" file="$2" label="$3"
+  if grep -Fq -- "$pattern" "$file"; then
+    printf 'FAIL: %s\n' "$label"
+    fail=1
+  else
+    printf 'PASS: %s\n' "$label"
+  fi
+}
 
 bash -n "$HOUSE"
 sh -n "$GUARD"
@@ -44,6 +53,11 @@ check_fixed '[ "$rapid_growth" -eq 1 ]' "$GUARD" 'rapid growth triggers guarded 
 check_fixed 'WORKTREE_PRESSURE_COUNT=' "$GUARD" 'disk guard defines a worktree pressure threshold'
 check_fixed 'worktree_count()' "$GUARD" 'disk guard counts worktree directories'
 check_fixed 'FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1' "$GUARD" 'pressure cleanup removes clean delivered inactive worktrees immediately'
+check_fixed 'cleanup_unused_docker_images()' "$GUARD" 'disk guard defines safe unused-image cleanup'
+check_fixed 'docker image prune -af >/dev/null 2>&1 || true' "$GUARD" 'unused Docker images are reclaimable without a seven-day delay'
+check_fixed 'if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ]; then' "$GUARD" 'disk guard reclaims unused Docker images at observe pressure or rapid growth'
+check_absent 'docker volume prune' "$GUARD" 'disk guard never prunes Docker volumes'
+check_absent 'docker system prune' "$GUARD" 'disk guard never performs broad Docker system prune'
 if [ "$(grep -c '^EOF2$' "$GUARD")" -eq 1 ]; then
   printf 'PASS: disk guard state heredoc is well formed
 '
