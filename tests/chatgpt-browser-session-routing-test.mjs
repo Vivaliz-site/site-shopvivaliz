@@ -33,8 +33,12 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'invalid' }));
         assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
         fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'fred' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'fred', conversation_id: 'fred-bound-conversation' }));
         assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
         fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', conversation_id: 'legacy-bound-conversation' }));
         assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
       } finally { fs.rmSync(isolated, { recursive: true, force: true }); }
     }],
