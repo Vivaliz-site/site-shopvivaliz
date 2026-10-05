@@ -604,3 +604,19 @@ and the send identity guard must recognize either exact route. Tests execute
 the injected browser programs against isolated HTTP/editor fixtures and are
 part of the bridge worker gate. HTTP 200, stream COMPLETE or a tool/thought
 node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
+
+
+## Unavailable-conversation classification and proof
+
+The unavailable-conversation UI detector must inspect the current `main`
+surface, excluding transcript turns, quoted code, drafts, hidden content,
+sidebars and other dialogs. A phrase in conversation history is diagnostic
+content, not a current application failure. The canonical presence check and
+all active-stream/input guards remain mandatory.
+
+A completed assistant response observed once is not evidence of automatic
+recovery. Before certifying same-conversation recovery, run `browser_proof`
+from `chatgpt_continuity_proof_certifier.py` against the actual checkpoint:
+it must find `PROGRESS_CONFIRMED` for that task, its bound conversation and
+one of its recorded checkpoint fingerprints. `continuity_ready=true` is an
+operational health result, not a substitute for that provenance check.

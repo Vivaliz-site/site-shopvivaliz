@@ -34,6 +34,12 @@ on:
       - 'tests/test_remote_control_mcp_priority_policy.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-unavailable-surface-test.mjs'
+      - 'tests/chatgpt-recovery-detail-code-test.mjs'
+      - 'tests/chatgpt-continuity-real-response-test.mjs'
+      - 'tests/chatgpt-unavailable-canonical-state-test.mjs'
+      - 'tests/chatgpt-progress-read-rate-test.mjs'
+      - 'tests/chatgpt-retry-scope-test.mjs'
       - 'tests/chatgpt-canonical-read-budget-test.mjs'
       - 'tests/chatgpt-browser-session-routing-test.mjs'
       - 'tests/test_browser_session_binding.py'
@@ -84,6 +90,12 @@ on:
       - 'tests/test_chatgpt_continuity_proof_certifier.py'
       - 'tests/test_chatgpt_continuity_nudge_dispatcher.py'
       - 'tests/chatgpt-continuity-bridge-worker-test.mjs'
+      - 'tests/chatgpt-unavailable-surface-test.mjs'
+      - 'tests/chatgpt-recovery-detail-code-test.mjs'
+      - 'tests/chatgpt-continuity-real-response-test.mjs'
+      - 'tests/chatgpt-unavailable-canonical-state-test.mjs'
+      - 'tests/chatgpt-progress-read-rate-test.mjs'
+      - 'tests/chatgpt-retry-scope-test.mjs'
       - 'tests/chatgpt-canonical-read-budget-test.mjs'
       - 'tests/chatgpt-browser-session-routing-test.mjs'
       - 'tests/test_browser_session_binding.py'
@@ -130,7 +142,7 @@ jobs:
       - name: Run ChatGPT continuity bridge worker regression
         run: node tests/chatgpt-continuity-bridge-worker-test.mjs
       - name: Run platform-wait safety regression
-        run: node --test tests/chatgpt-continuity-cooldown-test.mjs
+        run: node --test tests/chatgpt-continuity-cooldown-test.mjs tests/chatgpt-continuity-real-response-test.mjs tests/chatgpt-unavailable-canonical-state-test.mjs tests/chatgpt-progress-read-rate-test.mjs tests/chatgpt-retry-scope-test.mjs
       - name: Run ChatGPT continuity pending queue regression
         run: php tests/chatgpt-continuity-pending-nudge-store-test.php
       - name: Validate continuity policy
