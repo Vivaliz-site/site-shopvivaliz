@@ -2802,7 +2802,8 @@ async function attemptNudgeInSession(
         if (!(await conversationUnavailablePresent(cdp))) {
           return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
         }
-      } else if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
+      }
+      if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
           detail: 'another conversation in the same browser session is active; deferred without reload or continuation',
