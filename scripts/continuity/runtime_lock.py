@@ -8,7 +8,16 @@ class RuntimeLockConflict(RuntimeError): pass
 def _root()->Path:
     base=os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR","/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state").strip()
     if not base: raise RuntimeLockConflict("runtime lock state directory is required")
-    p=Path(base)/"_runtime-lock"; p.mkdir(parents=True,exist_ok=True); return p
+    root=Path(base)
+    p=root/"_runtime-lock"
+    p.mkdir(parents=True,exist_ok=True)
+    gid=root.stat().st_gid
+    try:
+        if p.stat().st_gid != gid: os.chown(p,-1,gid)
+        os.chmod(p,0o2770)
+    except OSError as e:
+        raise RuntimeLockConflict(f"cannot prepare shared runtime lock directory: {e}") from e
+    return p
 
 def _paths():
     r=_root(); return r/"lock.json",r/"lock.lock"
@@ -20,13 +29,26 @@ def _load(path):
 def _write(path,payload):
     fd,name=tempfile.mkstemp(prefix="runtime-lock.",dir=str(path.parent))
     try:
+        os.fchmod(fd,0o660)
+        gid=path.parent.stat().st_gid
+        if os.fstat(fd).st_gid != gid: os.fchown(fd,-1,gid)
         with os.fdopen(fd,"w") as h: json.dump(payload,h,sort_keys=True,separators=(",",":")); h.write("\n"); h.flush(); os.fsync(h.fileno())
         os.replace(name,path)
     finally:
         if os.path.exists(name): os.unlink(name)
 class _Guard:
     def __enter__(self):
-        self.path,lp=_paths(); self.h=lp.open("a+"); fcntl.flock(self.h.fileno(),fcntl.LOCK_EX); return self.path
+        self.path,lp=_paths()
+        fd=os.open(lp,os.O_RDWR|os.O_CREAT,0o660)
+        try:
+            os.fchmod(fd,0o660)
+            gid=self.path.parent.stat().st_gid
+            if os.fstat(fd).st_gid != gid: os.fchown(fd,-1,gid)
+            self.h=os.fdopen(fd,"a+")
+        except Exception:
+            os.close(fd)
+            raise
+        fcntl.flock(self.h.fileno(),fcntl.LOCK_EX); return self.path
     def __exit__(self,*_): fcntl.flock(self.h.fileno(),fcntl.LOCK_UN); self.h.close()
 def _live(p,now=None): return bool(p and p.get("released_at") is None and float(p.get("expires_at_epoch",0))>(time.time() if now is None else now))
 def acquire_runtime_lock(owner_kind:str,owner_id:str,ttl_seconds:int,allowed_actions:list[str])->dict[str,Any]:
