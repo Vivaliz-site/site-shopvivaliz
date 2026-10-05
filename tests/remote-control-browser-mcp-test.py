@@ -203,6 +203,80 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("tab_id", specs["browser_type"]["inputSchema"]["properties"])
         self.assertNotIn("tab_id", specs["browser_gui_type"]["inputSchema"]["properties"])
 
+    def test_desktop_window_resolution_is_target_bound_and_ambiguous_fails_closed(self):
+        search = mock.Mock(returncode=0, stdout="101\n202\n")
+        with (
+            mock.patch.object(m, "run_gui", return_value=search),
+            mock.patch.object(m, "window_title", side_effect=lambda w: {"101": "DESKTOP-KOCEPSV - RustDesk", "202": "RustDesk"}[w]),
+        ):
+            self.assertEqual(["101"], m.rustdesk_windows("KOCEPSV", "123456789"))
+        with mock.patch.object(m, "rustdesk_windows", return_value=["101", "102"]):
+            with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
+                m.active_desktop_window("KOCEPSV", "123456789")
+
+    def test_desktop_click_is_relative_and_bounded_to_rustdesk_window(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 200, "WIDTH": 500, "HEIGHT": 400}),
+            mock.patch.object(m, "run_gui") as run,
+        ):
+            with self.assertRaisesRegex(ValueError, "desktop_click_outside_window"):
+                m.desktop_click({"host": "KOCEPSV", "x": 500, "y": 10})
+            result = m.desktop_click({"host": "KOCEPSV", "x": 50, "y": 60, "button": "left", "clicks": 1})
+        self.assertTrue(result["ok"])
+        self.assertEqual(50, result["x"])
+        self.assertEqual(60, result["y"])
+        self.assertIn(mock.call(["xdotool", "mousemove", "--sync", "150", "260"]), run.call_args_list)
+
+    def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
+        secret = "sample-sensitive-input"
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "run_gui") as run,
+            mock.patch.object(m, "key") as key,
+        ):
+            result = m.desktop_type({"host": "KOCEPSV", "text": secret, "press_enter": True})
+        self.assertEqual(len(secret), result["typed_characters"])
+        for call in run.call_args_list:
+            argv = call.args[0]
+            self.assertNotIn(secret, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
+        self.assertIn(mock.call("ctrl+v"), key.call_args_list)
+        self.assertIn(mock.call("Return"), key.call_args_list)
+
+    def test_desktop_screenshot_captures_only_resolved_rustdesk_window(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="321") as active,
+            mock.patch.object(m, "capture_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
+        ):
+            result = m.desktop_screenshot({"host": "KOCEPSV"})
+        self.assertTrue(result["ok"])
+        active.assert_called_once_with("KOCEPSV", mock.ANY)
+        capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
+
+    def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
+        proc = mock.Mock()
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_windows", side_effect=[[], ["901"]]),
+            mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m.time, "sleep"),
+        ):
+            result = m.desktop_open({"host": "KOCEPSV"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("901", result["window_id"])
+        self.assertNotIn("123456789", repr(result))
+        argv = popen.call_args.args[0]
+        self.assertEqual("--connect", argv[-2])
+        self.assertEqual("123456789", argv[-1])
+
     def test_unit_is_loopback_and_separate_port(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_REMOTE_MCP_HOST=127.0.0.1", unit)
@@ -250,6 +324,31 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
+
+    def test_desktop_runtime_config_uses_separate_protected_env_file(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("EnvironmentFile=-/var/lib/shopvivaliz-remote-control/desktop.env", unit)
+        self.assertIn("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY=/usr/bin/rustdesk", unit)
+        self.assertIn('DESKTOP_ENV="/var/lib/shopvivaliz-remote-control/desktop.env"', setup)
+        self.assertIn('command -v rustdesk >/dev/null 2>&1', setup)
+        self.assertIn('stat -c %a "$DESKTOP_ENV"', setup)
+        self.assertIn('stat -c %U:%G "$DESKTOP_ENV"', setup)
+        self.assertIn("grep -q '^SHOPVIVALIZ_RUSTDESK_HOST_IDS=' \"$DESKTOP_ENV\"", setup)
+        self.assertNotIn('cat "$DESKTOP_ENV"', setup)
+        self.assertNotRegex(unit, r"SHOPVIVALIZ_RUSTDESK_HOST_IDS=.*[0-9]{6}")
+
+    def test_desktop_contract_is_documented_without_hardcoded_target_ids(self):
+        browser_spec = (ROOT / "remote-control-browser-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        base_spec = (ROOT / "remote-control-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        host_access = (ROOT / "docs" / "knowledge" / "host-access.md").read_text(encoding="utf-8")
+        for token in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
+            self.assertIn(token, browser_spec)
+        self.assertIn("desktop.env", browser_spec)
+        self.assertIn("desktop.env", base_spec)
+        self.assertIn("desktop_*", host_access)
+        self.assertIn("fredconsole", browser_spec)
+        self.assertNotIn("A automação usa somente a sessão gráfica X11 do usuário `fredrdp`", browser_spec)
 
     def test_browser_mcp_execstart_overrides_shared_env_for_session_isolation(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")

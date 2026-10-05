@@ -197,6 +197,60 @@ class RemoteControlMcpTests(unittest.TestCase):
             ["tab_id", "index"],
         )
 
+    def test_desktop_tools_have_safe_annotations_and_bounded_schemas(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for name in ("desktop_health", "desktop_screenshot"):
+            self.assertTrue(specs[name]["annotations"]["readOnlyHint"])
+            self.assertFalse(specs[name]["annotations"]["destructiveHint"])
+        for name in ("desktop_open", "desktop_click", "desktop_type"):
+            self.assertFalse(specs[name]["annotations"]["readOnlyHint"])
+            self.assertTrue(specs[name]["annotations"]["destructiveHint"])
+        for name in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
+            host = specs[name]["inputSchema"]["properties"]["host"]
+            self.assertEqual(set(host["enum"]), {"Fred-Win", "KOCEPSV"})
+            for forbidden in ("rustdesk_id", "display", "window", "selector", "command"):
+                self.assertNotIn(forbidden, specs[name]["inputSchema"]["properties"])
+        self.assertEqual(specs["desktop_health"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_open"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_screenshot"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_click"]["inputSchema"]["required"], ["host", "x", "y"])
+        self.assertEqual(specs["desktop_type"]["inputSchema"]["required"], ["host", "text"])
+
+    def test_desktop_host_validation_rejects_non_support_hosts(self):
+        self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
+        self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
+        for host in ("always-free-arm-1787907847-26", "shopvivaliz-free-a1", "unknown"):
+            with self.subTest(host=host):
+                with self.assertRaisesRegex(ValueError, "unsupported_desktop_host"):
+                    m.validate_desktop_host(host)
+
+    def test_rustdesk_host_id_requires_runtime_mapping_and_valid_id(self):
+        old = os.environ.pop("SHOPVIVALIZ_RUSTDESK_HOST_IDS", None)
+        try:
+            with self.assertRaisesRegex(ValueError, "rustdesk_host_id_unavailable"):
+                m.rustdesk_host_id("KOCEPSV")
+            os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = json.dumps({"KOCEPSV": "123456789"})
+            self.assertEqual(m.rustdesk_host_id("KOCEPSV"), "123456789")
+            with self.assertRaisesRegex(ValueError, "rustdesk_host_id_unavailable"):
+                m.rustdesk_host_id("Fred-Win")
+            os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = json.dumps({"KOCEPSV": "bad id"})
+            with self.assertRaisesRegex(ValueError, "invalid_rustdesk_host_id"):
+                m.rustdesk_host_id("KOCEPSV")
+        finally:
+            if old is None:
+                os.environ.pop("SHOPVIVALIZ_RUSTDESK_HOST_IDS", None)
+            else:
+                os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = old
+
+    def test_audit_redacts_desktop_type_text(self):
+        safe = m.sanitize_audit_args(
+            "desktop_type",
+            {"host": "KOCEPSV", "text": "sample-sensitive-input", "press_enter": True},
+        )
+        self.assertNotIn("text", safe)
+        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
+
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
