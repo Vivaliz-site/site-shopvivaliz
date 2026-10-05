@@ -15,6 +15,7 @@ python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
 bash tests/disk-hygiene-policy-contract-test.sh
 python3 tests/test_workspace_housekeeper_safety.py
+python3 tests/test_production_functional_audit_security.py
 python3 scripts/validate-task-continuity-enforcement.py
 bash tests/chatgpt-account-diagnostic-contract-test.sh
 python3 -m unittest tests.test_task_continuity_enforcement -v
