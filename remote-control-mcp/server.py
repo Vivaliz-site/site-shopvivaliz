@@ -111,6 +111,35 @@ HOSTS = {
 
 # Keep enough durable capacity for a control/diagnostic task even when one
 # long job is active. Windows relay work stays serialized.
+DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV")
+RUSTDESK_ID_RE = re.compile(r"^[0-9]{6,20}$")
+
+
+def validate_desktop_host(host: str) -> dict[str, Any]:
+    if host not in DESKTOP_HOSTS:
+        raise ValueError("unsupported_desktop_host")
+    return validate_host(host)
+
+
+def rustdesk_host_id(host: str) -> str:
+    validate_desktop_host(host)
+    raw = os.environ.get("SHOPVIVALIZ_RUSTDESK_HOST_IDS", "").strip()
+    if not raw:
+        raise ValueError("rustdesk_host_id_unavailable")
+    try:
+        mapping = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid_rustdesk_host_ids_config") from exc
+    if not isinstance(mapping, dict):
+        raise ValueError("invalid_rustdesk_host_ids_config")
+    value = str(mapping.get(host) or "").strip()
+    if not value:
+        raise ValueError("rustdesk_host_id_unavailable")
+    if not RUSTDESK_ID_RE.fullmatch(value):
+        raise ValueError("invalid_rustdesk_host_id")
+    return value
+
+
 HOST_DURABLE_LIMITS = {
     "always-free-arm-1787907847-26": 2,
     "shopvivaliz-free-a1": 2,
@@ -1577,6 +1606,9 @@ MUTATING_RUNTIME_ACTIONS = {
     "browser_click_control": "browser_click_control",
     "browser_type": "browser_type",
     "service_action": "service_action",
+    "desktop_open": "desktop_open",
+    "desktop_click": "desktop_click",
+    "desktop_type": "desktop_type",
 }
 
 def _durable_handoff_enabled() -> bool:
@@ -1907,6 +1939,11 @@ TOOLS = [
     ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
     ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
+    ("desktop_health", "Check the constrained backend RustDesk GUI path for a canonical Windows support host without exposing its RustDesk ID.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_open", "Open or focus the configured RustDesk session for a canonical Windows support host. The target ID comes only from protected runtime configuration.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
+    ("desktop_screenshot", "Capture only the constrained RustDesk remote-session window for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_click", "Click bounded coordinates relative to the active RustDesk remote-session window for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
+    ("desktop_type", "Type into the active constrained RustDesk remote-session window. Text is sent only over stdin and hashed in audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -1927,7 +1964,7 @@ TOOLS = [
 def tool_specs() -> list[dict[str, Any]]:
     specs = []
     for name, desc, props, readonly, destructive in TOOLS:
-        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout"}
+        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout", "button", "clicks", "press_enter"}
         if name == "browser_navigate":
             optional.add("tab_id")
         schema_props = dict(props)
