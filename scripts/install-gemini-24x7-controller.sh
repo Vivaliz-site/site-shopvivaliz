@@ -67,8 +67,12 @@ if [ ! -d "$target_dir" ]; then
   cleanup() { sudo rm -rf "$stage_dir"; }
   trap cleanup EXIT
   sudo install -d -o root -g root -m 0755 "$stage_dir/scripts"
+  sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"
   for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py; do
     sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"
+  done
+  for source in "$release_dir"/scripts/continuity/*.py; do
+    sudo install -o root -g root -m 0644 "$source" "$stage_dir/scripts/continuity/$(basename "$source")"
   done
   sudo install -o root -g root -m 0644 "$release_dir/AGENTS.md" "$stage_dir/AGENTS.md"
   continuity_doc="$release_dir/docs/knowledge/task-continuity.md"
@@ -82,7 +86,7 @@ if [ ! -d "$target_dir" ]; then
   # The systemd process runs as ubuntu and must traverse this immutable code
   # directory; runtime state remains under the separately protected shared
   # directory and is not copied into the release.
-  sudo chmod 0755 "$stage_dir" "$stage_dir/scripts"
+  sudo chmod 0755 "$stage_dir" "$stage_dir/scripts" "$stage_dir/scripts/continuity"
   sudo mv "$stage_dir" "$target_dir"
   trap - EXIT
 fi
