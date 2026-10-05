@@ -177,9 +177,10 @@ class TaskResumeQueueCertificationTests(unittest.TestCase):
         state.start_task("historical-queue", "historical goal", "gpt")
         state.record_progress("historical-queue", next_action="must not resume")
         payload = self._payload("historical-queue")
-        payload["updated_at"] = (
+        payload["created_at"] = (
             now - timedelta(days=11)
         ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        payload["updated_at"] = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
         (self.runtime / "historical-queue.json").write_text(
             json.dumps(payload), encoding="utf-8"
         )
