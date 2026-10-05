@@ -42,6 +42,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             watchdog.RUNTIME_DIR = root
             try:
                 task_state.start_task("task-1", "goal", "gpt")
+                task_state.bind_conversation("task-1", conversation_id="fixture-backend-token-conversation")
                 task_state.record_progress("task-1", next_action="continue safely")
                 state_path = root / "task-1.json"
                 payload = json.loads(state_path.read_text(encoding="utf-8"))
@@ -74,6 +75,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             self.assertEqual(result["dispatched"], 1)
             self.assertEqual(result["skipped_no_token"], 0)
+            self.assertEqual(result["skipped_unbound"], 0)
+            self.assertEqual(calls[0]["conversation_id"], "fixture-backend-token-conversation")
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
 
