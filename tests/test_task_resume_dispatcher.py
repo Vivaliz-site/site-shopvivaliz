@@ -133,6 +133,29 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 0)
         self.assertEqual(result["deferred_unbound"], 1)
 
+    def test_durable_handoff_defers_missing_browser_session_instead_of_crashing(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "conversation_session123"
+        state.pop("browser_session", None)
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_session_unbound"], 1)
+
     def test_durable_handoff_defers_busy_recovery_owner_instead_of_crashing(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
