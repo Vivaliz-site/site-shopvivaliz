@@ -70,7 +70,18 @@ CLAUDE_REMOTE_CONTROL_POINTER_FILE = Path(os.environ.get(
 ))
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
-CONTINUITY_LIB_DIR = Path(os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", str(Path(__file__).resolve().parents[1] / "scripts" / "continuity")))
+def resolve_continuity_lib_dir(server_path: Path | str | None = None, override: str | None = None) -> Path:
+    explicit = (override if override is not None else os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", "")).strip()
+    if explicit:
+        return Path(explicit)
+    resolved = Path(server_path or __file__).resolve()
+    installed = resolved.parent / "scripts" / "continuity"
+    if installed.is_dir():
+        return installed
+    return resolved.parents[1] / "scripts" / "continuity"
+
+
+CONTINUITY_LIB_DIR = resolve_continuity_lib_dir()
 if str(CONTINUITY_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(CONTINUITY_LIB_DIR))
 import runtime_lock

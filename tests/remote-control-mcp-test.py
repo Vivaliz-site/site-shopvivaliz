@@ -95,6 +95,31 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(result["foreground_release_reason"],"foreground_completed")
         release.assert_called_once_with("task-a", lease_id="lease-a", fencing_token=3, reason="foreground_completed")
 
+    def test_controller_service_env_carries_single_durable_handoff_flag(self):
+        setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", setup)
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}", setup)
+        browser=(ROOT/"deploy"/"systemd"/"shopvivaliz-remote-control-browser-mcp.service").read_text()
+        self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", browser)
+
+    def test_installed_server_resolves_colocated_continuity_runtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            server_path=Path(td)/"shopvivaliz-remote-control"/"server.py"
+            runtime_dir=server_path.parent/"scripts"/"continuity"
+            runtime_dir.mkdir(parents=True)
+            server_path.touch()
+            self.assertEqual(m.resolve_continuity_lib_dir(server_path, ""), runtime_dir)
+
+    def test_controller_installer_bundles_continuity_runtime_dependencies(self):
+        setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
+        for required in ("AGENT_TASK_STATE_SOURCE", "CONTINUITY_SOURCE_DIR", "agent_task_state.py", "conversation_lease.py", "runtime_lock.py", "mutation_gate.py", "foreground_handoff.py"):
+            self.assertIn(required, setup)
+        bootstrap=(ROOT/".github"/"workflows"/"remote-control-mcp-bootstrap.yml").read_text()
+        self.assertIn("scripts/agent_task_state.py scripts/continuity", bootstrap)
+        bastion=(ROOT/".github"/"workflows"/"oci-bastion-private-access-bootstrap.yml").read_text()
+        for required in ("agent_task_state.py", "conversation_lease.py", "runtime_lock.py", "mutation_gate.py", "foreground_handoff.py"):
+            self.assertIn(required, bastion)
+
     def test_browser_allows_microsoft_oauth_host(self):
         self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
 
@@ -1029,8 +1054,8 @@ class BootstrapContractTests(unittest.TestCase):
 
     def test_oci_bastion_bootstrap_copies_and_passes_canonical_controller_unit(self):
         text = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn('"${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/', text)
-        self.assertIn('install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service', text)
+        self.assertIn('"${BACKEND_SCP[@]}" -r remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity ubuntu@127.0.0.1:/tmp/', text)
+        self.assertIn('install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service /tmp/agent_task_state.py /tmp/continuity', text)
 
     def test_bootstrap_uses_reverse_ssh_for_windows(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
