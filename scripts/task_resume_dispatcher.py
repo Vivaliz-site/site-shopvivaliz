@@ -759,6 +759,7 @@ def run_once(
         "deferred_chatgpt": 0,
         "deferred_browser_probe": 0,
         "deferred_unbound": 0,
+        "deferred_unbound_session": 0,
         "deferred_ownership_busy": 0,
         "generated_at": utc_now(),
     }
@@ -819,6 +820,9 @@ def run_once(
 
             if _durable_handoff_enabled() and not str(state.get("conversation_id", "")).strip():
                 summary["deferred_unbound"] += 1
+                continue
+            if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento"}:
+                summary["deferred_unbound_session"] += 1
                 continue
 
             try:
