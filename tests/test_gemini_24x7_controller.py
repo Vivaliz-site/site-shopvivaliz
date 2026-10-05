@@ -264,6 +264,35 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("chatgpt_browser_auth_unknown", result["degraded_reasons"])
         self.assertFalse(result["chatgpt_browser"]["fresh"])
 
+    def test_disabled_reinforcement_monitor_does_not_fail_readiness(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "updated_at": "2000-01-01T00:00:00Z",
+                    "degraded": True,
+                    "action": "recovery_retry_cooldown",
+                    "sent": False,
+                    "progress_confirmed": False,
+                    "failure_reason": "silent_stall",
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"CHATGPT_CONTINUITY_MONITOR_REQUIRED": "0"}),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="monitor-disabled")
+
+        self.assertTrue(result["continuity_ready"])
+        self.assertNotIn("chatgpt_browser_monitor_stale", result["degraded_reasons"])
+        self.assertNotIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
+        self.assertFalse(result["chatgpt_monitor"]["required"])
+
     def test_missing_reinforcement_monitor_fails_readiness_closed(self) -> None:
         controller = load_controller()
         (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).unlink()
@@ -624,6 +653,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('releases_dir="$base_dir/releases"', installer)
         self.assertNotIn("current/", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081", installer)
+        self.assertIn("CHATGPT_CONTINUITY_MONITOR_REQUIRED=0", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", installer)
         self.assertIn("GEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env", installer)
         self.assertIn('gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"', installer)

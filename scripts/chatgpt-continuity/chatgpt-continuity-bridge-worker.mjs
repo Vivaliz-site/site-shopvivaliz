@@ -213,7 +213,8 @@ function reinforcementHealthPayload(
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
-    || action === 'idle_no_checkpoint';
+    || action === 'idle_no_checkpoint'
+    || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
@@ -1517,7 +1518,15 @@ async function silentStallPresent(cdp) {
   return Boolean(await localIncompleteTurnPresent(cdp));
 }
 
+// Fresh server bookkeeping is required at the actuator boundary as well as
+// in callers: reinforcement and delayed keyboard fallbacks share these helpers.
+async function conversationStreamComplete(cdp) {
+  const stream = await conversationStreamStatus(cdp);
+  return stream?.http_status === 200 && String(stream?.status || '').toUpperCase() === 'COMPLETE';
+}
+
 async function clearStaleCompleteGeneration(cdp) {
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
     const button=document.querySelector('[data-testid="stop-button"]');
@@ -2256,6 +2265,7 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '') {
   })()`);
   if (!target) return false;
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
 
   if (typeof cdp?.send === 'function') {
     try {
@@ -2330,6 +2340,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
     if (submitTarget?.state === 'ready') {
       if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+      if (!(await conversationStreamComplete(cdp))) return false;
       try {
         const x=Number(submitTarget.x);
         const y=Number(submitTarget.y);
@@ -2359,6 +2370,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
 async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
@@ -2469,6 +2481,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
         if (String(insertedDraft || '').trim() !== expected) return false;
         if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
         if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+        if (!(await conversationStreamComplete(cdp))) return false;
         try {
           await cdp.send('Input.dispatchKeyEvent', {
             type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2563,6 +2576,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
 
     if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+    if (!(await conversationStreamComplete(cdp))) return false;
     try {
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2597,6 +2611,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (!typed) return false;
   await sleep(300);
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
@@ -2630,6 +2645,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (clicked) return true;
   if (typeof cdp?.send !== 'function') return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   try {
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyDown', key: 'Enter', code: 'Enter',
@@ -2694,6 +2710,14 @@ async function attemptNudgeInSession(
     : {})});
   let cdp;
   let boundSessionStream = null;
+  const streamCompletionDeferral = async () => {
+    if (await conversationStreamComplete(cdp)) return null;
+    return {
+      result_status: 'STALLED_NOT_CONFIRMED',
+      detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+      ...recoveryMetadata(),
+    };
+  };
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
@@ -2761,7 +2785,6 @@ async function attemptNudgeInSession(
       };
     }
     let recoveredStaleComplete = false;
-    let recoveredTerminalFailure = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
@@ -2829,6 +2852,18 @@ async function attemptNudgeInSession(
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
 
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks appeared after reattach; deferred without stop or continuation',
+        ...recoveryMetadata(),
+      };
+    }
+    // DOM controls and banners can be stale after reattach. Every recovery
+    // actuator needs fresh canonical COMPLETE evidence, including silent stalls.
+    const postReattachStreamDeferral = await streamCompletionDeferral();
+    if (postReattachStreamDeferral) return postReattachStreamDeferral;
+
     // "Stopped thinking" exposes a native Retry action in the current ChatGPT
     // UI. Prefer that platform-native retry once before writing a new
     // continuation message. This preserves the exact conversation and avoids
@@ -2836,6 +2871,8 @@ async function attemptNudgeInSession(
     if (detectedFailureReason === 'stopped_thinking') {
       const retryBaseline = await assistantSnapshot(cdp);
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryStreamDeferral = await streamCompletionDeferral();
+      if (retryStreamDeferral) return retryStreamDeferral;
       const retryClicked = await clickRecoverableRetryButton(
         cdp,
         retryBaseline?.conversationFingerprint,
@@ -2869,37 +2906,16 @@ async function attemptNudgeInSession(
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
-      // Re-read server bookkeeping only after the passive recovery window.
-      // Anything other than a confirmed COMPLETE remains potentially active
-      // and must not receive a duplicate continuation.
-      const stream = await conversationStreamStatus(cdp);
-      const streamComplete = stream?.http_status === 200 && stream?.status === 'COMPLETE';
-      if (!streamComplete && !detectedFailureReason) {
+      const stopStreamDeferral = await streamCompletionDeferral();
+      if (stopStreamDeferral) return stopStreamDeferral;
+      if (generatingAfterReattach && !(await clearStaleCompleteGeneration(cdp))) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
-          detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+          detail: 'stale COMPLETE stream detected but Stop state did not clear',
           ...recoveryMetadata(),
         };
       }
-
-      // A persisted terminal/degraded failure is stronger evidence than a
-      // stale Stop control or server-side IN_PROGRESS bookkeeping. The
-      // reinforcement path already gives ChatGPT its own retry grace window;
-      // after no progress, clear only that stale UI control and resume the
-      // checkpoint on the same model.
-      if (generatingAfterReattach) {
-        if (!(await clearStaleCompleteGeneration(cdp))) {
-          return {
-            result_status: 'STALLED_NOT_CONFIRMED',
-            detail: detectedFailureReason
-              ? 'recoverable failure detected but stale Stop state did not clear'
-              : 'stale COMPLETE stream detected but Stop state did not clear',
-            ...recoveryMetadata(),
-          };
-        }
-      }
-      recoveredStaleComplete = streamComplete;
-      recoveredTerminalFailure = !streamComplete && Boolean(detectedFailureReason);
+      recoveredStaleComplete = true;
     }
     if (!(await waitComposer(cdp))) {
       return {
@@ -2911,6 +2927,8 @@ async function attemptNudgeInSession(
     let baseline = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
     let turnBaseline = await conversationTurnState(cdp);
+    const sendStreamDeferral = await streamCompletionDeferral();
+    if (sendStreamDeferral) return sendStreamDeferral;
     let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
     continuationSent = Boolean(sent);
     if (!sent) {
@@ -2930,6 +2948,8 @@ async function attemptNudgeInSession(
       baseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
       turnBaseline = await conversationTurnState(cdp);
+      const resendStreamDeferral = await streamCompletionDeferral();
+      if (resendStreamDeferral) return resendStreamDeferral;
       sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
@@ -2967,6 +2987,8 @@ async function attemptNudgeInSession(
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
       const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
+      const transmissionStreamDeferral = await streamCompletionDeferral();
+      if (transmissionStreamDeferral) return transmissionStreamDeferral;
       const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
       if (!retrySent) {
         return {
@@ -2996,9 +3018,7 @@ async function attemptNudgeInSession(
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
           ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
-          : recoveredTerminalFailure
-            ? 'recovered terminal generation state and sent continuation, but no assistant progress was observed'
-            : 'sent continuation, but no assistant progress was observed',
+          : 'sent continuation, but no assistant progress was observed',
         ...recoveryMetadata(),
       };
     }
@@ -3006,9 +3026,7 @@ async function attemptNudgeInSession(
       result_status: 'PROGRESS_CONFIRMED',
       detail: recoveredStaleComplete
         ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
-        : recoveredTerminalFailure
-          ? 'recovered terminal generation state; continuation produced assistant progress'
-          : 'continuation produced assistant progress',
+        : 'continuation produced assistant progress',
       ...recoveryMetadata(),
     };
   } catch (error) {
@@ -3533,15 +3551,36 @@ async function reinforcementLoop(
   }
 }
 
+async function disabledReinforcementHeartbeatLoop(
+  persist = persistReinforcementHealth,
+  wait = sleep,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
+) {
+  for (;;) {
+    persist({
+      action: 'monitor_disabled',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await wait(heartbeatIntervalMs);
+  }
+}
+
 async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
   runAuthorizationLoop = authorizationLoop,
   autoAllowEnabled = AUTO_ALLOW_ENABLED,
+  runDisabledMonitorHeartbeatLoop = disabledReinforcementHeartbeatLoop,
 ) {
   const loops = [runBridgeLoop()];
-  if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (reinforcementEnabled) {
+    loops.push(runReinforcementLoop());
+  } else {
+    loops.push(runDisabledMonitorHeartbeatLoop());
+  }
   if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
@@ -3602,6 +3641,7 @@ export {
   withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
+  disabledReinforcementHeartbeatLoop,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,

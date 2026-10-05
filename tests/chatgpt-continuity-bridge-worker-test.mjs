@@ -72,7 +72,7 @@ function fakeCdp({
   composerUsable = true,
   pageText = '',
   sendSucceeds = true,
-  streamStatus = 'IN_PROGRESS',
+  streamStatus = generating ? 'IN_PROGRESS' : 'COMPLETE',
   staleStopClearSucceeds = true,
 } = {}) {
   const calls = [];
@@ -818,6 +818,7 @@ async function run() {
     let composerProbes = 0;
     let platformChecks = 0;
     await sendContinueMessage({ async evaluate(source) {
+      if (String(source).includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (String(source).includes('continuity-conversation-identity-probe')) {
         return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
       }
@@ -1004,6 +1005,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(expression);
         if (expression.includes('insertText') || expression.includes('proto.value')) {
           return expression.includes('[role="textbox"][contenteditable="true"]');
@@ -1028,6 +1030,7 @@ async function run() {
     let sendEnabled = false;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1108,6 +1111,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1151,6 +1155,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1190,6 +1195,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1222,6 +1228,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1264,6 +1271,7 @@ async function run() {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         if (String(expression).includes('continuity-composer-draft-probe')) {
           return { usable: true, text: 'unsent customer draft' };
         }
@@ -1286,6 +1294,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(['evaluate', expression]);
         if (expression.includes('insertText') || expression.includes('proto.value')) return true;
         if (expression.includes('b.click()')) return false;
@@ -1313,6 +1322,7 @@ async function run() {
         return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
       },
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         evaluateCalls += 1;
         if (String(expression).includes('continuity-error-banner-probe')) return true;
         return false;
@@ -1538,10 +1548,12 @@ async function run() {
       async () => false,
       async () => true,
     );
-    assert.notEqual(
-      outcome.result_status,
-      'STALLED_NOT_CONFIRMED',
-      'an explicit recoverable failure must outrank a stale Stop control / IN_PROGRESS bookkeeping signal',
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.sent, false, 'an error banner cannot authorize sending into an active stream');
+    assert.equal(
+      cdp.calls.some(call => call.includes('stale-complete-stop-clear')),
+      false,
+      'an error banner cannot authorize Stop without canonical COMPLETE',
     );
   }
 
@@ -3456,6 +3468,52 @@ async function run() {
     await running;
   }
 
+  // Disabling the aggressive Fred reinforcement monitor must not disable
+  // the liveness heartbeat consumed by the controller.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      false,
+      async () => { events.push('authorization'); await blocked; },
+      true,
+      async () => { events.push('monitor-heartbeat'); await blocked; },
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'monitor-heartbeat']);
+    release();
+    await running;
+  }
+
+  // A neutral heartbeat for an intentionally disabled reinforcement monitor
+  // must clear stale reinforcement failure state instead of latching it forever.
+  {
+    const payload = reinforcementHealthPayload(
+      {
+        action: 'monitor_disabled',
+        sent: false,
+        progress_confirmed: false,
+      },
+      '2026-10-05T02:00:00.000Z',
+      {
+        degraded: true,
+        action: 'send_failed',
+        last_cycle_action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'old failure',
+        failure_reason: 'silent_stall',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'monitor_disabled');
+    assert.equal(payload.last_cycle_action, 'monitor_disabled');
+    assert.equal(payload.failure_reason, '');
+  }
+
   // Banner flashes then clears by the confirm re-check (client's own retry
   // succeeded) -> must NOT send a message.
   {
@@ -3599,6 +3657,7 @@ async function run() {
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
   });
   await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint }, testTaskStateDir);
+  await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
   console.log('reinforcementCheckOnce branches: PASS');
 }
 
