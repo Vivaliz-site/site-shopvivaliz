@@ -1,0 +1,8 @@
+name = "amazon-returns-email-ingress"
+main = "src/index.mjs"
+compatibility_date = "2026-10-04"
+addresses = ["amazon-returns@shopvivaliz.com.br"]
+
+[vars]
+INGRESS_URL = "https://returns.shopvivaliz.com.br/api/amazon-returns/email-ingress.php"
+FORWARD_TO = "fredmourao@gmail.com"
