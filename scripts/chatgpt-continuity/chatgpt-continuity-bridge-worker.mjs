@@ -508,7 +508,10 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
         // The reinforcement loop belongs only to the legacy/personal browser.
+        // Global/detached tasks without a bound browser conversation must not
+        // keep the Fred browser hot with account-scoped reinforcement sweeps.
         if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
+        if (!safeConversationId(payload?.conversation_id)) continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
       } catch {

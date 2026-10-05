@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -42,13 +43,20 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             watchdog.RUNTIME_DIR = root
             try:
                 task_state.start_task("task-1", "goal", "gpt")
-                task_state.bind_conversation("task-1", conversation_id="fixture-backend-token-conversation")
+                task_state.bind_conversation(
+                    "task-1",
+                    conversation_id="12345678-2222-3333-4444-555555555555",
+                )
                 task_state.record_progress("task-1", next_action="continue safely")
                 state_path = root / "task-1.json"
                 payload = json.loads(state_path.read_text(encoding="utf-8"))
-                payload["updated_at"] = "2020-01-01T00:00:00Z"
+                payload["updated_at"] = (
+                    datetime.now(timezone.utc) - timedelta(minutes=5)
+                ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                 state_path.write_text(json.dumps(payload), encoding="utf-8")
-                watchdog.run_once(stale_seconds=1, runtime_dir=root)
+                watchdog_result = watchdog.run_once(stale_seconds=1, runtime_dir=root)
+                self.assertEqual(watchdog_result["dispatched"], 1, watchdog_result)
+                self.assertEqual(len(watchdog.read_requests(root)), 1)
             finally:
                 task_state.RUNTIME_DIR = original_state_runtime
                 watchdog.RUNTIME_DIR = original_watchdog_runtime
@@ -73,10 +81,10 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                     enqueue=fake_enqueue,
                 )
 
-            self.assertEqual(result["dispatched"], 1)
+            self.assertEqual(result["dispatched"], 1, result)
             self.assertEqual(result["skipped_no_token"], 0)
             self.assertEqual(result["skipped_unbound"], 0)
-            self.assertEqual(calls[0]["conversation_id"], "fixture-backend-token-conversation")
+            self.assertEqual(calls[0]["conversation_id"], "12345678-2222-3333-4444-555555555555")
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
 
@@ -96,6 +104,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             "ReadWritePaths=$install_root $config_root /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
             body,
         )
+        self.assertIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0", body)
+        self.assertNotIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1", body)
         self.assertNotIn("C:\\ShopVivaliz", body)
         self.assertIn("90-atendimento-cdp.conf", body)
         self.assertIn("90-atendimento-browser.conf", body)

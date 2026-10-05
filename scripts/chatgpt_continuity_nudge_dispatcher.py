@@ -34,10 +34,10 @@ from typing import Any
 
 try:
     from .agent_task_state import RUNTIME_DIR, bind_conversation
-    from .task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
+    from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import RUNTIME_DIR, bind_conversation
-    from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
+    from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 LOCK_FILE = "_continuity-execution.lock"
@@ -210,6 +210,11 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
     except (OSError, json.JSONDecodeError):
         return False
     if not isinstance(payload, dict) or str(payload.get("status", "")).strip() != "RUNNING":
+        return False
+    created_at = _parse_time(payload.get("created_at"))
+    if created_at is None:
+        return False
+    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if not str(payload.get("next_action", "")).strip():
         return False
