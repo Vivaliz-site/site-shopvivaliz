@@ -2189,6 +2189,8 @@ async function errorBannerPresent(cdp) {
       'transmissao interrompida',
       'stopped thinking',
       'parou de pensar',
+      'thinking failed',
+      'o pensamento falhou',
       'nossos sistemas estão fazendo verificações adicionais',
       'nossos sistemas estao fazendo verificacoes adicionais',
       'verificações adicionais antes de responder',

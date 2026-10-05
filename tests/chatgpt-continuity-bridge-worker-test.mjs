@@ -3696,6 +3696,7 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-thinking-failed-test.mjs')).runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage });
   await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
   (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
