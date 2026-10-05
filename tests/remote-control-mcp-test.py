@@ -475,9 +475,13 @@ class RemoteControlMcpTests(unittest.TestCase):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:
+            # Self-hosted runners can be heavily loaded while multiple audit
+            # workflows start at once. This is a privacy assertion, not a
+            # latency assertion, so allow scheduling delay without turning a
+            # healthy metadata-only `ps` invocation into a false negative.
             result = subprocess.run(
                 ["ps", "-p", str(child.pid), "-o", fields],
-                capture_output=True, text=True, timeout=8, check=True,
+                capture_output=True, text=True, timeout=30, check=True,
             )
             self.assertIn(str(child.pid), result.stdout)
             self.assertTrue(sentinel not in result.stdout,
@@ -1034,6 +1038,83 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("user@127.0.0.1", desk)
         self.assertIn("-p", desk)
         self.assertEqual(desk[desk.index("-p") + 1], "2223")
+
+
+    def test_reverse_ssh_transport_errors_are_narrowly_classified(self):
+        self.assertTrue(m.is_recoverable_reverse_ssh_error(
+            "Fred-Win",
+            "Connection timed out during banner exchange\r\nConnection to 127.0.0.1 port 2222 timed out",
+        ))
+        self.assertTrue(m.is_recoverable_reverse_ssh_error(
+            "KOCEPSV",
+            "kex_exchange_identification: read: Connection reset by peer",
+        ))
+        self.assertFalse(m.is_recoverable_reverse_ssh_error(
+            "Fred-Win",
+            "Permission denied (publickey).",
+        ))
+        self.assertFalse(m.is_recoverable_reverse_ssh_error(
+            "shopvivaliz-free-a1",
+            "Connection timed out during banner exchange",
+        ))
+
+    def test_reverse_ssh_listener_pid_accepts_only_sshd_listener(self):
+        sample = mock.Mock(
+            returncode=0,
+            stdout='LISTEN 0 128 127.0.0.1:2222 0.0.0.0:* users:(("sshd",pid=4321,fd=8))\n',
+        )
+        with (
+            mock.patch.object(m.subprocess, "run", return_value=sample),
+            mock.patch.object(m.Path, "read_text", return_value="sshd\n"),
+        ):
+            self.assertEqual(4321, m.reverse_ssh_listener_pid(2222))
+
+        with (
+            mock.patch.object(m.subprocess, "run", return_value=sample),
+            mock.patch.object(m.Path, "read_text", return_value="python\n"),
+        ):
+            self.assertIsNone(m.reverse_ssh_listener_pid(2222))
+
+    def test_recover_reverse_ssh_transport_recycles_listener_until_new_pid(self):
+        pids = iter([4321, 4321, 9876])
+        with (
+            mock.patch.object(m, "reverse_ssh_listener_pid", side_effect=lambda port: next(pids)),
+            mock.patch.object(m.os, "kill") as kill,
+            mock.patch.object(m.time, "sleep"),
+            mock.patch.object(m.time, "monotonic", side_effect=[10.0, 10.1, 10.2]),
+        ):
+            self.assertTrue(m.recover_reverse_ssh_transport("Fred-Win"))
+        kill.assert_called_once_with(4321, m.signal.SIGTERM)
+
+    def test_run_host_command_retries_once_after_reverse_ssh_recovery(self):
+        class FakeProc:
+            def __init__(self, rc, stdout, stderr):
+                self.returncode = rc
+                self._stdout = stdout
+                self._stderr = stderr
+                self.pid = 1000 + rc
+
+            def communicate(self, timeout=None):
+                return self._stdout, self._stderr
+
+            def poll(self):
+                return self.returncode
+
+        first = FakeProc(255, b"", b"Connection timed out during banner exchange")
+        second = FakeProc(0, b"ok", b"")
+        with (
+            mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=[first, second]) as popen,
+            mock.patch.object(m, "_cleanup_isolated_scope"),
+            mock.patch.object(m, "recover_reverse_ssh_transport", return_value=True) as recover,
+        ):
+            result = m.run_host_command("Fred-Win", "Get-Date", timeout=10)
+        self.assertEqual(0, result["exit_code"])
+        self.assertEqual("ok", result["stdout"])
+        self.assertTrue(result["transport_recovered"])
+        self.assertEqual(2, popen.call_count)
+        recover.assert_called_once_with("Fred-Win")
 
 
 class BranchCoherenceTests(unittest.TestCase):
