@@ -176,6 +176,7 @@ const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FI
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
+  if (normalized.includes('canonical history read rate limited')) return 'CANONICAL_READ_RATE_LIMITED';
   if (normalized.includes('bound browser session stream active or unconfirmed')) return 'BOUND_STREAM_NOT_COMPLETE';
   if (normalized.includes('another conversation in the same browser session is active')) return 'SIBLING_STREAM_ACTIVE';
   if (normalized.includes('canonical presence could not be confirmed')) return 'CONVERSATION_PRESENCE_UNCONFIRMED';
@@ -1361,6 +1362,19 @@ async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_
             message_status:'NO_CONVERSATION'
           };
         }
+        // Persist only a non-secret deadline in this browser profile. A new
+        // tab or worker restart must not immediately repeat a throttled read.
+        const backoffKey='shopvivaliz.canonical-read-backoff-until.v1';
+        let backoffUntil=Number(globalThis.__shopvivalizCanonicalReadBackoffUntil||0);
+        if(!Number.isFinite(backoffUntil)) backoffUntil=0;
+        try{
+          const stored=Number(localStorage.getItem(backoffKey)||0);
+          if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+        }catch{}
+        const rateLimited=()=>({http_status:429,node_id:'',role:'',end_turn:null,
+          child_count:-1,content_text_length:0,message_status:'RATE_LIMIT_BACKOFF',
+          retry_after_ms:Math.max(0,backoffUntil-Date.now())});
+        if(backoffUntil>Date.now()) return rateLimited();
         let accountId='';
         let accessToken='';
         try{
@@ -1383,6 +1397,22 @@ async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_
             '/backend-api/conversation/'+encodeURIComponent(match[1]),
             {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
+          if(response.status===429){
+            const retryAfter=String(response.headers?.get?.('retry-after')||'').trim();
+            const seconds=Number(retryAfter);
+            const retryDate=Date.parse(retryAfter);
+            const requestedWait=retryAfter&&Number.isFinite(seconds)&&seconds>=0
+              ? seconds*1000 : (Number.isFinite(retryDate)?retryDate-Date.now():0);
+            const waitMs=Number.isFinite(requestedWait)?Math.max(300000,requestedWait):300000;
+            backoffUntil=Date.now()+waitMs;
+            globalThis.__shopvivalizCanonicalReadBackoffUntil=backoffUntil;
+            try{
+              const stored=Number(localStorage.getItem(backoffKey)||0);
+              if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+              localStorage.setItem(backoffKey,String(backoffUntil));
+            }catch{}
+            return {...rateLimited(),message_status:'HTTP_ERROR'};
+          }
           let body=null;
           try{body=await response.json();}catch{}
           if(!response.ok){
@@ -2829,6 +2859,11 @@ async function attemptNudgeInSession(
           ...recoveryMetadata(),
         };
       }
+      if (canonicalStatus === 429) {
+        return { result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'canonical history read rate limited; waiting without reload or continuation',
+          ...recoveryMetadata() };
+      }
       if (!canonicalPresent) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
@@ -2839,7 +2874,11 @@ async function attemptNudgeInSession(
       const streamStatus = String(unavailableStream?.status || '').toUpperCase();
       const canonicalActive = unavailableTurn?.end_turn === false
         || ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus);
-      if (!canonicalActive) {
+      // COMPLETE describes the server stream, not successful UI hydration.
+      // A tool leaf (end_turn=null), or even an existing final answer, can
+      // still need passive reattachment. This never authorizes a new send.
+      const canonicalComplete = unavailableStream?.http_status === 200 && streamStatus === 'COMPLETE';
+      if (!canonicalActive && !canonicalComplete) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
           detail: 'bound conversation exists canonically but no unfinished response is confirmed; deferred without continuation',
