@@ -729,6 +729,13 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_immutable_release_bundles_continuity_dependencies(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        self.assertIn('sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"', installer)
+        self.assertIn('for source in "$release_dir"/scripts/continuity/*.py', installer)
+        self.assertIn('"$stage_dir/scripts/continuity/$(basename "$source")"', installer)
+        self.assertIn('sudo chmod 0755 "$stage_dir" "$stage_dir/scripts" "$stage_dir/scripts/continuity"', installer)
+
     def test_controller_installer_consumes_same_durable_handoff_flag_and_preserves_state(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', installer)
