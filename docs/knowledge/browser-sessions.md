@@ -28,3 +28,33 @@ Em 2026-10-04, o backend `always-free-arm-1787907847-26` apresentava processos C
 - `shopvivaliz-atendimento-chromium` com `--remote-debugging-port=9556`.
 
 A conta de cada perfil deve permanecer conforme a tabela acima.
+
+
+## Roteamento da retomada por checkpoint
+
+O worker continua unico; nao criar um segundo consumidor da fila nem trocar
+`CHATGPT_CONTINUITY_CDP_URL` globalmente para atender uma conta diferente.
+Checkpoints corporativos devem fixar a conversa e depois a sessao:
+
+```sh
+python3 scripts/agent_task_state.py bind-conversation --task <id> --conversation-id <conversa-confirmada>
+python3 scripts/agent_task_state.py bind-browser-session --task <id> --browser-session atendimento
+```
+
+`browser_session=atendimento` seleciona somente CDP9556; `fred` seleciona
+somente CDP9555. Checkpoints legados sem o campo mantem a rota pessoal atual.
+O binding e imutavel, nao conta como progresso e e herdado pelo sucessor junto
+com a conversa. Nunca substituir implicitamente a conta/conversa antiga.
+
+Antes de reload ou envio, o worker confirma a identidade da sessao e a rota
+exata dentro da propria aba, retornando apenas booleano, sem credenciais.
+Stream ativo ou nao confirmado e deferido mesmo se o DOM nao mostrar Stop.
+Conta divergente, binding invalido, conversa divergente ou checkpoint terminal
+falham sem usar outro perfil como fallback. O monitor legado permanece pessoal;
+a cobertura corporativa e checkpoint-driven, nao descoberta global da conta.
+
+A escolha de porta usa contexto assincrono por tentativa, sem alterar variaveis
+de ambiente globais. Testes exercitam o endpoint realmente solicitado, a
+expressao de identidade injetada, concorrencia, heranca e falha fechada.
+Fonte de implementacao: Node.js `AsyncLocalStorage.run` (documentacao oficial:
+https://nodejs.org/api/async_context.html#asynclocalstoragerunstore-callback-args).
