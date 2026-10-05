@@ -16,7 +16,22 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect OAuth request change
+        id: request_change
+        env:
+          BEFORE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" -- ops/gmail-oauth-finalize.json | grep -Fxq 'ops/gmail-oauth-finalize.json'; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate job
+        if: steps.request_change.outputs.changed == 'true'
         id: req
         shell: bash
         run: |
@@ -25,6 +40,7 @@ jobs:
           [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || exit 2
           echo "job=$JOB" >> "$GITHUB_OUTPUT"
       - name: Configure VM key
+        if: steps.request_change.outputs.changed == 'true'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
           VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || '127.0.0.1' }}
@@ -38,6 +54,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
           echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
       - name: Recover and install Gmail token
+        if: steps.request_change.outputs.changed == 'true'
         env:
           JOB: ${{ steps.req.outputs.job }}
         shell: bash
