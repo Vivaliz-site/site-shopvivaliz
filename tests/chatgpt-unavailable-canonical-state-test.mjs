@@ -7,6 +7,7 @@ function canonicalUnavailableCdp({
   turnStatus = 200,
   streamStatus = 'IS_STREAMING',
   endTurn = false,
+  role = 'assistant',
 } = {}) {
   const calls = [];
   return {
@@ -23,7 +24,7 @@ function canonicalUnavailableCdp({
         return {
           http_status: turnStatus,
           node_id: turnStatus === 200 ? 'assistant-node-live' : '',
-          role: turnStatus === 200 ? 'assistant' : '',
+          role: turnStatus === 200 ? role : '',
           end_turn: turnStatus === 200 ? endTurn : null,
           child_count: 0,
           content_text_length: 0,
@@ -97,4 +98,32 @@ test('canonical 404 still permits CONVERSATION_NOT_FOUND for unavailable UI', as
 
   assert.equal(outcome.result_status, 'CONVERSATION_NOT_FOUND');
   assert.equal(outcome.sent, false);
+});
+
+for (const [label, role, endTurn] of [['tool leaf', 'tool', null], ['completed assistant', 'assistant', true]]) {
+  test(`canonical COMPLETE ${label} can rehydrate the UI without sending or certifying old content`, async () => {
+    const cdp = canonicalUnavailableCdp({ streamStatus: 'COMPLETE', role, endTurn });
+    const result = await attemptNudge('rehydrate-complete-fixture', async () => cdp, async () => false, async () => {
+      throw Error('no composer input during passive hydration');
+    }, 'live-bound-conversation');
+    assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(result.sent, false);
+    assert.equal(cdp.calls.filter(source => source.includes('location.reload')).length, 1, 'one passive reattach, never an indefinite no-op');
+  });
+}
+for (const turnStatus of [0, 401, 429]) {
+  test(`unavailable UI with canonical HTTP ${turnStatus} never authorizes reattach or input`, async () => {
+    const cdp = canonicalUnavailableCdp({ turnStatus, streamStatus: 'COMPLETE', role: 'tool', endTurn: null });
+    const result = await attemptNudge('rehydrate-unconfirmed-fixture', async () => cdp, async () => false, async () => false, 'live-bound-conversation');
+    assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(result.sent, false);
+    assert.equal(cdp.calls.some(source => source.includes('location.reload')), false);
+  });
+}
+test('tool leaf with unknown stream state cannot authorize reattach', async () => {
+  const cdp = canonicalUnavailableCdp({ streamStatus: 'UNKNOWN', role: 'tool', endTurn: null });
+  const result = await attemptNudge('rehydrate-unknown-stream-fixture', async () => cdp, async () => false, async () => false, 'live-bound-conversation');
+  assert.equal(result.result_status, 'STALLED_NOT_CONFIRMED');
+  assert.equal(result.sent, false);
+  assert.equal(cdp.calls.some(source => source.includes('location.reload')), false);
 });

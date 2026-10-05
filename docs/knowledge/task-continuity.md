@@ -620,3 +620,29 @@ from `chatgpt_continuity_proof_certifier.py` against the actual checkpoint:
 it must find `PROGRESS_CONFIRMED` for that task, its bound conversation and
 one of its recorded checkpoint fingerprints. `continuity_ready=true` is an
 operational health result, not a substitute for that provenance check.
+
+
+## Canonical read cooldown and passive hydration (2026-10-05)
+
+Full-history HTTP429 responses start a five-minute minimum cooldown, honoring
+longer numeric or HTTP-date Retry-After values. Only its non-secret deadline
+is stored under `shopvivaliz.canonical-read-backoff-until.v1` in the same
+ChatGPT browser profile, so tabs and worker restarts share the pause without
+copying account data. A per-page in-memory fallback covers unavailable storage.
+During the pause the reader returns explicit HTTP429/RATE_LIMIT_BACKOFF without
+an auth/history fetch; expiry requires a fresh response, never cached proof.
+This does not modify cookies, provider limits, account routing or stream guards.
+
+Canonical HTTP200 plus a node and a confirmed COMPLETE stream permits one
+passive UI reattachment even for a tool leaf (`end_turn=null`) or an existing
+final answer. COMPLETE alone is not evidence of a loaded interface. Hydration
+recovery still never sends a continuation and cannot certify an old answer.
+HTTP429, missing canonical presence and unknown stream state remain fail-closed.
+
+Here, profile means a distinct Chromium `--user-data-dir`, not a ChatGPT
+workspace: Fred uses `shopvivaliz-chromium`/CDP9555 and Atendimento uses
+`shopvivaliz-atendimento-chromium`/CDP9556, as enforced in browser-sessions.md.
+Each contains one authorized login; the two localStorage namespaces are not
+shared. A longer Retry-After is never shortened to the five-minute default
+(RFC9110 section10.2.3). Browser UTC must remain synchronized for persisted
+deadlines, as for existing request timestamps; this does not cache responses.
