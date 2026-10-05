@@ -1536,6 +1536,47 @@ async function run() {
 
   {
     const cdp = fakeCdp({
+      pageText: 'Something went wrong',
+      generating: false,
+      composerUsable: false,
+      sendSucceeds: false,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-generation-error-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => false,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'generation_error');
+    assert.equal(outcome.sent, false, 'generation-error Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'generic generation error must click the unique native Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful generic Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
       pageText: 'Parou de pensar',
       generating: true,
       composerUsable: true,

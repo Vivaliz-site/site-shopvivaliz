@@ -2936,11 +2936,11 @@ async function attemptNudgeInSession(
     const postReattachStreamDeferral = await streamCompletionDeferral();
     if (postReattachStreamDeferral) return postReattachStreamDeferral;
 
-    // "Stopped thinking" exposes a native Retry action in the current ChatGPT
-    // UI. Prefer that platform-native retry once before writing a new
-    // continuation message. This preserves the exact conversation and avoids
-    // accumulating duplicate "continue" turns when generation itself failed.
-    if (detectedFailureReason === 'stopped_thinking') {
+    // Recoverable generation failures can expose a native Retry action in the
+    // current ChatGPT UI. Prefer that platform-native retry once before writing
+    // a new continuation message. This preserves the exact conversation and
+    // avoids accumulating duplicate "continue" turns when generation failed.
+    if (['stopped_thinking', 'streaming_interrupted', 'request_timeout', 'generation_error'].includes(detectedFailureReason)) {
       const retryBaseline = await assistantSnapshot(cdp);
       const retryTurnBaseline = await conversationTurnState(cdp);
       const retryStreamDeferral = await streamCompletionDeferral();
