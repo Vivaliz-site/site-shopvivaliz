@@ -656,3 +656,18 @@ not override a history-read cooldown. If a first continuation was already
 sent before a later read is rate-limited, preserve SENT_UNCONFIRMED and the
 send budget; never relabel it as an unsent deferral or send again. Existing
 stream, account and same-conversation progress guards remain mandatory.
+
+
+### Localized thinking failure (2026-10-05)
+
+The user screenshot shows `O pensamento falhou` after a real continuation
+request. The detector previously recognized `parou de pensar`, but not this
+wording or `Thinking failed`. Both now enter the existing `generation_error`
+recovery classification. The current-status/historical-message boundary,
+additional-checks priority, account binding, native Retry preference, active
+stream checks and canonical429 cooldown are unchanged.
+
+The regression executes the injected detector code with isolated status and
+Range fixtures. Recognizing this error is not proof that a provider failure
+has been fixed or that automatic recovery completed. Require correlated
+browser-worker progress on the bound task and conversation for that claim.
