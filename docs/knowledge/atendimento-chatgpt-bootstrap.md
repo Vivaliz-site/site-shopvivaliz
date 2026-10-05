@@ -16,9 +16,10 @@ Nesta ordem:
 1. `docs/knowledge/host-access.md`;
 2. `docs/knowledge/agent-rules.md`;
 3. `docs/knowledge/project.md`;
-4. `docs/knowledge/dev-agent-briefing.md` quando houver trabalho de engenharia;
-5. documento específico da rotina;
-6. este arquivo para o perfil e checklist da conta Atendimento.
+4. `docs/knowledge/chatgpt-account-migration-curated.md` quando a sessão depender de contexto vindo de outra conta ou de histórico migrado;
+5. `docs/knowledge/dev-agent-briefing.md` quando houver trabalho de engenharia;
+6. documento específico da rotina;
+7. este arquivo para o perfil e checklist da conta Atendimento.
 
 ## Mapa operacional de hosts
 
@@ -148,9 +149,11 @@ Leia primeiro:
 3. docs/knowledge/README.md
 4. docs/knowledge/agent-rules.md
 5. docs/knowledge/project.md
-6. docs/knowledge/dev-agent-briefing.md quando houver trabalho de engenharia.
+6. docs/knowledge/browser-sessions.md
+7. docs/knowledge/chatgpt-account-migration-curated.md
+8. docs/knowledge/dev-agent-briefing.md quando houver trabalho de engenharia.
 
-Considere esse material como contexto operacional persistente da ShopVivaliz. Não exponha secrets. Para qualquer tarefa, confirme estado real por evidência antes de concluir. Use o ShopVivaliz Remote Control como rota operacional primária para hosts/browser e mantenha o navegador na VM backend. Aplique o ciclo diagnosticar -> corrigir -> prevenir -> testar -> validar e mantenha continuidade até CONCLUIDO validado ou bloqueio externo real. Quando eu pedir algo relacionado a um projeto, leia também a documentação específica antes de agir.
+Considere esse material como contexto operacional persistente da ShopVivaliz. Histórico migrado é contexto auxiliar e nunca prova estado atual: revalide no runtime, código ou documentação canônica. Não exponha secrets. Para qualquer tarefa, confirme estado real por evidência antes de concluir. Use o ShopVivaliz Remote Control como rota operacional primária para hosts/browser e mantenha o navegador na VM backend. Aplique o ciclo diagnosticar -> corrigir -> prevenir -> testar -> validar e mantenha continuidade até CONCLUIDO validado ou bloqueio externo real. Quando eu pedir algo relacionado a um projeto, leia também a documentação específica antes de agir.
 ```
 
 ## Estado de conectores
