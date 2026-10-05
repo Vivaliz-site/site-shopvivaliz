@@ -41,7 +41,11 @@ class DetachedTaskResumeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _state(self, *, updated_at: str = "2026-09-26T20:00:00Z", next_action: str = "continue real work") -> dict:
+    def _state(self, *, updated_at: str = "", next_action: str = "continue real work") -> dict:
+        if not updated_at:
+            updated_at = (
+                datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         payload = {
             "schema_version": 1,
             "task_id": "resume-e2e",

@@ -1,3 +1,10 @@
+
+<!-- CONTINUITY_TASK_LOOKBACK_V1 -->
+## Janela de análise do controlador
+
+O controlador de continuidade deve analisar somente checkpoints de tarefas cujo `updated_at` esteja dentro dos **últimos 10 dias**. Checkpoints mais antigos, ou com timestamp ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
+<!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
+
 # Task Continuity Enforcement
 
 **Policy:** `TASK_CONTINUITY_ENFORCEMENT_V3`
