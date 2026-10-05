@@ -34,10 +34,10 @@ from typing import Any
 
 try:
     from .agent_task_state import RUNTIME_DIR, bind_conversation
-    from .task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
+    from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import RUNTIME_DIR, bind_conversation
-    from task_continuation_watchdog import read_requests, _fingerprint as checkpoint_fingerprint
+    from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
 LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 LOCK_FILE = "_continuity-execution.lock"
@@ -211,6 +211,11 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
         return False
     if not isinstance(payload, dict) or str(payload.get("status", "")).strip() != "RUNNING":
         return False
+    updated_at = _parse_time(payload.get("updated_at"))
+    if updated_at is None:
+        return False
+    if (datetime.now(timezone.utc) - updated_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
+        return False
     if not str(payload.get("next_action", "")).strip():
         return False
     request_repo = str(request.get("repository", "")).strip()
@@ -361,6 +366,7 @@ def _run_once_locked(
     skipped_no_token = 0
     skipped_stale_checkpoint = 0
     skipped_conversation_coalesced = 0
+    skipped_unbound = 0
     retry_attempted = 0
     skipped_attempt_limit = 0
 
@@ -390,6 +396,9 @@ def _run_once_locked(
             _bound_conversation_id(root, task_id)
             or _ledger_bound_conversation_id(ledger, task_id)
         )
+        if not resolved_conversation_id:
+            skipped_unbound += 1
+            continue
         if (
             resolved_conversation_id
             and conversation_owners.get(resolved_conversation_id) != fingerprint
@@ -566,6 +575,7 @@ def _run_once_locked(
         "skipped_no_token": skipped_no_token,
         "skipped_stale_checkpoint": skipped_stale_checkpoint,
         "skipped_conversation_coalesced": skipped_conversation_coalesced,
+        "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
         "skipped_attempt_limit": skipped_attempt_limit,
         "generated_at": utc_now(),
@@ -592,6 +602,7 @@ def run_once(
                 "skipped_no_token": 0,
                 "skipped_stale_checkpoint": 0,
                 "skipped_conversation_coalesced": 0,
+                "skipped_unbound": 0,
                 "retry_attempted": 0,
                 "skipped_attempt_limit": 0,
                 "locked": True,
