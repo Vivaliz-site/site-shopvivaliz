@@ -35,6 +35,8 @@ function transport(options = {}) {
       };
       if (source.includes('/backend-api/conversation/')) {
         state.turnReads += 1;
+        const overridden = options.turn ? options.turn(state) : null;
+        if (overridden) return overridden;
         return { http_status: 200, node_id: 'old-assistant', role: 'assistant',
           end_turn: false, child_count: 0, content_text_length: 0 };
       }
@@ -90,7 +92,30 @@ function transport(options = {}) {
 export async function runStreamActuatorGuardTests(api, directory) {
   const active = { http_status: 200, status: 'IS_STREAMING' };
   const complete = { http_status: 200, status: 'COMPLETE' };
+  const rateLimited = { http_status: 429, node_id: '', role: '', end_turn: null,
+    child_count: -1, content_text_length: 0, message_status: 'RATE_LIMIT_BACKOFF' };
   const cases = [
+    ['canonical history 429 prevents the initial passive reload', {
+      turn: () => rateLimited, wantReloads: 0,
+    }],
+    ['canonical history 429 prevents native Retry after reattach', {
+      pageText: 'Stopped thinking', turn: state => state.reloads ? rateLimited : null,
+      wantReloads: 1,
+    }],
+    ['canonical history 429 prevents first continuation after composer readiness', {
+      turn: state => state.rateLimited ? rateLimited : null,
+      waitComposer: async cdp => { cdp.state.rateLimited = true; return true; },
+      wantReloads: 1,
+    }],
+    ['canonical history 429 prevents another send after failed submission', {
+      sendSucceeds: false, turn: state => state.reloads >= 2 ? rateLimited : null,
+      wantAttempts: 1, wantReloads: 2,
+    }],
+    ['canonical history 429 after a real send preserves the send budget and prevents duplicate transmission', {
+      pageText: state => state.sendAttempts ? 'Erro na transmiss\u00e3o de mensagem' : '',
+      turn: state => state.reloads >= 2 ? rateLimited : null,
+      wantStatus: 'SENT_UNCONFIRMED', wantSent: true, wantAttempts: 1, wantReloads: 2,
+    }],
     ['silent stream without Stop remains active after reattach', {
       silentBeforeReload: true, stream: active,
     }],
@@ -211,6 +236,7 @@ export async function runStreamActuatorGuardTests(api, directory) {
           assert.equal(result.result_status, options.wantStatus || 'STALLED_NOT_CONFIRMED');
           assert.equal(result.sent, options.wantSent || false);
         }
+        if (Object.hasOwn(options, 'wantReloads')) assert.equal(cdp.state.reloads, options.wantReloads, 'bounded passive reload count');
         assert.equal(cdp.state.sendAttempts, options.wantAttempts || 0, 'continuation submission count');
         assert.equal(cdp.state.nativeRetries, options.wantRetries || 0, 'native Retry count');
         assert.equal(cdp.state.stopClicks, 0, 'active stream must not receive Stop');
