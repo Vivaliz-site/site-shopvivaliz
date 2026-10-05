@@ -312,10 +312,10 @@ def _restore_executor_owned_no_progress(
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
         return False
-    updated_at = _parse_utc(str(state.get("updated_at", "")))
-    if updated_at is None:
+    created_at = _parse_utc(str(state.get("created_at", "")))
+    if created_at is None:
         return False
-    if (datetime.now(timezone.utc) - updated_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
+    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
         return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
