@@ -178,6 +178,12 @@ class BrowserMcpTests(unittest.TestCase):
         base.assert_called_once()
         gui.assert_not_called()
 
+    def test_canonical_focused_type_allows_loopback_helpers_but_not_lan_hosts(self):
+        src = m.base.BROWSER_FOCUSED_TYPE_NODE_SCRIPT
+        self.assertIn("127.0.0.1", src)
+        self.assertIn("localhost", src)
+        self.assertNotIn("192.168.", src)
+
     def test_public_browser_type_alias_audit_redacts_text(self):
         captured = {}
         def fake_audit(tool, host, args, ok, summary):
