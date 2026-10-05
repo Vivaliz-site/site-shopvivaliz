@@ -96,6 +96,8 @@ O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e
 3. **GitHub Actions/OCI Bastion** — bootstrap, recovery e reparo.
 4. **RustDesk** — GUI/validacao visual; navegador de agente permanece na backend.
 
+Para GUI de `Fred-Win`/`KOCEPSV`, prefira as ferramentas `desktop_*` do Remote Control quando disponíveis. Elas operam o cliente RustDesk na sessão `fredconsole` da backend e não transformam o Windows em host de navegador de agente. O mapeamento de IDs fica somente em `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`); nunca versionar nem imprimir esse conteúdo.
+
 Antes de operar qualquer host, valide `hostname`, identidade e contexto do repositorio sem expor credenciais.
 
 ## Repositório principal

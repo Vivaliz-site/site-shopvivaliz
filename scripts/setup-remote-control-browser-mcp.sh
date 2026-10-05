@@ -5,6 +5,7 @@ SOURCE_SERVER="${1:-remote-control-browser-mcp/server.py}"
 SOURCE_UNIT="${2:-deploy/systemd/shopvivaliz-remote-control-browser-mcp.service}"
 INSTALL_DIR="/opt/shopvivaliz-remote-control-browser"
 UNIT_PATH="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service"
+DESKTOP_ENV="/var/lib/shopvivaliz-remote-control/desktop.env"
 UNIT_DROPIN_DIR="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d"
 CONFLICTING_SESSION_DROPIN="$UNIT_DROPIN_DIR/40-authenticated-session.conf"
 CONFLICTING_SESSION_BACKUP="$UNIT_DROPIN_DIR/40-authenticated-session.conf.disabled"
@@ -15,6 +16,14 @@ test -f "$SOURCE_SERVER" || { echo "ERROR=server_source_missing" >&2; exit 3; }
 test -f "$SOURCE_UNIT" || { echo "ERROR=unit_source_missing" >&2; exit 4; }
 test -f /opt/shopvivaliz-remote-control/server.py || { echo "ERROR=base_remote_control_missing" >&2; exit 5; }
 test -f /var/lib/shopvivaliz-remote-control/service.env || { echo "ERROR=base_service_env_missing" >&2; exit 6; }
+command -v rustdesk >/dev/null 2>&1 || { echo "ERROR=rustdesk_binary_missing" >&2; exit 9; }
+if [ -e "$DESKTOP_ENV" ]; then
+  desktop_mode="$(stat -c %a "$DESKTOP_ENV")"
+  desktop_owner="$(stat -c %U:%G "$DESKTOP_ENV")"
+  [ "$desktop_mode" = "600" ] || { echo "ERROR=desktop_env_mode_invalid" >&2; exit 10; }
+  [ "$desktop_owner" = "root:root" ] || { echo "ERROR=desktop_env_owner_invalid" >&2; exit 11; }
+  grep -q '^SHOPVIVALIZ_RUSTDESK_HOST_IDS=' "$DESKTOP_ENV" || { echo "ERROR=desktop_env_mapping_missing" >&2; exit 12; }
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 missing=()

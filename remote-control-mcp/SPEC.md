@@ -157,3 +157,10 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - The relay restart may be asynchronous because restarting the tunnel intentionally drops the legacy `5558` request path.
 - A normal `push` bootstrap performs installation, Windows bootstrap and controller host-key pinning only.
 - Stage 5 four-host health/durable-task E2E runs only from an explicit `workflow_dispatch` with `run_e2e=true`.
+
+
+## Contrato de desktop RustDesk
+
+O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`. A atuação X11 é implementada pelo wrapper `remote-control-browser-mcp`, que permanece na backend.
+
+IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.

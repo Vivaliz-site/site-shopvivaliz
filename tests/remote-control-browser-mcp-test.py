@@ -325,6 +325,31 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
 
+    def test_desktop_runtime_config_uses_separate_protected_env_file(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("EnvironmentFile=-/var/lib/shopvivaliz-remote-control/desktop.env", unit)
+        self.assertIn("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY=/usr/bin/rustdesk", unit)
+        self.assertIn('DESKTOP_ENV="/var/lib/shopvivaliz-remote-control/desktop.env"', setup)
+        self.assertIn('command -v rustdesk >/dev/null 2>&1', setup)
+        self.assertIn('stat -c %a "$DESKTOP_ENV"', setup)
+        self.assertIn('stat -c %U:%G "$DESKTOP_ENV"', setup)
+        self.assertIn("grep -q '^SHOPVIVALIZ_RUSTDESK_HOST_IDS=' \"$DESKTOP_ENV\"", setup)
+        self.assertNotIn('cat "$DESKTOP_ENV"', setup)
+        self.assertNotRegex(unit, r"SHOPVIVALIZ_RUSTDESK_HOST_IDS=.*[0-9]{6}")
+
+    def test_desktop_contract_is_documented_without_hardcoded_target_ids(self):
+        browser_spec = (ROOT / "remote-control-browser-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        base_spec = (ROOT / "remote-control-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        host_access = (ROOT / "docs" / "knowledge" / "host-access.md").read_text(encoding="utf-8")
+        for token in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
+            self.assertIn(token, browser_spec)
+        self.assertIn("desktop.env", browser_spec)
+        self.assertIn("desktop.env", base_spec)
+        self.assertIn("desktop_*", host_access)
+        self.assertIn("fredconsole", browser_spec)
+        self.assertNotIn("A automação usa somente a sessão gráfica X11 do usuário `fredrdp`", browser_spec)
+
     def test_browser_mcp_execstart_overrides_shared_env_for_session_isolation(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
         exec_line = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
