@@ -3468,6 +3468,52 @@ async function run() {
     await running;
   }
 
+  // Disabling the aggressive Fred reinforcement monitor must not disable
+  // the liveness heartbeat consumed by the controller.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      false,
+      async () => { events.push('authorization'); await blocked; },
+      true,
+      async () => { events.push('monitor-heartbeat'); await blocked; },
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'monitor-heartbeat']);
+    release();
+    await running;
+  }
+
+  // A neutral heartbeat for an intentionally disabled reinforcement monitor
+  // must clear stale reinforcement failure state instead of latching it forever.
+  {
+    const payload = reinforcementHealthPayload(
+      {
+        action: 'monitor_disabled',
+        sent: false,
+        progress_confirmed: false,
+      },
+      '2026-10-05T02:00:00.000Z',
+      {
+        degraded: true,
+        action: 'send_failed',
+        last_cycle_action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'old failure',
+        failure_reason: 'silent_stall',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'monitor_disabled');
+    assert.equal(payload.last_cycle_action, 'monitor_disabled');
+    assert.equal(payload.failure_reason, '');
+  }
+
   // Banner flashes then clears by the confirm re-check (client's own retry
   // succeeded) -> must NOT send a message.
   {

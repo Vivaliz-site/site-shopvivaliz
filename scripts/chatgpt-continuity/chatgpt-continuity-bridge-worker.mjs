@@ -213,7 +213,8 @@ function reinforcementHealthPayload(
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
-    || action === 'idle_no_checkpoint';
+    || action === 'idle_no_checkpoint'
+    || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
@@ -3550,15 +3551,36 @@ async function reinforcementLoop(
   }
 }
 
+async function disabledReinforcementHeartbeatLoop(
+  persist = persistReinforcementHealth,
+  wait = sleep,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
+) {
+  for (;;) {
+    persist({
+      action: 'monitor_disabled',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await wait(heartbeatIntervalMs);
+  }
+}
+
 async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
   runAuthorizationLoop = authorizationLoop,
   autoAllowEnabled = AUTO_ALLOW_ENABLED,
+  runDisabledMonitorHeartbeatLoop = disabledReinforcementHeartbeatLoop,
 ) {
   const loops = [runBridgeLoop()];
-  if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (reinforcementEnabled) {
+    loops.push(runReinforcementLoop());
+  } else {
+    loops.push(runDisabledMonitorHeartbeatLoop());
+  }
   if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
@@ -3619,6 +3641,7 @@ export {
   withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
+  disabledReinforcementHeartbeatLoop,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,
