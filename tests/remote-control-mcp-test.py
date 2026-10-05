@@ -475,9 +475,13 @@ class RemoteControlMcpTests(unittest.TestCase):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:
+            # Self-hosted runners can be heavily loaded while multiple audit
+            # workflows start at once. This is a privacy assertion, not a
+            # latency assertion, so allow scheduling delay without turning a
+            # healthy metadata-only `ps` invocation into a false negative.
             result = subprocess.run(
                 ["ps", "-p", str(child.pid), "-o", fields],
-                capture_output=True, text=True, timeout=8, check=True,
+                capture_output=True, text=True, timeout=30, check=True,
             )
             self.assertIn(str(child.pid), result.stdout)
             self.assertTrue(sentinel not in result.stdout,
