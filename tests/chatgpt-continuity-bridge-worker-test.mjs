@@ -62,6 +62,8 @@ const {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
+  mutationAuthorizationAllows,
+  guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
@@ -3699,6 +3701,32 @@ async function run() {
   await (await import('./chatgpt-thinking-failed-test.mjs')).runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage });
   await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
   (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
+
+  {
+    assert.equal(mutationAuthorizationAllows({ authorized: true }), true);
+    assert.equal(mutationAuthorizationAllows({ authorized: false, reason: 'foreground_active' }), false);
+    let mutated = 0;
+    const rejected = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: false, reason: 'foreground_active' }),
+    );
+    assert.equal(rejected.authorized, false);
+    assert.equal(rejected.reason, 'foreground_active');
+    assert.equal(mutated, 0, 'rejected mutation authorization must never execute callback');
+    const allowed = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: true, reason: 'authorized' }),
+    );
+    assert.equal(allowed.authorized, true);
+    assert.equal(allowed.value, 'sent');
+    assert.equal(mutated, 1);
+  }
   await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,

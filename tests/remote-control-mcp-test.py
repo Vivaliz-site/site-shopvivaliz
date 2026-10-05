@@ -165,18 +165,59 @@ class RemoteControlMcpTests(unittest.TestCase):
             if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
             else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
 
+    def test_browser_mutation_requires_conversation_gate_when_handoff_enabled(self):
+        old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
+        try:
+            runtime = m.runtime_lock.acquire_runtime_lock("durable-recovery", "worker-a", 30, ["browser_click_control"])
+            with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as runner:
+                with self.assertRaisesRegex(ValueError, "conversation_mutation_gate_required"):
+                    m.execute_tool("browser_click_control", {
+                        "tab_id": "ABC123", "index": 0,
+                        "runtime_lease_id": runtime["lease_id"],
+                        "runtime_fencing_token": runtime["fencing_token"],
+                    })
+            runner.assert_not_called()
+        finally:
+            if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
+            if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
+            else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
+
     def test_mutating_browser_tool_accepts_current_runtime_lock_and_rejects_stale_token(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
         os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
         os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = self.tmp.name
         try:
+            task_id = "task-runtime-lock"
+            conversation_id = "conversation_12345678"
+            checkpoint = {
+                "task_id": task_id, "status": "RUNNING", "conversation_id": conversation_id,
+                "browser_session": "fred", "history": [{"action": "start"}],
+            }
+            (Path(self.tmp.name) / f"{task_id}.json").write_text(json.dumps(checkpoint))
+            conversation = m.conversation_lease.acquire_conversation_lease(
+                conversation_id, "durable-recovery", "worker-a", 1, 30, ["browser_click_control"]
+            )
             lock = m.runtime_lock.acquire_runtime_lock("durable-recovery", "worker-a", 30, ["browser_click_control"])
+            args = {
+                "tab_id": "ABC123", "index": 0, "task_id": task_id,
+                "conversation_id": conversation_id, "checkpoint_version": 1,
+                "session_identity": "fred",
+                "conversation_lease_id": conversation["lease_id"],
+                "conversation_fencing_token": conversation["fencing_token"],
+                "runtime_lease_id": lock["lease_id"],
+                "runtime_fencing_token": lock["fencing_token"],
+            }
             with mock.patch.object(m, "run_host_command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as runner:
-                m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0, "runtime_lease_id": lock["lease_id"], "runtime_fencing_token": lock["fencing_token"]})
+                m.execute_tool("browser_click_control", args)
             self.assertTrue(runner.called)
+            stale = dict(args); stale["runtime_fencing_token"] = lock["fencing_token"] - 1
             with self.assertRaisesRegex(ValueError, "runtime_lock_invalid"):
-                m.execute_tool("browser_click_control", {"tab_id": "ABC123", "index": 0, "runtime_lease_id": lock["lease_id"], "runtime_fencing_token": lock["fencing_token"] - 1})
+                m.execute_tool("browser_click_control", stale)
         finally:
             if old is None: os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
             else: os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = old
