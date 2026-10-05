@@ -397,6 +397,14 @@ async function cdpReady() {
   }
 }
 
+function classifyChatgptPath(pathname) {
+  const conversation = String(pathname || '').match(/^\/(?:g\/[^/]+\/)?(?:c|uc)\/([^/]+)/);
+  if (conversation) return { rank: 0, conversationId: conversation[1] };
+  if (pathname === '/' || pathname === '') return { rank: 1, conversationId: '' };
+  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(pathname)) return { rank: 3, conversationId: '' };
+  return { rank: 2, conversationId: '' };
+}
+
 function chatgptTabRank(tab) {
   if (!tab || tab.type !== 'page' || !tab.webSocketDebuggerUrl) return Number.POSITIVE_INFINITY;
   let url;
@@ -406,10 +414,7 @@ function chatgptTabRank(tab) {
     return Number.POSITIVE_INFINITY;
   }
   if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com') return Number.POSITIVE_INFINITY;
-  if (/^\/(?:c|uc)\/[^/]+/.test(url.pathname)) return 0;
-  if (url.pathname === '/' || url.pathname === '') return 1;
-  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(url.pathname)) return 3;
-  return 2;
+  return classifyChatgptPath(url.pathname).rank;
 }
 
 function selectChatgptTab(tabs) {
@@ -489,7 +494,7 @@ async function selectBoundConversationReentryTab(
 function conversationIdFromTab(tab) {
   if (chatgptTabRank(tab) !== 0) return '';
   try {
-    return new URL(String(tab.url || '')).pathname.match(/^\/(?:c|uc)\/([^/]+)/)?.[1] || '';
+    return classifyChatgptPath(new URL(String(tab.url || '')).pathname).conversationId;
   } catch {
     return '';
   }

@@ -172,6 +172,8 @@ async function run() {
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
       { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://uc', url: 'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-c', url: 'https://chatgpt.com/g/g-p-returns/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-uc', url: 'https://chatgpt.com/g/g-p-returns/uc/99999999-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
@@ -179,7 +181,7 @@ async function run() {
       tabs,
       '11111111-2222-3333-4444-555555555555',
     );
-    assert.equal(bound.length, 1);
+    assert.equal(bound.length, 2, 'plain and Project routes must share the same conversation identity');
     assert.equal(
       bound[0].url,
       'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
@@ -189,7 +191,7 @@ async function run() {
       tabs,
       '99999999-2222-3333-4444-555555555555',
     );
-    assert.equal(ucBound.length, 1, '/uc conversation routes must be first-class bound tabs');
+    assert.equal(ucBound.length, 2, 'plain and Project /uc routes must share the same conversation identity');
     assert.equal(
       ucBound[0].url,
       'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555',
