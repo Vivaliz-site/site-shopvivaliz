@@ -33,6 +33,11 @@ DISPLAY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_DISPLAY", ":0")
 BROWSER_BINARY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome")
 BROWSER_PROFILE_DIR = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium")
 BROWSER_WINDOW_CLASS = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS", "shopvivaliz-general")
+RUSTDESK_BINARY = os.environ.get("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY", "/usr/bin/rustdesk")
+DESKTOP_ALIASES = {
+    "KOCEPSV": ("kocepsv", "desktop-kocepsv"),
+    "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
+}
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
@@ -188,6 +193,128 @@ def selected_url(window: str) -> str:
     return safe_url(copied.stdout or "")
 
 
+def rustdesk_windows(host: str, target_id: str) -> list[str]:
+    base.validate_desktop_host(host)
+    require_binary("xdotool")
+    aliases = tuple(item.lower() for item in DESKTOP_ALIASES.get(host, (host.lower(),)))
+    found: list[str] = []
+    result = run_gui(["xdotool", "search", "--onlyvisible", "--class", "rustdesk"], check=False)
+    if result.returncode != 0:
+        return found
+    for item in (result.stdout or "").split():
+        if not item.isdigit() or item in found:
+            continue
+        title = window_title(item).lower()
+        if target_id in title or any(alias in title for alias in aliases):
+            found.append(item)
+    return found
+
+
+def active_desktop_window(host: str, target_id: str) -> str:
+    windows = rustdesk_windows(host, target_id)
+    if not windows:
+        raise RuntimeError("rustdesk_session_window_not_found")
+    if len(windows) != 1:
+        raise RuntimeError("rustdesk_session_window_ambiguous")
+    window = windows[0]
+    active = run_gui(["xdotool", "getactivewindow"], check=False)
+    if (active.stdout or "").strip() != window:
+        focus(window)
+    return window
+
+
+def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    target_id = base.rustdesk_host_id(host)
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
+    rustdesk_launchable = os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)
+    display_accessible = dependencies["xdotool"] and run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
+    windows = rustdesk_windows(host, target_id) if display_accessible else []
+    return {
+        "ok": all(dependencies.values()) and rustdesk_launchable and display_accessible and len(windows) <= 1,
+        "host": host,
+        "gui_user": GUI_USER,
+        "display": DISPLAY,
+        "dependencies": dependencies,
+        "rustdesk_launchable": rustdesk_launchable,
+        "display_accessible": bool(display_accessible),
+        "session_window_count": len(windows),
+        "session_open": len(windows) == 1,
+    }
+
+
+def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    target_id = base.rustdesk_host_id(host)
+    windows = rustdesk_windows(host, target_id)
+    if len(windows) > 1:
+        raise RuntimeError("rustdesk_session_window_ambiguous")
+    if len(windows) == 1:
+        focus(windows[0])
+        return {"ok": True, "host": host, "window_id": windows[0], "action": "focus_existing"}
+    if not (os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)):
+        raise RuntimeError("rustdesk_binary_not_found")
+    subprocess.Popen(
+        gui_prefix() + [RUSTDESK_BINARY, "--connect", target_id],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    for _ in range(40):
+        time.sleep(0.25)
+        windows = rustdesk_windows(host, target_id)
+        if len(windows) > 1:
+            raise RuntimeError("rustdesk_session_window_ambiguous")
+        if len(windows) == 1:
+            focus(windows[0])
+            return {"ok": True, "host": host, "window_id": windows[0], "action": "opened"}
+    raise RuntimeError("rustdesk_session_window_timeout")
+
+
+def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    target_id = base.rustdesk_host_id(host)
+    x = int(args.get("x"))
+    y = int(args.get("y"))
+    button_name = str(args.get("button") or "left")
+    clicks = max(1, min(int(args.get("clicks", 1)), 3))
+    button = {"left": "1", "middle": "2", "right": "3"}.get(button_name)
+    if button is None:
+        raise ValueError("desktop_invalid_mouse_button")
+    window = active_desktop_window(host, target_id)
+    focus(window)
+    geo = parse_geometry(window)
+    if not (0 <= x < geo["WIDTH"] and 0 <= y < geo["HEIGHT"]):
+        raise ValueError("desktop_click_outside_window")
+    absolute_x = geo["X"] + x
+    absolute_y = geo["Y"] + y
+    run_gui(["xdotool", "mousemove", "--sync", str(absolute_x), str(absolute_y)])
+    for _ in range(clicks):
+        run_gui(["xdotool", "click", button])
+    return {"ok": True, "host": host, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
+
+
+def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    target_id = base.rustdesk_host_id(host)
+    text = str(args.get("text") or "")
+    if not text:
+        raise ValueError("desktop_text_required")
+    if len(text) > 4096:
+        raise ValueError("desktop_text_too_long")
+    window = active_desktop_window(host, target_id)
+    focus(window)
+    require_binary("xclip")
+    try:
+        run_gui(["xclip", "-selection", "clipboard", "-i"], input_text=text)
+        key("ctrl+v")
+    finally:
+        run_gui(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False)
+    if bool(args.get("press_enter", False)):
+        key("Return")
+    return {"ok": True, "host": host, "window_id": window, "typed_characters": len(text), "press_enter": bool(args.get("press_enter", False))}
+
+
 def browser_health() -> dict[str, Any]:
     dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
     display_accessible = False
@@ -329,10 +456,9 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def browser_screenshot() -> dict[str, Any]:
-    window = active_browser_window()
+def capture_window(window: str, host: str, prefix: str) -> dict[str, Any]:
     focus(window)
-    tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-browser-")
+    tmpdir = tempfile.mkdtemp(prefix=prefix)
     gui = pwd.getpwnam(GUI_USER)
     os.chown(tmpdir, gui.pw_uid, gui.pw_gid)
     os.chmod(tmpdir, 0o700)
@@ -343,23 +469,30 @@ def browser_screenshot() -> dict[str, Any]:
         elif shutil.which("gnome-screenshot"):
             run_gui(["gnome-screenshot", "-f", path], timeout=20)
         elif shutil.which("import"):
-            run_gui(["import", "-window", "root", path], timeout=20)
+            run_gui(["import", "-window", window, path], timeout=20)
         else:
-            raise RuntimeError("browser_screenshot_dependency_missing")
+            raise RuntimeError("screenshot_dependency_missing")
         raw = Path(path).read_bytes()
         if not raw or len(raw) > MAX_SCREENSHOT_BYTES:
-            raise RuntimeError("browser_screenshot_size_invalid")
+            raise RuntimeError("screenshot_size_invalid")
         return {
-            "ok": True,
-            "host": BROWSER_HOST,
-            "window_id": window,
-            "mime_type": "image/png",
-            "sha256": hashlib.sha256(raw).hexdigest(),
-            "bytes": len(raw),
+            "ok": True, "host": host, "window_id": window, "mime_type": "image/png",
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
             "__mcp_image__": base64.b64encode(raw).decode("ascii"),
         }
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def browser_screenshot() -> dict[str, Any]:
+    return capture_window(active_browser_window(), BROWSER_HOST, "shopvivaliz-browser-")
+
+
+def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    target_id = base.rustdesk_host_id(host)
+    window = active_desktop_window(host, target_id)
+    return capture_window(window, host, "shopvivaliz-desktop-")
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
@@ -368,6 +501,18 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name in {"desktop_open", "desktop_click", "desktop_type"}:
+        base._assert_runtime_mutation(name, args)
+    if name == "desktop_health":
+        return desktop_health(args)
+    if name == "desktop_open":
+        return desktop_open(args)
+    if name == "desktop_screenshot":
+        return desktop_screenshot(args)
+    if name == "desktop_click":
+        return desktop_click(args)
+    if name == "desktop_type":
+        return desktop_type(args)
     if name in ATTENDIMENTO_TOOL_MAP:
         return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
     if name == "browser_health":
