@@ -3656,7 +3656,7 @@ async function run() {
   await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
     conversationTurnState, conversationStreamStatus, sendContinueMessage,
   });
-  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint }, testTaskStateDir);
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, conversationUnavailablePresent }, testTaskStateDir);
   await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
   console.log('reinforcementCheckOnce branches: PASS');
 }
