@@ -498,6 +498,11 @@ Somente uma linha `queued` unica cujo `task_id`, repositorio,
 `checkpoint_updated_at`, `next_action` e fingerprint coincidam com um
 checkpoint `RUNNING` atual permanece acionavel.
 
+A analise operacional usa uma janela de **10 dias desde a criacao da tarefa**, baseada em
+`created_at`. Atualizar uma tarefa antiga nao a recoloca na janela. Checkpoints mais antigos continuam preservados como historico,
+mas nao podem manter requests acionaveis na fila; a compactacao move esses
+requests para `_resume-requests-archive.jsonl`.
+
 Linhas de checkpoint terminal, superseded/mismatched, orfas, duplicadas,
 malformadas ou com status nao operacional saem da fila ativa e sao preservadas
 em `_resume-requests-archive.jsonl`. A compactacao usa
