@@ -434,6 +434,8 @@ def run_once(
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
         monitor = _chatgpt_monitor_health(root)
+        monitor_required = os.environ.get("CHATGPT_CONTINUITY_MONITOR_REQUIRED", "1").strip().lower() not in {"0", "false", "no", "off"}
+        monitor["required"] = monitor_required
         browser_health = _chatgpt_browser_health(root)
         claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
@@ -447,9 +449,9 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
-        if monitor.get("fresh") is not True:
+        if monitor_required and monitor.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_monitor_stale")
-        if monitor.get("degraded") is True:
+        if monitor_required and monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
         if browser_health.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_auth_unknown")
