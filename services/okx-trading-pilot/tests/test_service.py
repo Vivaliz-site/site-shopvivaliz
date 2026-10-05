@@ -12,8 +12,19 @@ class Model:
         now=datetime.now(timezone.utc)
         from okx_pilot.decision import REQUIRED_LAYERS
         return dict(decision='HOLD',decision_id='d',instrument_id=s.instrument_id,instrument_type='swap',direction='neutral',entry=None,stop=None,targets=[],suggested_risk_usd='0',suggested_leverage='1',confidence=80,expected_rr='2',time_horizon='1h',invalidation='none',supporting_evidence=['x'],contrary_evidence=['y'],layers=list(REQUIRED_LAYERS),market_snapshot_ts=now.isoformat(),expires_at=(now+timedelta(seconds=30)).isoformat())
+class TradeModel:
+    def analyze(self,s):
+        now=datetime.now(timezone.utc)
+        from okx_pilot.decision import REQUIRED_LAYERS
+        return dict(decision='TRADE',decision_id='d-trade',instrument_id=s.instrument_id,instrument_type='swap',direction='long',entry='100',stop='95',targets=['110'],suggested_risk_usd='5',suggested_leverage='2',confidence=80,expected_rr='2',time_horizon='1h',invalidation='break',supporting_evidence=['trend'],contrary_evidence=['funding'],layers=list(REQUIRED_LAYERS),market_snapshot_ts=now.isoformat(),expires_at=(now+timedelta(seconds=30)).isoformat())
 
 def test_hold_never_reaches_execution():
     svc=TradingPilotService(Okx(),Model(),PilotConfig(mode=Mode.SHADOW))
     out=svc.run_cycle(datetime.now(timezone.utc))
     assert out['decisions']==1 and out['executed']==0
+
+def test_shadow_trade_is_approved_but_not_counted_as_executed():
+    svc=TradingPilotService(Okx(),TradeModel(),PilotConfig(mode=Mode.SHADOW))
+    out=svc.run_cycle(datetime.now(timezone.utc))
+    assert out['approved']==1
+    assert out['executed']==0
