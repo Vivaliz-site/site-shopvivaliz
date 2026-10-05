@@ -1508,7 +1508,7 @@ let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
 const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
-const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
+const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai','127.0.0.1','localhost']);
 const candidates=[];
 for(const t of tabs){
   if(t?.type!=='page'||!t?.webSocketDebuggerUrl) continue;
