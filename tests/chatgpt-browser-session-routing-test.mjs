@@ -24,6 +24,20 @@ export async function runBrowserSessionRoutingTests(api, directory) {
     return { urls, outcome };
   };
   const cases = [
+    ['corporate checkpoints cannot wake the personal reinforcement monitor', async () => {
+      const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'personal-reinforcement-routing-'));
+      const checkpoint = path.join(isolated, 'task.json');
+      try {
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'atendimento' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'invalid' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), false);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING', browser_session: 'fred' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
+        fs.writeFileSync(checkpoint, JSON.stringify({ status: 'RUNNING' }));
+        assert.equal(api.hasActiveContinuityCheckpoint(isolated), true);
+      } finally { fs.rmSync(isolated, { recursive: true, force: true }); }
+    }],
     ['corporate checkpoint reaches CDP9556, never personal CDP9555', async () => {
       const result = await capture();
       assert.equal(result.urls[0], 'http://127.0.0.1:9556/json/version');

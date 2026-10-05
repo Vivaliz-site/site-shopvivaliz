@@ -52,6 +52,7 @@ Stream ativo ou nao confirmado e deferido mesmo se o DOM nao mostrar Stop.
 Conta divergente, binding invalido, conversa divergente ou checkpoint terminal
 falham sem usar outro perfil como fallback. O monitor legado permanece pessoal;
 a cobertura corporativa e checkpoint-driven, nao descoberta global da conta.
+Checkpoint corporativo ou com sessao invalida nao acorda o monitor pessoal.
 
 A escolha de porta usa contexto assincrono por tentativa, sem alterar variaveis
 de ambiente globais. Testes exercitam o endpoint realmente solicitado, a

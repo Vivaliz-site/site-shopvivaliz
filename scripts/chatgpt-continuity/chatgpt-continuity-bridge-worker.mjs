@@ -507,6 +507,8 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('_')) continue;
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
+        // The reinforcement loop belongs only to the legacy/personal browser.
+        if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
       } catch {
