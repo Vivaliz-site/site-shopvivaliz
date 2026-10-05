@@ -2810,6 +2810,14 @@ async function attemptNudgeInSession(
     : {})});
   let cdp;
   let boundSessionStream = null;
+  const canonicalRateLimitDeferral = turn => {
+    if (Number(turn?.http_status || 0) !== 429) return null;
+    return {
+      result_status: continuationSent ? 'SENT_UNCONFIRMED' : 'STALLED_NOT_CONFIRMED',
+      detail: 'canonical history read rate limited; waiting without reload or continuation',
+      ...recoveryMetadata(),
+    };
+  };
   const streamCompletionDeferral = async () => {
     if (await conversationStreamComplete(cdp)) return null;
     return {
@@ -2939,6 +2947,8 @@ async function attemptNudgeInSession(
       || Boolean(detectedFailureReason)
       || silentStallBeforeReattach;
     const passiveTurnBaseline = await conversationTurnState(cdp);
+    const passiveTurnBaselineRateLimit = canonicalRateLimitDeferral(passiveTurnBaseline);
+    if (passiveTurnBaselineRateLimit) return passiveTurnBaselineRateLimit;
     const passiveBaseline = await assistantSnapshot(cdp);
     await cdp.evaluate(`(()=>{location.reload();return true})()`);
     await sleep(1200);
@@ -2987,6 +2997,8 @@ async function attemptNudgeInSession(
     if (['stopped_thinking', 'streaming_interrupted', 'request_timeout', 'generation_error'].includes(detectedFailureReason)) {
       const retryBaseline = await assistantSnapshot(cdp);
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
       const retryStreamDeferral = await streamCompletionDeferral();
       if (retryStreamDeferral) return retryStreamDeferral;
       const retryClicked = await clickRecoverableRetryButton(
@@ -3043,6 +3055,8 @@ async function attemptNudgeInSession(
     let baseline = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
     let turnBaseline = await conversationTurnState(cdp);
+    const initialReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+    if (initialReadRateLimit) return initialReadRateLimit;
     const sendStreamDeferral = await streamCompletionDeferral();
     if (sendStreamDeferral) return sendStreamDeferral;
     let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
@@ -3064,6 +3078,8 @@ async function attemptNudgeInSession(
       baseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
       turnBaseline = await conversationTurnState(cdp);
+      const resendReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+      if (resendReadRateLimit) return resendReadRateLimit;
       const resendStreamDeferral = await streamCompletionDeferral();
       if (resendStreamDeferral) return resendStreamDeferral;
       sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
@@ -3083,6 +3099,8 @@ async function attemptNudgeInSession(
       // Treat this as a transport failure, not as an ambiguous unconfirmed send:
       // reload/reattach once and retry only after the UI still reports the error.
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
       const retryBaseline = await assistantSnapshot(cdp);
       await cdp.evaluate(`(()=>{location.reload();return true})()`);
       await sleep(1200);
@@ -3103,6 +3121,8 @@ async function attemptNudgeInSession(
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
       const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
+      const retryAfterReattachTurnBaselineRateLimit = canonicalRateLimitDeferral(retryAfterReattachTurnBaseline);
+      if (retryAfterReattachTurnBaselineRateLimit) return retryAfterReattachTurnBaselineRateLimit;
       const transmissionStreamDeferral = await streamCompletionDeferral();
       if (transmissionStreamDeferral) return transmissionStreamDeferral;
       const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);

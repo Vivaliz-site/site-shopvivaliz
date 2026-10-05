@@ -646,3 +646,13 @@ Each contains one authorized login; the two localStorage namespaces are not
 shared. A longer Retry-After is never shortened to the five-minute default
 (RFC9110 section10.2.3). Browser UTC must remain synchronized for persisted
 deadlines, as for existing request timestamps; this does not cache responses.
+
+
+### Canonical429 is an actuator boundary, not only a reader pause
+
+Every full-history baseline inside a recovery attempt must reject HTTP429
+before the next reload, native Retry or continuation. Stream COMPLETE does
+not override a history-read cooldown. If a first continuation was already
+sent before a later read is rate-limited, preserve SENT_UNCONFIRMED and the
+send budget; never relabel it as an unsent deferral or send again. Existing
+stream, account and same-conversation progress guards remain mandatory.
