@@ -10,6 +10,8 @@ CACHE_TTL_HOURS="${CACHE_TTL_HOURS:-12}"
 ORPHAN_WORKTREE_TTL_HOURS="${ORPHAN_WORKTREE_TTL_HOURS:-2}"
 ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"
 DRY_RUN="${DRY_RUN:-0}"
+# A queued task has no process/cwd yet, even when its new HEAD is in main.
+WORKTREE_MIN_AGE_SECONDS=1800
 
 mkdir -p "$STATE_DIR"
 exec 9>"$LOCK"
@@ -39,6 +41,33 @@ path_active() {
   while IFS= read -r q; do
     case "$q" in "$p"|"$p"/*) return 0;; esac
   done <<< "$ACTIVE_CWDS"
+  return 1
+}
+
+# Preserve reserved/recent workspaces, including their enclosing chat wrapper.
+# Call again immediately before destructive steps. This narrows TOCTOU windows;
+# it is not an atomic reservation protocol. Owners must lock before eligibility.
+worktree_protected() {
+  local root="$1" container="${2:-$1}" candidate modified git_dir
+  for candidate in "$root" "$container"; do
+    if ! modified="$(stat -c %Y "$candidate" 2>/dev/null)" || ! [[ "$modified" =~ ^[0-9]+$ ]]; then
+      log "workspace_preserved reason=metadata path=$root"
+      return 0
+    fi
+    if [ "$((now_epoch-modified))" -lt "$WORKTREE_MIN_AGE_SECONDS" ]; then
+      log "workspace_preserved reason=grace path=$root"
+      return 0
+    fi
+  done
+  if ! git_dir="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse --absolute-git-dir 2>/dev/null)" ||
+     [ -z "$git_dir" ] || [ ! -d "$git_dir" ] || [ ! -r "$git_dir" ] || [ ! -x "$git_dir" ]; then
+    log "workspace_preserved reason=metadata path=$root"
+    return 0
+  fi
+  if [ -e "$git_dir/locked" ] || [ -L "$git_dir/locked" ]; then
+    log "workspace_preserved reason=locked path=$root"
+    return 0
+  fi
   return 1
 }
 
@@ -99,10 +128,12 @@ delivered() {
 }
 
 cleanup_cache() {
-  local root="$1" x b
+  local root="$1" container="${2:-$1}" x b
   for x in node_modules .next test-results coverage .pytest_cache .eslintcache; do
     [ -e "$root/$x" ] || continue
+    worktree_protected "$root" "$container" && return 0
     b="$(du -sx -B1 "$root/$x" 2>/dev/null | awk '{print $1}' || echo 0)"
+    worktree_protected "$root" "$container" && return 0
     if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root/$x"; fi
     freed_bytes=$((freed_bytes+b))
     cache_cleaned=$((cache_cleaned+1))
@@ -113,6 +144,7 @@ cleanup_cache() {
       log "cache_preserved_tracked path=$(basename "$(dirname "$root")")/$(basename "$root")/tsconfig.tsbuildinfo"
     else
       b="$(stat -c %s "$root/tsconfig.tsbuildinfo" 2>/dev/null || echo 0)"
+      worktree_protected "$root" "$container" && return 0
       if [ "$DRY_RUN" = 0 ]; then rm -f -- "$root/tsconfig.tsbuildinfo"; fi
       freed_bytes=$((freed_bytes+b))
       cache_cleaned=$((cache_cleaned+1))
@@ -129,8 +161,12 @@ if [ -d "$ROOT" ]; then
       continue
     fi
     root="$(git_root "$d" || true)"
+    if [ -n "$root" ] && worktree_protected "$root" "$d"; then
+      preserved=$((preserved+1))
+      continue
+    fi
     if [ "$age" -ge "$CACHE_TTL_HOURS" ] && [ -n "$root" ]; then
-      cleanup_cache "$root"
+      cleanup_cache "$root" "$d"
     fi
     [ "$age" -ge "$FULL_TTL_HOURS" ] || { preserved=$((preserved+1)); continue; }
     [ -n "$root" ] || { preserved=$((preserved+1)); continue; }
@@ -140,6 +176,10 @@ if [ -d "$ROOT" ]; then
     fi
     if delivered "$root"; then
       b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+      if worktree_protected "$root" "$d"; then
+        preserved=$((preserved+1))
+        continue
+      fi
       if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
       freed_bytes=$((freed_bytes+b))
       removed=$((removed+1))
@@ -265,6 +305,10 @@ worktree_removed=0
 if [ -d /home/ubuntu/worktrees ]; then
   while IFS= read -r root; do
     [ -d "$root" ] || continue
+    if worktree_protected "$root"; then
+      preserved=$((preserved+1))
+      continue
+    fi
     path_active "$root" && continue
     age=$(( (now_epoch-$(stat -c %Y "$root" 2>/dev/null || echo "$now_epoch"))/3600 ))
     if [ "$age" -ge "$CACHE_TTL_HOURS" ]; then cleanup_cache "$root"; fi
@@ -272,6 +316,10 @@ if [ -d /home/ubuntu/worktrees ]; then
     [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
     if delivered "$root"; then
       b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
+      if worktree_protected "$root"; then
+        preserved=$((preserved+1))
+        continue
+      fi
       if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
       freed_bytes=$((freed_bytes+b))
       worktree_removed=$((worktree_removed+1))

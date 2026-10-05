@@ -83,6 +83,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
 
             self.assertEqual(result["dispatched"], 1, result)
             self.assertEqual(result["skipped_no_token"], 0)
+            self.assertEqual(result["skipped_unbound"], 0)
+            self.assertEqual(calls[0]["conversation_id"], "12345678-2222-3333-4444-555555555555")
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
 
