@@ -172,6 +172,8 @@ def main() -> int:
         import_verified = os.getenv("GOOGLE_ADS_GA4_IMPORT_VERIFIED", "").strip().lower() in {"1", "true", "yes"}
         if not import_verified:
             errors.append("ga4_import_not_verified")
+        if is_placeholder(os.getenv("GA4_SECRET", "")):
+            errors.append("ga4_purchase_server_side_secret_missing")
     else:
         missing.extend(key for key in MANUAL_CONVERSION_ENV if is_placeholder(os.getenv(key, "")))
     if missing:
