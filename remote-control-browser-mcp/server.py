@@ -270,15 +270,41 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def rustdesk_host_password(host: str) -> str:
+    base.validate_desktop_host(host)
+    raw = os.environ.get("SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS", "").strip()
+    if not raw:
+        return ""
+    try:
+        mapping = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("rustdesk_password_config_invalid") from exc
+    if not isinstance(mapping, dict):
+        raise RuntimeError("rustdesk_password_config_invalid")
+    value = mapping.get(host, "")
+    if value in (None, ""):
+        return ""
+    if not isinstance(value, str) or len(value) > 4096 or "\x00" in value:
+        raise RuntimeError("rustdesk_password_config_invalid")
+    return value
+
+
 def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     target_id = base.rustdesk_host_id(host)
+    password = rustdesk_host_password(host)
     windows = rustdesk_windows(host, target_id)
     if len(windows) > 1:
         raise RuntimeError("rustdesk_session_window_ambiguous")
     if len(windows) == 1:
         focus(windows[0])
-        return {"ok": True, "host": host, "window_id": windows[0], "action": "focus_existing"}
+        return {
+            "ok": True,
+            "host": host,
+            "window_id": windows[0],
+            "action": "focus_existing",
+            "unattended_auth_attempted": False,
+        }
     if not (os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)):
         raise RuntimeError("rustdesk_binary_not_found")
     subprocess.Popen(
@@ -294,7 +320,23 @@ def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError("rustdesk_session_window_ambiguous")
         if len(windows) == 1:
             focus(windows[0])
-            return {"ok": True, "host": host, "window_id": windows[0], "action": "opened"}
+            attempted = False
+            if password:
+                require_binary("xclip")
+                try:
+                    run_gui(["xclip", "-selection", "clipboard", "-i"], input_text=password)
+                    key("ctrl+v")
+                finally:
+                    run_gui(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False)
+                key("Return")
+                attempted = True
+            return {
+                "ok": True,
+                "host": host,
+                "window_id": windows[0],
+                "action": "opened",
+                "unattended_auth_attempted": attempted,
+            }
     raise RuntimeError("rustdesk_session_window_timeout")
 
 
