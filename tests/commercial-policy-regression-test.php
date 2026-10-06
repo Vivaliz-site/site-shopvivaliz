@@ -25,7 +25,7 @@ $sanitizer = file_get_contents(dirname(__DIR__) . '/includes/product-trust-sanit
 policy_assert(!str_contains($index, 'VIVALIZ10'), 'public home must not advertise legacy VIVALIZ10');
 policy_assert(!str_contains($index, 'PRIMEIRA10'), 'public home must not advertise legacy PRIMEIRA10');
 policy_assert(!preg_match('/10%[^\n]{0,100}(primeira|1.?)\s*compra/iu', $index), 'public home must not claim 10% first purchase');
-policy_assert(str_contains($index, '3% OFF automatico no carrinho'), 'home must advertise the approved automatic 3% cart offer');
+policy_assert(str_contains($index, '3% OFF automático no checkout'), 'home must advertise the approved automatic 3% checkout offer');
 policy_assert(str_contains($sanitizer, 'PIX disponível no checkout'), 'PIX claim must stay neutral until checkout-authoritative');
 policy_assert(str_contains($sanitizer, 'Parcelamento disponível no checkout'), 'installment claim must stay neutral until checkout-authoritative');
 

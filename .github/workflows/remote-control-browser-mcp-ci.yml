@@ -1,0 +1,56 @@
+name: Remote Control Browser MCP CI
+
+on:
+  pull_request:
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - 'remote-control-mcp/server.py'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/browser-gui-stdin-x11-test.py'
+      - 'tests/audit-v5-gui-input-privacy-test.py'
+      - '.github/workflows/remote-control-browser-mcp-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - 'remote-control-mcp/server.py'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/browser-gui-stdin-x11-test.py'
+      - 'tests/audit-v5-gui-input-privacy-test.py'
+      - '.github/workflows/remote-control-browser-mcp-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Browser MCP contract tests
+        run: |
+          set -Eeuo pipefail
+          python3 tests/remote-control-browser-mcp-test.py
+      - name: Existing Remote Control MCP regression tests
+        run: |
+          set -Eeuo pipefail
+          python3 tests/remote-control-mcp-test.py
+      - name: GUI input privacy focused regression
+        run: |
+          set -Eeuo pipefail
+          python3 tests/audit-v5-gui-input-privacy-test.py
+      - name: Real isolated X11 stdin regression
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool
+          SHOPVIVALIZ_TEST_X11_FIXTURE=1 xvfb-run -a -s '-screen 0 800x600x24 -nolisten tcp' python3 tests/browser-gui-stdin-x11-test.py

@@ -13,6 +13,9 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
 - [`dev-agent-briefing.md`](dev-agent-briefing.md) — onboarding canônico do `@dev`: projetos, hosts, regras, pesquisa técnica na web e padrão de engenharia.
+- [`browser-sessions.md`](browser-sessions.md) — vínculo obrigatório entre perfis Chromium, portas CDP e contas ChatGPT; proíbe logout/troca cruzada de conta.
+- [`atendimento-chatgpt-bootstrap.md`](atendimento-chatgpt-bootstrap.md) — bootstrap canônico e não secreto da conta corporativa `atendimento@shopvivaliz.com.br`, incluindo plugins mínimos e checklist E2E.
+- [`chatgpt-account-migration-curated.md`](chatgpt-account-migration-curated.md) — política de migração curada entre contas ChatGPT: o que preservar, o que descartar e como revalidar histórico antes de usá-lo.
 - [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
 - [`structure-policy.md`](structure-policy.md) — política de reorganização por lotes e critérios de conclusão.
 - [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
@@ -32,6 +35,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`../audits/repository-cleanup-backlog.md`](../audits/repository-cleanup-backlog.md) — fases e pendências da reorganização.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
+
+- [`chatgpt-vm-auth.md`](chatgpt-vm-auth.md) — autenticação ChatGPT na VM, OTPClient, regra de TOTP local e digitação segura de senha/OTP.
 
 ## Bootstrap obrigatório de nova sessão
 
@@ -59,5 +64,6 @@ Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime 
 7. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
 8. Consulte `repository-index.md` e `structure-policy.md` antes de mover arquivos ou alterar automações.
 9. Registre lacunas na documentação ao encontrar comportamento novo.
+10. <!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 --> Ao confirmar defeito, **não pare no diagnóstico**: corrija o que estiver autorizado e ao alcance, aplique prevenção pertinente, teste e valide no runtime/E2E aplicável; enquanto houver ação segura executável, a tarefa permanece `RUNNING`. <!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.

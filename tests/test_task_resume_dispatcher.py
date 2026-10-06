@@ -6,12 +6,16 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 DISPATCHER_PATH = SCRIPTS / "task_resume_dispatcher.py"
 sys.path.insert(0, str(SCRIPTS))
+
+
+import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher  # noqa: E402
 
 
 def load_dispatcher():
@@ -37,7 +41,11 @@ class DetachedTaskResumeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _state(self, *, updated_at: str = "2026-09-26T20:00:00Z", next_action: str = "continue real work") -> dict:
+    def _state(self, *, updated_at: str = "", next_action: str = "continue real work") -> dict:
+        if not updated_at:
+            updated_at = (
+                datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         payload = {
             "schema_version": 1,
             "task_id": "resume-e2e",
@@ -104,6 +112,192 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
 """
         script.write_text(body, encoding="utf-8")
         return [sys.executable, str(script)]
+
+    def test_durable_handoff_defers_unbound_legacy_task_instead_of_crashing(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_unbound"], 1)
+
+    def test_durable_handoff_defers_bound_conversation_without_browser_session(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "conversation_12345678"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_unbound_session"], 1)
+
+    def test_durable_handoff_defers_busy_recovery_owner_instead_of_crashing(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "conversation_busy123"
+        state["browser_session"] = "fred"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            dispatcher.continuity_state.TaskStateError("conversation recovery ownership is busy")
+        )
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_ownership_busy"], 1)
+
+    def test_dispatcher_enqueues_without_calling_provider_inline(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        original_execute = dispatcher._execute
+        dispatcher._execute = lambda **kwargs: (_ for _ in ()).throw(AssertionError("provider executed inline"))
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            dispatcher._execute = original_execute
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+        records = list(self.runtime.glob("_resume-execution-*.json"))
+        self.assertEqual(len(records), 1)
+        record = json.loads(records[0].read_text())
+        self.assertEqual(record["fingerprint"], "fingerprint-v1")
+        self.assertEqual(record["status"], "queued")
+
+    def test_live_execution_record_prevents_duplicate_launch(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        first = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        second = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(first["launched"], 1)
+        self.assertEqual(first["in_flight"], 1)
+        self.assertEqual(second["launched"], 0)
+        self.assertEqual(second["in_flight"], 1)
+        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
+
+    def test_task_older_than_ten_days_cannot_create_execution_record_after_recent_update(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=11)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(list(self.runtime.glob("_resume-execution-*.json")), [])
+
+    def test_task_at_ten_day_cutoff_keeps_current_boundary_semantics(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+
+    def test_completed_worker_execution_is_reconciled_into_ledger(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        request = json.loads((self.runtime / "_resume-requests.jsonl").read_text().splitlines()[0])
+        dispatcher.enqueue_execution(self.runtime, self.project, request, state, 30)
+        record_path = next(self.runtime.glob("_resume-execution-*.json"))
+        record = json.loads(record_path.read_text())
+        record.update(
+            status="completed",
+            result="progress",
+            executor_exit_code=0,
+            checkpoint_after="2026-10-05T08:10:00Z",
+            diagnostic={"provider": "test"},
+        )
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(result["reconciled"], 1)
+        self.assertEqual(result["progressed"], 1)
+        ledger = [json.loads(line) for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines() if line.strip()]
+        self.assertEqual(ledger[-1]["result"], "progress")
+        self.assertEqual(ledger[-1]["fingerprint"], "fingerprint-v1")
+        self.assertEqual(ledger[-1]["evidence"]["checkpoint_after"], "2026-10-05T08:10:00Z")
+        self.assertEqual(ledger[-1]["evidence"]["diagnostic"]["provider"], "test")
+        reconciled = json.loads(record_path.read_text())
+        self.assertEqual(reconciled["status"], "reconciled")
+        self.assertTrue(reconciled["reconciled_at"])
 
     def test_dispatcher_executes_matching_checkpoint_and_requires_real_state_advance(self) -> None:
         dispatcher = load_dispatcher()
@@ -177,6 +371,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["progressed"], 0)
         self.assertEqual(result["no_progress"], 1)
         current = json.loads((self.runtime / "resume-e2e.json").read_text())
+        self.assertEqual(current, state, "executor-owned no-progress mutations must be rolled back exactly")
         self.assertEqual(current["next_action"], "continue real work")
         ledger = [
             json.loads(line)
@@ -204,6 +399,72 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         )
         self.assertEqual(retried["executed"], 1)
         self.assertEqual(retried["no_progress"], 1)
+
+    def test_evidence_only_checkpoint_churn_is_not_counted_as_progress(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        script = self.root / "evidence_only.py"
+        script.write_text(
+            """
+import json, os
+from pathlib import Path
+runtime = Path(os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"])
+task_id = os.environ["SHOPVIVALIZ_TASK_ID"]
+state_path = runtime / f"{task_id}.json"
+state = json.loads(state_path.read_text())
+state.setdefault("evidence", []).append("generic verification passed")
+state.setdefault("history", []).append({
+    "event": "progress",
+    "resume_request_id": os.environ["SHOPVIVALIZ_RESUME_REQUEST_ID"],
+    "next_action": state.get("next_action"),
+})
+state["updated_at"] = "2026-09-26T20:06:00Z"
+state_path.write_text(json.dumps(state))
+""",
+            encoding="utf-8",
+        )
+
+        result = dispatcher.run_once(
+            runtime_dir=self.runtime,
+            project_dir=self.project,
+            executor=[sys.executable, str(script)],
+            timeout_seconds=30,
+            max_requests=1,
+        )
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 0)
+        self.assertEqual(result["no_progress"], 1)
+        current = json.loads((self.runtime / "resume-e2e.json").read_text())
+        self.assertEqual(current["next_action"], "continue real work")
+        ledger = [
+            json.loads(line)
+            for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(ledger[-1]["result"], "no_progress")
+
+    def test_chatgpt_nudge_and_detached_fallback_share_execution_lock(self) -> None:
+        dispatcher = load_dispatcher()
+        self.assertEqual(dispatcher.LOCK_FILE, nudge_dispatcher.LOCK_FILE)
+        self.assertEqual(dispatcher.LOCK_FILE, "_continuity-execution.lock")
+        state = self._state()
+        self._request(state)
+
+        with nudge_dispatcher._dispatcher_lock(self.runtime) as acquired:
+            self.assertTrue(acquired)
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+
+        self.assertTrue(result.get("locked"))
+        self.assertEqual(result["executed"], 0)
+        self.assertFalse(self.capture.exists())
 
     def test_recent_successful_chatgpt_nudge_defers_detached_executor(self) -> None:
         dispatcher = load_dispatcher()
@@ -276,6 +537,55 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 1)
         self.assertEqual(result["progressed"], 1)
 
+    def test_new_failed_chatgpt_nudge_bypasses_detached_retry_cooldown(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        now = datetime.now(timezone.utc)
+        previous_at = (now - timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
+        failed_at = now.isoformat().replace("+00:00", "Z")
+        (self.runtime / "_resume-executions.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "result": "no_progress",
+                "created_at": previous_at,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "dispatched_at": failed_at,
+                "worker_status_observed_at": failed_at,
+                "bridge_ok": True,
+                "http_status": 200,
+                "worker_status": "SENT_UNCONFIRMED",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+                retry_after_seconds=900,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
     def test_old_or_failed_chatgpt_nudge_does_not_block_detached_fallback_forever(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
@@ -326,6 +636,72 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
 
         self.assertEqual(result["executed"], 1)
         self.assertEqual(result["progressed"], 1)
+
+    def test_browser_e2e_probe_never_falls_through_to_detached_executor(self) -> None:
+        dispatcher = load_dispatcher()
+        task_id = "continuity-e2e-browser-only"
+        next_action = (
+            "Esta tarefa e um probe de continuidade automatica; nao ha edicao de codigo real necessaria. "
+            "Rode exatamente estes dois comandos, nesta ordem, e nada mais:\n"
+            f"1) python3 scripts/agent_task_state.py ready --task {task_id} --verification continuity_e2e_pass\n"
+            f"2) python3 scripts/agent_task_state.py complete --task {task_id}"
+        )
+        state = self._state(next_action=next_action)
+        (self.runtime / "resume-e2e.json").unlink()
+        state["task_id"] = task_id
+        state["conversation_id"] = "12345678-2222-3333-4444-555555555555"
+        (self.runtime / f"{task_id}.json").write_text(json.dumps(state), encoding="utf-8")
+        request = {
+            "id": "resume-browser-probe",
+            "kind": "auto_resume",
+            "status": "queued",
+            "task_id": task_id,
+            "agent_id": "gpt",
+            "goal": state["goal"],
+            "next_action": state["next_action"],
+            "checkpoint_updated_at": state["updated_at"],
+            "fingerprint": "browser-probe-fingerprint",
+            "preferred_executor": "chatgpt_common",
+            "secondary_executor": "chatgpt_work",
+            "final_fallback": "cli",
+            "executor_order": ["chatgpt_common", "chatgpt_work", "cli"],
+            "fallback_policy": "chatgpt_common_then_work_then_cli",
+        }
+        (self.runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "fingerprint": request["fingerprint"],
+                "task_id": task_id,
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "dispatched_at": dispatcher.utc_now(),
+                "bridge_ok": True,
+                "http_status": 200,
+                "worker_status": "ERROR",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result.get("deferred_browser_probe"), 1)
+        self.assertFalse(self.capture.exists(), "browser E2E sentinel must not be executed by Gemini/CLI fallback")
+        current = json.loads((self.runtime / f"{task_id}.json").read_text())
+        self.assertEqual(current["status"], "RUNNING")
+        self.assertFalse((self.runtime / "_resume-executions.jsonl").exists())
 
     def test_detached_prompt_requires_safe_git_push_wrapper(self) -> None:
         dispatcher = load_dispatcher()
@@ -471,6 +847,7 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
             result = dispatcher.run_once(
                 runtime_dir=self.runtime,
                 project_dir=self.project,
+                executor=[sys.executable],
                 timeout_seconds=30,
                 max_requests=1,
             )

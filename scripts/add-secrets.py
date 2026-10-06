@@ -8,20 +8,11 @@ import sys
 REPO = "fredmourao-ai/site-shopvivaliz"
 
 DEFAULTS = {
-    "EMAIL_SMTP_HOST": "smtp.titan.email",
-    "EMAIL_SMTP_PORT": "465",
-    "SMTP_HOST": "smtp.titan.email",
-    "SMTP_PORT": "465",
-    "EMAIL_TO": "fredmourao@gmail.com,atendimento@shopvivaliz.com.br",
+    "EMAIL_TO": "fredmourao@gmail.com",
 }
 
 SECRETS = [
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_USER",
-    "SMTP_PASS",
-    "EMAIL_USER",
-    "EMAIL_PASSWORD",
+    "BREVO_API_KEY",
     "EMAIL_TO",
 ]
 
@@ -73,7 +64,7 @@ def main():
     print(f"\n Sistema pronto para notificações por email!")
     if DEFAULTS["EMAIL_TO"]:
         print(f"\n📧 Destino padrão sugerido: {DEFAULTS['EMAIL_TO']}")
-    print("   Configure EMAIL_USER e EMAIL_PASSWORD via input seguro ou ambiente.")
+    print("   Configure BREVO_API_KEY via input seguro ou GitHub Environment Secret.")
 
 if __name__ == "__main__":
     main()

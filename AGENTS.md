@@ -1,3 +1,11 @@
+
+<!-- BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+> 🔐 **SESSÕES CHATGPT FIXAS:** leia `docs/knowledge/browser-sessions.md`. Na VM backend, `shopvivaliz-dev-chromium`/CDP 9559 pertence a `dev@shopvivaliz.com.br` e `shopvivaliz-atendimento-chromium`/CDP 9556 pertence a `atendimento@shopvivaliz.com.br`; o antigo perfil Fred/CDP 9555 é somente compatibilidade temporária para checkpoints pré-migração. **Nunca faça logout para alternar contas, nunca autentique uma conta no perfil da outra e nunca misture cookies/storage.** Se uma sessão falhar, repare o perfil correspondente e preserve o login da outra.
+<!-- /BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+<!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
+> **AUDITORIA EXTERNA TAMBÉM É CORRETIVA:** auditoria interna, externa, independente, contraditória ou feita por outro agente/revisor segue o mesmo ciclo. Auditor externo com autorização deve corrigir, testar e reauditar. Se for read-only, o relatório não encerra: os achados corrigíveis seguem para executor autorizado e permanecem em andamento até correção + revalidação independente ou bloqueio externo comprovado.
+<!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
+
 <!-- SHOPVIVALIZ_HOST_ACCESS_CANONICAL_V2 -->
 ## Acesso canônico aos hosts ShopVivaliz
 
@@ -43,6 +51,13 @@ Antes de qualquer operação em VM, runtime, navegador, serviço, deploy, logs o
 
 ---
 
+<!-- AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> 🛠️ **AUDITORIA É CORRETIVA:** qualquer pedido de auditoria, mesmo sem "extrema", obriga todos os agentes a investigar causa raiz, corrigir todo achado material seguro/autorizado, aplicar prevenção quando pertinente, testar e reauditar. Listar erros, recomendar ou abrir issue não conclui a auditoria. APTO/CONCLUIDO exige evidência fresca pós-correção e E2E real quando aplicável. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md` (`AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1`).
+<!-- /AUDIT_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+
+<!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
+> 🔧 **DIAGNÓSTICO É CORRETIVO EM QUALQUER TAREFA:** identificar a causa não conclui o trabalho. Todo agente/controlador deve continuar de defeito confirmado para **correção segura → prevenção pertinente → testes → validação real/E2E aplicável → revalidação**. Enquanto houver ação segura executável, o estado é `RUNNING`; `CONCLUIDO` exige evidência fresca pós-correção. Só `BLOCKED_EXTERNAL` comprovado, após esgotar alternativas autorizadas, permite encerrar sem corrigir. Fonte: `REGRAS-AGENTES-CENTRALIZADAS.md` (`DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`).
+<!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 ## 🔴 Auditoria Extrema — cobertura universal obrigatória
 
 Quando houver auditoria completa/extrema, validação de release/apto ou condição definida em `AUDIT_POLICY.md`, todos os agentes (Claude, Codex, Gemini, GPT e demais) devem executar integralmente `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md`.

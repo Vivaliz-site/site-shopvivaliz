@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   validateRequest,
   classifyRateLimit,
+  readRateLimitState,
   exactModelMatches,
   sanitizeBridgeError,
   remainingRequestMs,
@@ -52,6 +53,13 @@ assert.equal(classifyRateLimit({
   primary: { usedPercent: 1 },
   rateLimitReachedType: null,
 }), 'available');
+
+assert.equal(await readRateLimitState(async () => {
+  throw new Error('rate telemetry unavailable');
+}), 'unknown');
+assert.equal(await readRateLimitState(async () => ({
+  rateLimits: { primary: { usedPercent: 2 }, rateLimitReachedType: null },
+})), 'available');
 
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-sol'), true);
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
@@ -110,3 +118,5 @@ assert(!safe.includes('sk-secret-token'));
 assert(!safe.includes('user@example.com'));
 
 console.log('AI_SQUAD_CODEX_BRIDGE_TEST=PASS');
+const bridgeSourceAuth = fs.readFileSync(new URL('../ops/ai-squad/codex-bridge.mjs', import.meta.url), 'utf8');
+assert.match(bridgeSourceAuth, /account\/read[\s\S]*refreshToken:\s*true/);

@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from datetime import datetime, timezone
+import fcntl
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,11 +25,29 @@ except ImportError:  # direct CLI execution from repository root
     import task_resume_queue as resume_queue
 
 REQUESTS_FILE = resume_queue.REQUESTS_FILE
+LOCK_FILE = "_continuity-watchdog.lock"
 DEFAULT_STALE_SECONDS = 120
+DEFAULT_LOOKBACK_DAYS = 10
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+@contextmanager
+def _watchdog_lock(root: Path):
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / LOCK_FILE
+    with path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -73,15 +93,18 @@ def _append_request(runtime_dir: Path, row: dict[str, Any]) -> None:
     resume_queue.append_request(runtime_dir, row)
 
 
-def run_once(
+def _run_once_locked(
     *,
     stale_seconds: int = DEFAULT_STALE_SECONDS,
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     runtime_dir: Path | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = max(1, int(stale_seconds))
+    lookback = max(1, int(lookback_days))
+    lookback_cutoff = current - timedelta(days=lookback)
     queue_maintenance = resume_queue.compact_queue(root)
 
     existing = {
@@ -93,21 +116,32 @@ def run_once(
     scanned = 0
     eligible = 0
     dispatched = 0
+    skipped_outside_lookback = 0
+    skipped_invalid_timestamp = 0
 
     for path in _state_files(root):
-        scanned += 1
         payload = _read_state(path)
         if not payload:
+            continue
+
+        created = _parse_time(payload.get("created_at"))
+        if created is None:
+            skipped_invalid_timestamp += 1
+            continue
+        if created < lookback_cutoff:
+            skipped_outside_lookback += 1
+            continue
+        scanned += 1
+
+        updated = _parse_time(payload.get("updated_at"))
+        if updated is None:
+            skipped_invalid_timestamp += 1
             continue
         if str(payload.get("status", "")).strip() != "RUNNING":
             continue
 
         next_action = str(payload.get("next_action", "")).strip()
         if not next_action:
-            continue
-
-        updated = _parse_time(payload.get("updated_at"))
-        if updated is None:
             continue
 
         age_seconds = (current - updated).total_seconds()
@@ -153,9 +187,12 @@ def run_once(
         "ok": True,
         "runtime_dir": str(root),
         "stale_seconds": cutoff,
+        "lookback_days": lookback,
         "scanned": scanned,
         "eligible": eligible,
         "dispatched": dispatched,
+        "skipped_outside_lookback": skipped_outside_lookback,
+        "skipped_invalid_timestamp": skipped_invalid_timestamp,
         "queue": {
             "compacted": bool(queue_maintenance.get("compacted")),
             "archived_rows": int(queue_maintenance.get("archived_rows") or 0),
@@ -166,14 +203,50 @@ def run_once(
     }
 
 
+def run_once(
+    *,
+    stale_seconds: int = DEFAULT_STALE_SECONDS,
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+    runtime_dir: Path | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    root = Path(runtime_dir or RUNTIME_DIR)
+    cutoff = max(1, int(stale_seconds))
+    lookback = max(1, int(lookback_days))
+    with _watchdog_lock(root) as acquired:
+        if not acquired:
+            return {
+                "ok": True,
+                "runtime_dir": str(root),
+                "stale_seconds": cutoff,
+                "lookback_days": lookback,
+                "scanned": 0,
+                "eligible": 0,
+                "dispatched": 0,
+                "locked": True,
+                "generated_at": utc_now(),
+            }
+        return _run_once_locked(
+            stale_seconds=cutoff,
+            lookback_days=lookback,
+            runtime_dir=root,
+            now=now,
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Emit resume requests for stale RUNNING task checkpoints.")
     parser.add_argument("--stale-seconds", type=int, default=DEFAULT_STALE_SECONDS)
+    parser.add_argument("--lookback-days", type=int, default=DEFAULT_LOOKBACK_DAYS)
     parser.add_argument("--runtime-dir", default="")
     args = parser.parse_args()
 
     runtime_dir = Path(args.runtime_dir).expanduser() if args.runtime_dir else None
-    result = run_once(stale_seconds=args.stale_seconds, runtime_dir=runtime_dir)
+    result = run_once(
+        stale_seconds=args.stale_seconds,
+        lookback_days=args.lookback_days,
+        runtime_dir=runtime_dir,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

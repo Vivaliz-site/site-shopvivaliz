@@ -177,40 +177,42 @@ class ShopeeLogisticsWorkerSafetyCycleTests(unittest.TestCase):
         self.assertEqual(client.ship_calls, [])
 
 class ShopeeAlertSenderTests(unittest.TestCase):
-    def test_brevo_configuration_is_sufficient_without_smtp(self):
+    def test_brevo_configuration_is_sufficient_and_identity_is_fixed(self):
         import os
         from unittest.mock import patch
         m = load_module()
         env = {
             'BREVO_API_KEY': 'test-key',
-            'EMAIL_FROM': 'sender@example.com',
+            'EMAIL_FROM': 'Contabilidade Melo <wrong@example.com>',
             'EMAIL_TO': 'seller@example.com',
+            'EMAIL_SMTP_HOST': 'smtp.gmail.com',
+            'EMAIL_USER': 'legacy@example.com',
+            'EMAIL_PASSWORD': 'legacy-pass',
         }
         with patch.dict(os.environ, env, clear=True):
             sender = m.AlertSender()
         self.assertTrue(sender.configured)
         self.assertTrue(sender.brevo_configured)
-        self.assertFalse(sender.smtp_configured)
+        self.assertEqual(sender.FROM_EMAIL, 'atendimento@shopvivaliz.com.br')
+        self.assertEqual(sender.FROM_NAME, 'ShopVivaliz')
+        self.assertEqual(sender.REPLY_TO_EMAIL, 'atendimento@shopvivaliz.com.br')
+        self.assertFalse(hasattr(sender, 'smtp_configured'))
 
-    def test_send_prefers_brevo_and_does_not_touch_smtp(self):
+    def test_send_uses_brevo_only(self):
         import os
         from unittest.mock import patch
         m = load_module()
         env = {
             'BREVO_API_KEY': 'test-key',
-            'EMAIL_FROM': 'sender@example.com',
             'EMAIL_TO': 'seller@example.com',
-            'EMAIL_SMTP_HOST': 'smtp.example.com',
-            'EMAIL_USER': 'smtp-user',
-            'EMAIL_PASSWORD': 'smtp-pass',
         }
         with patch.dict(os.environ, env, clear=True):
             sender = m.AlertSender()
-        with patch.object(sender, '_send_brevo', return_value=True) as brevo, patch.object(sender, '_send_smtp', side_effect=AssertionError('smtp should not be used')):
+        with patch.object(sender, '_send_brevo', return_value=True) as brevo:
             self.assertTrue(sender.send('subject', 'body'))
         brevo.assert_called_once()
 
-    def test_brevo_payload_contains_pdf_attachment(self):
+    def test_brevo_payload_has_fixed_identity_and_pdf_attachment(self):
         import base64
         import json
         import os
@@ -219,7 +221,7 @@ class ShopeeAlertSenderTests(unittest.TestCase):
         m = load_module()
         env = {
             'BREVO_API_KEY': 'test-key',
-            'EMAIL_FROM': 'sender@example.com',
+            'EMAIL_FROM': 'Contabilidade Melo <wrong@example.com>',
             'EMAIL_TO': 'seller@example.com',
         }
         captured = {}
@@ -227,7 +229,7 @@ class ShopeeAlertSenderTests(unittest.TestCase):
             status = 201
             def __enter__(self): return self
             def __exit__(self, *args): return False
-            def read(self): return b'{}'
+            def read(self): return b'{"messageId":"test"}'
         def fake_urlopen(request, timeout=0):
             captured['payload'] = json.loads(request.data.decode('utf-8'))
             return FakeResponse()
@@ -237,5 +239,54 @@ class ShopeeAlertSenderTests(unittest.TestCase):
             sender = m.AlertSender()
             self.assertTrue(sender._send_brevo('subject', 'body', pdf))
         payload = captured['payload']
+        self.assertEqual(payload['sender'], {'email': 'atendimento@shopvivaliz.com.br', 'name': 'ShopVivaliz'})
+        self.assertEqual(payload['replyTo']['email'], 'atendimento@shopvivaliz.com.br')
         self.assertEqual(payload['attachment'][0]['name'], 'label.pdf')
         self.assertEqual(base64.b64decode(payload['attachment'][0]['content']), b'%PDF-test')
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+class ShopeeUnsplitRetryTests(unittest.TestCase):
+    def test_ship_order_retries_without_package_number_only_for_unsplit_error(self):
+        m = load_module()
+        calls = []
+        class Client:
+            def ship_order(self, body):
+                calls.append(dict(body))
+                if len(calls) == 1:
+                    raise RuntimeError("Shopee API error logistics.ship_order_not_need_pacakge_number: Please don't request with package_number for this unsplit order.")
+                return {'error': ''}
+        m.ship_order_with_unsplit_retry(Client(), {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}})
+        self.assertEqual(calls, [
+            {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}},
+            {'order_sn': 'O1', 'dropoff': {}},
+        ])
+
+    def test_ship_order_does_not_retry_unrelated_error(self):
+        m = load_module()
+        calls = []
+        class Client:
+            def ship_order(self, body):
+                calls.append(dict(body))
+                raise RuntimeError('Shopee API error logistics.some_other_error: nope')
+        with self.assertRaisesRegex(RuntimeError, 'some_other_error'):
+            m.ship_order_with_unsplit_retry(Client(), {'order_sn': 'O1', 'package_number': 'P1', 'dropoff': {}})
+        self.assertEqual(len(calls), 1)
+
+class ShopeeInvoicePendingRegressionTests(unittest.TestCase):
+    def test_invoice_validation_error_is_deferred_not_worker_error(self):
+        import tempfile
+        m = load_module()
+        now = 100000
+        package = {'order_sn': 'NF1', 'package_number': 'PKG1', 'logistics_channel_id': 91003, 'is_shipment_arranged': False}
+        client = _FakeClient(package, now - 7200)
+        def fail_ship(body):
+            raise RuntimeError('Shopee API error logistics.lack_of_invoice_data: invalid by SEFAZ')
+        client.ship_order = fail_ship
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = m.run(apply=True, now=now, client=client, shared_root=Path(tmp), sender=_FakeSender())
+        self.assertEqual(summary['errors'], 0)
+        self.assertEqual(summary['deferred_by_shopee'], 1)
+        self.assertEqual(summary['arranged'], 0)

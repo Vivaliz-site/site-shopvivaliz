@@ -60,6 +60,15 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - File access is restricted to configured roots per host.
 - Sessions/tasks have TTL and cancellation support.
 
+## Universal administrative execution and software installation
+- `admin_command_run` is the universal privileged escape hatch for legitimate host administration on the four canonical hosts.
+- Linux commands execute as root locally or through the dedicated administrative SSH target; Windows commands execute in the configured Administrator context through PowerShell.
+- Package-manager and application-install commands are in scope (for example apt/dpkg and winget/MSI/PowerShell installers) when requested by an authorized operator.
+- Long-running installs and upgrades must use durable execution (`durable=true` or `task_submit`) so they survive caller disconnects. The default durable ceiling is 7200 seconds and can be changed by protected runtime configuration up to the server hard cap.
+- Structured tools remain preferred for common operations because they provide tighter schemas, but their existence does not remove the universal administrative command path.
+- Secrets remain non-exportable, production active releases remain immutable, and explicit destructive/high-impact operations remain subject to their normal safety gates.
+- Browser navigation/click/type/screenshot and Windows RustDesk `desktop_*` controls complement shell/PowerShell execution for workflows that require GUI interaction.
+
 ## Durable Task Model
 - Local SQLite database in WAL mode on the backend controller.
 - States: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `expired`.
@@ -69,6 +78,12 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Querying task status is idempotent.
 
 ## Initial MCP Tools
+- controller_status
+- controller_promote
+- continuity_status
+- continuity_e2e
+- claude_remote_control_status
+- claude_remote_control_reconcile
 - `hosts_list`
 - `host_health`
 - `processes_list`
@@ -77,7 +92,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - `file_read`
 - `file_list`
 - `logs_tail`
-- `command_run` (policy-controlled)
+- `admin_command_run` (policy-controlled)
 - `task_submit`
 - `task_status`
 - `task_cancel`
@@ -100,6 +115,17 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 4. Return structured evidence and audit ID.
 
 Tools: `hosts_list`, `host_health`, `processes_list`, `service_status`, `service_action`, `file_read`, `file_list`, `logs_tail`, `admin_command_run`.
+
+### Promote and validate the continuity controller
+1. controller_status reads the active immutable controller SHA and sanitized runtime state.
+2. controller_promote accepts only a full 40-character SHA that must equal refreshed origin/main.
+3. Promotion uses a clean detached worktree plus the canonical installer; it never edits the active release in place.
+4. continuity_status aggregates sanitized ChatGPT, Claude Remote Control and dispatcher health.
+5. continuity_e2e runs the canonical detached continuity probe bound to an explicit conversation ID and only passes with observed_request=true and continuity_e2e_pass.
+
+Tools: controller_status, controller_promote, continuity_status, continuity_e2e, claude_remote_control_status, claude_remote_control_reconcile.
+
+controller_promote, continuity_e2e and claude_remote_control_reconcile are always dispatched as durable MCP tasks. The initial tool call returns a task ID quickly; completion is verified through task_status/task_wait and survives caller disconnects.
 
 ### Run a durable privileged task
 1. Submit an operation for a named host.
@@ -140,3 +166,10 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - The relay restart may be asynchronous because restarting the tunnel intentionally drops the legacy `5558` request path.
 - A normal `push` bootstrap performs installation, Windows bootstrap and controller host-key pinning only.
 - Stage 5 four-host health/durable-task E2E runs only from an explicit `workflow_dispatch` with `run_e2e=true`.
+
+
+## Contrato de desktop RustDesk
+
+O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`. A atuação X11 é implementada pelo wrapper `remote-control-browser-mcp`, que permanece na backend.
+
+IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.

@@ -152,19 +152,33 @@ final class SvChatgptContinuityPendingNudgeStore
      * appended as a second row, which would leave status()/pullOldest()
      * seeing stale historical data ahead of the current one.
      */
-    public function enqueue(string $taskId, string $repository, string $requestedAt): bool
+    public function enqueue(string $taskId, string $repository, string $requestedAt, string $conversationId = ''): bool
     {
-        return (bool)$this->withLock(function (array $nudges) use ($taskId, $repository, $requestedAt) {
+        return (bool)$this->withLock(function (array $nudges) use ($taskId, $repository, $requestedAt, $conversationId) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] !== $taskId) {
                     continue;
                 }
                 if (in_array($row['status'], ['PENDING', 'CLAIMED'], true)) {
+                    if ($conversationId !== '' && (string)($row['conversation_id'] ?? '') === '') {
+                        $nudges[$index]['conversation_id'] = $conversationId;
+                    }
                     return ['nudges' => $nudges, 'return' => false];
+                }
+                $existingConversationId = trim((string)($row['conversation_id'] ?? ''));
+                if (
+                    $conversationId !== ''
+                    && $existingConversationId !== ''
+                    && $existingConversationId !== $conversationId
+                ) {
+                    throw new RuntimeException('enqueue conversation binding does not match persisted binding');
                 }
                 $nudges[$index] = [
                     'task_id' => $taskId,
                     'repository' => $repository,
+                    'conversation_id' => $conversationId !== ''
+                        ? $conversationId
+                        : ($existingConversationId !== '' ? $existingConversationId : null),
                     'requested_at' => $requestedAt,
                     'status' => 'PENDING',
                     'claimed_at' => null,
@@ -176,6 +190,7 @@ final class SvChatgptContinuityPendingNudgeStore
             $nudges[] = [
                 'task_id' => $taskId,
                 'repository' => $repository,
+                'conversation_id' => $conversationId !== '' ? $conversationId : null,
                 'requested_at' => $requestedAt,
                 'status' => 'PENDING',
                 'claimed_at' => null,
@@ -241,15 +256,32 @@ final class SvChatgptContinuityPendingNudgeStore
         return ['code' => $code, 'sha256' => hash('sha256', $raw)];
     }
 
-    public function recordResult(string $taskId, string $status, ?string $detail): bool
+    public function recordResult(string $taskId, string $status, ?string $detail, string $conversationId = ''): bool
     {
         if (!in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('unsupported nudge result status');
         }
-        $diagnostic = self::safeDetailDiagnostic($detail);
-        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic) {
+        $diagnostic = $status === 'PROGRESS_CONFIRMED'
+            ? [
+                'code' => 'PROGRESS_CONFIRMED',
+                'sha256' => trim((string)$detail) !== '' ? hash('sha256', trim((string)$detail)) : null,
+            ]
+            : self::safeDetailDiagnostic($detail);
+        return (bool)$this->withLock(function (array $nudges) use ($taskId, $status, $diagnostic, $conversationId) {
             foreach ($nudges as $index => $row) {
                 if ($row['task_id'] === $taskId) {
+                    $existingConversationId = trim((string)($row['conversation_id'] ?? ''));
+                    if (
+                        $status === 'PROGRESS_CONFIRMED'
+                        && $conversationId !== ''
+                        && $existingConversationId !== ''
+                        && $existingConversationId !== $conversationId
+                    ) {
+                        throw new RuntimeException('confirmed conversation binding does not match queued binding');
+                    }
+                    if ($status === 'PROGRESS_CONFIRMED' && $conversationId !== '') {
+                        $nudges[$index]['conversation_id'] = $conversationId;
+                    }
                     $nudges[$index]['status'] = $status;
                     $nudges[$index]['resolved_at'] = gmdate(DATE_ATOM);
                     unset($nudges[$index]['detail']);

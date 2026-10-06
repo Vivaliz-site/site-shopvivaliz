@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 📱 Smart Notifications - Escalação inteligente de alertas
  * CRÍTICO: SMS/Email/Slack imediato
@@ -195,20 +196,10 @@ class SmartNotifications {
     private function sendEmail($to, $subject, $body, $priority = 'normal') {
         echo "📧 Enviando email: {$subject}\n";
 
-        $headers = [
-            'From' => 'alerts@shopvivaliz.com.br',
-            'Content-Type' => 'text/plain; charset=UTF-8',
-        ];
-
-        if ($priority === 'critical') {
-            $headers['X-Priority'] = '1';
-        }
-
-        $headerStr = implode("\r\n", array_map(fn($k, $v) => "$k: $v", array_keys($headers), $headers));
-
-        mail($to, $subject, $body, $headerStr);
-
-        return true;
+        $html = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars((string)$body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        return send_email((string)$to, (string)$subject, $html);
     }
 
     private function sendSlack($alert, $color = 'warning') {

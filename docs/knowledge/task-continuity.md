@@ -1,3 +1,10 @@
+
+<!-- CONTINUITY_TASK_LOOKBACK_V1 -->
+## Janela de análise do controlador
+
+O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
+<!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
+
 # Task Continuity Enforcement
 
 **Policy:** `TASK_CONTINUITY_ENFORCEMENT_V3`
@@ -100,14 +107,16 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 <!-- TASK_CONTINUITY_AUTO_RESUME_V4 -->
 ## Confirmação real da retomada do ChatGPT
 
-Policy: `CHATGPT_PROGRESS_CONFIRMATION_V11`.
+Policy: `CHATGPT_PROGRESS_CONFIRMATION_V12`.
 
 Para a reentrada da conversa ChatGPT, **enviar/clicar em `continue` não é
 sucesso**. O worker deve distinguir:
 
-- `PROGRESS_CONFIRMED`: surgiu progresso observável do assistente após o
-  envio; este é o único resultado de sucesso da camada ChatGPT para o mesmo
-  fingerprint;
+- `PROGRESS_CONFIRMED`: existe uma resposta real da conversa vinculada no
+  backend canônico do ChatGPT: novo nó `assistant` concluído, ou o mesmo nó
+  previamente incompleto que passou a `end_turn=true`, com conteúdo textual
+  visível não vazio. Crescimento de DOM, `Pensando`, tool activity, spinner,
+  hidratação da UI ou saúde do bridge **não** certificam sucesso;
 - `SENT_UNCONFIRMED`: o envio foi aceito pela UI, mas não surgiu progresso
   observável dentro da janela de confirmação; continua retryable;
 - `STALLED_NOT_CONFIRMED`, `CONVERSATION_NOT_FOUND` e `ERROR`: falhas
@@ -217,6 +226,7 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
+- Um executor de background **não pode certificar `READY_TO_COMPLETE` somente por texto/evidência gerada pelo provider**. A transição terminal em background exige `completion_checks` determinísticos e previamente fixados no checkpoint; sem eles, o provider pode apenas registrar progresso concreto e deixar a certificação terminal para uma execução foreground.
 - Sem avanço, o fingerprint é registrado em `_resume-executions.jsonl`; o mesmo checkpoint pode ser tentado
   novamente após cooldown (900 s padrão, configurável por
   `SHOPVIVALIZ_RESUME_RETRY_AFTER_SECONDS`). Nunca há mais de uma tentativa por
@@ -246,60 +256,82 @@ O controlador `scripts/gemini_24x7_controller.py` supervisiona a pilha já
 existente, sem substituí-la: watchdog determinístico → nudge de ChatGPT comum
 → dispatcher finito com Gemini primário e fallback `codex-auto` explicitamente autorizado. Ele mantém um lease atômico no runtime
 compartilhado, registra apenas metadados sanitizados e recusa propriedade
-duplicada enquanto o lease estiver vivo. Após interrupção/crash, lease vencido
-é recuperado e registrado antes de novo ciclo.
+duplicada enquanto o lease estiver vivo. Além do lease por ciclo, o modo
+`--daemon` mantém um lock exclusivo durante toda a vida do processo; um segundo
+daemon falha fechado antes de executar watchdog, nudge ou dispatcher. O nudge
+ChatGPT possui um lock transacional próprio cobrindo leitura do ledger, decisão,
+chamada ao bridge e persistência do resultado, impedindo duplo envio por TOCTOU.
+Após interrupção/crash, lease vencido é recuperado e registrado antes de novo ciclo.
+
+Os checkpoints em `agent_task_state.py` serializam toda transição
+`load -> mutate -> atomic write` com um lock compartilhado entre processos.
+A gravação faz `fsync` no arquivo, `os.replace` e `fsync` no diretório pai;
+`start` repetido para a mesma identidade é idempotente e uma colisão de
+`task_id` com objetivo/repositório diferentes falha fechado, sem sobrescrever
+histórico. O estado-resumo do controlador continua sendo atualizado a cada ciclo,
+mas o ledger de eventos só cresce quando existe atividade material, recuperação
+de lease ou anomalia, evitando crescimento ocioso a cada 30 segundos.
 
 A unidade canônica é `shopvivaliz-gemini-24x7-controller.service` no backend
 `always-free-arm-1787907847-26`; ela deve estar `enabled` e `active`. Ela usa
 `KillMode=control-group`, backoff limitado e nunca conclui checkpoint por ACK,
-PID, exit code ou resposta HTTP. A instalação só pode partir de uma release
+PID, exit code ou resposta HTTP. O daemon mantém
+`_gemini-24x7-controller-daemon.lock` durante toda a vida do processo, portanto
+dois daemons não podem alternar ownership entre ciclos. O nudge ChatGPT e o
+fallback detached compartilham `_continuity-execution.lock`: enquanto um efeito
+externo de retomada estiver em voo, o outro tier fica suprimido. O lease durável
+registra PID, boot id e start ticks; se o processo proprietário morrer, o restart
+recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
+continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
-## Prova de ponta a ponta da retomada desacoplada em produção
+## Prova E2E da retomada na mesma conversa ChatGPT
 
 Policy: `DETACHED_TASK_RECOVERY_E2E_V7`.
 
-A V6 garante que existe um executor real. A V7 garante que ninguém pode
-certificar continuidade a partir de gates estáticos/ACK: exige prova real,
-correlacionada, de que o daemon já em execução na produção detecta, enfileira,
-executa e conclui uma tarefa sintética por conta própria.
+A recuperação detached continua sendo o fallback legítimo para tarefas normais.
+Ela, porém, **não pode certificar a retomada do browser na mesma conversa**. O
+probe sintético `continuity-e2e-*` existe exclusivamente para provar a cadeia
+watchdog → fila → bridge/worker → conversa ChatGPT explicitamente vinculada.
 
-- `scripts/task_continuity_e2e.py` cria exatamente uma tarefa sintética
-  `RUNNING` (`continuity-e2e-<uuid>`) via `agent_task_state.py` e, a partir
-  daí, **somente observa** arquivos de estado/ledger em disco. É proibido o
-  probe importar ou chamar `task_continuation_watchdog`/
-  `task_resume_dispatcher` ou invocar diretamente qualquer `run_once`; toda
-  detecção/execução deve vir do daemon `shopvivaliz-agent.service` já
-  rodando no host de produção, no ciclo dele.
-- `next_action` da tarefa sintética usa apenas comandos já permitidos na
-  política headless do executor (`agent_task_state.py ready`/`complete`),
-  para que o resultado do probe nunca dependa de uma política de aprovação
-  de ferramenta não relacionada.
-- PASS exige, tudo correlacionado pelo mesmo `task_id`/`fingerprint`:
-  pedido em `_resume-requests.jsonl`; linha correspondente em
-  `_resume-executions.jsonl` com `result` igual a `progress` ou `terminal`
-  (nunca `no_progress`); o diagnóstico deve provar um modo autorizado de background: `diagnostic.background_paid_fallback_forbidden=true` quando não houve fallback pago, ou `diagnostic.background_codex_fallback_authorized=true` quando o fallback finito `codex-auto` foi usado; checkpoint final com `status=CONCLUIDO` e
-  `verification=continuity_e2e_pass`.
-- `.github/workflows/task-continuity-production-e2e.yml` roda manualmente
-  (`workflow_dispatch`) no runner `shopvivaliz-a1-deploy`, único lugar onde
-  o daemon real está ativo; não substitui os testes unitários do probe, que
-  correm no `Task Continuity Fast Gate` de forma isolada (com estado
-  fabricado, sem depender de produção).
-- **Distinção obrigatória, sempre explícita:** retomada desacoplada
-  (watchdog + dispatcher + Gemini continuando estado persistido) **não é**
-  reabertura da mesma conversa do aplicativo ChatGPT. Desde
-  `CHATGPT_SESSION_REENTRY_V10`, a reentrada da conversa existe como uma
-  camada separada: o pedido `chatgpt_common` é enfileirado no bridge HTTPS e
-  um worker da VM backend anexa via CDP `127.0.0.1:9555` ao navegador
-  ChatGPT já autenticado do usuário. O worker nunca cria um browser/perfil
-  paralelo e nunca usa Codex como fallback automático.
-- Falha do E2E (qualquer motivo: nenhum pedido observado, dispatcher não
-  executou, `no_progress`, checkpoint não terminal, verificação ausente,
-  só ACK do worker, `task_id` não correlacionado, evidência antiga) nunca é
-  motivo para declarar `NÃO APTO` e parar: é `RUNNING`. Levantar causa raiz,
-  TDD (RED → GREEN), commit/PR/merge/deploy, e repetir o E2E.
+- `scripts/task_continuity_e2e.py` cria exatamente um checkpoint sintético
+  `RUNNING`, vincula um `conversation_id` explícito e grava como `next_action`
+  somente os dois comandos allowlisted `agent_task_state.py ready` e
+  `agent_task_state.py complete`. Depois disso o probe apenas observa o estado
+  e os ledgers; ele nunca invoca watchdog/dispatcher diretamente.
+- O dispatcher reconhece estritamente esse contrato e **não libera fallback
+  detached/Gemini/CLI para `continuity-e2e-*`**. Esse isolamento é restrito ao
+  probe de browser e não desabilita a retomada automática das tarefas reais.
+- Um `conversation_id` confirmado pelo browser em `PROGRESS_CONFIRMED` deve ser
+  persistido no checkpoint durável. Esse binding é metadado de roteamento: não
+  avança `updated_at` nem cria um novo fingerprint de retomada. Sucessores
+  explícitos herdam o binding imutável do predecessor, evitando retornar à
+  descoberta ambígua por horário/API após uma conversa já ter sido provada.
+- PASS exige o mesmo `task_id`, fingerprint e `conversation_id` no request e no
+  nudge, `worker_status=PROGRESS_CONFIRMED`, checkpoint final
+  `CONCLUIDO`, `verification=continuity_e2e_pass`, histórico contendo
+  `ready_to_complete` e `completed` sem `resume_request_id`, e ausência de
+  qualquer execução correspondente em `_resume-executions.jsonl`.
+- `scripts/chatgpt_continuity_proof_certifier.py` repete essas verificações de
+  provenance de forma fail-closed; `ok=true` é obrigatório antes de aceitar a
+  evidência como prova da mesma conversa.
+- Falha/timeout preserva evidência e quarentena o checkpoint sintético fora da
+  raiz ativa. Se o arquivo histórico preferencial não puder ser usado, a
+  quarentena cai em `agent-task-state/_e2e-failures/`, subdiretório que não é
+  varrido pelo watchdog. Nunca se deixa um JSON sintético `RUNNING` residual na
+  raiz ativa.
+- O workflow `.github/workflows/task-continuity-production-e2e.yml` roda no
+  runner `[self-hosted, Linux, ARM64, shopvivaliz-backend-browser]`, porque a
+  prova depende do browser canônico autenticado no backend. Browser de
+  Fred-Win/KOCEPSV e conversas reais de negócio são proibidos para probes.
+- A conversa de teste deve ser dedicada e fornecida explicitamente ao workflow;
+  a automação nunca seleciona conversa por atividade recente, título ou fallback
+  ambíguo.
+
+Um terminal criado por Gemini/Codex/CLI, ainda que contenha exatamente
+`continuity_e2e_pass`, é falso-verde para esta prova e deve ser rejeitado.
 <!-- /DETACHED_TASK_RECOVERY_E2E_V7 -->
 
 
@@ -375,22 +407,65 @@ operacional:
    `always-free-arm-1787907847-26` e anexa ao browser canônico por
    `http://127.0.0.1:9555`;
 5. o worker só envia `continue` quando não há geração ativa. O monitor de
-   reforço só atua quando um banner explícito de interrupção persiste depois
-   da janela de confirmação, evitando duplicar a tentativa de recuperação do
-   próprio cliente.
+   reforço só atua quando existe checkpoint não terminal (`RUNNING` ou
+   `READY_TO_COMPLETE`) **e** o health do browser canônico está recente e
+   `AUTHENTICATED`; sem tarefa ativa não faz discovery da conta, e estados
+   `AUTH_FLOW`, `AUTH_TERMINAL`, `LOGGED_OUT`, `UNKNOWN` ou health stale ficam
+   em quiescência fail-closed;
+6. a mensagem de plataforma de **verificações adicionais** (`additional_checks`)
+   é um estado de deferimento: não autoriza reload, novo `continue` nem troca
+   automática para modelo mais rápido. O reinforcement entra em cooldown de
+   cinco minutos antes de nova tentativa;
+7. interrupções realmente recuperáveis continuam exigindo confirmação de
+   progresso do assistente para sair da degradação.
+
+O monitor grava heartbeat durável em
+`agent-task-state/_chatgpt-continuity-monitor-state.json`. Em idle ou durante
+autenticação ele mantém somente o heartbeat local; sweep/discovery de
+conversas é permitido apenas com checkpoint ativo e sessão autenticada. Falhas
+ficam latched até recuperação confirmada; um ciclo neutro não pode apagar
+degradação anterior. O controlador trata heartbeat ausente ou stale como
+`chatgpt_browser_monitor_stale` e falha fechado em `continuity_ready=false`.
+O instalador do worker fixa `SHOPVIVALIZ_AGENT_TASK_STATE_DIR` e libera
+explicitamente esse diretório no sandbox do systemd; depender apenas do path
+default do código é proibido.
 
 O instalador canônico é
-`scripts/install-chatgpt-continuity-backend-bridge.sh`. A implementação
-Windows permanece somente como legado/fallback e não é a rota operacional
-padrão. O worker nunca deve imprimir token/cookie/storage de sessão e nunca
-deve iniciar outro perfil do navegador.
+`scripts/install-chatgpt-continuity-backend-bridge.sh`. Existe um único owner
+de supervisão do Chrome: `shopvivaliz-chatgpt-browser-guardian.timer`. O
+instalador deve desabilitar/remover o antigo
+`shopvivaliz-browser-healthcheck.timer`/`.service` e seu script para impedir
+restarts concorrentes do mesmo perfil autenticado. A implementação Windows
+permanece somente como legado/fallback e não é a rota operacional padrão. O
+worker nunca deve imprimir token/cookie/storage de sessão e nunca deve iniciar
+outro perfil do navegador.
 
 Não executar probes sintéticos repetitivos para “testar” a conta. A prova
 operacional preferida é: heartbeat autenticado do bridge + serviço backend
-ativo + CDP 9555 alcançável + um nudge real correlacionado a uma interrupção
-natural chegando a `SENT`/status. Enquanto faltar a última evidência, declarar
-a mitigação instalada/armada, não “continuidade E2E comprovada”.
+ativo + CDP 9559 Dev alcançável + um nudge real correlacionado a uma interrupção
+natural chegando a `PROGRESS_CONFIRMED` na mesma conversa. `SENT` ou
+`SENT_UNCONFIRMED` não certificam retomada. Enquanto faltar a última
+evidência, declarar a mitigação instalada/armada, não “continuidade E2E
+comprovada”.
 <!-- /CHATGPT_SESSION_REENTRY_V10 -->
+
+<!-- CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
+## Durabilidade das sessoes Claude Remote Control
+
+O servidor `shopvivaliz-claude-remote-control.service` deve manter capacidade
+de reanexar as sessoes servidas depois de uma saida/restart do processo. O
+`ExecStart` canônico usa `claude remote-control --spawn worktree` e **nao pode**
+usar `--no-create-session-in-dir`, pois essa flag arquiva as sessoes do servidor
+quando ele para e impede a retomada pelo novo processo. `Restart=always` e
+mantido para recuperar saidas limpas causadas por falha prolongada de rede ou
+do ambiente remoto.
+
+`StandardOutput` e `StandardError` devem ir para o journal para que uma saida
+limpa nao vire falso-verde sem causa observavel. O comando `status` do instalador
+falha fechado com `service_session_recovery_disabled` se o unit instalado
+reintroduzir a flag que descarta retomada. Servico `active` sem executor de
+sessao nao comprova continuidade do chat remoto.
+<!-- /CLAUDE_REMOTE_CONTROL_SESSION_DURABILITY_V1 -->
 
 
 ### Resiliência de quota Gemini no background
@@ -422,6 +497,11 @@ Cada ciclo do watchdog certifica a fila contra os checkpoints duraveis atuais.
 Somente uma linha `queued` unica cujo `task_id`, repositorio,
 `checkpoint_updated_at`, `next_action` e fingerprint coincidam com um
 checkpoint `RUNNING` atual permanece acionavel.
+
+A analise operacional usa uma janela de **10 dias desde a criacao da tarefa**, baseada em
+`created_at`. Atualizar uma tarefa antiga nao a recoloca na janela. Checkpoints mais antigos continuam preservados como historico,
+mas nao podem manter requests acionaveis na fila; a compactacao move esses
+requests para `_resume-requests-archive.jsonl`.
 
 Linhas de checkpoint terminal, superseded/mismatched, orfas, duplicadas,
 malformadas ou com status nao operacional saem da fila ativa e sao preservadas
@@ -473,3 +553,133 @@ Mudancas em `api/chatgpt-continuity/**`,
 de Actions devem acionar o `Task Continuity Fast Gate`.
 Se `main` avancar enquanto o PR de continuidade estiver em validacao, os gates devem ser reexecutados contra a nova base antes do merge; verde calculado apenas contra base anterior nao certifica a integracao final.
 <!-- /CONTINUITY_QUEUE_CERTIFICATION_V13 -->
+
+### Prova de conclusão e concorrência de retomadas
+
+O dispatcher registra `SHOPVIVALIZ_RESUME_HISTORY_LENGTH` e a identidade do
+request no histórico. Um executor de checkpoint antigo não pode certificar
+`ready`/`complete` depois de avanço concorrente; ele deve reler o estado e
+continuar a ação atual. A retomada automática permanece habilitada.
+
+Tarefas críticas devem fixar verificações objetivas na criação, usando
+`agent_task_state.py start --completion-check '["/usr/bin/test","-f","/caminho/artefato"]'`.
+São aceitos apenas probes read-only limitados de arquivo, hash e serviços
+canônicos (no máximo quatro; timeout de 10s por probe). As verificações usam
+argv, sem shell, não podem conter secrets e executam de
+novo tanto em `ready` quanto em `complete`. Saída não é registrada; recibos
+contêm somente índice, hash do argv, timestamp e exit code. Uma frase PASS
+não substitui essas verificações. Checkpoints com checks usam schema 2: clientes
+antigos devem rejeitá-los em vez de ignorar o contrato de prova. Atualize o CLI
+antes de retomá-los. Tarefas legadas sem checks mantêm contrato
+compatível e sua conclusão textual não certifica aptidão por si só.
+
+O worker registra `sent` somente quando o envio efetivo ocorreu; progresso
+restaurado por reattach passivo e tentativa rejeitada não contam como envio.
+
+## Cooldown e instalacao segura (2026-10-03)
+
+Durante `additional_checks_cooldown`, o heartbeat local continua avancando a
+cada ciclo, sem chamadas ao browser/conta. O monitor permanece degradado; um
+resultado saudavel anterior nao pode mascarar o deferimento atual. A deteccao
+apos reattach e a entrada de envio tambem devem rejeitar novos envios. O
+cooldown interrompe o sweep do ciclo atual.
+
+O instalador conclui a copia, reload e restart do worker antes da verificacao
+final da sessao autenticada. `CHATGPT_CONTINUITY_BACKEND_INSTALLED=PASS` prova
+somente instalacao; o `BACKEND_SERVICE=PASS` continua atras do guardian real.
+Auth expirada mantem falha de readiness, mas nao mantem codigo antigo rodando.
+
+
+## Canonical conversation read budget (2026-10-04)
+
+The authenticated full-conversation endpoint was observed returning HTTP 200
+after 6135 ms while the same bound conversation timed out with the previous
+5000 ms stream-status budget. The full turn-state read now has a separate
+10000 ms default (`CHATGPT_CONTINUITY_TURN_STATE_TIMEOUT_MS`), capped at
+12000 ms including session lookup, below the unchanged 15000 ms CDP timeout.
+Authentication consumes that total budget; timeout aborts the HTTP request.
+
+Both `/c/` and `/uc/` routes must reach the same canonical conversation API,
+and the send identity guard must recognize either exact route. Tests execute
+the injected browser programs against isolated HTTP/editor fixtures and are
+part of the bridge worker gate. HTTP 200, stream COMPLETE or a tool/thought
+node with `end_turn=false` still cannot certify `PROGRESS_CONFIRMED`.
+
+## Unavailable-conversation classification and proof
+
+The unavailable-conversation UI detector must inspect the current `main`
+surface, excluding transcript turns, quoted code, drafts, hidden content,
+sidebars and other dialogs. A phrase in conversation history is diagnostic
+content, not a current application failure. The canonical presence check and
+all active-stream/input guards remain mandatory.
+
+A completed assistant response observed once is not evidence of automatic
+recovery. Before certifying same-conversation recovery, run `browser_proof`
+from `chatgpt_continuity_proof_certifier.py` against the actual checkpoint:
+it must find `PROGRESS_CONFIRMED` for that task, its bound conversation and
+one of its recorded checkpoint fingerprints. `continuity_ready=true` is an
+operational health result, not a substitute for that provenance check.
+
+
+## Canonical read cooldown and passive hydration (2026-10-05)
+
+Full-history HTTP429 responses start a five-minute minimum cooldown, honoring
+longer numeric or HTTP-date Retry-After values. Only its non-secret deadline
+is stored under `shopvivaliz.canonical-read-backoff-until.v1` in the same
+ChatGPT browser profile, so tabs and worker restarts share the pause without
+copying account data. A per-page in-memory fallback covers unavailable storage.
+During the pause the reader returns explicit HTTP429/RATE_LIMIT_BACKOFF without
+an auth/history fetch; expiry requires a fresh response, never cached proof.
+This does not modify cookies, provider limits, account routing or stream guards.
+
+Canonical HTTP200 plus a node and a confirmed COMPLETE stream permits one
+passive UI reattachment even for a tool leaf (`end_turn=null`) or an existing
+final answer. COMPLETE alone is not evidence of a loaded interface. Hydration
+recovery still never sends a continuation and cannot certify an old answer.
+HTTP429, missing canonical presence and unknown stream state remain fail-closed.
+
+Here, profile means a distinct Chromium `--user-data-dir`, not a ChatGPT
+workspace: Dev uses `shopvivaliz-dev-chromium`/CDP9559 and Atendimento uses
+`shopvivaliz-atendimento-chromium`/CDP9556, as enforced in browser-sessions.md.
+Each contains one authorized login; the two localStorage namespaces are not
+shared. A longer Retry-After is never shortened to the five-minute default
+(RFC9110 section10.2.3). Browser UTC must remain synchronized for persisted
+deadlines, as for existing request timestamps; this does not cache responses.
+
+
+### Canonical429 is an actuator boundary, not only a reader pause
+
+Every full-history baseline inside a recovery attempt must reject HTTP429
+before the next reload, native Retry or continuation. Stream COMPLETE does
+not override a history-read cooldown. If a first continuation was already
+sent before a later read is rate-limited, preserve SENT_UNCONFIRMED and the
+send budget; never relabel it as an unsent deferral or send again. Existing
+stream, account and same-conversation progress guards remain mandatory.
+
+
+### Localized thinking failure (2026-10-05)
+
+The user screenshot shows `O pensamento falhou` after a real continuation
+request. The detector previously recognized `parou de pensar`, but not this
+wording or `Thinking failed`. Both now enter the existing `generation_error`
+recovery classification. The current-status/historical-message boundary,
+additional-checks priority, account binding, native Retry preference, active
+stream checks and canonical429 cooldown are unchanged.
+
+The regression executes the injected detector code with isolated status and
+Range fixtures. Recognizing this error is not proof that a provider failure
+has been fixed or that automatic recovery completed. Require correlated
+browser-worker progress on the bound task and conversation for that claim.
+
+## Foreground curto, handoff durável e single-writer
+
+Quando `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`, o turno interativo do ChatGPT é apenas coordenador: vincula `conversation_id`, persiste o checkpoint, adquire o lease foreground, submete uma única execução durável e retorna. O foreground não pode esperar CI/deploy, chamar `task_wait`, dormir aguardando fila, nem manter o stream aberto por trabalho operacional longo.
+
+Toda mutação de browser ou runtime compartilhado exige ownership atual, checkpoint version compatível e fencing token válido. Um lease foreground vivo torna recovery background somente leitura para a conversa. Promotion/restart/browser mutation passam pelo runtime lock; escritor stale falha fechado.
+
+`PROGRESS_CONFIRMED` continua significando exclusivamente uma nova resposta real do assistente na `conversation_id` vinculada após o baseline de recovery. Bridge healthy, HTTP 200, clique bem-sucedido, `Thinking`, tool activity, mudança de stream flag ou controller promotion são apenas evidência diagnóstica e nunca certificam conclusão E2E.
+
+Auditoria operacional registra somente metadados de ownership/execução necessários para correlação (`lease_id`, owner kind/id, fencing token, checkpoint version, durable execution id, queue position, foreground duration, mutation rejection e tipo de evidência E2E). Prompt, mensagem, body, credencial, token e cookie não são persistidos em claro.
+### Foreground lease release contract
+
+A successful foreground handoff does not mean the foreground lease should remain live until TTL. Normal completion is explicit: the foreground caller releases the exact lease immediately before returning the user-facing response. Lease TTL is only the disconnect/crash fallback. A bounded renew is allowed only while foreground preparation is still active; it cannot be used to keep an interactive turn open while waiting on durable/background work. Recovery remains read-only while the foreground lease is live and can acquire mutation ownership only after explicit release or expiry.

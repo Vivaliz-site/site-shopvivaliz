@@ -8,23 +8,17 @@ import os
 import sys
 import sqlite3
 import json
-import smtplib
+import urllib.request
 from html import escape
 from datetime import datetime
 from pathlib import Path
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 # Configurações
 DB_PATH = Path(__file__).parent.parent / "data" / "shopvivaliz.db"
-SMTP_HOST = os.getenv("SMTP_HOST") or os.getenv("EMAIL_SMTP_HOST") or os.getenv("MAIL_HOST") or "localhost"
-try:
-    SMTP_PORT = int(os.getenv("SMTP_PORT") or os.getenv("EMAIL_SMTP_PORT") or os.getenv("MAIL_PORT") or "587")
-except ValueError:
-    SMTP_PORT = 587
-SMTP_USER = os.getenv("SMTP_USER") or os.getenv("EMAIL_USER") or os.getenv("MAIL_USER") or ""
-SMTP_PASS = os.getenv("SMTP_PASS") or os.getenv("EMAIL_PASSWORD") or os.getenv("MAIL_PASS") or ""
-EMAIL_FROM = os.getenv("EMAIL_FROM") or SMTP_USER or "noreply@shopvivaliz.com.br"
+BREVO_API_KEY = (os.getenv("BREVO_API_KEY") or "").strip()
+EMAIL_FROM = "atendimento@shopvivaliz.com.br"
+EMAIL_FROM_NAME = "ShopVivaliz"
+EMAIL_REPLY_TO = "atendimento@shopvivaliz.com.br"
 
 # Template HTML do email
 EMAIL_TEMPLATE = """
@@ -140,44 +134,49 @@ def get_back_in_stock_alerts():
 
 
 def send_email(email_to, product_name, sku, unsubscribe_token):
-    """Enviar email de notificação"""
+    """Enviar notificacao transacional via Brevo API."""
     if "@" not in str(email_to) or "." not in str(email_to):
         print(f"[AVISO] Email invalido ignorado: {email_to}")
         return False
 
-    if not SMTP_USER or not SMTP_PASS:
-        print(f"[AVISO] Credenciais SMTP não configuradas - skipando envio real")
+    if not BREVO_API_KEY:
+        print("[AVISO] BREVO_API_KEY nao configurada - envio bloqueado")
         return False
 
+    subject = f"✓ {product_name} voltou ao estoque!"
+    html_body = EMAIL_TEMPLATE.format(
+        product_name=escape(str(product_name)),
+        sku=escape(str(sku)),
+        unsubscribe_token=escape(str(unsubscribe_token)),
+    )
+    payload = {
+        "sender": {"name": EMAIL_FROM_NAME, "email": EMAIL_FROM},
+        "replyTo": {"name": "ShopVivaliz Atendimento", "email": EMAIL_REPLY_TO},
+        "to": [{"email": email_to}],
+        "subject": subject,
+        "htmlContent": html_body,
+        "tags": ["shopvivaliz-transactional", "stock-alert"],
+    }
+    request = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "api-key": BREVO_API_KEY,
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+        },
+        method="POST",
+    )
+
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"✓ {product_name} voltou ao estoque!"
-        msg["From"] = EMAIL_FROM
-        msg["To"] = email_to
-
-        html_body = EMAIL_TEMPLATE.format(
-            product_name=escape(str(product_name)),
-            sku=escape(str(sku)),
-            unsubscribe_token=escape(str(unsubscribe_token))
-        )
-
-        msg.attach(MIMEText(html_body, "html"))
-
-        if SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30)
-        else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
-
-        with server:
-            if SMTP_PORT != 465:
-                server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.send_message(msg)
-
-        print(f"[✓] Email enviado para {email_to} (SKU: {sku})")
-        return True
-    except Exception as e:
-        print(f"[ERRO] Falha ao enviar email para {email_to}: {e}")
+        with urllib.request.urlopen(request, timeout=30) as response:
+            response.read()
+            ok = int(getattr(response, "status", 0)) == 201
+        if ok:
+            print(f"[✓] Email enviado para {email_to} (SKU: {sku})")
+        return ok
+    except Exception as exc:
+        print(f"[ERRO] Falha ao enviar email para {email_to}: {type(exc).__name__}")
         return False
 
 

@@ -6,8 +6,7 @@ Sistema de alertas para falhas e eventos importantes.
 """
 
 import os
-import smtplib
-from email.message import EmailMessage
+from shopvivaliz_mail import send_text
 from typing import Optional
 import requests
 from datetime import datetime
@@ -18,7 +17,7 @@ class Notificator:
 
     def __init__(self):
         """Inicializar notificador."""
-        self.email_enabled = bool(os.getenv("EMAIL_FROM"))
+        self.email_enabled = bool(os.getenv("BREVO_API_KEY"))
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.github_repo = "Vivaliz-site/site-shopvivaliz"
 
@@ -115,29 +114,18 @@ class Notificator:
     # ======================================================================
 
     def _send_email(self, subject: str, body: str):
-        """Enviar email."""
-        try:
-            smtp_host = os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com")
-            smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
-            email_from = os.getenv("EMAIL_FROM")
-            email_password = os.getenv("EMAIL_PASSWORD")
-            email_to = os.getenv("EMAIL_TO", email_from)
-
-            msg = EmailMessage()
-            msg["Subject"] = subject
-            msg["From"] = email_from
-            msg["To"] = email_to
-            msg.set_content(body)
-
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                server.starttls()
-                server.login(email_from, email_password)
-                server.send_message(msg)
-
+        """Enviar email pelo provider transacional ShopVivaliz."""
+        email_to = os.getenv("EMAIL_TO", "fredmourao@gmail.com")
+        result = send_text(
+            email_to,
+            subject,
+            body,
+            tags=["shopvivaliz-transactional", "ops-alert"],
+        )
+        if result.success:
             print(f"📧 Email enviado para {email_to}")
-
-        except Exception as e:
-            print(f"⚠️ Erro ao enviar email: {e}")
+        else:
+            print(f"⚠️ Erro ao enviar email: {result.error}")
 
     def _create_github_issue(self, title: str, body: str, labels: list = None):
         """Criar issue no GitHub."""

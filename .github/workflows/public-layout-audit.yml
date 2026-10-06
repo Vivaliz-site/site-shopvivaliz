@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '59 7 * * *'
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
 
 concurrency:
   group: public-layout-audit
@@ -14,7 +11,6 @@ concurrency:
 
 jobs:
   audit:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 35
     permissions:

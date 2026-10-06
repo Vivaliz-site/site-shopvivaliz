@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * 🛡️ WATCHDOG - Health Check + Auto-Rollback Circuit Breaker
  * Executa após cada deploy para validar integridade do site
@@ -219,13 +220,10 @@ class WatchdogHealthCheck {
             curl_close($ch);
         }
 
-        // Email como fallback
-        mail(
-            'fredmourao@gmail.com',
-            "[ALERTAS SHOPVIVALIZ] {$title}",
-            $message,
-            'From: watchdog@shopvivaliz.com.br'
-        );
+        $html = '<pre style="white-space:pre-wrap;font-family:Arial,sans-serif">'
+            . htmlspecialchars((string)$message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '</pre>';
+        send_email('fredmourao@gmail.com', "[ALERTAS SHOPVIVALIZ] {$title}", $html);
     }
 
     private function recordHealthStatus($status, $checks) {

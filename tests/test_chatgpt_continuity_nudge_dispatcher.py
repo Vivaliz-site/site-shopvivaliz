@@ -6,6 +6,8 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -44,19 +46,86 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
 
-    def _stale_checkpoint_and_request(self, task_id: str = "task-1") -> None:
+    def _stale_checkpoint_and_request(self, task_id: str = "task-1", *, bind: bool = True) -> None:
         state.start_task(task_id, "goal", "gpt")
+        if bind:
+            state.bind_conversation(task_id, conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
         state.record_progress(task_id, next_action="keep going")
         # Force staleness directly on disk so the watchdog treats it as due.
         path = self.runtime / f"{task_id}.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
-        payload["updated_at"] = "2020-01-01T00:00:00Z"
+        payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=5)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         path.write_text(json.dumps(payload), encoding="utf-8")
         watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
 
     def _fake_enqueue_ok(self, **kwargs):
         self.calls.append(kwargs)
         return {"ok": True, "http_status": 200, "body": {"status": "OK", "enqueued": True}}
+
+    def test_worker_error_remains_degraded_during_retry_cooldown(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        status = {"ok": True, "body": {"nudge": {"status": "ERROR"}}}
+        kwargs["query_status"] = lambda **unused: status
+        result = self.dispatcher.run_once(**kwargs)
+        later = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(later["failed"], 1)
+        self.assertEqual(len(self.calls), 1)
+        state.record_progress("task-1", next_action="repair transport", evidence="changed checkpoint")
+        result = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(result["failed"], 0, "obsolete failed fingerprint must not degrade current work")
+
+    def test_confirmed_progress_clears_browser_failure(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+                      token="test-token", enqueue=self._fake_enqueue_ok)
+        self.dispatcher.run_once(**kwargs)
+        result = self.dispatcher.run_once(**kwargs, query_status=lambda **unused: {
+            "ok": True, "body": {"nudge": {
+                "status": "PROGRESS_CONFIRMED",
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+            }}})
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(
+            state.load_task("task-1")["conversation_id"],
+            "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+            "confirmed browser progress must persist the exact conversation binding in the checkpoint",
+        )
+
+    def test_enqueue_failure_is_reported_without_disabling_retry(self) -> None:
+        self._stale_checkpoint_and_request()
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=lambda **unused: {"ok": False, "http_status": 503})
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["dispatched"], 0)
+
+    def test_confirmed_ledger_binding_is_reused_across_fingerprints(self) -> None:
+        ledger = {
+            "old-fingerprint": {
+                "task_id": "task-1",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:00:00Z",
+                "conversation_id": "12345678-2222-3333-4444-555555555555",
+            },
+            "other-task": {
+                "task_id": "task-2",
+                "worker_status": "PROGRESS_CONFIRMED",
+                "worker_status_observed_at": "2026-10-02T06:01:00Z",
+                "conversation_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            },
+        }
+        self.assertEqual(
+            self.dispatcher._ledger_bound_conversation_id(ledger, "task-1"),
+            "12345678-2222-3333-4444-555555555555",
+        )
+        self.assertEqual(self.dispatcher._ledger_bound_conversation_id(ledger, "missing"), "")
 
     def test_canonical_defaults_match_backend_bridge_runtime(self) -> None:
         self.assertEqual(
@@ -68,6 +137,18 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
             Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token"),
         )
         self.assertNotEqual(self.dispatcher.DEFAULT_TOKEN_FILE, self.dispatcher.LEGACY_TOKEN_FILE)
+
+    def test_unbound_checkpoint_is_deferred_without_browser_dispatch(self) -> None:
+        self._stale_checkpoint_and_request(bind=False)
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result.get("skipped_unbound"), 1)
+        self.assertEqual(len(self.calls), 0)
 
     def test_dispatches_new_chatgpt_common_request_to_the_bridge(self) -> None:
         self._stale_checkpoint_and_request()
@@ -94,6 +175,135 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         )
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1, "the bridge must be called exactly once for the same fingerprint")
+
+    def test_same_conversation_dispatches_only_newest_running_checkpoint(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        now = datetime.now(timezone.utc)
+        for task_id, updated_at in (
+            ("task-old", (now - timedelta(days=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+            ("task-new", (now - timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+        ):
+            state.start_task(task_id, "goal", "gpt")
+            state.bind_conversation(task_id, conversation_id=conversation_id)
+            state.record_progress(task_id, next_action="keep going")
+            path = self.runtime / f"{task_id}.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["updated_at"] = updated_at
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(result.get("skipped_conversation_coalesced"), 1)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0]["task_id"], "task-new")
+        self.assertEqual(self.calls[0]["conversation_id"], conversation_id)
+
+    def test_inflight_same_conversation_keeps_ownership_until_terminal(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        state.start_task("task-old", "goal", "gpt")
+        state.bind_conversation("task-old", conversation_id=conversation_id)
+        state.record_progress("task-old", next_action="keep going")
+        old_path = self.runtime / "task-old.json"
+        old_payload = json.loads(old_path.read_text(encoding="utf-8"))
+        old_payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=2)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        old_path.write_text(json.dumps(old_payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+        self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(len(self.calls), 1)
+
+        state.start_task("task-new", "goal", "gpt")
+        state.bind_conversation("task-new", conversation_id=conversation_id)
+        state.record_progress("task-new", next_action="keep going")
+        new_path = self.runtime / "task-new.json"
+        new_payload = json.loads(new_path.read_text(encoding="utf-8"))
+        new_payload["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=1)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        new_path.write_text(json.dumps(new_payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+            query_status=lambda **unused: {"ok": True, "body": {"nudge": {"status": "CLAIMED"}}},
+        )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_conversation_coalesced"], 1)
+        self.assertEqual(len(self.calls), 1, "new checkpoint must not overlap an accepted browser attempt")
+
+    def test_failed_older_same_conversation_does_not_poison_new_owner_health(self) -> None:
+        conversation_id = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        now = datetime.now(timezone.utc)
+        for task_id, updated_at in (
+            ("task-old", (now - timedelta(days=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+            ("task-new", (now - timedelta(days=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")),
+        ):
+            state.start_task(task_id, "goal", "gpt")
+            state.bind_conversation(task_id, conversation_id=conversation_id)
+            state.record_progress(task_id, next_action="keep going")
+            path = self.runtime / f"{task_id}.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["updated_at"] = updated_at
+            path.write_text(json.dumps(payload), encoding="utf-8")
+        watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+        requests = watchdog.read_requests(self.runtime)
+        old_request = next(row for row in requests if row.get("task_id") == "task-old")
+        self.dispatcher._append_ledger(self.runtime, {
+            "fingerprint": old_request["fingerprint"],
+            "task_id": "task-old",
+            "repository": state.DEFAULT_REPOSITORY,
+            "dispatched_at": "2020-01-01T00:00:00Z",
+            "bridge_ok": True,
+            "worker_status": "ERROR",
+            "attempt_count": 1,
+            "send_attempt_count": 0,
+            "conversation_id": conversation_id,
+        })
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime, bridge_url="https://example.invalid/bridge.php",
+            token="test-token", enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(result["failed"], 0, "superseded same-conversation failure must not poison readiness")
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(self.calls[0]["task_id"], "task-new")
+
+    def test_live_dispatch_lock_blocks_parallel_nudge_effect(self) -> None:
+        self._stale_checkpoint_and_request()
+        with self.dispatcher._dispatcher_lock(self.runtime) as acquired:
+            self.assertTrue(acquired)
+            blocked = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+
+        self.assertTrue(blocked["locked"])
+        self.assertEqual(blocked["dispatched"], 0)
+        self.assertEqual(len(self.calls), 0)
+
+        recovered = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.assertEqual(recovered["dispatched"], 1)
+        self.assertEqual(len(self.calls), 1)
 
     def test_confirmed_progress_is_the_only_terminal_success_for_same_fingerprint(self) -> None:
         self._stale_checkpoint_and_request()
@@ -123,6 +333,29 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(second["dispatched"], 0)
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(status_calls), 1)
+
+    def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
+        self._stale_checkpoint_and_request(task_id="foreground-blocked")
+        state.bind_browser_session("foreground-blocked", browser_session="dev")
+        state.acquire_foreground_lease_for_task("foreground-blocked", owner_id="turn-live", ttl_seconds=60)
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            result = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result["skipped_foreground_active"], 1)
+        self.assertEqual(self.calls, [])
+
+    def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
+        f = self.dispatcher.recovery_state_for_worker_status
+        self.assertEqual(f("CLAIMED", 0, 2), "RECOVERY_CLAIMED")
+        self.assertEqual(f("SENT_UNCONFIRMED", 1, 2), "WAITING_FOR_REAL_RESPONSE")
+        self.assertEqual(f("PROGRESS_CONFIRMED", 1, 2), "PROGRESS_CONFIRMED")
+        self.assertEqual(f("SENT_UNCONFIRMED", 2, 2), "RECOVERY_EXHAUSTED")
+        self.assertNotEqual(f("STALLED_NOT_CONFIRMED", 0, 2), "PROGRESS_CONFIRMED")
 
     def test_sent_unconfirmed_becomes_retryable_after_cooldown(self) -> None:
         self._stale_checkpoint_and_request()
