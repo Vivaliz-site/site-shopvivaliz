@@ -2568,6 +2568,15 @@ class DurableExecutorV2Tests(unittest.TestCase):
             )
         return unit
 
+    def test_durable_health_is_degraded_when_indeterminate_tasks_need_review(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+        summary = m.durable_health_summary()
+        self.assertEqual(summary["indeterminate"], 1)
+        self.assertTrue(summary["degraded"])
+
     def test_init_db_does_not_requeue_running_task(self):
         task_id = self.submit()["task_id"]
         with m.db_conn() as db:
