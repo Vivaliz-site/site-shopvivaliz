@@ -444,6 +444,8 @@ class BrowserMcpTests(unittest.TestCase):
         for token in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
             self.assertIn(token, browser_spec)
         self.assertIn("desktop.env", browser_spec)
+        self.assertIn("xwd", browser_spec.lower())
+        self.assertIn("backing store", browser_spec.lower())
         self.assertIn("desktop.env", base_spec)
         self.assertIn("desktop_*", host_access)
         self.assertIn("fredconsole", browser_spec)
