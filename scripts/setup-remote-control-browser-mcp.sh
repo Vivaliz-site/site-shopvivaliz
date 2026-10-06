@@ -27,12 +27,12 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 missing=()
-for bin in xdotool xclip scrot; do
+for bin in xdotool xclip scrot xwd; do
   command -v "$bin" >/dev/null 2>&1 || missing+=("$bin")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
   apt-get update -qq
-  apt-get install -y --no-install-recommends xdotool xclip scrot
+  apt-get install -y --no-install-recommends xdotool xclip scrot x11-apps
 fi
 
 install -d -m 0755 "$INSTALL_DIR"
@@ -75,6 +75,7 @@ deps=p.get('dependencies') or {}
 assert deps.get('xdotool') is True
 assert deps.get('xclip') is True
 assert deps.get('scrot') is True
+assert deps.get('xwd') is True
 print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
 PY
     rm -f /tmp/shopvivaliz-browser-mcp-health.json
