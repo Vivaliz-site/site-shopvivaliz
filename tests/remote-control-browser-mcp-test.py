@@ -245,6 +245,21 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
                 m.active_desktop_window("KOCEPSV", "123456789")
 
+    def test_desktop_health_reports_only_unattended_password_presence(self):
+        secret = "never-return-this-secret"
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_host_password", return_value=secret),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
+        ):
+            health = m.desktop_health({"host": "Fred-Win"})
+        self.assertTrue(health["unattended_password_configured"])
+        self.assertNotIn(secret, repr(health))
+
     def test_desktop_click_is_relative_and_bounded_to_rustdesk_window(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
@@ -323,6 +338,87 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         active.assert_called_once_with("KOCEPSV", mock.ANY)
         capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
+
+    def test_desktop_open_uses_protected_runtime_password_via_clipboard_not_argv(self):
+        secret = "sample-runtime-password"
+        proc = mock.Mock()
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_host_password", return_value=secret),
+            mock.patch.object(m, "rustdesk_windows", side_effect=[[], ["901"]]),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xclip"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m.time, "sleep"),
+            mock.patch.object(m, "run_gui") as run,
+            mock.patch.object(m, "key") as key,
+        ):
+            result = m.desktop_open({"host": "Fred-Win"})
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["unattended_auth_attempted"])
+        argv = popen.call_args.args[0]
+        self.assertNotIn(secret, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
+        self.assertIn(mock.call("ctrl+v"), key.call_args_list)
+        self.assertIn(mock.call("Return"), key.call_args_list)
+        self.assertNotIn(secret, repr(result))
+
+    def test_unattended_bootstrap_is_exposed_and_routes_through_mutation_gate(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("desktop_unattended_bootstrap", specs)
+        self.assertEqual(
+            ["Fred-Win", "KOCEPSV"],
+            specs["desktop_unattended_bootstrap"]["inputSchema"]["properties"]["host"]["enum"],
+        )
+        properties = specs["desktop_unattended_bootstrap"]["inputSchema"]["properties"]
+        self.assertIn("runtime_lease_id", properties)
+        self.assertIn("runtime_fencing_token", properties)
+        self.assertEqual(
+            "desktop_unattended_bootstrap",
+            m.base.MUTATING_RUNTIME_ACTIONS.get("desktop_unattended_bootstrap"),
+        )
+        with (
+            mock.patch.object(m.base, "_assert_runtime_mutation") as gate,
+            mock.patch.object(m, "bootstrap_rustdesk_unattended", return_value={"ok": True}) as bootstrap,
+        ):
+            result = m.execute_tool("desktop_unattended_bootstrap", {"host": "Fred-Win"})
+        self.assertTrue(result["ok"])
+        gate.assert_called_once_with("desktop_unattended_bootstrap", {"host": "Fred-Win"})
+        bootstrap.assert_called_once_with({"host": "Fred-Win"})
+
+    def test_unattended_bootstrap_validates_protected_store_before_remote_change(self):
+        with (
+            mock.patch.object(m, "validate_desktop_env", side_effect=RuntimeError("desktop_env_permissions_invalid")),
+            mock.patch.object(m.base, "run_local_command_with_stdin") as run,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "desktop_env_permissions_invalid"):
+                m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
+        run.assert_not_called()
+
+    def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
+        secret = "server-generated-secret"
+        with (
+            mock.patch.object(m, "validate_desktop_env", return_value=m.DESKTOP_ENV_PATH),
+            mock.patch.object(m, "generate_rustdesk_password", return_value=secret),
+            mock.patch.object(m.base, "remote_invocation", return_value=["ssh", "Fred-Win"]) as remote,
+            mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}) as run,
+            mock.patch.object(m, "persist_rustdesk_password") as persist,
+        ):
+            result = m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["unattended_password_configured"])
+        self.assertNotIn(secret, repr(result))
+        remote_command = remote.call_args.args[1]
+        self.assertNotIn(secret, remote_command)
+        invocation = run.call_args.args[0]
+        self.assertNotIn(secret, repr(invocation))
+        self.assertEqual(secret, run.call_args.args[1])
+        persist.assert_called_once_with("Fred-Win", secret)
 
     def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
         proc = mock.Mock()
