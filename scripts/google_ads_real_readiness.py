@@ -19,6 +19,7 @@ REQUIRED_ENV = [
 ]
 MANUAL_CONVERSION_ENV = ["GOOGLE_ADS_ID", "GOOGLE_ADS_CONVERSION_LABEL"]
 GA4_IMPORT_ENV = ["GOOGLE_ANALYTICS_ID"]
+DIRECT_UPLOAD_ENV = ["GOOGLE_ADS_PURCHASE_CONVERSION_ACTION_ID"]
 ALLOWED_HOST = "shopvivaliz.com.br"
 
 
@@ -42,6 +43,26 @@ def is_placeholder(value: str) -> bool:
         or "developer_token" in lowered
     )
 
+
+
+
+def conversion_tracking_errors(env: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
+    source_env = os.environ if env is None else env
+    missing: list[str] = []
+    errors: list[str] = []
+    conversion_source = str(source_env.get("GOOGLE_ADS_CONVERSION_SOURCE", "MANUAL_GTAG")).strip().upper()
+    if conversion_source == "GA4_IMPORT":
+        missing.extend(key for key in GA4_IMPORT_ENV if is_placeholder(str(source_env.get(key, ""))))
+        import_verified = str(source_env.get("GOOGLE_ADS_GA4_IMPORT_VERIFIED", "")).strip().lower() in {"1", "true", "yes"}
+        if not import_verified:
+            errors.append("ga4_import_not_verified")
+        if is_placeholder(str(source_env.get("GA4_SECRET", ""))):
+            errors.append("ga4_purchase_server_side_secret_missing")
+    elif conversion_source == "DIRECT_UPLOAD":
+        missing.extend(key for key in DIRECT_UPLOAD_ENV if is_placeholder(str(source_env.get(key, ""))))
+    else:
+        missing.extend(key for key in MANUAL_CONVERSION_ENV if is_placeholder(str(source_env.get(key, ""))))
+    return missing, errors
 
 def norm(value: str) -> str:
     return " ".join(str(value).strip().casefold().split())
@@ -166,16 +187,9 @@ def main() -> int:
     if is_placeholder(refresh_value):
         missing.append("GOOGLE_OAUTH_REFRESH_TOKEN_OR_GOOGLE_ADS_REFRESH_TOKEN")
 
-    conversion_source = os.getenv("GOOGLE_ADS_CONVERSION_SOURCE", "MANUAL_GTAG").strip().upper()
-    if conversion_source == "GA4_IMPORT":
-        missing.extend(key for key in GA4_IMPORT_ENV if is_placeholder(os.getenv(key, "")))
-        import_verified = os.getenv("GOOGLE_ADS_GA4_IMPORT_VERIFIED", "").strip().lower() in {"1", "true", "yes"}
-        if not import_verified:
-            errors.append("ga4_import_not_verified")
-        if is_placeholder(os.getenv("GA4_SECRET", "")):
-            errors.append("ga4_purchase_server_side_secret_missing")
-    else:
-        missing.extend(key for key in MANUAL_CONVERSION_ENV if is_placeholder(os.getenv(key, "")))
+    conversion_missing, conversion_errors = conversion_tracking_errors()
+    missing.extend(conversion_missing)
+    errors.extend(conversion_errors)
     if missing:
         errors.append("missing_or_placeholder_env=" + ",".join(missing))
 
