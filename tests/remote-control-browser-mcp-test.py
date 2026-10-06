@@ -389,6 +389,15 @@ class BrowserMcpTests(unittest.TestCase):
         gate.assert_called_once_with("desktop_unattended_bootstrap", {"host": "Fred-Win"})
         bootstrap.assert_called_once_with({"host": "Fred-Win"})
 
+    def test_unattended_bootstrap_validates_protected_store_before_remote_change(self):
+        with (
+            mock.patch.object(m, "validate_desktop_env", side_effect=RuntimeError("desktop_env_permissions_invalid")),
+            mock.patch.object(m.base, "run_local_command_with_stdin") as run,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "desktop_env_permissions_invalid"):
+                m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
+        run.assert_not_called()
+
     def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
         secret = "server-generated-secret"
         with (
