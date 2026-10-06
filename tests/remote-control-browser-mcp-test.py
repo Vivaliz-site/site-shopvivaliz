@@ -408,13 +408,15 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
             mock.patch.object(m, "persist_rustdesk_password"),
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
-            mock.patch.object(m, "rustdesk_windows", return_value=["901"]),
+            mock.patch.object(m, "rustdesk_windows", side_effect=[["901"], []]) as windows,
             mock.patch.object(m, "run_gui") as run,
+            mock.patch.object(m.time, "sleep"),
         ):
             result = m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
 
         self.assertTrue(result["closed_existing_session"])
         run.assert_called_once_with(["xdotool", "windowclose", "901"])
+        self.assertEqual(2, windows.call_count)
         self.assertNotIn(secret, repr(run.call_args_list))
         self.assertNotIn(secret, repr(result))
 
