@@ -231,7 +231,7 @@ exit 0
         self.transport_up = False
         result = self.run_guardian()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('restart shopvivaliz-chatgpt-browser.service', self.system_log.read_text())
+        self.assertIn('restart shopvivaliz-dev-browser.service', self.system_log.read_text())
 
     def test_corrupt_cache_forces_real_probe(self):
         self.run_guardian()

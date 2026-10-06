@@ -682,7 +682,7 @@ jobs:
               "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
               install_output=''
               install_rc=0
-              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"; then
+              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559' bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"; then
                 install_rc=0
               else
                 install_rc=$?

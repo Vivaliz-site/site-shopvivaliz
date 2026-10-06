@@ -344,7 +344,7 @@ def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
         file_probe = len(argv) == 3 and argv[0] == "/usr/bin/test" and argv[1] in {"-f", "-s", "-d"}
         hash_probe = len(argv) == 3 and argv[:2] == ["/usr/bin/sha256sum", "--check"]
         service_probe = len(argv) == 4 and argv[:3] == ["/usr/bin/systemctl", "is-active", "--quiet"] and argv[3] in {
-            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-chatgpt-browser.service",
+            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-dev-browser.service", "shopvivaliz-chatgpt-browser.service",
         }
         if not (file_probe or hash_probe or service_probe):
             raise TaskStateError("completion check must use a bounded read-only file/hash/service probe")
