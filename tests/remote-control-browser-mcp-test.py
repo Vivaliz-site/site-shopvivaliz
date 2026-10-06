@@ -392,6 +392,19 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
 
+    def test_browser_health_requires_xwd_for_complete_browser_mcp_capability(self):
+        with (
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "browser_windows", return_value=[]),
+        ):
+            health = m.browser_health()
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
     def test_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
