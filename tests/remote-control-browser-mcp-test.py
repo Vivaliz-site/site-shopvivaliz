@@ -351,6 +351,22 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call("Return"), key.call_args_list)
         self.assertNotIn(secret, repr(result))
 
+    def test_unattended_bootstrap_is_exposed_and_routes_through_mutation_gate(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("desktop_unattended_bootstrap", specs)
+        self.assertEqual(
+            ["Fred-Win", "KOCEPSV"],
+            specs["desktop_unattended_bootstrap"]["inputSchema"]["properties"]["host"]["enum"],
+        )
+        with (
+            mock.patch.object(m.base, "_assert_runtime_mutation") as gate,
+            mock.patch.object(m, "bootstrap_rustdesk_unattended", return_value={"ok": True}) as bootstrap,
+        ):
+            result = m.execute_tool("desktop_unattended_bootstrap", {"host": "Fred-Win"})
+        self.assertTrue(result["ok"])
+        gate.assert_called_once_with("desktop_unattended_bootstrap", {"host": "Fred-Win"})
+        bootstrap.assert_called_once_with({"host": "Fred-Win"})
+
     def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
         secret = "server-generated-secret"
         with (
