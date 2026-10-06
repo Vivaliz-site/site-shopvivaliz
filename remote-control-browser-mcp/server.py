@@ -9,6 +9,7 @@ profile parsing is used.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import importlib.util
 import json
@@ -17,11 +18,13 @@ from pathlib import Path
 import pwd
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Any
+import zlib
 from urllib.parse import urlsplit, urlunsplit
 
 BASE_SERVER = os.environ.get(
@@ -39,6 +42,7 @@ DESKTOP_ALIASES = {
     "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
 }
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
+MAX_XWD_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_XWD_BYTES", str(64 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
 BASE_SERVER_DIR = str(Path(BASE_SERVER).resolve().parent)
@@ -480,6 +484,95 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    checksum = binascii.crc32(kind + payload) & 0xFFFFFFFF
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+
+def _xwd_channel(value: int, mask: int) -> int:
+    if mask <= 0:
+        raise ValueError("xwd_color_mask_invalid")
+    shift = (mask & -mask).bit_length() - 1
+    maximum = mask >> shift
+    if maximum <= 0:
+        raise ValueError("xwd_color_mask_invalid")
+    sample = (value & mask) >> shift
+    return (sample * 255 + maximum // 2) // maximum
+
+
+def xwd_to_png_bytes(raw: bytes) -> bytes:
+    if len(raw) < 100 or len(raw) > MAX_XWD_BYTES:
+        raise ValueError("xwd_size_invalid")
+    fields = struct.unpack(">25I", raw[:100])
+    (
+        header_size, file_version, pixmap_format, _pixmap_depth, width, height,
+        _xoffset, byte_order, _bitmap_unit, _bitmap_bit_order, _bitmap_pad,
+        bits_per_pixel, bytes_per_line, _visual_class, red_mask, green_mask,
+        blue_mask, _bits_per_rgb, _colormap_entries, ncolors, *_window_fields,
+    ) = fields
+    if file_version != 7 or pixmap_format != 2:
+        raise ValueError("xwd_format_unsupported")
+    if width < 1 or height < 1 or width * height > 16_777_216:
+        raise ValueError("xwd_dimensions_invalid")
+    if bits_per_pixel not in {16, 24, 32} or byte_order not in {0, 1}:
+        raise ValueError("xwd_pixel_format_unsupported")
+    bytes_per_pixel = bits_per_pixel // 8
+    if bytes_per_line < width * bytes_per_pixel:
+        raise ValueError("xwd_stride_invalid")
+    pixel_offset = header_size + ncolors * 12
+    pixel_bytes = bytes_per_line * height
+    if header_size < 100 or pixel_offset < header_size or pixel_offset + pixel_bytes > len(raw):
+        raise ValueError("xwd_payload_invalid")
+    if red_mask & green_mask or red_mask & blue_mask or green_mask & blue_mask:
+        raise ValueError("xwd_color_mask_invalid")
+
+    endian = "little" if byte_order == 0 else "big"
+    scanlines = bytearray()
+    pixels = memoryview(raw)
+    for y in range(height):
+        scanlines.append(0)
+        row_start = pixel_offset + y * bytes_per_line
+        for x in range(width):
+            start = row_start + x * bytes_per_pixel
+            value = int.from_bytes(pixels[start:start + bytes_per_pixel], endian)
+            scanlines.extend((
+                _xwd_channel(value, red_mask),
+                _xwd_channel(value, green_mask),
+                _xwd_channel(value, blue_mask),
+            ))
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(bytes(scanlines), 6))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+def capture_xwd_window(window: str, host: str, prefix: str) -> dict[str, Any]:
+    focus(window)
+    require_binary("xwd")
+    tmpdir = tempfile.mkdtemp(prefix=prefix)
+    gui = pwd.getpwnam(GUI_USER)
+    os.chown(tmpdir, gui.pw_uid, gui.pw_gid)
+    os.chmod(tmpdir, 0o700)
+    path = str(Path(tmpdir) / "screenshot.xwd")
+    try:
+        run_gui(["xwd", "-silent", "-id", window, "-out", path], timeout=20)
+        xwd = Path(path).read_bytes()
+        raw = xwd_to_png_bytes(xwd)
+        if not raw or len(raw) > MAX_SCREENSHOT_BYTES:
+            raise RuntimeError("screenshot_size_invalid")
+        return {
+            "ok": True, "host": host, "window_id": window, "mime_type": "image/png",
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
+            "__mcp_image__": base64.b64encode(raw).decode("ascii"),
+        }
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def capture_window(window: str, host: str, prefix: str) -> dict[str, Any]:
     focus(window)
     tmpdir = tempfile.mkdtemp(prefix=prefix)
@@ -516,7 +609,7 @@ def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     target_id = base.rustdesk_host_id(host)
     window = active_desktop_window(host, target_id)
-    return capture_window(window, host, "shopvivaliz-desktop-")
+    return capture_xwd_window(window, host, "shopvivaliz-desktop-")
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
