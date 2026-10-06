@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$ScriptPath = $PSCommandPath
 $Root = 'C:\ProgramData\ShopVivaliz\RemoteDesktopBridge'
 $TaskPrefix = 'ShopVivaliz Native Desktop Bridge'
 
@@ -171,7 +172,7 @@ function Invoke-Dispatch {
         [IO.File]::WriteAllText($requestFile, $raw, (New-Object Text.UTF8Encoding($false)))
         Set-PrivateFileAcl -Path $requestFile -UserName $interactiveUser
 
-        $scriptPath = $MyInvocation.MyCommand.Path
+        $scriptPath = $ScriptPath
         $workerArguments = @(
             '-NoLogo',
             '-NoProfile',
