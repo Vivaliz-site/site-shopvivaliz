@@ -299,10 +299,7 @@ def generate_rustdesk_password() -> str:
     return "".join(secrets.choice(alphabet) for _ in range(28))
 
 
-def persist_rustdesk_password(host: str, password: str) -> None:
-    base.validate_desktop_host(host)
-    if not password or len(password) > 4096 or "\x00" in password or "\n" in password or "\r" in password:
-        raise RuntimeError("rustdesk_password_config_invalid")
+def validate_desktop_env() -> Path:
     path = DESKTOP_ENV_PATH
     try:
         st = path.stat()
@@ -310,6 +307,14 @@ def persist_rustdesk_password(host: str, password: str) -> None:
         raise RuntimeError("desktop_env_missing") from exc
     if st.st_uid != 0 or st.st_gid != 0 or (st.st_mode & 0o777) != 0o600:
         raise RuntimeError("desktop_env_permissions_invalid")
+    return path
+
+
+def persist_rustdesk_password(host: str, password: str) -> None:
+    base.validate_desktop_host(host)
+    if not password or len(password) > 4096 or "\x00" in password or "\n" in password or "\r" in password:
+        raise RuntimeError("rustdesk_password_config_invalid")
+    path = validate_desktop_env()
 
     mapping = _rustdesk_password_mapping()
     mapping[host] = password
@@ -365,6 +370,7 @@ Write-Output 'RUSTDESK_UNATTENDED_CONFIGURED=true'
 def bootstrap_rustdesk_unattended(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     base.validate_desktop_host(host)
+    validate_desktop_env()
     password = generate_rustdesk_password()
     command = _rustdesk_password_set_command()
     invocation = base.remote_invocation(host, command)
