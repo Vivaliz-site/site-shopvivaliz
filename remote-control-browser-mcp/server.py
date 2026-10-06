@@ -269,6 +269,7 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
         "display_accessible": bool(display_accessible),
         "session_window_count": len(windows),
         "session_open": len(windows) == 1,
+        "unattended_password_configured": bool(rustdesk_host_password(host)),
     }
 
 
