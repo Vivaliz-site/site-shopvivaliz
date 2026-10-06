@@ -399,6 +399,25 @@ class BrowserMcpTests(unittest.TestCase):
                 m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
         run.assert_not_called()
 
+    def test_unattended_bootstrap_resets_only_existing_target_session(self):
+        secret = "server-generated-secret"
+        with (
+            mock.patch.object(m, "validate_desktop_env", return_value=m.DESKTOP_ENV_PATH),
+            mock.patch.object(m, "generate_rustdesk_password", return_value=secret),
+            mock.patch.object(m.base, "remote_invocation", return_value=["ssh", "Fred-Win"]),
+            mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
+            mock.patch.object(m, "persist_rustdesk_password"),
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_windows", return_value=["901"]),
+            mock.patch.object(m, "run_gui") as run,
+        ):
+            result = m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
+
+        self.assertTrue(result["closed_existing_session"])
+        run.assert_called_once_with(["xdotool", "windowclose", "901"])
+        self.assertNotIn(secret, repr(run.call_args_list))
+        self.assertNotIn(secret, repr(result))
+
     def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
         secret = "server-generated-secret"
         with (
