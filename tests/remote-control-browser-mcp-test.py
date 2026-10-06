@@ -298,6 +298,14 @@ class BrowserMcpTests(unittest.TestCase):
             calls,
         )
 
+    def test_fredwin_desktop_health_uses_native_interactive_bridge(self):
+        with mock.patch.object(m, "native_desktop_bridge", return_value={"ok": True, "action": "health", "width": 1920, "height": 1080}) as bridge:
+            result = m.desktop_health({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "health"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("windows_interactive", result["surface"])
+        self.assertTrue(result["display_accessible"])
+
     def test_fredwin_desktop_open_uses_native_interactive_bridge(self):
         with mock.patch.object(m, "native_desktop_bridge", return_value={"ok": True, "action": "health", "width": 1920, "height": 1080}) as bridge:
             result = m.desktop_open({"host": "Fred-Win"})
