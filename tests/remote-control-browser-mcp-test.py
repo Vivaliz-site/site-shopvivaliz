@@ -350,6 +350,7 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.os, "access", return_value=True),
             mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
             mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xclip"),
             mock.patch.object(m, "focus"),
             mock.patch.object(m.time, "sleep"),
             mock.patch.object(m, "run_gui") as run,
@@ -401,6 +402,7 @@ class BrowserMcpTests(unittest.TestCase):
     def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
         secret = "server-generated-secret"
         with (
+            mock.patch.object(m, "validate_desktop_env", return_value=m.DESKTOP_ENV_PATH),
             mock.patch.object(m, "generate_rustdesk_password", return_value=secret),
             mock.patch.object(m.base, "remote_invocation", return_value=["ssh", "Fred-Win"]) as remote,
             mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}) as run,
