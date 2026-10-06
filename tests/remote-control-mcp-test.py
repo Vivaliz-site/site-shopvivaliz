@@ -640,6 +640,24 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("url", required)
         self.assertNotIn("tab_id", required)
 
+    def test_browser_tab_specific_commands_support_dev_and_atendimento_without_legacy_fallback(self):
+        tabs = m.browser_tabs_command()
+        self.assertIn("127.0.0.1:9556/json", tabs)
+        self.assertIn("127.0.0.1:9559/json", tabs)
+        self.assertNotIn("127.0.0.1:9555/json", tabs)
+        command = m._browser_cdp_command("ABC123", "(()=>true)()")
+        self.assertIn("127.0.0.1:9556/json", command)
+        self.assertIn("127.0.0.1:9559/json", command)
+        self.assertIn("tab_id_ambiguous", command)
+        self.assertNotIn("127.0.0.1:9555/json", command)
+
+    def test_browser_explicit_type_supports_dev_and_atendimento_without_cross_account_fallback(self):
+        script = m.BROWSER_TYPE_NODE_SCRIPT
+        self.assertIn("127.0.0.1:9556/json", script)
+        self.assertIn("127.0.0.1:9559/json", script)
+        self.assertIn("tab_id_ambiguous", script)
+        self.assertNotIn("127.0.0.1:9555/json", script)
+
     def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
         command = m._browser_cdp_command("ABC123", "(()=>true)()")
         self.assertIn("new WebSocket(t.webSocketDebuggerUrl)", command)
