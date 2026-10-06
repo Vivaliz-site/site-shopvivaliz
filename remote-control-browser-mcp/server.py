@@ -752,10 +752,12 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
-    if name in {"desktop_open", "desktop_click", "desktop_type"}:
+    if name in {"desktop_open", "desktop_click", "desktop_type", "desktop_unattended_bootstrap"}:
         base._assert_runtime_mutation(name, args)
     if name == "desktop_health":
         return desktop_health(args)
+    if name == "desktop_unattended_bootstrap":
+        return bootstrap_rustdesk_unattended(args)
     if name == "desktop_open":
         return desktop_open(args)
     if name == "desktop_screenshot":
@@ -821,6 +823,17 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "desktop_unattended_bootstrap",
+        "description": "Generate and configure a protected unattended RustDesk password for a canonical Windows support host. The password is generated server-side, persisted only in protected runtime configuration, never accepted as a tool argument, and never returned.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}},
+            "required": ["host"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
     {
         "name": "browser_health",
         "description": "Check graphical backend browser dependencies and visible browser window availability.",
