@@ -147,6 +147,10 @@ function configuredProfileHomes() {
   } catch {}
   return dirs;
 }
+export function accountReadParams() {
+  return { refreshToken: false };
+}
+
 export const CHATGPT_ONLY_OVERRIDES = [
   '-c', 'forced_login_method="chatgpt"',
   '-c', 'model_provider="openai"',
@@ -299,7 +303,7 @@ async function probeProfile(profileHome, request, deadlineMs) {
     await client.start(deadlineMs);
     const account = await client.rpc(
       'account/read',
-      { refreshToken: true },
+      accountReadParams(),
       remainingRequestMs(deadlineMs, Date.now(), 8000)
     );
     if (account?.account?.type !== 'chatgpt') {
