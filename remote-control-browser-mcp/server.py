@@ -37,6 +37,10 @@ BROWSER_BINARY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY", "/opt/
 BROWSER_PROFILE_DIR = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium")
 BROWSER_WINDOW_CLASS = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS", "shopvivaliz-general")
 RUSTDESK_BINARY = os.environ.get("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY", "/usr/bin/rustdesk")
+FREDWIN_NATIVE_DESKTOP_BRIDGE = os.environ.get(
+    "SHOPVIVALIZ_FREDWIN_NATIVE_DESKTOP_BRIDGE",
+    r"C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1",
+)
 DESKTOP_ALIASES = {
     "KOCEPSV": ("kocepsv", "desktop-kocepsv"),
     "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
@@ -250,8 +254,62 @@ def active_desktop_window(host: str, target_id: str) -> str:
     return window
 
 
+def _completed_text(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value or "")
+
+
+def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if host != "Fred-Win":
+        raise ValueError("native_desktop_bridge_host_unsupported")
+    cfg = base.validate_desktop_host(host)
+    address = str(cfg.get("address") or "")
+    user = str(cfg.get("user") or "")
+    port = int(cfg.get("port", 22))
+    argv = base.ssh_base(address, user, port) + [
+        "powershell.exe",
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        FREDWIN_NATIVE_DESKTOP_BRIDGE,
+    ]
+    request = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    try:
+        completed = subprocess.run(
+            argv,
+            input=request,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=35,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("native_desktop_bridge_timeout") from None
+    stdout = _completed_text(completed.stdout).strip().lstrip("\ufeff")
+    if completed.returncode != 0:
+        raise RuntimeError("native_desktop_bridge_failed")
+    try:
+        result = json.loads(stdout)
+    except (TypeError, ValueError):
+        raise RuntimeError("native_desktop_bridge_invalid_response") from None
+    if not isinstance(result, dict):
+        raise RuntimeError("native_desktop_bridge_invalid_response")
+    result.setdefault("host", host)
+    return result
+
+
 def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "health"})
+        result["surface"] = "windows_interactive"
+        result["display_accessible"] = bool(result.get("ok"))
+        result["session_open"] = bool(result.get("ok"))
+        return result
     target_id = base.rustdesk_host_id(host)
     dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot", "xwd")}
     rustdesk_launchable = os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)
@@ -267,11 +325,17 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
         "display_accessible": bool(display_accessible),
         "session_window_count": len(windows),
         "session_open": len(windows) == 1,
+        "surface": "rustdesk",
     }
 
 
 def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "health"})
+        result["surface"] = "windows_interactive"
+        result["action"] = "native_bridge_ready"
+        return result
     target_id = base.rustdesk_host_id(host)
     windows = rustdesk_windows(host, target_id)
     if len(windows) > 1:
@@ -300,11 +364,18 @@ def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
 
 def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
-    target_id = base.rustdesk_host_id(host)
     x = int(args.get("x"))
     y = int(args.get("y"))
     button_name = str(args.get("button") or "left")
     clicks = max(1, min(int(args.get("clicks", 1)), 3))
+    if host == "Fred-Win":
+        result = native_desktop_bridge(
+            host,
+            {"action": "click", "x": x, "y": y, "button": button_name, "clicks": clicks},
+        )
+        result["surface"] = "windows_interactive"
+        return result
+    target_id = base.rustdesk_host_id(host)
     button = {"left": "1", "middle": "2", "right": "3"}.get(button_name)
     if button is None:
         raise ValueError("desktop_invalid_mouse_button")
@@ -323,12 +394,19 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
 
 def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
-    target_id = base.rustdesk_host_id(host)
     text = str(args.get("text") or "")
     if not text:
         raise ValueError("desktop_text_required")
     if len(text) > 4096:
         raise ValueError("desktop_text_too_long")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(
+            host,
+            {"action": "type", "text": text, "press_enter": bool(args.get("press_enter", False))},
+        )
+        result["surface"] = "windows_interactive"
+        return result
+    target_id = base.rustdesk_host_id(host)
     window = active_desktop_window(host, target_id)
     focus(window)
     require_binary("xclip")
@@ -607,9 +685,19 @@ def browser_screenshot() -> dict[str, Any]:
 
 def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "screenshot"})
+        image_b64 = result.pop("image_b64", None)
+        if not image_b64:
+            raise RuntimeError("native_desktop_screenshot_missing")
+        result["surface"] = "windows_interactive"
+        result["__mcp_image__"] = image_b64
+        return result
     target_id = base.rustdesk_host_id(host)
     window = active_desktop_window(host, target_id)
-    return capture_xwd_window(window, host, "shopvivaliz-desktop-")
+    result = capture_xwd_window(window, host, "shopvivaliz-desktop-")
+    result["surface"] = "rustdesk"
+    return result
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
