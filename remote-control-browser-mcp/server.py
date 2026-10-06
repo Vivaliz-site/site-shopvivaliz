@@ -378,10 +378,30 @@ def bootstrap_rustdesk_unattended(args: dict[str, Any]) -> dict[str, Any]:
     if int(result.get("exit_code", 1)) != 0:
         raise RuntimeError("rustdesk_unattended_configuration_failed")
     persist_rustdesk_password(host, password)
+
+    target_id = base.rustdesk_host_id(host)
+    windows = rustdesk_windows(host, target_id)
+    if len(windows) > 1:
+        raise RuntimeError("rustdesk_session_window_ambiguous")
+    closed_existing_session = False
+    if len(windows) == 1:
+        run_gui(["xdotool", "windowclose", windows[0]])
+        closed_existing_session = True
+        for _ in range(20):
+            time.sleep(0.1)
+            windows = rustdesk_windows(host, target_id)
+            if not windows:
+                break
+            if len(windows) > 1:
+                raise RuntimeError("rustdesk_session_window_ambiguous")
+        if windows:
+            raise RuntimeError("rustdesk_session_window_close_timeout")
+
     return {
         "ok": True,
         "host": host,
         "unattended_password_configured": True,
+        "closed_existing_session": closed_existing_session,
     }
 
 
