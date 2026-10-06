@@ -161,6 +161,17 @@ class BrowserMcpTests(unittest.TestCase):
             prefix = m.gui_prefix()
         self.assertIn("TMPDIR=/var/tmp", prefix)
 
+    def test_public_browser_type_alias_falls_back_when_canonical_cdp_times_out(self):
+        failure = {"ok": False, "stderr": "Error: CDP command timed out"}
+        with (
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
+        ):
+            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
+        self.assertEqual({"route": "gui-type"}, result)
+        base.assert_called_once()
+        gui.assert_called_once()
+
     def test_public_browser_type_alias_falls_back_when_canonical_browser_is_down(self):
         failure = {"ok": False, "stderr": "TypeError: fetch failed; connect ECONNREFUSED 127.0.0.1:9556"}
         with (

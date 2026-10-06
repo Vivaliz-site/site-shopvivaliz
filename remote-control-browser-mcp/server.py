@@ -573,6 +573,7 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
                 or "focused_editable_ambiguous" in detail
                 or ("fetch failed" in detail and "127.0.0.1:9556" in detail)
                 or ("ECONNREFUSED" in detail and "127.0.0.1:9556" in detail)
+                or "CDP command timed out" in detail
             )
             if canonical_unavailable:
                 return browser_type(args)
