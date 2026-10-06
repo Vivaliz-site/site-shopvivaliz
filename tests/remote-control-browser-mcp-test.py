@@ -4,7 +4,9 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import struct
 import unittest
+import zlib
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -279,7 +281,49 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call("ctrl+v"), key.call_args_list)
         self.assertIn(mock.call("Return"), key.call_args_list)
 
-    def test_desktop_screenshot_captures_only_resolved_rustdesk_window(self):
+    def test_xwd_to_png_converts_lsb_bgrx_truecolor_pixels(self):
+        header = struct.pack(
+            ">25I",
+            100, 7, 2, 24, 2, 1, 0, 0, 32, 0, 32, 32, 8, 4,
+            0x00FF0000, 0x0000FF00, 0x000000FF, 8, 256, 0,
+            2, 1, 0, 0, 0,
+        )
+        xwd = header + bytes((0, 0, 255, 0, 0, 255, 0, 0))
+
+        png = m.xwd_to_png_bytes(xwd)
+
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        pos = 8
+        width = height = None
+        idat = bytearray()
+        while pos < len(png):
+            length = struct.unpack(">I", png[pos:pos + 4])[0]
+            kind = png[pos + 4:pos + 8]
+            data = png[pos + 8:pos + 8 + length]
+            pos += 12 + length
+            if kind == b"IHDR":
+                width, height = struct.unpack(">II", data[:8])
+            elif kind == b"IDAT":
+                idat.extend(data)
+            elif kind == b"IEND":
+                break
+        self.assertEqual((2, 1), (width, height))
+        self.assertEqual(
+            b"\x00\xff\x00\x00\x00\xff\x00",
+            zlib.decompress(bytes(idat)),
+        )
+
+    def test_desktop_screenshot_prefers_xwd_window_backing_store(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="321") as active,
+            mock.patch.object(m, "capture_xwd_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
+        ):
+            result = m.desktop_screenshot({"host": "KOCEPSV"})
+        self.assertTrue(result["ok"])
+        active.assert_called_once_with("KOCEPSV", mock.ANY)
+        capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
+
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "active_desktop_window", return_value="321") as active,
