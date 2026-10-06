@@ -87,6 +87,7 @@ def gui_prefix() -> list[str]:
         f"USER={GUI_USER}",
         f"LOGNAME={GUI_USER}",
         f"XDG_RUNTIME_DIR=/run/user/{info.pw_uid}",
+        "TMPDIR=/var/tmp",
     ]
     return ["sudo", "-n", "-u", GUI_USER, "env", *env]
 
@@ -567,7 +568,13 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         result = BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
         if isinstance(result, dict) and result.get("ok") is False:
             detail = str(result.get("stderr") or result.get("stdout") or result.get("error") or "")
-            if "focused_editable_not_found" in detail or "focused_editable_ambiguous" in detail:
+            canonical_unavailable = (
+                "focused_editable_not_found" in detail
+                or "focused_editable_ambiguous" in detail
+                or ("fetch failed" in detail and "127.0.0.1:9556" in detail)
+                or ("ECONNREFUSED" in detail and "127.0.0.1:9556" in detail)
+            )
+            if canonical_unavailable:
                 return browser_type(args)
         return result
 
