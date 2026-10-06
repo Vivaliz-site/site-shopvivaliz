@@ -1050,9 +1050,11 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
     for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+        # Unsalted digests of low-entropy secrets remain guessable metadata.
+        # Preserve event identity and length, not a searchable secret digest.
+        safe_args.pop(f"{secret_key}_sha256", None)
         if secret_key in safe_args:
             secret_value = str(safe_args.pop(secret_key))
-            safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
             safe_args[f"{secret_key}_length"] = len(secret_value)
     if "email" in safe_args:
         email_value = str(safe_args.pop("email"))

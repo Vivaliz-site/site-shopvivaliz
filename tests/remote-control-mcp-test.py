@@ -284,7 +284,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"host": "KOCEPSV", "text": "sample-sensitive-input", "press_enter": True},
         )
         self.assertNotIn("text", safe)
-        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
 
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
@@ -571,7 +571,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
         )
         self.assertNotIn("text", safe)
-        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
         nav = m.sanitize_audit_args(
             "browser_navigate",
