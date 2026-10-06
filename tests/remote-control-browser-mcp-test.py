@@ -4,7 +4,9 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import struct
 import unittest
+import zlib
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -279,11 +281,43 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call("ctrl+v"), key.call_args_list)
         self.assertIn(mock.call("Return"), key.call_args_list)
 
-    def test_desktop_screenshot_captures_only_resolved_rustdesk_window(self):
+    def test_xwd_to_png_converts_lsb_bgrx_truecolor_pixels(self):
+        header = struct.pack(
+            ">25I",
+            100, 7, 2, 24, 2, 1, 0, 0, 32, 0, 32, 32, 8, 4,
+            0x00FF0000, 0x0000FF00, 0x000000FF, 8, 256, 0,
+            2, 1, 0, 0, 0,
+        )
+        xwd = header + bytes((0, 0, 255, 0, 0, 255, 0, 0))
+
+        png = m.xwd_to_png_bytes(xwd)
+
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        pos = 8
+        width = height = None
+        idat = bytearray()
+        while pos < len(png):
+            length = struct.unpack(">I", png[pos:pos + 4])[0]
+            kind = png[pos + 4:pos + 8]
+            data = png[pos + 8:pos + 8 + length]
+            pos += 12 + length
+            if kind == b"IHDR":
+                width, height = struct.unpack(">II", data[:8])
+            elif kind == b"IDAT":
+                idat.extend(data)
+            elif kind == b"IEND":
+                break
+        self.assertEqual((2, 1), (width, height))
+        self.assertEqual(
+            b"\x00\xff\x00\x00\x00\xff\x00",
+            zlib.decompress(bytes(idat)),
+        )
+
+    def test_desktop_screenshot_prefers_xwd_window_backing_store(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m, "active_desktop_window", return_value="321") as active,
-            mock.patch.object(m, "capture_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
+            mock.patch.object(m, "capture_xwd_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
         ):
             result = m.desktop_screenshot({"host": "KOCEPSV"})
         self.assertTrue(result["ok"])
@@ -358,6 +392,39 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
 
+    def test_browser_health_requires_xwd_for_complete_browser_mcp_capability(self):
+        with (
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "browser_windows", return_value=[]),
+        ):
+            health = m.browser_health()
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
+    def test_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
+        ):
+            health = m.desktop_health({"host": "Fred-Win"})
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("for bin in xdotool xclip scrot xwd", setup)
+        self.assertIn("x11-apps", setup)
+        self.assertIn("assert deps.get('scrot') is True\nassert deps.get('xwd') is True", setup)
+        self.assertNotIn(r"True\nassert", setup)
+
     def test_desktop_runtime_config_uses_separate_protected_env_file(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
@@ -378,6 +445,8 @@ class BrowserMcpTests(unittest.TestCase):
         for token in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
             self.assertIn(token, browser_spec)
         self.assertIn("desktop.env", browser_spec)
+        self.assertIn("xwd", browser_spec.lower())
+        self.assertIn("backing store", browser_spec.lower())
         self.assertIn("desktop.env", base_spec)
         self.assertIn("desktop_*", host_access)
         self.assertIn("fredconsole", browser_spec)
