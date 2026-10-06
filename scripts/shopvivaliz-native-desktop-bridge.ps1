@@ -18,11 +18,19 @@ function Write-JsonResponse([hashtable]$Value) {
 function Set-PrivateFileAcl([string]$Path, [string]$UserName) {
     $acl = New-Object System.Security.AccessControl.FileSecurity
     $acl.SetAccessRuleProtection($true, $false)
-    foreach ($identity in @('SYSTEM', 'BUILTIN\Administrators', $UserName)) {
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $userSid = ([System.Security.Principal.NTAccount]$UserName).Translate(
+        [System.Security.Principal.SecurityIdentifier]
+    )
+    $identities = @(
+        [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18'),
+        [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'),
+        $userSid
+    )
+    foreach ($identity in $identities) {
+        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
             $identity,
-            'FullControl',
-            'Allow'
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            [System.Security.AccessControl.AccessControlType]::Allow
         )
         [void]$acl.AddAccessRule($rule)
     }
