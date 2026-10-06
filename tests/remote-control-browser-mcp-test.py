@@ -324,6 +324,33 @@ class BrowserMcpTests(unittest.TestCase):
         active.assert_called_once_with("KOCEPSV", mock.ANY)
         capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
 
+    def test_desktop_open_uses_protected_runtime_password_via_clipboard_not_argv(self):
+        secret = "sample-runtime-password"
+        proc = mock.Mock()
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_host_password", return_value=secret),
+            mock.patch.object(m, "rustdesk_windows", side_effect=[[], ["901"]]),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m.time, "sleep"),
+            mock.patch.object(m, "run_gui") as run,
+            mock.patch.object(m, "key") as key,
+        ):
+            result = m.desktop_open({"host": "Fred-Win"})
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["unattended_auth_attempted"])
+        argv = popen.call_args.args[0]
+        self.assertNotIn(secret, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
+        self.assertIn(mock.call("ctrl+v"), key.call_args_list)
+        self.assertIn(mock.call("Return"), key.call_args_list)
+        self.assertNotIn(secret, repr(result))
+
     def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
         proc = mock.Mock()
         with (
