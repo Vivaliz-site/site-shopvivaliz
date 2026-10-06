@@ -474,7 +474,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertFalse(health["dependencies"]["xwd"])
         self.assertFalse(health["ok"])
 
-    def test_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
+    def test_rustdesk_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
             mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
@@ -483,7 +483,7 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
             mock.patch.object(m, "rustdesk_windows", return_value=[]),
         ):
-            health = m.desktop_health({"host": "Fred-Win"})
+            health = m.desktop_health({"host": "KOCEPSV"})
         self.assertIn("xwd", health["dependencies"])
         self.assertFalse(health["dependencies"]["xwd"])
         self.assertFalse(health["ok"])
