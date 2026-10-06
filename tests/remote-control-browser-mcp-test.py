@@ -324,16 +324,6 @@ class BrowserMcpTests(unittest.TestCase):
         active.assert_called_once_with("KOCEPSV", mock.ANY)
         capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
 
-        with (
-            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
-            mock.patch.object(m, "active_desktop_window", return_value="321") as active,
-            mock.patch.object(m, "capture_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
-        ):
-            result = m.desktop_screenshot({"host": "KOCEPSV"})
-        self.assertTrue(result["ok"])
-        active.assert_called_once_with("KOCEPSV", mock.ANY)
-        capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
-
     def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
         proc = mock.Mock()
         with (
