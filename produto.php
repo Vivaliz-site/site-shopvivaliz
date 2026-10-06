@@ -897,7 +897,7 @@ if ($notFound) {
         if (buyNowButton) {
             buyNowButton.addEventListener('click', function () {
                 addToCart(product);
-                window.location.href='/carrinho';
+                window.location.href='/checkout';
             });
         }
 
