@@ -373,6 +373,13 @@ class BrowserMcpTests(unittest.TestCase):
             ["Fred-Win", "KOCEPSV"],
             specs["desktop_unattended_bootstrap"]["inputSchema"]["properties"]["host"]["enum"],
         )
+        properties = specs["desktop_unattended_bootstrap"]["inputSchema"]["properties"]
+        self.assertIn("runtime_lease_id", properties)
+        self.assertIn("runtime_fencing_token", properties)
+        self.assertEqual(
+            "desktop_unattended_bootstrap",
+            m.base.MUTATING_RUNTIME_ACTIONS.get("desktop_unattended_bootstrap"),
+        )
         with (
             mock.patch.object(m.base, "_assert_runtime_mutation") as gate,
             mock.patch.object(m, "bootstrap_rustdesk_unattended", return_value={"ok": True}) as bootstrap,
