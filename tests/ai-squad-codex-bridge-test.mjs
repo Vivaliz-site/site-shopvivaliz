@@ -25,6 +25,22 @@ assert.equal(valid.model, 'gpt-5.6-sol');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
 
+const devScoped = validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'dev',
+});
+assert.equal(devScoped.profile, 'dev');
+assert.throws(() => validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'fredmourao',
+}), /invalid_profile/);
+
 assert.equal(resolveCodexWebSearchMode(true, undefined), 'live');
 assert.equal(resolveCodexWebSearchMode(true, 'cached'), 'cached');
 assert.equal(resolveCodexWebSearchMode(true, 'live'), 'live');
