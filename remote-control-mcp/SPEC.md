@@ -60,6 +60,15 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - File access is restricted to configured roots per host.
 - Sessions/tasks have TTL and cancellation support.
 
+## Universal administrative execution and software installation
+- `admin_command_run` is the universal privileged escape hatch for legitimate host administration on the four canonical hosts.
+- Linux commands execute as root locally or through the dedicated administrative SSH target; Windows commands execute in the configured Administrator context through PowerShell.
+- Package-manager and application-install commands are in scope (for example apt/dpkg and winget/MSI/PowerShell installers) when requested by an authorized operator.
+- Long-running installs and upgrades must use durable execution (`durable=true` or `task_submit`) so they survive caller disconnects. The default durable ceiling is 7200 seconds and can be changed by protected runtime configuration up to the server hard cap.
+- Structured tools remain preferred for common operations because they provide tighter schemas, but their existence does not remove the universal administrative command path.
+- Secrets remain non-exportable, production active releases remain immutable, and explicit destructive/high-impact operations remain subject to their normal safety gates.
+- Browser navigation/click/type/screenshot and Windows RustDesk `desktop_*` controls complement shell/PowerShell execution for workflows that require GUI interaction.
+
 ## Durable Task Model
 - Local SQLite database in WAL mode on the backend controller.
 - States: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `expired`.

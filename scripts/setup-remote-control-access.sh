@@ -57,6 +57,7 @@ install_controller() {
     printf 'SHOPVIVALIZ_REMOTE_MCP_TOKEN='
     cat "$token_file"
     printf 'SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\n' "$SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"
+    printf 'SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=%s\n' "${SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT:-7200}"
     printf 'SHOPVIVALIZ_CONTINUITY_LIB_DIR=%s\n' "$INSTALL_DIR/scripts/continuity"
     printf 'SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\n'
   } > "$env_file"

@@ -137,6 +137,42 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(specs["admin_command_run"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["host_health"]["annotations"]["readOnlyHint"])
 
+    def test_durable_admin_commands_support_long_application_installs(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertEqual(
+            specs["task_submit"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        self.assertEqual(
+            specs["admin_command_run"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        task = m.execute_tool(
+            "admin_command_run",
+            {
+                "host": "always-free-arm-1787907847-26",
+                "command": "printf install-capability-check",
+                "timeout": 3600,
+                "durable": True,
+                "request_id": "long-install-capability",
+            },
+        )
+        self.assertTrue(task["durable"])
+        row = m.load_task(task["task_id"])
+        self.assertEqual(int(row["timeout"]), 3600)
+
+    def test_long_inline_admin_command_requires_durable_mode(self):
+        with self.assertRaisesRegex(ValueError, "timeout_out_of_range"):
+            m.execute_tool(
+                "admin_command_run",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "command": "printf inline-too-long",
+                    "timeout": 3600,
+                    "durable": False,
+                },
+            )
+
     def test_admin_command_rejects_browser_mcp_continuity_session_coupling(self):
         command = (
             "cp /etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/"
