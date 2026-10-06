@@ -87,7 +87,7 @@ Não declarar verde por evidência apenas estrutural. Produção funcional exige
 - Não desabilitar retomada automática checkpoint-driven apenas por diagnóstico de risco.
 - Estado de tarefas: `/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state`.
 - Checkpoints desta conta devem fixar a conversa corporativa comprovada e `browser_session=atendimento`, pelo comando `bind-browser-session` do CLI de estado. Consultar `browser-sessions.md`. Nao reutilizar binding de conversa pessoal nem trocar a porta global do worker.
-- O worker unico roteia esse binding para CDP9556 e verifica a identidade antes de qualquer recarga ou envio. Servico ativo em CDP9555, sozinho, nao comprova cobertura desta conta.
+- O worker unico roteia esse binding para CDP9556 e verifica a identidade antes de qualquer recarga ou envio. Servico padrão em CDP9559 (Dev), sozinho, nao comprova cobertura desta conta; Atendimento permanece em CDP9556.
 
 ### Amazon Returns / SAFE-T
 

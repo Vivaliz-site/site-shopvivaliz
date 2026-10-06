@@ -75,8 +75,10 @@ async function guardedRecoveryMutation(taskId, action, conversationId, mutate, a
 // browser without changing the concurrent legacy reinforcement context.
 const BROWSER_SESSION_CONTEXT = new AsyncLocalStorage();
 const BROWSER_SESSIONS = Object.freeze({
-  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com' }),
+  dev: Object.freeze({ cdpBase: 'http://127.0.0.1:9559', expectedEmail: 'dev@shopvivaliz.com.br' }),
   atendimento: Object.freeze({ cdpBase: 'http://127.0.0.1:9556', expectedEmail: 'atendimento@shopvivaliz.com.br' }),
+  // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
+  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
 });
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;

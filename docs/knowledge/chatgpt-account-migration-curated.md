@@ -86,7 +86,8 @@ Produção usa `/home/ubuntu/shopvivaliz-deploy/` com releases imutáveis. Nunca
 
 A fonte final é `browser-sessions.md`.
 
-- `shopvivaliz-chromium` / CDP 9555 — conta pessoal.
+- `shopvivaliz-dev-chromium` / CDP 9559 — conta corporativa Dev.
+- `shopvivaliz-chromium` / CDP 9555 — legado temporário apenas para checkpoints pré-migração já vinculados; não usar para novas tarefas.
 - `shopvivaliz-atendimento-chromium` / CDP 9556 — conta corporativa Atendimento.
 - Nunca fazer logout para trocar contas.
 - Nunca reutilizar perfil, cookies, storage ou porta CDP entre contas.
