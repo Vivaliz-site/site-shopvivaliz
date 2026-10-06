@@ -245,6 +245,11 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
                 m.active_desktop_window("KOCEPSV", "123456789")
 
+    def test_native_desktop_bridge_dispatcher_fails_closed(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("exit 0", script)
+        self.assertIn("exit 1", script)
+
     def test_fredwin_native_bridge_sends_typed_text_only_on_stdin(self):
         secret = "sample-sensitive-input"
         completed = mock.Mock(returncode=0, stdout='{"ok":true,"typed_characters":22}', stderr="")
