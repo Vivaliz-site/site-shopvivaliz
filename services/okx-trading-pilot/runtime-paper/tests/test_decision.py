@@ -25,18 +25,22 @@ def test_parser_rejects_missing_layer_and_weak_trade():
     raw["decision"]="TRADE"; raw["confidence"]="69"; raw["expected_rr"]="2"
     with pytest.raises(DecisionValidationError): DecisionParser.parse(raw, now=datetime.now(timezone.utc))
 
-def test_http_decision_provider_sends_only_normalized_market_context():
-    from okx_pilot.decision import HttpDecisionProvider
+def test_codex_bridge_provider_uses_prompt_protocol_without_secrets():
+    import json
+    from okx_pilot.decision import CodexBridgeDecisionProvider, HeuristicDecisionProvider, REQUIRED_LAYER_NAMES
     captured={}
     def transport(url, payload, timeout):
         captured.update(payload)
-        return HeuristicDecisionProvider().analyze(snap())
-    provider=HttpDecisionProvider("http://127.0.0.1:17656/v1/respond", transport=transport)
-    raw=provider.analyze(snap())
+        return {"ok": True, "text": json.dumps(HeuristicDecisionProvider().analyze(snap())), "model": "gpt-5.6-terra", "transport": "codex_chatgpt"}
+    provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond", transport=transport)
+    raw=provider.analyze(snap(), context={"paper_account":{"total_equity":"100"}})
     assert len(raw["layers"]) == 20
-    assert captured["model"] == "gpt-5.6-sol"
+    assert captured["model"] == "gpt-5.6-terra"
     assert captured["web_search"] is False
-    assert captured["market"]["instrument"] == "AAA-USDT"
-    serialized=str(captured).lower()
-    assert "api_key" not in serialized and "secret" not in serialized and "passphrase" not in serialized
-    assert len(captured["required_layers"]) == 20
+    assert set(captured) == {"model","effort","prompt","web_search"}
+    prompt=captured["prompt"]
+    assert "AAA-USDT" in prompt
+    for name in REQUIRED_LAYER_NAMES:
+        assert name in prompt
+    lowered=prompt.lower()
+    assert "api_key" not in lowered and "secret" not in lowered and "passphrase" not in lowered

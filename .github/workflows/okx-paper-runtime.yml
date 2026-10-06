@@ -1,10 +1,10 @@
 name: OKX PAPER Runtime
 on:
   pull_request:
-    paths: ['services/okx-trading-pilot/runtime-paper/**', '.github/workflows/okx-paper-runtime.yml']
+    paths: ['services/okx-trading-pilot/runtime-paper/**', 'ops/ai-squad/codex-bridge.mjs', 'tests/ai-squad-codex-bridge-test.mjs', 'tests/okx-codex-login-only-test.mjs', '.github/workflows/okx-paper-runtime.yml']
   push:
-    branches: ['main', 'fix/okx-paper-universe-resume-20261005']
-    paths: ['services/okx-trading-pilot/runtime-paper/**', '.github/workflows/okx-paper-runtime.yml']
+    branches: ['main']
+    paths: ['services/okx-trading-pilot/runtime-paper/**', 'ops/ai-squad/codex-bridge.mjs', 'tests/ai-squad-codex-bridge-test.mjs', 'tests/okx-codex-login-only-test.mjs', '.github/workflows/okx-paper-runtime.yml']
 permissions:
   contents: read
 jobs:
@@ -20,3 +20,7 @@ jobs:
       - name: PAPER contract and regression tests
         working-directory: services/okx-trading-pilot/runtime-paper
         run: python -m pytest -q
+      - name: Codex bridge contract tests
+        run: node tests/ai-squad-codex-bridge-test.mjs
+      - name: Login-only transport contract
+        run: node tests/okx-codex-login-only-test.mjs

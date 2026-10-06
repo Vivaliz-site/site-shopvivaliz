@@ -13,7 +13,7 @@ import time
 from okx_pilot.domain import PilotLimits, InstrumentType
 from okx_pilot.market import OkxPublicMarketClient, MarketDataError
 from okx_pilot.scanner import MarketScanner
-from okx_pilot.decision import HeuristicDecisionProvider
+from okx_pilot.decision import CodexBridgeDecisionProvider, DecisionContextBuilder
 from okx_pilot.risk import RiskGateway
 from okx_pilot.paper import PaperBroker
 from okx_pilot.orchestrator import PilotOrchestrator
@@ -39,6 +39,9 @@ def main():
     p.add_argument('--audit',type=Path,required=True)
     p.add_argument('--state',type=Path,required=True)
     p.add_argument('--status',type=Path,required=True)
+    p.add_argument('--decision-url',default='http://127.0.0.1:17656/v1/respond')
+    p.add_argument('--decision-model',default='gpt-5.6-terra')
+    p.add_argument('--decision-effort',default='medium',choices=('low','medium','high','xhigh'))
     args=p.parse_args()
     if args.cycles<0 or not 1<=args.interval<=3600: p.error('invalid cycles/interval')
     args.state.parent.mkdir(parents=True,exist_ok=True)
@@ -48,8 +51,14 @@ def main():
     signal.signal(signal.SIGTERM,stop_handler); signal.signal(signal.SIGINT,stop_handler)
     broker=PaperBroker(state_path=args.state)
     client=OkxPublicMarketClient()
-    orch=PilotOrchestrator(MarketScanner(),HeuristicDecisionProvider(),RiskGateway(PilotLimits()),broker,args.audit)
-    orch._audit({'event':'RUN_START','run_id':broker.run_id,'started_at':broker.started_at,'mode':'PAPER','decision_provider':'HEURISTIC_BASELINE'})
+    context_builder=DecisionContextBuilder(client,broker)
+    decision_provider=CodexBridgeDecisionProvider(
+        args.decision_url, model=args.decision_model, effort=args.decision_effort,
+        timeout_seconds=45, context_builder=context_builder,
+    )
+    orch=PilotOrchestrator(MarketScanner(),decision_provider,RiskGateway(PilotLimits()),broker,args.audit)
+    orch._audit({'event':'RUN_START','run_id':broker.run_id,'started_at':broker.started_at,'mode':'PAPER',
+                 'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model})
     eligible={}; refreshed=0.; cycle=0
     with ThreadPoolExecutor(max_workers=3) as pool:
         while not STOP and (args.cycles==0 or cycle<args.cycles):
@@ -91,7 +100,10 @@ def main():
             report=broker.summary()
             report.update({'updated_at':datetime.now(timezone.utc).isoformat(),'cycle':cycle,'markets':counts,
                 'eligible':{k.value:len(v) for k,v in eligible.items()},'entries_blocked':bool(errors),'errors':errors,
-                'decision_provider':'HEURISTIC_BASELINE','ai_20_layers_active':False,'real_orders_enabled':False,
+                'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model,
+                'ai_20_layers_configured':True,'ai_20_layers_active':orch.decision_successes_total>0,
+                'decision_pending':orch.pending_count,'decision_provider_errors_total':orch.provider_errors_total,
+                'decision_provider_last_error':orch.last_provider_error,'real_orders_enabled':False,
                 'candidates':result.candidates if result else 0,'decisions':result.decisions if result else 0,
                 'fills_this_cycle':result.fills if result else 0,'release':str(Path(__file__).resolve().parents[1]),
                 'valuation_note':'USD/USDT/USDC assumed 1:1; open PnL uses current bid/ask before future exit costs; funding uses realized rates with current observed price; no exchange-exact liquidation model'})
@@ -102,6 +114,7 @@ def main():
             if args.cycles and cycle>=args.cycles: break
             deadline=time.monotonic()+args.interval
             while not STOP and time.monotonic()<deadline: time.sleep(min(.2,max(0,deadline-time.monotonic())))
+    orch.close()
     broker._persist()
     fcntl.flock(lock,fcntl.LOCK_UN); lock.close()
 

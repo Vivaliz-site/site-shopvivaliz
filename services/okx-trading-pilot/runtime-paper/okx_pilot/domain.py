@@ -88,6 +88,10 @@ class DecisionIntent:
     layers: tuple[dict[str, Any], ...]
     thesis: str
     invalidation: str
+    time_horizon: str = ""
+    supporting_evidence: tuple[str, ...] = ()
+    contrary_evidence: tuple[str, ...] = ()
+    market_snapshot_ts: datetime | None = None
 
     def __post_init__(self):
         for name in ("entry_low", "entry_high", "stop", "confidence", "expected_rr", "suggested_risk", "suggested_leverage"):
@@ -96,6 +100,8 @@ class DecisionIntent:
             _decimal("target", target)
         _aware("created_at", self.created_at)
         _aware("expires_at", self.expires_at)
+        if self.market_snapshot_ts is not None:
+            _aware("market_snapshot_ts", self.market_snapshot_ts)
         if self.entry_low > self.entry_high:
             raise ValueError("entry_low above entry_high")
 
