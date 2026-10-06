@@ -11,7 +11,7 @@ Segundo MCP privado derivado do Remote Control MCP canônico. Ele preserva as fe
 - autenticação MCP: token protegido em `/var/lib/shopvivaliz-remote-control/service.env`
 - alvos RustDesk: configuração opcional protegida em `/var/lib/shopvivaliz-remote-control/desktop.env`
 
-`desktop.env` deve ser `root:root` modo `0600` e conter somente configuração runtime, nunca ser versionado. O mapeamento `SHOPVIVALIZ_RUSTDESK_HOST_IDS` associa os nomes canônicos `Fred-Win` e/ou `KOCEPSV` aos IDs RustDesk; os IDs não são argumentos públicos das ferramentas e não são retornados em health/audit.
+`desktop.env` deve ser `root:root` modo `0600` e conter somente configuração runtime, nunca ser versionado. O mapeamento `SHOPVIVALIZ_RUSTDESK_HOST_IDS` associa os nomes canônicos `Fred-Win` e/ou `KOCEPSV` aos IDs RustDesk; `SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS` guarda apenas as senhas unattended geradas no backend. IDs e senhas nunca são argumentos públicos nem são retornados em health/audit.
 
 ## Ferramentas gráficas de navegador
 
@@ -25,7 +25,8 @@ Segundo MCP privado derivado do Remote Control MCP canônico. Ele preserva as fe
 
 ## Ferramentas de desktop RustDesk
 
-- `desktop_health(host)` — valida dependências, display, RustDesk e unicidade da janela do alvo.
+- `desktop_health(host)` — valida dependências, display, RustDesk, unicidade da janela e apenas a presença booleana da credencial unattended.
+- `desktop_unattended_bootstrap(host)` — gera a senha no backend, configura o RustDesk do Windows por transporte administrativo e a persiste somente em `desktop.env`; a senha nunca entra nos argumentos MCP nem na resposta.
 - `desktop_open(host)` — abre ou foca a sessão RustDesk configurada para o host canônico.
 - `desktop_screenshot(host)` — captura somente a janela RustDesk resolvida e retorna PNG.
 - `desktop_click(host,x,y,...)` — clique com coordenadas relativas e limitadas à janela RustDesk.
@@ -35,7 +36,7 @@ Somente `Fred-Win` e `KOCEPSV` são aceitos como alvos desktop. Não há parâme
 
 ## Política de navegador e desktop
 
-A automação usa a sessão gráfica X11 do usuário `fredconsole` com `xdotool`, `xclip`, `scrot`, `xwd` e o cliente RustDesk provisionado. `desktop_screenshot` captura o backing store da janela RustDesk com `xwd -id` e o converte internamente para PNG; isso evita depender do framebuffer raiz, que pode aparecer totalmente preto em sessões RustDesk/Flutter sobre display virtual. A captura continua restrita à janela resolvida do host. Navegador de agente continua na backend; o Windows é apenas endpoint gráfico remoto. Não usa CDP/DevTools neste wrapper, não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções.
+A automação usa a sessão gráfica X11 do usuário `fredconsole` com `xdotool`, `xclip`, `scrot`, `xwd` e o cliente RustDesk provisionado. `desktop_screenshot` captura o backing store da janela RustDesk com `xwd -id` e o converte internamente para PNG; isso evita depender do framebuffer raiz, que pode aparecer totalmente preto em sessões RustDesk/Flutter sobre display virtual. A captura continua restrita à janela resolvida do host. Quando existe senha unattended protegida, `desktop_open` a transfere somente pelo stdin do clipboard X11, cola na janela RustDesk recém-aberta, limpa imediatamente o clipboard e nunca inclui a senha no argv do cliente controlador. O bootstrap envia a senha ao PowerShell remoto por stdin; a chamada local suportada pelo próprio RustDesk para gravar a senha permanente no Windows pode expô-la transitoriamente apenas ao processo local do host, nunca ao MCP, audit ou resposta. Navegador de agente continua na backend; o Windows é apenas endpoint gráfico remoto. Não usa CDP/DevTools neste wrapper, não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções.
 
 Texto digitado nunca é persistido em audit log; ficam somente tamanho e SHA-256. URLs auditadas têm query string e fragment removidos. Cliques de browser permanecem limitados à janela ativa do browser, e cliques desktop ficam limitados à janela RustDesk do host solicitado.
 
