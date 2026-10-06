@@ -30,7 +30,8 @@ def test_codex_provider_uses_real_bridge_protocol_and_strict_prompt():
     provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=transport)
     raw=provider.analyze(m,context={"paper_account":{"equity":"100"},"missing_sections":[]})
     assert raw["decision"]=="TRADE"
-    assert set(captured)=={"model","effort","prompt","web_search"}
+    assert set(captured)=={"model","effort","prompt","web_search","profile"}
+    assert captured["profile"]=="dev"
     assert captured["model"]=="gpt-5.6-terra" and captured["effort"]=="medium" and captured["web_search"] is False
     prompt=captured["prompt"]; compact=prompt.replace(" ","")
     for i,name in enumerate(REQUIRED_LAYER_NAMES,1):
