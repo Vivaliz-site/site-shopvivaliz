@@ -56,7 +56,7 @@ class DetachedTaskResumeTests(unittest.TestCase):
             "evidence": ["checkpoint before interrupted stream"],
             "verification": None,
             "blocker": None,
-            "created_at": "2026-09-26T19:59:00Z",
+            "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "updated_at": updated_at,
             "history": [],
         }
