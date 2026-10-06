@@ -224,5 +224,5 @@ try {
         exit 1
     }
     Write-JsonResponse @{ ok = $false; error = ([string]$_.Exception.Message) }
-    exit 0
+    exit 1
 }
