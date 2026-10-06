@@ -70,7 +70,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(len("top-secret-value"), captured["text_length"])
-        self.assertIn("text_sha256", captured)
+        self.assertNotIn("text_sha256", captured)
 
     def test_url_audit_strips_query_fragment_and_credentials_are_rejected(self):
         self.assertEqual("https://chatgpt.com/account", m.safe_url("https://chatgpt.com/account?token=abc#secret"))
@@ -194,7 +194,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(6, captured["text_length"])
-        self.assertIn("text_sha256", captured)
+        self.assertNotIn("text_sha256", captured)
 
     def test_gui_browser_actions_are_explicitly_namespaced(self):
         specs = {spec["name"]: spec for spec in m.tool_specs()}
