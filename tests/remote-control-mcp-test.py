@@ -1238,6 +1238,40 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
 
+    def test_bootstrap_tracks_validates_and_installs_browser_mcp_from_same_checkout(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        for path in (
+            "remote-control-browser-mcp/**",
+            "scripts/setup-remote-control-browser-mcp.sh",
+            "deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            "scripts/shopvivaliz-native-desktop-bridge.ps1",
+            "tests/remote-control-browser-mcp-test.py",
+        ):
+            self.assertIn(path, text)
+        self.assertIn(
+            "python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py",
+            text,
+        )
+        self.assertIn("python3 tests/remote-control-browser-mcp-test.py", text)
+        self.assertIn("bash -n scripts/setup-remote-control-browser-mcp.sh", text)
+        self.assertIn(
+            "sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            text,
+        )
+
+    def test_bootstrap_stages_native_fred_desktop_bridge_from_canonical_checkout(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("- name: Stage native Fred-Win desktop bridge", text)
+        start = text.index("- name: Stage native Fred-Win desktop bridge")
+        block = text[start:]
+        self.assertIn("scripts/shopvivaliz-native-desktop-bridge.ps1", block)
+        self.assertIn("/var/lib/shopvivaliz-remote-control/id_ed25519", block)
+        self.assertIn("127.0.0.1", block)
+        self.assertIn("2222", block)
+        self.assertIn("Parser]::ParseFile", block)
+        self.assertIn("REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS", block)
+        self.assertNotIn("git show origin/main:scripts/shopvivaliz-native-desktop-bridge.ps1", block)
+
     def test_bootstrap_runs_on_controller_backend(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
         self.assertIn("runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]", text)
