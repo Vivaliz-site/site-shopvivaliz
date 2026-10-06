@@ -509,7 +509,7 @@ jobs:
 
           sudo -n scp -P 2222             -o BatchMode=yes             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOSTS"             -o ConnectTimeout=10             -i "$KEY"             "$SOURCE" "FRED@127.0.0.1:$STAGE"
 
-          read -r -d '' POWERSHELL <<'PS' || true
+          POWERSHELL="$(cat <<'PS'
           $ErrorActionPreference='Stop'
           $src=Join-Path $env:USERPROFILE 'shopvivaliz-native-desktop-bridge.ps1.stage'
           $dst='C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1'
@@ -524,6 +524,7 @@ jobs:
           Write-Output ('REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_SHA256=' + $sha)
           Write-Output 'REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS'
           PS
+          )"
           ENCODED="$(printf '%s' "$POWERSHELL" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)"
           OUTPUT="$(
             sudo -n ssh -p 2222               -o BatchMode=yes               -o IdentitiesOnly=yes               -o StrictHostKeyChecking=yes               -o UserKnownHostsFile="$HOSTS"               -o ConnectTimeout=10               -i "$KEY"               FRED@127.0.0.1               powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "$ENCODED"
