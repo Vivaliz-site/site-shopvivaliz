@@ -57,6 +57,8 @@ if spec is None or spec.loader is None:
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 
+base.MUTATING_RUNTIME_ACTIONS["desktop_unattended_bootstrap"] = "desktop_unattended_bootstrap"
+
 VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
 BROWSER_TOOLS = {
@@ -829,7 +831,11 @@ BROWSER_TOOL_SPECS = [
         "description": "Generate and configure a protected unattended RustDesk password for a canonical Windows support host. The password is generated server-side, persisted only in protected runtime configuration, never accepted as a tool argument, and never returned.",
         "inputSchema": {
             "type": "object",
-            "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}},
+            "properties": {
+                "host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]},
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            },
             "required": ["host"],
             "additionalProperties": False,
         },
