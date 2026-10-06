@@ -2186,7 +2186,7 @@ def durable_health_summary() -> dict[str, Any]:
         except ValueError:
             age = None
     summary["oldest_heartbeat_age_seconds"] = age
-    summary["degraded"] = age is not None and age > 10
+    summary["degraded"] = summary["indeterminate"] > 0 or (age is not None and age > 10)
     return summary
 
 
