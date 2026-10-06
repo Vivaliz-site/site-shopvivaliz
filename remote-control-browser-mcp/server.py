@@ -343,7 +343,7 @@ def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def browser_health() -> dict[str, Any]:
-    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot", "xwd")}
     display_accessible = False
     if dependencies["xdotool"]:
         display_accessible = run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
