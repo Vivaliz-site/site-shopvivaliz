@@ -34,7 +34,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Production web host: `shopvivaliz-free-a1` (private `10.0.1.112`).
 - Support hosts: `Fred-Win` and `KOCEPSV`.
 - Private transport: VCN/Tailscale/OpenSSH using the dedicated `shopvivaliz-agent` identity and existing restricted wrappers/relays.
-- GUI fallback: self-hosted RustDesk.
+- GUI control: native interactive Windows bridge for `Fred-Win`; self-hosted RustDesk remains the graphical path for `KOCEPSV` and human fallback.
 - ChatGPT connects to the private MCP endpoint through Secure MCP Tunnel; the MCP service itself is not publicly exposed.
 - GitHub may store source code and may be used for one-time bootstrap/recovery, but it is not part of normal command transport, task queue, heartbeat, execution or state.
 - Browser automation for ShopVivaliz remains on the backend VM, not Windows hosts.
@@ -67,7 +67,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Long-running installs and upgrades must use durable execution (`durable=true` or `task_submit`) so they survive caller disconnects. The default durable ceiling is 7200 seconds and can be changed by protected runtime configuration up to the server hard cap.
 - Structured tools remain preferred for common operations because they provide tighter schemas, but their existence does not remove the universal administrative command path.
 - Secrets remain non-exportable, production active releases remain immutable, and explicit destructive/high-impact operations remain subject to their normal safety gates.
-- Browser navigation/click/type/screenshot and Windows RustDesk `desktop_*` controls complement shell/PowerShell execution for workflows that require GUI interaction.
+- Browser navigation/click/type/screenshot and Windows `desktop_*` controls complement shell/PowerShell execution for workflows that require GUI interaction. `Fred-Win` uses the native interactive bridge; `KOCEPSV` retains the protected RustDesk path.
 
 ## Durable Task Model
 - Local SQLite database in WAL mode on the backend controller.
@@ -168,8 +168,10 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - Stage 5 four-host health/durable-task E2E runs only from an explicit `workflow_dispatch` with `run_e2e=true`.
 
 
-## Contrato de desktop RustDesk
+## Contrato de desktop
 
-O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`. A atuação X11 é implementada pelo wrapper `remote-control-browser-mcp`, que permanece na backend.
+O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`; a implementação fica no wrapper `remote-control-browser-mcp` da backend.
 
-IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.
+No `Fred-Win`, o wrapper usa o reverse SSH canônico para invocar `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe a requisição JSON por stdin e executa um worker efêmero na sessão Windows interativa, permitindo screenshot, mouse e teclado sem transportar senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. Texto digitado não entra em argv nem no audit.
+
+No `KOCEPSV`, a rota permanece RustDesk/X11. IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.
