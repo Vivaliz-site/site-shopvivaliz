@@ -351,6 +351,26 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn(mock.call("Return"), key.call_args_list)
         self.assertNotIn(secret, repr(result))
 
+    def test_unattended_bootstrap_generates_password_server_side_and_never_returns_it(self):
+        secret = "server-generated-secret"
+        with (
+            mock.patch.object(m, "generate_rustdesk_password", return_value=secret),
+            mock.patch.object(m.base, "remote_invocation", return_value=["ssh", "Fred-Win"]) as remote,
+            mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}) as run,
+            mock.patch.object(m, "persist_rustdesk_password") as persist,
+        ):
+            result = m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["unattended_password_configured"])
+        self.assertNotIn(secret, repr(result))
+        remote_command = remote.call_args.args[1]
+        self.assertNotIn(secret, remote_command)
+        invocation = run.call_args.args[0]
+        self.assertNotIn(secret, repr(invocation))
+        self.assertEqual(secret, run.call_args.args[1])
+        persist.assert_called_once_with("Fred-Win", secret)
+
     def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
         proc = mock.Mock()
         with (
