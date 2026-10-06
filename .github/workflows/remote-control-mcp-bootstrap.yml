@@ -177,7 +177,6 @@ jobs:
                   raise last_error
           PY
 
-          ssh_protocol_alive() {
           PY
 
           ssh_protocol_alive() {
@@ -249,8 +248,6 @@ jobs:
               if ssh_protocol_alive 2222; then break; fi
               sleep 2
             done
-          fi
-          if ! ssh_protocol_alive 2222; then
           fi
           if ! ssh_protocol_alive 2222; then
             echo "REMOTE_CONTROL_FRED_REVERSE_SSH=FAIL protocol_handshake_unavailable"
@@ -346,9 +343,6 @@ jobs:
             if [ "$kocepsv_wait_opened" -ne 1 ]; then
               echo "REMOTE_CONTROL_KOCEPSV_WAIT_LOOP=timed out after 30 attempts (60s), port never opened"
             fi
-          fi
-
-          echo "::group::KOCEPSV 2223 diagnostic: local listener state before final check"
           fi
 
           echo "::group::KOCEPSV 2223 diagnostic: local listener state before final check"
