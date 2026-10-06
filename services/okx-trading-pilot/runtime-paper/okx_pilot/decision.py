@@ -295,7 +295,7 @@ class DecisionParser:
             rr = DecisionParser._decimal("expected_rr", payload.get("expected_rr", "0"))
             risk = DecisionParser._decimal("suggested_risk", payload.get("suggested_risk", "0"))
             leverage = DecisionParser._decimal("suggested_leverage", payload.get("suggested_leverage", "1"))
-            if confidence < 0 or confidence > 100 or rr < 0 or risk < 0 or risk > 10 or leverage <= 0 or leverage > 20:
+            if confidence < 0 or confidence > 100 or rr < 0 or risk < 0 or risk > 10 or leverage < 0 or leverage > 20:
                 raise DecisionValidationError("decision numerical controls out of range")
             supporting = tuple(str(x) for x in payload.get("supporting_evidence", ()) if str(x).strip())
             contrary = tuple(str(x) for x in payload.get("contrary_evidence", ()) if str(x).strip())
@@ -312,7 +312,7 @@ class DecisionParser:
             if decision is DecisionKind.TRADE:
                 if confidence < Decimal("70") or rr < Decimal("1.5"):
                     raise DecisionValidationError("trade below minimum confidence or rr")
-                if entry_low <= 0 or entry_high <= 0 or stop <= 0 or risk <= 0 or not targets:
+                if entry_low <= 0 or entry_high <= 0 or stop <= 0 or risk <= 0 or leverage <= 0 or not targets:
                     raise DecisionValidationError("trade order shape incomplete")
             return DecisionIntent(
                 decision_id=str(payload["decision_id"]), decision=decision, instrument=str(payload["instrument"]),

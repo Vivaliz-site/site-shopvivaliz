@@ -137,3 +137,29 @@ def test_production_runner_has_no_heuristic_fallback():
     source=(Path(__file__).parents[1]/"scripts"/"run.py").read_text()
     assert "HeuristicDecisionProvider" not in source
     assert "CodexBridgeDecisionProvider" in source
+
+
+def test_hold_allows_zero_leverage_when_no_position_is_opened():
+    raw=valid_payload()
+    raw.update({
+        "decision":"HOLD",
+        "direction":"LONG",
+        "entry_low":"0",
+        "entry_high":"0",
+        "stop":"0",
+        "targets":[],
+        "suggested_risk":"0",
+        "suggested_leverage":"0",
+        "expected_rr":"0",
+        "confidence":"62",
+    })
+    intent=DecisionParser.parse(raw,datetime.now(timezone.utc))
+    assert intent.decision.value=="HOLD"
+    assert intent.suggested_leverage==D("0")
+
+
+def test_trade_still_rejects_zero_leverage():
+    raw=valid_payload()
+    raw["suggested_leverage"]="0"
+    with pytest.raises(DecisionValidationError):
+        DecisionParser.parse(raw,datetime.now(timezone.utc))

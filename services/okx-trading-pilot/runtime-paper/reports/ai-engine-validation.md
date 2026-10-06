@@ -24,3 +24,18 @@
 
 ## Deployment gate
 Do not merge or deploy until a corporate login completes, a real Terra-medium turn succeeds, a real OKX response validates all 20 layers, and the operational ledger survives a controlled restart. The existing heuristic PAPER service remains on its previously validated immutable release meanwhile.
+
+## Real ChatGPT/Codex E2E — dev account
+- Corporate `dev` profile authenticated through native Codex device-code flow; no API key used.
+- `account/read(refreshToken=true)`: ChatGPT Team session valid.
+- Real `gpt-5.6-terra` + `medium` probe completed successfully.
+- Real OKX 20-layer E2E on public SWAP market data completed successfully after a parser regression fix:
+  - exactly 20 ordered layers, all names exact;
+  - market snapshot timestamp matched;
+  - no market context sections missing;
+  - supporting and contrary evidence present;
+  - model returned HOLD with confidence 62, zero risk/leverage, which Risk Gateway correctly denied as `not_trade`;
+  - paper portfolio was read from a temporary copy only;
+  - no broker submit and no real order were executed.
+- Parser now allows leverage=0 for non-trade decisions only; TRADE still requires leverage > 0. Regression covered by tests.
+- Full runtime suite after fix: 59 tests PASS.
