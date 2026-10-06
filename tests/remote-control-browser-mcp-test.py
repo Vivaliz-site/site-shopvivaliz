@@ -245,6 +245,13 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
                 m.active_desktop_window("KOCEPSV", "123456789")
 
+    def test_native_desktop_bridge_acl_uses_language_neutral_sids(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertIn("S-1-5-18", script)
+        self.assertIn("S-1-5-32-544", script)
+        self.assertNotIn("'SYSTEM'", script)
+        self.assertNotIn("'BUILTIN\\Administrators'", script)
+
     def test_native_desktop_bridge_dispatcher_fails_closed(self):
         script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
         self.assertNotIn("exit 0", script)
