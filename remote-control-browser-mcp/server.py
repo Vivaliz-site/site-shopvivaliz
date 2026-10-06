@@ -366,7 +366,7 @@ def bootstrap_rustdesk_unattended(args: dict[str, Any]) -> dict[str, Any]:
     command = _rustdesk_password_set_command()
     invocation = base.remote_invocation(host, command)
     result = base.run_local_command_with_stdin(invocation, password, timeout=60)
-    if int(result.get("exit_code", 1)) != 0 or "RUSTDESK_UNATTENDED_CONFIGURED=true" not in str(result.get("stdout") or ""):
+    if int(result.get("exit_code", 1)) != 0:
         raise RuntimeError("rustdesk_unattended_configuration_failed")
     persist_rustdesk_password(host, password)
     return {
