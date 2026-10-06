@@ -41,6 +41,7 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
+MAX_DURABLE_TIMEOUT = max(MAX_TIMEOUT, min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT", "7200")), 86400))
 TASK_WAIT_MAX_SECONDS = 5
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
@@ -659,12 +660,12 @@ def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[
     }
 
 
-def validate_timeout(value: Any) -> int:
+def validate_timeout(value: Any, *, max_timeout: int = MAX_TIMEOUT) -> int:
     try:
         timeout = int(value if value is not None else DEFAULT_TIMEOUT)
     except (TypeError, ValueError):
         raise ValueError("invalid_timeout")
-    if timeout < 1 or timeout > MAX_TIMEOUT:
+    if timeout < 1 or timeout > max_timeout:
         raise ValueError("timeout_out_of_range")
     return timeout
 
@@ -1934,7 +1935,7 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         validate_admin_command_policy(str(host), command)
-        timeout = validate_timeout(args.get("timeout", 300))
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
         digest = hashlib.sha256(command.encode()).hexdigest()
         request_id = str(args.get("request_id") or "").strip() or None
         if request_id and len(request_id) > 200:
@@ -1958,6 +1959,19 @@ def execute_tool(
 
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
+    if name == "admin_command_run" and bool(args.get("durable", False)):
+        command = str(args.get("command") or "")
+        if not command.strip():
+            raise ValueError("command_required")
+        validate_admin_command_policy(str(host), command)
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
+        durable = execute_tool(
+            "task_submit",
+            {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")},
+            None,
+        )
+        durable["durable"] = True
+        return durable
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
         result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
@@ -2001,10 +2015,6 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         validate_admin_command_policy(str(host), command)
-        if bool(args.get("durable", False)):
-            durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
-            durable["durable"] = True
-            return durable
         result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
@@ -2025,7 +2035,7 @@ TOOLS = [
     ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
     ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
-    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
+    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_DURABLE_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
     ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
     ("desktop_health", "Check the constrained backend RustDesk GUI path for a canonical Windows support host without exposing its RustDesk ID.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
@@ -2041,8 +2051,8 @@ TOOLS = [
     ("file_read", "Read a non-sensitive file from a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 262144}}, True, False),
     ("file_list", "List a non-sensitive directory on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}}, True, False),
     ("logs_tail", "Tail a non-sensitive log file on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "lines": {"type": "integer", "minimum": 1, "maximum": 1000}}, True, False),
-    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Use durable=true for work that must survive client disconnects.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
-    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("admin_command_run", "Run an administrative shell or PowerShell command on a named host, including package-manager and application installation commands. Use durable=true for long work; inline calls stay bounded.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_submit", "Queue a durable administrative shell or PowerShell command, including long package/application installs, that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
     ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
