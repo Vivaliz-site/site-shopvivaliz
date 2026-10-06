@@ -8,7 +8,7 @@ Discover active spot instruments quoted in USD/USDT/USDC and linear SWAP/FUTURES
 
 ## Simulation boundary and limitations
 
-The operational decision provider is the local authenticated ChatGPT/Codex bridge using gpt-5.6-sol at medium reasoning effort. Every model result must satisfy an exact 20-layer schema, from market_regime through adversarial_review, contain supporting and contrary evidence, and expire within 120 seconds. At most two model analyses may be in flight at once; the market/position loop never waits for them. Invalid JSON, unavailable or revoked authentication, wrong model identity, stale decisions, or missing required evidence fail closed for new entries. There is no heuristic fallback in the production runner. The heuristic provider remains only as a deterministic unit-test fixture.
+The operational decision provider is the local authenticated ChatGPT/Codex bridge using gpt-5.6-terra at medium reasoning effort. Every model result must satisfy an exact 20-layer schema, from market_regime through adversarial_review, contain supporting and contrary evidence, and expire within 120 seconds. At most two model analyses may be in flight at once; the market/position loop never waits for them. Invalid JSON, unavailable or revoked authentication, wrong model identity, stale decisions, or missing required evidence fail closed for new entries. There is no heuristic fallback in the production runner. The heuristic provider remains only as a deterministic unit-test fixture.
 
 The 20-layer engine does not place orders and cannot modify risk limits. It receives normalized public OKX context (5m/1h/4h candles, order book, derivatives open interest/funding where applicable) plus the local PAPER portfolio/risk state. No exchange credentials are passed to the model. The deterministic Risk Gateway remains authoritative after every model decision.
 
@@ -34,3 +34,7 @@ Run tests with `python -m pytest -q`. Run the operational read-only check with `
 - Tickers: volCcy24h is quote volume for spot and base volume for derivatives.
 - Public instruments: linear notional is contracts times ctVal times price.
 - Funding history accepts SWAP and X-Perps FUTURES instruments.
+
+## Login-only deployment requirement
+
+The candidate defaults to Terra + medium and permits only a loopback Codex bridge. OpenAI API-key access and silent model/transport fallback are not supported. Authenticate a corporate Codex profile with the native executable, not a legacy profile-selection wrapper; never copy browser cookies or paste credentials in chat. This candidate is not operational until the real login/inference gate in reports/ai-engine-validation.md passes.

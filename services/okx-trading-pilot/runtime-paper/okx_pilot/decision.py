@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import json
+from urllib.parse import urlsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import uuid4
@@ -81,12 +82,17 @@ class CodexBridgeDecisionProvider:
     def __init__(
         self,
         url: str = "http://127.0.0.1:17656/v1/respond",
-        model: str = "gpt-5.6-sol",
+        model: str = "gpt-5.6-terra",
         effort: str = "medium",
         timeout_seconds: int = 45,
         context_builder: DecisionContextBuilder | None = None,
         transport=None,
     ):
+        parsed = urlsplit(url)
+        if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or parsed.path != "/v1/respond" or parsed.username is not None
+                or parsed.password is not None or parsed.query or parsed.fragment):
+            raise DecisionValidationError("decision_bridge:loopback_url_required")
         self.url = url
         self.model = model
         self.effort = effort
@@ -193,6 +199,8 @@ class CodexBridgeDecisionProvider:
             raise DecisionValidationError(f"decision_bridge:{reason}")
         if str(result.get("model")) != self.model:
             raise DecisionValidationError("decision_bridge:model_mismatch")
+        if result.get("transport") != "codex_chatgpt":
+            raise DecisionValidationError("decision_bridge:transport_mismatch")
         text = result.get("text")
         if not isinstance(text, str):
             raise DecisionValidationError("decision_bridge:missing_text")

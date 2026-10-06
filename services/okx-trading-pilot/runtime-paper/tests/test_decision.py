@@ -31,11 +31,11 @@ def test_codex_bridge_provider_uses_prompt_protocol_without_secrets():
     captured={}
     def transport(url, payload, timeout):
         captured.update(payload)
-        return {"ok": True, "text": json.dumps(HeuristicDecisionProvider().analyze(snap())), "model": "gpt-5.6-sol"}
+        return {"ok": True, "text": json.dumps(HeuristicDecisionProvider().analyze(snap())), "model": "gpt-5.6-terra", "transport": "codex_chatgpt"}
     provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond", transport=transport)
     raw=provider.analyze(snap(), context={"paper_account":{"total_equity":"100"}})
     assert len(raw["layers"]) == 20
-    assert captured["model"] == "gpt-5.6-sol"
+    assert captured["model"] == "gpt-5.6-terra"
     assert captured["web_search"] is False
     assert set(captured) == {"model","effort","prompt","web_search"}
     prompt=captured["prompt"]

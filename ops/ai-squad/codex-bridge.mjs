@@ -140,6 +140,20 @@ function configuredProfileHomes() {
   } catch {}
   return dirs;
 }
+export const CHATGPT_ONLY_OVERRIDES = [
+  '-c', 'forced_login_method="chatgpt"',
+  '-c', 'model_provider="openai"',
+];
+
+export function codexLoginEnvironment(base, profileHome) {
+  const env = { ...base, CODEX_HOME: profileHome };
+  for (const key of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN',
+    'OPENAI_BASE_URL', 'OPENAI_FEDERATION_RULE_ID', 'OPENAI_IDENTITY_TOKEN_FILE']) {
+    delete env[key];
+  }
+  return env;
+}
+
 class AppServerClient {
   constructor(profileHome, request) {
     this.profileHome = profileHome;
@@ -156,15 +170,14 @@ class AppServerClient {
   async start(deadlineMs) {
     const args = [
       'app-server', '--stdio',
+      ...CHATGPT_ONLY_OVERRIDES,
       '-c', `web_search="${resolveCodexWebSearchMode(this.request.web_search)}"`,
       '-c', `model_reasoning_effort="${this.request.effort}"`,
       '-c', 'features.shell_tool=false',
       '-c', 'agents.enabled=false',
       '-c', 'allow_login_shell=false',
     ];
-    const env = { ...process.env, CODEX_HOME: this.profileHome };
-    delete env.OPENAI_API_KEY;
-    delete env.CODEX_API_KEY;
+    const env = codexLoginEnvironment(process.env, this.profileHome);
 
     this.proc = spawn(realCodexPath(), args, { stdio: ['pipe', 'pipe', 'pipe'], env });
     const rl = readline.createInterface({ input: this.proc.stdout });

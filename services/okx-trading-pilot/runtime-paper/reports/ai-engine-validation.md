@@ -1,20 +1,26 @@
-# OKX 20-layer PAPER decision engine validation
+# OKX Terra login-only engine validation
 
-## Implemented
-- Exact 20 ordered analytical layers, ending in adversarial review.
-- Strict whole-response JSON parsing and finite numeric validation.
-- gpt-5.6-sol model identity enforcement; medium effort; web search disabled.
-- Maximum two asynchronous decisions in flight; position protection remains non-blocking.
-- Public OKX decision context: 5m/1h/4h candles, top order book, open interest and funding where applicable.
-- PAPER portfolio/risk state only; no exchange secrets or live-order surface.
-- Deterministic Risk Gateway remains authoritative; no heuristic fallback in the production runner.
-- Bridge health requires a real refresh-token check, preventing stale account metadata from reporting authenticated.
+## Requested configuration
+- Model: gpt-5.6-terra; reasoning effort: medium.
+- Local Codex bridge with corporate ChatGPT login, not an OpenAI API key.
+- Existing 20 ordered analytical layers and deterministic Risk Gateway retained.
+- PAPER only. Existing operational ledger must not be reset or replaced by smoke results.
 
-## Test evidence
-- AI Squad Codex bridge unit test PASS.
-- Runtime Python suite: 47 tests PASS before auth-expiry gate.
-- Alternate-port candidate bridge correctly discovered both configured ChatGPT profiles.
-- Direct app-server turn probe proved both persisted refresh tokens are revoked. This is an external authentication gate: model-turn E2E cannot be certified until a profile is reauthenticated.
+## Enforced boundaries
+- Provider URL must be loopback HTTP /v1/respond; userinfo, query credentials and fragments rejected.
+- Result requires matching model and codex_chatgpt transport.
+- Child process forces ChatGPT login and native openai provider.
+- API key, direct access-token and workload-identity environment overrides are removed from the child environment.
+- Invalid model output/authentication fails closed. No automatic fallback to API-key access or heuristic execution in this candidate.
 
-## Rollout gate
-Do not deploy the new decision engine into the 24/7 PAPER service until a fresh real gpt-5.6-sol turn through the candidate bridge succeeds and a real 20-layer OKX decision parses successfully. Existing PAPER service stays on the previously validated release meanwhile.
+## Validation evidence
+- Test-first: default/transport suite produced five expected failures before correction; endpoint/environment guards failed before implementation.
+- Local validation: 57 Python tests PASS; existing Codex bridge suite PASS; new login-only environment suite PASS; syntax and git diff checks PASS. CI must also run on the new commit.
+- Review in this session was local, not an independent model review. Superpowers workflow applied; GEPETO_UNAVAILABLE in exposed tools.
+- Initial legacy profile probes showed revoked session credentials. This is historical evidence, not proof about corporate credentials today.
+- Native login was attempted in the canonical corporate dev profile using the real Codex executable, bypassing the legacy profile-selection wrapper. The wrapper otherwise overrides CODEX_HOME and buffers interactive output.
+- Native OAuth reached the corporate sign-in page. The dedicated authentication tab was subsequently navigated to example.com outside this task; the attempt was stopped instead of fighting a concurrent browser writer.
+- Native login status after that attempt: Not logged in. No successful Terra inference has yet been observed.
+
+## Deployment gate
+Do not merge or deploy until a corporate login completes, a real Terra-medium turn succeeds, a real OKX response validates all 20 layers, and the operational ledger survives a controlled restart. The existing heuristic PAPER service remains on its previously validated immutable release meanwhile.

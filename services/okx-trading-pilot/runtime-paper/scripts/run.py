@@ -40,7 +40,7 @@ def main():
     p.add_argument('--state',type=Path,required=True)
     p.add_argument('--status',type=Path,required=True)
     p.add_argument('--decision-url',default='http://127.0.0.1:17656/v1/respond')
-    p.add_argument('--decision-model',default='gpt-5.6-sol')
+    p.add_argument('--decision-model',default='gpt-5.6-terra')
     p.add_argument('--decision-effort',default='medium',choices=('low','medium','high','xhigh'))
     args=p.parse_args()
     if args.cycles<0 or not 1<=args.interval<=3600: p.error('invalid cycles/interval')
