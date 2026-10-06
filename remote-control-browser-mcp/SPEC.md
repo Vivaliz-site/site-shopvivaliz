@@ -9,9 +9,9 @@ Segundo MCP privado derivado do Remote Control MCP canônico. Ele preserva as fe
 - service: `shopvivaliz-remote-control-browser-mcp.service`
 - usuário gráfico: `fredconsole` em `DISPLAY=:0`
 - autenticação MCP: token protegido em `/var/lib/shopvivaliz-remote-control/service.env`
-- alvos RustDesk: configuração opcional protegida em `/var/lib/shopvivaliz-remote-control/desktop.env`
+- alvos RustDesk: configuração opcional protegida em `/var/lib/shopvivaliz-remote-control/desktop.env`; a rota normal do `Fred-Win` não depende dela.
 
-`desktop.env` deve ser `root:root` modo `0600` e conter somente configuração runtime, nunca ser versionado. O mapeamento `SHOPVIVALIZ_RUSTDESK_HOST_IDS` associa os nomes canônicos `Fred-Win` e/ou `KOCEPSV` aos IDs RustDesk; os IDs não são argumentos públicos das ferramentas e não são retornados em health/audit.
+`desktop.env` deve ser `root:root` modo `0600` e conter somente configuração runtime, nunca ser versionado. O mapeamento `SHOPVIVALIZ_RUSTDESK_HOST_IDS` permanece disponível para alvos RustDesk, especialmente `KOCEPSV`; os IDs não são argumentos públicos das ferramentas e não são retornados em health/audit. `Fred-Win` usa normalmente o bridge interativo nativo pelo reverse SSH canônico.
 
 ## Ferramentas gráficas de navegador
 
@@ -23,22 +23,30 @@ Segundo MCP privado derivado do Remote Control MCP canônico. Ele preserva as fe
 - `browser_click`
 - `browser_type`
 
-## Ferramentas de desktop RustDesk
+## Ferramentas de desktop
 
-- `desktop_health(host)` — valida dependências, display, RustDesk e unicidade da janela do alvo.
-- `desktop_open(host)` — abre ou foca a sessão RustDesk configurada para o host canônico.
-- `desktop_screenshot(host)` — captura somente a janela RustDesk resolvida e retorna PNG.
-- `desktop_click(host,x,y,...)` — clique com coordenadas relativas e limitadas à janela RustDesk.
-- `desktop_type(host,text,...)` — digitação na janela RustDesk; texto não entra em argv nem audit e o clipboard transitório é limpo após a colagem.
+- `desktop_health(host)` — valida a rota gráfica correspondente ao host.
+- `desktop_open(host)` — prepara a rota gráfica: bridge interativo nativo no `Fred-Win`; sessão RustDesk protegida no `KOCEPSV`.
+- `desktop_screenshot(host)` — captura a superfície gráfica restrita e retorna PNG.
+- `desktop_click(host,x,y,...)` — clique com coordenadas limitadas à superfície retornada por screenshot.
+- `desktop_type(host,text,...)` — digitação na superfície ativa; o texto nunca entra em argv nem no audit log.
 
-Somente `Fred-Win` e `KOCEPSV` são aceitos como alvos desktop. Não há parâmetro público para ID RustDesk, display, seletor de janela ou comando arbitrário. Janela ausente ou ambígua falha fechado.
+Somente `Fred-Win` e `KOCEPSV` são aceitos como alvos desktop. Não há parâmetro público para ID RustDesk, display, seletor de janela ou comando arbitrário.
+
+### Fred-Win: bridge interativo nativo
+
+A rota normal do `Fred-Win` usa o reverse SSH canônico do Remote Control MCP e o script versionado `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe JSON exclusivamente por stdin, grava uma requisição temporária com ACL restrita e executa um worker temporário na sessão do usuário Windows atualmente logado por Scheduled Task `Interactive/Highest`. O worker usa APIs nativas do Windows para `CopyFromScreen`, mouse e teclado/clipboard. Requisição, resposta, screenshot e task temporários são removidos no final. Texto digitado fica apenas no canal protegido e no clipboard transitório, que é limpo.
+
+As coordenadas do `Fred-Win` são relativas ao PNG do desktop virtual retornado por `desktop_screenshot`, inclusive em múltiplos monitores. Essa rota não depende de senha RustDesk, de ID público ou do registro cloud do Remote Desktop Commander.
+
+### KOCEPSV: RustDesk
+
+O `KOCEPSV` continua usando a sessão gráfica X11 do usuário `fredconsole` na backend, com `xdotool`, `xclip`, `xwd` e o cliente RustDesk provisionado. `desktop_screenshot` captura o backing store da janela RustDesk com `xwd -id` e o converte internamente para PNG; isso evita depender do framebuffer raiz, que pode aparecer preto em sessões RustDesk/Flutter sobre display virtual. Cliques são limitados à janela RustDesk resolvida.
 
 ## Política de navegador e desktop
 
-A automação usa a sessão gráfica X11 do usuário `fredconsole` com `xdotool`, `xclip`, `scrot`, `xwd` e o cliente RustDesk provisionado. `desktop_screenshot` captura o backing store da janela RustDesk com `xwd -id` e o converte internamente para PNG; isso evita depender do framebuffer raiz, que pode aparecer totalmente preto em sessões RustDesk/Flutter sobre display virtual. A captura continua restrita à janela resolvida do host. Navegador de agente continua na backend; o Windows é apenas endpoint gráfico remoto. Não usa CDP/DevTools neste wrapper, não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções.
-
-Texto digitado nunca é persistido em audit log; ficam somente tamanho e SHA-256. URLs auditadas têm query string e fragment removidos. Cliques de browser permanecem limitados à janela ativa do browser, e cliques desktop ficam limitados à janela RustDesk do host solicitado.
+O navegador de agente continua na backend; os Windows são apenas endpoints gráficos/administrativos. O wrapper não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções. Texto digitado nunca é persistido no audit log; fica somente seu tamanho. URLs auditadas têm query string e fragment removidos.
 
 ## Validação
 
-Antes de promover: executar as suítes do Remote Control base e deste wrapper; validar `tools/list`; provar `desktop_health`, `desktop_open`, screenshot real e uma interação inofensiva no KOCEPSV; em seguida confirmar `browser_health` e `host_health(KOCEPSV)` para detectar regressão.
+Antes de promover: executar as suítes do Remote Control base e deste wrapper; validar `tools/list`; no `Fred-Win`, provar health/open, screenshot nativo real, digitação e clique inofensivos; no `KOCEPSV`, manter a validação RustDesk; em seguida confirmar `browser_health` e `host_health` para detectar regressão.
