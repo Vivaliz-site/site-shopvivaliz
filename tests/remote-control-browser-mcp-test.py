@@ -245,6 +245,21 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
                 m.active_desktop_window("KOCEPSV", "123456789")
 
+    def test_desktop_health_reports_only_unattended_password_presence(self):
+        secret = "never-return-this-secret"
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_host_password", return_value=secret),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
+        ):
+            health = m.desktop_health({"host": "Fred-Win"})
+        self.assertTrue(health["unattended_password_configured"])
+        self.assertNotIn(secret, repr(health))
+
     def test_desktop_click_is_relative_and_bounded_to_rustdesk_window(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
