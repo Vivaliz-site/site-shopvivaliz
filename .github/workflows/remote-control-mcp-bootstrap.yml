@@ -12,7 +12,10 @@ on:
     branches: [main]
     paths:
       - 'remote-control-mcp/**'
+      - 'remote-control-browser-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/shopvivaliz-native-desktop-bridge.ps1'
       - 'scripts/agent_task_state.py'
       - 'scripts/continuity/**'
       - 'scripts/setup-remote-control-windows.ps1'
@@ -21,7 +24,9 @@ on:
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/remote-control-browser-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
 
 permissions:
@@ -39,9 +44,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py tests/remote-control-mcp-test.py tests/remote-control-browser-mcp-test.py
           python3 tests/remote-control-mcp-test.py
+          python3 tests/remote-control-browser-mcp-test.py
           bash -n scripts/setup-remote-control-access.sh
+          bash -n scripts/setup-remote-control-browser-mcp.sh
 
       - name: Configure verified bootstrap SSH
         env:
@@ -62,6 +69,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity
+          sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service
           sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub > /tmp/shopvivaliz-remote-control.pub
           test -s /tmp/shopvivaliz-remote-control.pub
           chmod 600 /tmp/shopvivaliz-remote-control.pub
@@ -488,6 +496,43 @@ jobs:
             exit 1
           fi
           REMOTE
+
+      - name: Stage native Fred-Win desktop bridge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KEY=/var/lib/shopvivaliz-remote-control/id_ed25519
+          HOSTS=/var/lib/shopvivaliz-remote-control/known_hosts
+          SOURCE=scripts/shopvivaliz-native-desktop-bridge.ps1
+          STAGE=shopvivaliz-native-desktop-bridge.ps1.stage
+          EXPECTED_SHA="$(sha256sum "$SOURCE" | awk '{print $1}')"
+
+          sudo -n scp -P 2222             -o BatchMode=yes             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOSTS"             -o ConnectTimeout=10             -i "$KEY"             "$SOURCE" "FRED@127.0.0.1:$STAGE"
+
+          read -r -d '' POWERSHELL <<'PS' || true
+          $ErrorActionPreference='Stop'
+          $src=Join-Path $env:USERPROFILE 'shopvivaliz-native-desktop-bridge.ps1.stage'
+          $dst='C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1'
+          if (-not (Test-Path -LiteralPath $src)) { throw 'native_desktop_bridge_stage_missing' }
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile($src,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw 'native_desktop_bridge_parser_failed' }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+          Move-Item -LiteralPath $src -Destination $dst -Force
+          $sha=(Get-FileHash -Algorithm SHA256 -LiteralPath $dst).Hash.ToLowerInvariant()
+          Write-Output ('REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_SHA256=' + $sha)
+          Write-Output 'REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS'
+          PS
+          ENCODED="$(printf '%s' "$POWERSHELL" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)"
+          OUTPUT="$(
+            sudo -n ssh -p 2222               -o BatchMode=yes               -o IdentitiesOnly=yes               -o StrictHostKeyChecking=yes               -o UserKnownHostsFile="$HOSTS"               -o ConnectTimeout=10               -i "$KEY"               FRED@127.0.0.1               powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "$ENCODED"
+          )"
+          printf '%s\n' "$OUTPUT"
+          printf '%s\n' "$OUTPUT" | grep -F 'REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS' >/dev/null
+          ACTUAL_SHA="$(printf '%s\n' "$OUTPUT" | sed -n 's/^REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_SHA256=//p' | tr -d '\r' | tail -1)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_HASH=PASS"
 
       - name: Four-host live MCP health validation
         if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true
