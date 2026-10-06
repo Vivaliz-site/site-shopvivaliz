@@ -245,6 +245,67 @@ class BrowserMcpTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
                 m.active_desktop_window("KOCEPSV", "123456789")
 
+    def test_fredwin_native_bridge_sends_typed_text_only_on_stdin(self):
+        secret = "sample-sensitive-input"
+        completed = mock.Mock(returncode=0, stdout='{"ok":true,"typed_characters":22}', stderr="")
+        cfg = {"platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1", "port": 2222, "user": "FRED"}
+        with (
+            mock.patch.object(m.base, "validate_desktop_host", return_value=cfg),
+            mock.patch.object(m.base, "ssh_base", return_value=["ssh", "FRED@127.0.0.1"]),
+            mock.patch.object(m.subprocess, "run", return_value=completed) as run,
+        ):
+            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": secret, "press_enter": True})
+        self.assertTrue(result["ok"])
+        argv = run.call_args.args[0]
+        self.assertNotIn(secret, repr(argv))
+        self.assertIn(secret, run.call_args.kwargs["input"].decode("utf-8"))
+        self.assertIn("shopvivaliz-native-desktop-bridge.ps1", repr(argv))
+
+    def test_fredwin_desktop_screenshot_uses_native_bridge(self):
+        native = {
+            "ok": True,
+            "action": "screenshot",
+            "mime_type": "image/png",
+            "image_b64": "cG5n",
+            "bytes": 3,
+            "width": 1920,
+            "height": 1080,
+        }
+        with mock.patch.object(m, "native_desktop_bridge", return_value=native) as bridge:
+            result = m.desktop_screenshot({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "screenshot"})
+        self.assertEqual("cG5n", result["__mcp_image__"])
+        self.assertNotIn("image_b64", result)
+        self.assertEqual("windows_interactive", result["surface"])
+
+    def test_fredwin_desktop_click_and_type_route_to_native_bridge(self):
+        calls = []
+        def fake_bridge(host, payload):
+            calls.append((host, payload))
+            if payload["action"] == "click":
+                return {"ok": True, "action": "click", "x": payload["x"], "y": payload["y"], "clicks": payload["clicks"]}
+            return {"ok": True, "action": "type", "typed_characters": len(payload["text"]), "press_enter": payload["press_enter"]}
+        with mock.patch.object(m, "native_desktop_bridge", side_effect=fake_bridge):
+            clicked = m.desktop_click({"host": "Fred-Win", "x": 40, "y": 50, "button": "left", "clicks": 2})
+            typed = m.desktop_type({"host": "Fred-Win", "text": "abc", "press_enter": True})
+        self.assertTrue(clicked["ok"])
+        self.assertEqual(3, typed["typed_characters"])
+        self.assertEqual(
+            [
+                ("Fred-Win", {"action": "click", "x": 40, "y": 50, "button": "left", "clicks": 2}),
+                ("Fred-Win", {"action": "type", "text": "abc", "press_enter": True}),
+            ],
+            calls,
+        )
+
+    def test_fredwin_desktop_open_uses_native_interactive_bridge(self):
+        with mock.patch.object(m, "native_desktop_bridge", return_value={"ok": True, "action": "health", "width": 1920, "height": 1080}) as bridge:
+            result = m.desktop_open({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "health"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("windows_interactive", result["surface"])
+        self.assertEqual("native_bridge_ready", result["action"])
+
     def test_desktop_click_is_relative_and_bounded_to_rustdesk_window(self):
         with (
             mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
