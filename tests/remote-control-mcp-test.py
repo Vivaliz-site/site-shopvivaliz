@@ -1343,7 +1343,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/desktopkocepsv-remote-control-ssh-bridge.ps1",
         ):
             self.assertIn(path, block)
-        self.assertIn("/mcp/tool/write_file", block)
+        self.assertIn('"write_file"', block)
         self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", block)
         self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", block)
         self.assertNotIn("git fetch origin main", block)
