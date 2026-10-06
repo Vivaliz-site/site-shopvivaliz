@@ -1307,7 +1307,8 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('REMOTE_CONTROL_{label}_SSHD_RECOVERY_QUEUED=PASS', text)
         self.assertIn("REMOTE_CONTROL_{label}_SSHD_RECOVERY_STAGE=PASS", text)
         self.assertIn("windows-openssh-recovery.ps1", text)
-        self.assertIn("git show 'origin/main:scripts/windows-openssh-recovery.ps1'", text)
+        self.assertIn('Path("scripts/windows-openssh-recovery.ps1").read_text', text)
+        self.assertNotIn("git show 'origin/main:scripts/windows-openssh-recovery.ps1'", text)
         self.assertIn("Start-Process -FilePath 'powershell.exe'", text)
         self.assertIn('peers = (("FRED", 5557), ("KOCEPSV", 5558))', text)
         self.assertNotIn("inner_b64", text)
@@ -1328,14 +1329,26 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertNotIn('remote-control-bootstrap.key" scripts/setup-remote-control-windows.ps1', block)
         self.assertNotIn(" scp -P \"$port\"", block)
 
-    def test_kocepsv_bootstrap_stages_relay_scripts_before_async_restart(self):
+    def test_windows_recovery_stages_scripts_from_workflow_checkout_not_remote_git(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
-        self.assertIn("git fetch origin main", text)
-        self.assertIn("'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'", text)
-        self.assertIn("'scripts/desktopkocepsv-remote-bootstrap.ps1'", text)
-        self.assertIn('git show ("origin/main:" + $rel)', text)
-        self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", text)
-        self.assertNotIn("git merge --ff-only origin/main", text)
+        start = text.index("- name: Bootstrap Windows reverse SSH relays")
+        end = text.index("- name: Pin private host keys for controller", start)
+        block = text[start:end]
+        for path in (
+            "scripts/windows-openssh-recovery.ps1",
+            "scripts/ssh-tunnel-service-managed.ps1",
+            "scripts/fredwin-remote-bootstrap.ps1",
+            "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1",
+            "scripts/desktopkocepsv-remote-bootstrap.ps1",
+            "scripts/desktopkocepsv-remote-control-ssh-bridge.ps1",
+        ):
+            self.assertIn(path, block)
+        self.assertIn("/mcp/tool/write_file", block)
+        self.assertIn("REMOTE_CONTROL_KOCEPSV_STAGE=PASS", block)
+        self.assertIn("REMOTE_CONTROL_FRED_STAGE=PASS", block)
+        self.assertNotIn("git fetch origin main", block)
+        self.assertNotIn("git show ", block)
+        self.assertNotIn("git merge --ff-only origin/main", block)
 
     def test_four_host_e2e_requires_explicit_stage5_dispatch(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
