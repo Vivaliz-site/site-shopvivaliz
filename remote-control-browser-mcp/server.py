@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import secrets
 import shutil
 import struct
 import subprocess
@@ -37,6 +38,7 @@ BROWSER_BINARY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY", "/opt/
 BROWSER_PROFILE_DIR = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium")
 BROWSER_WINDOW_CLASS = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS", "shopvivaliz-general")
 RUSTDESK_BINARY = os.environ.get("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY", "/usr/bin/rustdesk")
+DESKTOP_ENV_PATH = Path(os.environ.get("SHOPVIVALIZ_DESKTOP_ENV_FILE", "/var/lib/shopvivaliz-remote-control/desktop.env"))
 DESKTOP_ALIASES = {
     "KOCEPSV": ("kocepsv", "desktop-kocepsv"),
     "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
@@ -270,23 +272,113 @@ def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def rustdesk_host_password(host: str) -> str:
-    base.validate_desktop_host(host)
+def _rustdesk_password_mapping() -> dict[str, str]:
     raw = os.environ.get("SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS", "").strip()
     if not raw:
-        return ""
+        return {}
     try:
         mapping = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise RuntimeError("rustdesk_password_config_invalid") from exc
     if not isinstance(mapping, dict):
         raise RuntimeError("rustdesk_password_config_invalid")
-    value = mapping.get(host, "")
-    if value in (None, ""):
-        return ""
-    if not isinstance(value, str) or len(value) > 4096 or "\x00" in value:
+    out: dict[str, str] = {}
+    for key, value in mapping.items():
+        if key not in base.DESKTOP_HOSTS or not isinstance(value, str) or len(value) > 4096 or "\x00" in value:
+            raise RuntimeError("rustdesk_password_config_invalid")
+        if value:
+            out[key] = value
+    return out
+
+
+def generate_rustdesk_password() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(28))
+
+
+def persist_rustdesk_password(host: str, password: str) -> None:
+    base.validate_desktop_host(host)
+    if not password or len(password) > 4096 or "\x00" in password or "\n" in password or "\r" in password:
         raise RuntimeError("rustdesk_password_config_invalid")
-    return value
+    path = DESKTOP_ENV_PATH
+    try:
+        st = path.stat()
+    except OSError as exc:
+        raise RuntimeError("desktop_env_missing") from exc
+    if st.st_uid != 0 or st.st_gid != 0 or (st.st_mode & 0o777) != 0o600:
+        raise RuntimeError("desktop_env_permissions_invalid")
+
+    mapping = _rustdesk_password_mapping()
+    mapping[host] = password
+    serialized = json.dumps(mapping, separators=(",", ":"), ensure_ascii=True)
+    line = "SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS='" + serialized + "'"
+
+    current = path.read_text(encoding="utf-8")
+    lines = [item for item in current.splitlines() if not item.startswith("SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS=")]
+    lines.append(line)
+    rendered = "\n".join(lines) + "\n"
+
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(4)}.tmp")
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chown(temp, 0, 0)
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        try:
+            temp.unlink()
+        except FileNotFoundError:
+            pass
+    os.environ["SHOPVIVALIZ_RUSTDESK_HOST_PASSWORDS"] = serialized
+
+
+def _rustdesk_password_set_command() -> str:
+    return r"""
+$ErrorActionPreference = 'Stop'
+$pw = [Console]::In.ReadToEnd().Trim()
+if ([string]::IsNullOrWhiteSpace($pw)) { throw 'rustdesk_password_input_missing' }
+$candidates = @(
+  'C:\Program Files\RustDesk\rustdesk.exe',
+  'C:\Program Files (x86)\RustDesk\rustdesk.exe',
+  "$env:LOCALAPPDATA\Programs\RustDesk\rustdesk.exe"
+)
+$binary = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $binary) { throw 'rustdesk_binary_missing' }
+& $binary --password $pw | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'rustdesk_password_set_failed' }
+Write-Output 'RUSTDESK_UNATTENDED_CONFIGURED=true'
+""".strip()
+
+
+def bootstrap_rustdesk_unattended(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    base.validate_desktop_host(host)
+    password = generate_rustdesk_password()
+    command = _rustdesk_password_set_command()
+    invocation = base.remote_invocation(host, command)
+    result = base.run_local_command_with_stdin(invocation, password, timeout=60)
+    if int(result.get("exit_code", 1)) != 0 or "RUSTDESK_UNATTENDED_CONFIGURED=true" not in str(result.get("stdout") or ""):
+        raise RuntimeError("rustdesk_unattended_configuration_failed")
+    persist_rustdesk_password(host, password)
+    return {
+        "ok": True,
+        "host": host,
+        "unattended_password_configured": True,
+    }
+
+
+def rustdesk_host_password(host: str) -> str:
+    base.validate_desktop_host(host)
+    return _rustdesk_password_mapping().get(host, "")
 
 
 def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
@@ -660,10 +752,12 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
-    if name in {"desktop_open", "desktop_click", "desktop_type"}:
+    if name in {"desktop_open", "desktop_click", "desktop_type", "desktop_unattended_bootstrap"}:
         base._assert_runtime_mutation(name, args)
     if name == "desktop_health":
         return desktop_health(args)
+    if name == "desktop_unattended_bootstrap":
+        return bootstrap_rustdesk_unattended(args)
     if name == "desktop_open":
         return desktop_open(args)
     if name == "desktop_screenshot":
@@ -729,6 +823,17 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "desktop_unattended_bootstrap",
+        "description": "Generate and configure a protected unattended RustDesk password for a canonical Windows support host. The password is generated server-side, persisted only in protected runtime configuration, never accepted as a tool argument, and never returned.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}},
+            "required": ["host"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
     {
         "name": "browser_health",
         "description": "Check graphical backend browser dependencies and visible browser window availability.",
