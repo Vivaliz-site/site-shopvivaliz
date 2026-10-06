@@ -37,7 +37,8 @@ def test_codex_bridge_provider_uses_prompt_protocol_without_secrets():
     assert len(raw["layers"]) == 20
     assert captured["model"] == "gpt-5.6-terra"
     assert captured["web_search"] is False
-    assert set(captured) == {"model","effort","prompt","web_search"}
+    assert captured["profile"] == "dev"
+    assert set(captured) == {"model","effort","prompt","web_search","profile"}
     prompt=captured["prompt"]
     assert "AAA-USDT" in prompt
     for name in REQUIRED_LAYER_NAMES:
