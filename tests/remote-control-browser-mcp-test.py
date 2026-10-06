@@ -428,6 +428,8 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.base, "remote_invocation", return_value=["ssh", "Fred-Win"]) as remote,
             mock.patch.object(m.base, "run_local_command_with_stdin", return_value={"exit_code": 0, "stdout": "", "stderr": ""}) as run,
             mock.patch.object(m, "persist_rustdesk_password") as persist,
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
         ):
             result = m.bootstrap_rustdesk_unattended({"host": "Fred-Win"})
 
