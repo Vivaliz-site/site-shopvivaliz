@@ -35,7 +35,7 @@ Somente `Fred-Win` e `KOCEPSV` são aceitos como alvos desktop. Não há parâme
 
 ## Política de navegador e desktop
 
-A automação usa a sessão gráfica X11 do usuário `fredconsole` com `xdotool`, `xclip`, `scrot` e o cliente RustDesk provisionado. Navegador de agente continua na backend; o Windows é apenas endpoint gráfico remoto. Não usa CDP/DevTools neste wrapper, não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções.
+A automação usa a sessão gráfica X11 do usuário `fredconsole` com `xdotool`, `xclip`, `scrot`, `xwd` e o cliente RustDesk provisionado. `desktop_screenshot` captura o backing store da janela RustDesk com `xwd -id` e o converte internamente para PNG; isso evita depender do framebuffer raiz, que pode aparecer totalmente preto em sessões RustDesk/Flutter sobre display virtual. A captura continua restrita à janela resolvida do host. Navegador de agente continua na backend; o Windows é apenas endpoint gráfico remoto. Não usa CDP/DevTools neste wrapper, não lê cookies, não analisa perfil do Chrome e não tenta contornar MFA, CAPTCHA, consentimento ou outras proteções.
 
 Texto digitado nunca é persistido em audit log; ficam somente tamanho e SHA-256. URLs auditadas têm query string e fragment removidos. Cliques de browser permanecem limitados à janela ativa do browser, e cliques desktop ficam limitados à janela RustDesk do host solicitado.
 
