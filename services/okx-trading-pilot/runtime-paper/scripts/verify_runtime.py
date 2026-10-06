@@ -16,6 +16,8 @@ def main():
     age=(datetime.now(timezone.utc)-datetime.fromisoformat(report['updated_at'])).total_seconds()
     assert 0<=age<=45, 'stale_status'
     assert report['mode']=='PAPER' and report['real_orders_enabled'] is False
+    assert report.get('decision_provider')=='CODEX_20_LAYER'
+    assert report.get('ai_20_layers_configured') is True
     assert report['run_id']==ledger['run_id'] and ledger['starting_equity']=='100'
     assert report['errors']==[] and not report['entries_blocked'], 'market_data_not_ready'
     assert all(report['markets'].get(x,0)>0 for x in ('SPOT','SWAP','FUTURES'))

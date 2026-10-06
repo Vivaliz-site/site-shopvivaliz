@@ -94,3 +94,63 @@ class OkxPublicMarketClient:
             except (KeyError,ValueError,InvalidOperation,TypeError):
                 raise MarketDataError('invalid_realized_funding')
         return sorted(out,key=lambda x:x[1])
+
+    def candles(self, instrument, bar, limit=24, timeout=5.0):
+        payload=self._get_json('/api/v5/market/candles',{'instId':instrument,'bar':bar,'limit':str(limit)},timeout)
+        out=[]
+        for row in reversed(payload['data']):
+            if not isinstance(row,list) or len(row)<8: continue
+            out.append({
+                'ts':str(row[0]),'open':str(row[1]),'high':str(row[2]),'low':str(row[3]),
+                'close':str(row[4]),'volume':str(row[5]),'volume_ccy':str(row[6]),'volume_quote':str(row[7]),
+            })
+        return out
+
+    def order_book(self, instrument, depth=20, timeout=5.0):
+        payload=self._get_json('/api/v5/market/books',{'instId':instrument,'sz':str(depth)},timeout)
+        if not payload['data']: raise MarketDataError('empty_order_book')
+        row=payload['data'][0]
+        def levels(name):
+            return [[str(x[0]),str(x[1]),str(x[3]) if len(x)>3 else '0'] for x in row.get(name,[])[:10]]
+        return {'ts':str(row.get('ts','')),'bids':levels('bids'),'asks':levels('asks')}
+
+    def open_interest(self, snapshot, timeout=5.0):
+        if snapshot.instrument_type is InstrumentType.SPOT: return None
+        payload=self._get_json('/api/v5/public/open-interest',{'instType':snapshot.instrument_type.value,'instId':snapshot.instrument},timeout)
+        if not payload['data']: return None
+        row=payload['data'][0]
+        return {'ts':str(row.get('ts','')),'oi':str(row.get('oi','')),'oi_ccy':str(row.get('oiCcy',''))}
+
+    def current_funding(self, snapshot, timeout=5.0):
+        if snapshot.instrument_type is not InstrumentType.SWAP and '_XPERP-' not in snapshot.instrument:
+            return None
+        payload=self._get_json('/api/v5/public/funding-rate',{'instId':snapshot.instrument},timeout)
+        if not payload['data']: return None
+        row=payload['data'][0]
+        return {
+            'funding_rate':str(row.get('fundingRate','')),
+            'funding_time':str(row.get('fundingTime','')),
+            'next_funding_time':str(row.get('nextFundingTime','')),
+        }
+
+    def decision_market_context(self, snapshot):
+        from concurrent.futures import ThreadPoolExecutor
+        jobs={
+            'candles_5m': lambda:self.candles(snapshot.instrument,'5m',24),
+            'candles_1h': lambda:self.candles(snapshot.instrument,'1H',24),
+            'candles_4h': lambda:self.candles(snapshot.instrument,'4H',24),
+            'order_book': lambda:self.order_book(snapshot.instrument,20),
+            'open_interest': lambda:self.open_interest(snapshot),
+            'funding': lambda:self.current_funding(snapshot),
+        }
+        result={}; missing=[]
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            futures={name:pool.submit(fn) for name,fn in jobs.items()}
+            for name,fut in futures.items():
+                try:
+                    result[name]=fut.result(timeout=6)
+                except Exception as exc:
+                    result[name]=None
+                    missing.append(name+':'+type(exc).__name__)
+        result['missing_sections']=missing
+        return result

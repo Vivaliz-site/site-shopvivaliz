@@ -39,6 +39,17 @@ export function classifyRateLimit(rateLimits) {
     : 'available';
 }
 
+export async function readRateLimitState(readFn) {
+  try {
+    const limits = await readFn();
+    return classifyRateLimit(limits?.rateLimits);
+  } catch {
+    // account/read is the authentication authority. Rate-limit telemetry is
+    // advisory and has changed independently across Codex app-server builds.
+    return 'unknown';
+  }
+}
+
 export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infinity) {
   const remaining = Number(deadlineMs) - Number(nowMs);
   if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('request_timeout');
@@ -259,18 +270,17 @@ async function probeProfile(profileHome, request, deadlineMs) {
     await client.start(deadlineMs);
     const account = await client.rpc(
       'account/read',
-      { refreshToken: false },
+      { refreshToken: true },
       remainingRequestMs(deadlineMs, Date.now(), 8000)
     );
     if (account?.account?.type !== 'chatgpt') {
       throw new Error('authentication_required');
     }
-    const limits = await client.rpc(
+    const state = await readRateLimitState(() => client.rpc(
       'account/rateLimits/read',
       {},
       remainingRequestMs(deadlineMs, Date.now(), 8000)
-    );
-    const state = classifyRateLimit(limits?.rateLimits);
+    ));
     return { client, state };
   } catch (error) {
     client.close();
@@ -349,6 +359,7 @@ async function bridgeHealth() {
   let available = 0;
   let exhausted = 0;
   let authenticated = 0;
+  let unknownRateLimits = 0;
   const probeRequest = {
     model: 'gpt-5.6-luna',
     effort: 'low',
@@ -375,6 +386,7 @@ async function bridgeHealth() {
     authenticated_profile_count: authenticated,
     available_profile_count: available,
     exhausted_profile_count: exhausted,
+    unknown_rate_limit_profile_count: unknownRateLimits,
     model_allowlist: [...ALLOWED_MODELS],
     web_search_mode: resolveCodexWebSearchMode(true),
   };
