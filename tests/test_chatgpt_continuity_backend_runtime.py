@@ -377,7 +377,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("state === \"AUTHENTICATED\"", probe)
         self.assertIn("connectFirstUsableChatgptTab(tabs", probe)
 
-    def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
+    def test_chatgpt_browser_guardian_waits_for_slow_active_browser_before_restart(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -397,6 +397,58 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 'count=0; [[ -f "$GUARDIAN_CURL_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_CURL_COUNT_FILE")"; '
                 'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_CURL_COUNT_FILE"; '
                 'if [[ "$count" -ge 3 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
+            )
+            executable("pgrep", "printf '424242\\n'\n")
+            executable(
+                "systemctl",
+                'printf "%s\\n" "$*" >>"$GUARDIAN_SYSTEMCTL_LOG"; '
+                'if [[ "${1:-}" == "is-active" ]]; then exit 0; fi; exit 0\n',
+            )
+            executable("sleep", "exit 0\n")
+            executable(
+                "node",
+                'if [[ "$*" == *"CONTINUITY_BROWSER_SESSION_STATE_PROBE"* ]]; then printf "AUTHENTICATED\\n"; fi; exit 0\n',
+            )
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["GUARDIAN_CURL_COUNT_FILE"] = str(count_file)
+            env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
+            env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
+            result = subprocess.run(
+                ["bash", str(guardian)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = systemctl_log.read_text(encoding="utf-8")
+            self.assertIn("is-active --quiet shopvivaliz-atendimento-browser.service", calls)
+            self.assertNotIn("restart shopvivaliz-atendimento-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=HEALTHY_AFTER_RECHECK", result.stdout)
+
+    def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            count_file = root / "curl-count"
+            systemctl_log = root / "systemctl.log"
+            health_file = root / "browser-health.json"
+
+            def executable(name: str, body: str) -> None:
+                path = fake_bin / name
+                path.write_text("#!/usr/bin/env bash\nset -Eeuo pipefail\n" + body, encoding="utf-8")
+                path.chmod(0o755)
+
+            executable(
+                "curl",
+                'count=0; [[ -f "$GUARDIAN_CURL_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_CURL_COUNT_FILE")"; '
+                'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_CURL_COUNT_FILE"; '
+                'if [[ "$count" -ge 32 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
             )
             executable("pgrep", "printf \'424242\\n\'\n")
             executable(
@@ -452,7 +504,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 "curl",
                 'count=0; [[ -f "$GUARDIAN_CURL_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_CURL_COUNT_FILE")"; '
                 'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_CURL_COUNT_FILE"; '
-                'if [[ "$count" -ge 3 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
+                'if [[ "$count" -ge 32 ]]; then printf \'{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}\'; exit 0; fi; exit 22\n',
             )
             executable("pgrep", "exit 1\n")
             executable(
@@ -616,7 +668,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 'count=0; [[ -f "$GUARDIAN_NODE_COUNT_FILE" ]] && count="$(cat "$GUARDIAN_NODE_COUNT_FILE")"; '
                 'count=$((count + 1)); printf "%s" "$count" >"$GUARDIAN_NODE_COUNT_FILE"; '
                 'if [[ "$*" == *"CONTINUITY_BROWSER_SESSION_STATE_PROBE"* ]]; then printf "AUTHENTICATED\\n"; exit 0; fi; '
-                'if [[ "$count" -ge 3 ]]; then exit 0; fi; exit 1\n',
+                'if [[ "$count" -ge 32 ]]; then exit 0; fi; exit 1\n',
             )
             executable("pgrep", "printf \'424242\\n\'\n")
             executable(
