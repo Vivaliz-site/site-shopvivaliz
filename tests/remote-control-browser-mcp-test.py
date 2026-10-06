@@ -392,6 +392,25 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
         self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
 
+    def test_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
+        ):
+            health = m.desktop_health({"host": "Fred-Win"})
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("for bin in xdotool xclip scrot xwd", setup)
+        self.assertIn("x11-apps", setup)
+        self.assertIn("deps.get('xwd') is True", setup)
+
     def test_desktop_runtime_config_uses_separate_protected_env_file(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
