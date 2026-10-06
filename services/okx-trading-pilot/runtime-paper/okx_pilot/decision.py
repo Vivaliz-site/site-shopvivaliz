@@ -190,6 +190,7 @@ class CodexBridgeDecisionProvider:
         payload = {
             "model": self.model,
             "effort": self.effort,
+            "profile": "dev",
             "prompt": self._prompt(snapshot, context),
             "web_search": False,
         }

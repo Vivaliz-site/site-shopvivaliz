@@ -12,6 +12,7 @@ const ALLOWED_MODELS = new Set([
   'gpt-5.6-luna',
 ]);
 const ALLOWED_EFFORTS = new Set(['xhigh', 'high', 'medium', 'low']);
+const ALLOWED_REQUEST_PROFILES = new Set(['dev']);
 const DEFAULT_PORT = 17656;
 const MAX_BODY_BYTES = 262144;
 const DEFAULT_TIMEOUT_MS = 180000;
@@ -82,12 +83,18 @@ export function validateRequest(input) {
   const effort = String(input.effort ?? '').trim().toLowerCase();
   const prompt = String(input.prompt ?? '').trim();
   const webSearch = input.web_search === true;
+  const profile = input.profile === undefined || input.profile === null
+    ? null
+    : String(input.profile).trim();
 
   if (!ALLOWED_MODELS.has(model)) throw new Error('invalid_model');
   if (!ALLOWED_EFFORTS.has(effort)) throw new Error('invalid_effort');
   if (!prompt || prompt.length > 120000) throw new Error('invalid_prompt');
+  if (profile !== null && !ALLOWED_REQUEST_PROFILES.has(profile)) throw new Error('invalid_profile');
 
-  return { model, effort, prompt, web_search: webSearch };
+  return profile
+    ? { model, effort, prompt, web_search: webSearch, profile }
+    : { model, effort, prompt, web_search: webSearch };
 }
 
 function classifyFailure(error) {
@@ -144,6 +151,15 @@ export const CHATGPT_ONLY_OVERRIDES = [
   '-c', 'forced_login_method="chatgpt"',
   '-c', 'model_provider="openai"',
 ];
+
+export function profileHomesForRequest(profile, root = businessHome()) {
+  if (profile === undefined || profile === null || profile === '') {
+    return configuredProfileHomes();
+  }
+  const normalized = String(profile).trim();
+  if (!ALLOWED_REQUEST_PROFILES.has(normalized)) throw new Error('invalid_profile');
+  return [path.join(root, normalized)];
+}
 
 export function codexLoginEnvironment(base, profileHome) {
   const env = { ...base, CODEX_HOME: profileHome };
@@ -408,7 +424,7 @@ async function bridgeHealth() {
 }
 
 async function respond(request) {
-  const profiles = configuredProfileHomes();
+  const profiles = profileHomesForRequest(request.profile);
   if (!profiles.length) {
     return { ok: false, error: 'codex_unavailable', attempts: ['auth'] };
   }
