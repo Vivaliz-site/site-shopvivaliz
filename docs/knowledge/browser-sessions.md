@@ -6,7 +6,6 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 
 | Perfil / sessão | Porta CDP | Conta permitida |
 |---|---:|---|
-| `/home/fredrdp/.config/shopvivaliz-chromium` | `9555` | `fredmourao@gmail.com` |
 | `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `atendimento@shopvivaliz.com.br` |
 | `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9559` | `dev@shopvivaliz.com.br` |
 
@@ -16,7 +15,7 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 - Nunca trocar a conta autenticada dentro de um perfil já dedicado.
 - Nunca reutilizar cookies, storage, perfil ou porta CDP de uma conta para a outra.
 - Para tarefa destinada a `atendimento@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-atendimento-chromium` / porta `9556`.
-- Para tarefa destinada a `fredmourao@gmail.com`, usar exclusivamente `shopvivaliz-chromium` / porta `9555`.
+- Não criar novos bindings para a conta pessoal antiga. `fred`/CDP 9555 existe apenas para concluir checkpoints explicitamente vinculados antes da migração.
 - Para tarefa destinada a `dev@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-dev-chromium` / porta `9559`; nunca reutilizar os perfis pessoal ou Atendimento.
 - Se a sessão correta estiver indisponível, reparar ou reabrir o perfil correspondente; não usar a outra sessão como atalho.
 - Preservar login e cookies existentes. Reinício de navegador só é permitido preservando o mesmo `user-data-dir`.
@@ -45,8 +44,8 @@ python3 scripts/agent_task_state.py bind-conversation --task <id> --conversation
 python3 scripts/agent_task_state.py bind-browser-session --task <id> --browser-session atendimento
 ```
 
-`browser_session=atendimento` seleciona somente CDP9556; `fred` seleciona
-somente CDP9555. Checkpoints legados sem o campo mantem a rota pessoal atual.
+`browser_session=atendimento` seleciona somente CDP9556; `dev` seleciona
+somente CDP9559. `fred`/CDP9555 é aceito apenas como compatibilidade de checkpoints pré-migração. Checkpoints novos devem declarar a sessão explicitamente.
 O binding e imutavel, nao conta como progresso e e herdado pelo sucessor junto
 com a conversa. Nunca substituir implicitamente a conta/conversa antiga.
 
@@ -54,9 +53,8 @@ Antes de reload ou envio, o worker confirma a identidade da sessao e a rota
 exata dentro da propria aba, retornando apenas booleano, sem credenciais.
 Stream ativo ou nao confirmado e deferido mesmo se o DOM nao mostrar Stop.
 Conta divergente, binding invalido, conversa divergente ou checkpoint terminal
-falham sem usar outro perfil como fallback. O monitor legado permanece pessoal;
-a cobertura corporativa e checkpoint-driven, nao descoberta global da conta.
-Checkpoint corporativo ou com sessao invalida nao acorda o monitor pessoal.
+falham sem usar outro perfil como fallback. O monitor padrão acompanha Dev/CDP9559. Atendimento permanece checkpoint-driven em CDP9556.
+Sessão inválida falha fechado e nunca usa outra conta como fallback.
 
 A escolha de porta usa contexto assincrono por tentativa, sem alterar variaveis
 de ambiente globais. Testes exercitam o endpoint realmente solicitado, a

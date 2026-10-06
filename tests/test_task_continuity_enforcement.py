@@ -53,7 +53,7 @@ class AgentTaskStateTests(unittest.TestCase):
     def test_stale_fenced_resume_cannot_mutate_after_conversation_rebind(self) -> None:
         state.start_task("fenced-resume", "continue durable work", "work")
         state.bind_conversation("fenced-resume", conversation_id="11111111-2222-3333-4444-555555555555")
-        state.bind_browser_session("fenced-resume", browser_session="fred")
+        state.bind_browser_session("fenced-resume", browser_session="dev")
         before = state.load_task("fenced-resume")
         claimed = state.claim_recovery_ownership(
             "fenced-resume", owner_id="resume:old-request",
@@ -126,7 +126,7 @@ class AgentTaskStateTests(unittest.TestCase):
     def test_recovery_state_machine_suppresses_foreground_and_claims_after_expiry(self) -> None:
         state.start_task("recovery-state", "recover", "work")
         state.bind_conversation("recovery-state", conversation_id="11111111-2222-3333-4444-555555555555")
-        state.bind_browser_session("recovery-state", browser_session="fred")
+        state.bind_browser_session("recovery-state", browser_session="dev")
         version = state.load_task("recovery-state")["checkpoint_version"]
         state.acquire_foreground_lease_for_task("recovery-state", owner_id="turn-1", ttl_seconds=1)
         blocked = state.claim_recovery_ownership("recovery-state", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
@@ -142,7 +142,7 @@ class AgentTaskStateTests(unittest.TestCase):
     def test_rebind_increments_checkpoint_and_invalidates_old_recovery_owner(self) -> None:
         state.start_task("rebind-recovery", "recover", "work")
         first = state.bind_conversation("rebind-recovery", conversation_id="11111111-2222-3333-4444-555555555555")
-        state.bind_browser_session("rebind-recovery", browser_session="fred")
+        state.bind_browser_session("rebind-recovery", browser_session="dev")
         before = state.load_task("rebind-recovery")["checkpoint_version"]
         state.acquire_foreground_lease_for_task("rebind-recovery", owner_id="turn-1", ttl_seconds=1)
         time.sleep(1.05)
@@ -158,7 +158,7 @@ class AgentTaskStateTests(unittest.TestCase):
     def test_progress_confirmed_requires_real_assistant_response(self) -> None:
         state.start_task("real-response", "recover", "work")
         state.bind_conversation("real-response", conversation_id="11111111-2222-3333-4444-555555555555")
-        state.bind_browser_session("real-response", browser_session="fred")
+        state.bind_browser_session("real-response", browser_session="dev")
         version = state.load_task("real-response")["checkpoint_version"]
         state.record_recovery_state("real-response", state="RECOVERY_CLAIMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
         state.record_recovery_state("real-response", state="RECOVERY_ACTIONED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)

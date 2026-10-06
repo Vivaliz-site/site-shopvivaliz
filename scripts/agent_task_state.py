@@ -344,7 +344,7 @@ def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
         file_probe = len(argv) == 3 and argv[0] == "/usr/bin/test" and argv[1] in {"-f", "-s", "-d"}
         hash_probe = len(argv) == 3 and argv[:2] == ["/usr/bin/sha256sum", "--check"]
         service_probe = len(argv) == 4 and argv[:3] == ["/usr/bin/systemctl", "is-active", "--quiet"] and argv[3] in {
-            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-chatgpt-browser.service",
+            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-dev-browser.service", "shopvivaliz-chatgpt-browser.service",
         }
         if not (file_probe or hash_probe or service_probe):
             raise TaskStateError("completion check must use a bounded read-only file/hash/service probe")
@@ -476,7 +476,7 @@ def start_successor_task(
         payload["conversation_id"] = _safe_conversation_id(inherited_conversation_id)
         inherited_session = predecessor.get("browser_session")
         if inherited_session is not None:
-            if inherited_session not in {"fred", "atendimento"}:
+            if inherited_session not in {"dev", "atendimento", "fred"}:
                 raise TaskStateError("predecessor has invalid browser session binding")
             payload["browser_session"] = inherited_session
     _atomic_write(path, payload)
@@ -661,8 +661,8 @@ def bind_browser_session(task_id: str, *, browser_session: str) -> dict[str, Any
         raise TaskStateError("terminal task cannot bind browser session")
     _require_current_resume(payload)
     session = str(browser_session).strip()
-    if session not in {"fred", "atendimento"}:
-        raise TaskStateError("browser_session must be fred or atendimento")
+    if session not in {"dev", "atendimento"}:
+        raise TaskStateError("browser_session must be dev or atendimento")
     _safe_conversation_id(payload.get("conversation_id", ""))
     existing = payload.get("browser_session")
     if existing is not None and existing != session:
@@ -780,7 +780,7 @@ def claim_recovery_ownership(task_id: str, *, owner_id: str, allowed_actions: It
     if is_terminal(payload): raise TaskStateError('terminal task cannot claim recovery ownership')
     conversation_id = _safe_conversation_id(payload.get('conversation_id', ''))
     session = str(payload.get('browser_session', '')).strip()
-    if session not in {'fred', 'atendimento'}: raise TaskStateError('recovery requires bound browser session')
+    if session not in {'dev', 'atendimento', 'fred'}: raise TaskStateError('recovery requires bound browser session')
     version = _checkpoint_version(payload)
     actions = sorted({str(v).strip() for v in allowed_actions if str(v).strip()})
     if not actions: raise TaskStateError('recovery requires allowed actions')

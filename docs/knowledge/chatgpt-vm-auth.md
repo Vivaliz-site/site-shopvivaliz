@@ -2,10 +2,12 @@
 
 ## Estado operacional registrado em 2026-10-04
 
-A VM `always-free-arm-1787907847-26` possui autenticação TOTP local configurada no OTPClient para as duas contas ChatGPT usadas no ambiente:
+As duas contas ChatGPT operacionais após a migração são:
 
-- `fredmourao` / conta pessoal do Fred;
-- `atendimento@shopvivaliz.com.br`.
+- `dev@shopvivaliz.com.br` — engenharia/desenvolvimento;
+- `atendimento@shopvivaliz.com.br` — atendimento/operação corporativa.
+
+A referência antiga `fredmourao` é legado de migração e não deve ser usada para novos logins. A existência de senha/TOTP para `dev` só pode ser tratada como provisionada após validação da fonte segura local; nunca inferir a partir da documentação.
 
 O OTPClient é executado na sessão gráfica usada pelo RustDesk/ChatGPT em `DISPLAY=:99`, usuário `fredrdp`.
 

@@ -87,6 +87,7 @@ def gui_prefix() -> list[str]:
         f"USER={GUI_USER}",
         f"LOGNAME={GUI_USER}",
         f"XDG_RUNTIME_DIR=/run/user/{info.pw_uid}",
+        "TMPDIR=/var/tmp",
     ]
     return ["sudo", "-n", "-u", GUI_USER, "env", *env]
 
@@ -148,14 +149,36 @@ def key(*keys: str) -> None:
     run_gui(["xdotool", "key", "--clearmodifiers", *keys])
 
 
-def type_text(value: str) -> None:
+def check_text(value: str) -> None:
     if len(value) > 20000:
         raise ValueError("browser_text_too_long")
-    run_gui(["xdotool", "type", "--clearmodifiers", "--delay", "1", "--", value], timeout=30)
+    if "\x00" in value:
+        raise ValueError("browser_text_contains_nul")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("browser_text_not_utf8") from None
+
+
+def type_text(value: str) -> None:
+    check_text(value)
+    try:
+        run_gui(
+            ["xdotool", "type", "--clearmodifiers", "--delay", "1", "--file", "-"],
+            timeout=30,
+            input_text=value,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("browser_type_timeout") from None
+    except RuntimeError:
+        raise RuntimeError("browser_type_command_failed") from None
 
 
 def validate_url(value: Any) -> str:
-    url = str(value or "").strip()
+    raw = str(value or "")
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7f for ch in raw):
+        raise ValueError("browser_url_control_character")
+    url = raw.strip()
     if not URL_RE.match(url):
         raise ValueError("browser_url_must_be_http_or_https")
     parts = urlsplit(url)
@@ -442,6 +465,7 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     text = str(args.get("text") or "")
     if not text:
         raise ValueError("browser_text_required")
+    check_text(text)
     window = active_browser_window()
     focus(window)
     type_text(text)
@@ -544,7 +568,14 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         result = BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
         if isinstance(result, dict) and result.get("ok") is False:
             detail = str(result.get("stderr") or result.get("stdout") or result.get("error") or "")
-            if "focused_editable_not_found" in detail or "focused_editable_ambiguous" in detail:
+            canonical_unavailable = (
+                "focused_editable_not_found" in detail
+                or "focused_editable_ambiguous" in detail
+                or ("fetch failed" in detail and "127.0.0.1:9556" in detail)
+                or ("ECONNREFUSED" in detail and "127.0.0.1:9556" in detail)
+                or "CDP command timed out" in detail
+            )
+            if canonical_unavailable:
                 return browser_type(args)
         return result
 
@@ -555,7 +586,7 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
     safe = dict(args)
     if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type"} and "text" in safe:
         raw = str(safe.pop("text"))
-        safe["text_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
+        safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
     if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))

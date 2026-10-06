@@ -200,7 +200,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ## Vínculo obrigatório entre sessão de navegador e conta
 
 - Fonte canônica: `docs/knowledge/browser-sessions.md`.
-- `shopvivaliz-chromium` / CDP `9555` é dedicado a `fredmourao@gmail.com`.
+- `shopvivaliz-dev-chromium` / CDP `9559` é dedicado a `dev@shopvivaliz.com.br`; `fred`/CDP `9555` é somente compatibilidade temporária para checkpoints pré-migração.
 - `shopvivaliz-atendimento-chromium` / CDP `9556` é dedicado a `atendimento@shopvivaliz.com.br`.
 - É proibido fazer logout para trocar de conta, autenticar a outra conta no perfil errado ou migrar cookies/storage entre esses perfis.
 - Se a sessão correta falhar, reparar/reabrir o mesmo perfil; nunca usar a outra sessão como atalho.
@@ -210,7 +210,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 <!-- CHATGPT_VM_AUTH_V1 -->
 ## ChatGPT VM: autenticação local obrigatória
 
-- Existem dois TOTPs ChatGPT provisionados localmente na VM: `fredmourao` e `atendimento@shopvivaliz.com.br`.
+- As contas ChatGPT operacionais são `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`. Fontes locais de MFA só podem ser declaradas provisionadas após validação real; referências antigas de `fredmourao` são legado de migração.
 - A fonte operacional é o OTPClient da sessão `fredrdp` em `DISPLAY=:99`; seeds, senhas e códigos nunca podem ser versionados ou impressos.
 - O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
 - Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.

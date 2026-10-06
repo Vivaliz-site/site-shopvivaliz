@@ -40,7 +40,7 @@ class ForegroundHandoffTests(unittest.TestCase):
     def test_explicit_release_allows_recovery_before_foreground_ttl(self):
         m=load(HANDOFF_PATH,"foreground_handoff_test_release")
         out=m.handoff_foreground("task-a","conversation_12345678",1,["job"],lease_ttl_seconds=300,_submitter=lambda cmd:{"task_id":"durable-release","queue_position":1,"state":"queued"})
-        self.agent.bind_browser_session("task-a",browser_session="fred")
+        self.agent.bind_browser_session("task-a",browser_session="dev")
         released=m.release_foreground(
             "task-a", lease_id=out["lease_id"], fencing_token=out["fencing_token"], reason="foreground_completed")
         self.assertEqual(released["foreground_release_reason"],"foreground_completed")

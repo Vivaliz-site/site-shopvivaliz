@@ -673,7 +673,7 @@ jobs:
               "${SSH[@]}" "dd of='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' status=none && chmod 700 '$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'" < scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
               "${SSH[@]}" "dd of='$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh' status=none && chmod 700 '$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-guardian.sh'" < scripts/chatgpt-continuity/chatgpt-browser-guardian.sh
               "${SSH[@]}" "dd of='$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py' status=none && chmod 700 '$remote_dir/scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py'" < scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py
-              "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser.service'" < ops/systemd/shopvivaliz-chatgpt-browser.service
+              "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-dev-browser.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-dev-browser.service'" < ops/systemd/shopvivaliz-dev-browser.service
               "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.service
               "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer
               sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
@@ -682,7 +682,7 @@ jobs:
               "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
               install_output=''
               install_rc=0
-              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555' bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"; then
+              if install_output="$("${SSH[@]}" "env CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs' CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br' CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559' bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"; then
                 install_rc=0
               else
                 install_rc=$?

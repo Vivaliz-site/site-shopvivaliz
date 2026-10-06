@@ -41,6 +41,7 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
+MAX_DURABLE_TIMEOUT = max(MAX_TIMEOUT, min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT", "7200")), 86400))
 TASK_WAIT_MAX_SECONDS = 5
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
@@ -659,12 +660,12 @@ def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[
     }
 
 
-def validate_timeout(value: Any) -> int:
+def validate_timeout(value: Any, *, max_timeout: int = MAX_TIMEOUT) -> int:
     try:
         timeout = int(value if value is not None else DEFAULT_TIMEOUT)
     except (TypeError, ValueError):
         raise ValueError("invalid_timeout")
-    if timeout < 1 or timeout > MAX_TIMEOUT:
+    if timeout < 1 or timeout > max_timeout:
         raise ValueError("timeout_out_of_range")
     return timeout
 
@@ -1049,9 +1050,11 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
     for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+        # Unsalted digests of low-entropy secrets remain guessable metadata.
+        # Preserve event identity and length, not a searchable secret digest.
+        safe_args.pop(f"{secret_key}_sha256", None)
         if secret_key in safe_args:
             secret_value = str(safe_args.pop(secret_key))
-            safe_args[f"{secret_key}_sha256"] = hashlib.sha256(secret_value.encode()).hexdigest()
             safe_args[f"{secret_key}_length"] = len(secret_value)
     if "email" in safe_args:
         email_value = str(safe_args.pop("email"))
@@ -1484,14 +1487,24 @@ def browser_tabs_command() -> str:
     return (
         "python3 - <<'PY'\n"
         "import json,urllib.request,urllib.parse\n"
-        "with urllib.request.urlopen('http://127.0.0.1:9556/json',timeout=5) as r: a=json.load(r)\n"
+        "sources=[('atendimento','http://127.0.0.1:9556/json'),('dev','http://127.0.0.1:9559/json')]\n"
         "out=[]\n"
+        "seen={}\n"
         "allowed={'chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
-        "for x in a:\n"
-        " if x.get('type')!='page': continue\n"
-        " u=urllib.parse.urlparse(x.get('url',''))\n"
-        " if u.hostname not in allowed: continue\n"
-        " out.append({'id':x.get('id'),'origin':u.scheme+'://'+u.netloc if u.netloc else ''})\n"
+        "for session,endpoint in sources:\n"
+        " try:\n"
+        "  with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
+        " except Exception:\n"
+        "  continue\n"
+        " for x in pages:\n"
+        "  if x.get('type')!='page': continue\n"
+        "  u=urllib.parse.urlparse(x.get('url',''))\n"
+        "  if u.hostname not in allowed: continue\n"
+        "  tab_id=x.get('id')\n"
+        "  if not tab_id: continue\n"
+        "  if tab_id in seen: raise SystemExit('tab_id_ambiguous')\n"
+        "  seen[tab_id]=session\n"
+        "  out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
         "print(json.dumps({'tabs':out},separators=(',',':')))\n"
         "PY"
     )
@@ -1507,8 +1520,11 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
-        "const tabs=await (await fetch('http://127.0.0.1:9556/json')).json(); "
-        "const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found'); "
+        "const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']]; "
+        "const matches=[]; "
+        "for(const [session,endpoint] of sources){try{const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();for(const candidate of tabs){if(candidate?.id===id)matches.push({t:candidate,session});}}catch{}} "
+        "if(matches.length===0) throw new Error('tab_not_found'); if(matches.length>1) throw new Error('tab_id_ambiguous'); "
+        "const {t,session}=matches[0]; "
         "const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']); "
         "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
         "const ws=new WebSocket(t.webSocketDebuggerUrl); "
@@ -1519,7 +1535,6 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
         "JS"
     )
-
 
 def browser_controls_expression() -> str:
     return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
@@ -1594,8 +1609,17 @@ const [id,selector,submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
-const t=tabs.find(x=>x.id===id); if(!t) throw new Error('tab_not_found');
+const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']];
+const matches=[];
+for(const [session,endpoint] of sources){
+  try{
+    const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();
+    for(const candidate of tabs){if(candidate?.id===id) matches.push({t:candidate,session});}
+  }catch{}
+}
+if(matches.length===0) throw new Error('tab_not_found');
+if(matches.length>1) throw new Error('tab_id_ambiguous');
+const {t}=matches[0];
 const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
 const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
 const ws=new WebSocket(t.webSocketDebuggerUrl);
@@ -1934,7 +1958,7 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         validate_admin_command_policy(str(host), command)
-        timeout = validate_timeout(args.get("timeout", 300))
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
         digest = hashlib.sha256(command.encode()).hexdigest()
         request_id = str(args.get("request_id") or "").strip() or None
         if request_id and len(request_id) > 200:
@@ -1958,6 +1982,19 @@ def execute_tool(
 
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
+    if name == "admin_command_run" and bool(args.get("durable", False)):
+        command = str(args.get("command") or "")
+        if not command.strip():
+            raise ValueError("command_required")
+        validate_admin_command_policy(str(host), command)
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
+        durable = execute_tool(
+            "task_submit",
+            {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")},
+            None,
+        )
+        durable["durable"] = True
+        return durable
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
         result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
@@ -2001,10 +2038,6 @@ def execute_tool(
         if not command.strip():
             raise ValueError("command_required")
         validate_admin_command_policy(str(host), command)
-        if bool(args.get("durable", False)):
-            durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
-            durable["durable"] = True
-            return durable
         result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
@@ -2025,7 +2058,7 @@ TOOLS = [
     ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
     ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
     ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
-    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
+    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_DURABLE_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
     ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
     ("desktop_health", "Check the constrained backend RustDesk GUI path for a canonical Windows support host without exposing its RustDesk ID.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
@@ -2041,8 +2074,8 @@ TOOLS = [
     ("file_read", "Read a non-sensitive file from a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 262144}}, True, False),
     ("file_list", "List a non-sensitive directory on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}}, True, False),
     ("logs_tail", "Tail a non-sensitive log file on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "lines": {"type": "integer", "minimum": 1, "maximum": 1000}}, True, False),
-    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Use durable=true for work that must survive client disconnects.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
-    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("admin_command_run", "Run an administrative shell or PowerShell command on a named host, including package-manager and application installation commands. Use durable=true for long work; inline calls stay bounded.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_submit", "Queue a durable administrative shell or PowerShell command, including long package/application installs, that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
     ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),

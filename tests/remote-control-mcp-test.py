@@ -137,6 +137,42 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(specs["admin_command_run"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["host_health"]["annotations"]["readOnlyHint"])
 
+    def test_durable_admin_commands_support_long_application_installs(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertEqual(
+            specs["task_submit"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        self.assertEqual(
+            specs["admin_command_run"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        task = m.execute_tool(
+            "admin_command_run",
+            {
+                "host": "always-free-arm-1787907847-26",
+                "command": "printf install-capability-check",
+                "timeout": 3600,
+                "durable": True,
+                "request_id": "long-install-capability",
+            },
+        )
+        self.assertTrue(task["durable"])
+        row = m.load_task(task["task_id"])
+        self.assertEqual(int(row["timeout"]), 3600)
+
+    def test_long_inline_admin_command_requires_durable_mode(self):
+        with self.assertRaisesRegex(ValueError, "timeout_out_of_range"):
+            m.execute_tool(
+                "admin_command_run",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "command": "printf inline-too-long",
+                    "timeout": 3600,
+                    "durable": False,
+                },
+            )
+
     def test_admin_command_rejects_browser_mcp_continuity_session_coupling(self):
         command = (
             "cp /etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d/"
@@ -248,7 +284,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"host": "KOCEPSV", "text": "sample-sensitive-input", "press_enter": True},
         )
         self.assertNotIn("text", safe)
-        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
 
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
@@ -535,7 +571,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
         )
         self.assertNotIn("text", safe)
-        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
         nav = m.sanitize_audit_args(
             "browser_navigate",
@@ -603,6 +639,24 @@ class RemoteControlMcpTests(unittest.TestCase):
         required = specs["browser_navigate"]["inputSchema"]["required"]
         self.assertIn("url", required)
         self.assertNotIn("tab_id", required)
+
+    def test_browser_tab_specific_commands_support_dev_and_atendimento_without_legacy_fallback(self):
+        tabs = m.browser_tabs_command()
+        self.assertIn("127.0.0.1:9556/json", tabs)
+        self.assertIn("127.0.0.1:9559/json", tabs)
+        self.assertNotIn("127.0.0.1:9555/json", tabs)
+        command = m._browser_cdp_command("ABC123", "(()=>true)()")
+        self.assertIn("127.0.0.1:9556/json", command)
+        self.assertIn("127.0.0.1:9559/json", command)
+        self.assertIn("tab_id_ambiguous", command)
+        self.assertNotIn("127.0.0.1:9555/json", command)
+
+    def test_browser_explicit_type_supports_dev_and_atendimento_without_cross_account_fallback(self):
+        script = m.BROWSER_TYPE_NODE_SCRIPT
+        self.assertIn("127.0.0.1:9556/json", script)
+        self.assertIn("127.0.0.1:9559/json", script)
+        self.assertIn("tab_id_ambiguous", script)
+        self.assertNotIn("127.0.0.1:9555/json", script)
 
     def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
         command = m._browser_cdp_command("ABC123", "(()=>true)()")
@@ -1933,7 +1987,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-dev-browser.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         )

@@ -70,7 +70,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(len("top-secret-value"), captured["text_length"])
-        self.assertIn("text_sha256", captured)
+        self.assertNotIn("text_sha256", captured)
 
     def test_url_audit_strips_query_fragment_and_credentials_are_rejected(self):
         self.assertEqual("https://chatgpt.com/account", m.safe_url("https://chatgpt.com/account?token=abc#secret"))
@@ -155,6 +155,34 @@ class BrowserMcpTests(unittest.TestCase):
         base.assert_called_once_with("browser_type", args, cancel_check=None)
         gui_type.assert_not_called()
 
+    def test_gui_prefix_uses_shared_writable_tmpdir(self):
+        fake_user = mock.Mock(pw_dir="/home/gui", pw_uid=1234)
+        with mock.patch.object(m.pwd, "getpwnam", return_value=fake_user):
+            prefix = m.gui_prefix()
+        self.assertIn("TMPDIR=/var/tmp", prefix)
+
+    def test_public_browser_type_alias_falls_back_when_canonical_cdp_times_out(self):
+        failure = {"ok": False, "stderr": "Error: CDP command timed out"}
+        with (
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
+        ):
+            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
+        self.assertEqual({"route": "gui-type"}, result)
+        base.assert_called_once()
+        gui.assert_called_once()
+
+    def test_public_browser_type_alias_falls_back_when_canonical_browser_is_down(self):
+        failure = {"ok": False, "stderr": "TypeError: fetch failed; connect ECONNREFUSED 127.0.0.1:9556"}
+        with (
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
+        ):
+            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
+        self.assertEqual({"route": "gui-type"}, result)
+        base.assert_called_once()
+        gui.assert_called_once()
+
     def test_public_browser_type_alias_falls_back_to_gui_only_when_canonical_focus_is_unavailable(self):
         for error in ("focused_editable_not_found", "focused_editable_ambiguous"):
             with (
@@ -194,7 +222,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(6, captured["text_length"])
-        self.assertIn("text_sha256", captured)
+        self.assertNotIn("text_sha256", captured)
 
     def test_gui_browser_actions_are_explicitly_namespaced(self):
         specs = {spec["name"]: spec for spec in m.tool_specs()}
