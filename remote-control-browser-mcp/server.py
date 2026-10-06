@@ -253,7 +253,7 @@ def active_desktop_window(host: str, target_id: str) -> str:
 def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
     host = str(args.get("host") or "")
     target_id = base.rustdesk_host_id(host)
-    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot", "xwd")}
     rustdesk_launchable = os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)
     display_accessible = dependencies["xdotool"] and run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
     windows = rustdesk_windows(host, target_id) if display_accessible else []
