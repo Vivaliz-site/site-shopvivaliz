@@ -96,7 +96,7 @@ O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e
 3. **GitHub Actions/OCI Bastion** — bootstrap, recovery e reparo.
 4. **RustDesk** — GUI/validacao visual; navegador de agente permanece na backend.
 
-Para GUI de `Fred-Win`/`KOCEPSV`, prefira as ferramentas `desktop_*` do Remote Control quando disponíveis. No `Fred-Win`, a rota normal é o bridge interativo nativo por reverse SSH (`scripts/shopvivaliz-native-desktop-bridge.ps1`), que executa screenshot/mouse/teclado na sessão Windows logada sem senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. No `KOCEPSV`, `desktop_*` continua operando o cliente RustDesk na sessão `fredconsole` da backend. O mapeamento de IDs RustDesk fica somente em `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`); nunca versionar nem imprimir esse conteúdo. Nenhuma dessas rotas transforma o Windows em host de navegador de agente.
+Para GUI de `Fred-Win`/`KOCEPSV`, prefira as ferramentas `desktop_*` do Remote Control quando disponíveis. No `Fred-Win`, a rota normal é o bridge interativo nativo por reverse SSH (`scripts/shopvivaliz-native-desktop-bridge.ps1`), que executa screenshot/mouse/teclado na sessão Windows logada sem senha RustDesk e sem depender de registro cloud de ferramenta legada de desktop remoto. No `KOCEPSV`, `desktop_*` continua operando o cliente RustDesk na sessão `fredconsole` da backend. O mapeamento de IDs RustDesk fica somente em `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`); nunca versionar nem imprimir esse conteúdo. Nenhuma dessas rotas transforma o Windows em host de navegador de agente.
 
 Antes de operar qualquer host, valide `hostname`, identidade e contexto do repositorio sem expor credenciais.
 

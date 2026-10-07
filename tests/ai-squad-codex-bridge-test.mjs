@@ -14,6 +14,7 @@ import {
   isDirectInvocation,
   beginHeartbeat,
   profileHomesForRequest,
+  accountReadParams,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -45,6 +46,8 @@ assert.throws(() => validateRequest({
   web_search: false,
   profile: 'fredmourao',
 }), /invalid_profile/);
+
+assert.deepEqual(accountReadParams(), { refreshToken: false });
 
 assert.equal(resolveCodexWebSearchMode(true, undefined), 'live');
 assert.equal(resolveCodexWebSearchMode(true, 'cached'), 'cached');
@@ -145,4 +148,4 @@ assert(!safe.includes('user@example.com'));
 
 console.log('AI_SQUAD_CODEX_BRIDGE_TEST=PASS');
 const bridgeSourceAuth = fs.readFileSync(new URL('../ops/ai-squad/codex-bridge.mjs', import.meta.url), 'utf8');
-assert.match(bridgeSourceAuth, /account\/read[\s\S]*refreshToken:\s*true/);
+assert.match(bridgeSourceAuth, /account\/read[\s\S]*accountReadParams\(\)/);
