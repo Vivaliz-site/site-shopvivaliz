@@ -2300,9 +2300,7 @@ def task_worker() -> None:
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
-            reconciled = reconcile_tasks()
-            if "indeterminate" in reconciled:
-                process_indeterminate_tasks(limit=50)
+            reconcile_tasks()
             with db_conn() as db:
                 active_rows = db.execute(
                     "SELECT host,COUNT(*) AS count FROM tasks "
@@ -2485,7 +2483,6 @@ def main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
     reconcile_tasks()
-    process_indeterminate_tasks(limit=200)
     worker = threading.Thread(target=task_worker, name="task-worker", daemon=True)
     worker.start()
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
