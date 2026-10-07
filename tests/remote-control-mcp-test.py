@@ -1170,6 +1170,54 @@ class RemoteControlMcpTests(unittest.TestCase):
             "Connection closed by remote host",
         ))
 
+    def test_read_only_host_tools_disable_transport_recovery(self):
+        cases = [
+            ("host_health", {"host": "Fred-Win"}),
+            ("processes_list", {"host": "Fred-Win"}),
+            ("service_status", {"host": "Fred-Win", "service": "RustDesk"}),
+            ("file_read", {"host": "Fred-Win", "path": r"C:\\Windows\\win.ini"}),
+            ("file_list", {"host": "Fred-Win", "path": r"C:\\Windows"}),
+            ("logs_tail", {"host": "Fred-Win", "path": r"C:\\Windows\\WindowsUpdate.log"}),
+        ]
+        for name, args in cases:
+            with self.subTest(tool=name), mock.patch.object(
+                m,
+                "run_host_command",
+                return_value={"host": "Fred-Win", "exit_code": 0, "stdout": "", "stderr": "", "duration_ms": 1},
+            ) as run:
+                result = m.execute_tool(name, args)
+                self.assertTrue(result["ok"])
+                self.assertFalse(run.call_args.kwargs.get("recover_transport", True))
+
+    def test_run_host_command_can_probe_without_mutating_reverse_ssh_transport(self):
+        class FakeProc:
+            returncode = 255
+            pid = 1001
+
+            def communicate(self, timeout=None):
+                return b"", b"Connection timed out during banner exchange"
+
+            def poll(self):
+                return self.returncode
+
+        self.assertIn("recover_transport", m.run_host_command.__code__.co_varnames)
+        with (
+            mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=FakeProc()),
+            mock.patch.object(m, "_cleanup_isolated_scope"),
+            mock.patch.object(m, "recover_reverse_ssh_transport") as recover,
+        ):
+            result = m.run_host_command(
+                "Fred-Win",
+                "Get-Date",
+                timeout=10,
+                recover_transport=False,
+            )
+        self.assertEqual(255, result["exit_code"])
+        self.assertTrue(result["transport_recovery_available"])
+        recover.assert_not_called()
+
     def test_run_host_command_retries_once_after_reverse_ssh_recovery(self):
         class FakeProc:
             def __init__(self, rc, stdout, stderr):
