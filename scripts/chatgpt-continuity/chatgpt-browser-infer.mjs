@@ -32,6 +32,13 @@ export function chooseExtraHighCandidate(rows) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+export function classifyChatgptReadyState(state) {
+  if (!state || state.ready !== 'complete') return 'waiting';
+  if (state.host === 'chatgpt.com') return state.composer ? 'ready' : 'session_check';
+  if (state.host === 'auth.openai.com') return 'auth_required';
+  return 'unexpected_origin';
+}
+
 function requireDevSession() {
   const session = clean(process.env.SHOPVIVALIZ_BROWSER_SESSION_NAME || '');
   const cdpBase = clean(process.env.SHOPVIVALIZ_BROWSER_CDP_URL || '').replace(/\/+$/, '');
@@ -78,7 +85,10 @@ async function waitChatgptReady(cdp, deadline) {
     const state = await cdp.evaluate(
       "(()=>({host:location.hostname,path:location.pathname,ready:document.readyState,composer:!!(document.querySelector('[data-testid=\"prompt-textarea\"]')||document.querySelector('[role=\"textbox\"][contenteditable=\"true\"]'))}))()"
     ).catch(() => null);
-    if (state?.host === 'chatgpt.com' && state?.ready === 'complete' && state?.composer) return state;
+    const classification = classifyChatgptReadyState(state);
+    if (classification === 'ready' || classification === 'session_check') return state;
+    if (classification === 'auth_required') throw new Error('browser_auth_required');
+    if (classification === 'unexpected_origin') throw new Error('unexpected_browser_origin');
     await sleep(250);
   }
   throw new Error('chatgpt_ready_timeout');
@@ -90,6 +100,17 @@ async function verifySession(cdp, expectedEmail) {
   const state = await cdp.evaluate(expression);
   if (!state?.ok || !state?.account) throw new Error('browser_auth_required');
   if (!state?.identity_match) throw new Error('browser_identity_mismatch');
+}
+
+async function waitComposerReady(cdp, deadline) {
+  while (Date.now() < deadline) {
+    const ready = await cdp.evaluate(
+      "(()=>!!(document.querySelector('[data-testid=\"prompt-textarea\"]')||document.querySelector('[role=\"textbox\"][contenteditable=\"true\"]')))()"
+    ).catch(() => false);
+    if (ready) return;
+    await sleep(250);
+  }
+  throw new Error('composer_ready_timeout');
 }
 
 async function trustedClick(cdp, target) {
@@ -189,8 +210,11 @@ async function infer(request) {
   try {
     cdp = await connectTab(tab);
     const deadline = Date.now() + 210000;
-    await waitChatgptReady(cdp, Math.min(deadline, Date.now() + 20000));
+    const readyState = await waitChatgptReady(cdp, Math.min(deadline, Date.now() + 20000));
     await verifySession(cdp, cfg.expectedEmail);
+    if (!readyState?.composer) {
+      await waitComposerReady(cdp, Math.min(deadline, Date.now() + 10000));
+    }
     await ensureTemporaryChat(cdp);
     await ensureExtraHigh(cdp);
     await sendPrompt(cdp, request.prompt);

@@ -4,6 +4,7 @@ import {
   isExtraHighLabel,
   isSolResolvedModel,
   chooseExtraHighCandidate,
+  classifyChatgptReadyState,
 } from '../scripts/chatgpt-continuity/chatgpt-browser-infer.mjs';
 
 const valid=validateInferenceRequest({model:'gpt-5.6-sol',effort:'xhigh',prompt:'Return JSON'});
@@ -22,4 +23,8 @@ assert.equal(chooseExtraHighCandidate([
   {label:'High',visible:true,disabled:false,index:0},
   {label:'Extra High',visible:true,disabled:false,index:1},
 ]).index,1);
+assert.equal(classifyChatgptReadyState({host:'chatgpt.com',ready:'complete',composer:false}),'session_check');
+assert.equal(classifyChatgptReadyState({host:'chatgpt.com',ready:'complete',composer:true}),'ready');
+assert.equal(classifyChatgptReadyState({host:'auth.openai.com',ready:'complete',composer:false}),'auth_required');
+assert.equal(classifyChatgptReadyState({host:'chatgpt.com',ready:'loading',composer:false}),'waiting');
 console.log('CHATGPT_BROWSER_INFER_CONTRACT=PASS');
