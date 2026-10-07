@@ -35,13 +35,13 @@ from typing import Any
 try:
     from .agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
@@ -73,6 +73,24 @@ def recovery_state_for_worker_status(worker_status: str, send_attempt_count: int
     if status in {'ERROR', 'CONVERSATION_NOT_FOUND'} and sends >= budget:
         return 'RECOVERY_EXHAUSTED'
     return 'RECOVERY_ACTIONED' if sends > 0 else 'RECOVERY_CLAIMED'
+
+def _release_dispatcher_ownership(task_id: str, fingerprint: str, reason: str) -> None:
+    if not _durable_handoff_enabled():
+        return
+    owner_id = f"dispatcher:{str(fingerprint).strip()}"
+    if not str(task_id).strip() or not str(fingerprint).strip():
+        return
+    try:
+        release_recovery_ownership(
+            str(task_id).strip(),
+            owner_id=owner_id,
+            reason=str(reason).strip() or "chatgpt_dispatcher_attempt_finished",
+        )
+    except TaskStateError:
+        # Ownership may already have expired or been fenced by a newer owner.
+        # Never let cleanup of stale ownership mutate or block current work.
+        pass
+
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
     direct = explicit_token.strip() or os.getenv("CHATGPT_CONTINUITY_BRIDGE_TOKEN", "").strip()
@@ -512,6 +530,12 @@ def _run_once_locked(
                                     # Ownership/version changed while observing the bridge result;
                                     # the stale worker outcome must not mutate current task state.
                                     pass
+                                if observed_status not in {"", "PENDING", "CLAIMED"}:
+                                    _release_dispatcher_ownership(
+                                        task_id,
+                                        fingerprint,
+                                        f"chatgpt_worker_result_{observed_status.lower()}",
+                                    )
                         worker_status = observed_status
 
             if worker_status == "PROGRESS_CONFIRMED":
@@ -618,6 +642,12 @@ def _run_once_locked(
         ledger[fingerprint] = ledger_row
         if result.get("ok"):
             dispatched += 1
+        elif claimed_state is not None:
+            _release_dispatcher_ownership(
+                task_id,
+                fingerprint,
+                "chatgpt_enqueue_failed",
+            )
 
     # Keep failed outcomes visible throughout cooldown. Only the current
     # queued fingerprint may affect readiness; completed/superseded work must
