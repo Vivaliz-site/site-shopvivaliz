@@ -154,6 +154,10 @@ REVERSE_SSH_RECOVERABLE_ERRORS = (
     "connection reset by peer",
     "kex_exchange_identification",
 )
+REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS = (
+    "connection timed out during banner exchange",
+    "kex_exchange_identification",
+)
 REVERSE_SSH_RECONNECT_WAIT_SECONDS = max(
     1,
     min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_REVERSE_SSH_RECONNECT_WAIT", "12")), 60),
@@ -1023,17 +1027,48 @@ def run_task_entrypoint(task_id: str) -> int:
             finalize_cancelled_without_result(task_id)
             return 0
         deadline = time.monotonic() + int(row["timeout"])
-        while proc.poll() is None:
-            state = load_task(task_id)["state"]
-            if state == "cancel_requested":
-                terminate_process_group(proc)
-                return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
-            if time.monotonic() >= deadline:
-                terminate_process_group(proc)
-                return finalize_task(task_id, "expired", proc.poll(), result_dir)
-            update_heartbeat_and_progress(task_id, result_dir)
-            time.sleep(0.2)
-        return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
+        transport_retry_used = False
+        while True:
+            while proc.poll() is None:
+                state = load_task(task_id)["state"]
+                if state == "cancel_requested":
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
+                if time.monotonic() >= deadline:
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "expired", proc.poll(), result_dir)
+                update_heartbeat_and_progress(task_id, result_dir)
+                time.sleep(0.2)
+
+            if (
+                proc.returncode != 0
+                and not transport_retry_used
+                and is_safe_pre_execution_reverse_ssh_error(str(row["host"]), read_capped_text(stderr_path))
+                and time.monotonic() < deadline
+            ):
+                if load_task(task_id)["state"] == "cancel_requested":
+                    return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                if recover_reverse_ssh_transport(str(row["host"])) and time.monotonic() < deadline:
+                    if load_task(task_id)["state"] == "cancel_requested":
+                        return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                    out.seek(0)
+                    out.truncate(0)
+                    err.seek(0)
+                    err.truncate(0)
+                    with db_conn() as db:
+                        db.execute(
+                            "UPDATE tasks SET heartbeat_at=?,progress='transport_retry',"
+                            "recovery_note='reverse_ssh_transport_recovered_retry' WHERE id=?",
+                            (now(), task_id),
+                        )
+                    proc = subprocess.Popen(
+                        remote_invocation(str(row["host"]), str(row["command"])),
+                        stdout=out, stderr=err, start_new_session=True,
+                    )
+                    transport_retry_used = True
+                    continue
+
+            return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
 AUDIT_RESULT_METADATA_KEYS = (
@@ -1115,6 +1150,14 @@ def is_recoverable_reverse_ssh_error(host: str, stderr: str) -> bool:
         return False
     lowered = str(stderr or "").lower()
     return any(marker in lowered for marker in REVERSE_SSH_RECOVERABLE_ERRORS)
+
+
+def is_safe_pre_execution_reverse_ssh_error(host: str, stderr: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    lowered = str(stderr or "").lower()
+    return any(marker in lowered for marker in REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS)
 
 
 def reverse_ssh_listener_pid(port: int) -> int | None:
@@ -1302,7 +1345,7 @@ def run_host_command(
         result = run_once()
         if (
             result["exit_code"] != 0
-            and is_recoverable_reverse_ssh_error(host, str(result.get("stderr") or ""))
+            and is_safe_pre_execution_reverse_ssh_error(host, str(result.get("stderr") or ""))
             and deadline - time.monotonic() > 1
             and recover_reverse_ssh_transport(host)
             and deadline - time.monotonic() > 1
