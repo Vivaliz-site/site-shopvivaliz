@@ -2666,6 +2666,110 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(summary["indeterminate"], 1)
         self.assertTrue(summary["degraded"])
 
+    def test_api_processes_indeterminate_by_analysis_without_reexecution(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        with (
+            mock.patch.object(m, "run_task_entrypoint") as runner,
+            mock.patch.object(m.subprocess, "Popen") as spawn,
+            mock.patch.object(m, "recover_reverse_ssh_transport") as recover,
+        ):
+            processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+
+        self.assertEqual(processed["processed"], 1)
+        self.assertEqual(processed["classifications"]["positive_evidence"], 1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "indeterminate")
+        self.assertEqual(status["analysis_status"], "processed")
+        self.assertEqual(status["analysis_result"], "positive_evidence")
+        self.assertEqual(status["analysis_intervention_required"], 0)
+        self.assertIsNotNone(status["analyzed_at"])
+        runner.assert_not_called()
+        spawn.assert_not_called()
+        recover.assert_not_called()
+
+    def test_durable_health_separates_processed_indeterminate_from_pending_review(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        before = m.durable_health_summary()
+        self.assertEqual(before["indeterminate"], 1)
+        self.assertEqual(before["indeterminate_pending_analysis"], 1)
+        self.assertEqual(before["indeterminate_processed"], 0)
+        self.assertTrue(before["degraded"])
+
+        processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+        self.assertEqual(processed["processed"], 1)
+
+        after = m.durable_health_summary()
+        self.assertEqual(after["indeterminate"], 1)
+        self.assertEqual(after["indeterminate_pending_analysis"], 0)
+        self.assertEqual(after["indeterminate_processed"], 1)
+        self.assertFalse(after["degraded"])
+
+    def test_worker_processes_newly_indeterminate_tasks_analytically(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start()
+            deadline = time.monotonic() + 1.5
+            status = m.execute_tool("task_status", {"task_id": task_id})
+            while time.monotonic() < deadline and status.get("analysis_status") != "processed":
+                time.sleep(0.03)
+                status = m.execute_tool("task_status", {"task_id": task_id})
+            m.STOP_EVENT.set()
+            worker.join(timeout=1)
+
+        self.assertEqual(status["state"], "indeterminate")
+        self.assertEqual(status["analysis_status"], "processed")
+        self.assertEqual(status["analysis_result"], "positive_evidence")
+
+    def test_indeterminate_analysis_treats_tap_not_ok_as_negative_evidence(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("not ok 1 - checkout\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+
+        self.assertEqual(processed["processed"], 1)
+        self.assertEqual(processed["classifications"]["negative_evidence"], 1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["analysis_result"], "negative_evidence")
+        evidence = json.loads(status["analysis_evidence_json"])
+        self.assertEqual(evidence["negative_markers"], 1)
+        self.assertEqual(evidence["positive_markers"], 0)
+
+    def test_task_process_indeterminate_is_an_api_tool_with_no_external_intervention_contract(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("task_process_indeterminate", specs)
+        spec = specs["task_process_indeterminate"]
+        self.assertFalse(spec["annotations"]["readOnlyHint"])
+        self.assertFalse(spec["annotations"]["destructiveHint"])
+        self.assertEqual(
+            "integer",
+            spec["inputSchema"]["properties"]["limit"]["type"],
+        )
+
     def test_init_db_does_not_requeue_running_task(self):
         task_id = self.submit()["task_id"]
         with m.db_conn() as db:
