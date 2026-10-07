@@ -1170,6 +1170,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             def poll(self):
                 return self.returncode
 
+        self.assertIn("recover_transport", m.run_host_command.__code__.co_varnames)
         with (
             mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
             mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
