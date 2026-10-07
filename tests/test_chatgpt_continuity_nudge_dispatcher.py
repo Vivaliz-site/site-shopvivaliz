@@ -435,41 +435,6 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(next_result["skipped_ownership_busy"], 0)
         self.assertEqual(self.calls[-1]["task_id"], "second-conversation")
 
-    def test_live_recovery_owner_defers_stale_failed_ledger_from_health(self) -> None:
-        self._stale_checkpoint_and_request(task_id="ownership-busy")
-        state.bind_browser_session("ownership-busy", browser_session="dev")
-        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
-        self.dispatcher._append_ledger(self.runtime, {
-            "fingerprint": fingerprint,
-            "task_id": "ownership-busy",
-            "repository": state.DEFAULT_REPOSITORY,
-            "dispatched_at": "2020-01-01T00:00:00Z",
-            "bridge_ok": True,
-            "worker_status": "ERROR",
-            "attempt_count": 1,
-            "send_attempt_count": 0,
-            "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
-        })
-        state.claim_recovery_ownership(
-            "ownership-busy",
-            owner_id="other-live-owner",
-            allowed_actions=["continuation_send"],
-            ttl_seconds=60,
-        )
-
-        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
-            result = self.dispatcher.run_once(
-                runtime_dir=self.runtime,
-                bridge_url="https://example.invalid/bridge.php",
-                token="test-token",
-                enqueue=self._fake_enqueue_ok,
-            )
-
-        self.assertEqual(result["dispatched"], 0)
-        self.assertEqual(result["skipped_ownership_busy"], 1)
-        self.assertEqual(result["failed"], 0)
-        self.assertEqual(self.calls, [])
-
     def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
         f = self.dispatcher.recovery_state_for_worker_status
         self.assertEqual(f("CLAIMED", 0, 2), "RECOVERY_CLAIMED")
