@@ -412,6 +412,70 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
 
         self.assertEqual(claimed["recovery_owner_id"], "next-conversation")
 
+    def test_preexisting_terminal_ledger_releases_stale_dispatcher_ownership_during_cooldown(self) -> None:
+        self._stale_checkpoint_and_request(task_id="task-stale-terminal-owner")
+        state.bind_browser_session("task-stale-terminal-owner", browser_session="dev")
+
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+
+            ledger = self.runtime / self.dispatcher.LEDGER_FILE
+            rows = [
+                json.loads(line)
+                for line in ledger.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            rows[-1]["worker_status"] = "ERROR"
+            rows[-1]["worker_status_observed_at"] = self.dispatcher.utc_now()
+            ledger.write_text(
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+
+            cooldown = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+            self.assertEqual(cooldown["dispatched"], 0)
+
+            state.start_task("task-after-stale-terminal-owner", "goal", "gpt")
+            state.bind_conversation(
+                "task-after-stale-terminal-owner",
+                conversation_id="cccccccc-dddd-eeee-ffff-000000000000",
+            )
+            state.bind_browser_session(
+                "task-after-stale-terminal-owner",
+                browser_session="dev",
+            )
+            state.record_progress(
+                "task-after-stale-terminal-owner",
+                next_action="continue after stale terminal owner",
+            )
+            try:
+                claimed = state.claim_recovery_ownership(
+                    "task-after-stale-terminal-owner",
+                    owner_id="after-stale-terminal-owner",
+                    allowed_actions=["continuation_send"],
+                    ttl_seconds=30,
+                )
+            except state.TaskStateError as exc:
+                self.fail(
+                    "a terminal ledger row must clean up a stale dispatcher lock "
+                    f"without waiting for TTL: {exc}"
+                )
+
+        self.assertEqual(
+            claimed["recovery_owner_id"],
+            "after-stale-terminal-owner",
+        )
+
     def test_enqueue_failure_releases_recovery_ownership_immediately(self) -> None:
         self._stale_checkpoint_and_request(task_id="task-failed-enqueue")
         state.bind_browser_session("task-failed-enqueue", browser_session="dev")
