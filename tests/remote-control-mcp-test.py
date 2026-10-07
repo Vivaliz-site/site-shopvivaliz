@@ -2729,6 +2729,25 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(status["analysis_status"], "processed")
         self.assertEqual(status["analysis_result"], "positive_evidence")
 
+    def test_indeterminate_analysis_treats_tap_not_ok_as_negative_evidence(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("not ok 1 - checkout\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+
+        self.assertEqual(processed["processed"], 1)
+        self.assertEqual(processed["classifications"]["negative_evidence"], 1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["analysis_result"], "negative_evidence")
+        evidence = json.loads(status["analysis_evidence_json"])
+        self.assertEqual(evidence["negative_markers"], 1)
+        self.assertEqual(evidence["positive_markers"], 0)
+
     def test_task_process_indeterminate_is_an_api_tool_with_no_external_intervention_contract(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertIn("task_process_indeterminate", specs)
