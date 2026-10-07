@@ -1,0 +1,53 @@
+name: Temporary Backend Disk Guard Diagnostic
+on:
+  push:
+    branches:
+      - diagnose/backend-disk-guard-20261007
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose disk guard runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          echo "=== IDENTITY ==="
+          hostname
+          whoami
+          echo "=== DISK ==="
+          df -h /
+          df -i /
+          echo "=== RUNTIME HASHES ==="
+          sha256sum ops/host/shopvivaliz-disk-guard ops/host/shopvivaliz-workspace-housekeeper
+          sudo -n sha256sum /usr/local/sbin/shopvivaliz-disk-guard /usr/local/sbin/shopvivaliz-workspace-housekeeper || true
+          echo "=== TIMER STATUS ==="
+          systemctl is-enabled shopvivaliz-disk-guard.timer || true
+          systemctl is-active shopvivaliz-disk-guard.timer || true
+          systemctl is-enabled shopvivaliz-workspace-housekeeper.timer || true
+          systemctl is-active shopvivaliz-workspace-housekeeper.timer || true
+          systemctl list-timers --all --no-pager | grep -E 'shopvivaliz-(disk-guard|workspace-housekeeper)' || true
+          echo "=== STATE ==="
+          sudo -n cat /var/lib/shopvivaliz-ops/disk-status.env 2>/dev/null || true
+          sudo -n cat /var/lib/shopvivaliz-workspace-housekeeper/state.env 2>/dev/null || true
+          echo "=== GUARD LOG ==="
+          sudo -n tail -120 /var/log/shopvivaliz-disk-guard.log 2>/dev/null || true
+          echo "=== HOUSEKEEPER LOG ==="
+          sudo -n tail -120 /var/log/shopvivaliz-workspace-housekeeper.log 2>/dev/null || true
+          echo "=== SERVICE JOURNAL ==="
+          sudo -n journalctl -u shopvivaliz-disk-guard.service -u shopvivaliz-workspace-housekeeper.service --since '2026-10-04 00:00:00' --no-pager -n 200 2>/dev/null || true
+          echo "=== STORAGE TOP ==="
+          sudo -n du -x -B1 --max-depth=1 /home /var /opt /tmp 2>/dev/null | sort -n | tail -30 || true
+          echo "=== HOME UBUNTU TOP ==="
+          sudo -n du -x -B1 --max-depth=2 /home/ubuntu 2>/dev/null | sort -n | tail -50 || true
+          echo "=== WORKTREES ==="
+          printf 'count='
+          find /home/ubuntu/worktrees -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || true
+          sudo -n du -x -B1 --max-depth=1 /home/ubuntu/worktrees 2>/dev/null | sort -n | tail -50 || true
+          echo "=== DOCKER ==="
+          sudo -n docker system df 2>/dev/null || true
+          echo "=== END ==="
