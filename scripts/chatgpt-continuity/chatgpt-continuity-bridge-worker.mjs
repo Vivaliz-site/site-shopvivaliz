@@ -694,6 +694,43 @@ async function resolveAmbiguousConversationTabs(
   }
 }
 
+async function connectBoundConversationWithReentry(
+  tabs,
+  conversationId,
+  {
+    connector = connectCdpTarget,
+    selectReentry = selectBoundConversationReentryTab,
+    navigate = navigateNeutralTabToConversation,
+    preferred = boundConversationRecoveryReady,
+  } = {},
+) {
+  const id = safeConversationId(conversationId);
+  if (!id) throw new Error('invalid bound conversation id');
+
+  const boundTabs = selectBoundConversationTabs(tabs, id);
+  const existing = await connectFirstUsableChatgptTab(
+    boundTabs,
+    connector,
+    boundTabs.length > 1 ? preferred : null,
+  );
+  if (existing) return existing;
+
+  // A target can remain listed by /json while its renderer no longer answers
+  // Runtime.evaluate. Re-enter the exact immutable conversation id through a
+  // neutral authenticated Home target instead of declaring the conversation
+  // unavailable or selecting another conversation.
+  const reentryTab = await selectReentry(tabs);
+  if (!reentryTab) {
+    throw new Error('bound conversation is not available in the attached browser');
+  }
+  const navigated = await navigate(reentryTab, id, connector);
+  if (!navigated) throw new Error('bound conversation could not be opened');
+
+  const reentered = await connector(reentryTab);
+  if (!reentered) throw new Error('bound conversation reentry target is not usable');
+  return reentered;
+}
+
 class Cdp {
   constructor(ws, { commandTimeoutMs = 15_000 } = {}) {
     this.ws = ws;
@@ -745,25 +782,7 @@ class Cdp {
     const boundConversationId = safeConversationId(targetConversationId);
     const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
     if (boundConversationId) {
-      candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
-      if (candidateTabs.length === 0) {
-        // Never guess among multiple neutral tabs and never repurpose another
-        // real conversation. A single neutral home tab is safe to reuse; when
-        // there are zero or multiple neutral homes, create one isolated target
-        // exclusively for exact bound-conversation reentry.
-        const neutralHomeTab = await selectBoundConversationReentryTab(tabs);
-        if (!neutralHomeTab) {
-          throw new Error('bound conversation is not available in the attached browser');
-        }
-        const navigated = await navigateNeutralTabToConversation(
-          neutralHomeTab,
-          boundConversationId,
-          connectCdpTarget,
-        );
-        if (!navigated) throw new Error('bound conversation could not be opened');
-        candidateTabs = [neutralHomeTab];
-      }
-      if (candidateTabs.length > 1) preferredCandidate = boundConversationRecoveryReady;
+      return await connectBoundConversationWithReentry(tabs, boundConversationId);
     } else if (allowLatestDisambiguation && checkpointTargetMs > 0) {
       // Checkpoint-driven recovery must bind to the intended conversation
       // even when the persistent browser currently has only a neutral home
@@ -4017,6 +4036,7 @@ export {
   safeConversationId,
   selectBoundConversationTabs,
   selectBoundConversationReentryTab,
+  connectBoundConversationWithReentry,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
