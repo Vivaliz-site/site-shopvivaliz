@@ -34,6 +34,13 @@ class BrowserMcpTests(unittest.TestCase):
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
 
+    def test_browser_open_routes_to_canonical_base_browser(self):
+        args = {"url": "https://claude.ai/login"}
+        with mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base:
+            result = m.execute_tool("browser_open", args)
+        self.assertEqual({"route": "base"}, result)
+        base.assert_called_once_with("browser_open", args, cancel_check=None)
+
     def test_atendimento_browser_tools_are_explicit_and_preserve_base_contracts(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         base_specs = {item["name"]: item for item in m.base.tool_specs()}

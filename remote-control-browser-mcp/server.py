@@ -725,7 +725,7 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     if name == "browser_gui_tabs":
         return browser_tabs()
     if name == "browser_open":
-        return browser_open(args)
+        return BASE_EXECUTE_TOOL("browser_open", args, cancel_check=cancel_check)
     if name == "browser_gui_navigate":
         return browser_navigate(args)
     if name == "browser_screenshot":
