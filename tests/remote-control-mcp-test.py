@@ -1152,6 +1152,72 @@ class RemoteControlMcpTests(unittest.TestCase):
             self.assertTrue(m.recover_reverse_ssh_transport("Fred-Win"))
         kill.assert_called_once_with(4321, m.signal.SIGTERM)
 
+    def test_safe_reverse_ssh_retry_rejects_ambiguous_connection_reset(self):
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection timed out during banner exchange",
+        ))
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "kex_exchange_identification: read: Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection closed by remote host",
+        ))
+
+    def test_read_only_host_tools_disable_transport_recovery(self):
+        cases = [
+            ("host_health", {"host": "Fred-Win"}),
+            ("processes_list", {"host": "Fred-Win"}),
+            ("service_status", {"host": "Fred-Win", "service": "RustDesk"}),
+            ("file_read", {"host": "Fred-Win", "path": r"C:\\Windows\\win.ini"}),
+            ("file_list", {"host": "Fred-Win", "path": r"C:\\Windows"}),
+            ("logs_tail", {"host": "Fred-Win", "path": r"C:\\Windows\\WindowsUpdate.log"}),
+        ]
+        for name, args in cases:
+            with self.subTest(tool=name), mock.patch.object(
+                m,
+                "run_host_command",
+                return_value={"host": "Fred-Win", "exit_code": 0, "stdout": "", "stderr": "", "duration_ms": 1},
+            ) as run:
+                result = m.execute_tool(name, args)
+                self.assertTrue(result["ok"])
+                self.assertFalse(run.call_args.kwargs.get("recover_transport", True))
+
+    def test_run_host_command_can_probe_without_mutating_reverse_ssh_transport(self):
+        class FakeProc:
+            returncode = 255
+            pid = 1001
+
+            def communicate(self, timeout=None):
+                return b"", b"Connection timed out during banner exchange"
+
+            def poll(self):
+                return self.returncode
+
+        self.assertIn("recover_transport", m.run_host_command.__code__.co_varnames)
+        with (
+            mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=FakeProc()),
+            mock.patch.object(m, "_cleanup_isolated_scope"),
+            mock.patch.object(m, "recover_reverse_ssh_transport") as recover,
+        ):
+            result = m.run_host_command(
+                "Fred-Win",
+                "Get-Date",
+                timeout=10,
+                recover_transport=False,
+            )
+        self.assertEqual(255, result["exit_code"])
+        self.assertTrue(result["transport_recovery_available"])
+        recover.assert_not_called()
+
     def test_run_host_command_retries_once_after_reverse_ssh_recovery(self):
         class FakeProc:
             def __init__(self, rc, stdout, stderr):
@@ -2762,6 +2828,44 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(status["state"], "succeeded")
         self.assertIn("runner-output", status["stdout"])
         self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
+
+    def test_runner_retries_once_after_reverse_ssh_recovery(self):
+        task_id = m.execute_tool("task_submit", {
+            "host": "KOCEPSV",
+            "command": "Write-Output durable-recovered",
+            "timeout": 30,
+        })["task_id"]
+        self.claim(task_id)
+        attempts = {"count": 0}
+
+        class FakeProc:
+            def __init__(self, rc):
+                self.returncode = rc
+                self.pid = 4000 + attempts["count"]
+
+            def poll(self):
+                return self.returncode
+
+        def fake_popen(_argv, stdout=None, stderr=None, **_kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                stderr.write(b"Connection timed out during banner exchange\n")
+                return FakeProc(255)
+            stdout.write(b"durable-recovered\n")
+            return FakeProc(0)
+
+        with (
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=fake_popen) as popen,
+            mock.patch.object(m, "recover_reverse_ssh_transport", return_value=True) as recover,
+        ):
+            self.assertEqual(m.run_task_entrypoint(task_id), 0)
+
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "succeeded")
+        self.assertIn("durable-recovered", status["stdout"])
+        self.assertEqual(popen.call_count, 2)
+        recover.assert_called_once_with("KOCEPSV")
 
     def test_runner_cancel_requested_never_marks_execution_started_or_spawns(self):
         task_id = self.submit(command="printf must-not-run") ["task_id"]
