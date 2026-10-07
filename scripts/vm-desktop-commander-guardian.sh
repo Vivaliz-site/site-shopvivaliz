@@ -6,9 +6,10 @@ DEVICE_DIR='/home/ubuntu/.desktop-commander-device'
 DEVICE_FILE="$DEVICE_DIR/device.json"
 COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 LOCK_FILE='/run/lock/shopvivaliz-desktop-commander-guardian.lock'
-REMOTE_PATTERN='(@wonderwhy-er/desktop-commander@0[.]2[.]47 remote --persist-session|shopvivaliz-dc-remote|desktop-commander/dist/index[.]js remote --persist-session)'
+REMOTE_PATTERN='(@wonderwhy-er/desktop-commander@0[.]2[.]48 remote --persist-session|shopvivaliz-dc-remote|desktop-commander/dist/index[.]js remote --persist-session)'
 SERVICE_CGROUP="/system.slice/$SERVICE"
 AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-15}"
+PROVIDER_SOCKET_GRACE_SECONDS="${PROVIDER_SOCKET_GRACE_SECONDS:-90}"
 
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
@@ -112,6 +113,15 @@ auth_blocked() {
   return 1
 }
 
+provider_socket_connected() {
+  local pid age
+  pid="$(pgrep -f 'desktop-commander/dist/index[.]js' 2>/dev/null | head -1 || :)"
+  [[ -n "$pid" ]] || return 1
+  age="$(( $(date +%s) - $(stat -c %Y "/proc/$pid" 2>/dev/null || echo 0) ))"
+  (( age < PROVIDER_SOCKET_GRACE_SECONDS )) && return 0
+  ss -H -tnp 2>/dev/null | grep -F "pid=$pid," | grep -q 'ESTAB'
+}
+
 service_state() {
   local value='unknown'
   if value="$(systemctl is-active "$SERVICE" 2>/dev/null)"; then
@@ -127,6 +137,12 @@ service_state() {
 
 kill_foreign_launchers
 active="$(service_state)"
+if [[ "$active" == 'active' ]] && ! provider_socket_connected; then
+  log_guardian 'provider_connection_stale=true action=restart_service'
+  systemctl restart "$SERVICE"
+  sleep 5
+  active="$(service_state)"
+fi
 if [[ "$active" != 'active' ]]; then
   if auth_blocked; then
     log_guardian 'service_not_started reason=provider_auth_or_missing_device_state'

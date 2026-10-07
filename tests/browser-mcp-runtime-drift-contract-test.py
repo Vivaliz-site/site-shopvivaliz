@@ -30,3 +30,17 @@ def test_browser_mcp_source_stays_isolated_from_continuity_browser():
 def test_chatgpt_browser_has_thread_headroom():
     text = CHATGPT_BROWSER_UNIT.read_text(encoding="utf-8")
     assert "TasksMax=512" in text
+
+
+def test_two_dedicated_browser_mcp_services_are_declared():
+    atendimento = (ROOT / "deploy/systemd/shopvivaliz-browser-atendimento-mcp.service").read_text(encoding="utf-8")
+    dev = (ROOT / "deploy/systemd/shopvivaliz-browser-dev-mcp.service").read_text(encoding="utf-8")
+    assert "SHOPVIVALIZ_BROWSER_SESSION_NAME=atendimento" in atendimento
+    assert "SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9556" in atendimento
+    assert "SHOPVIVALIZ_REMOTE_MCP_PORT=5582" in atendimento
+    assert "SHOPVIVALIZ_BROWSER_SESSION_NAME=dev" in dev
+    assert "SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9559" in dev
+    assert "SHOPVIVALIZ_REMOTE_MCP_PORT=5583" in dev
+    setup = SETUP.read_text(encoding="utf-8")
+    assert 'curl -fsS "http://127.0.0.1:${port}/health"' in setup
+    assert "browser_session" in setup

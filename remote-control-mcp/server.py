@@ -1631,6 +1631,8 @@ def processes_command(platform: str) -> str:
 BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}
 BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
 BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
+BROWSER_SESSION_NAME = os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "atendimento").strip() or "atendimento"
+BROWSER_CDP_URL = os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL", "http://127.0.0.1:9556").rstrip("/")
 
 
 def _safe_browser_token(value: str, label: str) -> str:
@@ -1641,27 +1643,23 @@ def _safe_browser_token(value: str, label: str) -> str:
 
 
 def browser_tabs_command() -> str:
+    session = json.dumps(BROWSER_SESSION_NAME)
+    endpoint = json.dumps(BROWSER_CDP_URL + "/json")
     return (
         "python3 - <<'PY'\n"
         "import json,urllib.request,urllib.parse\n"
-        "sources=[('atendimento','http://127.0.0.1:9556/json'),('dev','http://127.0.0.1:9559/json')]\n"
+        f"session={session}; endpoint={endpoint}\n"
         "out=[]\n"
-        "seen={}\n"
         "allowed={'chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
-        "for session,endpoint in sources:\n"
-        " try:\n"
-        "  with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
-        " except Exception:\n"
-        "  continue\n"
-        " for x in pages:\n"
-        "  if x.get('type')!='page': continue\n"
-        "  u=urllib.parse.urlparse(x.get('url',''))\n"
-        "  if u.hostname not in allowed: continue\n"
-        "  tab_id=x.get('id')\n"
-        "  if not tab_id: continue\n"
-        "  if tab_id in seen: raise SystemExit('tab_id_ambiguous')\n"
-        "  seen[tab_id]=session\n"
-        "  out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
+        "try:\n"
+        " with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
+        "except Exception: pages=[]\n"
+        "for x in pages:\n"
+        " if x.get('type')!='page': continue\n"
+        " u=urllib.parse.urlparse(x.get('url',''))\n"
+        " if u.hostname not in allowed: continue\n"
+        " tab_id=x.get('id')\n"
+        " if tab_id: out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
         "print(json.dumps({'tabs':out},separators=(',',':')))\n"
         "PY"
     )
@@ -1677,7 +1675,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
-        "const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']]; "
+        f"const sources=[[{json.dumps(BROWSER_SESSION_NAME)},{json.dumps(BROWSER_CDP_URL + '/json')}]]; "
         "const matches=[]; "
         "for(const [session,endpoint] of sources){try{const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();for(const candidate of tabs){if(candidate?.id===id)matches.push({t:candidate,session});}}catch{}} "
         "if(matches.length===0) throw new Error('tab_not_found'); if(matches.length>1) throw new Error('tab_id_ambiguous'); "
@@ -1705,9 +1703,9 @@ def browser_open_command(url: str) -> str:
         "python3 - <<'PY'\n"
         "import base64,json,os,urllib.request,urllib.parse\n"
         "url=base64.b64decode(os.environ['SHOPVIVALIZ_OPEN_URL_B64']).decode()\n"
-        "req=urllib.request.Request('http://127.0.0.1:9556/json/new?'+urllib.parse.quote(url,safe=':/'),method='PUT')\n"
+        f"req=urllib.request.Request({json.dumps(BROWSER_CDP_URL + '/json/new?')}+urllib.parse.quote(url,safe=':/'),method='PUT')\n"
         "with urllib.request.urlopen(req,timeout=5) as r: x=json.load(r)\n"
-        "print(json.dumps({'opened':True,'id':x.get('id'),'origin':url.split('/',3)[0]+'//'+url.split('/',3)[2],'session':'atendimento'},separators=(',',':')))\n"
+        f"print(json.dumps({{'opened':True,'id':x.get('id'),'origin':url.split('/',3)[0]+'//'+url.split('/',3)[2],'session':{json.dumps(BROWSER_SESSION_NAME)}}},separators=(',',':')))\n"
         "PY"
     )
 
@@ -1743,7 +1741,7 @@ def browser_focused_navigate_command(url: str) -> str:
         "node --input-type=module <<'JS'\n"
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const url=Buffer.from(process.env.SHOPVIVALIZ_NAV_URL_B64,'base64').toString(); "
-        "const tabs=await (await fetch('http://127.0.0.1:9556/json')).json(); "
+        f"const tabs=await (await fetch({json.dumps(BROWSER_CDP_URL + '/json')})).json(); "
         f"const allowed=new Set({allowed}); "
         "const focused=[]; "
         "for(const t of tabs){if(t?.type!=='page'||!t?.webSocketDebuggerUrl)continue; let u;try{u=new URL(String(t.url||''));}catch{continue;} if(!allowed.has(u.hostname))continue; "
@@ -1785,7 +1783,7 @@ const [id,selector,submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']];
+const sources=[[process.env.SHOPVIVALIZ_BROWSER_SESSION_NAME||'atendimento',(process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json']];
 const matches=[];
 for(const [session,endpoint] of sources){
   try{
@@ -1825,7 +1823,7 @@ const [submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
+const tabs=await (await fetch((process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json')).json();
 const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai','127.0.0.1','localhost']);
 const candidates=[];
 for(const t of tabs){
