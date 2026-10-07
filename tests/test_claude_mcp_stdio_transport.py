@@ -199,7 +199,7 @@ class StdioTransportTests(unittest.TestCase):
             encoding="utf-8",
         )
         with (
-            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env),
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env, create=True),
             mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
         ):
             result = self.forward(self.request(timeout=7200, durable=True))
@@ -215,7 +215,7 @@ class StdioTransportTests(unittest.TestCase):
             encoding="utf-8",
         )
         with (
-            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env),
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env, create=True),
             mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
         ):
             result = self.forward(self.request(timeout=7201, durable=True))
