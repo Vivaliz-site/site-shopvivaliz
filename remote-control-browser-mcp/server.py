@@ -386,7 +386,7 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("desktop_click_outside_window")
     absolute_x = geo["X"] + x
     absolute_y = geo["Y"] + y
-    run_gui(["xdotool", "mousemove", "--sync", str(absolute_x), str(absolute_y)])
+    run_gui(["xdotool", "mousemove", str(absolute_x), str(absolute_y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": host, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -537,7 +537,7 @@ def browser_click(args: dict[str, Any]) -> dict[str, Any]:
     geo = parse_geometry(window)
     if not (geo["X"] <= x < geo["X"] + geo["WIDTH"] and geo["Y"] <= y < geo["Y"] + geo["HEIGHT"]):
         raise ValueError("browser_click_outside_active_window")
-    run_gui(["xdotool", "mousemove", "--sync", str(x), str(y)])
+    run_gui(["xdotool", "mousemove", str(x), str(y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": BROWSER_HOST, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
