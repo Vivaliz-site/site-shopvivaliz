@@ -1,0 +1,145 @@
+name: Backend Disk Hygiene Reconcile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/host/shopvivaliz-disk-guard'
+      - 'ops/host/shopvivaliz-workspace-housekeeper'
+      - 'scripts/install-disk-hygiene.sh'
+      - 'deploy/systemd/shopvivaliz-disk-guard.service'
+      - 'deploy/systemd/shopvivaliz-disk-guard.timer'
+      - 'deploy/systemd/shopvivaliz-workspace-housekeeper.service'
+      - 'deploy/systemd/shopvivaliz-workspace-housekeeper.timer'
+      - 'tests/disk-hygiene-policy-contract-test.sh'
+      - 'tests/backend-disk-hygiene-reconcile-contract-test.sh'
+      - '.github/workflows/backend-disk-hygiene-reconcile.yml'
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-disk-hygiene-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 15
+    env:
+      MIN_FREE_BYTES: 6442450944
+    steps:
+      - name: Checkout canonical source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate disk hygiene policy
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/disk-hygiene-policy-contract-test.sh
+          bash tests/backend-disk-hygiene-reconcile-contract-test.sh
+          bash -n scripts/install-disk-hygiene.sh
+          bash -n ops/host/shopvivaliz-workspace-housekeeper
+          sh -n ops/host/shopvivaliz-disk-guard
+          systemd-analyze verify             deploy/systemd/shopvivaliz-disk-guard.service             deploy/systemd/shopvivaliz-disk-guard.timer             deploy/systemd/shopvivaliz-workspace-housekeeper.service             deploy/systemd/shopvivaliz-workspace-housekeeper.timer
+
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/backend-disk-hygiene.key"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/backend-disk-hygiene.known_hosts"
+          chmod 600 "$HOME/.ssh/backend-disk-hygiene.key" "$HOME/.ssh/backend-disk-hygiene.known_hosts"
+
+      - name: Reconcile canonical disk hygiene on backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/backend-disk-hygiene.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/backend-disk-hygiene.key" ubuntu@10.0.1.38)
+          SCP=(scp -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/backend-disk-hygiene.known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/backend-disk-hygiene.key")
+          archive="$RUNNER_TEMP/backend-disk-hygiene-${GITHUB_RUN_ID}.tgz"
+          remote_archive="/tmp/backend-disk-hygiene-${GITHUB_RUN_ID}.tgz"
+          remote_stage="/tmp/backend-disk-hygiene-${GITHUB_RUN_ID}"
+          tar -czf "$archive"             scripts/install-disk-hygiene.sh             ops/host/shopvivaliz-disk-guard             ops/host/shopvivaliz-workspace-housekeeper             deploy/systemd/shopvivaliz-disk-guard.service             deploy/systemd/shopvivaliz-disk-guard.timer             deploy/systemd/shopvivaliz-workspace-housekeeper.service             deploy/systemd/shopvivaliz-workspace-housekeeper.timer
+          "${SCP[@]}" "$archive" "ubuntu@10.0.1.38:$remote_archive"
+
+          source_guard="$(sha256sum ops/host/shopvivaliz-disk-guard | awk '{print $1}')"
+          source_house="$(sha256sum ops/host/shopvivaliz-workspace-housekeeper | awk '{print $1}')"
+          source_timer="$(sha256sum deploy/systemd/shopvivaliz-disk-guard.timer | awk '{print $1}')"
+
+          "${SSH[@]}" bash -s -- "$remote_archive" "$remote_stage" "$source_guard" "$source_house" "$source_timer" "$MIN_FREE_BYTES" <<'REMOTE'
+          set -Eeuo pipefail
+          archive="$1"
+          stage="$2"
+          source_guard="$3"
+          source_house="$4"
+          source_timer="$5"
+          MIN_FREE_BYTES="$6"
+          cleanup() { rm -rf -- "$stage" "$archive"; }
+          trap cleanup EXIT
+          rm -rf -- "$stage"
+          mkdir -p "$stage"
+          tar -xzf "$archive" -C "$stage"
+
+          runtime_guard=""
+          runtime_house=""
+          runtime_timer=""
+          if [ -r /usr/local/sbin/shopvivaliz-disk-guard ]; then
+            runtime_guard="$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard | awk '{print $1}')"
+          fi
+          if [ -r /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
+            runtime_house="$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper | awk '{print $1}')"
+          fi
+          if [ -r /etc/systemd/system/shopvivaliz-disk-guard.timer ]; then
+            runtime_timer="$(sha256sum /etc/systemd/system/shopvivaliz-disk-guard.timer | awk '{print $1}')"
+          fi
+          needs_install=0
+          [ "$runtime_guard" = "$source_guard" ] || needs_install=1
+          [ "$runtime_house" = "$source_house" ] || needs_install=1
+          [ "$runtime_timer" = "$source_timer" ] || needs_install=1
+          systemctl is-enabled --quiet shopvivaliz-disk-guard.timer || needs_install=1
+          systemctl is-active --quiet shopvivaliz-disk-guard.timer || needs_install=1
+          systemctl is-enabled --quiet shopvivaliz-workspace-housekeeper.timer || needs_install=1
+          systemctl is-active --quiet shopvivaliz-workspace-housekeeper.timer || needs_install=1
+
+          if [ "$needs_install" -eq 1 ]; then
+            sudo -n bash "$stage/scripts/install-disk-hygiene.sh"
+          fi
+
+          systemctl is-enabled --quiet shopvivaliz-disk-guard.timer
+          systemctl is-active --quiet shopvivaliz-disk-guard.timer
+          systemctl is-enabled --quiet shopvivaliz-workspace-housekeeper.timer
+          systemctl is-active --quiet shopvivaliz-workspace-housekeeper.timer
+          test "$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard | awk '{print $1}')" = "$source_guard"
+          test "$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper | awk '{print $1}')" = "$source_house"
+          test "$(sha256sum /etc/systemd/system/shopvivaliz-disk-guard.timer | awk '{print $1}')" = "$source_timer"
+
+          sudo -n systemctl start shopvivaliz-disk-guard.service
+          available="$(df -PB1 / | awk 'NR==2 {print $4}')"
+          root_pct="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
+          printf 'DISK_HYGIENE_AVAILABLE_BYTES=%s\n' "$available"
+          printf 'DISK_HYGIENE_ROOT_PCT=%s\n' "$root_pct"
+          if [ "$available" -lt "$MIN_FREE_BYTES" ]; then
+            printf 'DISK_HYGIENE_RECONCILE=DEGRADED available=%s minimum=%s\n' "$available" "$MIN_FREE_BYTES"
+            exit 42
+          fi
+          printf 'DISK_HYGIENE_RECONCILE=PASS available=%s minimum=%s root_pct=%s\n' "$available" "$MIN_FREE_BYTES" "$root_pct"
+          REMOTE
+
+      - name: Remove transient SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/backend-disk-hygiene.key" "$HOME/.ssh/backend-disk-hygiene.known_hosts"
