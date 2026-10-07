@@ -127,12 +127,25 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_browser_allows_microsoft_oauth_host(self):
         self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
 
+    def test_browser_session_sources_can_be_pinned_per_mcp(self):
+        old_name = m.BROWSER_SESSION_NAME
+        old_url = m.BROWSER_CDP_URL
+        try:
+            m.BROWSER_SESSION_NAME = "dev"
+            m.BROWSER_CDP_URL = "http://127.0.0.1:9559"
+            self.assertIn('session="dev"; endpoint="http://127.0.0.1:9559/json"', m.browser_tabs_command())
+            self.assertNotIn("9556/json", m.browser_tabs_command())
+            self.assertIn("127.0.0.1:9559/json/new?", m.browser_open_command("https://claude.ai/login"))
+        finally:
+            m.BROWSER_SESSION_NAME = old_name
+            m.BROWSER_CDP_URL = old_url
+
     def test_browser_open_targets_canonical_atendimento_cdp_session(self):
         command = m.browser_open_command("https://claude.ai/login")
         self.assertIn("http://127.0.0.1:9556/json/new?", command)
         self.assertNotIn("9559", command)
         self.assertIn("SHOPVIVALIZ_OPEN_URL_B64", command)
-        self.assertIn("session':'atendimento", command)
+        self.assertIn("'session':\"atendimento\"", command)
 
     def test_browser_open_is_exposed_by_canonical_base_mcp(self):
         specs = {item["name"]: item for item in m.tool_specs()}
@@ -652,22 +665,20 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("url", required)
         self.assertNotIn("tab_id", required)
 
-    def test_browser_tab_specific_commands_support_dev_and_atendimento_without_legacy_fallback(self):
+    def test_browser_tab_specific_commands_are_pinned_to_one_session(self):
         tabs = m.browser_tabs_command()
         self.assertIn("127.0.0.1:9556/json", tabs)
-        self.assertIn("127.0.0.1:9559/json", tabs)
+        self.assertNotIn("127.0.0.1:9559/json", tabs)
         self.assertNotIn("127.0.0.1:9555/json", tabs)
         command = m._browser_cdp_command("ABC123", "(()=>true)()")
         self.assertIn("127.0.0.1:9556/json", command)
-        self.assertIn("127.0.0.1:9559/json", command)
-        self.assertIn("tab_id_ambiguous", command)
-        self.assertNotIn("127.0.0.1:9555/json", command)
+        self.assertNotIn("127.0.0.1:9559/json", command)
 
-    def test_browser_explicit_type_supports_dev_and_atendimento_without_cross_account_fallback(self):
+    def test_browser_explicit_type_is_pinned_by_session_environment(self):
         script = m.BROWSER_TYPE_NODE_SCRIPT
-        self.assertIn("127.0.0.1:9556/json", script)
-        self.assertIn("127.0.0.1:9559/json", script)
-        self.assertIn("tab_id_ambiguous", script)
+        self.assertIn("SHOPVIVALIZ_BROWSER_CDP_URL", script)
+        self.assertIn("SHOPVIVALIZ_BROWSER_SESSION_NAME", script)
+        self.assertNotIn("127.0.0.1:9559/json", script)
         self.assertNotIn("127.0.0.1:9555/json", script)
 
     def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
