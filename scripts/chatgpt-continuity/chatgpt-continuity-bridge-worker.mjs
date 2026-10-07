@@ -2492,21 +2492,28 @@ async function recoverableRetryButtonTarget(cdp) {
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return null;
-    const candidates=[];
+    const retryCandidates=[];
+    const regenerateCandidates=[];
     for(const button of surface.querySelectorAll('button')){
       if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      if(!accepted.has(label)) continue;
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) continue;
       const rect=button.getBoundingClientRect();
       if(!(rect.width>0&&rect.height>0)) continue;
       const style=getComputedStyle(button);
       if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
-      candidates.push({x:rect.left+rect.width/2,y:rect.top+rect.height/2});
+      const target={x:rect.left+rect.width/2,y:rect.top+rect.height/2,top:rect.top};
+      if(retryLabels.has(label)) retryCandidates.push(target);
+      else regenerateCandidates.push(target);
     }
-    return candidates.length===1 ? candidates[0] : null;
+    if(retryCandidates.length===1) return retryCandidates[0];
+    if(retryCandidates.length>1||regenerateCandidates.length===0) return null;
+    regenerateCandidates.sort((a,b)=>b.top-a.top);
+    return regenerateCandidates[0];
   })()`);
 }
 
@@ -2563,16 +2570,24 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '', { allo
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return false;
-    const candidates=[...surface.querySelectorAll('button')].filter(button=>{
-      if(button.disabled||button.getAttribute('aria-disabled')==='true') return false;
+    const rows=[...surface.querySelectorAll('button')].map(button=>{
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') return null;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      return accepted.has(label);
-    });
-    if(candidates.length!==1) return false;
-    candidates[0].click();
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) return null;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return null;
+      return {button,label,top:rect.top};
+    }).filter(Boolean);
+    const retries=rows.filter(row=>retryLabels.has(row.label));
+    if(retries.length===1){retries[0].button.click();return true;}
+    if(retries.length>1) return false;
+    const regenerates=rows.filter(row=>regenerateLabels.has(row.label)).sort((a,b)=>b.top-a.top);
+    if(!regenerates.length) return false;
+    regenerates[0].button.click();
     return true;
   })()`));
 }
@@ -4081,6 +4096,7 @@ export {
   errorBannerPresent,
   recoverableFailureReason,
   conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
