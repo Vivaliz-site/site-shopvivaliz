@@ -561,7 +561,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("/api/auth/session", probe)
         self.assertIn("sessionResponse.ok", probe)
         self.assertIn("session?.account", probe)
-        self.assertIn("session?.accessToken", probe)
+        self.assertIn("const hasIdentity = Boolean(session?.account || session?.user);", probe)
+        self.assertIn('if (hasIdentity) return "AUTHENTICATED";', probe)
         self.assertLess(probe.index("/api/auth/session"), probe.index("document.querySelector(\"[contenteditable=true]\")"))
 
     def test_chatgpt_browser_guardian_authenticated_session_precedes_residual_logout_dom(self) -> None:
