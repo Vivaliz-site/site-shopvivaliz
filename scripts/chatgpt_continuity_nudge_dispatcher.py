@@ -407,7 +407,6 @@ def _run_once_locked(
     skipped_attempt_limit = 0
     skipped_foreground_active = 0
     skipped_ownership_busy = 0
-    deferred_by_live_owner: set[str] = set()
 
     ledger = _read_ledger(root)
     requests = read_requests(root)
@@ -619,11 +618,9 @@ def _run_once_locked(
                 )
             except TaskStateError:
                 skipped_ownership_busy += 1
-                deferred_by_live_owner.add(fingerprint)
                 continue
             if str(claimed_state.get("recovery_state", "")).strip() == "FOREGROUND_ACTIVE":
                 skipped_foreground_active += 1
-                deferred_by_live_owner.add(fingerprint)
                 continue
 
         result = enqueue(
@@ -673,11 +670,6 @@ def _run_once_locked(
             continue
         task_id = str(request.get("task_id", "")).strip()
         fingerprint = str(request.get("fingerprint", "")).strip()
-        if fingerprint in deferred_by_live_owner:
-            # A live foreground/durable owner is currently authoritative for
-            # this checkpoint. An older terminal ledger row is historical
-            # evidence, not a fresh failure from this dispatcher cycle.
-            continue
         conversation_id = (
             _bound_conversation_id(root, task_id)
             or _ledger_bound_conversation_id(ledger, task_id)
