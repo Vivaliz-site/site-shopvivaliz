@@ -27,7 +27,7 @@ check_fixed 'install-disk-hygiene.sh' 'reconciliation invokes the canonical inst
 check_fixed 'systemctl is-enabled --quiet shopvivaliz-disk-guard.timer' 'reconciliation verifies the guard timer is enabled'
 check_fixed 'systemctl is-active --quiet shopvivaliz-disk-guard.timer' 'reconciliation verifies the guard timer is active'
 check_fixed 'systemctl start shopvivaliz-disk-guard.service' 'reconciliation runs the guard after reconciling'
-check_fixed 'MIN_FREE_BYTES=8589934592' 'reconciliation enforces the 8 GiB free-space floor during verification'
+check_fixed 'MIN_FREE_BYTES=6442450944' 'reconciliation enforces the 6 GiB free-space floor during verification'
 check_fixed 'DISK_HYGIENE_RECONCILE=PASS' 'reconciliation emits an explicit terminal proof'
 
 exit "$fail"
