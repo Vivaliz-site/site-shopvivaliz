@@ -214,6 +214,134 @@ class CodexBridgeDecisionProvider:
         return parsed
 
 
+class ChatGPTBrowserDecisionProvider(CodexBridgeDecisionProvider):
+    """Strict 20-layer fallback over a dedicated normal ChatGPT login."""
+    async_mode = True
+    max_concurrency = 1
+    max_decisions_per_cycle = 1
+    provider_name = "CHATGPT_BROWSER_20_LAYER"
+
+    def __init__(
+        self,
+        url: str = "http://127.0.0.1:17657/v1/respond",
+        model: str = "gpt-5.6-sol",
+        effort: str = "xhigh",
+        timeout_seconds: int = 180,
+        context_builder: DecisionContextBuilder | None = None,
+        transport=None,
+    ):
+        super().__init__(
+            url=url,
+            model=model,
+            effort=effort,
+            timeout_seconds=timeout_seconds,
+            context_builder=context_builder,
+            transport=transport,
+        )
+        if model != "gpt-5.6-sol":
+            raise DecisionValidationError("decision_browser:sol_required")
+        if effort != "xhigh":
+            raise DecisionValidationError("decision_browser:xhigh_required")
+
+    def analyze(self, snapshot: MarketSnapshot, context: dict | None = None) -> dict:
+        if context is None:
+            context = self.context_builder.build(snapshot) if self.context_builder else {}
+        elif self.context_builder:
+            context = self.context_builder.build(snapshot, context)
+        payload = {
+            "model": self.model,
+            "effort": self.effort,
+            "profile": "okx",
+            "prompt": self._prompt(snapshot, context),
+            "web_search": False,
+        }
+        result = self.transport(self.url, payload, self.timeout_seconds)
+        if not isinstance(result, dict) or result.get("ok") is not True:
+            reason = result.get("error") if isinstance(result, dict) else "non_object"
+            raise DecisionValidationError(f"decision_browser:{reason}")
+        if str(result.get("model")) != self.model:
+            raise DecisionValidationError("decision_browser:model_mismatch")
+        if str(result.get("effort")) != self.effort:
+            raise DecisionValidationError("decision_browser:effort_mismatch")
+        if result.get("transport") != "chatgpt_browser":
+            raise DecisionValidationError("decision_browser:transport_mismatch")
+        if result.get("profile") != "okx":
+            raise DecisionValidationError("decision_browser:profile_mismatch")
+        text = result.get("text")
+        if not isinstance(text, str):
+            raise DecisionValidationError("decision_browser:missing_text")
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise DecisionValidationError("decision_browser:non_json_response") from exc
+        if not isinstance(parsed, dict):
+            raise DecisionValidationError("decision_browser:non_object_response")
+        return parsed
+
+
+class LoginFailoverDecisionProvider:
+    """Codex login primary with a normal ChatGPT login fallback."""
+    async_mode = True
+    max_concurrency = 2
+    max_decisions_per_cycle = 2
+    provider_name = "LOGIN_20_LAYER_FAILOVER"
+    _PRIMARY_AVAILABILITY_MARKERS = (
+        "decision_bridge:codex_unavailable",
+        "decision_bridge:bridge_busy",
+        "decision_bridge:timeouterror",
+        "decision_bridge:urlerror",
+        "decision_bridge:http_429",
+        "decision_bridge:usage_limit",
+        "decision_bridge:quota",
+        "decision_bridge:authentication_required",
+    )
+
+    def __init__(self, primary, fallback, context_builder: DecisionContextBuilder | None = None):
+        import threading
+        self.primary = primary
+        self.fallback = fallback
+        self.context_builder = context_builder
+        self._status_lock = threading.Lock()
+        self.last_provider_name = ""
+        self.last_model = ""
+        self.last_effort = ""
+        self.last_primary_error = ""
+        self.primary_failures_total = 0
+        self.fallback_uses_total = 0
+
+    @classmethod
+    def _fallback_allowed(cls, exc: Exception) -> bool:
+        reason = str(exc).lower()
+        return any(marker in reason for marker in cls._PRIMARY_AVAILABILITY_MARKERS)
+
+    def _record_effective(self, provider, *, fallback_used: bool):
+        with self._status_lock:
+            self.last_provider_name = str(getattr(provider, "provider_name", ""))
+            self.last_model = str(getattr(provider, "model", ""))
+            self.last_effort = str(getattr(provider, "effort", ""))
+            if fallback_used:
+                self.fallback_uses_total += 1
+
+    def analyze(self, snapshot: MarketSnapshot, context: dict | None = None) -> dict:
+        if context is None:
+            context = self.context_builder.build(snapshot) if self.context_builder else {}
+        elif self.context_builder:
+            context = self.context_builder.build(snapshot, context)
+        try:
+            result = self.primary.analyze(snapshot, context)
+        except DecisionValidationError as exc:
+            if not self._fallback_allowed(exc):
+                raise
+            with self._status_lock:
+                self.primary_failures_total += 1
+                self.last_primary_error = str(exc)[:160]
+            result = self.fallback.analyze(snapshot, context)
+            self._record_effective(self.fallback, fallback_used=True)
+            return result
+        self._record_effective(self.primary, fallback_used=False)
+        return result
+
+
 class HeuristicDecisionProvider:
     """Test fixture/baseline only. Production runtime must not select this provider."""
     async_mode = False
