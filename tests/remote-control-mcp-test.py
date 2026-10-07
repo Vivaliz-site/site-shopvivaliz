@@ -1140,6 +1140,24 @@ class RemoteControlMcpTests(unittest.TestCase):
             self.assertTrue(m.recover_reverse_ssh_transport("Fred-Win"))
         kill.assert_called_once_with(4321, m.signal.SIGTERM)
 
+    def test_safe_reverse_ssh_retry_rejects_ambiguous_connection_reset(self):
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection timed out during banner exchange",
+        ))
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "kex_exchange_identification: read: Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection closed by remote host",
+        ))
+
     def test_run_host_command_retries_once_after_reverse_ssh_recovery(self):
         class FakeProc:
             def __init__(self, rc, stdout, stderr):
