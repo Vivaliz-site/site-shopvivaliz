@@ -147,8 +147,7 @@ browser_session_state() {
             let session = null;
             try { session = await sessionResponse.json(); } catch {}
             const hasIdentity = Boolean(session?.account || session?.user);
-            const hasAccessToken = Boolean(session?.accessToken || session?.access_token);
-            if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
+            if (hasIdentity) return "AUTHENTICATED";
           }
         } catch {}
         const body = String(document.body?.innerText || "").toLowerCase();
