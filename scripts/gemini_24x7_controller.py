@@ -604,6 +604,8 @@ def run_once(
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
+        if int(nudge.get("skipped_session_unavailable") or 0) > 0:
+            degraded_reasons.append("chatgpt_bound_session_unavailable")
         if monitor_required and monitor.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_monitor_stale")
         if monitor_required and monitor.get("degraded") is True:
@@ -641,7 +643,7 @@ def run_once(
             "single_writer_enforced": durable_handoff_enabled,
             "completion_sweep": completion_sweep,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_foreground_active", "skipped_ownership_busy")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,

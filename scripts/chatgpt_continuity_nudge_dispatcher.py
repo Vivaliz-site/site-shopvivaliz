@@ -395,6 +395,7 @@ def _run_once_locked(
     skipped_unbound = 0
     retry_attempted = 0
     progress_followup_attempted = 0
+    skipped_session_unavailable = 0
     skipped_attempt_limit = 0
     skipped_foreground_active = 0
     skipped_ownership_busy = 0
@@ -439,13 +440,17 @@ def _run_once_locked(
         if previous:
             attempted_at = _parse_time(previous.get("dispatched_at"))
             worker_status = str(previous.get("worker_status", "")).strip().upper()
+            detail_code = str(previous.get("detail_code", "")).strip().upper()
 
             # Empty/PENDING/CLAIMED are observations of an active attempt,
             # not terminal outcomes. Re-poll them every dispatcher cycle so a
             # later worker result cannot be cached as "in flight" forever.
             if (
                 previous.get("bridge_ok") is True
-                and worker_status in {"", "PENDING", "CLAIMED"}
+                and (
+                    worker_status in {"", "PENDING", "CLAIMED"}
+                    or (worker_status == "ERROR" and not detail_code)
+                )
                 and resolved_token
             ):
                 status_result = query_status(
@@ -459,9 +464,14 @@ def _run_once_locked(
                     nudge = status_body.get("nudge") if isinstance(status_body.get("nudge"), dict) else {}
                     observed_status = str(nudge.get("status", "")).strip().upper()
                     if observed_status:
-                        if observed_status != worker_status:
+                        observed_detail_code = str(nudge.get("detail_code", "")).strip().upper()
+                        if observed_status != worker_status or (
+                            observed_detail_code and observed_detail_code != detail_code
+                        ):
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
+                            if observed_detail_code:
+                                observed["detail_code"] = observed_detail_code
                             observed["worker_status_observed_at"] = utc_now()
                             confirmed_conversation_id = str(nudge.get("conversation_id", "")).strip()
                             if (
@@ -513,6 +523,16 @@ def _run_once_locked(
                                     # the stale worker outcome must not mutate current task state.
                                     pass
                         worker_status = observed_status
+                        detail_code = observed_detail_code or detail_code
+
+            if worker_status == "ERROR" and detail_code == "BOUND_SESSION_IDENTITY_MISMATCH":
+                # This is a missing prerequisite, not a transient generation
+                # failure. Re-enqueueing the immutable checkpoint cannot
+                # authenticate the bound browser profile and only creates a
+                # retry storm. Keep the failure visible until the session or
+                # checkpoint changes.
+                skipped_session_unavailable += 1
+                continue
 
             if worker_status == "PROGRESS_CONFIRMED":
                 # A real assistant response proves only that this continuation
@@ -658,6 +678,7 @@ def _run_once_locked(
         "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
         "progress_followup_attempted": progress_followup_attempted,
+        "skipped_session_unavailable": skipped_session_unavailable,
         "skipped_attempt_limit": skipped_attempt_limit,
         "skipped_foreground_active": skipped_foreground_active,
         "skipped_ownership_busy": skipped_ownership_busy,
@@ -688,6 +709,7 @@ def run_once(
                 "skipped_unbound": 0,
                 "retry_attempted": 0,
                 "progress_followup_attempted": 0,
+                "skipped_session_unavailable": 0,
                 "skipped_attempt_limit": 0,
                 "locked": True,
                 "generated_at": utc_now(),

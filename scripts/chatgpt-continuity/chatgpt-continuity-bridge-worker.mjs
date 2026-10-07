@@ -238,6 +238,7 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('multiple open chatgpt conversation tabs found')) return 'AMBIGUOUS_CONVERSATION_TARGET';
   if (normalized.includes('cdp endpoint unreachable')) return 'CDP_ENDPOINT_UNREACHABLE';
   if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
+  if (normalized.includes('browser session account mismatch or bound conversation mismatch')) return 'BOUND_SESSION_IDENTITY_MISMATCH';
   return 'UNCLASSIFIED_RUNTIME_ERROR';
 }
 
