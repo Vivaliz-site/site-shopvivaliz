@@ -330,5 +330,28 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
 
 
 
+    def test_proactive_mode_dispatches_fresh_running_checkpoint(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("fresh-proactive", "acompanhar ate concluir", "gpt")
+        state.record_progress(
+            "fresh-proactive",
+            next_action="continuar a tarefa sem aguardar travamento",
+            evidence="checkpoint fresco",
+        )
+
+        result = watchdog.run_once(
+            stale_seconds=120,
+            runtime_dir=self.runtime,
+            proactive=True,
+        )
+
+        self.assertEqual(result["mode"], "proactive")
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["dispatched"], 1)
+        requests = watchdog.read_requests(self.runtime)
+        self.assertEqual([row["task_id"] for row in requests], ["fresh-proactive"])
+
+
 if __name__ == "__main__":
     unittest.main()

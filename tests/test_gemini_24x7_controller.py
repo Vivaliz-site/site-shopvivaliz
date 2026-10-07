@@ -797,5 +797,96 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(lines[index + 1].strip(), '"$target_dir/scripts/gemini_24x7_controller.py" ' + chr(92))
 
 
+    def test_durable_handoff_controller_requests_proactive_convergence(self) -> None:
+        controller = load_controller()
+        calls = []
+
+        def fake_watchdog(**kwargs):
+            calls.append(kwargs)
+            return {"scanned": 1, "eligible": 0, "dispatched": 0, "mode": "proactive"}
+
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", side_effect=fake_watchdog),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="proactive-owner")
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0]["proactive"])
+        self.assertTrue(result["durable_handoff_enabled"])
+
+    def test_controller_terminalizes_ready_to_complete_checkpoint_each_cycle(self) -> None:
+        controller = load_controller()
+        from scripts import agent_task_state as task_state
+
+        previous_runtime = task_state.RUNTIME_DIR
+        task_state.RUNTIME_DIR = self.runtime
+        try:
+            task_state.start_task("ready-cycle", "finalizar tarefa verificada", "gpt")
+            task_state.mark_ready(
+                "ready-cycle",
+                evidence=["validacao fresca PASS"],
+                verification="objetivo original verificado",
+            )
+        finally:
+            task_state.RUNTIME_DIR = previous_runtime
+
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="terminalize-owner")
+
+        current = json.loads((self.runtime / "ready-cycle.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["status"], "CONCLUIDO")
+        self.assertEqual(result["completion_sweep"]["completed"], 1)
+
+
+    def test_controller_defers_ready_terminalization_while_foreground_lease_is_live(self) -> None:
+        controller = load_controller()
+        from scripts import agent_task_state as task_state
+
+        previous_runtime = task_state.RUNTIME_DIR
+        task_state.RUNTIME_DIR = self.runtime
+        try:
+            task_state.start_task("ready-foreground", "finalizar sem competir com foreground", "gpt")
+            task_state.bind_conversation(
+                "ready-foreground",
+                conversation_id="conversation_ready_foreground",
+            )
+            task_state.bind_browser_session(
+                "ready-foreground",
+                browser_session="atendimento",
+            )
+            task_state.acquire_foreground_lease_for_task(
+                "ready-foreground",
+                owner_id="interactive-turn",
+                ttl_seconds=300,
+            )
+            task_state.mark_ready(
+                "ready-foreground",
+                evidence=["validacao foreground PASS"],
+                verification="objetivo verificado pelo turno ativo",
+            )
+        finally:
+            task_state.RUNTIME_DIR = previous_runtime
+
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="terminalize-foreground-owner")
+
+        current = json.loads((self.runtime / "ready-foreground.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["status"], "READY_TO_COMPLETE")
+        self.assertEqual(result["completion_sweep"]["deferred_foreground"], 1)
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
