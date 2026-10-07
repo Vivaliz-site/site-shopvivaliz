@@ -27,11 +27,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
+    from . import agent_task_state as task_state
     from .agent_task_state import RUNTIME_DIR
     from . import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
     from . import task_continuation_watchdog as watchdog
     from . import task_resume_dispatcher as dispatcher
 except ImportError:  # direct execution from a release checkout
+    from scripts import agent_task_state as task_state
     from scripts.agent_task_state import RUNTIME_DIR
     from scripts import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
     from scripts import task_continuation_watchdog as watchdog
@@ -150,6 +152,142 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
     return value if isinstance(value, dict) else {}
 
+
+def _completion_sweep(
+    root: Path,
+    *,
+    durable_handoff_enabled: bool = False,
+) -> dict[str, Any]:
+    """Inspect every recent active checkpoint and close verified READY work.
+
+    RUNNING checkpoints are queued by the proactive watchdog. READY_TO_COMPLETE
+    checkpoints are terminalized deterministically, but never by racing the
+    interactive foreground: bound conversations first acquire the same fenced
+    recovery ownership used by detached executors.
+    """
+    runtime = Path(root)
+    current = datetime.now(timezone.utc)
+    lookback_days = max(1, int(getattr(watchdog, "DEFAULT_LOOKBACK_DAYS", 10)))
+    lookback_cutoff = current - timedelta(days=lookback_days)
+    summary = {
+        "scanned": 0,
+        "active": 0,
+        "bound_conversations": 0,
+        "unbound_active": 0,
+        "ready": 0,
+        "completed": 0,
+        "requeued": 0,
+        "failed": 0,
+        "deferred_foreground": 0,
+        "deferred_ownership_busy": 0,
+        "deferred_unbound_session": 0,
+        "skipped_invalid_timestamp": 0,
+        "skipped_outside_lookback": 0,
+    }
+
+    previous_runtime = task_state.RUNTIME_DIR
+    task_state.RUNTIME_DIR = runtime
+    try:
+        for path in sorted(runtime.glob("*.json")):
+            if not path.is_file() or path.name.startswith("_"):
+                continue
+            payload = _read_json(path)
+            if not payload:
+                continue
+            created = _parse_utc(payload.get("created_at"))
+            if created is None:
+                summary["skipped_invalid_timestamp"] += 1
+                continue
+            if created < lookback_cutoff:
+                summary["skipped_outside_lookback"] += 1
+                continue
+
+            summary["scanned"] += 1
+            status = str(payload.get("status", "")).strip()
+            if status not in {"RUNNING", "READY_TO_COMPLETE"}:
+                continue
+
+            summary["active"] += 1
+            conversation_id = str(payload.get("conversation_id", "")).strip()
+            if conversation_id:
+                summary["bound_conversations"] += 1
+            else:
+                summary["unbound_active"] += 1
+
+            if status != "READY_TO_COMPLETE":
+                continue
+
+            summary["ready"] += 1
+            task_id = str(payload.get("task_id", "")).strip()
+            if not task_id:
+                summary["failed"] += 1
+                continue
+
+            recovery_owner = ""
+            if durable_handoff_enabled and conversation_id:
+                browser_session = str(payload.get("browser_session", "")).strip()
+                if browser_session not in {"dev", "atendimento", "fred"}:
+                    # Never bypass the single-writer contract merely to move a
+                    # checkpoint from READY to terminal.
+                    summary["deferred_unbound_session"] += 1
+                    continue
+                recovery_owner = f"controller-terminalize:{task_id}"
+                try:
+                    claimed = task_state.claim_recovery_ownership(
+                        task_id,
+                        owner_id=recovery_owner,
+                        allowed_actions=["checkpoint_mutation"],
+                        ttl_seconds=60,
+                    )
+                except task_state.TaskStateError as exc:
+                    message = str(exc).strip().lower()
+                    if (
+                        "ownership is busy" in message
+                        or "lease already held" in message
+                        or "runtime lock already held" in message
+                    ):
+                        summary["deferred_ownership_busy"] += 1
+                    else:
+                        summary["failed"] += 1
+                    continue
+                if str(claimed.get("recovery_state", "")).strip() == "FOREGROUND_ACTIVE":
+                    summary["deferred_foreground"] += 1
+                    recovery_owner = ""
+                    continue
+
+            try:
+                completed = task_state.complete_task(task_id)
+            except task_state.TaskStateError:
+                try:
+                    current_state = task_state.load_task(task_id)
+                except task_state.TaskStateError:
+                    current_state = {}
+                if str(current_state.get("status", "")).strip() == "RUNNING":
+                    summary["requeued"] += 1
+                else:
+                    summary["failed"] += 1
+                continue
+            finally:
+                if recovery_owner:
+                    try:
+                        task_state.release_recovery_ownership(
+                            task_id,
+                            owner_id=recovery_owner,
+                            reason="controller_terminalization_finished",
+                        )
+                    except task_state.TaskStateError:
+                        # The terminal transition is already durable. A stale
+                        # release is forensic noise, not permission to undo it.
+                        pass
+
+            if str(completed.get("status", "")).strip() == "CONCLUIDO":
+                summary["completed"] += 1
+            else:
+                summary["failed"] += 1
+    finally:
+        task_state.RUNTIME_DIR = previous_runtime
+
+    return summary
 
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
     runtime_root = Path(root).resolve()
@@ -430,7 +568,16 @@ def run_once(
         _append_event(root, "duplicate_suppressed", reason=lease.reason)
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
-        watch = watchdog.run_once(stale_seconds=max(1, int(stale_seconds)), runtime_dir=root)
+        durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+        completion_sweep = _completion_sweep(
+            root,
+            durable_handoff_enabled=durable_handoff_enabled,
+        )
+        watch = watchdog.run_once(
+            stale_seconds=max(1, int(stale_seconds)),
+            runtime_dir=root,
+            proactive=durable_handoff_enabled,
+        )
         nudge = nudge_dispatcher.run_once(runtime_dir=root)
         # The dispatcher only enqueues/reconciles durable work. Provider execution
         # runs in the independent resume worker and must never block this cycle.
@@ -447,6 +594,10 @@ def run_once(
             degraded_reasons.append("dispatcher_no_progress")
         if failed > 0:
             degraded_reasons.append("dispatcher_failed")
+        if int(completion_sweep.get("failed") or 0) > 0:
+            degraded_reasons.append("completion_sweep_failed")
+        if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
+            degraded_reasons.append("completion_sweep_unbound_session")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
         if int(nudge.get("skipped_no_token") or 0) > 0:
@@ -475,7 +626,6 @@ def run_once(
         elif claude_health.get("connected") is not True:
             degraded_reasons.append("claude_remote_control_not_connected")
         continuity_ready = not degraded_reasons
-        durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
             # daemon that is alive but unable to advance continuity must fail
@@ -489,7 +639,8 @@ def run_once(
             "lease_recovered": lease.recovered,
             "durable_handoff_enabled": durable_handoff_enabled,
             "single_writer_enforced": durable_handoff_enabled,
-            "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
+            "completion_sweep": completion_sweep,
+            "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_foreground_active", "skipped_ownership_busy")},
             "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
@@ -498,12 +649,16 @@ def run_once(
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
-        if _has_material_activity(lease, watch, nudge, resumed):
+        if _has_material_activity(lease, watch, nudge, resumed) or any(
+            int(completion_sweep.get(key) or 0) > 0
+            for key in ("completed", "requeued", "failed")
+        ):
             _append_event(
                 root,
                 "cycle_completed",
                 owner_id=owner,
                 lease_recovered=lease.recovered,
+                completion_sweep=summary["completion_sweep"],
                 watchdog=summary["watchdog"],
                 chatgpt_nudge=summary["chatgpt_nudge"],
                 dispatcher=summary["dispatcher"],
