@@ -46,6 +46,7 @@ Do not merge or deploy until a corporate login completes, a real Terra-medium tu
 - Fallback is normal ChatGPT login with gpt-5.6-sol + xhigh (Extra High).
 - The fallback transport is the canonical Dev browser MCP on loopback 5583, pinned to shopvivaliz-dev-chromium / CDP 9559 / dev@shopvivaliz.com.br.
 - Atendimento (5582 / CDP 9556) is never used as a substitute, and no third OKX browser profile is created.
+- Dev authentication is not Google-based; unrelated/stale `accounts.google.com` tabs are not valid authentication evidence and must not be used as the fallback login path.
 - Each fallback inference uses a fresh Temporary Chat under the global browser maintenance lock, rejects web-search/tool use, validates Sol model metadata, and closes its tab.
 - Primary availability failures start a primary cooldown; browser-provider errors start the orchestrator cooldown. Integrity/model/schema failures do not silently switch providers.
 - No OpenAI Platform API key, access-token environment fallback, heuristic decision engine, or real exchange order path is enabled.

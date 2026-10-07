@@ -89,6 +89,17 @@ O acesso humano pelas conexoes SSH do iPhone deve permanecer privado:
 O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e deve escutar somente no IPv4 Tailscale atual do backend. Nao usar os IPs publicos das VMs como fallback no iPhone. A chave privada continua armazenada apenas no cliente autorizado e nunca deve ser copiada para Git, logs ou chat.
 
 
+## Browser MCPs dedicados das contas ChatGPT
+
+No backend `always-free-arm-1787907847-26`, as duas contas ChatGPT corporativas possuem MCPs de navegador distintos:
+
+| Conta | Serviço MCP | Loopback MCP | Perfil Chromium | CDP |
+|---|---|---:|---|---:|
+| `atendimento@shopvivaliz.com.br` | `shopvivaliz-browser-atendimento-mcp.service` | `127.0.0.1:5582` | `shopvivaliz-atendimento-chromium` | `9556` |
+| `dev@shopvivaliz.com.br` | `shopvivaliz-browser-dev-mcp.service` | `127.0.0.1:5583` | `shopvivaliz-dev-chromium` | `9559` |
+
+A separação é obrigatória: não cruzar contas, cookies, perfis ou portas. O MCP Dev é a única rota de navegador permitida para o fallback ChatGPT normal do simulador OKX; Atendimento nunca é fallback desse fluxo. A conta Dev não usa Google como método de login, portanto abas Google no perfil não devem ser tratadas como continuação do login Dev.
+
 ## Prioridade operacional
 
 1. **Remote Control MCP** — primeira escolha para controle, observacao e tarefas duraveis.
