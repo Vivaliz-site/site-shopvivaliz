@@ -272,7 +272,7 @@ async function run() {
           return live;
         },
         selectReentry: async tabs => {
-          assert.equal(tabs, [bound, home]);
+          assert.deepEqual(tabs, [bound, home]);
           return home;
         },
         navigate: async (tab, conversationId) => {
