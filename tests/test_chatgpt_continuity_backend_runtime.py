@@ -222,6 +222,15 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
         self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
 
+    def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        start = body.index("browser_session_state()")
+        end = body.index("persist_browser_health()", start)
+        probe = body[start:end]
+        self.assertIn("sessionResponse.status === 401 || sessionResponse.status === 403", probe)
+        self.assertIn("timeout 15s node --input-type=module -e", probe)
+
     def test_chatgpt_browser_guardian_preserves_oauth_flow_without_restart(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
