@@ -35,13 +35,13 @@ from typing import Any
 try:
     from .agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
@@ -53,6 +53,14 @@ DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/b
 LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
+WORKER_ATTEMPT_TERMINAL_STATUSES = frozenset({
+    "PROGRESS_CONFIRMED",
+    "SENT",
+    "SENT_UNCONFIRMED",
+    "STALLED_NOT_CONFIRMED",
+    "CONVERSATION_NOT_FOUND",
+    "ERROR",
+})
 
 
 def _durable_handoff_enabled() -> bool:
@@ -522,6 +530,18 @@ def _run_once_locked(
                                     # Ownership/version changed while observing the bridge result;
                                     # the stale worker outcome must not mutate current task state.
                                     pass
+                                if observed_status in WORKER_ATTEMPT_TERMINAL_STATUSES:
+                                    try:
+                                        release_recovery_ownership(
+                                            task_id,
+                                            owner_id=f"dispatcher:{fingerprint}",
+                                            reason=f"worker_{observed_status.lower()}",
+                                        )
+                                    except TaskStateError:
+                                        # A newer owner/checkpoint may already have taken over.
+                                        # Never release ownership that no longer belongs to this
+                                        # exact dispatcher fingerprint.
+                                        pass
                         worker_status = observed_status
                         detail_code = observed_detail_code or detail_code
 
