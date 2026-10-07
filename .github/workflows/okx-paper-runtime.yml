@@ -20,6 +20,8 @@ jobs:
       - name: PAPER contract and regression tests
         working-directory: services/okx-trading-pilot/runtime-paper
         run: python -m pytest -q
+      - name: ChatGPT browser bridge contract
+        run: node services/okx-trading-pilot/runtime-paper/tests/okx-chatgpt-browser-bridge-test.mjs
       - name: Codex bridge contract tests
         run: node tests/ai-squad-codex-bridge-test.mjs
       - name: Login-only transport contract
