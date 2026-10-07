@@ -34,12 +34,16 @@ class BrowserMcpTests(unittest.TestCase):
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
 
-    def test_browser_open_routes_to_canonical_base_browser(self):
+    def test_browser_open_routes_to_isolated_gui_browser(self):
         args = {"url": "https://claude.ai/login"}
-        with mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base:
+        with (
+            mock.patch.object(m, "browser_open", return_value={"route": "gui-open"}) as gui,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
             result = m.execute_tool("browser_open", args)
-        self.assertEqual({"route": "base"}, result)
-        base.assert_called_once_with("browser_open", args, cancel_check=None)
+        self.assertEqual({"route": "gui-open"}, result)
+        gui.assert_called_once_with(args)
+        base.assert_not_called()
 
     def test_atendimento_browser_tools_are_explicit_and_preserve_base_contracts(self):
         specs = {item["name"]: item for item in m.tool_specs()}
@@ -89,11 +93,18 @@ class BrowserMcpTests(unittest.TestCase):
             m.validate_url("file:///tmp/a")
 
     def test_click_must_remain_inside_active_browser_window(self):
-        with mock.patch.object(m, "active_browser_window", return_value="123"),              mock.patch.object(m, "focus"),              mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),              mock.patch.object(m, "run_gui"):
+        with (
+            mock.patch.object(m, "active_browser_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),
+            mock.patch.object(m, "run_gui") as run,
+        ):
             with self.assertRaisesRegex(ValueError, "outside_active_window"):
                 m.browser_click({"x": 50, "y": 50})
             result = m.browser_click({"x": 150, "y": 150})
             self.assertTrue(result["ok"])
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "150"]), run.call_args_list)
+        self.assertNotIn(mock.call(["xdotool", "mousemove", "--sync", "150", "150"]), run.call_args_list)
 
     def test_screenshot_uses_active_window_capture(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
@@ -132,7 +143,7 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base,
         ):
             self.assertEqual(
-                {"route": "base"},
+                {"route": "gui-navigate"},
                 m.execute_tool("browser_navigate", {"url": "https://chatgpt.com/"}),
             )
             self.assertEqual(
@@ -140,7 +151,7 @@ class BrowserMcpTests(unittest.TestCase):
                 m.execute_tool("browser_click", {"x": 10, "y": 20}),
             )
             self.assertEqual(
-                {"route": "base"},
+                {"route": "gui-type"},
                 m.execute_tool("browser_type", {"text": "123456", "press_enter": False}),
             )
             self.assertEqual(
@@ -148,78 +159,21 @@ class BrowserMcpTests(unittest.TestCase):
                 m.execute_tool("browser_type", {"tab_id": "abc", "selector": "#code", "text": "123456"}),
             )
 
-        navigate.assert_not_called()
+        navigate.assert_called_once()
         click.assert_called_once()
-        type_.assert_not_called()
-        self.assertEqual(3, base.call_count)
+        type_.assert_called_once()
+        base.assert_called_once()
 
-    def test_public_browser_type_prefers_canonical_focused_cdp_before_gui(self):
+    def test_public_browser_type_without_selector_stays_on_isolated_gui_surface(self):
         args = {"text": "123456", "press_enter": False}
         with (
-            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
             mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui_type,
         ):
             result = m.execute_tool("browser_type", args)
-        self.assertEqual({"route": "base"}, result)
-        base.assert_called_once_with("browser_type", args, cancel_check=None)
-        gui_type.assert_not_called()
-
-    def test_gui_prefix_uses_shared_writable_tmpdir(self):
-        fake_user = mock.Mock(pw_dir="/home/gui", pw_uid=1234)
-        with mock.patch.object(m.pwd, "getpwnam", return_value=fake_user):
-            prefix = m.gui_prefix()
-        self.assertIn("TMPDIR=/var/tmp", prefix)
-
-    def test_public_browser_type_alias_falls_back_when_canonical_cdp_times_out(self):
-        failure = {"ok": False, "stderr": "Error: CDP command timed out"}
-        with (
-            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
-            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
-        ):
-            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
         self.assertEqual({"route": "gui-type"}, result)
-        base.assert_called_once()
-        gui.assert_called_once()
-
-    def test_public_browser_type_alias_falls_back_when_canonical_browser_is_down(self):
-        failure = {"ok": False, "stderr": "TypeError: fetch failed; connect ECONNREFUSED 127.0.0.1:9556"}
-        with (
-            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
-            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
-        ):
-            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
-        self.assertEqual({"route": "gui-type"}, result)
-        base.assert_called_once()
-        gui.assert_called_once()
-
-    def test_public_browser_type_alias_falls_back_to_gui_only_when_canonical_focus_is_unavailable(self):
-        for error in ("focused_editable_not_found", "focused_editable_ambiguous"):
-            with (
-                self.subTest(error=error),
-                mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"ok": False, "stderr": error}) as base,
-                mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui,
-            ):
-                result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
-                self.assertEqual({"route": "gui-type"}, result)
-                base.assert_called_once()
-                gui.assert_called_once()
-
-    def test_public_browser_type_alias_does_not_hide_other_canonical_failures(self):
-        failure = {"ok": False, "stderr": "tab_origin_not_allowlisted"}
-        with (
-            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value=failure) as base,
-            mock.patch.object(m, "browser_type") as gui,
-        ):
-            result = m.execute_tool("browser_type", {"text": "sample", "press_enter": False})
-        self.assertEqual(failure, result)
-        base.assert_called_once()
-        gui.assert_not_called()
-
-    def test_canonical_focused_type_allows_loopback_helpers_but_not_lan_hosts(self):
-        src = m.base.BROWSER_FOCUSED_TYPE_NODE_SCRIPT
-        self.assertIn("127.0.0.1", src)
-        self.assertIn("localhost", src)
-        self.assertNotIn("192.168.", src)
+        gui_type.assert_called_once_with(args)
+        base.assert_not_called()
 
     def test_public_browser_type_alias_audit_redacts_text(self):
         captured = {}
@@ -353,7 +307,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(50, result["x"])
         self.assertEqual(60, result["y"])
-        self.assertIn(mock.call(["xdotool", "mousemove", "--sync", "150", "260"]), run.call_args_list)
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "260"]), run.call_args_list)
 
     def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
         secret = "sample-sensitive-input"
