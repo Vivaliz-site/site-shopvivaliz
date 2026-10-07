@@ -857,6 +857,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
                 "ready-foreground",
                 conversation_id="conversation_ready_foreground",
             )
+            task_state.bind_browser_session(
+                "ready-foreground",
+                browser_session="atendimento",
+            )
             task_state.acquire_foreground_lease_for_task(
                 "ready-foreground",
                 owner_id="interactive-turn",
