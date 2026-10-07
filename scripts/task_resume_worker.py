@@ -127,6 +127,12 @@ def worker_run_once(
         state = dispatcher._load_json(dispatcher._state_path(runtime, task_id))
 
         if not request or not state:
+            dispatcher._release_resume_ownership(
+                runtime,
+                state or {"task_id": task_id},
+                request or {"id": str(record.get("request_id", "")).strip()},
+                "resume_worker_context_missing",
+            )
             diagnostic = {"worker_error": "execution_context_missing"}
             record.update(
                 status="completed",
@@ -159,6 +165,9 @@ def worker_run_once(
                 updated_at=dispatcher.utc_now(),
             )
             dispatcher._atomic_json(record_path, record)
+            dispatcher._release_resume_ownership(
+                runtime, state, request, "resume_worker_superseded"
+            )
             return summary
 
         record.update(
@@ -171,14 +180,19 @@ def worker_run_once(
         dispatcher._atomic_json(record_path, record)
         summary["claimed"] = 1
 
-        result, exit_code, after_state, diagnostic = dispatcher._execute(
-            runtime_dir=runtime,
-            project_dir=project,
-            request=request,
-            state=state,
-            executor=executor,
-            timeout_seconds=max(1, int(record.get("timeout_seconds") or dispatcher.DEFAULT_TIMEOUT_SECONDS)),
-        )
+        try:
+            result, exit_code, after_state, diagnostic = dispatcher._execute(
+                runtime_dir=runtime,
+                project_dir=project,
+                request=request,
+                state=state,
+                executor=executor,
+                timeout_seconds=max(1, int(record.get("timeout_seconds") or dispatcher.DEFAULT_TIMEOUT_SECONDS)),
+            )
+        finally:
+            dispatcher._release_resume_ownership(
+                runtime, state, request, "resume_worker_finished"
+            )
         checkpoint_after = str(after_state.get("updated_at", "")).strip() if after_state else ""
         diagnostic = diagnostic or {}
         record.update(
