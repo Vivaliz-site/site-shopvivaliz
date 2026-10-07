@@ -2297,12 +2297,15 @@ def tool_specs() -> list[dict[str, Any]]:
 
 
 def task_worker() -> None:
+    next_analysis_at = 0.0
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
-            reconciled = reconcile_tasks()
-            if "indeterminate" in reconciled:
+            reconcile_tasks()
+            current = time.monotonic()
+            if current >= next_analysis_at:
                 process_indeterminate_tasks(limit=50)
+                next_analysis_at = current + 1.0
             with db_conn() as db:
                 active_rows = db.execute(
                     "SELECT host,COUNT(*) AS count FROM tasks "
