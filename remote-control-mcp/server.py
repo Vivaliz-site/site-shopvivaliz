@@ -2300,7 +2300,9 @@ def task_worker() -> None:
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
-            reconcile_tasks()
+            reconciled = reconcile_tasks()
+            if "indeterminate" in reconciled:
+                process_indeterminate_tasks(limit=50)
             with db_conn() as db:
                 active_rows = db.execute(
                     "SELECT host,COUNT(*) AS count FROM tasks "
