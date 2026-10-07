@@ -64,6 +64,85 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertEqual({"route": "base"}, result)
         base.assert_called_once_with("browser_type", args, cancel_check=None)
 
+    def test_dev_mcp_exposes_okx_chatgpt_respond_only_on_dev_session(self):
+        original = m.base.BROWSER_SESSION_NAME
+        try:
+            m.base.BROWSER_SESSION_NAME = "dev"
+            specs = {item["name"]: item for item in m.tool_specs()}
+            self.assertIn("browser_chatgpt_respond", specs)
+            self.assertFalse(specs["browser_chatgpt_respond"]["annotations"]["readOnlyHint"])
+            self.assertFalse(specs["browser_chatgpt_respond"]["annotations"]["destructiveHint"])
+            m.base.BROWSER_SESSION_NAME = "atendimento"
+            specs = {item["name"]: item for item in m.tool_specs()}
+            self.assertNotIn("browser_chatgpt_respond", specs)
+        finally:
+            m.base.BROWSER_SESSION_NAME = original
+
+    def test_dev_chatgpt_request_requires_sol_xhigh_okx(self):
+        valid = {
+            "model": "gpt-5.6-sol",
+            "effort": "xhigh",
+            "profile": "okx",
+            "prompt": "Return JSON only",
+            "web_search": False,
+        }
+        self.assertEqual("gpt-5.6-sol", m.validate_chatgpt_dev_request(valid)["model"])
+        for key, value in (
+            ("model", "gpt-5.6-terra"),
+            ("effort", "high"),
+            ("profile", "dev"),
+        ):
+            broken = dict(valid)
+            broken[key] = value
+            with self.assertRaises(ValueError):
+                m.validate_chatgpt_dev_request(broken)
+        broken = dict(valid)
+        broken["web_search"] = True
+        with self.assertRaises(ValueError):
+            m.validate_chatgpt_dev_request(broken)
+
+    def test_dev_chatgpt_respond_fails_closed_when_continuity_owns_dev_browser(self):
+        original = m.base.BROWSER_SESSION_NAME
+        try:
+            m.base.BROWSER_SESSION_NAME = "dev"
+            with mock.patch.object(m, "dev_session_has_live_continuity_owner", return_value=True), \
+                 mock.patch.object(m, "chatgpt_dev_respond") as helper:
+                with self.assertRaisesRegex(RuntimeError, "dev_browser_owned_by_continuity"):
+                    m.execute_tool("browser_chatgpt_respond", {
+                        "model": "gpt-5.6-sol",
+                        "effort": "xhigh",
+                        "profile": "okx",
+                        "prompt": "Return JSON only",
+                        "web_search": False,
+                    })
+            helper.assert_not_called()
+        finally:
+            m.base.BROWSER_SESSION_NAME = original
+
+    def test_dev_chatgpt_respond_routes_only_on_dev_mcp(self):
+        original_name = m.base.BROWSER_SESSION_NAME
+        original_url = m.base.BROWSER_CDP_URL
+        args = {
+            "model": "gpt-5.6-sol",
+            "effort": "xhigh",
+            "profile": "okx",
+            "prompt": "Return JSON only",
+            "web_search": False,
+        }
+        try:
+            m.base.BROWSER_SESSION_NAME = "dev"
+            m.base.BROWSER_CDP_URL = "http://127.0.0.1:9559"
+            with mock.patch.object(m, "dev_session_has_live_continuity_owner", return_value=False), \
+                 mock.patch.object(m, "chatgpt_dev_respond", return_value={"ok": True}) as helper:
+                self.assertTrue(m.execute_tool("browser_chatgpt_respond", args)["ok"])
+                helper.assert_called_once_with(args)
+            m.base.BROWSER_SESSION_NAME = "atendimento"
+            with self.assertRaisesRegex(ValueError, "dev_session_required"):
+                m.execute_tool("browser_chatgpt_respond", args)
+        finally:
+            m.base.BROWSER_SESSION_NAME = original_name
+            m.base.BROWSER_CDP_URL = original_url
+
     def test_browser_health_is_read_only(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
