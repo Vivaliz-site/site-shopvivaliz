@@ -13,7 +13,7 @@ import time
 from okx_pilot.domain import PilotLimits, InstrumentType
 from okx_pilot.market import OkxPublicMarketClient, MarketDataError
 from okx_pilot.scanner import MarketScanner
-from okx_pilot.decision import CodexBridgeDecisionProvider, DecisionContextBuilder
+from okx_pilot.decision import CodexBridgeDecisionProvider, ChatGPTBrowserDecisionProvider, LoginFailoverDecisionProvider, DecisionContextBuilder
 from okx_pilot.risk import RiskGateway
 from okx_pilot.paper import PaperBroker
 from okx_pilot.orchestrator import PilotOrchestrator
@@ -42,6 +42,9 @@ def main():
     p.add_argument('--decision-url',default='http://127.0.0.1:17656/v1/respond')
     p.add_argument('--decision-model',default='gpt-5.6-terra')
     p.add_argument('--decision-effort',default='medium',choices=('low','medium','high','xhigh'))
+    p.add_argument('--fallback-decision-url',default='http://127.0.0.1:17657/v1/respond')
+    p.add_argument('--fallback-decision-model',default='gpt-5.6-sol')
+    p.add_argument('--fallback-decision-effort',default='xhigh',choices=('xhigh',))
     args=p.parse_args()
     if args.cycles<0 or not 1<=args.interval<=3600: p.error('invalid cycles/interval')
     args.state.parent.mkdir(parents=True,exist_ok=True)
@@ -52,13 +55,24 @@ def main():
     broker=PaperBroker(state_path=args.state)
     client=OkxPublicMarketClient()
     context_builder=DecisionContextBuilder(client,broker)
-    decision_provider=CodexBridgeDecisionProvider(
+    primary_provider=CodexBridgeDecisionProvider(
         args.decision_url, model=args.decision_model, effort=args.decision_effort,
-        timeout_seconds=45, context_builder=context_builder,
+        timeout_seconds=45, context_builder=None,
+    )
+    fallback_provider=ChatGPTBrowserDecisionProvider(
+        args.fallback_decision_url, model=args.fallback_decision_model,
+        effort=args.fallback_decision_effort, timeout_seconds=180, context_builder=None,
+    )
+    decision_provider=LoginFailoverDecisionProvider(
+        primary_provider, fallback_provider, context_builder=context_builder,
     )
     orch=PilotOrchestrator(MarketScanner(),decision_provider,RiskGateway(PilotLimits()),broker,args.audit)
     orch._audit({'event':'RUN_START','run_id':broker.run_id,'started_at':broker.started_at,'mode':'PAPER',
-                 'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model})
+                 'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model,
+                 'decision_effort':args.decision_effort,
+                 'decision_fallback_provider':'CHATGPT_BROWSER_20_LAYER',
+                 'decision_fallback_model':args.fallback_decision_model,
+                 'decision_fallback_effort':args.fallback_decision_effort})
     eligible={}; refreshed=0.; cycle=0
     with ThreadPoolExecutor(max_workers=3) as pool:
         while not STOP and (args.cycles==0 or cycle<args.cycles):
@@ -101,6 +115,17 @@ def main():
             report.update({'updated_at':datetime.now(timezone.utc).isoformat(),'cycle':cycle,'markets':counts,
                 'eligible':{k.value:len(v) for k,v in eligible.items()},'entries_blocked':bool(errors),'errors':errors,
                 'decision_provider':'CODEX_20_LAYER','decision_model':args.decision_model,
+                'decision_effort':args.decision_effort,
+                'decision_fallback_provider':'CHATGPT_BROWSER_20_LAYER',
+                'decision_fallback_model':args.fallback_decision_model,
+                'decision_fallback_effort':args.fallback_decision_effort,
+                'decision_effective_provider':decision_provider.last_provider_name,
+                'decision_effective_model':decision_provider.last_model,
+                'decision_effective_effort':decision_provider.last_effort,
+                'decision_primary_failures_total':decision_provider.primary_failures_total,
+                'decision_fallback_uses_total':decision_provider.fallback_uses_total,
+                'decision_primary_last_error':decision_provider.last_primary_error,
+                'decision_login_only':True,'platform_api_fallback':False,'heuristic_fallback':False,
                 'ai_20_layers_configured':True,'ai_20_layers_active':orch.provider_ready,
                 'decision_provider_cooldown_seconds':round(orch.provider_cooldown_seconds,3),
                 'decision_pending':orch.pending_count,'decision_provider_errors_total':orch.provider_errors_total,
