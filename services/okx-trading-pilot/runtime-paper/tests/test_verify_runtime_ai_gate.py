@@ -44,7 +44,7 @@ def valid_status(release: Path):
 def run_validation(tmp_path, monkeypatch, status):
     module = load_verify_runtime()
     release = tmp_path / "release"
-    release.mkdir()
+    release.mkdir(exist_ok=True)
     (release / "SOURCE_COMMIT").write_text("a" * 40, encoding="utf-8")
     state = tmp_path / "state.json"
     state.write_text(json.dumps({"run_id": "runtime-1", "starting_equity": "100"}), encoding="utf-8")
