@@ -369,6 +369,88 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(followup.get("progress_followup_attempted"), 1)
         self.assertEqual(len(self.calls), 2)
 
+    def test_terminal_worker_result_releases_recovery_ownership_for_next_conversation(self) -> None:
+        self._stale_checkpoint_and_request(task_id="task-first")
+        state.bind_browser_session("task-first", browser_session="dev")
+
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+            )
+            observed = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=self._fake_enqueue_ok,
+                query_status=lambda **unused: {
+                    "ok": True,
+                    "http_status": 200,
+                    "body": {"status": "OK", "nudge": {"status": "ERROR"}},
+                },
+            )
+
+            self.assertEqual(observed["failed"], 1)
+            state.start_task("task-next", "goal", "gpt")
+            state.bind_conversation(
+                "task-next",
+                conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            )
+            state.bind_browser_session("task-next", browser_session="dev")
+            state.record_progress("task-next", next_action="continue next conversation")
+            try:
+                claimed = state.claim_recovery_ownership(
+                    "task-next",
+                    owner_id="next-conversation",
+                    allowed_actions=["continuation_send"],
+                    ttl_seconds=30,
+                )
+            except state.TaskStateError as exc:
+                self.fail(f"terminal browser result must release the global recovery lock: {exc}")
+
+        self.assertEqual(claimed["recovery_owner_id"], "next-conversation")
+
+    def test_enqueue_failure_releases_recovery_ownership_immediately(self) -> None:
+        self._stale_checkpoint_and_request(task_id="task-failed-enqueue")
+        state.bind_browser_session("task-failed-enqueue", browser_session="dev")
+
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            failed = self.dispatcher.run_once(
+                runtime_dir=self.runtime,
+                bridge_url="https://example.invalid/bridge.php",
+                token="test-token",
+                enqueue=lambda **unused: {
+                    "ok": False,
+                    "http_status": 503,
+                    "error": "transport_error",
+                },
+            )
+            self.assertEqual(failed["dispatched"], 0)
+
+            state.start_task("task-after-failed-enqueue", "goal", "gpt")
+            state.bind_conversation(
+                "task-after-failed-enqueue",
+                conversation_id="bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+            )
+            state.bind_browser_session("task-after-failed-enqueue", browser_session="dev")
+            state.record_progress(
+                "task-after-failed-enqueue",
+                next_action="continue after failed enqueue",
+            )
+            try:
+                claimed = state.claim_recovery_ownership(
+                    "task-after-failed-enqueue",
+                    owner_id="after-failed-enqueue",
+                    allowed_actions=["continuation_send"],
+                    ttl_seconds=30,
+                )
+            except state.TaskStateError as exc:
+                self.fail(f"failed enqueue must not monopolize the global recovery lock: {exc}")
+
+        self.assertEqual(claimed["recovery_owner_id"], "after-failed-enqueue")
+
     def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
         self._stale_checkpoint_and_request(task_id="foreground-blocked")
         state.bind_browser_session("foreground-blocked", browser_session="dev")
