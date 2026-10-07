@@ -33,7 +33,7 @@ e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-fa
 gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"
 gemini_cli_bin="/home/ubuntu/.local/bin/gemini"
 gemini_cli_package_json="/home/ubuntu/.local/lib/node_modules/@google/gemini-cli/package.json"
-durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"
+durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}"
 case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff" >&2; exit 64 ;; esac
 
 test -d "$release_dir"
