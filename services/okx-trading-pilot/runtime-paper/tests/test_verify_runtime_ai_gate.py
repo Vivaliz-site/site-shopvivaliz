@@ -24,6 +24,13 @@ def valid_status(release: Path):
         "real_orders_enabled": False,
         "decision_provider": "CODEX_20_LAYER",
         "decision_model": "gpt-5.6-terra",
+        "decision_effort": "medium",
+        "decision_fallback_provider": "CHATGPT_BROWSER_20_LAYER",
+        "decision_fallback_model": "gpt-5.6-sol",
+        "decision_fallback_effort": "xhigh",
+        "decision_login_only": True,
+        "platform_api_fallback": False,
+        "heuristic_fallback": False,
         "ai_20_layers_configured": True,
         "ai_20_layers_active": True,
         "run_id": "runtime-1",
@@ -71,3 +78,24 @@ def test_verify_runtime_requires_exact_terra_model(tmp_path, monkeypatch):
     status["decision_model"] = "gpt-5.6-sol"
     with pytest.raises(AssertionError, match="wrong_decision_model"):
         run_validation(tmp_path, monkeypatch, status)
+
+
+def test_verify_runtime_requires_exact_sol_xhigh_fallback(tmp_path, monkeypatch):
+    release = tmp_path / "placeholder"
+    status = valid_status(release)
+    status["decision_fallback_model"] = "gpt-5.6-terra"
+    with pytest.raises(AssertionError, match="wrong_fallback_model"):
+        run_validation(tmp_path, monkeypatch, status)
+    status = valid_status(release)
+    status["decision_fallback_effort"] = "high"
+    with pytest.raises(AssertionError, match="wrong_fallback_effort"):
+        run_validation(tmp_path, monkeypatch, status)
+
+
+def test_verify_runtime_rejects_platform_or_heuristic_fallback(tmp_path, monkeypatch):
+    release = tmp_path / "placeholder"
+    for key, expected in (("platform_api_fallback", True), ("heuristic_fallback", True)):
+        status = valid_status(release)
+        status[key] = expected
+        with pytest.raises(AssertionError):
+            run_validation(tmp_path, monkeypatch, status)
