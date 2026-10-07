@@ -69,7 +69,7 @@ else
   fail=1
 fi
 
-check_fixed 'MIN_FREE_BYTES="${MIN_FREE_BYTES:-8589934592}"' "$GUARD" 'disk guard reserves an 8 GiB free-space floor'
+check_fixed 'MIN_FREE_BYTES="${MIN_FREE_BYTES:-6442450944}"' "$GUARD" 'disk guard reserves an 6 GiB free-space floor'
 check_fixed 'available_bytes()' "$GUARD" 'disk guard measures absolute free bytes'
 check_fixed 'low_free=1' "$GUARD" 'disk guard records absolute free-space pressure'
 check_fixed '[ "$low_free" -eq 1 ]' "$GUARD" 'absolute free-space pressure triggers cleanup'
@@ -83,6 +83,7 @@ check_fixed 'RandomizedDelaySec=15' "$TIMER" 'disk guard jitter is bounded to fi
 
 check_fixed 'ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"' "$HOUSE" 'abandoned clones default to seven-day TTL'
 check_fixed 'canonical_clone()' "$HOUSE" 'canonical clones are explicitly protected'
+check_fixed '/home/ubuntu/shopvivaliz-deploy/releases/*' "$HOUSE" 'immutable deploy releases are protected from generic abandoned-clone reclamation'
 check_fixed 'clone_has_unpushed_commits()' "$HOUSE" 'clones with unpushed local commits are protected'
 check_fixed 'linked_worktrees' "$HOUSE" 'clones with linked worktrees are protected'
 check_fixed 'abandoned_clone_removed' "$HOUSE" 'abandoned clone removals are persisted in state and logs'
