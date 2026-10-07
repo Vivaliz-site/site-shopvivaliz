@@ -458,6 +458,17 @@ def _run_once_locked(
             attempted_at = _parse_time(previous.get("dispatched_at"))
             worker_status = str(previous.get("worker_status", "")).strip().upper()
 
+            if _durable_handoff_enabled() and worker_status not in {"", "PENDING", "CLAIMED"}:
+                # Crash/restart and rolling-upgrade safety: a terminal worker
+                # result may already be durable in the ledger while an older
+                # dispatcher lease is still live. Clean it before cooldown so
+                # another conversation can take the global single-writer lock.
+                _release_dispatcher_ownership(
+                    task_id,
+                    fingerprint,
+                    f"chatgpt_terminal_ledger_{worker_status.lower()}",
+                )
+
             # Empty/PENDING/CLAIMED are observations of an active attempt,
             # not terminal outcomes. Re-poll them every dispatcher cycle so a
             # later worker result cannot be cached as "in flight" forever.
