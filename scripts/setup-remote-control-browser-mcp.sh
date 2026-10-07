@@ -89,3 +89,32 @@ if [ "${REMOTE_CONTROL_BROWSER_MCP_READY:-0}" != "1" ]; then
   journalctl -u shopvivaliz-remote-control-browser-mcp.service -n 100 --no-pager
   exit 7
 fi
+
+# Dedicated CDP browser MCPs: one process per authenticated browser session.
+for session in atendimento dev; do
+  unit="shopvivaliz-browser-${session}-mcp.service"
+  install -m 0644 "deploy/systemd/${unit}" "/etc/systemd/system/${unit}"
+done
+systemctl daemon-reload
+for session in atendimento dev; do
+  unit="shopvivaliz-browser-${session}-mcp.service"
+  if [ "$session" = atendimento ]; then port=5582; else port=5583; fi
+  systemctl enable --now "$unit"
+  ready=0
+  for _ in $(seq 1 20); do
+    if curl -fsS "http://127.0.0.1:${port}/health" >"/tmp/${unit}.health.json"; then
+      python3 - "$session" "/tmp/${unit}.health.json" <<'PYHEALTH'
+import json,sys
+session,path=sys.argv[1:]
+p=json.load(open(path,encoding='utf-8'))
+assert p.get('ok') is True
+print('browser_session='+session+' health=PASS')
+PYHEALTH
+      rm -f "/tmp/${unit}.health.json"
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$ready" = 1 ] || { systemctl status "$unit" --no-pager -l; exit 13; }
+done
