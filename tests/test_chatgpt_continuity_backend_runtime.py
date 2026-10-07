@@ -388,6 +388,22 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('if (hasIdentity) return "AUTHENTICATED";', probe)
         self.assertNotIn('if (hasIdentity && hasAccessToken) return "AUTHENTICATED";', probe)
 
+
+    def test_guardian_accepts_authenticated_shell_when_session_payload_omits_identity(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        self.assertIn(marker, body)
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        ui_marker = 'document.querySelector(\'[aria-label="Open profile menu"]\')'
+        self.assertIn(ui_marker, probe)
+        self.assertIn('return "AUTHENTICATED";', probe)
+        self.assertLess(
+            probe.index(ui_marker),
+            probe.index('const loggedOut ='),
+            "authenticated app-shell evidence must beat stale login/MFA remnants",
+        )
+
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
