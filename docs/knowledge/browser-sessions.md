@@ -61,3 +61,17 @@ de ambiente globais. Testes exercitam o endpoint realmente solicitado, a
 expressao de identidade injetada, concorrencia, heranca e falha fechada.
 Fonte de implementacao: Node.js `AsyncLocalStorage.run` (documentacao oficial:
 https://nodejs.org/api/async_context.html#asynclocalstoragerunstore-callback-args).
+
+
+## Inferência normal do ChatGPT para OKX
+
+O fallback de IA do simulador OKX usa somente o MCP dedicado Dev:
+shopvivaliz-browser-dev-mcp.service / loopback 5583 / CDP 9559 /
+dev@shopvivaliz.com.br.
+
+A operação de alto nível browser_chatgpt_infer existe somente nesse MCP.
+Ela adquire o runtime lock global em modo maintenance, cria uma conversa
+temporária nova, exige GPT-5.6 Sol em Extra High, fecha a aba ao terminar e
+falha fechado se identidade, modelo, effort ou ownership divergirem.
+shopvivaliz-browser-atendimento-mcp.service / 5582 / CDP 9556 nunca é
+fallback para o OKX. Não criar terceiro perfil de navegador para esse fluxo.

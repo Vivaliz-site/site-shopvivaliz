@@ -24,3 +24,5 @@ jobs:
         run: node tests/ai-squad-codex-bridge-test.mjs
       - name: Login-only transport contract
         run: node tests/okx-codex-login-only-test.mjs
+      - name: Normal ChatGPT Dev-MCP fallback contract
+        run: node services/okx-trading-pilot/runtime-paper/tests/okx-chatgpt-browser-bridge-test.mjs

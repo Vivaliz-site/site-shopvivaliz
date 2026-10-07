@@ -20,6 +20,13 @@ def main():
     assert report.get('ai_20_layers_configured') is True
     assert report.get('ai_20_layers_active') is True, 'ai_20_layers_not_active'
     assert report.get('decision_model')=='gpt-5.6-terra', 'wrong_decision_model'
+    assert report.get('decision_effort')=='medium', 'wrong_decision_effort'
+    assert report.get('decision_fallback_provider')=='CHATGPT_BROWSER_20_LAYER', 'wrong_fallback_provider'
+    assert report.get('decision_fallback_model')=='gpt-5.6-sol', 'wrong_fallback_model'
+    assert report.get('decision_fallback_effort')=='xhigh', 'wrong_fallback_effort'
+    assert report.get('decision_login_only') is True, 'login_only_required'
+    assert report.get('platform_api_fallback') is False, 'platform_api_fallback_forbidden'
+    assert report.get('heuristic_fallback') is False, 'heuristic_fallback_forbidden'
     assert report['run_id']==ledger['run_id'] and ledger['starting_equity']=='100'
     assert report['errors']==[] and not report['entries_blocked'], 'market_data_not_ready'
     assert all(report['markets'].get(x,0)>0 for x in ('SPOT','SWAP','FUTURES'))

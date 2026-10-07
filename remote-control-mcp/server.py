@@ -1476,9 +1476,17 @@ def run_local_command_with_stdin(
     stdin_text: str,
     timeout: int = DEFAULT_TIMEOUT,
     cancel_check: Callable[[], bool] | None = None,
+    *,
+    max_input_chars: int = 4096,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    if len(stdin_text) > 4096:
+    try:
+        input_limit = int(max_input_chars)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid_stdin_limit") from exc
+    if input_limit < 1 or input_limit > 262144:
+        raise ValueError("invalid_stdin_limit")
+    if len(stdin_text) > input_limit:
         raise ValueError("browser_text_too_long")
     invocation = isolated_invocation(args, label="browser-input")
     started = time.monotonic()

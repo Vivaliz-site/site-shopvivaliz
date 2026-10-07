@@ -1332,7 +1332,10 @@ class BootstrapContractTests(unittest.TestCase):
         for path in (
             "remote-control-browser-mcp/**",
             "scripts/setup-remote-control-browser-mcp.sh",
+            "scripts/chatgpt-continuity/chatgpt-browser-infer.mjs",
             "deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            "deploy/systemd/shopvivaliz-browser-atendimento-mcp.service",
+            "deploy/systemd/shopvivaliz-browser-dev-mcp.service",
             "scripts/shopvivaliz-native-desktop-bridge.ps1",
             "tests/remote-control-browser-mcp-test.py",
         ):
@@ -1343,6 +1346,7 @@ class BootstrapContractTests(unittest.TestCase):
         )
         self.assertIn("python3 tests/remote-control-browser-mcp-test.py", text)
         self.assertIn("bash -n scripts/setup-remote-control-browser-mcp.sh", text)
+        self.assertIn("node --check scripts/chatgpt-continuity/chatgpt-browser-infer.mjs", text)
         self.assertIn(
             "sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
             text,

@@ -40,6 +40,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tests/remote-control-browser-mcp-test.py
+      - name: Dedicated Dev and Atendimento session contracts
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install pytest==9.1.1
+          python3 -m pytest -q tests/browser-mcp-runtime-drift-contract-test.py tests/browser-dev-chatgpt-infer-contract-test.py
+          node tests/chatgpt-browser-infer-test.mjs
+          node --check scripts/chatgpt-continuity/chatgpt-browser-infer.mjs
+          bash -n scripts/setup-remote-control-browser-mcp.sh
       - name: Existing Remote Control MCP regression tests
         run: |
           set -Eeuo pipefail
