@@ -2313,9 +2313,30 @@ async function currentConversationSurfaceContains(cdp, markers, probeToken) {
         }
       }
     }else{
-      // Some loading/virtualized ChatGPT surfaces do not expose role markers.
-      // Keep only the tail so historical failures near the top cannot retrigger.
-      scope=String(body.innerText||body.textContent||'').slice(-16000);
+      // The current ChatGPT UI can omit data-message-author-role entirely.
+      // Never scan a large history tail in that case: quoted/historical failure
+      // text in an old turn would retrigger recovery forever. Anchor at the
+      // latest completed assistant turn (identified by its Regenerate action)
+      // and inspect only content rendered after that turn. Live alerts are
+      // appended below regardless, so current failures remain observable.
+      const retryButtons=[...body.querySelectorAll('button[aria-label="Regenerate response"]')];
+      const lastRetry=retryButtons[retryButtons.length-1]||null;
+      const completedTurn=lastRetry?.closest('.group.flex.flex-col')||null;
+      if(completedTurn){
+        // Use rendered text, not Range.toString(): React hydration scripts can
+        // contain serialized historical turns and would reintroduce the same
+        // false-positive through invisible script content.
+        const visibleBody=String(body.innerText||'');
+        const completedText=String(completedTurn.innerText||'').trim();
+        const boundary=completedText ? visibleBody.lastIndexOf(completedText) : -1;
+        scope=boundary>=0
+          ? visibleBody.slice(boundary+completedText.length)
+          : visibleBody.slice(-1200);
+      }else{
+        // Fail closed when no reliable turn boundary exists. Keep a very small
+        // tail for transient current-page status text; live alerts are added below.
+        scope=String(body.innerText||body.textContent||'').slice(-1200);
+      }
     }
 
     // Error/status UI often lives in a portal outside the turn subtree.
@@ -2471,21 +2492,28 @@ async function recoverableRetryButtonTarget(cdp) {
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return null;
-    const candidates=[];
+    const retryCandidates=[];
+    const regenerateCandidates=[];
     for(const button of surface.querySelectorAll('button')){
       if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      if(!accepted.has(label)) continue;
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) continue;
       const rect=button.getBoundingClientRect();
       if(!(rect.width>0&&rect.height>0)) continue;
       const style=getComputedStyle(button);
       if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
-      candidates.push({x:rect.left+rect.width/2,y:rect.top+rect.height/2});
+      const target={x:rect.left+rect.width/2,y:rect.top+rect.height/2,top:rect.top};
+      if(retryLabels.has(label)) retryCandidates.push(target);
+      else regenerateCandidates.push(target);
     }
-    return candidates.length===1 ? candidates[0] : null;
+    if(retryCandidates.length===1) return retryCandidates[0];
+    if(retryCandidates.length>1||regenerateCandidates.length===0) return null;
+    regenerateCandidates.sort((a,b)=>b.top-a.top);
+    return regenerateCandidates[0];
   })()`);
 }
 
@@ -2542,16 +2570,24 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '', { allo
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return false;
-    const candidates=[...surface.querySelectorAll('button')].filter(button=>{
-      if(button.disabled||button.getAttribute('aria-disabled')==='true') return false;
+    const rows=[...surface.querySelectorAll('button')].map(button=>{
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') return null;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      return accepted.has(label);
-    });
-    if(candidates.length!==1) return false;
-    candidates[0].click();
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) return null;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return null;
+      return {button,label,top:rect.top};
+    }).filter(Boolean);
+    const retries=rows.filter(row=>retryLabels.has(row.label));
+    if(retries.length===1){retries[0].button.click();return true;}
+    if(retries.length>1) return false;
+    const regenerates=rows.filter(row=>regenerateLabels.has(row.label)).sort((a,b)=>b.top-a.top);
+    if(!regenerates.length) return false;
+    regenerates[0].button.click();
     return true;
   })()`));
 }
@@ -4060,6 +4096,7 @@ export {
   errorBannerPresent,
   recoverableFailureReason,
   conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,

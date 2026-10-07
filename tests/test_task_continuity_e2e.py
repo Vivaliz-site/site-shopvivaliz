@@ -50,6 +50,7 @@ class ProbeStaticContractTests(unittest.TestCase):
         )
         self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
         self.assertIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertIn("bind-browser-session", PROBE_PATH.read_text(encoding="utf-8"))
 
     def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
         workflow = (
@@ -353,8 +354,9 @@ class ProbeEvaluationTests(unittest.TestCase):
                 runner=fake_runner,
             )
         commands = [call[2] for call in calls]
-        self.assertEqual(commands, ["start", "bind-conversation", "progress"])
+        self.assertEqual(commands, ["start", "bind-conversation", "bind-browser-session", "progress"])
         self.assertIn(self.CONVERSATION_ID, calls[1])
+        self.assertIn("atendimento", calls[2])
 
 
 

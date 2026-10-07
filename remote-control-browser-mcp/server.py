@@ -386,7 +386,7 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("desktop_click_outside_window")
     absolute_x = geo["X"] + x
     absolute_y = geo["Y"] + y
-    run_gui(["xdotool", "mousemove", "--sync", str(absolute_x), str(absolute_y)])
+    run_gui(["xdotool", "mousemove", str(absolute_x), str(absolute_y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": host, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -537,7 +537,7 @@ def browser_click(args: dict[str, Any]) -> dict[str, Any]:
     geo = parse_geometry(window)
     if not (geo["X"] <= x < geo["X"] + geo["WIDTH"] and geo["Y"] <= y < geo["Y"] + geo["HEIGHT"]):
         raise ValueError("browser_click_outside_active_window")
-    run_gui(["xdotool", "mousemove", "--sync", str(x), str(y)])
+    run_gui(["xdotool", "mousemove", str(x), str(y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": BROWSER_HOST, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -725,7 +725,7 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     if name == "browser_gui_tabs":
         return browser_tabs()
     if name == "browser_open":
-        return BASE_EXECUTE_TOOL("browser_open", args, cancel_check=cancel_check)
+        return browser_open(args)
     if name == "browser_gui_navigate":
         return browser_navigate(args)
     if name == "browser_screenshot":
@@ -739,26 +739,11 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     # contracts under the legacy public names. Preserve the canonical CDP
     # actions when their tab_id/selector arguments are present.
     if name == "browser_navigate" and "tab_id" not in args:
-        return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
+        return browser_navigate(args)
     if name == "browser_click" and "x" in args and "y" in args:
         return browser_click(args)
     if name == "browser_type" and "tab_id" not in args and "selector" not in args:
-        # Prefer the canonical Atendimento browser. Fall back to the isolated
-        # graphical helper only when there is no unambiguous focused editable
-        # element in the canonical session. Other canonical failures stay visible.
-        result = BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
-        if isinstance(result, dict) and result.get("ok") is False:
-            detail = str(result.get("stderr") or result.get("stdout") or result.get("error") or "")
-            canonical_unavailable = (
-                "focused_editable_not_found" in detail
-                or "focused_editable_ambiguous" in detail
-                or ("fetch failed" in detail and "127.0.0.1:9556" in detail)
-                or ("ECONNREFUSED" in detail and "127.0.0.1:9556" in detail)
-                or "CDP command timed out" in detail
-            )
-            if canonical_unavailable:
-                return browser_type(args)
-        return result
+        return browser_type(args)
 
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
