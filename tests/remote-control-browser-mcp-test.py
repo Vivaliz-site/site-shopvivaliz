@@ -93,11 +93,18 @@ class BrowserMcpTests(unittest.TestCase):
             m.validate_url("file:///tmp/a")
 
     def test_click_must_remain_inside_active_browser_window(self):
-        with mock.patch.object(m, "active_browser_window", return_value="123"),              mock.patch.object(m, "focus"),              mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),              mock.patch.object(m, "run_gui"):
+        with (
+            mock.patch.object(m, "active_browser_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),
+            mock.patch.object(m, "run_gui") as run,
+        ):
             with self.assertRaisesRegex(ValueError, "outside_active_window"):
                 m.browser_click({"x": 50, "y": 50})
             result = m.browser_click({"x": 150, "y": 150})
             self.assertTrue(result["ok"])
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "150"]), run.call_args_list)
+        self.assertNotIn(mock.call(["xdotool", "mousemove", "--sync", "150", "150"]), run.call_args_list)
 
     def test_screenshot_uses_active_window_capture(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
@@ -300,7 +307,7 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(50, result["x"])
         self.assertEqual(60, result["y"])
-        self.assertIn(mock.call(["xdotool", "mousemove", "--sync", "150", "260"]), run.call_args_list)
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "260"]), run.call_args_list)
 
     def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
         secret = "sample-sensitive-input"
