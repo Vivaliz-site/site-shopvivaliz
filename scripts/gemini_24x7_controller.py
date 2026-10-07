@@ -153,14 +153,17 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _completion_sweep(root: Path) -> dict[str, Any]:
+def _completion_sweep(
+    root: Path,
+    *,
+    durable_handoff_enabled: bool = False,
+) -> dict[str, Any]:
     """Inspect every recent active checkpoint and close verified READY work.
 
-    RUNNING checkpoints are observed here and queued by the proactive watchdog.
-    READY_TO_COMPLETE is already verified, so completing it is deterministic.
-    If completion checks regress, complete_task moves it back to RUNNING with a
-    concrete repair action; the proactive watchdog can queue that new revision
-    in the same controller cycle.
+    RUNNING checkpoints are queued by the proactive watchdog. READY_TO_COMPLETE
+    checkpoints are terminalized deterministically, but never by racing the
+    interactive foreground: bound conversations first acquire the same fenced
+    recovery ownership used by detached executors.
     """
     runtime = Path(root)
     current = datetime.now(timezone.utc)
@@ -175,6 +178,9 @@ def _completion_sweep(root: Path) -> dict[str, Any]:
         "completed": 0,
         "requeued": 0,
         "failed": 0,
+        "deferred_foreground": 0,
+        "deferred_ownership_busy": 0,
+        "deferred_unbound_session": 0,
         "skipped_invalid_timestamp": 0,
         "skipped_outside_lookback": 0,
     }
@@ -202,7 +208,8 @@ def _completion_sweep(root: Path) -> dict[str, Any]:
                 continue
 
             summary["active"] += 1
-            if str(payload.get("conversation_id", "")).strip():
+            conversation_id = str(payload.get("conversation_id", "")).strip()
+            if conversation_id:
                 summary["bound_conversations"] += 1
             else:
                 summary["unbound_active"] += 1
@@ -215,6 +222,39 @@ def _completion_sweep(root: Path) -> dict[str, Any]:
             if not task_id:
                 summary["failed"] += 1
                 continue
+
+            recovery_owner = ""
+            if durable_handoff_enabled and conversation_id:
+                browser_session = str(payload.get("browser_session", "")).strip()
+                if browser_session not in {"dev", "atendimento", "fred"}:
+                    # Never bypass the single-writer contract merely to move a
+                    # checkpoint from READY to terminal.
+                    summary["deferred_unbound_session"] += 1
+                    continue
+                recovery_owner = f"controller-terminalize:{task_id}"
+                try:
+                    claimed = task_state.claim_recovery_ownership(
+                        task_id,
+                        owner_id=recovery_owner,
+                        allowed_actions=["checkpoint_mutation"],
+                        ttl_seconds=60,
+                    )
+                except task_state.TaskStateError as exc:
+                    message = str(exc).strip().lower()
+                    if (
+                        "ownership is busy" in message
+                        or "lease already held" in message
+                        or "runtime lock already held" in message
+                    ):
+                        summary["deferred_ownership_busy"] += 1
+                    else:
+                        summary["failed"] += 1
+                    continue
+                if str(claimed.get("recovery_state", "")).strip() == "FOREGROUND_ACTIVE":
+                    summary["deferred_foreground"] += 1
+                    recovery_owner = ""
+                    continue
+
             try:
                 completed = task_state.complete_task(task_id)
             except task_state.TaskStateError:
@@ -227,6 +267,19 @@ def _completion_sweep(root: Path) -> dict[str, Any]:
                 else:
                     summary["failed"] += 1
                 continue
+            finally:
+                if recovery_owner:
+                    try:
+                        task_state.release_recovery_ownership(
+                            task_id,
+                            owner_id=recovery_owner,
+                            reason="controller_terminalization_finished",
+                        )
+                    except task_state.TaskStateError:
+                        # The terminal transition is already durable. A stale
+                        # release is forensic noise, not permission to undo it.
+                        pass
+
             if str(completed.get("status", "")).strip() == "CONCLUIDO":
                 summary["completed"] += 1
             else:
@@ -235,7 +288,6 @@ def _completion_sweep(root: Path) -> dict[str, Any]:
         task_state.RUNTIME_DIR = previous_runtime
 
     return summary
-
 
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
     runtime_root = Path(root).resolve()
@@ -517,7 +569,10 @@ def run_once(
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
         durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
-        completion_sweep = _completion_sweep(root)
+        completion_sweep = _completion_sweep(
+            root,
+            durable_handoff_enabled=durable_handoff_enabled,
+        )
         watch = watchdog.run_once(
             stale_seconds=max(1, int(stale_seconds)),
             runtime_dir=root,
@@ -541,6 +596,8 @@ def run_once(
             degraded_reasons.append("dispatcher_failed")
         if int(completion_sweep.get("failed") or 0) > 0:
             degraded_reasons.append("completion_sweep_failed")
+        if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
+            degraded_reasons.append("completion_sweep_unbound_session")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
         if int(nudge.get("skipped_no_token") or 0) > 0:
