@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 SOURCE_SERVER="${1:-remote-control-browser-mcp/server.py}"
 SOURCE_UNIT="${2:-deploy/systemd/shopvivaliz-remote-control-browser-mcp.service}"
+SOURCE_CHATGPT_DEV_RESPONDER="${3:-remote-control-browser-mcp/chatgpt-dev-respond.mjs}"
 INSTALL_DIR="/opt/shopvivaliz-remote-control-browser"
 UNIT_PATH="/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service"
 DESKTOP_ENV="/var/lib/shopvivaliz-remote-control/desktop.env"
@@ -14,6 +15,7 @@ CONFLICTING_SESSION_DAYBREAK_BACKUP="$UNIT_DROPIN_DIR/40-authenticated-session.c
 test "$(id -u)" = 0 || { echo "ERROR=root_required" >&2; exit 2; }
 test -f "$SOURCE_SERVER" || { echo "ERROR=server_source_missing" >&2; exit 3; }
 test -f "$SOURCE_UNIT" || { echo "ERROR=unit_source_missing" >&2; exit 4; }
+test -f "$SOURCE_CHATGPT_DEV_RESPONDER" || { echo "ERROR=chatgpt_dev_responder_source_missing" >&2; exit 14; }
 test -f /opt/shopvivaliz-remote-control/server.py || { echo "ERROR=base_remote_control_missing" >&2; exit 5; }
 test -f /var/lib/shopvivaliz-remote-control/service.env || { echo "ERROR=base_service_env_missing" >&2; exit 6; }
 command -v rustdesk >/dev/null 2>&1 || { echo "ERROR=rustdesk_binary_missing" >&2; exit 9; }
@@ -37,8 +39,10 @@ fi
 
 install -d -m 0755 "$INSTALL_DIR"
 install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
+install -m 0755 "$SOURCE_CHATGPT_DEV_RESPONDER" "$INSTALL_DIR/chatgpt-dev-respond.mjs"
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
 python3 -m py_compile "$INSTALL_DIR/server.py"
+node --check "$INSTALL_DIR/chatgpt-dev-respond.mjs"
 
 # The Browser MCP must never inherit or retain a drop-in that points it at the
 # authenticated ChatGPT continuity profile. General browsing and continuity are
