@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 TOKEN_PATH = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
+SERVICE_ENV_PATH = Path("/var/lib/shopvivaliz-remote-control/service.env")
 MCP_URLS = (
     "http://127.0.0.1:5581/mcp",
     "http://127.0.0.1:5580/mcp",
@@ -24,7 +25,21 @@ MAX_MESSAGE = 1_048_576
 HTTP_TIMEOUT = 30
 INLINE_BUDGET = 20
 DEFAULT_COMMAND_TIMEOUT = 30
-MAX_COMMAND_TIMEOUT = 900
+MAX_DURABLE_TIMEOUT_DEFAULT = 7200
+MAX_DURABLE_TIMEOUT_HARD = 86400
+
+
+def configured_max_durable_timeout() -> int:
+    value = MAX_DURABLE_TIMEOUT_DEFAULT
+    try:
+        for raw_line in SERVICE_ENV_PATH.read_text(encoding="utf-8").splitlines():
+            key, separator, raw_value = raw_line.partition("=")
+            if separator and key == "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT":
+                value = int(raw_value.strip())
+                break
+    except (OSError, UnicodeError, ValueError):
+        value = MAX_DURABLE_TIMEOUT_DEFAULT
+    return max(900, min(value, MAX_DURABLE_TIMEOUT_HARD))
 
 
 def error_response(request: Any, message: str, **data: Any) -> dict[str, Any]:
@@ -49,7 +64,7 @@ def prepare_request(request: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     promoted = False
     if name == "admin_command_run":
         timeout = args.get("timeout", DEFAULT_COMMAND_TIMEOUT)
-        if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= MAX_COMMAND_TIMEOUT:
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= configured_max_durable_timeout():
             raise ValueError("invalid_timeout")
         durable = args.get("durable")
         if durable is not None and not isinstance(durable, bool):
