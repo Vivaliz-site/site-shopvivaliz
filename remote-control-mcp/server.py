@@ -1579,6 +1579,25 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "JS"
     )
 
+def browser_open_command(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    encoded = base64.b64encode(url.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_OPEN_URL_B64={encoded}; "
+        "python3 - <<'PY'\n"
+        "import base64,json,os,urllib.request,urllib.parse\n"
+        "url=base64.b64decode(os.environ['SHOPVIVALIZ_OPEN_URL_B64']).decode()\n"
+        "req=urllib.request.Request('http://127.0.0.1:9556/json/new?'+urllib.parse.quote(url,safe=':/'),method='PUT')\n"
+        "with urllib.request.urlopen(req,timeout=5) as r: x=json.load(r)\n"
+        "print(json.dumps({'opened':True,'id':x.get('id'),'origin':url.split('/',3)[0]+'//'+url.split('/',3)[2],'session':'atendimento'},separators=(',',':')))\n"
+        "PY"
+    )
+
+
 def browser_controls_expression() -> str:
     return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
 
@@ -1852,6 +1871,13 @@ def execute_tool(
         )
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
+    if name == "browser_open":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_open_command(str(args.get("url") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
     if name == "browser_controls":
         return _browser_result(run_host_command(
             CONTROLLER_BACKEND_HOST,
@@ -2095,6 +2121,7 @@ TOOLS = [
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
+    ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),

@@ -127,6 +127,18 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_browser_allows_microsoft_oauth_host(self):
         self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
 
+    def test_browser_open_targets_canonical_atendimento_cdp_session(self):
+        command = m.browser_open_command("https://claude.ai/login")
+        self.assertIn("http://127.0.0.1:9556/json/new?", command)
+        self.assertNotIn("9559", command)
+        self.assertIn("SHOPVIVALIZ_OPEN_URL_B64", command)
+        self.assertIn("session':'atendimento", command)
+
+    def test_browser_open_is_exposed_by_canonical_base_mcp(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_open", specs)
+        self.assertEqual(["url"], specs["browser_open"]["inputSchema"]["required"])
+
     def test_mcp_tool_names_are_unique(self):
         names = [item["name"] for item in m.tool_specs()]
         self.assertEqual(len(names), len(set(names)))
