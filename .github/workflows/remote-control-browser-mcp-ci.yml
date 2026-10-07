@@ -32,10 +32,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Python syntax
+      - name: Syntax
         run: |
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+          node --check remote-control-browser-mcp/chatgpt-dev-respond.mjs
       - name: Browser MCP contract tests
         run: |
           set -Eeuo pipefail
