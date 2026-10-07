@@ -394,6 +394,7 @@ def _run_once_locked(
     skipped_conversation_coalesced = 0
     skipped_unbound = 0
     retry_attempted = 0
+    progress_followup_attempted = 0
     skipped_attempt_limit = 0
     skipped_foreground_active = 0
     skipped_ownership_busy = 0
@@ -514,7 +515,21 @@ def _run_once_locked(
                         worker_status = observed_status
 
             if worker_status == "PROGRESS_CONFIRMED":
-                continue
+                # A real assistant response proves only that this continuation
+                # round advanced. The task contract remains authoritative: if
+                # the same checkpoint is still RUNNING after the normal retry
+                # cooldown, follow the same conversation again until the task
+                # itself reaches CONCLUIDO or BLOCKED_EXTERNAL.
+                confirmed_at = _parse_time(
+                    previous.get("worker_status_observed_at")
+                    or previous.get("dispatched_at")
+                )
+                if (
+                    confirmed_at is None
+                    or (current - confirmed_at).total_seconds() < retry_seconds
+                ):
+                    continue
+                progress_followup_attempted += 1
 
             # An active queue claim is already being handled by the browser
             # worker. Re-enqueueing would only duplicate the same continuation.
@@ -642,6 +657,7 @@ def _run_once_locked(
         "skipped_conversation_coalesced": skipped_conversation_coalesced,
         "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
+        "progress_followup_attempted": progress_followup_attempted,
         "skipped_attempt_limit": skipped_attempt_limit,
         "skipped_foreground_active": skipped_foreground_active,
         "skipped_ownership_busy": skipped_ownership_busy,
@@ -671,6 +687,7 @@ def run_once(
                 "skipped_conversation_coalesced": 0,
                 "skipped_unbound": 0,
                 "retry_attempted": 0,
+                "progress_followup_attempted": 0,
                 "skipped_attempt_limit": 0,
                 "locked": True,
                 "generated_at": utc_now(),

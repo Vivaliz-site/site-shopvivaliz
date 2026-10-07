@@ -334,6 +334,41 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(status_calls), 1)
 
+    def test_confirmed_progress_is_followed_again_until_checkpoint_becomes_terminal(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.dispatcher.run_once(**kwargs)
+        observed = self.dispatcher.run_once(
+            **kwargs,
+            query_status=lambda **unused: {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {
+                    "status": "PROGRESS_CONFIRMED",
+                    "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                }},
+            },
+        )
+        self.assertEqual(observed["dispatched"], 0)
+        self.assertEqual(len(self.calls), 1)
+
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows[-1]["worker_status_observed_at"] = "2020-01-01T00:00:00Z"
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+        followup = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(state.load_task("task-1")["status"], "RUNNING")
+        self.assertEqual(followup["dispatched"], 1)
+        self.assertEqual(followup.get("progress_followup_attempted"), 1)
+        self.assertEqual(len(self.calls), 2)
+
     def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
         self._stale_checkpoint_and_request(task_id="foreground-blocked")
         state.bind_browser_session("foreground-blocked", browser_session="dev")
