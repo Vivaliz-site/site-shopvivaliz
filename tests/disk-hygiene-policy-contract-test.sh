@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOUSE="$ROOT/ops/host/shopvivaliz-workspace-housekeeper"
 GUARD="$ROOT/ops/host/shopvivaliz-disk-guard"
 INSTALLER="$ROOT/scripts/install-disk-hygiene.sh"
+TIMER="$ROOT/deploy/systemd/shopvivaliz-disk-guard.timer"
 
 fail=0
 check_fixed() {
@@ -29,6 +30,7 @@ check_absent() {
 bash -n "$HOUSE"
 sh -n "$GUARD"
 bash -n "$INSTALLER"
+test -f "$TIMER"
 
 check_fixed '-ge 70' "$HOUSE" 'housekeeper has 70% pressure threshold'
 check_fixed 'FULL_TTL_HOURS="${FULL_TTL_HOURS:-24}"' "$HOUSE" 'housekeeper honors full TTL override'
@@ -66,6 +68,18 @@ else
 '
   fail=1
 fi
+
+check_fixed 'MIN_FREE_BYTES="${MIN_FREE_BYTES:-8589934592}"' "$GUARD" 'disk guard reserves an 8 GiB free-space floor'
+check_fixed 'available_bytes()' "$GUARD" 'disk guard measures absolute free bytes'
+check_fixed 'low_free=1' "$GUARD" 'disk guard records absolute free-space pressure'
+check_fixed '[ "$low_free" -eq 1 ]' "$GUARD" 'absolute free-space pressure triggers cleanup'
+check_fixed 'PRESSURE_RECLAIM_PUSHED=1' "$GUARD" 'pressure cleanup may reclaim clean pushed inactive worktrees'
+check_fixed 'ABANDONED_CLONE_TTL_HOURS=24' "$GUARD" 'pressure cleanup shortens safe abandoned-clone TTL'
+check_fixed 'PRESSURE_RECLAIM_PUSHED="${PRESSURE_RECLAIM_PUSHED:-0}"' "$HOUSE" 'housekeeper defaults pushed-worktree reclamation off'
+check_fixed 'pushed_worktree()' "$HOUSE" 'housekeeper proves HEAD exists on a remote branch before pressure reclamation'
+check_fixed 'pushed_worktree_removed' "$HOUSE" 'pushed clean worktree reclamation is auditable'
+check_fixed 'OnUnitActiveSec=5min' "$TIMER" 'disk guard runs every five minutes'
+check_fixed 'RandomizedDelaySec=15' "$TIMER" 'disk guard jitter is bounded to fifteen seconds'
 
 check_fixed 'ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"' "$HOUSE" 'abandoned clones default to seven-day TTL'
 check_fixed 'canonical_clone()' "$HOUSE" 'canonical clones are explicitly protected'
