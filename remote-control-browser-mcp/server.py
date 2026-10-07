@@ -9,6 +9,7 @@ profile parsing is used.
 from __future__ import annotations
 
 import base64
+import fcntl
 import binascii
 import hashlib
 import importlib.util
@@ -70,6 +71,117 @@ BROWSER_TOOLS = {
     "browser_gui_click",
     "browser_gui_type",
 }
+
+CHATGPT_DEV_RESPONDER = Path(__file__).with_name("chatgpt-dev-respond.mjs")
+CHATGPT_DEV_LOCK = Path("/run/lock/shopvivaliz-chatgpt-dev-respond.lock")
+AGENT_TASK_STATE_DIR = Path(os.environ.get(
+    "SHOPVIVALIZ_AGENT_TASK_STATE_DIR",
+    "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
+))
+
+
+def validate_chatgpt_dev_request(args: dict[str, Any]) -> dict[str, Any]:
+    model = str(args.get("model") or "").strip()
+    effort = str(args.get("effort") or "").strip().lower()
+    profile = str(args.get("profile") or "").strip()
+    prompt = str(args.get("prompt") or "").strip()
+    if model != "gpt-5.6-sol":
+        raise ValueError("invalid_model")
+    if effort != "xhigh":
+        raise ValueError("invalid_effort")
+    if profile != "okx":
+        raise ValueError("invalid_profile")
+    if bool(args.get("web_search", False)):
+        raise ValueError("web_search_disabled")
+    if not prompt or len(prompt) > 120000:
+        raise ValueError("invalid_prompt")
+    return {
+        "model": model,
+        "effort": effort,
+        "profile": profile,
+        "prompt": prompt,
+        "web_search": False,
+    }
+
+
+def _live_lease_for_conversation(conversation_id: str) -> bool:
+    if not conversation_id:
+        return False
+    lease_path = AGENT_TASK_STATE_DIR / "_conversation-leases" / (
+        hashlib.sha256(conversation_id.encode()).hexdigest() + ".json"
+    )
+    try:
+        payload = json.loads(lease_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if payload.get("released_at") is not None:
+        return False
+    try:
+        return float(payload.get("expires_at_epoch") or 0) > time.time()
+    except (TypeError, ValueError):
+        return False
+
+
+def dev_session_has_live_continuity_owner() -> bool:
+    try:
+        entries = list(AGENT_TASK_STATE_DIR.glob("*.json"))
+    except OSError:
+        return True
+    for path in entries:
+        if path.name.startswith("_"):
+            continue
+        try:
+            task = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if str(task.get("browser_session") or "").strip() != "dev":
+            continue
+        if str(task.get("status") or "").upper() not in {"RUNNING", "READY_TO_COMPLETE"}:
+            continue
+        conversation_id = str(task.get("conversation_id") or "").strip()
+        if conversation_id and _live_lease_for_conversation(conversation_id):
+            return True
+    return False
+
+
+def chatgpt_dev_respond(args: dict[str, Any]) -> dict[str, Any]:
+    request = validate_chatgpt_dev_request(args)
+    if base.BROWSER_SESSION_NAME != "dev" or base.BROWSER_CDP_URL != "http://127.0.0.1:9559":
+        raise ValueError("dev_session_required")
+    if dev_session_has_live_continuity_owner():
+        raise RuntimeError("dev_browser_owned_by_continuity")
+    if not CHATGPT_DEV_RESPONDER.is_file():
+        raise RuntimeError("chatgpt_dev_responder_missing")
+    CHATGPT_DEV_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with CHATGPT_DEV_LOCK.open("a+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("dev_browser_busy") from None
+        completed = subprocess.run(
+            ["/usr/bin/node", str(CHATGPT_DEV_RESPONDER)],
+            input=json.dumps(request, separators=(",", ":")),
+            text=True,
+            capture_output=True,
+            timeout=210,
+            check=False,
+            env={
+                **os.environ,
+                "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+                "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+            },
+        )
+        if completed.returncode != 0:
+            detail = base.redact_text((completed.stderr or completed.stdout or "chatgpt_dev_responder_failed").strip())
+            raise RuntimeError(detail[:400])
+        try:
+            payload = json.loads(completed.stdout)
+        except ValueError:
+            raise RuntimeError("chatgpt_dev_responder_invalid_json") from None
+        if not isinstance(payload, dict):
+            raise RuntimeError("chatgpt_dev_responder_invalid_payload")
+        return payload
+
 
 ATTENDIMENTO_TOOL_MAP = {
     "browser_atendimento_tabs": "browser_tabs",
@@ -718,6 +830,12 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         return desktop_click(args)
     if name == "desktop_type":
         return desktop_type(args)
+    if name == "browser_chatgpt_respond":
+        if base.BROWSER_SESSION_NAME != "dev":
+            raise ValueError("dev_session_required")
+        if dev_session_has_live_continuity_owner():
+            raise RuntimeError("dev_browser_owned_by_continuity")
+        return chatgpt_dev_respond(args)
     if name in ATTENDIMENTO_TOOL_MAP:
         return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
     if name == "browser_health":
@@ -769,9 +887,33 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
         raw = str(safe.pop("text"))
         safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
+    if tool == "browser_chatgpt_respond" and "prompt" in safe:
+        raw = str(safe.pop("prompt"))
+        safe.pop("prompt_sha256", None)
+        safe["prompt_length"] = len(raw)
     if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
+
+
+
+CHATGPT_DEV_TOOL_SPEC = {
+    "name": "browser_chatgpt_respond",
+    "description": "Use only the dedicated Dev ChatGPT session for one serialized OKX PAPER model turn.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "model": {"type": "string", "enum": ["gpt-5.6-sol"]},
+            "effort": {"type": "string", "enum": ["xhigh"]},
+            "profile": {"type": "string", "enum": ["okx"]},
+            "prompt": {"type": "string", "minLength": 1, "maxLength": 120000},
+            "web_search": {"type": "boolean", "enum": [False]},
+        },
+        "required": ["model", "effort", "profile", "prompt", "web_search"],
+        "additionalProperties": False,
+    },
+    "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+}
 
 
 BROWSER_TOOL_SPECS = [
@@ -854,7 +996,8 @@ def tool_specs() -> list[dict[str, Any]]:
     browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
     atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
     inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
-    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
+    extra = [CHATGPT_DEV_TOOL_SPEC] if base.BROWSER_SESSION_NAME == "dev" else []
+    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs() + extra
 
 
 base.execute_tool = execute_tool
