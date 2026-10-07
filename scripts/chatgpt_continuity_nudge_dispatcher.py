@@ -35,13 +35,13 @@ from typing import Any
 try:
     from .agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state, release_recovery_ownership, release_recovery_ownership,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
