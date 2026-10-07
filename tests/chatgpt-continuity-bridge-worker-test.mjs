@@ -241,6 +241,55 @@ async function run() {
   }
 
   {
+    const workerModule = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+    assert.equal(
+      typeof workerModule.connectBoundConversationWithReentry,
+      'function',
+      'bound recovery needs an explicit reentry path when the existing exact tab is hung',
+    );
+    const id = '11111111-2222-3333-4444-555555555555';
+    const bound = {
+      type: 'page',
+      url: `https://chatgpt.com/c/${id}`,
+      webSocketDebuggerUrl: 'ws://hung-bound',
+    };
+    const home = {
+      type: 'page',
+      url: 'https://chatgpt.com/',
+      webSocketDebuggerUrl: 'ws://neutral-home',
+    };
+    const live = { marker: 'reentered-bound-conversation', close() {} };
+    const connectorCalls = [];
+    let navigations = 0;
+
+    const connected = await workerModule.connectBoundConversationWithReentry(
+      [bound, home],
+      id,
+      {
+        connector: async tab => {
+          connectorCalls.push(tab.webSocketDebuggerUrl);
+          if (tab === bound) throw new Error('CDP command timed out');
+          return live;
+        },
+        selectReentry: async tabs => {
+          assert.deepEqual(tabs, [bound, home]);
+          return home;
+        },
+        navigate: async (tab, conversationId) => {
+          navigations += 1;
+          assert.equal(tab, home);
+          assert.equal(conversationId, id);
+          return true;
+        },
+      },
+    );
+
+    assert.equal(connected, live, 'a hung exact target must fall back through a neutral authenticated tab');
+    assert.deepEqual(connectorCalls, ['ws://hung-bound', 'ws://neutral-home']);
+    assert.equal(navigations, 1, 'reentry must navigate the neutral target exactly once');
+  }
+
+  {
     const stale = { ready: false, closed: false, close() { this.closed = true; } };
     const healthy = { ready: true, closed: false, close() { this.closed = true; } };
     const tabs = [
