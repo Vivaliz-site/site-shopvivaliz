@@ -899,15 +899,28 @@ def mark_indeterminate(task_id: str, note: str) -> None:
 
 
 INDETERMINATE_POSITIVE_RE = re.compile(r"(?i)(?<![a-z])(?:pass(?:ed)?|success(?:ful|fully)?|ok)(?![a-z])")
-INDETERMINATE_NEGATIVE_RE = re.compile(r"(?i)(?<![a-z])(?:fail(?:ed|ure)?|error|traceback)(?![a-z])")
+INDETERMINATE_NEGATIVE_RE = re.compile(
+    r"(?i)(?<![a-z])(?:not\s+ok|bail\s+out!|fail(?:ed|ure)?|error|traceback)(?![a-z])"
+)
+
+
+def _indeterminate_marker_counts(value: str) -> tuple[int, int]:
+    negative = len(INDETERMINATE_NEGATIVE_RE.findall(value))
+    # Remove recognized failure phrases before looking for standalone positive
+    # tokens so TAP's "not ok" cannot be double-counted as success.
+    positive_source = INDETERMINATE_NEGATIVE_RE.sub(" ", value)
+    positive = len(INDETERMINATE_POSITIVE_RE.findall(positive_source))
+    return positive, negative
 
 
 def _indeterminate_log_evidence(task_id: str, result_dir: str | None) -> dict[str, Any]:
     path = Path(result_dir) if result_dir else task_result_dir(task_id)
     stdout = read_capped_text(path / "stdout.log")
     stderr = read_capped_text(path / "stderr.log")
-    positive = len(INDETERMINATE_POSITIVE_RE.findall(stdout)) + len(INDETERMINATE_POSITIVE_RE.findall(stderr))
-    negative = len(INDETERMINATE_NEGATIVE_RE.findall(stdout)) + len(INDETERMINATE_NEGATIVE_RE.findall(stderr))
+    stdout_positive, stdout_negative = _indeterminate_marker_counts(stdout)
+    stderr_positive, stderr_negative = _indeterminate_marker_counts(stderr)
+    positive = stdout_positive + stderr_positive
+    negative = stdout_negative + stderr_negative
     stdout_bytes = len(stdout.encode("utf-8"))
     stderr_bytes = len(stderr.encode("utf-8"))
     if positive and not negative:
