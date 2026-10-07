@@ -377,6 +377,17 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("state === \"AUTHENTICATED\"", probe)
         self.assertIn("connectFirstUsableChatgptTab(tabs", probe)
 
+
+    def test_guardian_accepts_authenticated_identity_without_exposed_access_token(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
+        self.assertIn(marker, body)
+        probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
+        self.assertIn("const hasIdentity = Boolean(session?.account || session?.user);", probe)
+        self.assertIn('if (hasIdentity) return "AUTHENTICATED";', probe)
+        self.assertNotIn('if (hasIdentity && hasAccessToken) return "AUTHENTICATED";', probe)
+
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
