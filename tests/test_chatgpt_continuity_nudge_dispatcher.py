@@ -384,6 +384,57 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(result["skipped_foreground_active"], 1)
         self.assertEqual(self.calls, [])
 
+    def test_terminal_worker_result_releases_recovery_ownership_for_next_conversation(self) -> None:
+        self._stale_checkpoint_and_request(task_id="first-conversation")
+        state.bind_browser_session("first-conversation", browser_session="dev")
+
+        kwargs = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            first = self.dispatcher.run_once(**kwargs)
+            self.assertEqual(first["dispatched"], 1)
+
+            observed = self.dispatcher.run_once(
+                **kwargs,
+                query_status=lambda **unused: {
+                    "ok": True,
+                    "http_status": 200,
+                    "body": {"status": "OK", "nudge": {"status": "STALLED_NOT_CONFIRMED"}},
+                },
+            )
+            self.assertEqual(observed["dispatched"], 0)
+
+            first_state = state.load_task("first-conversation")
+            self.assertTrue(
+                first_state.get("recovery_released_at"),
+                "terminal worker observation must release durable recovery ownership immediately",
+            )
+
+            state.start_task("second-conversation", "goal", "gpt")
+            state.bind_conversation(
+                "second-conversation",
+                conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            )
+            state.bind_browser_session("second-conversation", browser_session="dev")
+            state.record_progress("second-conversation", next_action="keep going")
+            second_path = self.runtime / "second-conversation.json"
+            second_payload = json.loads(second_path.read_text(encoding="utf-8"))
+            second_payload["updated_at"] = (
+                datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            second_path.write_text(json.dumps(second_payload), encoding="utf-8")
+            watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+            next_result = self.dispatcher.run_once(**kwargs)
+
+        self.assertEqual(next_result["dispatched"], 1)
+        self.assertEqual(next_result["skipped_ownership_busy"], 0)
+        self.assertEqual(self.calls[-1]["task_id"], "second-conversation")
+
     def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
         f = self.dispatcher.recovery_state_for_worker_status
         self.assertEqual(f("CLAIMED", 0, 2), "RECOVERY_CLAIMED")
