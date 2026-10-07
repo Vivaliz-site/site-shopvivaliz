@@ -166,9 +166,12 @@ def chatgpt_dev_respond(args: dict[str, Any]) -> dict[str, Any]:
             timeout=210,
             check=False,
             env={
-                **os.environ,
+                "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
                 "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
                 "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+                "SHOPVIVALIZ_CHATGPT_DEV_TIMEOUT_MS": os.environ.get(
+                    "SHOPVIVALIZ_CHATGPT_DEV_TIMEOUT_MS", "180000"
+                ),
             },
         )
         if completed.returncode != 0:
