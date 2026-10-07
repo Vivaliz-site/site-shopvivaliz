@@ -135,6 +135,16 @@ controller_promote, continuity_e2e and claude_remote_control_reconcile are alway
 
 Tools: `task_submit`, `task_status`, `task_cancel`.
 
+### Process indeterminate durable cases by API analysis only
+1. An execution that started but has no live unit and no persisted terminal result remains terminal `indeterminate`; the original command is never replayed automatically.
+2. The API analyzes only persisted stdout/stderr/result metadata and classifies the case as positive evidence, negative evidence, mixed evidence, logs without terminal markers, or no persisted output.
+3. Processing records sanitized evidence counts and timestamps in the task row, without storing new raw command/log content.
+4. Analytical processing never restarts transports/services, launches a process, cancels work, or changes the task's `indeterminate` state.
+5. The worker processes pending analytical cases automatically; `task_process_indeterminate` is the explicit batch API for immediate processing.
+6. Durable health reports total, processed and pending-analysis indeterminate counts. Historical cases that have been analytically processed do not by themselves degrade API availability.
+
+Tool: `task_process_indeterminate`.
+
 ### Review control-plane activity
 1. Request recent audit events.
 2. Inspect redacted inputs, host, actor, status and timestamps.

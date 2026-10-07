@@ -734,6 +734,11 @@ def init_db() -> None:
         ensure_column(db, "tasks", "result_dir", "TEXT")
         ensure_column(db, "tasks", "attempt", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(db, "tasks", "recovery_note", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_status", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_result", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_evidence_json", "TEXT NOT NULL DEFAULT '{}'")
+        ensure_column(db, "tasks", "analyzed_at", "TEXT")
+        ensure_column(db, "tasks", "analysis_intervention_required", "INTEGER NOT NULL DEFAULT 0")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
         db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_state_created ON tasks(state,created_at)")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_execution_unit ON tasks(execution_unit) WHERE execution_unit IS NOT NULL")
@@ -885,10 +890,112 @@ def finalize_task(task_id: str, state: str, exit_code: int | None, result_dir: P
 def mark_indeterminate(task_id: str, note: str) -> None:
     with db_conn() as db:
         db.execute(
-            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=? "
+            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=?,"
+            "analysis_status='pending',analysis_result='',analysis_evidence_json='{}',"
+            "analyzed_at=NULL,analysis_intervention_required=0 "
             "WHERE id=? AND state NOT IN ('succeeded','failed','expired','cancelled','indeterminate')",
             (now(), now(), note, task_id),
         )
+
+
+INDETERMINATE_POSITIVE_RE = re.compile(r"(?i)(?<![a-z])(?:pass(?:ed)?|success(?:ful|fully)?|ok)(?![a-z])")
+INDETERMINATE_NEGATIVE_RE = re.compile(
+    r"(?i)(?<![a-z])(?:not\s+ok|bail\s+out!|fail(?:ed|ure)?|error|traceback)(?![a-z])"
+)
+
+
+def _indeterminate_marker_counts(value: str) -> tuple[int, int]:
+    negative = len(INDETERMINATE_NEGATIVE_RE.findall(value))
+    # Remove recognized failure phrases before looking for standalone positive
+    # tokens so TAP's "not ok" cannot be double-counted as success.
+    positive_source = INDETERMINATE_NEGATIVE_RE.sub(" ", value)
+    positive = len(INDETERMINATE_POSITIVE_RE.findall(positive_source))
+    return positive, negative
+
+
+def _indeterminate_log_evidence(task_id: str, result_dir: str | None) -> dict[str, Any]:
+    path = Path(result_dir) if result_dir else task_result_dir(task_id)
+    stdout = read_capped_text(path / "stdout.log")
+    stderr = read_capped_text(path / "stderr.log")
+    stdout_positive, stdout_negative = _indeterminate_marker_counts(stdout)
+    stderr_positive, stderr_negative = _indeterminate_marker_counts(stderr)
+    positive = stdout_positive + stderr_positive
+    negative = stdout_negative + stderr_negative
+    stdout_bytes = len(stdout.encode("utf-8"))
+    stderr_bytes = len(stderr.encode("utf-8"))
+    if positive and not negative:
+        classification = "positive_evidence"
+    elif negative and not positive:
+        classification = "negative_evidence"
+    elif positive and negative:
+        classification = "mixed_evidence"
+    elif stdout_bytes or stderr_bytes:
+        classification = "logs_without_terminal_markers"
+    else:
+        classification = "no_persisted_output"
+    return {
+        "classification": classification,
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+        "positive_markers": positive,
+        "negative_markers": negative,
+        "result_json_present": (path / "result.json").is_file(),
+    }
+
+
+def analyze_indeterminate_task(task_id: str) -> dict[str, Any]:
+    row = load_task(task_id)
+    if row["state"] != "indeterminate":
+        raise ValueError("task_not_indeterminate")
+    evidence = _indeterminate_log_evidence(task_id, row["result_dir"])
+    analyzed_at = now()
+    with db_conn() as db:
+        changed = db.execute(
+            "UPDATE tasks SET analysis_status='processed',analysis_result=?,analysis_evidence_json=?,"
+            "analyzed_at=?,analysis_intervention_required=0 "
+            "WHERE id=? AND state='indeterminate'",
+            (
+                evidence["classification"],
+                json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+                analyzed_at,
+                task_id,
+            ),
+        ).rowcount
+    if not changed:
+        raise ValueError("task_not_indeterminate")
+    return {
+        "task_id": task_id,
+        "state": "indeterminate",
+        "analysis_status": "processed",
+        "analysis_result": evidence["classification"],
+        "analysis_intervention_required": 0,
+        "analyzed_at": analyzed_at,
+        "evidence": evidence,
+    }
+
+
+def process_indeterminate_tasks(limit: int = 200) -> dict[str, Any]:
+    bounded = max(1, min(int(limit), 200))
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT id FROM tasks WHERE state='indeterminate' "
+            "AND COALESCE(analysis_status,'') != 'processed' ORDER BY created_at LIMIT ?",
+            (bounded,),
+        ).fetchall()
+    classifications: dict[str, int] = {}
+    processed_ids: list[str] = []
+    for row in rows:
+        result = analyze_indeterminate_task(str(row["id"]))
+        classification = str(result["analysis_result"])
+        classifications[classification] = classifications.get(classification, 0) + 1
+        processed_ids.append(str(row["id"]))
+    return {
+        "processed": len(processed_ids),
+        "task_ids": processed_ids,
+        "classifications": classifications,
+        "analysis_only": True,
+        "external_intervention": False,
+    }
 
 
 def finalize_cancelled_without_result(task_id: str) -> None:
@@ -1974,6 +2081,8 @@ def execute_tool(
                 (limit,),
             ).fetchall()
         return {"events": [dict(r) for r in rows]}
+    if name == "task_process_indeterminate":
+        return process_indeterminate_tasks(args.get("limit", 200))
     if name == "task_status":
         tid = str(args.get("task_id") or "")
         row = load_task(tid)
@@ -2157,6 +2266,7 @@ TOOLS = [
     ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
+    ("task_process_indeterminate", "Process pending indeterminate durable tasks by persisted-log analysis only. Never re-executes the original command, restarts transports/services, or changes the indeterminate terminal state.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, False, False),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
 ]
 
@@ -2200,10 +2310,15 @@ def tool_specs() -> list[dict[str, Any]]:
 
 
 def task_worker() -> None:
+    next_analysis_at = 0.0
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
             reconcile_tasks()
+            current = time.monotonic()
+            if current >= next_analysis_at:
+                process_indeterminate_tasks(limit=50)
+                next_analysis_at = current + 1.0
             with db_conn() as db:
                 active_rows = db.execute(
                     "SELECT host,COUNT(*) AS count FROM tasks "
@@ -2252,11 +2367,18 @@ def durable_health_summary() -> dict[str, Any]:
         rows = db.execute(
             "SELECT state,COUNT(*) AS count FROM tasks WHERE state IN ('queued','starting','running','cancel_requested','indeterminate') GROUP BY state"
         ).fetchall()
+        analyzed = db.execute(
+            "SELECT COUNT(*) AS count FROM tasks WHERE state='indeterminate' AND analysis_status='processed'"
+        ).fetchone()
         heartbeat = db.execute(
             "SELECT heartbeat_at FROM tasks WHERE state IN ('starting','running','cancel_requested') AND heartbeat_at IS NOT NULL ORDER BY heartbeat_at LIMIT 1"
         ).fetchone()
     summary = {state: 0 for state in ("queued", "starting", "running", "cancel_requested", "indeterminate")}
     summary.update({str(row["state"]): int(row["count"]) for row in rows})
+    summary["indeterminate_processed"] = int(analyzed["count"]) if analyzed else 0
+    summary["indeterminate_pending_analysis"] = max(
+        0, summary["indeterminate"] - summary["indeterminate_processed"]
+    )
     age: float | None = None
     if heartbeat:
         try:
@@ -2264,7 +2386,7 @@ def durable_health_summary() -> dict[str, Any]:
         except ValueError:
             age = None
     summary["oldest_heartbeat_age_seconds"] = age
-    summary["degraded"] = summary["indeterminate"] > 0 or (age is not None and age > 10)
+    summary["degraded"] = summary["indeterminate_pending_analysis"] > 0 or (age is not None and age > 10)
     return summary
 
 
