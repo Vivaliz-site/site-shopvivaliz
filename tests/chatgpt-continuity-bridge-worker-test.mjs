@@ -21,6 +21,7 @@ const {
   errorBannerPresent,
   recoverableFailureReason,
   conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
@@ -66,6 +67,17 @@ const {
   mutationAuthorizationAllows,
   guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerate response/,
+  'retry target must recognize the current Regenerate response control label',
+);
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerateCandidates\.sort/,
+  'when multiple historical regenerate controls are visible, the latest visible control must be selected deterministically',
+);
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
 // report) be tested without a real browser or WebSocket -- exactly the
