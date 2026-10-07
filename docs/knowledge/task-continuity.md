@@ -140,6 +140,22 @@ Regras obrigatórias:
 Objetivo: impedir falso-verde e garantir que uma falha do stream/conversa não
 abandone a tarefa nem gere uma tempestade de mensagens de retomada.
 
+
+### Progresso de uma rodada não encerra a tarefa
+
+`PROGRESS_CONFIRMED` certifica somente que a conversa vinculada produziu uma
+resposta real naquela rodada. Ele **não** é estado terminal da tarefa. Enquanto
+o checkpoint correspondente continuar `RUNNING`, o controlador deve voltar a
+acompanhar a mesma conversa depois do cooldown normal e produzir novo follow-up
+serializado. A repetição para imediatamente quando o checkpoint chega a
+`CONCLUIDO` ou `BLOCKED_EXTERNAL`, ou quando uma nova revisão do checkpoint
+substitui o fingerprint anterior.
+
+No modo de handoff durável, isso vale também para checkpoints frescos: o
+controlador não espera a conversa ficar "travada" para assumir que ainda existe
+trabalho. O estado durável da tarefa, e não uma única resposta do assistente, é
+a fonte de verdade para decidir se o objetivo terminou.
+
 ## Retomada automática de checkpoint
 
 Policy: `TASK_CONTINUITY_AUTO_RESUME_V4`.
