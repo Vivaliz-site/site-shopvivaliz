@@ -108,6 +108,7 @@ def test_async_orchestrator_limits_inflight_to_two_and_never_blocks(tmp_path):
     second=orch.run_cycle(rows)
     assert second.decisions==2
     assert second.pending<=2
+    assert orch.provider_ready is True
     orch.close()
 
 
@@ -133,11 +134,46 @@ def test_async_provider_failure_is_fail_closed_not_daemon_crash(tmp_path):
     orch.close()
 
 
+def test_async_bridge_unavailable_enters_cooldown_without_resubmission(tmp_path):
+    import time
+    from okx_pilot.orchestrator import PilotOrchestrator
+    from okx_pilot.paper import PaperBroker
+    from okx_pilot.risk import RiskGateway
+    from okx_pilot.domain import PilotLimits
+    from okx_pilot.scanner import MarketScanner
+
+    calls=[]
+    class Provider:
+        async_mode=True; max_concurrency=2; provider_name="CODEX_20_LAYER"; context_builder=None
+        def analyze(self,m,context=None):
+            calls.append(m.instrument)
+            raise DecisionValidationError("decision_bridge:codex_unavailable")
+
+    rows=tuple(snap(f"Q{i}-USDT-SWAP") for i in range(4))
+    orch=PilotOrchestrator(MarketScanner(),Provider(),RiskGateway(PilotLimits()),PaperBroker(),tmp_path/"audit.jsonl")
+    first=orch.run_cycle(rows)
+    assert first.pending==2
+    time.sleep(0.02)
+    second=orch.run_cycle(rows)
+    assert second.provider_errors==2
+    assert second.pending==0
+    assert orch.provider_cooldown_seconds > 0
+    assert orch.provider_ready is False
+    attempts=len(calls)
+    third=orch.run_cycle(rows)
+    assert third.pending==0
+    time.sleep(0.02)
+    assert len(calls)==attempts
+    orch.close()
+
+
 def test_production_runner_has_no_heuristic_fallback():
     from pathlib import Path
     source=(Path(__file__).parents[1]/"scripts"/"run.py").read_text()
     assert "HeuristicDecisionProvider" not in source
     assert "CodexBridgeDecisionProvider" in source
+    assert "'ai_20_layers_active':orch.provider_ready" in source
+    assert "'decision_provider_cooldown_seconds':round(orch.provider_cooldown_seconds,3)" in source
 
 
 def test_hold_allows_zero_leverage_when_no_position_is_opened():

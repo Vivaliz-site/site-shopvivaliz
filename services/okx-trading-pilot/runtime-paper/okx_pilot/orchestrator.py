@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import time
 
 from .decision import DecisionParser, DecisionValidationError
 from .paper import PaperScenario
@@ -31,6 +32,9 @@ class PilotOrchestrator:
         self.decision_successes_total = 0
         self.provider_errors_total = 0
         self.last_provider_error = None
+        self.provider_available = False
+        self._provider_retry_not_before = 0.0
+        self._provider_retry_delay_seconds = 60.0
         self._pending = {}
         self._decision_pool = None
         if getattr(decision_provider, "async_mode", False):
@@ -43,6 +47,14 @@ class PilotOrchestrator:
     @property
     def pending_count(self):
         return len(self._pending)
+
+    @property
+    def provider_cooldown_seconds(self):
+        return max(0.0, self._provider_retry_not_before - time.monotonic())
+
+    @property
+    def provider_ready(self):
+        return self.provider_available and self.provider_cooldown_seconds <= 0
 
     def close(self):
         if self._decision_pool:
@@ -85,6 +97,18 @@ class PilotOrchestrator:
     def _provider_error(self, snap, exc):
         self.provider_errors_total += 1
         self.last_provider_error = str(exc)[:160]
+        self.provider_available = False
+        lowered = self.last_provider_error.lower()
+        if any(marker in lowered for marker in (
+            "decision_bridge:codex_unavailable",
+            "decision_bridge:bridge_busy",
+            "decision_bridge:timeouterror",
+            "decision_bridge:urlerror",
+        )):
+            self._provider_retry_not_before = max(
+                self._provider_retry_not_before,
+                time.monotonic() + self._provider_retry_delay_seconds,
+            )
         self._audit({
             "event": "DECISION_PROVIDER_ERROR",
             "instrument": snap.instrument,
@@ -110,6 +134,7 @@ class PilotOrchestrator:
 
         self.decision_successes_total += 1
         self.last_provider_error = None
+        self.provider_available = True
         effective_state = state if state is not None else self.paper_broker.pilot_state()
         verdict = self.risk_gateway.authorize(intent, snap, effective_state, now=now)
         self._audit({
@@ -192,6 +217,12 @@ class PilotOrchestrator:
             decisions += d
             approved += a
             fills += f
+
+        if self.provider_cooldown_seconds > 0:
+            return CycleResult(
+                "PAPER", len(candidates), decisions, approved, fills,
+                pending=len(self._pending), provider_errors=provider_errors,
+            )
 
         available = self._max_pending - len(self._pending)
         if available > 0:
