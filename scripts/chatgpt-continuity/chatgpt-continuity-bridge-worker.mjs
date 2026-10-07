@@ -2313,9 +2313,30 @@ async function currentConversationSurfaceContains(cdp, markers, probeToken) {
         }
       }
     }else{
-      // Some loading/virtualized ChatGPT surfaces do not expose role markers.
-      // Keep only the tail so historical failures near the top cannot retrigger.
-      scope=String(body.innerText||body.textContent||'').slice(-16000);
+      // The current ChatGPT UI can omit data-message-author-role entirely.
+      // Never scan a large history tail in that case: quoted/historical failure
+      // text in an old turn would retrigger recovery forever. Anchor at the
+      // latest completed assistant turn (identified by its Regenerate action)
+      // and inspect only content rendered after that turn. Live alerts are
+      // appended below regardless, so current failures remain observable.
+      const retryButtons=[...body.querySelectorAll('button[aria-label="Regenerate response"]')];
+      const lastRetry=retryButtons[retryButtons.length-1]||null;
+      const completedTurn=lastRetry?.closest('.group.flex.flex-col')||null;
+      if(completedTurn){
+        // Use rendered text, not Range.toString(): React hydration scripts can
+        // contain serialized historical turns and would reintroduce the same
+        // false-positive through invisible script content.
+        const visibleBody=String(body.innerText||'');
+        const completedText=String(completedTurn.innerText||'').trim();
+        const boundary=completedText ? visibleBody.lastIndexOf(completedText) : -1;
+        scope=boundary>=0
+          ? visibleBody.slice(boundary+completedText.length)
+          : visibleBody.slice(-1200);
+      }else{
+        // Fail closed when no reliable turn boundary exists. Keep a very small
+        // tail for transient current-page status text; live alerts are added below.
+        scope=String(body.innerText||body.textContent||'').slice(-1200);
+      }
     }
 
     // Error/status UI often lives in a portal outside the turn subtree.
