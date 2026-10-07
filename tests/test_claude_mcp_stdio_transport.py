@@ -190,8 +190,40 @@ class StdioTransportTests(unittest.TestCase):
         self.assertEqual(result["error"]["message"], "controller_token_unavailable")
         self.assertEqual(self.calls, [])
 
+    def test_durable_timeout_uses_protected_runtime_limit(self):
+        self.token_path.parent.mkdir(parents=True, exist_ok=True)
+        service_env = Path(self.temp.name) / "service.env"
+        service_env.write_text(
+            "SHOPVIVALIZ_REMOTE_MCP_TOKEN=not-a-real-credential\n"
+            "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=7200\n",
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env),
+            mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
+        ):
+            result = self.forward(self.request(timeout=7200, durable=True))
+        self.assertNotIn("error", result)
+        sent = self.calls[0][1]
+        self.assertEqual(sent["params"]["name"], "task_submit")
+        self.assertEqual(sent["params"]["arguments"]["timeout"], 7200)
+
+    def test_durable_timeout_above_protected_runtime_limit_is_rejected(self):
+        service_env = Path(self.temp.name) / "service.env"
+        service_env.write_text(
+            "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=7200\n",
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env),
+            mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
+        ):
+            result = self.forward(self.request(timeout=7201, durable=True))
+        self.assertEqual(self.calls, [])
+        self.assertEqual(result["error"]["message"], "invalid_timeout")
+
     def test_invalid_request_or_timeout_never_reaches_controller(self):
-        for payload in ([], self.request(timeout=0), self.request(timeout=901), self.request(timeout=True)):
+        for payload in ([], self.request(timeout=0), self.request(timeout=86401), self.request(timeout=True)):
             with self.subTest(payload=payload), mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
                 result = self.forward(payload)
                 self.assertIn("error", result)
