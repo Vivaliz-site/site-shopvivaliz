@@ -220,7 +220,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 
 ## ChatGPT: foreground curto e ownership obrigatório
 
-- Com durable handoff habilitado, o turno interativo deve encerrar após checkpoint + um único submit durável; é proibido manter a resposta aberta aguardando `task_wait`, CI, deploy, sleeps ou polling longo.
+- Após o recibo/handoff durável, o turno foreground retorna imediatamente. É proibido executar `task_wait`, sleep, espera de CI/deploy ou polling repetido de `task_status` no mesmo turno; o trabalho e sua observação pertencem ao executor durável.
 - Browser/continuity/controller são single-writer: qualquer ação mutável exige lease/lock atual e fencing token. Agentes concorrentes podem observar, mas não navegar, clicar, digitar, reiniciar serviço ou promover controller sem ownership válido.
 - Enquanto existir lease foreground vivo para a conversa, background é somente leitura. Recovery só assume ownership após release/expiry e revalidação da checkpoint version.
 - Nunca declarar recuperação E2E por saúde do bridge, HTTP 200, ACK, tool activity ou mudança genérica da UI. Sucesso exige nova resposta real do assistente na `conversation_id` vinculada.
