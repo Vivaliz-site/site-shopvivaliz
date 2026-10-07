@@ -70,7 +70,7 @@ runtime_eval_ready() {
 
 browser_session_state() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
-    timeout 8s node --input-type=module -e '
+    timeout 15s node --input-type=module -e '
       // CONTINUITY_BROWSER_SESSION_STATE_PROBE
       const { Cdp, connectFirstUsableChatgptTab } = await import(
         "file://" + process.env.CHATGPT_CONTINUITY_WORKER_MODULE
@@ -143,6 +143,7 @@ browser_session_state() {
             cache: "no-store",
             signal: AbortSignal.timeout(2000),
           });
+          if (sessionResponse.status === 401 || sessionResponse.status === 403) return "LOGGED_OUT";
           if (sessionResponse.ok) {
             let session = null;
             try { session = await sessionResponse.json(); } catch {}
