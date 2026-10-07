@@ -2707,6 +2707,28 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(after["indeterminate_processed"], 1)
         self.assertFalse(after["degraded"])
 
+    def test_worker_processes_newly_indeterminate_tasks_analytically(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start()
+            deadline = time.monotonic() + 1.5
+            status = m.execute_tool("task_status", {"task_id": task_id})
+            while time.monotonic() < deadline and status.get("analysis_status") != "processed":
+                time.sleep(0.03)
+                status = m.execute_tool("task_status", {"task_id": task_id})
+            m.STOP_EVENT.set()
+            worker.join(timeout=1)
+
+        self.assertEqual(status["state"], "indeterminate")
+        self.assertEqual(status["analysis_status"], "processed")
+        self.assertEqual(status["analysis_result"], "positive_evidence")
+
     def test_task_process_indeterminate_is_an_api_tool_with_no_external_intervention_contract(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertIn("task_process_indeterminate", specs)
