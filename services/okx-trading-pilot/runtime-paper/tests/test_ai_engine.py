@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal as D
 import pytest
 
-from okx_pilot.decision import CodexBridgeDecisionProvider, DecisionParser, DecisionValidationError, REQUIRED_LAYER_NAMES
+from okx_pilot.decision import CodexBridgeDecisionProvider, ChatGPTBrowserDecisionProvider, LoginFailoverDecisionProvider, DecisionParser, DecisionValidationError, REQUIRED_LAYER_NAMES
 from okx_pilot.domain import InstrumentType, MarketSnapshot
 
 def snap(inst="BTC-USDT-SWAP", typ=InstrumentType.SWAP):
@@ -39,6 +39,60 @@ def test_codex_provider_uses_real_bridge_protocol_and_strict_prompt():
     lowered=prompt.lower()
     assert "api_key" not in lowered and "passphrase" not in lowered and "bearer " not in lowered
     assert '"decision":"TRADE"' in compact
+
+def test_chatgpt_browser_provider_requires_sol_xhigh_login_transport():
+    m=snap(); captured={}
+    def transport(url,payload,timeout):
+        captured.update(payload)
+        return {"ok":True,"text":json.dumps(valid_payload(m)),"model":"gpt-5.6-sol","effort":"xhigh","transport":"chatgpt_browser","profile":"okx"}
+    provider=ChatGPTBrowserDecisionProvider("http://127.0.0.1:17657/v1/respond",transport=transport)
+    raw=provider.analyze(m,context={"paper_account":{"equity":"100"}})
+    assert raw["decision"]=="TRADE"
+    assert captured["model"]=="gpt-5.6-sol"
+    assert captured["effort"]=="xhigh"
+    assert captured["profile"]=="okx"
+    assert captured["web_search"] is False
+
+
+def test_login_failover_uses_browser_only_for_primary_availability_failures():
+    m=snap(); calls=[]
+    class Primary:
+        provider_name="CODEX_20_LAYER"
+        def analyze(self,*_):
+            calls.append("primary")
+            raise DecisionValidationError("decision_bridge:codex_unavailable")
+    class Fallback:
+        provider_name="CHATGPT_BROWSER_20_LAYER"; model="gpt-5.6-sol"; effort="xhigh"
+        def analyze(self,*_):
+            calls.append("fallback")
+            return valid_payload(m)
+    provider=LoginFailoverDecisionProvider(Primary(),Fallback())
+    raw=provider.analyze(m,{})
+    assert raw["instrument"]==m.instrument
+    assert calls==["primary","fallback"]
+    assert provider.last_provider_name=="CHATGPT_BROWSER_20_LAYER"
+    assert provider.last_model=="gpt-5.6-sol"
+    assert provider.last_effort=="xhigh"
+    assert provider.fallback_uses_total==1
+
+
+def test_login_failover_never_masks_primary_integrity_failure():
+    m=snap(); calls=[]
+    class Primary:
+        provider_name="CODEX_20_LAYER"
+        def analyze(self,*_):
+            calls.append("primary")
+            raise DecisionValidationError("decision_bridge:model_mismatch")
+    class Fallback:
+        provider_name="CHATGPT_BROWSER_20_LAYER"; model="gpt-5.6-sol"; effort="xhigh"
+        def analyze(self,*_):
+            calls.append("fallback")
+            return valid_payload(m)
+    provider=LoginFailoverDecisionProvider(Primary(),Fallback())
+    with pytest.raises(DecisionValidationError,match="model_mismatch"):
+        provider.analyze(m,{})
+    assert calls==["primary"]
+
 
 def test_provider_rejects_non_json_wrong_model_and_unavailable():
     m=snap()
@@ -172,6 +226,9 @@ def test_production_runner_has_no_heuristic_fallback():
     source=(Path(__file__).parents[1]/"scripts"/"run.py").read_text()
     assert "HeuristicDecisionProvider" not in source
     assert "CodexBridgeDecisionProvider" in source
+    assert "ChatGPTBrowserDecisionProvider" in source
+    assert "LoginFailoverDecisionProvider" in source
+    assert "gpt-5.6-sol" in source and "xhigh" in source
     assert "'ai_20_layers_active':orch.provider_ready" in source
     assert "'decision_provider_cooldown_seconds':round(orch.provider_cooldown_seconds,3)" in source
 
