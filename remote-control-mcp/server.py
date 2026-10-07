@@ -1245,6 +1245,8 @@ def run_host_command(
     command: str,
     timeout: int = DEFAULT_TIMEOUT,
     cancel_check: Callable[[], bool] | None = None,
+    *,
+    recover_transport: bool = True,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
     started = time.monotonic()
@@ -1300,9 +1302,14 @@ def run_host_command(
 
     try:
         result = run_once()
-        if (
+        recoverable_transport_error = (
             result["exit_code"] != 0
             and is_recoverable_reverse_ssh_error(host, str(result.get("stderr") or ""))
+        )
+        if recoverable_transport_error and not recover_transport:
+            result["transport_recovery_available"] = True
+        elif (
+            recoverable_transport_error
             and deadline - time.monotonic() > 1
             and recover_reverse_ssh_transport(host)
             and deadline - time.monotonic() > 1
@@ -1997,9 +2004,9 @@ def execute_tool(
         return durable
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
-        result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), health_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "processes_list":
-        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "service_status":
         result = run_host_command(
             str(host),
@@ -2011,6 +2018,7 @@ def execute_tool(
             ),
             timeout,
             cancel_check,
+            recover_transport=False,
         )
     elif name == "service_action":
         action = str(args.get("action") or "")
@@ -2028,11 +2036,11 @@ def execute_tool(
             cancel_check,
         )
     elif name == "file_read":
-        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
+        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check, recover_transport=False)
     elif name == "file_list":
-        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check)
+        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check, recover_transport=False)
     elif name == "logs_tail":
-        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check)
+        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check, recover_transport=False)
     elif name == "admin_command_run":
         command = str(args.get("command") or "")
         if not command.strip():
