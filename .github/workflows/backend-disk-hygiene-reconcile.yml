@@ -93,9 +93,18 @@ jobs:
           mkdir -p "$stage"
           tar -xzf "$archive" -C "$stage"
 
-          runtime_guard="$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard 2>/dev/null | awk '{print $1}' || true)"
-          runtime_house="$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper 2>/dev/null | awk '{print $1}' || true)"
-          runtime_timer="$(sha256sum /etc/systemd/system/shopvivaliz-disk-guard.timer 2>/dev/null | awk '{print $1}' || true)"
+          runtime_guard=""
+          runtime_house=""
+          runtime_timer=""
+          if [ -r /usr/local/sbin/shopvivaliz-disk-guard ]; then
+            runtime_guard="$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard | awk '{print $1}')"
+          fi
+          if [ -r /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
+            runtime_house="$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper | awk '{print $1}')"
+          fi
+          if [ -r /etc/systemd/system/shopvivaliz-disk-guard.timer ]; then
+            runtime_timer="$(sha256sum /etc/systemd/system/shopvivaliz-disk-guard.timer | awk '{print $1}')"
+          fi
           needs_install=0
           [ "$runtime_guard" = "$source_guard" ] || needs_install=1
           [ "$runtime_house" = "$source_house" ] || needs_install=1
