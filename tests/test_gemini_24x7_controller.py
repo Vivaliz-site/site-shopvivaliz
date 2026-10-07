@@ -797,5 +797,53 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(lines[index + 1].strip(), '"$target_dir/scripts/gemini_24x7_controller.py" ' + chr(92))
 
 
+    def test_durable_handoff_controller_requests_proactive_convergence(self) -> None:
+        controller = load_controller()
+        calls = []
+
+        def fake_watchdog(**kwargs):
+            calls.append(kwargs)
+            return {"scanned": 1, "eligible": 0, "dispatched": 0, "mode": "proactive"}
+
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", side_effect=fake_watchdog),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="proactive-owner")
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0]["proactive"])
+        self.assertTrue(result["durable_handoff_enabled"])
+
+    def test_controller_terminalizes_ready_to_complete_checkpoint_each_cycle(self) -> None:
+        controller = load_controller()
+        from scripts import agent_task_state as task_state
+
+        previous_runtime = task_state.RUNTIME_DIR
+        task_state.RUNTIME_DIR = self.runtime
+        try:
+            task_state.start_task("ready-cycle", "finalizar tarefa verificada", "gpt")
+            task_state.mark_ready(
+                "ready-cycle",
+                evidence=["validacao fresca PASS"],
+                verification="objetivo original verificado",
+            )
+        finally:
+            task_state.RUNTIME_DIR = previous_runtime
+
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="terminalize-owner")
+
+        current = json.loads((self.runtime / "ready-cycle.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["status"], "CONCLUIDO")
+        self.assertEqual(result["completion_sweep"]["completed"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
