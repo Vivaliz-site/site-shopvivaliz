@@ -1,0 +1,22 @@
+[Unit]
+Description=ShopVivaliz isolated universal browser MCP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/shared/browser-universal
+EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env
+ExecStart=/usr/local/bin/node /home/ubuntu/shopvivaliz-deploy/shared/browser-universal/mcp-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+MemoryMax=1200M
+
+[Install]
+WantedBy=multi-user.target
