@@ -37,6 +37,7 @@ class IssueCommentRouterTest(unittest.TestCase):
             "/mlrr operation=validate reason=test": "mlrr",
             "/continuity-e2e conversation_id=abcDEF_12345678": "continuity_e2e",
             "/backend-continuity-recover-v1": "backend_continuity_recovery",
+            "/recover-windows": "windows_private_peer_recovery",
             "/provision-governed-backend-ci-runners-v1": "provision_backend_runners",
             "/refresh-backend-delete-repo-scope-v1 CONFIRM": "refresh_backend_delete_scope",
             "/refresh-a1-delete-repo-scope-v1 CONFIRM": "refresh_a1_delete_scope",
