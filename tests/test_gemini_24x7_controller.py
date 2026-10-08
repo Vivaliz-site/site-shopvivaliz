@@ -97,6 +97,39 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
         self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
 
+    def test_unbound_active_checkpoint_is_not_reported_healthy(self) -> None:
+        controller = load_controller()
+        state = {
+            "task_id": "unbound-task",
+            "status": "RUNNING",
+            "goal": "resume after interrupted ChatGPT turn",
+            "next_action": "finish remaining work",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        (self.runtime / "unbound-task.json").write_text(json.dumps(state), encoding="utf-8")
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 1, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 0, "dispatched": 0, "skipped_unbound": 1,
+            }),
+            patch.object(controller.dispatcher, "run_once", return_value={
+                "scanned": 1, "eligible": 0, "launched": 0, "deferred_unbound": 1,
+            }),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="unbound-regression")
+
+        self.assertFalse(result["continuity_ready"])
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["liveness_ok"])
+        self.assertEqual(result["completion_sweep"]["unbound_active"], 1)
+        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 1)
+        self.assertEqual(result["dispatcher"]["deferred_unbound"], 1)
+        self.assertIn("active_checkpoints_missing_conversation_binding", result["degraded_reasons"])
+        self.assertIn("chatgpt_resume_unbound", result["degraded_reasons"])
+        self.assertIn("detached_resume_unbound", result["degraded_reasons"])
+
     def test_expired_durable_lease_is_recovered_and_recorded(self) -> None:
         controller = load_controller()
         lease = self.runtime / controller.LEASE_FILE
@@ -765,7 +798,10 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn("${SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY} --daemon", unit)
-        self.assertIn("Restart=on-failure", unit)
+        self.assertIn("Restart=always", unit)
+        self.assertIn("RestartSec=60", unit)
+        self.assertIn("StartLimitIntervalSec=0", unit)
+        self.assertNotIn("StartLimitBurst=", unit)
         self.assertIn("shopvivaliz-gemini-24x7-controller", installer)
         self.assertIn('base_dir="/opt/shopvivaliz-gemini-24x7-controller"', installer)
         self.assertIn('releases_dir="$base_dir/releases"', installer)
