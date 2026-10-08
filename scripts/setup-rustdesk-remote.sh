@@ -54,6 +54,22 @@ PY
   if systemctl list-unit-files rustdesk.service >/dev/null 2>&1; then systemctl enable rustdesk.service >/dev/null; fi
 }
 
+ensure_client_recovery_policy() {
+  require_root
+  assert_host
+  install -d -m 0755 /etc/systemd/system/rustdesk.service.d
+  cat >/etc/systemd/system/rustdesk.service.d/60-recovery.conf <<'EOF'
+[Service]
+Restart=on-failure
+RestartSec=10s
+EOF
+  chmod 0644 /etc/systemd/system/rustdesk.service.d/60-recovery.conf
+  systemctl daemon-reload
+  policy="$(systemctl show rustdesk.service -p Restart --value)"
+  [ "$policy" = "on-failure" ] || die rustdesk_restart_policy_not_applied 33
+  echo "RUSTDESK_CLIENT_RECOVERY_POLICY=$policy"
+}
+
 configure_client_profile() {
   local home="$1" owner="$2" server="$3" relay_server="$4" key="$5"
   local cfgdir="$home/.config/rustdesk"
@@ -99,6 +115,7 @@ install_client() {
   if systemctl is-active --quiet rustdesk.service; then systemctl stop rustdesk.service; fi
   install_client_package
   if systemctl is-active --quiet rustdesk.service; then systemctl stop rustdesk.service; fi
+  ensure_client_recovery_policy
 
   configure_client_profile /root root "$CLIENT_SERVER" "$CLIENT_RELAY_SERVER" "$CLIENT_KEY"
   for u in fredconsole fredrdp ubuntu; do
@@ -245,6 +262,8 @@ status() {
   fi
   if svc="$(systemctl is-active rustdesk.service 2>/dev/null)"; then :; else svc="inactive"; fi
   echo "RUSTDESK_CLIENT_SERVICE=${svc:-unknown}"
+  restart_policy="$(systemctl show rustdesk.service -p Restart --value 2>/dev/null || true)"
+  echo "RUSTDESK_CLIENT_RESTART_POLICY=${restart_policy:-unavailable}"
   if [ "$HOST" = "$BACKEND_HOST" ]; then
     if command -v docker >/dev/null 2>&1 && [ -f "$SERVER_ROOT/compose.yml" ]; then
       if hbbs="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)"; then :; else hbbs="missing"; fi
@@ -272,6 +291,7 @@ status() {
 case "$ACTION" in
   server_install) install_server ;;
   client_install) install_client ;;
+  client_recovery_ensure) ensure_client_recovery_policy; status ;;
   status) status ;;
   *) die unsupported_action 64 ;;
 esac

@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -27,6 +28,7 @@ REQUESTS_FILE = "_resume-requests.jsonl"
 ARCHIVE_FILE = "_resume-requests-archive.jsonl"
 LOCK_FILE = "_resume-queue.lock"
 DEFAULT_COMPACT_THRESHOLD = 25
+DEFAULT_TASK_ANALYSIS_WINDOW_DAYS = 10
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 
 
@@ -62,15 +64,38 @@ def _load_state(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _states(root: Path) -> dict[str, dict[str, Any]]:
+def _parse_time(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _states(
+    root: Path,
+    *,
+    now: datetime | None = None,
+    analysis_window_days: int = DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
+) -> dict[str, dict[str, Any]]:
     states: dict[str, dict[str, Any]] = {}
     if not root.is_dir():
         return states
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    oldest_allowed = current - timedelta(days=max(1, int(analysis_window_days)))
     for path in sorted(root.glob("*.json")):
         if path.name.startswith("_") or not path.is_file():
             continue
         payload = _load_state(path)
         if not payload:
+            continue
+        created = _parse_time(payload.get("created_at"))
+        if created is None or created < oldest_allowed:
             continue
         task_id = str(payload.get("task_id", "")).strip()
         if task_id:
@@ -164,16 +189,38 @@ def _analyze(lines: list[str], states: dict[str, dict[str, Any]], *, threshold: 
     return counts, retain
 
 
-def _certify_unlocked(root: Path, *, threshold: int) -> tuple[dict[str, Any], list[str], set[int]]:
+def _certify_unlocked(
+    root: Path,
+    *,
+    threshold: int,
+    now: datetime | None = None,
+    analysis_window_days: int = DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
+) -> tuple[dict[str, Any], list[str], set[int]]:
     lines = _raw_lines(root)
-    summary, retain = _analyze(lines, _states(root), threshold=threshold)
+    summary, retain = _analyze(
+        lines,
+        _states(root, now=now, analysis_window_days=analysis_window_days),
+        threshold=threshold,
+    )
+    summary["analysis_window_days"] = max(1, int(analysis_window_days))
     return summary, lines, retain
 
 
-def certify_queue(runtime_dir: Path | None = None, *, threshold: int = DEFAULT_COMPACT_THRESHOLD) -> dict[str, Any]:
+def certify_queue(
+    runtime_dir: Path | None = None,
+    *,
+    threshold: int = DEFAULT_COMPACT_THRESHOLD,
+    now: datetime | None = None,
+    analysis_window_days: int = DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
+) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     with _queue_lock(root, exclusive=False):
-        summary, _, _ = _certify_unlocked(root, threshold=threshold)
+        summary, _, _ = _certify_unlocked(
+            root,
+            threshold=threshold,
+            now=now,
+            analysis_window_days=analysis_window_days,
+        )
     return summary
 
 
@@ -247,10 +294,17 @@ def compact_queue(
     *,
     force: bool = False,
     threshold: int = DEFAULT_COMPACT_THRESHOLD,
+    now: datetime | None = None,
+    analysis_window_days: int = DEFAULT_TASK_ANALYSIS_WINDOW_DAYS,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     with _queue_lock(root, exclusive=True):
-        before, lines, retain = _certify_unlocked(root, threshold=threshold)
+        before, lines, retain = _certify_unlocked(
+            root,
+            threshold=threshold,
+            now=now,
+            analysis_window_days=analysis_window_days,
+        )
         removable = [line for index, line in enumerate(lines) if index not in retain]
         should_compact = bool(removable) or (force and bool(lines))
 
@@ -285,7 +339,12 @@ def compact_queue(
             os.replace(temp, target)
             _fsync_dir(root)
 
-        after, _, _ = _certify_unlocked(root, threshold=threshold)
+        after, _, _ = _certify_unlocked(
+            root,
+            threshold=threshold,
+            now=now,
+            analysis_window_days=analysis_window_days,
+        )
 
     return {
         "compacted": bool(should_compact),

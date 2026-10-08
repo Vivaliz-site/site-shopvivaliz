@@ -48,6 +48,18 @@ jobs:
 
           test -f "$SCRIPT"
           php -l "$SCRIPT"
+
+          # Host rebuilds/migrations may not preserve the cron package. Treat the
+          # scheduler as an explicit runtime dependency instead of assuming that
+          # `crontab` already exists.
+          if ! command -v crontab >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cron
+          fi
+          sudo systemctl enable --now cron.service
+          command -v crontab >/dev/null 2>&1
+          test "$(systemctl is-active cron.service)" = 'active'
+
           mkdir -p "$LOG_DIR"
 
           CURRENT="$(crontab -l 2>/dev/null)" || CURRENT=""

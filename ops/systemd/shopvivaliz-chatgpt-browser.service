@@ -5,6 +5,12 @@ Wants=network-online.target display-manager.service
 
 [Service]
 Type=simple
+CPUWeight=700
+IOWeight=700
+CPUQuota=120%
+MemoryHigh=3G
+MemoryMax=4G
+TasksMax=512
 User=fredrdp
 Group=fredrdp
 Environment=HOME=/home/fredrdp

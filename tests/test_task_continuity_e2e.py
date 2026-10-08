@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +50,7 @@ class ProbeStaticContractTests(unittest.TestCase):
         )
         self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
         self.assertIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertIn("bind-browser-session", PROBE_PATH.read_text(encoding="utf-8"))
 
     def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
         workflow = (
@@ -349,9 +354,104 @@ class ProbeEvaluationTests(unittest.TestCase):
                 runner=fake_runner,
             )
         commands = [call[2] for call in calls]
-        self.assertEqual(commands, ["start", "bind-conversation", "progress"])
+        self.assertEqual(commands, ["start", "bind-conversation", "bind-browser-session", "progress"])
         self.assertIn(self.CONVERSATION_ID, calls[1])
+        self.assertIn("atendimento", calls[2])
 
+
+
+
+class DurableHandoffDisconnectE2ETest(unittest.TestCase):
+    def test_detached_resume_survives_client_disconnect_with_fenced_ownership(self) -> None:
+        dispatcher_path = ROOT / "scripts" / "task_resume_dispatcher.py"
+        scripts_path = str(ROOT / "scripts")
+        if scripts_path not in sys.path:
+            sys.path.insert(0, scripts_path)
+        spec = importlib.util.spec_from_file_location("task_resume_dispatcher_disconnect_e2e", dispatcher_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        dispatcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(dispatcher)
+        conversation_id = "11111111-2222-3333-4444-555555555555"
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "state"
+            runtime.mkdir()
+            project = root / "project"
+            (project / "scripts").mkdir(parents=True)
+            capture = root / "capture.json"
+            state = {
+                "schema_version": 1,
+                "task_id": "durable-disconnect-e2e",
+                "agent_id": "chatgpt-common",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "goal": "continue after client stream disconnect",
+                "status": "RUNNING",
+                "next_action": "continue durable work",
+                "evidence": [],
+                "verification": None,
+                "blocker": None,
+                "conversation_id": conversation_id,
+                "browser_session": "fred",
+                "checkpoint_version": 7,
+                "created_at": now,
+                "updated_at": now,
+                "history": [],
+            }
+            (runtime / "durable-disconnect-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+            request = {
+                "id": "resume-disconnect-owner",
+                "kind": "auto_resume",
+                "status": "queued",
+                "task_id": state["task_id"],
+                "repository": state["repository"],
+                "goal": state["goal"],
+                "next_action": state["next_action"],
+                "checkpoint_updated_at": state["updated_at"],
+                "fingerprint": "disconnect-fingerprint-v1",
+                "preferred_executor": "cli",
+            }
+            (runtime / "_resume-requests.jsonl").write_text(json.dumps(request) + "\n", encoding="utf-8")
+            executor = root / "detached.py"
+            executor.write_text(
+                """
+import json, os
+from pathlib import Path
+runtime=Path(os.environ['SHOPVIVALIZ_AGENT_TASK_STATE_DIR'])
+task_id=os.environ['SHOPVIVALIZ_TASK_ID']
+keys=[
+ 'SHOPVIVALIZ_RESUME_CONVERSATION_ID','SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION',
+ 'SHOPVIVALIZ_RESUME_OWNER_ID','SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID',
+ 'SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN','SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID',
+ 'SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN'
+]
+Path(os.environ['CAPTURE_PATH']).write_text(json.dumps({k:os.environ.get(k,'') for k in keys}))
+p=runtime/f'{task_id}.json'; state=json.loads(p.read_text()); state['next_action']='detached durable work advanced'; state['updated_at']='2026-10-05T03:40:00Z'; p.write_text(json.dumps(state))
+""", encoding="utf-8")
+            old = {k: os.environ.get(k) for k in ("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "CAPTURE_PATH")}
+            os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+            os.environ["CAPTURE_PATH"] = str(capture)
+            try:
+                result = dispatcher.run_once(runtime_dir=runtime, project_dir=project, executor=[sys.executable, str(executor)], timeout_seconds=30, max_requests=1)
+            finally:
+                for key, value in old.items():
+                    if value is None: os.environ.pop(key, None)
+                    else: os.environ[key] = value
+            self.assertEqual(result["progressed"], 1)
+            metadata = json.loads(capture.read_text())
+            self.assertEqual(metadata["SHOPVIVALIZ_RESUME_CONVERSATION_ID"], conversation_id)
+            self.assertEqual(metadata["SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION"], "7")
+            self.assertEqual(metadata["SHOPVIVALIZ_RESUME_OWNER_ID"], "resume:resume-disconnect-owner")
+            for key in (
+                "SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID",
+                "SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN",
+                "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID",
+                "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN",
+            ):
+                self.assertTrue(metadata[key], key)
+            final_state = json.loads((runtime / "durable-disconnect-e2e.json").read_text())
+            self.assertEqual(final_state["next_action"], "detached durable work advanced")
 
 
 class ContinuityWorkflowTopologyTest(unittest.TestCase):

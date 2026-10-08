@@ -11,17 +11,23 @@ process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE = testMonitorFallbackFile;
 const {
   Cdp,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
+  realAssistantResponseCompletedSince,
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
   reinforcementHealthPayload,
   bridgeResultPayload,
+  recoveryStateForOutcome,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -38,7 +44,11 @@ const {
   attemptNudge,
   reinforcementCheckOnce,
   reinforcementDiscoveryDelayMs,
+  reinforcementSweepAllowed,
+  withBrowserRecoveryLock,
   reinforcementLoop,
+  hasActiveContinuityCheckpoint,
+  browserSessionReadyForReinforcement,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,
@@ -47,13 +57,27 @@ const {
   selectChatgptTab,
   safeConversationId,
   selectBoundConversationTabs,
+  selectBoundConversationReentryTab,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
+  mutationAuthorizationAllows,
+  guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerate response/,
+  'retry target must recognize the current Regenerate response control label',
+);
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerateCandidates\.sort/,
+  'when multiple historical regenerate controls are visible, the latest visible control must be selected deterministically',
+);
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
 // report) be tested without a real browser or WebSocket -- exactly the
@@ -64,7 +88,7 @@ function fakeCdp({
   composerUsable = true,
   pageText = '',
   sendSucceeds = true,
-  streamStatus = 'IN_PROGRESS',
+  streamStatus = generating ? 'IN_PROGRESS' : 'COMPLETE',
   staleStopClearSucceeds = true,
 } = {}) {
   const calls = [];
@@ -75,13 +99,28 @@ function fakeCdp({
       calls.push(expression);
       if (expression.includes('/stream_status')) return { http_status: 200, status: streamStatus };
       if (expression.includes('continuity-error-banner-probe')) {
-        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+        return /(something went wrong|algo deu errado|there was an error generating|houve um erro ao gerar|streaming interrupted|transmissão interrompida|transmissao interrompida|stopped thinking|parou de pensar|nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|request timed out|request timeout|esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao)/i.test(pageText);
+      }
+      if (expression.includes('continuity-additional-checks-probe')) {
+        return /(nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|try again with a faster model)/i.test(pageText);
+      }
+      if (expression.includes('continuity-stopped-thinking-probe')) {
+        return /(stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-streaming-interrupted-probe')) {
+        return /(streaming interrupted|transmissão interrompida|transmissao interrompida)/i.test(pageText);
       }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
+      if (expression.includes('continuity-conversation-unavailable-probe')) {
+        return /(could not load this chatgpt conversation|unable to load this chatgpt conversation|não foi possível carregar esta conversa|nao foi possivel carregar esta conversa)/i.test(pageText);
+      }
+      if (expression.includes('continuity-responding-indicator-probe')) {
+        return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
       }
       if (expression.includes('stale-complete-stop-clear')) {
         if (staleStopClearSucceeds) currentGenerating = false;
@@ -112,7 +151,7 @@ async function run() {
     assert.equal(errorPayload.conversation_id, undefined);
     const confirmedPayload = bridgeResultPayload(
       'task-1',
-      { result_status: 'PROGRESS_CONFIRMED', conversation_id: bound, detail: 'ok' },
+      { result_status: 'PROGRESS_CONFIRMED', real_response_observed: true, conversation_id: bound, detail: 'ok' },
       'ok',
     );
     assert.equal(confirmedPayload.conversation_id, bound);
@@ -147,6 +186,9 @@ async function run() {
     const tabs = [
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
       { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://uc', url: 'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-c', url: 'https://chatgpt.com/g/g-p-returns/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-uc', url: 'https://chatgpt.com/g/g-p-returns/uc/99999999-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
@@ -154,17 +196,125 @@ async function run() {
       tabs,
       '11111111-2222-3333-4444-555555555555',
     );
-    assert.equal(bound.length, 1);
+    assert.equal(bound.length, 2, 'plain and Project routes must share the same conversation identity');
     assert.equal(
       bound[0].url,
       'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
       'explicit binding must select only the requested conversation',
     );
+    const ucBound = selectBoundConversationTabs(
+      tabs,
+      '99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(ucBound.length, 2, 'plain and Project /uc routes must share the same conversation identity');
     assert.equal(
-      selectBoundConversationTabs(tabs, '99999999-2222-3333-4444-555555555555').length,
+      ucBound[0].url,
+      'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(
+      selectBoundConversationTabs(tabs, '77777777-2222-3333-4444-555555555555').length,
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
+  }
+
+  {
+    assert.equal(
+      typeof selectBoundConversationReentryTab,
+      'function',
+      'bound-conversation recovery must expose deterministic neutral-tab selection',
+    );
+    const homeA = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-a' };
+    const homeB = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-b' };
+    const synthetic = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://synthetic-home' };
+    let created = 0;
+    const selected = await selectBoundConversationReentryTab(
+      [homeA, homeB],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(created, 0, 'multiple neutral home tabs must reuse an existing target');
+    assert.equal(selected, homeA, 'bound recovery must deterministically reuse the first neutral target');
+
+    created = 0;
+    const lone = await selectBoundConversationReentryTab(
+      [homeA],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(lone, homeA, 'a single neutral home tab remains the safe direct target');
+    assert.equal(created, 0, 'a lone neutral target must not create an unnecessary extra tab');
+
+    created = 0;
+    const createdWhenMissing = await selectBoundConversationReentryTab(
+      [],
+      async () => { created += 1; return synthetic; },
+    );
+    assert.equal(created, 1, 'a neutral target must be created only when none exists');
+    assert.equal(createdWhenMissing, synthetic, 'missing neutral target must create exactly one replacement');
+  }
+
+  {
+    const workerModule = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+    assert.equal(
+      typeof workerModule.connectBoundConversationWithReentry,
+      'function',
+      'bound recovery needs an explicit reentry path when the existing exact tab is hung',
+    );
+    const id = '11111111-2222-3333-4444-555555555555';
+    const bound = {
+      type: 'page',
+      url: `https://chatgpt.com/c/${id}`,
+      webSocketDebuggerUrl: 'ws://hung-bound',
+    };
+    const home = {
+      type: 'page',
+      url: 'https://chatgpt.com/',
+      webSocketDebuggerUrl: 'ws://neutral-home',
+    };
+    const live = { marker: 'reentered-bound-conversation', close() {} };
+    const connectorCalls = [];
+    let navigations = 0;
+
+    const connected = await workerModule.connectBoundConversationWithReentry(
+      [bound, home],
+      id,
+      {
+        connector: async tab => {
+          connectorCalls.push(tab.webSocketDebuggerUrl);
+          if (tab === bound) throw new Error('CDP command timed out');
+          return live;
+        },
+        selectReentry: async tabs => {
+          assert.deepEqual(tabs, [bound, home]);
+          return home;
+        },
+        navigate: async (tab, conversationId) => {
+          navigations += 1;
+          assert.equal(tab, home);
+          assert.equal(conversationId, id);
+          return true;
+        },
+      },
+    );
+
+    assert.equal(connected, live, 'a hung exact target must fall back through a neutral authenticated tab');
+    assert.deepEqual(connectorCalls, ['ws://hung-bound', 'ws://neutral-home']);
+    assert.equal(navigations, 1, 'reentry must navigate the neutral target exactly once');
+  }
+
+  {
+    const stale = { ready: false, closed: false, close() { this.closed = true; } };
+    const healthy = { ready: true, closed: false, close() { this.closed = true; } };
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555', webSocketDebuggerUrl: 'ws://stale', target: stale },
+      { type: 'page', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555', webSocketDebuggerUrl: 'ws://healthy', target: healthy },
+    ];
+    const selected = await connectFirstUsableChatgptTab(
+      tabs,
+      async tab => tab.target,
+      async cdp => cdp.ready,
+    );
+    assert.equal(selected, healthy, 'duplicate bound tabs must prefer the recovery-ready target');
+    assert.equal(stale.closed, true, 'a rejected duplicate target must be closed');
   }
 
   {
@@ -175,8 +325,8 @@ async function run() {
       async evaluate(expression) {
         expressions.push(String(expression));
         if (String(expression).includes('continuity-bound-sidebar-route')) {
-          pathname = `/c/${id}`;
-          return 'sidebar';
+          pathname = `/uc/${id}`;
+          return `/uc/${id}`;
         }
         if (String(expression) === 'location.pathname') return pathname;
         return null;
@@ -190,7 +340,7 @@ async function run() {
       600,
       50,
     );
-    assert.equal(ok, true);
+    assert.equal(ok, true, 'bound recovery must accept a /uc sidebar route');
     assert.ok(
       expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
       'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
@@ -733,14 +883,21 @@ async function run() {
       return { conversationPath: '/c/thread-a' };
     }});
     let composerProbes = 0;
+    let platformChecks = 0;
     await sendContinueMessage({ async evaluate(source) {
+      if (String(source).includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (String(source).includes('continuity-conversation-identity-probe')) {
         return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
+      }
+      if (String(source).includes('continuity-error-banner-probe')) {
+        platformChecks += 1;
+        return false;
       }
       composerProbes += 1;
       return false;
     }}, expected.conversationFingerprint);
     assert.equal(composerProbes, 1, 'matching identity expression must parse and permit the composer probe');
+    assert.equal(platformChecks, 1, 'matching identity must check platform deferral before editing a draft');
   }
 
   // Current ChatGPT Web (2026-09-30) no longer exposes assistant turns only
@@ -777,7 +934,7 @@ async function run() {
     const cdp = {
       async evaluate(expression) {
         const source = String(expression);
-        if (source.includes('data-message-author-role')) {
+        if (source.includes('data-message-author-role=\"assistant\"')) {
           snapshots += 1;
           return {
             count: 0,
@@ -799,8 +956,8 @@ async function run() {
         1100,
         10,
       ),
-      true,
-      'current UI main-surface growth must confirm assistant/tool progress when legacy turn selectors are absent',
+      false,
+      'surface growth such as Pensando/tool activity must never certify a real assistant response',
     );
   }
 
@@ -810,7 +967,7 @@ async function run() {
     let snapshotNumber = 0;
     cdp.evaluate = async expression => {
       const source = String(expression);
-      if (source.includes('data-message-author-role')) {
+      if (source.includes('data-message-author-role=\"assistant\"')) {
         snapshotNumber += 1;
         return {
           count: 0,
@@ -915,6 +1072,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(expression);
         if (expression.includes('insertText') || expression.includes('proto.value')) {
           return expression.includes('[role="textbox"][contenteditable="true"]');
@@ -939,6 +1097,7 @@ async function run() {
     let sendEnabled = false;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1019,6 +1178,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1062,6 +1222,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1101,6 +1262,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1133,6 +1295,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1175,6 +1338,7 @@ async function run() {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         if (String(expression).includes('continuity-composer-draft-probe')) {
           return { usable: true, text: 'unsent customer draft' };
         }
@@ -1197,6 +1361,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(['evaluate', expression]);
         if (expression.includes('insertText') || expression.includes('proto.value')) return true;
         if (expression.includes('b.click()')) return false;
@@ -1224,6 +1389,7 @@ async function run() {
         return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
       },
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         evaluateCalls += 1;
         if (String(expression).includes('continuity-error-banner-probe')) return true;
         return false;
@@ -1354,6 +1520,129 @@ async function run() {
 
   {
     const cdp = fakeCdp({
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const outcome = await attemptNudge(
+      'task-additional-checks-no-send',
+      async () => cdp,
+      async () => false,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'additional_checks');
+    assert.equal(outcome.sent, false);
+    assert.equal(cdp.calls.some(call => call.includes('location.reload')), false, 'additional checks must not reload the turn');
+    assert.equal(cdp.calls.some(call => call.includes('insertText') || call.includes('b.click()')), false, 'additional checks must not submit continue');
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Nossos sistemas estão fazendo verificações adicionais antes de responder a esta solicitação.',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const outcome = await reinforcementCheckOnce(
+      async () => cdp,
+      0,
+      async () => false,
+      async () => ({ action: 'unused' }),
+      { allowCrossDeviceDiscovery: false },
+    );
+    assert.equal(outcome.action, 'additional_checks_cooldown');
+    assert.equal(outcome.sent, false);
+    assert.equal(cdp.calls.some(call => call.includes('location.reload')), false);
+    assert.equal(cdp.calls.some(call => call.includes('insertText') || call.includes('b.click()')), false);
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Parou de pensar',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-stopped-thinking-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.sent, false, 'native Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'stopped-thinking recovery must click Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful native Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Something went wrong',
+      generating: false,
+      composerUsable: false,
+      sendSucceeds: false,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-generation-error-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => false,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'generation_error');
+    assert.equal(outcome.sent, false, 'generation-error Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'generic generation error must click the unique native Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful generic Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
       pageText: 'Parou de pensar',
       generating: true,
       composerUsable: true,
@@ -1367,10 +1656,12 @@ async function run() {
       async () => false,
       async () => true,
     );
-    assert.notEqual(
-      outcome.result_status,
-      'STALLED_NOT_CONFIRMED',
-      'an explicit recoverable failure must outrank a stale Stop control / IN_PROGRESS bookkeeping signal',
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.sent, false, 'an error banner cannot authorize sending into an active stream');
+    assert.equal(
+      cdp.calls.some(call => call.includes('stale-complete-stop-clear')),
+      false,
+      'an error banner cannot authorize Stop without canonical COMPLETE',
     );
   }
 
@@ -1740,17 +2031,53 @@ async function run() {
   assert.equal(generating.result_status, 'STALLED_NOT_CONFIRMED', 'must never inject a continuation into an unconfirmed active stream');
   assert.equal(
     activeCdp.calls.some(call => call.includes('location.reload')),
-    true,
-    'stale checkpoint plus apparent active stream must attempt one passive reattach before deferring',
+    false,
+    'healthy active generation must not be reloaded merely because the checkpoint is stale',
   );
   assert.equal(
     activeCdp.calls.some(call => call.includes('b.click()')),
     false,
     'passive reattach must not inject a duplicate continue message',
   );
-  assert.match(generating.detail, /passive reattach/i);
+  assert.match(generating.detail, /active generation/i);
 
-  const recoveredCdp = fakeCdp({ generating: true });
+  // Live reproduction 2026-10-03: current ChatGPT UI can keep the
+  // composer usable and omit data-testid=stop-button while the backend
+  // stream_status is still IS_STREAMING ("ChatGPT is responding"). That is
+  // active generation, not an idle conversation, and must never be reloaded
+  // or receive a duplicate continuation.
+  {
+    const activeWithoutStop = fakeCdp({
+      generating: false,
+      composerUsable: true,
+      streamStatus: 'IS_STREAMING',
+      pageText: 'ChatGPT is responding',
+      sendSucceeds: true,
+    });
+    const outcome = await attemptNudge(
+      'task-active-stream-without-stop-button',
+      async () => activeWithoutStop,
+      async () => false,
+    );
+    assert.equal(
+      outcome.result_status,
+      'STALLED_NOT_CONFIRMED',
+      'backend IS_STREAMING must fail closed even when the Stop button is absent',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('location.reload')),
+      false,
+      'backend-active generation without Stop must not be reloaded',
+    );
+    assert.equal(
+      activeWithoutStop.calls.some(call => call.includes('b.click()')),
+      false,
+      'backend-active generation without Stop must not receive a duplicate continuation',
+    );
+    assert.match(outcome.detail, /active generation|stream/i);
+  }
+
+  const recoveredCdp = fakeCdp({ generating: true, pageText: 'Streaming interrupted' });
   const recoveredByReattach = await attemptNudge(
     'task-passive-reattach',
     async () => recoveredCdp,
@@ -1809,6 +2136,41 @@ async function run() {
     false,
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
+
+  {
+    let unavailableProbeExpression = '';
+    await conversationUnavailablePresent({
+      evaluate: async expression => {
+        unavailableProbeExpression = String(expression);
+        return false;
+      },
+    });
+    assert.doesNotThrow(
+      () => new Function(`return ${unavailableProbeExpression}`),
+      'the browser-side unavailable-conversation probe must be valid JavaScript',
+    );
+  }
+
+  {
+    const unavailableCdp = fakeCdp({
+      composerUsable: true,
+      pageText: 'Could not load this ChatGPT conversation. Try again',
+      sendSucceeds: true,
+    });
+    assert.equal(await conversationUnavailablePresent(unavailableCdp), true);
+    const unavailable = await attemptNudge(
+      'task-bound-conversation-unavailable',
+      async () => unavailableCdp,
+      async () => false,
+    );
+    assert.equal(unavailable.result_status, 'STALLED_NOT_CONFIRMED', unavailable.detail);
+    assert.match(unavailable.detail, /unavailable|canonical/i);
+    assert.equal(
+      unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
+      false,
+      'unavailable bound conversation must never consume a send attempt',
+    );
+  }
 
   const noComposer = await attemptNudge(
     'task-1',
@@ -2490,6 +2852,39 @@ async function run() {
     assert.match(expression, /ChatGPT-Account-Id/, 'turn-state probe must bind the request to the active ChatGPT account');
   }
 
+  {
+    const previousComplete = { http_status: 200, node_id: 'assistant-old', role: 'assistant', end_turn: true, content_text_length: 20 };
+    assert.equal(
+      realAssistantResponseCompletedSince(previousComplete, { ...previousComplete, content_text_length: 25 }),
+      false,
+      'growth on an already-completed assistant node is not a new response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'user-new', role: 'user', end_turn: true, content_text_length: 8 },
+        { http_status: 200, node_id: 'assistant-new', role: 'assistant', end_turn: true, content_text_length: 42 },
+      ),
+      true,
+      'a new completed assistant node with visible text is a real response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'assistant-stream', role: 'assistant', end_turn: false, content_text_length: 12 },
+        { http_status: 200, node_id: 'assistant-stream', role: 'assistant', end_turn: true, content_text_length: 48 },
+      ),
+      true,
+      'the same assistant node becoming end_turn=true is a completed response',
+    );
+    assert.equal(
+      realAssistantResponseCompletedSince(
+        { http_status: 200, node_id: 'user-new', role: 'user', end_turn: true, content_text_length: 8 },
+        { http_status: 200, node_id: 'assistant-thinking', role: 'assistant', end_turn: false, content_text_length: 7 },
+      ),
+      false,
+      'Pensando/incomplete assistant state never certifies a response',
+    );
+  }
+
   // Current UI fallback when the canonical conversation metadata endpoint is
   // rate-limited/unavailable: a COMPLETE transport whose last data-turn-key
   // contains user-message controls but no assistant node/action controls is a
@@ -2697,6 +3092,135 @@ async function run() {
     assert.equal(reinforcementDiscoveryDelayMs({ action: 'no_banner', cross_device_discovery: false }), 0);
   }
 
+  // A 429 must freeze the expensive recent-conversation sweep as well as
+  // account discovery. Local sidebar inspection may continue during backoff,
+  // but cached conversation candidates must not be navigated until account
+  // discovery is allowed again.
+  {
+    assert.equal(
+      reinforcementSweepAllowed(true, { http_status: 429, cross_device_discovery: true }),
+      false,
+      '429 must suppress the recent-conversation sweep in the rate-limited cycle',
+    );
+    assert.equal(
+      reinforcementSweepAllowed(false, { http_status: 0, cross_device_discovery: true }),
+      false,
+      'API backoff must keep the sweep disabled even while local sidebar checks continue',
+    );
+    assert.equal(
+      reinforcementSweepAllowed(true, { http_status: 200, cross_device_discovery: true }),
+      true,
+      'a successful account-discovery cycle may sweep its fresh candidates',
+    );
+  }
+
+  // Checkpoint-driven recovery and reinforcement share one canonical
+  // browser. They must never mutate/navigate that browser concurrently.
+  {
+    assert.equal(
+      typeof withBrowserRecoveryLock,
+      'function',
+      'worker must expose the shared browser recovery serializer',
+    );
+    const events = [];
+    let releaseFirst;
+    let markFirstStarted;
+    const firstStarted = new Promise(resolve => { markFirstStarted = resolve; });
+    const first = withBrowserRecoveryLock(async () => {
+      events.push('checkpoint:start');
+      markFirstStarted();
+      await new Promise(resolve => { releaseFirst = resolve; });
+      events.push('checkpoint:end');
+    });
+    await firstStarted;
+    const second = withBrowserRecoveryLock(async () => {
+      events.push('reinforcement:start');
+      events.push('reinforcement:end');
+    });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(
+      events,
+      ['checkpoint:start'],
+      'second browser recovery must remain queued until the first releases the lock',
+    );
+    releaseFirst();
+    await Promise.all([first, second]);
+    assert.deepEqual(events, [
+      'checkpoint:start',
+      'checkpoint:end',
+      'reinforcement:start',
+      'reinforcement:end',
+    ]);
+
+    const workerSource = fs.readFileSync(
+      new URL('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs', import.meta.url),
+      'utf8',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => attemptNudge\(/,
+      'checkpoint-driven nudge must use the shared browser recovery lock',
+    );
+    assert.match(
+      workerSource,
+      /withBrowserRecoveryLock\(\(\) => check\(/,
+      'reinforcement recovery must use the shared browser recovery lock',
+    );
+  }
+
+  // A long-running recovery check must keep the monitor heartbeat fresh.
+  // Live production reproduction: the browser remained authenticated and the
+  // worker stayed active while one recovery check outlived the controller's
+  // monitor freshness window, producing chatgpt_browser_monitor_stale.
+  {
+    const monitorFile = path.join(
+      testTaskStateDir,
+      '_chatgpt-continuity-monitor-state.json',
+    );
+    persistReinforcementHealth({
+      action: 'no_banner',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    const before = JSON.parse(fs.readFileSync(monitorFile, 'utf8'));
+
+    let releaseCheck;
+    const pendingCheck = new Promise(resolve => {
+      releaseCheck = resolve;
+    });
+    const stop = new Error('stop-after-long-check-heartbeat');
+    const loopPromise = reinforcementLoop(
+      async () => pendingCheck,
+      () => 0,
+      async () => { throw stop; },
+      async () => true,
+      async () => true,
+      10,
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 45));
+    const during = JSON.parse(fs.readFileSync(monitorFile, 'utf8'));
+    assert.notEqual(
+      during.updated_at,
+      before.updated_at,
+      'an in-flight recovery check must refresh monitor updated_at before the check completes',
+    );
+    assert.equal(
+      during.action,
+      'no_banner',
+      'heartbeat liveness must preserve the prior semantic monitor action',
+    );
+
+    releaseCheck({
+      action: 'no_banner',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await assert.rejects(loopPromise, error => error === stop);
+  }
+
   // The reinforcement scheduler must call its check with exactly the public
   // five-argument contract. Extra positional arguments can silently replace
   // the options object in JavaScript and disable the 429 discovery backoff.
@@ -2720,6 +3244,146 @@ async function run() {
       { allowCrossDeviceDiscovery: true },
       'the fifth argument must remain the options object, not a helper function',
     );
+  }
+
+  {
+    const checkpointDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-idle-gate-'));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
+    fs.writeFileSync(path.join(checkpointDir, 'done.json'), JSON.stringify({status: 'CONCLUIDO'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'unbound global tasks must not activate the Fred reinforcement browser');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', conversation_id: 'legacyFredConversation1'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'legacy Fred tasks remain eligible only when bound to a conversation');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'fred', conversation_id: 'fredConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'explicit Fred browser tasks remain eligible');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'atendimento', conversation_id: 'atendimentoConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'Atendimento tasks must never activate the Fred reinforcement browser');
+  }
+
+  {
+    const authDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatgpt-continuity-auth-gate-'));
+    const health = path.join(authDir, '_chatgpt-browser-health.json');
+    const now = Date.now();
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTHENTICATED',
+      authenticated: true,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), true);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTH_TERMINAL',
+      authenticated: false,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now).toISOString(),
+      session_state: 'AUTH_FLOW',
+      authenticated: false,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false);
+    fs.writeFileSync(health, JSON.stringify({
+      updated_at: new Date(now - 5 * 60_000).toISOString(),
+      session_state: 'AUTHENTICATED',
+      authenticated: true,
+    }));
+    assert.equal(browserSessionReadyForReinforcement(authDir, now), false, 'stale auth health must fail closed');
+  }
+
+  {
+    let checks = 0;
+    const stop = new Error('stop-after-auth-quiescent-cycle');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => { checks += 1; return { action: 'unexpected' }; },
+        () => 0,
+        async () => { throw stop; },
+        async () => true,
+        async () => false,
+      ),
+      error => error === stop,
+    );
+    assert.equal(checks, 0, 'unauthenticated browser health must make zero reinforcement/browser/account-discovery calls');
+  }
+
+  // Idle continuity must be completely passive: with no non-terminal
+  // checkpoint, the reinforcement loop must not attach to ChatGPT or query
+  // account-scoped conversation lists.
+  {
+    let checks = 0;
+    const stop = new Error('stop-after-idle-cycle');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => { checks += 1; return { action: 'unexpected' }; },
+        () => 0,
+        async () => { throw stop; },
+        async () => false,
+      ),
+      error => error === stop,
+    );
+    assert.equal(checks, 0, 'idle continuity must make zero reinforcement/browser/account-discovery calls');
+  }
+
+  {
+    const calls = [];
+    let waits = 0;
+    const stop = new Error('stop-after-additional-checks-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'additional_checks_cooldown',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'additional_checks',
+            cross_device_discovery: false,
+          };
+        },
+        () => 0,
+        async () => {
+          waits += 1;
+          if (waits >= 2) throw stop;
+        },
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'additional checks must suppress repeated reinforcement attempts during cooldown');
+  }
+
+  // A failed direct reinforcement recovery must not hammer the same browser
+  // every ~30 seconds. The checkpoint-driven dispatcher remains enabled and
+  // owns durable retries while reinforcement observes a bounded cooldown.
+  {
+    const calls = [];
+    let waits = 0;
+    let nowMs = 0;
+    const stop = new Error('stop-after-recovery-retry-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'send_failed',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'stopped_thinking',
+            cross_device_discovery: false,
+          };
+        },
+        () => nowMs,
+        async () => {
+          waits += 1;
+          nowMs += 30_000;
+          if (waits >= 2) throw stop;
+        },
+        async () => true,
+        async () => true,
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'failed reinforcement recovery must enter cooldown instead of retrying every poll');
   }
 
   // A 429 must back off only the account-scoped API, not the local sidebar
@@ -2912,6 +3576,52 @@ async function run() {
     await running;
   }
 
+  // Disabling the aggressive Fred reinforcement monitor must not disable
+  // the liveness heartbeat consumed by the controller.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      false,
+      async () => { events.push('authorization'); await blocked; },
+      true,
+      async () => { events.push('monitor-heartbeat'); await blocked; },
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'monitor-heartbeat']);
+    release();
+    await running;
+  }
+
+  // A neutral heartbeat for an intentionally disabled reinforcement monitor
+  // must clear stale reinforcement failure state instead of latching it forever.
+  {
+    const payload = reinforcementHealthPayload(
+      {
+        action: 'monitor_disabled',
+        sent: false,
+        progress_confirmed: false,
+      },
+      '2026-10-05T02:00:00.000Z',
+      {
+        degraded: true,
+        action: 'send_failed',
+        last_cycle_action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'old failure',
+        failure_reason: 'silent_stall',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'monitor_disabled');
+    assert.equal(payload.last_cycle_action, 'monitor_disabled');
+    assert.equal(payload.failure_reason, '');
+  }
+
   // Banner flashes then clears by the confirm re-check (client's own retry
   // succeeded) -> must NOT send a message.
   {
@@ -3000,6 +3710,39 @@ async function run() {
 
   {
     const payload = reinforcementHealthPayload(
+      { action: 'idle_no_checkpoint', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.500Z',
+      {
+        degraded: true,
+        action: 'error',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'no usable open chatgpt.com tab found in the attached browser',
+        failure_reason: 'request_timeout',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'idle_no_checkpoint');
+    assert.equal(payload.last_cycle_action, 'idle_no_checkpoint');
+    assert.equal(payload.detail, '');
+    assert.equal(payload.failure_reason, '');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
+      { action: 'auth_quiescent', sent: false, progress_confirmed: false },
+      '2026-10-03T01:23:45.700Z',
+      { degraded: true, action: 'error', detail: 'stale browser error', failure_reason: 'request_timeout' },
+    );
+    assert.equal(payload.degraded, true);
+    assert.equal(payload.action, 'auth_quiescent');
+    assert.equal(payload.last_cycle_action, 'auth_quiescent');
+    assert.equal(payload.detail, '');
+    assert.equal(payload.failure_reason, '');
+  }
+
+  {
+    const payload = reinforcementHealthPayload(
       { action: 'no_banner', sent: false, progress_confirmed: false },
       '2026-10-03T01:23:46.000Z',
       {
@@ -3017,6 +3760,65 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-thinking-failed-test.mjs')).runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage });
+  await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
+  (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
+
+  {
+    assert.equal(mutationAuthorizationAllows({ authorized: true }), true);
+    assert.equal(mutationAuthorizationAllows({ authorized: false, reason: 'foreground_active' }), false);
+    let mutated = 0;
+    const rejected = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: false, reason: 'foreground_active' }),
+    );
+    assert.equal(rejected.authorized, false);
+    assert.equal(rejected.reason, 'foreground_active');
+    assert.equal(mutated, 0, 'rejected mutation authorization must never execute callback');
+    const allowed = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: true, reason: 'authorized' }),
+    );
+    assert.equal(allowed.authorized, true);
+    assert.equal(allowed.value, 'sent');
+    assert.equal(mutated, 1);
+  }
+  {
+    const falseGreen = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: false,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'Thinking tool activity sidebar HTTP 200 Retry click',
+    }, 'diagnostic-only');
+    assert.notEqual(falseGreen.result_status, 'PROGRESS_CONFIRMED');
+    assert.notEqual(falseGreen.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(falseGreen.conversation_id, undefined);
+    const real = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: true,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'new assistant turn observed',
+    }, 'new assistant turn observed');
+    assert.equal(real.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(real.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(real.conversation_id, 'conversation_12345678');
+    assert.equal(recoveryStateForOutcome({ result_status: 'SENT_UNCONFIRMED', sent: true }), 'WAITING_FOR_REAL_RESPONSE');
+  }
+  await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
+  await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
+    conversationTurnState, conversationStreamStatus, sendContinueMessage,
+  });
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, anotherConversationActiveInSession }, testTaskStateDir);
+  await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
+  await (await import('./chatgpt-canonical-read-backoff-test.mjs')).runCanonicalReadBackoffTests({ conversationTurnState });
   console.log('reinforcementCheckOnce branches: PASS');
 }
 

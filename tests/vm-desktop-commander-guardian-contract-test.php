@@ -26,4 +26,8 @@ foreach (['shopvivaliz-desktop-commander-guardian.service','shopvivaliz-desktop-
 if (strpos((string)$guardian, 'AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-15}"') === false) {
     fwrite(STDERR, "VM guardian must retry recoverable provider auth after 15 minutes\n"); exit(1);
 }
+foreach (["provider_socket_connected", "ss -H -tnp", "PROVIDER_SOCKET_GRACE_SECONDS"] as $needle) {
+    if (strpos((string)$guardian, $needle) === false) { fwrite(STDERR, "VM guardian missing provider liveness check {$needle}\n"); exit(1); }
+}
+if (strpos((string)$guardian, "0[.]2[.]47") !== false) { fwrite(STDERR, "VM guardian still matches stale Desktop Commander 0.2.47 only\n"); exit(1); }
 echo "vm-desktop-commander-guardian-contract: ok\n";

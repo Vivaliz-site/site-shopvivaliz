@@ -4,12 +4,16 @@ set -Eeuo pipefail
 ACTION="${1:-status}"
 SERVER_SOURCE="${2:-}"
 UNIT_SOURCE="${3:-}"
+AGENT_TASK_STATE_SOURCE="${4:-}"
+CONTINUITY_SOURCE_DIR="${5:-}"
+SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
 SITE_HOST="shopvivaliz-free-a1"
 STATE_DIR="/var/lib/shopvivaliz-remote-control"
 INSTALL_DIR="/opt/shopvivaliz-remote-control"
 SERVICE="shopvivaliz-remote-control-mcp.service"
+BROWSER_SERVICE="shopvivaliz-remote-control-browser-mcp.service"
 REMOTE_USER="shopvivaliz-remote"
 PUBKEY="${SHOPVIVALIZ_REMOTE_CONTROL_PUBKEY:-}"
 
@@ -21,10 +25,18 @@ install_controller() {
   [ "$HOST" = "$BACKEND_HOST" ] || die controller_host_mismatch 21
   [ -n "$SERVER_SOURCE" ] && [ -f "$SERVER_SOURCE" ] || die server_source_required 22
   [ -n "$UNIT_SOURCE" ] && [ -f "$UNIT_SOURCE" ] || die unit_source_required 23
+  [ -n "$AGENT_TASK_STATE_SOURCE" ] && [ -f "$AGENT_TASK_STATE_SOURCE" ] || die agent_task_state_source_required 24
+  [ -n "$CONTINUITY_SOURCE_DIR" ] && [ -d "$CONTINUITY_SOURCE_DIR" ] || die continuity_source_dir_required 25
+  for required in conversation_lease.py runtime_lock.py mutation_gate.py foreground_handoff.py; do
+    [ -f "$CONTINUITY_SOURCE_DIR/$required" ] || die "continuity_dependency_missing:$required" 26
+  done
 
   install -d -m 700 -o root -g root "$STATE_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR"
+  install -d -m 755 -o root -g root "$INSTALL_DIR/scripts/continuity"
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  install -m 0755 -o root -g root "$AGENT_TASK_STATE_SOURCE" "$INSTALL_DIR/scripts/agent_task_state.py"
+  install -m 0644 -o root -g root "$CONTINUITY_SOURCE_DIR"/*.py "$INSTALL_DIR/scripts/continuity/"
 
   if [ ! -s "$STATE_DIR/id_ed25519" ]; then
     ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-remote-control -f "$STATE_DIR/id_ed25519"
@@ -44,6 +56,10 @@ install_controller() {
   {
     printf 'SHOPVIVALIZ_REMOTE_MCP_TOKEN='
     cat "$token_file"
+    printf 'SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\n' "$SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"
+    printf 'SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=%s\n' "${SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT:-7200}"
+    printf 'SHOPVIVALIZ_CONTINUITY_LIB_DIR=%s\n' "$INSTALL_DIR/scripts/continuity"
+    printf 'SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\n'
   } > "$env_file"
   chmod 600 "$env_file"
 
@@ -55,6 +71,23 @@ install_controller() {
   sleep 2
   systemctl is-active --quiet "$SERVICE"
   curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
+
+  # The browser MCP imports the base controller module at process start.
+  # Refresh an already-active browser MCP whenever the base tool catalog changes.
+  if systemctl is-active --quiet "$BROWSER_SERVICE"; then
+    systemctl try-restart "$BROWSER_SERVICE"
+    browser_ready=0
+    for _ in $(seq 1 20); do
+      if curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5581/health >/dev/null; then
+        browser_ready=1
+        break
+      fi
+      sleep 1
+    done
+    [ "$browser_ready" = "1" ] || die browser_dependent_refresh_failed 24
+    echo "REMOTE_CONTROL_BROWSER_DEPENDENT_REFRESH=PASS"
+  fi
+
   echo "REMOTE_CONTROL_CONTROLLER_INSTALL=PASS"
   echo "REMOTE_CONTROL_PUBLIC_KEY_FILE=$STATE_DIR/id_ed25519.pub"
 }
