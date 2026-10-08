@@ -256,6 +256,21 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('session?.user?.email', embedded_js)
         self.assertNotIn("document.querySelector([aria-label=", embedded_js)
 
+    def test_guardian_budgets_stalled_oauth_tabs_in_parallel(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        start = body.index("browser_session_state()")
+        end = body.index("persist_browser_health()", start)
+        probe = body[start:end]
+        self.assertIn("await Promise.allSettled(authPages.slice(0, 8).map(async page => {", probe)
+        self.assertIn('setTimeout(() => reject(new Error("open timeout")), 1200)', probe)
+        self.assertIn('setTimeout(() => reject(new Error("auth probe timeout")), 1500)', probe)
+        self.assertNotIn("for (const page of authPages)", probe)
+        self.assertIn("const sessionProbeBudgetMs = 10500", probe)
+        # At most 2.7s of parallel OAuth checks plus 10.5s for the ChatGPT
+        # renderer fit inside the enclosing 15s Node execution timeout.
+        self.assertLess(1200 + 1500 + 10500, 15000)
+
     def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
