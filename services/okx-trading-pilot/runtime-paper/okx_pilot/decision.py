@@ -194,6 +194,7 @@ class CodexBridgeDecisionProvider:
             "prompt": self._prompt(snapshot, context),
             "web_search": False,
         }
+        requested_at = datetime.now(timezone.utc)
         result = self.transport(self.url, payload, self.timeout_seconds)
         if not isinstance(result, dict) or result.get("ok") is not True:
             reason = result.get("error") if isinstance(result, dict) else "non_object"
@@ -211,6 +212,9 @@ class CodexBridgeDecisionProvider:
             raise DecisionValidationError("decision_bridge:non_json_response") from exc
         if not isinstance(parsed, dict):
             raise DecisionValidationError("decision_bridge:non_object_response")
+        parsed["created_at"] = requested_at.isoformat()
+        parsed["expires_at"] = (requested_at + timedelta(seconds=120)).isoformat()
+        parsed["market_snapshot_ts"] = snapshot.timestamp.isoformat()
         return parsed
 
 
