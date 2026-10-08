@@ -598,8 +598,16 @@ def run_once(
             degraded_reasons.append("completion_sweep_failed")
         if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
             degraded_reasons.append("completion_sweep_unbound_session")
+        if durable_handoff_enabled and int(completion_sweep.get("unbound_active") or 0) > 0:
+            degraded_reasons.append("active_checkpoints_missing_conversation_binding")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
+        if durable_handoff_enabled and int(nudge.get("skipped_unbound") or 0) > 0:
+            degraded_reasons.append("chatgpt_resume_unbound")
+        if durable_handoff_enabled and int(resumed.get("deferred_unbound") or 0) > 0:
+            degraded_reasons.append("detached_resume_unbound")
+        if durable_handoff_enabled and int(resumed.get("deferred_unbound_session") or 0) > 0:
+            degraded_reasons.append("detached_resume_unbound_session")
         if int(nudge.get("skipped_no_token") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
@@ -643,8 +651,8 @@ def run_once(
             "single_writer_enforced": durable_handoff_enabled,
             "completion_sweep": completion_sweep,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
-            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "skipped_unbound", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
+            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt", "deferred_unbound", "deferred_unbound_session", "deferred_ownership_busy", "deferred_foreground")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,
             "claude_remote_control": claude_health,
