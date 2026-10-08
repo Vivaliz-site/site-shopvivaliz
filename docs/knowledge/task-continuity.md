@@ -5,6 +5,30 @@
 O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
 <!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
 
+## Limpeza de clones temporários ao concluir uma tarefa
+
+Clones Git temporários **pertencem à tarefa que os criou**, não ao host. Antes de criar um clone, registre um `task_id` no `scripts/agent_task_state.py start` e use preferencialmente:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py clone --task <id> --repo https://github.com/Vivaliz-site/<repo>.git
+```
+
+Se o clone já existe, registre-o imediatamente após criá-lo:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py register --task <id> --path /tmp/<clone>
+```
+
+O comando `python3 scripts/agent_task_state.py complete --task <id>` conclui a tarefa após suas verificações e **limpa os clones registrados** em seguida, fora do bloqueio global dos checkpoints. Uma limpeza interrompida é retomada pela rotina:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py sweep
+```
+
+O serviço `shopvivaliz-agent-clone-cleanup.timer` executa essa rotina a cada 15 minutos, inclusive após reboot, **somente** para tarefas `CONCLUIDO`. `RUNNING`, `READY_TO_COMPLETE` e `BLOCKED_EXTERNAL` mantêm seus clones, permitindo retomar o trabalho.
+
+**Nunca remover** clones não registrados, worktrees com `git worktree lock`, processos/cwd ativos, arquivos sujos ou não rastreados, commits/branches sem remoto, worktrees vinculados a outros checkouts, ou diretórios fora das raízes temporárias permitidas. Uma recusa gera pendência observável para a próxima execução ou correção manual, sem `git reset --hard`, `git clean -fdx`, `git worktree remove --force` nem `rm -rf /tmp` genérico. Código, artefatos e evidências de tarefa que precisem persistir devem ser salvos no repositório/estado durável antes da conclusão.
+
 # Task Continuity Enforcement
 
 **Policy:** `TASK_CONTINUITY_ENFORCEMENT_V3`

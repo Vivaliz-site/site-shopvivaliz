@@ -705,7 +705,43 @@ BASE_TOOL_SPECS = base.tool_specs
 BASE_AUDIT = base.audit
 
 
+def desktop_session_attach(args: dict[str, Any]) -> dict[str, Any]:
+    """Attach to an existing authorized desktop without launching duplicates."""
+    host = str(args.get("host") or "")
+    base.validate_desktop_host(host)
+    result = desktop_open({"host": host})
+    if not result.get("ok", False):
+        return result
+    return {**result, "attached": True, "host": host}
+
+
+def browser_dom_inspect(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    """Return sanitized interactive DOM controls for one canonical tab."""
+    tab_id = str(args.get("tab_id") or "")
+    if not tab_id:
+        raise ValueError("tab_id_required")
+    return BASE_EXECUTE_TOOL("browser_controls", {"tab_id": tab_id}, cancel_check=cancel_check)
+
+
+def browser_click_index(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    """Click an inspected control index in an allowlisted canonical browser tab."""
+    tab_id = str(args.get("tab_id") or "")
+    index = args.get("index")
+    if not tab_id:
+        raise ValueError("tab_id_required")
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < 120:
+        raise ValueError("invalid_control_index")
+    base._assert_runtime_mutation("browser_click_control", args)
+    return BASE_EXECUTE_TOOL("browser_click_control", {"tab_id": tab_id, "index": index}, cancel_check=cancel_check)
+
+
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name == "desktop.session.attach":
+        return desktop_session_attach(args)
+    if name == "browser.dom.inspect":
+        return browser_dom_inspect(args, cancel_check=cancel_check)
+    if name == "browser.click":
+        return browser_click_index(args, cancel_check=cancel_check)
     if name in {"desktop_open", "desktop_click", "desktop_type"}:
         base._assert_runtime_mutation(name, args)
     if name == "desktop_health":
@@ -760,6 +796,24 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "desktop.session.attach",
+        "description": "Attach or focus an existing approved Fred-Win or KOCEPSV desktop session without creating duplicate sessions.",
+        "inputSchema": {"type": "object", "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}}, "required": ["host"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.dom.inspect",
+        "description": "Inspect sanitized visible interactive DOM controls in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}}, "required": ["tab_id"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.click",
+        "description": "Click a DOM control by index from browser.dom.inspect in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, "required": ["tab_id", "index"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
     {
         "name": "browser_health",
         "description": "Check graphical backend browser dependencies and visible browser window availability.",
