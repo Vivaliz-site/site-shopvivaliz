@@ -765,7 +765,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn("${SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY} --daemon", unit)
-        self.assertIn("Restart=on-failure", unit)
+        self.assertIn("Restart=always", unit)
         self.assertIn("shopvivaliz-gemini-24x7-controller", installer)
         self.assertIn('base_dir="/opt/shopvivaliz-gemini-24x7-controller"', installer)
         self.assertIn('releases_dir="$base_dir/releases"', installer)
