@@ -43,7 +43,11 @@ class CloneLifecycleTests(unittest.TestCase):
         return subprocess.run(["git", *args], cwd=cwd, env=self.env, check=True, capture_output=True, text=True, timeout=15)
 
     def write_task(self, status):
-        (self.state / (self.task_id + ".json")).write_text(json.dumps({"task_id": self.task_id, "status": status}))
+        payload = {"task_id": self.task_id, "status": status}
+        if status == "CONCLUIDO":
+            payload.update({"completed_at": "2026-10-08T11:00:00Z",
+                            "evidence": ["synthetic verified test"], "verification": "all checks passed"})
+        (self.state / (self.task_id + ".json")).write_text(json.dumps(payload))
 
     def register(self, path=None):
         return lifecycle.register_clone(self.task_id, path or self.clone, state_dir=self.state, allowed_roots=(self.allowed,))
@@ -59,6 +63,13 @@ class CloneLifecycleTests(unittest.TestCase):
         self.assertEqual(self.cleanup()["removed"], 1)
         self.assertFalse(self.clone.exists())
         self.assertEqual(self.cleanup()["removed"], 0, "idempotent cleanup")
+
+    def test_forged_terminal_without_evidence_preserves_clone(self):
+        self.register()
+        state_path = self.state / (self.task_id + ".json")
+        state_path.write_text(json.dumps({"task_id": self.task_id, "status": "CONCLUIDO"}))
+        self.assertEqual(self.cleanup()["removed"], 0)
+        self.assertTrue(self.clone.exists())
 
     def test_dirty_clone_is_preserved_and_retryable(self):
         self.register()
