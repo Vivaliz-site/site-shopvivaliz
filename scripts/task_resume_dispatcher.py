@@ -821,7 +821,7 @@ def run_once(
             if _durable_handoff_enabled() and not str(state.get("conversation_id", "")).strip():
                 summary["deferred_unbound"] += 1
                 continue
-            if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento"}:
+            if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento", "dev"}:
                 summary["deferred_unbound_session"] += 1
                 continue
 
