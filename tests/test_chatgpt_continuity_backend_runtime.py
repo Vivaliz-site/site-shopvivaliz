@@ -438,8 +438,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        ui_marker = 'document.querySelector(\'[aria-label="Open profile menu"]\')'
+        ui_marker = 'document.querySelectorAll("[aria-label]")'
         self.assertIn(ui_marker, probe)
+        self.assertIn('element.getAttribute("aria-label") === "Open profile menu"', probe)
         self.assertIn('return "AUTHENTICATED";', probe)
         self.assertLess(
             probe.index(ui_marker),
