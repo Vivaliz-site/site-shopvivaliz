@@ -78,8 +78,10 @@ def recovery_state_for_worker_status(worker_status: str, send_attempt_count: int
         return 'PROGRESS_CONFIRMED'
     if status in {'SENT', 'SENT_UNCONFIRMED'}:
         return 'RECOVERY_EXHAUSTED' if sends >= budget else 'WAITING_FOR_REAL_RESPONSE'
-    if status in {'ERROR', 'CONVERSATION_NOT_FOUND'} and sends >= budget:
+    if status in {'ERROR', 'CONVERSATION_NOT_FOUND'}:
         return 'RECOVERY_EXHAUSTED'
+    if status == 'STALLED_NOT_CONFIRMED':
+        return 'RECOVERY_ACTIONED'
     return 'RECOVERY_ACTIONED' if sends > 0 else 'RECOVERY_CLAIMED'
 
 def resolve_bridge_token(explicit_token: str = "") -> str:
