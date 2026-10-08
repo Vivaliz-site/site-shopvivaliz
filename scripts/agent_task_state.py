@@ -956,7 +956,7 @@ def _parser() -> argparse.ArgumentParser:
 
     browser = sub.add_parser("bind-browser-session")
     browser.add_argument("--task", required=True)
-    browser.add_argument("--browser-session", required=True, choices=["fred", "atendimento"])
+    browser.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
 
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
