@@ -59,6 +59,23 @@ def _status(task_id: str, state_dir: Path) -> str:
     return ""
 
 
+
+def _verified_completion(task_id: str, state_dir: Path) -> bool:
+    """Never reclaim work unless terminal verification evidence is persisted."""
+    try:
+        payload = json.loads((state_dir / (task_id + ".json")).read_text(encoding="utf-8"))
+        return (
+            isinstance(payload, dict)
+            and payload.get("task_id") == task_id
+            and payload.get("status") == "CONCLUIDO"
+            and bool(payload.get("evidence"))
+            and bool(payload.get("verification"))
+            and bool(payload.get("completed_at"))
+        )
+    except (OSError, ValueError):
+        return False
+
+
 def _normalize_path(path: Path | str, allowed_roots: Iterable[Path | str]) -> Path:
     supplied = Path(path).expanduser().absolute()
     if str(supplied) != str(supplied.resolve(strict=True)):
@@ -236,7 +253,7 @@ def cleanup_task(
         paths = data.get("paths", [])
         if data.get("task_id") != task or not isinstance(paths, list):
             return {"ok": False, "removed": 0, "preserved": 1, "reasons": ["registry_invalid"]}
-        if _status(task, state) != "CONCLUIDO":
+        if not _verified_completion(task, state):
             return {"ok": True, "removed": 0, "preserved": len(paths), "reasons": ["task_not_completed"]}
         remaining = []
         for raw in paths:
