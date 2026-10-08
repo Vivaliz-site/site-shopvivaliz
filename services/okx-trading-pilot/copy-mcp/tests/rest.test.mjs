@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { createOkxRestClient } from '../okx-rest.mjs';
+const credentials=async()=>({key:'test-key',secret:'test-secret',passphrase:'test-passphrase'});
+test('signed REST GET uses official path and authenticates without printing credentials',async()=>{
+ let req;
+ const client=createOkxRestClient({credentials,fetcher:async(url,opts)=>{
+   req={url,opts};
+   return {ok:true,status:200,json:async()=>({code:'0',data:[{uid:'expected'}]})};
+ }});
+ assert.deepEqual(await client.get('/api/v5/account/config'),[{uid:'expected'}]);
+ assert.equal(req.url,'https://www.okx.com/api/v5/account/config');
+ const headers=req.opts.headers;
+ assert.equal(headers['OK-ACCESS-KEY'],'test-key');
+ const expected=createHmac('sha256','test-secret').update(headers['OK-ACCESS-TIMESTAMP']+'GET'+'/api/v5/account/config').digest('base64');
+ assert.equal(headers['OK-ACCESS-SIGN'],expected);
+});
+test('network timeout never triggers repeat POST',async()=>{
+ let n=0;const client=createOkxRestClient({credentials,
+  fetcher:async()=>{n++;throw new Error('timeout')}});
+ await assert.rejects(()=>client.post('/api/v5/copytrading/stop-copy-trading',{uniqueCode:'TEST'}),/OKX_TRANSPORT_UNKNOWN/);
+ assert.equal(n,1);
+});
+test('rejects unauthorized endpoints and invalid origins',async()=>{
+ assert.throws(()=>createOkxRestClient({credentials,baseUrl:'https://example.com'}),/INVALID_OKX_ORIGIN/);
+ const client=createOkxRestClient({credentials,fetcher:async()=>{throw Error('MUST_NOT_CALL')}});
+ await assert.rejects(()=>client.post('/api/v5/asset/withdrawal',{}),/NON_ALLOWLISTED_PATH/);
+});
+test('API rejection surfaces explicit safe error code',async()=>{
+ const client=createOkxRestClient({credentials,fetcher:async()=>({ok:true,status:200,
+   json:async()=>({code:'59264',data:[],msg:'not supported'})})});
+ await assert.rejects(()=>client.get('/api/v5/copytrading/config'),/OKX_API_REJECTED/);
+});
