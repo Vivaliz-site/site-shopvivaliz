@@ -183,6 +183,8 @@ def _completion_sweep(
         "deferred_unbound_session": 0,
         "skipped_invalid_timestamp": 0,
         "skipped_outside_lookback": 0,
+        "active_invalid_timestamp": 0,
+        "active_outside_lookback": 0,
     }
 
     previous_runtime = task_state.RUNTIME_DIR
@@ -194,16 +196,21 @@ def _completion_sweep(
             payload = _read_json(path)
             if not payload:
                 continue
+            status = str(payload.get("status", "")).strip()
+            is_active = status in {"RUNNING", "READY_TO_COMPLETE"}
             created = _parse_utc(payload.get("created_at"))
             if created is None:
                 summary["skipped_invalid_timestamp"] += 1
+                if is_active:
+                    summary["active_invalid_timestamp"] += 1
                 continue
             if created < lookback_cutoff:
                 summary["skipped_outside_lookback"] += 1
+                if is_active:
+                    summary["active_outside_lookback"] += 1
                 continue
 
             summary["scanned"] += 1
-            status = str(payload.get("status", "")).strip()
             if status not in {"RUNNING", "READY_TO_COMPLETE"}:
                 continue
 
@@ -596,6 +603,10 @@ def run_once(
             degraded_reasons.append("dispatcher_failed")
         if int(completion_sweep.get("failed") or 0) > 0:
             degraded_reasons.append("completion_sweep_failed")
+        if int(completion_sweep.get("active_outside_lookback") or 0) > 0:
+            degraded_reasons.append("active_checkpoint_outside_recovery_window")
+        if int(completion_sweep.get("active_invalid_timestamp") or 0) > 0:
+            degraded_reasons.append("active_checkpoint_invalid_timestamp")
         if durable_handoff_enabled and int(completion_sweep.get("unbound_active") or 0) > 0:
             degraded_reasons.append("active_checkpoint_unbound")
         if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
