@@ -88,7 +88,9 @@ browser_session_state() {
       let authTerminal = false;
       let residualAuthTerminal = false;
       let validOpenAiAuthFlow = false;
-      for (const page of authPages) {
+      // Bound authentication-page inspection by the slowest page, not their sum.
+      // Multiple stale OAuth tabs must not consume the ChatGPT session probe budget.
+      await Promise.all(authPages.map(async page => {
         let authCdp;
         let pageHost = "";
         try {
@@ -134,7 +136,7 @@ browser_session_state() {
         } finally {
           try { authCdp?.close(); } catch {}
         }
-      }
+      }));
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const probeChatgptSessionState = async candidate => candidate.evaluate(`(async()=>{
         try {
