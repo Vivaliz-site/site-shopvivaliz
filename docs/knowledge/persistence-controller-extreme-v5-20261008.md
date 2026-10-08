@@ -81,6 +81,24 @@ O sistema parou de mascarar o bloqueio, mas as 9 tarefas **não** retomaram.
 - Estado desta etapa deve ser atualizado **somente** após merge, CI e prova
   pós-promocional.
 
+## Correção V5-3 — parser Bash do probe de autenticação
+
+No `chatgpt-browser-guardian.sh`, a chamada `node --input-type=module -e`
+possui corpo JavaScript delimitado por aspas simples do Bash. O seletor de
+perfil `document.querySelector('[aria-label="Open profile menu"]')`
+também usava aspas simples; o shell as removia antes de passar o código ao
+Node. A expressão de `Runtime.evaluate` tornava-se inválida,
+gerando `SyntaxError` mascarado como `browser expression failed`. O guardian
+podia registrar `UNKNOWN`/`UNREACHABLE` apesar de CDP responder.
+
+A correção evita aspas simples dentro do script JavaScript embutido,
+preserva a checagem por atributo acessível e adiciona teste que usa
+`shlex.split` para verificar o argumento efetivamente recebido pelo Node.
+Reiniciar o Chromium isoladamente não corrige esse defeito no guardian.
+
+Até demonstrar autenticação Dev real e `PROGRESS_CONFIRMED` em conversa
+explicitamente vinculada, permanecer `continuity_ready=false` é correto.
+
 ## Critérios de certificação ainda pendentes
 
 Aprovar `CONTINUITY_E2E_PASS` somente com:

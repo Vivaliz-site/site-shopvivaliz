@@ -151,7 +151,8 @@ browser_session_state() {
             if (hasIdentity) return "AUTHENTICATED";
           }
         } catch {}
-        if (document.querySelector('[aria-label="Open profile menu"]')) return "AUTHENTICATED";
+        // Keep every selector literal double-quoted: this JavaScript is wrapped in a Bash single-quoted -e argument.
+        if ([...document.querySelectorAll("[aria-label]")].some(element => element.getAttribute("aria-label") === "Open profile menu")) return "AUTHENTICATED";
         const body = String(document.body?.innerText || "").toLowerCase();
         const path = String(location.pathname || "");
         const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
