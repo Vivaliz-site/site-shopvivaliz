@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from typing import Any
 import zlib
 from urllib.parse import urlsplit, urlunsplit
@@ -48,6 +49,10 @@ DESKTOP_ALIASES = {
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
 MAX_XWD_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_XWD_BYTES", str(64 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
+CHATGPT_BROWSER_INFER_SCRIPT = os.environ.get(
+    "SHOPVIVALIZ_BROWSER_CHATGPT_INFER_SCRIPT",
+    "/opt/shopvivaliz-remote-control-browser/chatgpt-browser-infer.mjs",
+)
 
 BASE_SERVER_DIR = str(Path(BASE_SERVER).resolve().parent)
 if BASE_SERVER_DIR not in sys.path:
@@ -700,6 +705,76 @@ def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+
+def browser_chatgpt_infer(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if str(base.BROWSER_SESSION_NAME or "").strip() != "dev":
+        raise ValueError("browser_chatgpt_infer_dev_only")
+    if str(base.BROWSER_CDP_URL or "").rstrip("/") != "http://127.0.0.1:9559":
+        raise ValueError("browser_chatgpt_infer_dev_cdp_required")
+    model = str(args.get("model") or "").strip()
+    effort = str(args.get("effort") or "").strip().lower()
+    prompt = str(args.get("prompt") or "").strip()
+    if model != "gpt-5.6-sol":
+        raise ValueError("browser_chatgpt_infer_invalid_model")
+    if effort != "xhigh":
+        raise ValueError("browser_chatgpt_infer_invalid_effort")
+    if not prompt or len(prompt) > 120000:
+        raise ValueError("browser_chatgpt_infer_invalid_prompt")
+    if not Path(CHATGPT_BROWSER_INFER_SCRIPT).is_file():
+        raise RuntimeError("browser_chatgpt_infer_helper_missing")
+
+    owner_id = "browser-chatgpt-infer:" + str(uuid.uuid4())
+    try:
+        lease = base.runtime_lock.acquire_runtime_lock(
+            "maintenance", owner_id, 240, ["browser_chatgpt_infer"]
+        )
+    except base.runtime_lock.RuntimeLockConflict:
+        raise RuntimeError("browser_busy") from None
+
+    reason = "browser_chatgpt_infer_complete"
+    try:
+        request = json.dumps(
+            {"model": model, "effort": effort, "prompt": prompt},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        result = base.run_local_command_with_stdin(
+            [base.BROWSER_NODE_BIN, CHATGPT_BROWSER_INFER_SCRIPT],
+            request,
+            240,
+            cancel_check,
+            max_input_chars=130000,
+        )
+        stdout = str(result.get("stdout") or "").strip()
+        try:
+            payload = json.loads(stdout)
+        except (TypeError, ValueError):
+            raise RuntimeError("browser_chatgpt_infer_invalid_response") from None
+        if result.get("exit_code") != 0 or not isinstance(payload, dict) or payload.get("ok") is not True:
+            detail = str(payload.get("error") if isinstance(payload, dict) else "")
+            allowed = re.sub(r"[^A-Za-z0-9_:-]+", "_", detail)[:120] or "browser_chatgpt_infer_failed"
+            raise RuntimeError(allowed)
+        if (
+            payload.get("model") != "gpt-5.6-sol"
+            or payload.get("effort") != "xhigh"
+            or payload.get("transport") != "chatgpt_browser"
+            or payload.get("profile") != "dev"
+        ):
+            raise RuntimeError("browser_chatgpt_infer_contract_mismatch")
+        return payload
+    except Exception:
+        reason = "browser_chatgpt_infer_error"
+        raise
+    finally:
+        try:
+            base.runtime_lock.release_runtime_lock(
+                str(lease["lease_id"]), int(lease["fencing_token"]), reason
+            )
+        except Exception:
+            if reason == "browser_chatgpt_infer_complete":
+                raise RuntimeError("browser_chatgpt_infer_lock_release_failed") from None
+
+
 BASE_EXECUTE_TOOL = base.execute_tool
 BASE_TOOL_SPECS = base.tool_specs
 BASE_AUDIT = base.audit
@@ -720,6 +795,8 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
         return desktop_type(args)
     if name in ATTENDIMENTO_TOOL_MAP:
         return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
+    if name == "browser_chatgpt_infer":
+        return browser_chatgpt_infer(args, cancel_check=cancel_check)
     if name == "browser_health":
         return browser_health()
     if name == "browser_gui_tabs":
@@ -754,6 +831,10 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
         raw = str(safe.pop("text"))
         safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
+    if tool == "browser_chatgpt_infer" and "prompt" in safe:
+        raw = str(safe.pop("prompt"))
+        safe["prompt_length"] = len(raw)
+        safe["prompt_sha256"] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
@@ -839,7 +920,24 @@ def tool_specs() -> list[dict[str, Any]]:
     browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
     atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
     inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
-    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
+    extras = []
+    if str(base.BROWSER_SESSION_NAME or "").strip() == "dev":
+        extras.append({
+            "name": "browser_chatgpt_infer",
+            "description": "Run one isolated normal ChatGPT inference in the Dev session using GPT-5.6 Sol at Extra High. Acquires the global browser maintenance lock and closes its temporary tab.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model": {"type": "string", "enum": ["gpt-5.6-sol"]},
+                    "effort": {"type": "string", "enum": ["xhigh"]},
+                    "prompt": {"type": "string", "minLength": 1, "maxLength": 120000},
+                },
+                "required": ["model", "effort", "prompt"],
+                "additionalProperties": False,
+            },
+            "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+        })
+    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs() + extras
 
 
 base.execute_tool = execute_tool

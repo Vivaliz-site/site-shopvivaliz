@@ -1,7 +1,7 @@
 [Unit]
 Description=ShopVivaliz OKX PAPER-only continuous simulator
-After=network-online.target
-Wants=network-online.target
+After=network-online.target shopvivaliz-okx-chatgpt-browser-bridge.service
+Wants=network-online.target shopvivaliz-okx-chatgpt-browser-bridge.service
 StartLimitIntervalSec=0
 
 [Service]

@@ -711,7 +711,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("browser_runtime_exception", m.BROWSER_TYPE_NODE_SCRIPT)
 
     def test_browser_type_uses_modern_node_with_websocket_support(self):
-        self.assertEqual(m.BROWSER_NODE_BIN, "/usr/local/bin/node")
+        self.assertEqual(m.BROWSER_NODE_BIN, "/opt/node-v24.20.0-linux-arm64/bin/node")
 
     def test_browser_type_uses_stdin_not_command_line(self):
         argv = m.browser_type_invocation("ABC123", "#code", True)
@@ -1332,7 +1332,10 @@ class BootstrapContractTests(unittest.TestCase):
         for path in (
             "remote-control-browser-mcp/**",
             "scripts/setup-remote-control-browser-mcp.sh",
+            "scripts/chatgpt-continuity/chatgpt-browser-infer.mjs",
             "deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            "deploy/systemd/shopvivaliz-browser-atendimento-mcp.service",
+            "deploy/systemd/shopvivaliz-browser-dev-mcp.service",
             "scripts/shopvivaliz-native-desktop-bridge.ps1",
             "tests/remote-control-browser-mcp-test.py",
         ):
@@ -1343,6 +1346,7 @@ class BootstrapContractTests(unittest.TestCase):
         )
         self.assertIn("python3 tests/remote-control-browser-mcp-test.py", text)
         self.assertIn("bash -n scripts/setup-remote-control-browser-mcp.sh", text)
+        self.assertIn("node --check scripts/chatgpt-continuity/chatgpt-browser-infer.mjs", text)
         self.assertIn(
             "sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
             text,
@@ -3040,3 +3044,12 @@ class DurableExecutorV2Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+def test_browser_node_runtime_exposes_websocket():
+    import subprocess
+    assert m.BROWSER_NODE_BIN == "/opt/node-v24.20.0-linux-arm64/bin/node"
+    completed = subprocess.run(
+        [m.BROWSER_NODE_BIN, "-e", "process.exit(typeof WebSocket === 'function' ? 0 : 7)"],
+        check=False,
+    )
+    assert completed.returncode == 0

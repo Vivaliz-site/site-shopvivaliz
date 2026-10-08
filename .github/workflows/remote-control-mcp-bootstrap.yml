@@ -15,6 +15,9 @@ on:
       - 'remote-control-browser-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/chatgpt-continuity/chatgpt-browser-infer.mjs'
+      - 'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service'
+      - 'deploy/systemd/shopvivaliz-browser-dev-mcp.service'
       - 'scripts/shopvivaliz-native-desktop-bridge.ps1'
       - 'scripts/agent_task_state.py'
       - 'scripts/continuity/**'
@@ -49,6 +52,7 @@ jobs:
           python3 tests/remote-control-browser-mcp-test.py
           bash -n scripts/setup-remote-control-access.sh
           bash -n scripts/setup-remote-control-browser-mcp.sh
+          node --check scripts/chatgpt-continuity/chatgpt-browser-infer.mjs
 
       - name: Configure verified bootstrap SSH
         env:

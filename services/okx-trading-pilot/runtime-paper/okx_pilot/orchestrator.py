@@ -99,7 +99,7 @@ class PilotOrchestrator:
         self.last_provider_error = str(exc)[:160]
         self.provider_available = False
         lowered = self.last_provider_error.lower()
-        if any(marker in lowered for marker in (
+        if lowered.startswith("decision_browser:") or any(marker in lowered for marker in (
             "decision_bridge:codex_unavailable",
             "decision_bridge:bridge_busy",
             "decision_bridge:timeouterror",

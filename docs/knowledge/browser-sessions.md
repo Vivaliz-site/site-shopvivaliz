@@ -4,10 +4,21 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 
 ## Vínculos fixos
 
-| Perfil / sessão | Porta CDP | Conta permitida |
-|---|---:|---|
-| `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `atendimento@shopvivaliz.com.br` |
-| `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9559` | `dev@shopvivaliz.com.br` |
+| Perfil / sessão | Porta CDP | MCP dedicado | Porta MCP | Conta permitida |
+|---|---:|---|---:|---|
+| `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `shopvivaliz-browser-atendimento-mcp.service` | `5582` | `atendimento@shopvivaliz.com.br` |
+| `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9559` | `shopvivaliz-browser-dev-mcp.service` | `5583` | `dev@shopvivaliz.com.br` |
+
+## Regra dos dois MCPs dedicados
+
+Existem dois MCPs de navegador separados e persistentes para as contas ChatGPT corporativas:
+
+- Atendimento: `shopvivaliz-browser-atendimento-mcp.service` -> `127.0.0.1:5582` -> CDP `9556`.
+- Dev: `shopvivaliz-browser-dev-mcp.service` -> `127.0.0.1:5583` -> CDP `9559`.
+
+Os dois serviços podem estar ativos ao mesmo tempo, mas nunca devem compartilhar perfil, cookies, storage, conta ou porta CDP. Um MCP não é fallback do outro.
+
+A conta `dev@shopvivaliz.com.br` **não usa Google como método de login**. Abas antigas ou incidentais em `accounts.google.com` dentro do perfil Dev não provam nem definem o fluxo de autenticação do Dev e não devem ser continuadas como login da conta ChatGPT. Para reparar a sessão Dev, usar o fluxo próprio da conta ChatGPT/OpenAI no mesmo perfil Dev e as fontes seguras autorizadas já provisionadas.
 
 ## Regras obrigatórias
 
@@ -61,3 +72,17 @@ de ambiente globais. Testes exercitam o endpoint realmente solicitado, a
 expressao de identidade injetada, concorrencia, heranca e falha fechada.
 Fonte de implementacao: Node.js `AsyncLocalStorage.run` (documentacao oficial:
 https://nodejs.org/api/async_context.html#asynclocalstoragerunstore-callback-args).
+
+
+## Inferência normal do ChatGPT para OKX
+
+O fallback de IA do simulador OKX usa somente o MCP dedicado Dev:
+shopvivaliz-browser-dev-mcp.service / loopback 5583 / CDP 9559 /
+dev@shopvivaliz.com.br.
+
+A operação de alto nível browser_chatgpt_infer existe somente nesse MCP.
+Ela adquire o runtime lock global em modo maintenance, cria uma conversa
+temporária nova, exige GPT-5.6 Sol em Extra High, fecha a aba ao terminar e
+falha fechado se identidade, modelo, effort ou ownership divergirem.
+shopvivaliz-browser-atendimento-mcp.service / 5582 / CDP 9556 nunca é
+fallback para o OKX. Não criar terceiro perfil de navegador para esse fluxo.

@@ -1476,9 +1476,17 @@ def run_local_command_with_stdin(
     stdin_text: str,
     timeout: int = DEFAULT_TIMEOUT,
     cancel_check: Callable[[], bool] | None = None,
+    *,
+    max_input_chars: int = 4096,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    if len(stdin_text) > 4096:
+    try:
+        input_limit = int(max_input_chars)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid_stdin_limit") from exc
+    if input_limit < 1 or input_limit > 262144:
+        raise ValueError("invalid_stdin_limit")
+    if len(stdin_text) > input_limit:
         raise ValueError("browser_text_too_long")
     invocation = isolated_invocation(args, label="browser-input")
     started = time.monotonic()
@@ -1630,7 +1638,7 @@ def processes_command(platform: str) -> str:
 
 BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}
 BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
-BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
+BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/opt/node-v24.20.0-linux-arm64/bin/node")
 BROWSER_SESSION_NAME = os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "atendimento").strip() or "atendimento"
 BROWSER_CDP_URL = os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL", "http://127.0.0.1:9556").rstrip("/")
 

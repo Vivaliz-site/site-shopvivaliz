@@ -11,6 +11,19 @@ A referência antiga `fredmourao` é legado de migração e não deve ser usada 
 
 O OTPClient é executado na sessão gráfica usada pelo RustDesk/ChatGPT em `DISPLAY=:99`, usuário `fredrdp`.
 
+## Autenticação da conta Dev
+
+A conta `dev@shopvivaliz.com.br` não deve ser autenticada por Google. A presença de uma aba `accounts.google.com`, CAPTCHA Google ou sessão Google expirada no perfil Dev é evidência apenas daquela aba, não do método de login da conta ChatGPT Dev.
+
+Para `dev@shopvivaliz.com.br`:
+
+- usar exclusivamente o perfil `shopvivaliz-dev-chromium` / CDP `9559` / MCP Dev `127.0.0.1:5583`;
+- iniciar ou reparar o login pelo fluxo próprio da conta ChatGPT/OpenAI;
+- reutilizar somente credenciais/MFA provenientes das fontes seguras locais autorizadas e previamente validadas;
+- nunca usar a conta Atendimento, um perfil pessoal ou uma conta Google como atalho;
+- nunca inferir que um desafio Google faz parte do login Dev apenas porque existe uma aba Google aberta.
+
+
 ## Regra de segurança
 
 - Nunca registrar em Git, documentação, logs, saída de ferramenta ou chat o seed TOTP, código OTP atual, senha ou conteúdo de qualquer secret.
