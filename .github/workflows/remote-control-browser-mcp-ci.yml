@@ -8,6 +8,7 @@ on:
       - 'scripts/setup-remote-control-browser-mcp.sh'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_mcp_desktop_browser_named_tools.py'
       - 'tests/browser-gui-stdin-x11-test.py'
       - 'tests/audit-v5-gui-input-privacy-test.py'
       - '.github/workflows/remote-control-browser-mcp-ci.yml'
@@ -19,6 +20,7 @@ on:
       - 'scripts/setup-remote-control-browser-mcp.sh'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_mcp_desktop_browser_named_tools.py'
       - 'tests/browser-gui-stdin-x11-test.py'
       - 'tests/audit-v5-gui-input-privacy-test.py'
       - '.github/workflows/remote-control-browser-mcp-ci.yml'
@@ -40,6 +42,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tests/remote-control-browser-mcp-test.py
+      - name: Named desktop/browser tools contracts
+        run: python3 -m unittest discover -s tests -p 'test_mcp_desktop_browser_named_tools.py'
       - name: Existing Remote Control MCP regression tests
         run: |
           set -Eeuo pipefail
