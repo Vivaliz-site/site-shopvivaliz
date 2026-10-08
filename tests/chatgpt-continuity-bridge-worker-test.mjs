@@ -1952,7 +1952,7 @@ async function run() {
     assert.equal(recoverable.latest_age_seconds >= 13 * 60 - 2, true);
     assert.equal(recoverable.candidate_count, 1);
 
-    const tooOld = await alignLatestForReinforcement(
+    const stillRecoverable = await alignLatestForReinforcement(
       cdp,
       async () => ({
         http_status: 200,
@@ -1961,6 +1961,27 @@ async function run() {
           {
             id: 'thirty-one-minute-old',
             update_time: (nowMs - 31 * 60_000) / 1000,
+            source: 'global',
+          },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(
+      stillRecoverable.action,
+      'navigated',
+      'passive account-wide stall recovery may inspect a recent conversation beyond the 30-minute checkpoint-binding window',
+    );
+
+    const tooOld = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        project_count: 0,
+        candidates: [
+          {
+            id: 'two-hours-one-minute-old',
+            update_time: (nowMs - 121 * 60_000) / 1000,
             source: 'global',
           },
         ],
