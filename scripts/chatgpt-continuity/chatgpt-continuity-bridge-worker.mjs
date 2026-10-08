@@ -156,7 +156,7 @@ const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
 );
 const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
-  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 2 * 60 * 60_000),
 );
 const CHECKPOINT_TARGET_MAX_DELTA_MS = Math.max(
   60_000,
@@ -266,6 +266,11 @@ function reinforcementHealthPayload(
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
+    || action === 'no_banner'
+    || action === 'stale_latest'
+    || action === 'latest_unavailable'
+    || action === 'already_latest'
+    || action === 'navigated'
     || action === 'idle_no_checkpoint'
     || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
@@ -995,6 +1000,21 @@ async function connectReinforcementChatgptTab({
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => row.rank === 0 || row.rank === 1)
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // Cross-device discovery needs a neutral authenticated shell, not a scan
+  // of every historical conversation renderer. Prefer the first live Home
+  // target so stale duplicate tabs cannot make the monitor time out.
+  if (allowCrossDeviceDiscovery) {
+    for (const row of ranked.filter(item => item.rank === 1)) {
+      let neutral;
+      try {
+        neutral = await connector(row.tab);
+        if (neutral) return neutral;
+      } catch {
+        try { neutral?.close(); } catch {}
+      }
+    }
+  }
 
   const opened = [];
   for (const row of ranked) {
