@@ -254,6 +254,41 @@ async function run() {
 
   {
     const workerModule = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+    const id = '11111111-2222-3333-4444-555555555555';
+    const bound = {
+      type: 'page',
+      url: `https://chatgpt.com/c/${id}`,
+      webSocketDebuggerUrl: 'ws://stale-bound',
+    };
+    const home = {
+      type: 'page',
+      url: 'https://chatgpt.com/',
+      webSocketDebuggerUrl: 'ws://neutral-home',
+    };
+    const stale = {
+      closed: false,
+      async evaluate(expression) {
+        if (String(expression).trim() === 'location.pathname') return '/';
+        return null;
+      },
+      close() { this.closed = true; },
+    };
+    const live = { marker: 'reentered-live', close() {} };
+    const connected = await workerModule.connectBoundConversationWithReentry(
+      [bound, home],
+      id,
+      {
+        connector: async tab => tab === bound ? stale : live,
+        selectReentry: async () => home,
+        navigate: async () => true,
+      },
+    );
+    assert.equal(connected, live, 'stale exact bound target must fall through to neutral reentry');
+    assert.equal(stale.closed, true, 'stale exact bound target must be closed before reentry');
+  }
+
+  {
+    const workerModule = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
     assert.equal(
       typeof workerModule.connectBoundConversationWithReentry,
       'function',
@@ -2347,6 +2382,70 @@ async function run() {
     });
     assert.ok(selected);
     assert.equal(closed.length, 1, 'duplicate same-conversation tab must be deduplicated');
+    selected.close();
+  }
+
+  // Stale neutral Home targets can remain in /json after their renderer has
+  // stopped hydrating. Cross-device discovery must choose a rendered Home
+  // target instead of the first stale target deterministically.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-stale' },
+      { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-ready' },
+      { type: 'page', url: 'https://chatgpt.com/c/older-one', webSocketDebuggerUrl: 'ws://conversation' },
+    ];
+    const closed = [];
+    const connector = async tab => {
+      const ready = tab.webSocketDebuggerUrl === 'ws://home-ready';
+      const cdp = fakeCdp({ pageText: 'normal reply', composerUsable: ready });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
+      const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.evaluate = async expression => {
+        if (String(expression).trim() === 'location.pathname') {
+          return tab.url === 'https://chatgpt.com/' ? '/' : '/c/older-one';
+        }
+        return originalEvaluate(expression);
+      };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(selected.marker, 'ws://home-ready', 'stale Home target must be skipped in favor of a rendered Home target');
+    selected.close();
+  }
+
+  // /json can retain a conversation URL after the renderer has fallen back to
+  // Home. The idle discovery fallback must reject that stale target and keep
+  // the healthy duplicate conversation renderer.
+  {
+    const tabs = [
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://stale-renderer' },
+      { type: 'page', url: 'https://chatgpt.com/c/same-thread', webSocketDebuggerUrl: 'ws://healthy-renderer' },
+    ];
+    const connector = async tab => {
+      const cdp = fakeCdp({ pageText: 'normal reply', generating: false });
+      cdp.marker = tab.webSocketDebuggerUrl;
+      const originalEvaluate = cdp.evaluate.bind(cdp);
+      cdp.evaluate = async expression => {
+        if (String(expression).trim() === 'location.pathname') {
+          return tab.webSocketDebuggerUrl === 'ws://stale-renderer' ? '/' : '/c/same-thread';
+        }
+        return originalEvaluate(expression);
+      };
+      return cdp;
+    };
+    const selected = await connectReinforcementChatgptTab({
+      tabs,
+      connector,
+      probeBanner: async () => false,
+      allowCrossDeviceDiscovery: true,
+    });
+    assert.equal(selected.marker, 'ws://healthy-renderer', 'stale /json conversation target must not win idle fallback');
     selected.close();
   }
 
