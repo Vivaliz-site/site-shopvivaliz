@@ -702,6 +702,7 @@ async function connectBoundConversationWithReentry(
     connector = connectCdpTarget,
     selectReentry = selectBoundConversationReentryTab,
     navigate = navigateNeutralTabToConversation,
+    createNeutral = createNeutralChatgptTab,
     preferred = boundConversationRecoveryReady,
   } = {},
 ) {
@@ -709,22 +710,38 @@ async function connectBoundConversationWithReentry(
   if (!id) throw new Error('invalid bound conversation id');
 
   const boundTabs = selectBoundConversationTabs(tabs, id);
-  const existing = await connectFirstUsableChatgptTab(
+  let existing = await connectFirstUsableChatgptTab(
     boundTabs,
     connector,
     boundTabs.length > 1 ? preferred : null,
   );
-  if (existing) return existing;
+  if (existing) {
+    let liveId = '';
+    try {
+      const livePath = String(await existing.evaluate('location.pathname') || '');
+      liveId = safeConversationId(livePath.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
+    } catch {}
+    if (liveId === id) return existing;
+    try { existing.close(); } catch {}
+    existing = null;
+  }
 
   // A target can remain listed by /json while its renderer no longer answers
   // Runtime.evaluate. Re-enter the exact immutable conversation id through a
   // neutral authenticated Home target instead of declaring the conversation
   // unavailable or selecting another conversation.
-  const reentryTab = await selectReentry(tabs);
+  let reentryTab = await selectReentry(tabs);
   if (!reentryTab) {
     throw new Error('bound conversation is not available in the attached browser');
   }
-  const navigated = await navigate(reentryTab, id, connector);
+  let navigated = await navigate(reentryTab, id, connector);
+  if (!navigated) {
+    const replacement = await createNeutral();
+    if (replacement && replacement !== reentryTab) {
+      reentryTab = replacement;
+      navigated = await navigate(reentryTab, id, connector);
+    }
+  }
   if (!navigated) throw new Error('bound conversation could not be opened');
 
   const reentered = await connector(reentryTab);
@@ -1042,11 +1059,23 @@ async function connectReinforcementChatgptTab({
   if (allowCrossDeviceDiscovery) {
     const neutralHomes = opened.filter(row => row.rank === 1);
     const conversationRows = opened.filter(row => row.rank === 0);
-    if (neutralHomes.length >= 1) {
-      // Home tabs are neutral and equivalent discovery contexts. Prefer the
-      // first deterministically even when stale duplicate home tabs exist;
-      // ambiguity only applies to conversation targets, never to /.
-      selected = neutralHomes[0];
+    let readyHome = null;
+    for (const row of neutralHomes) {
+      try {
+        const livePath = String(await row.cdp.evaluate('location.pathname') || '');
+        if (livePath !== '/') continue;
+        if (await composerIsUsable(row.cdp)) {
+          readyHome = row;
+          break;
+        }
+        if (await sidebarLatestConversationId(row.cdp)) {
+          readyHome = row;
+          break;
+        }
+      } catch {}
+    }
+    if (readyHome) {
+      selected = readyHome;
     } else if (conversationRows.length > 1) {
       // Cross-device discovery should resolve the *target* from the account
       // endpoint, not from whichever conversations happen to be open in the
@@ -1091,6 +1120,16 @@ async function connectReinforcementChatgptTab({
         let idleRow = null;
         for (const row of conversationRows) {
           try {
+            const expectedConversationId = conversationIdFromTab(row.tab);
+            const livePath = String(await row.cdp.evaluate('location.pathname') || '');
+            const liveMatch = livePath.match(/^\/(?:c|uc)\/([^/?#]+)/);
+            if (
+              livePath
+              && expectedConversationId
+              && (!liveMatch || liveMatch[1] !== expectedConversationId)
+            ) {
+              continue;
+            }
             if (!(await conversationIsGenerating(row.cdp))) {
               idleRow = row;
               break;
@@ -1105,6 +1144,8 @@ async function connectReinforcementChatgptTab({
         }
         selected = idleRow;
       }
+    } else if (conversationRows.length === 1) {
+      selected = conversationRows[0];
     }
   }
   for (const row of opened) {
@@ -1216,6 +1257,19 @@ async function navigateNeutralTabToConversation(
   try {
     cdp = await connector(tab);
     if (!cdp) return false;
+
+    const browserSession = BROWSER_SESSION_CONTEXT.getStore();
+    if (browserSession?.expectedEmail) {
+      const accountMatches = Boolean(await cdp.evaluate(`(async()=>{
+        try{
+          const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(2000)});
+          if(!r.ok) return false;
+          const d=await r.json();
+          return String(d?.user?.email||'').toLowerCase()===${JSON.stringify(browserSession.expectedEmail)};
+        }catch{return false;}
+      })()`));
+      if (!accountMatches) return false;
+    }
 
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
