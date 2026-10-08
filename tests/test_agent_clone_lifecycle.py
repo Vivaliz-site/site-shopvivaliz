@@ -127,6 +127,23 @@ class CloneLifecycleTests(unittest.TestCase):
         self.assertEqual(self.cleanup()["removed"], 1)
         self.assertFalse(wt.exists())
 
+    def test_task_state_complete_invokes_cleanup_after_transition(self):
+        from unittest.mock import patch
+        import agent_task_state
+        terminal = {"task_id": self.task_id, "status": "CONCLUIDO"}
+        with patch.object(agent_task_state, "_complete_task_transition", return_value=terminal) as transition:
+            with patch.object(lifecycle, "cleanup_task", return_value={"ok": True, "removed": 1}) as cleanup:
+                result = agent_task_state.complete_task(self.task_id)
+        transition.assert_called_once_with(self.task_id)
+        cleanup.assert_called_once_with(self.task_id, state_dir=agent_task_state.RUNTIME_DIR)
+        self.assertEqual(result["clone_cleanup"]["removed"], 1)
+
+    def test_reject_noncompleted_blocked_task_cleanup(self):
+        self.register()
+        self.write_task("BLOCKED_EXTERNAL")
+        self.assertEqual(self.cleanup()["removed"], 0)
+        self.assertTrue(self.clone.exists())
+
     def test_missing_task_preserves_registered_work(self):
         self.register()
         (self.state / (self.task_id + ".json")).unlink()
