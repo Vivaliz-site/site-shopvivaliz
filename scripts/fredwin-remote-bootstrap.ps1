@@ -99,8 +99,13 @@ function Ensure-Relay {
             $protocolOk = Test-RemoteTunnelProtocol
         }
     }
-    if ($ssh.Count -ne 1 -or -not $protocolOk) {
-        Log 'Reverse SSH protocol unavailable or process count invalid; repairing'
+    if ($ssh.Count -eq 1 -and -not $protocolOk) {
+        # An inconclusive remote probe must never destroy a working transport.
+        # The backend controller is authoritative for actual reverse SSH health.
+        Log 'SSH protocol probe inconclusive; leaving existing tunnel intact'
+    }
+    if ($ssh.Count -ne 1) {
+        Log 'Reverse SSH process count invalid; repairing'
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
         Start-Sleep -Seconds 5
@@ -114,8 +119,8 @@ function Ensure-Relay {
         }
     }
     if ($ssh.Count -ne 1) { throw 'Managed Fred-Win reverse tunnel failed to stay running' }
-    if (-not $protocolOk) { throw 'Managed Fred-Win reverse tunnel SSH protocol is unavailable' }
-    Log 'Fred-Win relay ensure completed (SSH protocol verified)'
+    if (-not $protocolOk) { Log 'SSH protocol probe remains inconclusive after repair' }
+    Log 'Fred-Win relay ensure completed (process verified; protocol probe recorded)'
 }
 function Install-Task {
     $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
