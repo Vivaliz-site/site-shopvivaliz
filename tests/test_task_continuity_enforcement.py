@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import importlib.util
 import sys
 import tempfile
@@ -477,6 +478,98 @@ class OperationsWorkerContinuityTests(unittest.TestCase):
         self.assertEqual(assigned[0]["agent_id"], "gpt")
         self.assertEqual(assigned[0]["phase"], "docs_preflight")
         self.assertTrue(saved, "ownership must be persisted even before docs receipt")
+
+
+class OperationsWorkerOriginGuardTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.original_runtime = state.RUNTIME_DIR
+        state.RUNTIME_DIR = Path(self.temp.name)
+        self.worker = load_operations_worker()
+        self.env = mock.patch.dict(os.environ, {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+        }, clear=False)
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        state.RUNTIME_DIR = self.original_runtime
+        self.temp.cleanup()
+
+    def test_autonomous_queue_does_not_fabricate_chatgpt_checkpoint(self) -> None:
+        task = {"id": "autonomous-only", "title": "Review safe signals",
+                "auto_generated": True, "source": "real-project-signals"}
+        self.worker.persist_task_continuity("gpt", task, next_action="read source")
+        self.assertEqual(task["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS")
+        self.assertFalse((state.RUNTIME_DIR / "autonomous-only.json").exists())
+
+    def test_queue_persists_autonomous_route_status_without_chat_checkpoint(self) -> None:
+        queue = {"queue": [{"id": "auto-pending", "title": "Review safe signals",
+                            "status": "pending", "auto_generated": True}]}
+        saved = []
+        with (
+            mock.patch.object(self.worker, "load_queue", return_value=queue),
+            mock.patch.object(self.worker, "save_queue",
+                              side_effect=lambda value, **kw: saved.append(copy.deepcopy(value))),
+            mock.patch.object(self.worker, "choose_agent", return_value="gpt"),
+            mock.patch.object(self.worker, "docs_preflight",
+                              return_value=(False, "missing docs")),
+            mock.patch.object(self.worker, "push_step"),
+            mock.patch.object(self.worker, "set_focus"),
+        ):
+            assigned = self.worker.assign_pending_tasks({"agents": {}})
+        self.assertEqual(len(assigned), 1)
+        self.assertTrue(saved)
+        self.assertEqual(
+            saved[0]["queue"][0]["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS",
+        )
+        self.assertFalse((state.RUNTIME_DIR / "auto-pending.json").exists())
+
+    def test_human_queue_without_verified_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "missing-origin", "title": "Continue customer issue"}
+        self.worker.persist_task_continuity("gpt", task, next_action="resume source")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "missing-origin.json").exists())
+
+    def test_partial_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "partial-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check session")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "partial-origin.json").exists())
+
+    def test_explicitly_bound_queue_checkpoint_advances(self) -> None:
+        task = {"id": "verified-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev",
+                "continuity_binding_status": "AWAIT_VERIFIED_BROWSER_ORIGIN"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check system",
+                                            evidence="origin route provided")
+        stored = state.load_task("verified-origin")
+        self.assertEqual(stored["conversation_id"], task["conversation_id"])
+        self.assertEqual(stored["browser_session"], "dev")
+        self.assertEqual(stored["next_action"], "check system")
+        self.assertNotIn("continuity_binding_status", task)
+
+    def test_legacy_orphan_is_not_rewritten_by_generic_worker(self) -> None:
+        state.start_task("legacy-orphan", "Original work", "gpt")
+        before = state.load_task("legacy-orphan")
+        task = {"id": "legacy-orphan", "title": "Original work",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev"}
+        self.worker.persist_task_continuity("gpt", task, next_action="generic ACK")
+        after = state.load_task("legacy-orphan")
+        self.assertEqual(task["continuity_binding_status"], "LEGACY_UNBOUND_CHECKPOINT")
+        self.assertEqual(after, before)
+
+    def test_non_durable_legacy_mode_keeps_original_queue_behavior(self) -> None:
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "0"
+        task = {"id": "legacy-queue", "title": "Legacy standalone job",
+                "auto_generated": True}
+        self.worker.persist_task_continuity("gpt", task, next_action="legacy fallback")
+        stored = state.load_task("legacy-queue")
+        self.assertEqual(stored["status"], "RUNNING")
+        self.assertEqual(stored["next_action"], "legacy fallback")
 
 
 class TaskContinuityPolicyTests(unittest.TestCase):

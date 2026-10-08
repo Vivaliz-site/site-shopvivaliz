@@ -751,3 +751,21 @@ sem criar estado órfão ou forjar progresso. Fallback detached nunca cria
 checkpoint, mesmo no modo legado. Somente o opt-out foreground explicitamente
 não durável (SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) conserva a compatibilidade
 legada; o deploy canônico não utiliza esse modo.
+
+
+## Fila autônoma versus conversa autenticada
+
+O produtor scripts/agent-operations-worker.py recebe também tarefas geradas
+por auto-task-generator.py e por filas independentes do ChatGPT. No modo
+durável, uma tarefa sem conversa comprovada não deve virar um checkpoint
+ChatGPT RUNNING: tarefas auto_generated permanecem duráveis na fila
+(continuity_binding_status=QUEUE_ONLY_AUTONOMOUS), e tarefas humanas sem
+conversation_id + browser_session recebem
+AWAIT_VERIFIED_BROWSER_ORIGIN, sem fabricar um chat. Um checkpoint legado
+já órfão não é avançado por ACK genérico (LEGACY_UNBOUND_CHECKPOINT).
+A criação com vínculo explícito segue permitida, com verificação do e-mail e
+da conversa pelo worker antes de qualquer ação externa. O modo não durável
+(SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) mantém compatibilidade legada.
+
+Estes marcadores são diagnóstico de roteamento da fila, não comprovam
+retomada nem devem ser interpretados como PROGRESS_CONFIRMED.

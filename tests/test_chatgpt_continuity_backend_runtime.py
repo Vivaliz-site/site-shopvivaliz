@@ -639,6 +639,15 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertLess(probe.index("/api/auth/session"), probe.index('const loggedOut'))
 
 
+    def test_guardian_root_login_uses_multiple_signs_not_single_login_label(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        self.assertIn('const rootLoggedOut = path === "/"', body)
+        self.assertIn('document.querySelector("input[type=email]")', body)
+        self.assertIn('const hasActiveComposer', body)
+        self.assertIn('&& body.includes("sign up")', body)
+        self.assertIn('|| rootLoggedOut;', body)
+
     def test_chatgpt_browser_guardian_authenticated_session_precedes_residual_logout_dom(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")

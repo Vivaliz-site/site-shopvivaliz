@@ -75,3 +75,14 @@ vinculada, permanece obrigatória e independente do guardian.
 
 A recuperação de autenticação não permite usar cookies ou a sessão da conta
 Atendimento como substituto. O guardian não faz login nem altera perfis.
+
+
+## Página inicial sem login — confirmação não invasiva
+
+O guardian da sessão Dev também detecta LOGGED_OUT na raiz do ChatGPT
+quando o próprio DOM exibe simultaneamente campo de e-mail,
+ações Log in/Sign up e ausência de compositor ativo. Apenas uma UI
+parcial/carregando ou resposta de sessão sem identidade continua UNKNOWN.
+Isso reduz probes repetidos no perfil sem criar/fechar abas, navegar,
+alterar login ou buscar tokens. A autenticação de verdade continua
+dependendo de /api/auth/session com o e-mail Dev exato.
