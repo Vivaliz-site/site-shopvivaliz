@@ -36,8 +36,9 @@ function hash(x){return createHash('sha256').update(JSON.stringify(x)).digest('h
 function stableSnapshot(x,tool){
   let out=x;
   if(x?.balance?.trading)out={...out,balance:{...x.balance,trading:x.balance.trading.map(r=>({availBal:r.availBal??null,cashBal:r.cashBal??null}))}};
-  if((tool==='stop'||tool==='positions.close')&&out?.trader)
-    out={...out,trader:{uniqueCode:code(out.trader),name:label(out.trader)}};
+  if(out?.trader)out={...out,trader:{uniqueCode:code(out.trader),name:label(out.trader)}};
+  if(Array.isArray(out?.allocated))out={...out,allocated:out.allocated.map(t=>({uniqueCode:code(t),name:label(t)}))
+    .sort((a,b)=>a.uniqueCode.localeCompare(b.uniqueCode)||a.name.localeCompare(b.name))};
   return out;
 }
 function safeId(x){if(typeof x!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(x))fail('INVALID_IDENTIFIER');return x}
