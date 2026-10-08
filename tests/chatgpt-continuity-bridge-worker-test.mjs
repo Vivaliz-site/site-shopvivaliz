@@ -2426,8 +2426,10 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-a' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-b' },
     ];
+    const opened = [];
     const closed = [];
     const connector = async tab => {
+      opened.push(tab.webSocketDebuggerUrl);
       const cdp = fakeCdp({ pageText: 'normal reply' });
       cdp.marker = tab.webSocketDebuggerUrl;
       cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
