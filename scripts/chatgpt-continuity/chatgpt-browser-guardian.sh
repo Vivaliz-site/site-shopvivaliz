@@ -160,8 +160,9 @@ browser_session_state() {
         // be separated by unrelated marketing text. Only classify it from
         // multiple independent signs (email input + login/signup + no composer).
         // Mere missing session email remains UNKNOWN rather than logged out.
-        const hasActiveComposer = [...document.querySelectorAll("[contenteditable]")]
-          .some(element => element.getAttribute("contenteditable") === "true");
+        const hasActiveComposer = typeof document.querySelectorAll === "function"
+          && [...document.querySelectorAll("[contenteditable]")]
+            .some(element => element.getAttribute("contenteditable") === "true");
         const rootLoggedOut = path === "/"
           && Boolean(document.querySelector("input[type=email]"))
           && !hasActiveComposer
