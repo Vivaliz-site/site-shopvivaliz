@@ -1,4 +1,20 @@
 
+<!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
+## Registro atomico de tarefa e conversa
+
+O CLI permite criar um checkpoint `RUNNING` ja vinculado a conversa:
+`agent_task_state.py start --task ID --goal OBJETIVO --conversation-id ID_EXATO --browser-session dev|atendimento`.
+Os dois campos devem ser apresentados juntos. Sem ambos, a criacao permanece
+legada/unbound e nao pode ser retomada pelo durable fencing de conversa.
+Quando a fila de operacoes possui uma identidade exata, o executor deve
+repassa-la ao `start_task` antes da primeira gravacao. Nao inferir IDs por
+titulo ou horario; nao migrar tarefas entre contas por conveniencia.
+Para checkpoints antigos sem identificador, vincular a conversa original
+explicitamente antes de reivindicar lease. Health ativo nao equivale a
+`PROGRESS_CONFIRMED` do assistente em conversa real.
+
+<!-- /CONTINUITY_ATOMIC_ROUTING_V1 -->
+
 <!-- CONTINUITY_TASK_LOOKBACK_V1 -->
 ## Janela de análise do controlador
 

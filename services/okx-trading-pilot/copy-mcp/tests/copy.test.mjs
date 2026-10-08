@@ -7,13 +7,14 @@ import { createCopyModule } from '../copy-module.mjs';
 
 const UID = '822315791411831486';
 const SLIME_CODE='6A48C398F18CB31C';
-function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped=false, renamedOld=false, publicTarget=false, volatileEq=false}={}) {
-  const calls=[];let balanceReads=0;let transferSeq=0;
+function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped=false, renamedOld=false, publicTarget=false, volatileEq=false, volatileTraders=false, activeNew=false}={}) {
+  const calls=[];let balanceReads=0;let transferSeq=0;let traderReads=0;
   const old1Code=SLIME_CODE;
   const old1Name='史莱姆冲冲冲!';
   let traders=(stopped?[]:[{uniqueCode:old1Code,nickName:old1Name}]).concat([
     {uniqueCode:'OLD2',nickName:'Modern-dAPI-Manatee'},
-    {uniqueCode:'KEEP1',nickName:'BestMax'},{uniqueCode:'KEEP2',nickName:'NANO IA'}]);
+    {uniqueCode:'KEEP1',nickName:'BestMax'},{uniqueCode:'KEEP2',nickName:'NANO IA'},
+    ...(activeNew?[{uniqueCode:'NEW1',nickName:'Xiaoyao Lee'}]:[])]);
   let positions=stopped?[]:[{uniqueCode:old1Code,subPosId:'P1',margin:'15',upl:'-2',instId:'BTC-USDT-SWAP'}];
   return {calls,async restIdentity(){
     calls.push({method:'GET',path:'/api/v5/account/config',via:'rest'});
@@ -22,7 +23,11 @@ function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped
     calls.push({method:'GET',path,params});
     if(path==='/api/v5/account/config') return [{uid,mainUid:'MAIN_UID'}];
     if(path==='/api/v5/account/balance') return [{details:[{ccy:'USDT',availBal:balance,cashBal:balance,eq:volatileEq?String(1200+(balanceReads++)):'1200',frozenBal:volatileEq?String(20+balanceReads):'20'}]}];
-    if(path==='/api/v5/copytrading/current-lead-traders') return params.instType==='SPOT'?[]:traders;
+    if(path==='/api/v5/copytrading/current-lead-traders'){
+      if(params.instType==='SPOT')return [];
+      traderReads++;
+      return traders.map(x=>volatileTraders?{...x,upl:String(traderReads),todayPnl:String(traderReads)}:{...x});
+    }
     if(path==='/api/v5/copytrading/current-subpositions') return params.instType==='SPOT'?[]:positions;
     if(path==='/api/v5/copytrading/subpositions-history') return [];
     if(path==='/api/v5/copytrading/copy-settings') return [{copyTotalAmt:'600'}];
@@ -240,4 +245,35 @@ test('identical independently approved operations get distinct idempotency scope
  assert.equal(second.code,'VERIFIED');
  assert.notEqual(first.operation_id,second.operation_id);
  assert.equal(api.calls.filter(x=>x.method==='POST'&&x.path==='/api/v5/asset/transfer').length,2);
+});
+
+
+test('preflight ignores volatile lead-trader PnL for an internal transfer',async()=>{
+ const {mod,api,stateDir}=await harness({writeEnabled:true,balance:'100',volatileTraders:true});
+ const common={instType:'SWAP',from:'18',to:'6',amount:'1'};
+ const plan=await mod.call('okx.copy.funds.internal_transfer',{...common,phase:'preview'},{requestId:'volatile-traders-preview'});
+ await mkdir(join(stateDir,'grants'),{recursive:true});
+ await writeFile(join(stateDir,'grants','VOLTR1.json'),JSON.stringify({
+   plan_id:plan.plan_id,tool:'okx.copy.funds.internal_transfer',uid:UID,expires_at:Date.now()+60000
+ }),{mode:0o600});
+ const out=await mod.call('okx.copy.funds.internal_transfer',{
+   ...common,phase:'execute',plan_id:plan.plan_id,approval_id:'VOLTR1'
+ },{requestId:'volatile-traders-execute'});
+ assert.equal(out.code,'VERIFIED');
+ assert.equal(api.calls.filter(x=>x.method==='POST'&&x.path==='/api/v5/asset/transfer').length,1);
+});
+
+test('preflight ignores volatile PnL fields on the selected trader during settings update',async()=>{
+ const {mod,api,stateDir}=await harness({writeEnabled:true,balance:'100',volatileTraders:true,activeNew:true});
+ const common={instType:'SWAP',trader:'Xiaoyao Lee',uniqueCode:'NEW1',copyMgnMode:'copy',copyInstIdType:'copy',copyMode:'ratio_copy',copyTotalAmt:'600'};
+ const plan=await mod.call('okx.copy.trader.settings.update',{...common,phase:'preview'},{requestId:'volatile-settings-preview'});
+ await mkdir(join(stateDir,'grants'),{recursive:true});
+ await writeFile(join(stateDir,'grants','VOLSET1.json'),JSON.stringify({
+   plan_id:plan.plan_id,tool:'okx.copy.trader.settings.update',uid:UID,expires_at:Date.now()+60000
+ }),{mode:0o600});
+ const out=await mod.call('okx.copy.trader.settings.update',{
+   ...common,phase:'execute',plan_id:plan.plan_id,approval_id:'VOLSET1'
+ },{requestId:'volatile-settings-execute'});
+ assert.equal(out.code,'VERIFIED');
+ assert.equal(api.calls.filter(x=>x.method==='POST'&&x.path==='/api/v5/copytrading/amend-copy-settings').length,1);
 });
