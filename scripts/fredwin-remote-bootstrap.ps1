@@ -62,8 +62,7 @@ function Test-RemoteTunnelProtocol {
             -o 'ConnectTimeout=8' `
             -o 'StrictHostKeyChecking=yes' `
             -o ("UserKnownHostsFile=" + $knownHostsPath) `
-            "ubuntu@$backendHost" 'timeout 5 ssh-keyscan -T 3 -p 2222 127.0.0.1' 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
+            "ubuntu@$backendHost" 'timeout 5 ssh-keyscan -T 3 -p 2222 127.0.0.1 2>/dev/null' 2>$null
         foreach ($line in @($output)) {
             if ([string]$line -match '^\[127\.0\.0\.1\]:2222 ssh-') { return $true }
         }
