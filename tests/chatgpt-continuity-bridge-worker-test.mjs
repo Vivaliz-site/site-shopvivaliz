@@ -25,6 +25,7 @@ const {
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   reinforcementHealthPayload,
   bridgeResultPayload,
   recoveryStateForOutcome,
@@ -67,6 +68,25 @@ const {
   mutationAuthorizationAllows,
   guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// A crashed monitor writer may leave temp files, but its janitor must never
+// touch the current process, recent writes, or unrelated artifacts.
+{
+  const target = path.join(testTaskStateDir, '_monitor-janitor-fixture.json');
+  const stale = target + '.tmp.99999999';
+  const current = target + '.tmp.' + process.pid;
+  const recent = target + '.tmp.99999998';
+  const notMonitor = target + '.tmp.99999997.backup';
+  for (const filename of [stale, current, recent, notMonitor]) fs.writeFileSync(filename, 'fixture');
+  const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  for (const filename of [stale, current, notMonitor]) fs.utimesSync(filename, old, old);
+  const removed = pruneStaleMonitorTempFiles(target);
+  assert.equal(removed, 1, 'only an old, dead-PID regular monitor temp may be removed');
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(fs.existsSync(current), true, 'live writer files must never be removed');
+  assert.equal(fs.existsSync(recent), true, 'recent interrupted writes must be retained');
+  assert.equal(fs.existsSync(notMonitor), true, 'unrelated artifacts must be retained');
+}
 
 assert.match(
   recoverableRetryButtonTarget.toString(),
