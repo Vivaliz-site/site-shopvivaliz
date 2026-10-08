@@ -156,9 +156,21 @@ browser_session_state() {
         } catch {}
         const body = String(document.body?.innerText || "").toLowerCase();
         const path = String(location.pathname || "");
+        // On the logged-out root landing page, "Log in" and "Sign up" can
+        // be separated by unrelated marketing text. Only classify it from
+        // multiple independent signs (email input + login/signup + no composer).
+        // Mere missing session email remains UNKNOWN rather than logged out.
+        const hasActiveComposer = [...document.querySelectorAll("[contenteditable]")]
+          .some(element => element.getAttribute("contenteditable") === "true");
+        const rootLoggedOut = path === "/"
+          && Boolean(document.querySelector("input[type=email]"))
+          && !hasActiveComposer
+          && body.includes("log in")
+          && body.includes("sign up");
         const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
           || body.includes("log in or sign up")
-          || body.includes("log in to get answers");
+          || body.includes("log in to get answers")
+          || rootLoggedOut;
         if (loggedOut) return "LOGGED_OUT";
         return "UNKNOWN";
       })()`);
