@@ -63,7 +63,7 @@ function safeCode(e){
 }
 export function createOkxReadBridge({port=17671,transportFactory=defaultTransportFactory,copyFactory,restClient}={}){
   const readOnly=process.env.OKX_MCP_READ_ONLY!=='0';
-  const writeEnabled=process.env.OKX_SPOT_FUTURES_WRITE_ENABLED==='1';
+  const writeEnabled=!readOnly&&process.env.OKX_SPOT_FUTURES_WRITE_ENABLED==='1';
   const args=['--profile',PROFILE,'--modules','all',...(readOnly?['--read-only']:[])];
   let runtimeTools=new Set(),runtimeToolMeta=new Map(),upstreamTools=[],copyModule=null;
   const connectionPromise=Promise.resolve(transportFactory({command:MCP_COMMAND,args})).then(async connection=>{
