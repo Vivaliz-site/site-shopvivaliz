@@ -36,6 +36,13 @@ const selector = value => {
   if (typeof value !== 'string' || !value || value.length > 500) throw new Error('invalid_selector');
   return value;
 };
+const MAX_DOWNLOAD_BYTES=10_000_000;
+const saveBoundedDownload = async (download, target) => {
+  await download.saveAs(target);
+  const saved=statSync(target);
+  if(saved.size>MAX_DOWNLOAD_BYTES){unlinkSync(target);throw new Error('download_too_large');}
+  return saved.size;
+};
 const result = (o) => console.log(JSON.stringify(o));
 let context;
 try {
@@ -94,8 +101,14 @@ try {
     writeFileSync(uploadFile,'test', {mode:0o600});
     await page.locator('#file').setInputFiles(uploadFile);
     const [testDownload]=await Promise.all([page.waitForEvent('download'),page.locator('#dl').click()]);
-    await testDownload.saveAs(resolve(root,'probe-download.txt'));
-    result({ok:true, title:await page.title(), heading:await page.locator('h1').innerText(), value:await page.locator('#q').inputValue(), selected:await page.locator('#s').inputValue(), checked:await page.locator('#c').isChecked(),uploadFile:(await page.locator('#file').inputValue()).endsWith('smoke-test.txt'),downloadBytes:statSync(resolve(root,'probe-download.txt')).size});
+    const smallBytes=await saveBoundedDownload(testDownload,resolve(root,'probe-download.txt'));
+    const bigDownload={saveAs:async target=>writeFileSync(target,Buffer.alloc(10_000_001))};
+    let largeRejected=false;
+    const oversizedPath=resolve(root,'probe-oversized.bin');
+    try { await saveBoundedDownload(bigDownload,oversizedPath); }
+    catch(e) { if(e.message!=='download_too_large')throw e;largeRejected=true; }
+    if(!largeRejected || existsSync(oversizedPath))throw new Error('oversized_download_not_blocked');
+    result({ok:true, title:await page.title(), heading:await page.locator('h1').innerText(), value:await page.locator('#q').inputValue(), selected:await page.locator('#s').inputValue(), checked:await page.locator('#c').isChecked(),uploadFile:(await page.locator('#file').inputValue()).endsWith('smoke-test.txt'),downloadBytes:smallBytes,oversizedDownloadRejected:largeRejected});
   } else if (action === 'open') {
     await page.goto(await validateUrl(input.url), {waitUntil:'domcontentloaded',timeout:20000});
     result({ok:true,url:page.url().split('?')[0],title:(await page.title()).slice(0,200)});
@@ -131,10 +144,8 @@ try {
       const folder=resolve(root,'downloads');
       mkdirSync(folder,{recursive:true,mode:0o700});
       const target=resolve(folder,Date.now()+'-'+name);
-      await download.saveAs(target);
-      const saved=statSync(target);
-      if(saved.size>10_000_000){unlinkSync(target);throw new Error('download_too_large');}
-      result({ok:true,action,filename:basename(target),bytes:saved.size});
+      const bytes=await saveBoundedDownload(download,target);
+      result({ok:true,action,filename:basename(target),bytes});
     } else if (action === 'press') {
       if (!['Enter','Tab','Escape','ArrowUp','ArrowDown','Space'].includes(input.key)) throw new Error('invalid_key');
       await el.press(input.key);
