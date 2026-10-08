@@ -237,6 +237,24 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('2>/dev/null || printf \'%s\\n\' "UNKNOWN"', probe)
         self.assertNotIn('2>/dev/null || printf \'%s\\n\' "UNREACHABLE"', probe)
 
+    def test_guardian_auth_probe_selector_survives_bash_quote_parsing(self) -> None:
+        import shlex
+
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        probe = body.split("browser_session_state() {", 1)[1].split("\npersist_browser_health() {", 1)[0]
+        beginning = probe.index("node --input-type=module -e ")
+        ending = probe.index(" 2>/dev/null || printf", beginning)
+        argv = shlex.split(probe[beginning:ending], posix=True)
+        self.assertEqual(argv[:3], ["node", "--input-type=module", "-e"])
+        self.assertEqual(len(argv), 4)
+        embedded_js = argv[3]
+        # The old single-quoted querySelector argument vanished inside the
+        # Bash -e argument, yielding a SyntaxError in Runtime.evaluate.
+        self.assertIn('getAttribute("aria-label") === "Open profile menu"', embedded_js)
+        self.assertIn('document.querySelectorAll("[aria-label]")', embedded_js)
+        self.assertNotIn("document.querySelector([aria-label=", embedded_js)
+
     def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
