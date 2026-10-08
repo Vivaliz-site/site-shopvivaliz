@@ -231,3 +231,25 @@ def test_codex_provider_owns_temporal_envelope_instead_of_model_output():
     assert raw["market_snapshot_ts"] == m.timestamp.isoformat()
     intent = DecisionParser.parse(raw, now=after)
     assert intent.market_snapshot_ts == m.timestamp
+
+
+def test_prompt_bounds_output_size_and_forbids_direction_none():
+    m=snap()
+    provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=lambda *a: {})
+    prompt=provider._prompt(m,{"paper_account":{"total_equity":"100"},"market_research":{}})
+    assert "STRICT_COMPACTNESS" in prompt
+    assert "assessment <= 24 characters" in prompt
+    assert "evidence must contain exactly 1 string <= 60 characters" in prompt
+    assert "supporting_evidence exactly 1 string <= 96 characters" in prompt
+    assert "direction must always be exactly LONG or SHORT; never NONE" in prompt
+
+
+def test_prompt_example_uses_full_allowed_120_second_validity_window():
+    m=snap()
+    provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=lambda *a: {})
+    prompt=provider._prompt(m,{})
+    encoded=prompt.split("OUTPUT_SCHEMA_EXAMPLE=",1)[1].split("\nMARKET_SNAPSHOT=",1)[0]
+    example=json.loads(encoded)
+    created=datetime.fromisoformat(example["created_at"])
+    expires=datetime.fromisoformat(example["expires_at"])
+    assert expires-created == timedelta(seconds=120)
