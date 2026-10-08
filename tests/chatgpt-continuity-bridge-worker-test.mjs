@@ -2759,6 +2759,58 @@ async function run() {
     assert.equal(result.sidebar_fallback, true);
   }
 
+  // HTTP 200 with no valid candidates is not proof of account history being
+  // empty. The same safe, synchronized sidebar fallback must remain available.
+  {
+    let currentPath = '/';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/local-latest-20261008';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/local-latest-20261008';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 200);
+    assert.equal(result.sidebar_fallback, true);
+    assert.equal(result.candidate_count, 0);
+    assert.equal(currentPath, '/c/local-latest-20261008');
+  }
+
+  // A 200-empty response does not authorize tab takeover without independent
+  // proof that the tab is a safe neutral or unique discovery context.
+  {
+    let currentPath = '/c/unproven-20261008';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/other-conversation';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/other-conversation';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 200);
+    assert.equal(currentPath, '/c/unproven-20261008');
+  }
+
   // Live post-deploy state can contain exactly one conversation tab and no
   // neutral home tab. That tab is safe to use as temporary discovery context,
   // but only because connectReinforcementChatgptTab proved it is unique.

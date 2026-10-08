@@ -2283,7 +2283,10 @@ async function alignLatestForReinforcement(
     ? Math.max(0, Math.round((Number(nowMs) - Number(latest.update_time) * 1000) / 1000))
     : null;
   if (!latest) {
-    if (httpStatus === 429) {
+    // A 200 response without valid conversations is no stronger evidence
+    // than a rate limit. Recover only from a locally synchronized, provably
+    // unique sidebar context; never select an ambiguous active tab.
+    if (httpStatus === 429 || httpStatus === 200) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
       if (
         sidebar.action === 'navigated_sidebar_fallback'

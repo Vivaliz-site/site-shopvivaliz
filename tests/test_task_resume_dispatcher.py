@@ -155,6 +155,32 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["executed"], 0)
         self.assertEqual(result["deferred_unbound_session"], 1)
 
+    def test_durable_handoff_supports_dedicated_dev_browser_session(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "dev_conversation_123456"
+        state["browser_session"] = "dev"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: state
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["deferred_unbound_session"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+
     def test_durable_handoff_defers_busy_recovery_owner_instead_of_crashing(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
