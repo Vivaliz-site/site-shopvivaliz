@@ -18,17 +18,17 @@ import {
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
-  model: 'gpt-5.6-sol',
+  model: 'gpt-6-luna',
   effort: 'xhigh',
   prompt: 'pesquise',
   web_search: true,
 });
-assert.equal(valid.model, 'gpt-5.6-sol');
+assert.equal(valid.model, 'gpt-6-luna');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
 
 const devScoped = validateRequest({
-  model: 'gpt-5.6-terra',
+  model: 'gpt-6-luna',
   effort: 'medium',
   prompt: 'okx',
   web_search: false,
@@ -40,7 +40,7 @@ assert.deepEqual(
   ['/home/ubuntu/.codex-business/dev'],
 );
 assert.throws(() => validateRequest({
-  model: 'gpt-5.6-terra',
+  model: 'gpt-6-luna',
   effort: 'medium',
   prompt: 'okx',
   web_search: false,
@@ -62,8 +62,16 @@ assert.throws(() => validateRequest({
   web_search: true,
 }), /invalid_model/);
 
+// Legacy GPT-5.6 identifiers must no longer pass the allowlist after the GPT-6 Luna migration.
 assert.throws(() => validateRequest({
-  model: 'gpt-5.6-sol',
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'x',
+  web_search: false,
+}), /invalid_model/);
+
+assert.throws(() => validateRequest({
+  model: 'gpt-6-luna',
   effort: 'extreme',
   prompt: 'x',
   web_search: true,
@@ -85,8 +93,8 @@ assert.equal(await readRateLimitState(async () => ({
   rateLimits: { primary: { usedPercent: 2 }, rateLimitReachedType: null },
 })), 'available');
 
-assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-sol'), true);
-assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
+assert.equal(exactModelMatches('gpt-6-luna', 'gpt-6-luna'), true);
+assert.equal(exactModelMatches('gpt-6-luna', 'gpt-6-sol'), false);
 
 assert.equal(remainingRequestMs(5000, 1000, 10000), 4000);
 assert.equal(remainingRequestMs(5000, 1000, 2500), 2500);

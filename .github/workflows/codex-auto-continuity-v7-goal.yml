@@ -252,7 +252,7 @@ jobs:
               "initial_dirty_count": int(dirty_count),
               "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
               "status": "ACTIVE",
-              "model": "gpt-5.6-terra",
+              "model": "gpt-6-luna",
               "reasoning_effort": "medium",
           }
           target = Path(path)

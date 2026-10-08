@@ -191,7 +191,7 @@ Repositório canônico: `Vivaliz-site/site-shopvivaliz`.
 
 Estado operacional esperado em 2026-09-21:
 
-- OpenAI: `gpt-5.6-terra`, effort `medium`;
+- OpenAI: `gpt-6-luna`, effort `medium`;
 - Anthropic: `claude-sonnet-5`, effort `medium`;
 - Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;
 - Fable: proibido.
