@@ -4,7 +4,8 @@ This adapter provides 14 tools for public-site browser interaction through a sep
 
 ## Runtime
 
-- `universal-browser.mjs`: bounded browser action executor, one process per request, isolated persistent profile and logical tabs file.
+- `universal-browser.mjs`: bounded browser action executor, legacy one-shot diagnostic; newer live session is implemented in live-browser.mjs.
+- `live-browser.mjs` + `live-worker.mjs`: persistent Node child and Chromium pages; preserves live DOM state when switching tabs, and reloads saved public URLs after worker/service restart. Each action may identify an existing `tab_id` instead of repeating `url`.
 - `mcp-server.mjs`: token-authenticated loopback HTTP MCP endpoint at `127.0.0.1:5595/mcp` (override via `SHOPVIVALIZ_BROWSER_UNIVERSAL_PORT`).
 - Parent `remote-control-browser-mcp/server.py`: advertises and forwards the 14 tools to local adapter, sanitizes audit fields. The adapter token must be supplied by existing `SHOPVIVALIZ_REMOTE_MCP_TOKEN` secret environment; do not save credentials in repository.
 - Install dependencies using `npm ci --omit=dev` in the `universal/` folder with Node >=20, and deploy this folder as a whole. Chrome path may be provided by `SHOPVIVALIZ_BROWSER_UNIVERSAL_BINARY`.
@@ -14,12 +15,12 @@ This adapter provides 14 tools for public-site browser interaction through a sep
 
 ## Operating contract and limitations
 
-- `tabs_*` are **logical, persisted bookmarks**, not live CDP tabs. Switching reopens the saved URL; unsaved JavaScript/UI state is lost.
+- `tabs_*` are **live Playwright pages** during the worker lifetime: switching does not reload or lose unsaved form data. After service/worker restart the bookmark URL is restored lazily, but unsaved JavaScript/UI state cannot be recovered.
 - `upload` only reads a named file in `upload-staging/`; `download` saves into `downloads/`, both below the isolated runtime folder. No arbitrary path arguments.
 - Private/loopback addresses are rejected when resolving URLs and HTTP(S) resource requests. Additional DNS rebinding, proxy, IPv6 and cross-origin security testing is required before treating this as a complete SSRF defense.
 - Browser clicks and form submits can cause real-world effects on third-party sites. Require explicit task-specific authorization for consequential financial or irreversible actions.
 - No CAPTCHA bypass or credential extraction. Do not log passwords, text entered into forms, cookies or authentication headers.
-- Source launcher still creates a browser process for each action. The profile is persistent but live pages are not. Further work is needed for stateful multi-page automation.
+- Normal MCP actions share one persistent browser worker; the legacy one-shot CLI is retained only for maintenance testing. The in-memory worker self-recovers on later requests if it exits, restoring saved public URLs.
 - Download file results are local to the host and do not automatically appear as ChatGPT attachments.
 
 ## Validation (backend VM)
@@ -27,6 +28,9 @@ This adapter provides 14 tools for public-site browser interaction through a sep
 ```sh
 node --check universal-browser.mjs
 node --check mcp-server.mjs
+node --check live-browser.mjs
+node --check live-worker.mjs
+npm test
 printf '{}' | node universal-browser.mjs probe
 ```
 
@@ -37,7 +41,7 @@ Verify `GET http://127.0.0.1:5595/health`, `tools/list` via authenticated MCP, p
 ## Known remaining tasks
 
 1. Expose newly advertised tools through ChatGPT connector catalog refresh/reconnection. Updating MCP `tools/list` on the server alone does not refresh this conversation's tool list.
-2. Stateful tab management and action chaining within the same page, with recovery.
+2. Ensure connector catalog refresh so tab_id arguments are exposed in this ChatGPT session. Test longer-term memory/browser resource stability.
 3. Test strict DNS rebinding, cross-origin redirects, symlink uploads, download limits and file path confinement.
 4. Add deploy automation with rollback and E2E CI tests.
 5. Validate full host reboot only in scheduled maintenance window with user approval.
