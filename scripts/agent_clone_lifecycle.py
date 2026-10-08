@@ -111,34 +111,21 @@ def _validate_git_root(path: Path) -> None:
         raise ValueError("not_git_repository_root")
 
 
-def _ancestors() -> set[int]:
-    pids = set()
-    pid = os.getpid()
-    for _ in range(40):
-        if pid < 2 or pid in pids:
-            break
-        pids.add(pid)
-        try:
-            text = (Path("/proc") / str(pid) / "status").read_text(errors="replace")
-            match = re.search(r"^PPid:\s*(\d+)", text, re.MULTILINE)
-            pid = int(match.group(1)) if match else 0
-        except (OSError, ValueError):
-            break
-    return pids
-
-
 def _active(path: Path) -> bool:
     proc = Path("/proc")
     if not proc.is_dir():
         return True  # no process visibility: fail closed
-    excluded = _ancestors()
+    # A completion invoked inside the clone must wait for the agent to leave.
+    current = Path.cwd().resolve()
+    if current == path or path in current.parents:
+        return True
     needle = str(path)
     try:
         entries = list(proc.iterdir())
     except OSError:
         return True
     for entry in entries:
-        if not entry.name.isdecimal() or int(entry.name) in excluded:
+        if not entry.name.isdecimal() or int(entry.name) == os.getpid():
             continue
         try:
             cwd = os.readlink(entry / "cwd")
@@ -153,6 +140,11 @@ def _active(path: Path) -> bool:
         except (PermissionError, FileNotFoundError, ProcessLookupError):
             pass
     return False
+
+
+def _clone_identity(path: Path) -> list[int]:
+    stat = path.stat()
+    return [stat.st_dev, stat.st_ino]
 
 
 def _safe_to_remove(path: Path) -> tuple[bool, str, bool, str]:
@@ -226,9 +218,18 @@ def register_clone(
         try:
             data = json.loads(manifest.read_text())
         except FileNotFoundError:
-            data = {"task_id": task, "paths": [], "created_at": datetime.now(timezone.utc).isoformat()}
-        if str(clone) not in data["paths"]:
+            data = {"task_id": task, "paths": [], "identities": {},
+                    "created_at": datetime.now(timezone.utc).isoformat()}
+        identities = data.setdefault("identities", {})
+        if data.get("task_id") != task or not isinstance(identities, dict) or not isinstance(data.get("paths"), list):
+            raise ValueError("clone_registry_invalid")
+        identity = _clone_identity(clone)
+        if str(clone) in data["paths"]:
+            if identities.get(str(clone)) != identity:
+                raise ValueError("registered_clone_identity_changed")
+        else:
             data["paths"].append(str(clone))
+            identities[str(clone)] = identity
         _write_registry(manifest, data)
     return {"ok": True, "task_id": task, "registered": str(clone)}
 
@@ -251,12 +252,17 @@ def cleanup_task(
         except (OSError, ValueError):
             return {"ok": False, "removed": 0, "preserved": 1, "reasons": ["registry_unreadable"]}
         paths = data.get("paths", [])
-        if data.get("task_id") != task or not isinstance(paths, list):
+        identities = data.get("identities", {})
+        if data.get("task_id") != task or not isinstance(paths, list) or not isinstance(identities, dict):
             return {"ok": False, "removed": 0, "preserved": 1, "reasons": ["registry_invalid"]}
         if not _verified_completion(task, state):
             return {"ok": True, "removed": 0, "preserved": len(paths), "reasons": ["task_not_completed"]}
         remaining = []
         for raw in paths:
+            if not isinstance(raw, str):
+                remaining.append(raw)
+                preserved.append({"reason": "registry_path_invalid"})
+                continue
             try:
                 candidate = _normalize_path(raw, allowed_roots)
             except (ValueError, OSError):
@@ -265,6 +271,10 @@ def cleanup_task(
                     continue
                 remaining.append(raw)
                 preserved.append({"reason": "path_invalid"})
+                continue
+            if identities.get(raw) != _clone_identity(candidate):
+                remaining.append(raw)
+                preserved.append({"reason": "registered_clone_identity_changed"})
                 continue
             safe, reason, linked, common = _safe_to_remove(candidate)
             if not safe:
@@ -279,6 +289,10 @@ def cleanup_task(
                 preserved.append({"reason": reason})
                 continue
             try:
+                if identities.get(raw) != _clone_identity(candidate):
+                    remaining.append(raw)
+                    preserved.append({"reason": "registered_clone_identity_changed"})
+                    continue
                 if linked:
                     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
                     p = subprocess.run(
@@ -295,6 +309,7 @@ def cleanup_task(
                 preserved.append({"reason": "deletion_failed"})
         if remaining:
             data["paths"] = remaining
+            data["identities"] = {raw: identities[raw] for raw in remaining if isinstance(raw, str) and raw in identities}
             _write_registry(manifest, data)
         else:
             manifest.unlink(missing_ok=True)
