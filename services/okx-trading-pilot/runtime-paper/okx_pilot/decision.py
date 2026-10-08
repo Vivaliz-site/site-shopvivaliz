@@ -82,7 +82,7 @@ class CodexBridgeDecisionProvider:
     def __init__(
         self,
         url: str = "http://127.0.0.1:17656/v1/respond",
-        model: str = "gpt-5.6-terra",
+        model: str = "gpt-6-luna",
         effort: str = "medium",
         timeout_seconds: int = 45,
         context_builder: DecisionContextBuilder | None = None,
