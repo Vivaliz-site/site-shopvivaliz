@@ -75,6 +75,13 @@ persist_running_checkpoint() {
   [ -n "$SHOPVIVALIZ_TASK_ID" ] || return 0
 
   if ! python3 scripts/agent_task_state.py show --task "$SHOPVIVALIZ_TASK_ID" >/dev/null 2>&1; then
+    # CHECKPOINT_FIRST_NO_ORPHAN: detached recovery must never invent RUNNING.
+    # Durable foreground origin must start with verified binding before fallback.
+    if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ] || [ "${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}" = "1" ]; then
+      echo "durable checkpoint missing; task origin must start and bind the conversation before fallback" >&2
+      return 76
+    fi
+    # Legacy non-durable foreground opt-out only.
     python3 scripts/agent_task_state.py start       --task "$SHOPVIVALIZ_TASK_ID"       --goal "Continuar tarefa finita delegada ate estado terminal"       --agent executor-failover >/dev/null
   fi
 
