@@ -31,7 +31,7 @@ required = [
     "artifacts/ci-performance-24h.json",
     "artifacts/ci-performance-24h.md",
     "GITHUB_STEP_SUMMARY",
-    "uses: actions/upload-artifact@v7",
+    "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     "retention-days: 1",
     "<!-- ci-performance-monitor -->",
     "[CI Performance] Regression monitor",

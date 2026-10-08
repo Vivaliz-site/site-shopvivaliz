@@ -77,8 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.2'
       - name: Lint and verify tracking without network or purchase events
@@ -92,7 +92,7 @@ jobs:
           php tests/google-ads-ga4-health-test.php
           python3 tests/test_ecommerce_live_production_scope.py
           python3 tests/test_ecommerce_excellence_deploy_wait_retry.py
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
       - name: Install isolated test dependencies

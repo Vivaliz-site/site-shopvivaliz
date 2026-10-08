@@ -22,7 +22,7 @@ jobs:
       GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
       GOOGLE_ADS_CUSTOMER_ID: '5283091103'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Confirm required secrets are present
         shell: bash
         run: |

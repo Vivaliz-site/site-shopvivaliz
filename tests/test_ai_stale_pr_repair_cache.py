@@ -3,7 +3,7 @@ from pathlib import Path
 workflow = Path('.github/workflows/ai-stale-pr-repair.yml').read_text(encoding='utf-8')
 
 required = [
-    'uses: actions/cache@v4',
+    'uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830',
     'path: ~/.ollama/models',
     'key: ollama-model-${{ runner.os }}-${{ env.OLLAMA_MODEL }}',
     'ollama show "$OLLAMA_MODEL"',

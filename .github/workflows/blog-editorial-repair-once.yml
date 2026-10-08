@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout exact commit
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -133,7 +133,7 @@ jobs:
           PY
 
       - name: Upload repair evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: blog-editorial-repair-evidence-${{ github.sha }}
           path: artifacts/blog-editorial-repair-evidence.json

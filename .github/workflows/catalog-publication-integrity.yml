@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - name: Lint PHP publication code
@@ -193,7 +193,7 @@ jobs:
           test "$audit_status" = 0
       - name: Upload masked readiness evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: marketplace-publication-readiness-${{ github.run_id }}
           path: marketplace-publication-readiness.json

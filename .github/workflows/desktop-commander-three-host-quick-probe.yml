@@ -55,7 +55,7 @@ jobs:
           cp /tmp/quick-probe.md artifacts/desktop-commander-three-host-quick-probe/probe.md
       - name: Upload immutable probe evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-commander-quick-probe-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/desktop-commander-three-host-quick-probe/

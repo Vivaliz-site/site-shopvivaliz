@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload immutable probe evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mei-email-prod-probe-now-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/mei-email-prod-probe-now/

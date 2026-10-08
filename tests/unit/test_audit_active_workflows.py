@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: python audit.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           path: artifacts/
           if-no-files-found: error
@@ -284,6 +284,42 @@ jobs:
 """,
         )
         self.assertIn("production_push_trigger", {item.rule for item in findings})
+
+
+    def test_blocks_external_action_without_full_commit_sha(self):
+        findings = self.audit(
+            "unpinned-action.yml",
+            """name: Unpinned action
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+""",
+        )
+        rules = {item.rule for item in findings}
+        self.assertIn("unpinned_external_action", rules)
+
+    def test_allows_external_action_pinned_to_full_commit_sha(self):
+        findings = self.audit(
+            "pinned-action.yml",
+            """name: Pinned action
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+""",
+        )
+        self.assertNotIn("unpinned_external_action", {item.rule for item in findings})
 
 
 if __name__ == "__main__":

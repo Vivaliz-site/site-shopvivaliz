@@ -16,7 +16,7 @@ jobs:
       VM_USER: ubuntu
       REPORT_PATH: reports/mei-graph-token-diagnostic-20260823.txt
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Configure verified Oracle SSH
         shell: bash
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mei-graph-token-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.REPORT_PATH }}

@@ -23,7 +23,7 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Configure verified SSH
         env:
           PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
