@@ -25,7 +25,8 @@ test('MCP keeps live tabs across calls and accepts tab_id for inspection',{timeo
     cwd:root,env:{PATH:process.env.PATH,HOME:process.env.HOME,LANG:'C.UTF-8',
       SHOPVIVALIZ_REMOTE_MCP_TOKEN:token,SHOPVIVALIZ_BROWSER_UNIVERSAL_PORT:String(port),
       SHOPVIVALIZ_BROWSER_UNIVERSAL_DATA_DIR:data,
-      SHOPVIVALIZ_BROWSER_UNIVERSAL_PROFILE_DIR:resolve(data,'profile')},
+      SHOPVIVALIZ_BROWSER_UNIVERSAL_PROFILE_DIR:resolve(data,'profile'),
+      SHOPVIVALIZ_BROWSER_UNIVERSAL_BINARY:process.env.SHOPVIVALIZ_BROWSER_UNIVERSAL_BINARY || '/opt/shopvivaliz-browser/chrome-linux/chrome'},
     stdio:['ignore','ignore','pipe'],
   });
   let log='';
