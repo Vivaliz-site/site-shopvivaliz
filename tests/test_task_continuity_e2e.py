@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -49,8 +50,9 @@ class ProbeStaticContractTests(unittest.TestCase):
             ],
         )
         self.assertIn("--conversation-id", PROBE_PATH.read_text(encoding="utf-8"))
-        self.assertIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
-        self.assertIn("bind-browser-session", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertIn("--browser-session", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertNotIn("bind-conversation", PROBE_PATH.read_text(encoding="utf-8"))
+        self.assertNotIn("bind-browser-session", PROBE_PATH.read_text(encoding="utf-8"))
 
     def test_workflow_has_audited_issue_trigger_for_current_tooling(self) -> None:
         workflow = (
@@ -354,11 +356,36 @@ class ProbeEvaluationTests(unittest.TestCase):
                 runner=fake_runner,
             )
         commands = [call[2] for call in calls]
-        self.assertEqual(commands, ["start", "bind-conversation", "bind-browser-session", "progress"])
-        self.assertIn(self.CONVERSATION_ID, calls[1])
-        self.assertIn("atendimento", calls[2])
+        self.assertEqual(commands, ["start", "progress"])
+        self.assertIn("--conversation-id", calls[0])
+        self.assertIn(self.CONVERSATION_ID, calls[0])
+        self.assertIn("--browser-session", calls[0])
+        self.assertIn("atendimento", calls[0])
 
 
+    def test_crash_after_first_write_preserves_atomic_routing(self) -> None:
+        probe = load_probe()
+
+        def interrupt_after_start(argv, **kwargs):
+            subprocess.run(argv, **kwargs)
+            raise RuntimeError("client disconnected immediately after initial write")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp)
+            with self.assertRaisesRegex(RuntimeError, "client disconnected"):
+                probe.create_synthetic_task(
+                    runtime_dir=runtime,
+                    task_id="continuity-e2e-atomic-crash",
+                    repository="Vivaliz-site/site-shopvivaliz",
+                    agent_task_state_script=ROOT / "scripts" / "agent_task_state.py",
+                    conversation_id=self.CONVERSATION_ID,
+                    runner=interrupt_after_start,
+                )
+            checkpoint = json.loads((runtime / "continuity-e2e-atomic-crash.json").read_text(encoding="utf-8"))
+            self.assertEqual(checkpoint["conversation_id"], self.CONVERSATION_ID)
+            self.assertEqual(checkpoint["browser_session"], "atendimento")
+            self.assertEqual(checkpoint["status"], "RUNNING")
+            self.assertEqual(checkpoint["history"][0]["event"], "started")
 
 
 class DurableHandoffDisconnectE2ETest(unittest.TestCase):

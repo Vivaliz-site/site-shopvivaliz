@@ -67,3 +67,33 @@ test('gated Spot/Futures writes are exposed only when runtime metadata and expli
    if(oldWrite===undefined)delete process.env.OKX_SPOT_FUTURES_WRITE_ENABLED;else process.env.OKX_SPOT_FUTURES_WRITE_ENABLED=oldWrite;
  }
 });
+
+test('Spot/Futures write gate stays closed unless read-only mode is explicitly disabled too',async()=>{
+ const oldReadOnly=process.env.OKX_MCP_READ_ONLY;
+ const oldWrite=process.env.OKX_SPOT_FUTURES_WRITE_ENABLED;
+ process.env.OKX_MCP_READ_ONLY='1';
+ process.env.OKX_SPOT_FUTURES_WRITE_ENABLED='1';
+ let launchArgs=[];let invokes=[];
+ const conn={listTools:async()=>({tools:[
+   {name:'spot_place_order',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}
+ ]}),callTool:async ({name})=>{invokes.push(name);return fakeReply},close:async()=>{},ping:async()=>{}};
+ const copy={listTools:()=>[],call:async()=>({}),health:async()=>({enabled:true,write_enabled:false})};
+ const srv=createOkxReadBridge({port:0,transportFactory:async({args})=>{launchArgs=args;return conn},
+   copyFactory:()=>copy,restClient:{get:async()=>[],post:async()=>[]}});
+ await once(srv,'listening');
+ const url='http://127.0.0.1:'+srv.address().port;
+ try{
+   const health=await (await fetch(url+'/health')).json();
+   assert.equal(health.read_only,true);
+   assert.equal(health.spot_futures_writes_enabled,false);
+   assert.equal(launchArgs.includes('--read-only'),true);
+   const res=await fetch(url+'/v1/call',{method:'POST',headers:{'content-type':'application/json'},
+     body:JSON.stringify({request_id:'write-gate-closed',tool:'spot_place_order',arguments:{instId:'BTC-USDT'}})});
+   assert.equal(res.status,403);
+   assert.deepEqual(invokes,[]);
+ }finally{
+   await new Promise((resolve,reject)=>srv.close(e=>e?reject(e):resolve()));
+   if(oldReadOnly===undefined)delete process.env.OKX_MCP_READ_ONLY;else process.env.OKX_MCP_READ_ONLY=oldReadOnly;
+   if(oldWrite===undefined)delete process.env.OKX_SPOT_FUTURES_WRITE_ENABLED;else process.env.OKX_SPOT_FUTURES_WRITE_ENABLED=oldWrite;
+ }
+});
