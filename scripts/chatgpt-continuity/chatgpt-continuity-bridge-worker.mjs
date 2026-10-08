@@ -475,12 +475,56 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
-async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
+async function connectFirstUsableChatgptTab(tabs, connector, preferred = null, { maxParallel = 1 } = {}) {
   if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
   const ranked = tabs
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => Number.isFinite(row.rank))
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // The guardian may inspect many restored tabs. Probe small, bounded batches
+  // in parallel instead of serial 2.5s session fetches, while retaining the
+  // original deterministic first-preferred/fallback selection and closing all
+  // unselected CDP connections. All other callers remain strictly serial.
+  const parallel = Math.max(1, Math.min(8, Math.trunc(Number(maxParallel) || 1)));
+  if (parallel > 1 && typeof preferred === 'function') {
+    let fallback = null;
+    for (let index = 0; index < ranked.length; index += parallel) {
+      const batch = ranked.slice(index, index + parallel);
+      const checked = await Promise.all(batch.map(async ({ tab }) => {
+        let connected = null;
+        try {
+          connected = await connector(tab);
+          if (!connected) return { connected: null, accepted: false };
+          let accepted = false;
+          try { accepted = Boolean(await preferred(connected, tab)); } catch {}
+          return { connected, accepted };
+        } catch {
+          try { connected?.close(); } catch {}
+          return { connected: null, accepted: false };
+        }
+      }));
+      const winner = checked.find(result => result.accepted)?.connected || null;
+      if (winner) {
+        if (fallback && fallback !== winner) {
+          try { fallback.close(); } catch {}
+        }
+        for (const result of checked) {
+          if (result.connected && result.connected !== winner) {
+            try { result.connected.close(); } catch {}
+          }
+        }
+        return winner;
+      }
+      for (const result of checked) {
+        if (!result.connected) continue;
+        if (!fallback) fallback = result.connected;
+        else { try { result.connected.close(); } catch {} }
+      }
+    }
+    return fallback;
+  }
+
   let fallback = null;
   for (const { tab } of ranked) {
     try {
