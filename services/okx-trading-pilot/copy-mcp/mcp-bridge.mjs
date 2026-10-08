@@ -53,6 +53,7 @@ function makeApi(connected,rest){
       }
       return rest.get(path,params);
     },
+    restIdentity:()=>rest.get('/api/v5/account/config'),
     post:(path,payload)=>rest.post(path,payload)
   };
 }

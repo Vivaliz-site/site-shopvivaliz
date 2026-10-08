@@ -6,25 +6,37 @@ import { join } from 'node:path';
 import { createCopyModule } from '../copy-module.mjs';
 
 const UID = '822315791411831486';
-function fakeApi({uid=UID, uncertain=false, balance='12.5'}={}) {
-  const calls=[];
-  const traders=[{uniqueCode:'OLD1',nickName:'slime198888'},{uniqueCode:'OLD2',nickName:'Modern-dAPI-Manatee'},
-    {uniqueCode:'KEEP1',nickName:'BestMax'},{uniqueCode:'KEEP2',nickName:'NANO IA'}];
-  const positions=[{uniqueCode:'OLD1',subPosId:'P1',margin:'15',upl:'-2',instId:'BTC-USDT-SWAP'}];
-  return {calls,async get(path,params={}) {
+const SLIME_CODE='6A48C398F18CB31C';
+function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped=false, renamedOld=false, publicTarget=false, volatileEq=false}={}) {
+  const calls=[];let balanceReads=0;
+  const old1Code=SLIME_CODE;
+  const old1Name='史莱姆冲冲冲!';
+  let traders=(stopped?[]:[{uniqueCode:old1Code,nickName:old1Name}]).concat([
+    {uniqueCode:'OLD2',nickName:'Modern-dAPI-Manatee'},
+    {uniqueCode:'KEEP1',nickName:'BestMax'},{uniqueCode:'KEEP2',nickName:'NANO IA'}]);
+  let positions=stopped?[]:[{uniqueCode:old1Code,subPosId:'P1',margin:'15',upl:'-2',instId:'BTC-USDT-SWAP'}];
+  return {calls,async restIdentity(){
+    calls.push({method:'GET',path:'/api/v5/account/config',via:'rest'});
+    return [{uid:restUid,mainUid:'MAIN_UID'}];
+  },async get(path,params={}) {
     calls.push({method:'GET',path,params});
     if(path==='/api/v5/account/config') return [{uid,mainUid:'MAIN_UID'}];
-    if(path==='/api/v5/account/balance') return [{details:[{ccy:'USDT',availBal:balance,eq:'1200'}]}];
+    if(path==='/api/v5/account/balance') return [{details:[{ccy:'USDT',availBal:balance,cashBal:balance,eq:volatileEq?String(1200+(balanceReads++)):'1200',frozenBal:volatileEq?String(20+balanceReads):'20'}]}];
     if(path==='/api/v5/copytrading/current-lead-traders') return params.instType==='SPOT'?[]:traders;
     if(path==='/api/v5/copytrading/current-subpositions') return params.instType==='SPOT'?[]:positions;
     if(path==='/api/v5/copytrading/subpositions-history') return [];
     if(path==='/api/v5/copytrading/copy-settings') return [{copyTotalAmt:'600'}];
-    if(path==='/api/v5/copytrading/public-lead-traders') return [];
+    if(path==='/api/v5/copytrading/public-lead-traders') return publicTarget?[{ranks:[{uniqueCode:'NEW1',nickName:'Xiaoyao Lee'}]}]:[];
     if(path==='/api/v5/asset/transfer-state') return [{state:'success',transId:params.transId}];
     return [];
   },async post(path,body){
     calls.push({method:'POST',path,body});
     if(uncertain) throw Object.assign(new Error('timeout'),{code:'ETIMEDOUT'});
+    if(path==='/api/v5/copytrading/stop-copy-trading'){
+      traders=traders.filter(x=>x.uniqueCode!==body.uniqueCode);
+      positions=positions.filter(x=>x.uniqueCode!==body.uniqueCode);
+    }
+    if(path==='/api/v5/copytrading/first-copy-settings')traders.push({uniqueCode:body.uniqueCode,nickName:'Xiaoyao Lee'});
     return [{result:true}];
   }};
 }
@@ -44,13 +56,13 @@ test('wrong UID is fail-closed before balance query',async()=>{
 });
 test('previews show positions, balance and never POST',async()=>{
   const {mod,api}=await harness();
-  const out=await mod.call('okx.copy.stop',{phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:'OLD1'}, {requestId:'p1'});
+  const out=await mod.call('okx.copy.stop',{phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,confirmSmartSync:true}, {requestId:'p1'});
   assert.equal(out.code,'APPROVAL_REQUIRED');assert.ok(out.plan_id);assert.equal(out.open_positions.length,1);
   assert.equal(api.calls.filter(c=>c.method==='POST').length,0);
 });
 test('writes remain disabled without gate even with a plan',async()=>{
   const {mod,api}=await harness();
-  const args={phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:'OLD1'};
+  const args={phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,confirmSmartSync:true};
   const out=await mod.call('okx.copy.stop',args,{requestId:'p1'});
   await assert.rejects(()=>mod.call('okx.copy.stop',{...args,phase:'execute',plan_id:out.plan_id,approval_id:'fake'},{requestId:'p1'}),/WRITE_DISABLED/);
   assert.equal(api.calls.filter(c=>c.method==='POST').length,0);
@@ -71,7 +83,7 @@ test('transfer rejects external or cross-account flows',async()=>{
 });
 test('ambiguous timeout is journaled and never retried',async()=>{
   const {mod,api,stateDir}=await harness({uncertain:true,writeEnabled:true});
-  const common={instType:'SWAP',trader:'slime198888',uniqueCode:'OLD1',subPosCloseType:'manual_close'};
+  const common={instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,subPosCloseType:'manual_close',confirmSmartSync:true};
   const plan=await mod.call('okx.copy.stop',{...common,phase:'preview'}, {requestId:'p1'});
   await mkdir(join(stateDir,'grants'),{recursive:true});
   await writeFile(join(stateDir,'grants','A1.json'),JSON.stringify({plan_id:plan.plan_id,tool:'okx.copy.stop',uid:UID,expires_at:Date.now()+60000}),{mode:0o600});
@@ -96,7 +108,7 @@ test('insufficient transferable USDT is denied in preview without POST',async()=
 });
 test('unknown operation survives module restart with zero replayed POST',async()=>{
  const {mod,api,stateDir}=await harness({uncertain:true,writeEnabled:true});
- const base={instType:'SWAP',trader:'slime198888',uniqueCode:'OLD1',subPosCloseType:'manual_close'};
+ const base={instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,subPosCloseType:'manual_close',confirmSmartSync:true};
  const preview=await mod.call('okx.copy.stop',{phase:'preview',...base});
  await mkdir(join(stateDir,'grants'),{recursive:true});
  await writeFile(join(stateDir,'grants','R1.json'),JSON.stringify({
@@ -113,4 +125,83 @@ test('cross-account operations reject even with write flag disabled and no trade
  await assert.rejects(()=>mod.call('okx.copy.funds.internal_transfer',{phase:'preview',account:'other',
     from:'6',to:'18',amount:'1'}),/CROSS_ACCOUNT_FORBIDDEN/);
  assert.equal(api.calls.filter(x=>x.path==='/api/v5/asset/transfer').length,0);
+});
+
+
+test('REST credential identity mismatch fails closed before copy data access',async()=>{
+ const {mod,api}=await harness({restUid:'WRONG'});
+ await assert.rejects(()=>mod.call('okx.copy.traders.list',{instType:'SWAP'}),/UID_MISMATCH/);
+ assert.equal(api.calls.filter(x=>x.path==='/api/v5/copytrading/current-lead-traders').length,0);
+});
+
+test('transaction verify reconciles an unknown stop from read-only absence and never POSTs',async()=>{
+ const {mod,api,stateDir}=await harness({stopped:true});
+ await mkdir(join(stateDir,'plans'),{recursive:true});
+ await mkdir(join(stateDir,'operations'),{recursive:true});
+ const planId='plan-reconcile-stop';
+ const operationId='op-reconcile-stop';
+ const args={instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,subPosCloseType:'market_close',confirmSmartSync:true};
+ await writeFile(join(stateDir,'plans',planId+'.json'),JSON.stringify({
+   plan_id:planId,tool:'okx.copy.stop',uid:UID,args,expires_at:Date.now()-1000
+ }),{mode:0o600});
+ await writeFile(join(stateDir,'operations',operationId+'.json'),JSON.stringify({
+   operation_id:operationId,tool:'okx.copy.stop',uid:UID,status:'UNKNOWN',plan_id:planId,
+   created_at:new Date(Date.now()-10000).toISOString()
+ }),{mode:0o600});
+ const out=await mod.call('okx.copy.transaction.verify',{operation_id:operationId});
+ assert.equal(out.status,'VERIFIED');
+ assert.equal(out.verification_basis,'READ_ONLY_STOP_ABSENT');
+ assert.equal(api.calls.filter(x=>x.method==='POST').length,0);
+ const saved=JSON.parse(await readFile(join(stateDir,'operations',operationId+'.json'),'utf8'));
+ assert.equal(saved.status,'VERIFIED');
+ assert.equal(saved.verification_basis,'READ_ONLY_STOP_ABSENT');
+ assert.ok(saved.verified_at);
+});
+
+
+test('stop preview requires explicit Smart Sync confirmation',async()=>{
+ const {mod,api}=await harness();
+ await assert.rejects(()=>mod.call('okx.copy.stop',{
+   phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE
+ }),/SMART_SYNC_CONFIRMATION_REQUIRED/);
+ assert.equal(api.calls.filter(x=>x.method==='POST').length,0);
+});
+
+test('historical stopped-trader alias is pinned to the current exact OKX identity',async()=>{
+ const {mod}=await harness({renamedOld:true});
+ const out=await mod.call('okx.copy.stop',{
+   phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,confirmSmartSync:true
+ });
+ assert.equal(out.code,'APPROVAL_REQUIRED');
+});
+
+test('copy position and history reads do not send obsolete subPosType',async()=>{
+ const {mod,api}=await harness();
+ await mod.call('okx.copy.positions.list',{instType:'SWAP'});
+ await mod.call('okx.copy.history',{instType:'SWAP'});
+ const calls=api.calls.filter(x=>x.path==='/api/v5/copytrading/current-subpositions'||x.path==='/api/v5/copytrading/subpositions-history');
+ assert.equal(calls.length,2);
+ for(const c of calls)assert.equal(Object.hasOwn(c.params,'subPosType'),false);
+});
+
+test('new trader identity is verified from wrapped public ranks even when other traders are active',async()=>{
+ const {mod}=await harness({publicTarget:true,balance:'500'});
+ const out=await mod.call('okx.copy.trader.start',{
+   phase:'preview',instType:'SWAP',trader:'Xiaoyao Lee',uniqueCode:'NEW1',
+   copyMgnMode:'copy',copyInstIdType:'copy',copyMode:'ratio_copy',copyTotalAmt:'50',copyRatio:'1'
+ });
+ assert.equal(out.code,'APPROVAL_REQUIRED');
+});
+
+test('preflight ignores volatile equity fields but still executes only once with a grant',async()=>{
+ const {mod,api,stateDir}=await harness({volatileEq:true,writeEnabled:true});
+ const common={instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,subPosCloseType:'market_close',confirmSmartSync:true};
+ const plan=await mod.call('okx.copy.stop',{...common,phase:'preview'},{requestId:'volatile-preview'});
+ await mkdir(join(stateDir,'grants'),{recursive:true});
+ await writeFile(join(stateDir,'grants','VOL1.json'),JSON.stringify({
+   plan_id:plan.plan_id,tool:'okx.copy.stop',uid:UID,expires_at:Date.now()+60000
+ }),{mode:0o600});
+ const out=await mod.call('okx.copy.stop',{...common,phase:'execute',plan_id:plan.plan_id,approval_id:'VOL1'},{requestId:'volatile-execute'});
+ assert.equal(out.code,'VERIFIED');
+ assert.equal(api.calls.filter(x=>x.method==='POST').length,1);
 });

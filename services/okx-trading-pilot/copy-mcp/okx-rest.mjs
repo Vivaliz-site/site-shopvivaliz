@@ -1,4 +1,8 @@
 import { createHmac } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { parse as parseToml } from 'smol-toml';
 
 const ALLOWED_BASE_URLS=new Set(['https://www.okx.com','https://openapi.okx.com','https://us.okx.com','https://eea.okx.com']);
 const READ_PATHS=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/copytrading/current-lead-traders','/api/v5/copytrading/current-subpositions','/api/v5/copytrading/subpositions-history','/api/v5/copytrading/copy-settings','/api/v5/copytrading/public-stats','/api/v5/copytrading/public-lead-traders','/api/v5/copytrading/config','/api/v5/asset/transfer-state']);
@@ -33,6 +37,15 @@ export function createOkxRestClient({credentials,baseUrl='https://www.okx.com',f
   }
   return {get:(path,params)=>request('GET',path,params),post:(path,params)=>request('POST',path,params)};
 }
-export function environmentCredentialProvider(env=process.env){
-  return async()=>({key:env.OKX_COPY_API_KEY,secret:env.OKX_COPY_API_SECRET,passphrase:env.OKX_COPY_API_PASSPHRASE});
+export function environmentCredentialProvider(env=process.env,{configPath=join(homedir(),'.okx','config.toml')}={}){
+  return async()=>{
+    const provided=[env.OKX_COPY_API_KEY,env.OKX_COPY_API_SECRET,env.OKX_COPY_API_PASSPHRASE];
+    if(provided.every(Boolean)) return {key:provided[0],secret:provided[1],passphrase:provided[2]};
+    if(provided.some(Boolean)) throw new OkxApiError('INCOMPLETE_OKX_CREDENTIAL_ENV');
+    const config=parseToml(await readFile(configPath,'utf8'));
+    const profile=config?.profiles?.live;
+    if(profile?.site!=='global'||!profile.api_key||!profile.secret_key||!profile.passphrase)
+      throw new OkxApiError('LIVE_CREDENTIALS_MISSING');
+    return {key:String(profile.api_key),secret:String(profile.secret_key),passphrase:String(profile.passphrase)};
+  };
 }

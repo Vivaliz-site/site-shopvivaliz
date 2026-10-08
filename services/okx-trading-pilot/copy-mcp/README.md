@@ -51,3 +51,13 @@ systemctl is-enabled shopvivaliz-okx-mcp.service
 ```
 
 Use `okx.copy.account.verify` and `okx.copy.balance.available` for live non-financial smoke tests. The GET /health check proves process + MCP handshake, not the Copy API permissions. Do not label Copy Trader E2E validated unless real copy GET endpoints also return valid account-specific data.
+
+## Runtime hardening
+
+- Every Copy Trading call verifies the exact authorized subaccount through both the upstream MCP profile and the REST credential used for Copy endpoints. A mismatch fails closed before Copy data or writes are accepted.
+- REST credentials may come from the dedicated `OKX_COPY_API_*` environment variables only when all three are present; otherwise the protected local `~/.okx/config.toml` live profile is used. Partial environment configuration fails closed. Secrets are never returned by the module.
+- Historical selected-trader names are pinned to their currently verified OKX identities. Protected traders remain immutable through this adapter.
+- Stopping a Smart Sync copy requires explicit `confirmSmartSync=true` in addition to the normal preview/approval flow.
+- An `UNKNOWN` stop is never replayed automatically. `okx.copy.transaction.verify` may mark it `VERIFIED` only from read-only evidence that the exact lead trader is no longer followed and no position for that unique code remains; the journal records `READ_ONLY_STOP_ABSENT`.
+- Volatile equity display fields are excluded from the preflight hash, while releasable cash/balance and trader identity remain part of the safety snapshot.
+- The generic upstream OKX MCP remains started with `--read-only`; Copy writes use only the guarded adapter and its approval/journal controls.

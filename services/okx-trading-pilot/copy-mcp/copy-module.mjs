@@ -5,6 +5,11 @@ import { join } from 'node:path';
 export const EXPECTED_UID='822315791411831486';
 const PREFIX='okx.copy.';
 const ONLY_OLD=new Set(['slime198888','Modern-dAPI-Manatee']);
+// Historical nicknames were confirmed by the account owner against these current OKX identities.
+const VERIFIED_OLD_ALIASES=Object.freeze({
+  'slime198888':{currentName:'史莱姆冲冲冲!',uniqueCode:'6A48C398F18CB31C'},
+  'Modern-dAPI-Manatee':{currentName:'Bcbbi',uniqueCode:'BB3398A957270A39'}
+});
 const ONLY_NEW=new Set(['Caesar cipher','Xiaoyao Lee']);
 const PROTECTED=new Set(['BestMax','NANO IA']);
 const MODES=['SPOT','SWAP'];
@@ -13,7 +18,7 @@ const READ=['account.verify','traders.list','trader.details','positions.list','p
 const WRITE=['stop','positions.close','funds.internal_transfer','trader.start','trader.settings.update'];
 const UNSUPPORTED=['funds.release'];
 const REQUEST_KEYS=['instType','trader','uniqueCode','subPosId','subPosCloseType','amount','from','to',
-  'copyMgnMode','copyInstIdType','copyMode','copyTotalAmt','copyAmt','copyRatio','tpRatio','slRatio','slTotalAmt','instId'];
+  'copyMgnMode','copyInstIdType','copyMode','copyTotalAmt','copyAmt','copyRatio','confirmSmartSync','tpRatio','slRatio','slTotalAmt','instId'];
 const fields={
   instType:{type:'string',enum:MODES},trader:{type:'string',minLength:2},uniqueCode:{type:'string',minLength:4},
   subPosId:{type:'string',minLength:1},subPosCloseType:{type:'string',enum:['market_close','copy_close','manual_close']},
@@ -21,13 +26,20 @@ const fields={
   copyMgnMode:{type:'string'},copyInstIdType:{type:'string'},copyMode:{type:'string'},
   copyTotalAmt:{type:'string'},copyAmt:{type:'string'},copyRatio:{type:'string'},
   tpRatio:{type:'string'},slRatio:{type:'string'},slTotalAmt:{type:'string'},instId:{type:'string'},
-  phase:{type:'string',enum:['preview','execute']},plan_id:{type:'string'},approval_id:{type:'string'},
+  phase:{type:'string',enum:['preview','execute']},plan_id:{type:'string'},approval_id:{type:'string'},confirmSmartSync:{type:'boolean'},
   transId:{type:'string'},operation_id:{type:'string'},limit:{type:'string'}
 };
 function fail(code){throw new Error(code)}
 function label(x){return String(x?.nickName??x?.nickname??x?.traderName??x?.leadTraderName??x?.name??'').trim()}
 function code(x){return String(x?.uniqueCode??'')}
 function hash(x){return createHash('sha256').update(JSON.stringify(x)).digest('hex')}
+function stableSnapshot(x,tool){
+  let out=x;
+  if(x?.balance?.trading)out={...out,balance:{...x.balance,trading:x.balance.trading.map(r=>({availBal:r.availBal??null,cashBal:r.cashBal??null}))}};
+  if((tool==='stop'||tool==='positions.close')&&out?.trader)
+    out={...out,trader:{uniqueCode:code(out.trader),name:label(out.trader)}};
+  return out;
+}
 function safeId(x){if(typeof x!=='string'||!/^[a-zA-Z0-9-]{1,100}$/.test(x))fail('INVALID_IDENTIFIER');return x}
 function validateMode(v){if(!MODES.includes(v))fail('INVALID_MODALITY')}
 function normalizeArgs(x){return Object.fromEntries(REQUEST_KEYS.filter(k=>x[k]!==undefined).map(k=>[k,String(x[k])]))}
@@ -69,6 +81,10 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
     const accounts=await api.get('/api/v5/account/config');
     const a=accounts?.[0];
     if(!a?.uid||a.uid!==EXPECTED_UID||!a.mainUid||a.uid===a.mainUid)fail('UID_MISMATCH');
+    if(typeof api.restIdentity!=='function')fail('REST_IDENTITY_UNAVAILABLE');
+    const restAccounts=await api.restIdentity();
+    const restAccount=restAccounts?.[0];
+    if(!restAccount?.uid||restAccount.uid!==EXPECTED_UID||!restAccount.mainUid||restAccount.uid===restAccount.mainUid)fail('UID_MISMATCH');
     return {verified:true,uid:a.uid,subaccount:true,environment:'LIVE',roleType:a.roleType,spotRoleType:a.spotRoleType};
   }
   async function traders(instType){
@@ -78,7 +94,7 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
   }
   async function positions(instType){
     validateMode(instType);
-    const xs=await api.get('/api/v5/copytrading/current-subpositions',{instType,subPosType:'copy'});
+    const xs=await api.get('/api/v5/copytrading/current-subpositions',{instType});
     return Array.isArray(xs)?xs:[];
   }
   async function balance(){
@@ -112,10 +128,10 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
         return {instType:mode,data:items,note:'Investimento alocado nao significa saldo disponivel; liberacao requer fechamento e reconciliacao.'};
       }
       case 'history':return {instType:a.instType||'SWAP',data:await api.get('/api/v5/copytrading/subpositions-history',
-        {instType:a.instType||'SWAP',subPosType:'copy',...(a.limit?{limit:a.limit}:{})})};
+        {instType:a.instType||'SWAP',...(a.limit?{limit:a.limit}:{})})};
       case 'profit_loss':{
         const mode=a.instType||'SWAP',open=await positions(mode),closed=await api.get('/api/v5/copytrading/subpositions-history',
-          {instType:mode,subPosType:'copy',limit:'100'});
+          {instType:mode,limit:'100'});
         return {instType:mode,unrealized_upl_estimate:sumField(open,'upl'),
           realized_pnl_history_estimate:sumField(closed||[],'pnl'),history_limited:true,
           positions:open,history:closed,note:'Nao equivale ao PnL liquidado total da conta.'};
@@ -130,9 +146,29 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
         const p=join(stateDir,'operations',a.operation_id+'.json');
         let record;try{record=JSON.parse(await readFile(p,'utf8'))}catch{return {code:'TRANSACTION_NOT_FOUND'}}
         if(record.uid!==EXPECTED_UID)fail('UID_MISMATCH');
-        if(record.status==='UNKNOWN')return {status:'UNKNOWN_RECONCILE_REQUIRED',operation_id:a.operation_id,
-          next_step:'Inspecionar OKX; nao repetir automaticamente.'};
-        return {status:record.status,operation_id:a.operation_id,verified_at:record.verified_at||null};
+        if(record.status==='UNKNOWN'){
+          let plan=null;
+          try{plan=JSON.parse(await readFile(join(stateDir,'plans',String(record.plan_id||'')+'.json'),'utf8'))}catch{}
+          if(record.tool==='okx.copy.stop'&&plan?.tool==='okx.copy.stop'&&plan.uid===EXPECTED_UID){
+            const args=plan.args||{};
+            validateMode(args.instType);
+            const [active,openPositions]=await Promise.all([traders(args.instType),positions(args.instType)]);
+            const traderStillActive=active.some(x=>code(x)===String(args.uniqueCode||''));
+            const positionStillOpen=openPositions.some(x=>code(x)===String(args.uniqueCode||''));
+            if(!traderStillActive&&!positionStillOpen){
+              record.status='VERIFIED';
+              record.verified_at=new Date().toISOString();
+              record.verification_basis='READ_ONLY_STOP_ABSENT';
+              await durableWrite(p,record);
+              return {status:'VERIFIED',operation_id:a.operation_id,verified_at:record.verified_at,
+                verification_basis:record.verification_basis};
+            }
+          }
+          return {status:'UNKNOWN_RECONCILE_REQUIRED',operation_id:a.operation_id,
+            next_step:'Inspecionar OKX; nao repetir automaticamente.'};
+        }
+        return {status:record.status,operation_id:a.operation_id,verified_at:record.verified_at||null,
+          verification_basis:record.verification_basis||null};
       }
       default:return {code:'UNSUPPORTED_BY_OKX',assisted_execution:ui()};
     }
@@ -142,9 +178,21 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
     if(PROTECTED.has(a.trader))fail('PROTECTED_TRADER');
     if(!(old?ONLY_OLD:ONLY_NEW).has(a.trader))fail('TRADER_NOT_ALLOWED');
     if(!a.uniqueCode||!a.trader)fail('TRADER_ID_REQUIRED');
-    let source=existing;
-    if(!old&&(!source||!source.length))source=await api.get('/api/v5/copytrading/public-lead-traders',{instType:a.instType,limit:'100'});
-    if(!Array.isArray(source)||!source.some(t=>code(t)===a.uniqueCode&&label(t)===a.trader))fail('TRADER_ID_UNVERIFIED');
+    if(old){
+      const mapped=VERIFIED_OLD_ALIASES[a.trader];
+      if(!mapped||mapped.uniqueCode!==a.uniqueCode||
+        !Array.isArray(existing)||!existing.some(t=>code(t)===mapped.uniqueCode&&label(t)===mapped.currentName))
+        fail('TRADER_ID_UNVERIFIED');
+      return;
+    }
+    if(tool==='trader.settings.update'){
+      if(!Array.isArray(existing)||!existing.some(t=>code(t)===a.uniqueCode&&label(t)===a.trader))fail('TRADER_ID_UNVERIFIED');
+      return;
+    }
+    if(Array.isArray(existing)&&existing.some(t=>code(t)===a.uniqueCode))fail('TRADER_ALREADY_ACTIVE');
+    const page=await api.get('/api/v5/copytrading/public-lead-traders',{instType:a.instType,limit:'20'});
+    const source=(page||[]).flatMap(item=>Array.isArray(item?.ranks)?item.ranks:[item]);
+    if(!source.some(t=>code(t)===a.uniqueCode&&label(t)===a.trader))fail('TRADER_ID_UNVERIFIED');
   }
   async function snapshot(tool,a){
     if(a.subAcct||a.uid||a.account||a.destination||a.address)fail('CROSS_ACCOUNT_FORBIDDEN');
@@ -160,6 +208,7 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
       return {balance:bal,positions:open,allocated:active,scope:'SAME_SUBACCOUNT_ONLY'};
     }
     await ensureTrader(tool,a,active);
+    if(tool==='stop'&&a.confirmSmartSync!==true&&a.confirmSmartSync!=='true')fail('SMART_SYNC_CONFIRMATION_REQUIRED');
     if(tool==='positions.close'&&!open.some(x=>code(x)===a.uniqueCode&&String(x.subPosId)===a.subPosId))fail('POSITION_UNVERIFIED');
     if(tool==='trader.start'||tool==='trader.settings.update'){
       for(const x of ['copyMgnMode','copyInstIdType','copyMode','copyTotalAmt'])if(!a[x])fail('COPY_SETTING_REQUIRED_'+x);
@@ -220,7 +269,7 @@ export function createCopyModule({api,stateDir,writeEnabled=false}){
     try{
       await identity();
       const current=await snapshot(name,plan.args);
-      if(hash(current)!==hash(plan.snapshot))fail('STALE_PREFLIGHT');
+      if(hash(stableSnapshot(current,name))!==hash(stableSnapshot(plan.snapshot,name)))fail('STALE_PREFLIGHT');
       const record={operation_id:op_id,tool:PREFIX+name,uid:EXPECTED_UID,request_id:requestId,
         args_hash:hash(plan.args),plan_id:plan.plan_id,status:'UNKNOWN',created_at:new Date().toISOString()};
       await durableWrite(file,record);
