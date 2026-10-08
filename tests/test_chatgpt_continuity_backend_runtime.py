@@ -224,6 +224,19 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
         self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
 
+    def test_guardian_probes_many_tabs_in_bounded_parallel_without_mislabeling_timeout(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        start = body.index("browser_session_state()")
+        end = body.index("persist_browser_health()", start)
+        probe = body[start:end]
+        self.assertIn("sessionProbeBudgetMs = 10500", probe)
+        self.assertIn("maxParallel: 8", probe)
+        self.assertIn("connectFirstUsableChatgptTab(tabs", probe)
+        self.assertIn("AUTH_FLOW", probe)
+        self.assertIn('2>/dev/null || printf \'%s\\n\' "UNKNOWN"', probe)
+        self.assertNotIn('2>/dev/null || printf \'%s\\n\' "UNREACHABLE"', probe)
+
     def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
