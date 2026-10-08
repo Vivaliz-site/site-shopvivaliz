@@ -251,8 +251,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         embedded_js = argv[3]
         # The old single-quoted querySelector argument vanished inside the
         # Bash -e argument, yielding a SyntaxError in Runtime.evaluate.
-        self.assertIn('getAttribute("aria-label") === "Open profile menu"', embedded_js)
-        self.assertIn('document.querySelectorAll("[aria-label]")', embedded_js)
+        self.assertNotIn('Open profile menu', embedded_js)
+        self.assertNotIn('document.querySelector("[contenteditable=true]")', embedded_js)
+        self.assertIn('session?.user?.email', embedded_js)
         self.assertNotIn("document.querySelector([aria-label=", embedded_js)
 
     def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
@@ -427,26 +428,23 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        self.assertIn("const hasIdentity = Boolean(session?.account || session?.user);", probe)
-        self.assertIn('if (hasIdentity) return "AUTHENTICATED";', probe)
-        self.assertNotIn('if (hasIdentity && hasAccessToken) return "AUTHENTICATED";', probe)
+        self.assertIn('String(session?.user?.email || "").trim().toLowerCase()', probe)
+        self.assertIn('actualEmail === "dev@shopvivaliz.com.br"', probe)
+        self.assertIn('"IDENTITY_MISMATCH"', probe)
+        self.assertNotIn("Boolean(session?.account || session?.user)", probe)
+        self.assertNotIn('document.querySelector("[contenteditable=true]")', probe)
 
 
-    def test_guardian_accepts_authenticated_shell_when_session_payload_omits_identity(self) -> None:
+    def test_guardian_rejects_app_shell_without_exact_session_email(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
-        self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        ui_marker = 'document.querySelectorAll("[aria-label]")'
-        self.assertIn(ui_marker, probe)
-        self.assertIn('element.getAttribute("aria-label") === "Open profile menu"', probe)
-        self.assertIn('return "AUTHENTICATED";', probe)
-        self.assertLess(
-            probe.index(ui_marker),
-            probe.index('const loggedOut ='),
-            "authenticated app-shell evidence must beat stale login/MFA remnants",
-        )
+        self.assertNotIn('document.querySelectorAll("[aria-label]")', probe)
+        self.assertNotIn('document.querySelector("[contenteditable=true]")', probe)
+        self.assertIn('const actualEmail = String(session?.user?.email || "")', probe)
+        self.assertIn('return "UNKNOWN";', probe)
+
 
     def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
@@ -612,18 +610,19 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             # still require the existing absence check before starting a browser.
             self.assertIn("CHATGPT_BROWSER_SIGNAL=NOT_DELIVERED_RECHECK_REQUIRED", result.stderr)
 
-    def test_chatgpt_browser_guardian_recognizes_authenticated_session_without_composer(self) -> None:
+    def test_chatgpt_browser_guardian_requires_exact_email_without_composer(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         body = guardian.read_text(encoding="utf-8")
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
-        self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
         self.assertIn("/api/auth/session", probe)
         self.assertIn("sessionResponse.ok", probe)
-        self.assertIn("session?.account", probe)
-        self.assertIn("const hasIdentity = Boolean(session?.account || session?.user);", probe)
-        self.assertIn('if (hasIdentity) return "AUTHENTICATED";', probe)
-        self.assertLess(probe.index("/api/auth/session"), probe.index("document.querySelector(\"[contenteditable=true]\")"))
+        self.assertIn("session?.user?.email", probe)
+        self.assertIn('actualEmail === "dev@shopvivaliz.com.br"', probe)
+        self.assertNotIn("Boolean(session?.account || session?.user)", probe)
+        self.assertNotIn('document.querySelector("[contenteditable=true]")', probe)
+        self.assertLess(probe.index("/api/auth/session"), probe.index('const loggedOut'))
+
 
     def test_chatgpt_browser_guardian_authenticated_session_precedes_residual_logout_dom(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"

@@ -128,6 +128,20 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assert_cache_skip()
 
+    def test_wrong_account_fails_closed_and_cached_mismatch_stays_failed(self):
+        self.session_file.write_text('IDENTITY_MISMATCH')
+        first = self.run_guardian()
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn('DEGRADED_IDENTITY_MISMATCH', first.stdout)
+        data = json.loads(self.health.read_text())
+        self.assertEqual(data['session_state'], 'IDENTITY_MISMATCH')
+        self.assertFalse(data['authenticated'])
+        before = self.probes()
+        second = self.run_guardian()
+        self.assertNotEqual(second.returncode, 0)
+        self.assertEqual(self.probes(), before)
+        self.assertIn('QUIESCENT_AUTH_CACHE', second.stdout)
+
     def test_changed_page_resumes_probe_and_can_observe_authentication(self):
         self.run_guardian()
         before = self.probes()

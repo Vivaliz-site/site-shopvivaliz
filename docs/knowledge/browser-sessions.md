@@ -61,3 +61,17 @@ de ambiente globais. Testes exercitam o endpoint realmente solicitado, a
 expressao de identidade injetada, concorrencia, heranca e falha fechada.
 Fonte de implementacao: Node.js `AsyncLocalStorage.run` (documentacao oficial:
 https://nodejs.org/api/async_context.html#asynclocalstoragerunstore-callback-args).
+
+## Guardian da conta Dev — verificação de identidade
+
+O guardian do CDP 9559 só deve sinalizar AUTHENTICATED quando a resposta real
+de /api/auth/session contiver user.email=dev@shopvivaliz.com.br (comparação
+normalizada). Account ID, presença de token, campo editável ou menu de perfil
+**não** comprovam a identidade da conta. E-mail diferente retorna
+IDENTITY_MISMATCH, que gera saúde degradada e nunca autoriza envio.
+E-mail ausente ou erro de probe mantém UNKNOWN (falha fechada).
+A verificação de identidade no worker, antes de qualquer ação na conversa
+vinculada, permanece obrigatória e independente do guardian.
+
+A recuperação de autenticação não permite usar cookies ou a sessão da conta
+Atendimento como substituto. O guardian não faz login nem altera perfis.

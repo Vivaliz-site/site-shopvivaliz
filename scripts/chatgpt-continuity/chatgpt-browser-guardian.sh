@@ -147,25 +147,26 @@ browser_session_state() {
           if (sessionResponse.ok) {
             let session = null;
             try { session = await sessionResponse.json(); } catch {}
-            const hasIdentity = Boolean(session?.account || session?.user);
-            if (hasIdentity) return "AUTHENTICATED";
+            // A profile, account id, token, or composer is not proof of the
+            // *expected* account. Only the session email can grant readiness.
+            const actualEmail = String(session?.user?.email || "").trim().toLowerCase();
+            if (actualEmail) return actualEmail === "dev@shopvivaliz.com.br"
+              ? "AUTHENTICATED" : "IDENTITY_MISMATCH";
           }
         } catch {}
-        // Keep every selector literal double-quoted: this JavaScript is wrapped in a Bash single-quoted -e argument.
-        if ([...document.querySelectorAll("[aria-label]")].some(element => element.getAttribute("aria-label") === "Open profile menu")) return "AUTHENTICATED";
         const body = String(document.body?.innerText || "").toLowerCase();
         const path = String(location.pathname || "");
         const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
           || body.includes("log in or sign up")
           || body.includes("log in to get answers");
         if (loggedOut) return "LOGGED_OUT";
-        if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
         return "UNKNOWN";
       })()`);
 
       // Inspect multiple independent tabs concurrently with a bounded global
       // budget: serial probes exceeded the 15s guardian timeout on busy profiles.
       const sessionProbeBudgetMs = 10500;
+      let identityMismatchSeen = false;
       const c = await Promise.race([
         connectFirstUsableChatgptTab(tabs, async page => {
         let ws;
@@ -197,6 +198,7 @@ browser_session_state() {
             probeChatgptSessionState(candidate),
             new Promise((_, reject) => setTimeout(() => reject(new Error("session probe timeout")), 2500)),
           ]);
+          if (state === "IDENTITY_MISMATCH") identityMismatchSeen = true;
           return state === "AUTHENTICATED";
         } catch {
           return false;
@@ -205,13 +207,16 @@ browser_session_state() {
         new Promise(resolve => setTimeout(() => resolve(null), sessionProbeBudgetMs)),
       ]);
       if (!c) {
-        console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
+        console.log(identityMismatchSeen ? "IDENTITY_MISMATCH"
+          : (authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN")));
         process.exit(0);
       }
       try {
         const state = await probeChatgptSessionState(c);
         if (state === "AUTHENTICATED") {
           console.log("AUTHENTICATED");
+        } else if (state === "IDENTITY_MISMATCH") {
+          console.log("IDENTITY_MISMATCH");
         } else if (authTerminal) {
           console.log("AUTH_TERMINAL");
         } else if (authFlow) {
@@ -228,7 +233,7 @@ browser_session_state() {
 persist_browser_health() {
   local state="$1"
   case "$state" in
-    AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
+    AUTHENTICATED|IDENTITY_MISMATCH|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
     *) state="UNKNOWN" ;;
   esac
   python3 "$probe_cache_helper" record --health "$browser_health_file" \
@@ -269,6 +274,10 @@ validate_browser_session() {
     LOGGED_OUT)
       report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"
       return 0
+      ;;
+    IDENTITY_MISMATCH)
+      report_browser_state "DEGRADED_IDENTITY_MISMATCH" "$session_state"
+      return 1
       ;;
     *)
       report_browser_state "DEGRADED_SESSION" "${session_state:-UNKNOWN}"
@@ -331,6 +340,7 @@ if [[ "${CHATGPT_BROWSER_FORCE_SESSION_PROBE:-0}" != 1 ]] && \
     --base "$cdp_base" --tasks "$task_state_dir")"; then
   echo "CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_CACHE"
   echo "CHATGPT_BROWSER_SESSION=$cached_state"
+  if [[ "$cached_state" == "IDENTITY_MISMATCH" ]]; then status=1; fi
 else
   mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
 

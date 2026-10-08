@@ -80,6 +80,23 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
+    def test_account_mismatch_degrades_controller_even_if_transport_is_live(self) -> None:
+        controller = load_controller()
+        health = self.runtime / "_chatgpt-browser-health.json"
+        health.write_text(json.dumps({
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "session_state": "IDENTITY_MISMATCH",
+            "authenticated": False,
+        }), encoding="utf-8")
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="account-mismatch-observer")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_identity_mismatch", result["degraded_reasons"])
+
     def test_controller_reports_single_writer_ownership_counters(self) -> None:
         controller = load_controller()
         with (
