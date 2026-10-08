@@ -88,7 +88,7 @@ declare -A WORKFLOWS_USING_SECRET
 
 # Procurar todos os secrets referenciados
 while IFS= read -r line; do
-    # Extrair nomes de secrets (e.g., secrets.FTP_SERVER)
+    # Extrair nomes de secrets (e.g., secrets.BREVO_API_KEY)
     if [[ $line =~ secrets\.([A-Z_]+) ]]; then
         secret_name="${BASH_REMATCH[1]}"
         SECRETS_FOUND[$secret_name]=1
@@ -415,9 +415,10 @@ echo -e "${BLUE}▶ Status dos Principais Workflows${NC}"
 echo ""
 
 declare -A MAIN_WORKFLOWS=(
-    ["deploy.yml"]="Deploy via FTP"
+    ["production-deploy-event-gate.yml"]="Production Deploy Event Gate"
     ["autonomous-watchdog.yml"]="Autonomous Watchdog Monitor"
-    ["ci-autonomo-continuo.yml"]="CI Autônomo Contínuo"
+    ["mandatory-validation-gate.yml"]="Mandatory Validation Gate"
+    ["repository-governance.yml"]="Repository Governance"
 )
 
 for workflow in "${!MAIN_WORKFLOWS[@]}"; do
@@ -468,13 +469,10 @@ if [ $ERRORS -gt 0 ]; then
 fi
 
 echo "PRÓXIMOS PASSOS:"
-echo "  1. Verifique os Secrets obrigatórios no GitHub:"
-echo "     • FTP_SERVER (ou FTP_HOST como fallback)"
-echo "     • FTP_USERNAME (ou FTP_USER como fallback)"
-echo "     • FTP_PASSWORD (ou FTP_PASS como fallback)"
-echo "     • FTP_PORT"
-echo "     • FTP_REMOTE_DIR (ou FTP_TARGET_DIR/FTP_PATH como fallback)"
-echo "     • SHOPVIVALIZ_AGENT_KEY (ou AGENT_KEY/WATCHDOG_AGENT_KEY/AUTONOMOUS_AGENT_KEY como fallback)"
+echo "  1. Verifique apenas os secrets efetivamente referenciados pelos workflows ativos."
+echo "     O deploy FTP/HostGator foi aposentado; FTP_* não é requisito de produção."
+echo "     Para e-mail transacional, o provider canônico é BREVO_API_KEY."
+echo "     Para o agente, valide SHOPVIVALIZ_AGENT_KEY quando o workflow correspondente o exigir."
 echo ""
 echo "  2. Configure o arquivo .env local:"
 echo "     $ cp .env.example .env"

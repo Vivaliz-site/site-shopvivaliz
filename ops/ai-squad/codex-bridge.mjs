@@ -12,6 +12,7 @@ const ALLOWED_MODELS = new Set([
   'gpt-5.6-luna',
 ]);
 const ALLOWED_EFFORTS = new Set(['xhigh', 'high', 'medium', 'low']);
+const ALLOWED_REQUEST_PROFILES = new Set(['dev']);
 const DEFAULT_PORT = 17656;
 const MAX_BODY_BYTES = 262144;
 const DEFAULT_TIMEOUT_MS = 180000;
@@ -37,6 +38,17 @@ export function classifyRateLimit(rateLimits) {
   return windows.some((entry) => Number(entry?.usedPercent ?? 0) >= 100)
     ? 'exhausted'
     : 'available';
+}
+
+export async function readRateLimitState(readFn) {
+  try {
+    const limits = await readFn();
+    return classifyRateLimit(limits?.rateLimits);
+  } catch {
+    // account/read is the authentication authority. Rate-limit telemetry is
+    // advisory and has changed independently across Codex app-server builds.
+    return 'unknown';
+  }
 }
 
 export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infinity) {
@@ -71,12 +83,18 @@ export function validateRequest(input) {
   const effort = String(input.effort ?? '').trim().toLowerCase();
   const prompt = String(input.prompt ?? '').trim();
   const webSearch = input.web_search === true;
+  const profile = input.profile === undefined || input.profile === null
+    ? null
+    : String(input.profile).trim();
 
   if (!ALLOWED_MODELS.has(model)) throw new Error('invalid_model');
   if (!ALLOWED_EFFORTS.has(effort)) throw new Error('invalid_effort');
   if (!prompt || prompt.length > 120000) throw new Error('invalid_prompt');
+  if (profile !== null && !ALLOWED_REQUEST_PROFILES.has(profile)) throw new Error('invalid_profile');
 
-  return { model, effort, prompt, web_search: webSearch };
+  return profile
+    ? { model, effort, prompt, web_search: webSearch, profile }
+    : { model, effort, prompt, web_search: webSearch };
 }
 
 function classifyFailure(error) {
@@ -129,6 +147,33 @@ function configuredProfileHomes() {
   } catch {}
   return dirs;
 }
+export function accountReadParams() {
+  return { refreshToken: false };
+}
+
+export const CHATGPT_ONLY_OVERRIDES = [
+  '-c', 'forced_login_method="chatgpt"',
+  '-c', 'model_provider="openai"',
+];
+
+export function profileHomesForRequest(profile, root = businessHome()) {
+  if (profile === undefined || profile === null || profile === '') {
+    return configuredProfileHomes();
+  }
+  const normalized = String(profile).trim();
+  if (!ALLOWED_REQUEST_PROFILES.has(normalized)) throw new Error('invalid_profile');
+  return [path.join(root, normalized)];
+}
+
+export function codexLoginEnvironment(base, profileHome) {
+  const env = { ...base, CODEX_HOME: profileHome };
+  for (const key of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN',
+    'OPENAI_BASE_URL', 'OPENAI_FEDERATION_RULE_ID', 'OPENAI_IDENTITY_TOKEN_FILE']) {
+    delete env[key];
+  }
+  return env;
+}
+
 class AppServerClient {
   constructor(profileHome, request) {
     this.profileHome = profileHome;
@@ -145,15 +190,14 @@ class AppServerClient {
   async start(deadlineMs) {
     const args = [
       'app-server', '--stdio',
+      ...CHATGPT_ONLY_OVERRIDES,
       '-c', `web_search="${resolveCodexWebSearchMode(this.request.web_search)}"`,
       '-c', `model_reasoning_effort="${this.request.effort}"`,
       '-c', 'features.shell_tool=false',
       '-c', 'agents.enabled=false',
       '-c', 'allow_login_shell=false',
     ];
-    const env = { ...process.env, CODEX_HOME: this.profileHome };
-    delete env.OPENAI_API_KEY;
-    delete env.CODEX_API_KEY;
+    const env = codexLoginEnvironment(process.env, this.profileHome);
 
     this.proc = spawn(realCodexPath(), args, { stdio: ['pipe', 'pipe', 'pipe'], env });
     const rl = readline.createInterface({ input: this.proc.stdout });
@@ -259,18 +303,17 @@ async function probeProfile(profileHome, request, deadlineMs) {
     await client.start(deadlineMs);
     const account = await client.rpc(
       'account/read',
-      { refreshToken: false },
+      accountReadParams(),
       remainingRequestMs(deadlineMs, Date.now(), 8000)
     );
     if (account?.account?.type !== 'chatgpt') {
       throw new Error('authentication_required');
     }
-    const limits = await client.rpc(
+    const state = await readRateLimitState(() => client.rpc(
       'account/rateLimits/read',
       {},
       remainingRequestMs(deadlineMs, Date.now(), 8000)
-    );
-    const state = classifyRateLimit(limits?.rateLimits);
+    ));
     return { client, state };
   } catch (error) {
     client.close();
@@ -349,6 +392,7 @@ async function bridgeHealth() {
   let available = 0;
   let exhausted = 0;
   let authenticated = 0;
+  let unknownRateLimits = 0;
   const probeRequest = {
     model: 'gpt-5.6-luna',
     effort: 'low',
@@ -375,6 +419,7 @@ async function bridgeHealth() {
     authenticated_profile_count: authenticated,
     available_profile_count: available,
     exhausted_profile_count: exhausted,
+    unknown_rate_limit_profile_count: unknownRateLimits,
     model_allowlist: [...ALLOWED_MODELS],
     web_search_mode: resolveCodexWebSearchMode(true),
   };
@@ -383,7 +428,7 @@ async function bridgeHealth() {
 }
 
 async function respond(request) {
-  const profiles = configuredProfileHomes();
+  const profiles = profileHomesForRequest(request.profile);
   if (!profiles.length) {
     return { ok: false, error: 'codex_unavailable', attempts: ['auth'] };
   }

@@ -4,7 +4,7 @@ Use este documento para auditoria, priorização e acompanhamento das iniciativa
 
 ## 1. Estrutura técnica e rastreamento
 
-- [x] Google Tag Manager (GTM): instalação centralizada para gerenciar tags sem reduzir a velocidade do site.
+- [ ] Google Tag Manager (GTM): opcional. O container web legado foi desativado após auditoria V5; o GA4 oficial continua pelo carregamento direto/first-party.
 - [x] Google Analytics 4 (GA4): configuração do funil de e-commerce avançado (`view_item` → `add_to_cart` → `begin_checkout` → `purchase`).
 - [ ] Enhanced Conversions: ativação no Google Ads com envio seguro de dados criptografados.
 - [ ] Meta Conversions API (CAPI): rastreamento server-side para Instagram e Facebook Ads.
@@ -86,13 +86,14 @@ Priorizar primeiro iniciativas sem custo e sem dependência de autenticação ex
 
 Agentes devem implementar automaticamente todos os itens gratuitos e tecnicamente seguros. Quando houver dependência de login, verificação de domínio, consentimento, faturamento ou alteração em conta externa, marcar como `BLOQUEADO_POR_AUTENTICACAO` e solicitar intervenção humana apenas nesse ponto.
 
-## Status Atualizado em 2026-07-19
+## Status Atualizado em 2026-10-03
 
 | Item | Status | Evidência / bloqueio |
 |---|---:|---|
-| GTM | IMPLEMENTADO | Container `GTM-PHZ55CP3` presente no site. |
+| GTM | DESATIVADO_INTENCIONALMENTE | O container legado `GTM-PHZ55CP3` publicava o stream divergente `G-QWYPLYMZ9`. A auditoria V5 preserva o GA4 oficial `G-1H55K1TZ5D` via tag direta/first-party e só permite GTM quando explicitamente configurado. |
 | GA4 | IMPLEMENTADO | Stream `G-1H55K1TZ5D` acessível e recebendo tráfego. |
 | Funil GA4 e-commerce | IMPLEMENTADO | Eventos `view_item`, `add_to_cart`, `begin_checkout`, `purchase` presentes no código. |
+| Purchase GA4 server-side | CONFIGURACAO_PENDENTE | A Admin API foi habilitada e o OAuth existente consultou o stream oficial e os metadados da chave com HTTP 200. Uma chave ja existe; `GA4_SECRET` ainda esta ausente no runtime e sua instalacao nesta conversa foi bloqueada pela plataforma. Nao pedir novo token nem contornar a protecao. Seguir `ga4-server-validation.md`; validacao estrutural nao prova entrega de compra. |
 | Enhanced Conversions | BLOQUEADO_POR_CREDENCIAL | Código existe, mas faltam `GOOGLE_ADS_ID` e `GOOGLE_ADS_CONVERSION_LABEL` reais. |
 | Google Merchant Center | IMPLEMENTADO | Feed dedicado por URL cadastrado; 177 produtos adicionados; arquivo sem problema básico. |
 | Google Shopping / PMax | BLOQUEADO_POR_APROVACAO | Não ativar campanha paga sem aprovação de orçamento e conta Ads liberada. |

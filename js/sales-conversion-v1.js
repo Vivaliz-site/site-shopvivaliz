@@ -282,7 +282,7 @@
     var box=document.createElement('div');
     box.id='sv-cart-sales-offer';
     box.className='sv-sales-offer';
-    box.innerHTML='<strong>Economize antes de finalizar</strong><span>Use <code>VIVALIZ10</code> no checkout para 10% OFF em compras acima de R$ 100.</span>';
+    box.innerHTML='<strong>Economize antes de finalizar</strong><span>Use <code>VIVALIZ10</code> no checkout para 10% OFF. Confira as condições antes do pagamento.</span>';
     checkout.parentNode.insertBefore(box,checkout);
     checkout.textContent='Finalizar pedido • sem cadastro';
     var note=document.createElement('div');
@@ -296,13 +296,10 @@
     var buy=document.getElementById('buy-now');
     if(!buy || document.getElementById('sv-product-sales-offer')) return;
     var ctx=window.ShopVivalizProductContext||{};
-    var price=Number(ctx.price||0);
     var offer=document.createElement('div');
     offer.id='sv-product-sales-offer';
     offer.className='sv-sales-offer';
-    var message=price>=100
-      ? 'Este item já atinge o mínimo do cupom <code>VIVALIZ10</code>: 10% OFF no checkout.'
-      : 'Use <code>VIVALIZ10</code> para 10% OFF quando o carrinho passar de R$ 100.';
+    var message='Use <code>VIVALIZ10</code> para 10% OFF no checkout. Confira as condições antes do pagamento.';
     offer.innerHTML='<strong>Oferta disponível para sua compra</strong><span>'+message+'</span>';
     var buyTarget = buy.closest('.product-buy-group') || buy.closest('.produto-actions') || buy;
     buyTarget.parentNode.insertBefore(offer,buyTarget);

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -59,6 +60,106 @@ class ShopeeRuntimeCredentialsTest(unittest.TestCase):
         self.assertTrue(state["SHOPEE_REFRESH_TOKEN"])
 
 
+class ShopeeDaemonTokenCacheTest(unittest.TestCase):
+    def test_daemon_prefers_canonical_cache_for_rotating_tokens(self):
+        module = load_module("shopee_daemon_token_cache_test", "daemon-shopee-token-renewer.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_file = root / ".env"
+            env_file.write_text(
+                "SHOPEE_PARTNER_ID=123\n"
+                "SHOPEE_PARTNER_KEY=partner-key-value\n"
+                "SHOPEE_SHOP_ID=456\n"
+                "SHOPEE_ACCESS_TOKEN=legacy-access\n"
+                "SHOPEE_REFRESH_TOKEN=legacy-refresh\n",
+                encoding="utf-8",
+            )
+            token_file = root / "shopee-tokens.json"
+            token_file.write_text(
+                json.dumps(
+                    {
+                        "access_token": "canonical-access",
+                        "refresh_token": "canonical-refresh",
+                        "expires_at": 123,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            module.ENV_PATH = env_file
+            module.TOKEN_PATH = token_file
+            with patch.dict(
+                os.environ,
+                {
+                    "SHOPEE_PARTNER_ID": "",
+                    "SHOPEE_PARTNER_KEY": "",
+                    "SHOPEE_SHOP_ID": "",
+                },
+                clear=False,
+            ):
+                config = module.get_config()
+
+        self.assertEqual(config["SHOPEE_PARTNER_ID"], "123")
+        self.assertEqual(config["SHOPEE_ACCESS_TOKEN"], "canonical-access")
+        self.assertEqual(config["SHOPEE_REFRESH_TOKEN"], "canonical-refresh")
+
+    def test_daemon_refuses_legacy_env_tokens_when_cache_is_missing(self):
+        module = load_module("shopee_daemon_no_legacy_fallback_test", "daemon-shopee-token-renewer.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_file = root / ".env"
+            env_file.write_text(
+                "SHOPEE_PARTNER_ID=123\n"
+                "SHOPEE_PARTNER_KEY=partner-key-value\n"
+                "SHOPEE_SHOP_ID=456\n"
+                "SHOPEE_ACCESS_TOKEN=legacy-access\n"
+                "SHOPEE_REFRESH_TOKEN=legacy-refresh\n",
+                encoding="utf-8",
+            )
+            module.ENV_PATH = env_file
+            module.TOKEN_PATH = root / "missing-token-cache.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "SHOPEE_PARTNER_ID": "",
+                    "SHOPEE_PARTNER_KEY": "",
+                    "SHOPEE_SHOP_ID": "",
+                },
+                clear=False,
+            ):
+                config = module.get_config()
+
+        self.assertNotIn("SHOPEE_ACCESS_TOKEN", config)
+        self.assertNotIn("SHOPEE_REFRESH_TOKEN", config)
+
+    def test_daemon_updates_cache_atomically_preserving_mode_and_metadata(self):
+        module = load_module("shopee_daemon_cache_write_test", "daemon-shopee-token-renewer.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp) / "shopee-tokens.json"
+            token_file.write_text(
+                json.dumps(
+                    {
+                        "access_token": "old-access",
+                        "refresh_token": "old-refresh",
+                        "expires_at": 123,
+                        "keep_me": "metadata",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.chmod(token_file, 0o640)
+            module.TOKEN_PATH = token_file
+            with patch.object(module.time, "time", return_value=1000):
+                module.update_token_cache("new-access", "new-refresh", 3600)
+
+            payload = json.loads(token_file.read_text(encoding="utf-8"))
+            self.assertEqual(payload["access_token"], "new-access")
+            self.assertEqual(payload["refresh_token"], "new-refresh")
+            self.assertEqual(payload["expires_at"], 4600)
+            self.assertEqual(payload["updated_at"], 1000)
+            self.assertEqual(payload["keep_me"], "metadata")
+            self.assertEqual(token_file.stat().st_mode & 0o777, 0o640)
+
+
 class ShopeeClientRetryTest(unittest.TestCase):
     def _client(self):
         fake_requests = types.ModuleType("requests")
@@ -84,6 +185,35 @@ class ShopeeClientRetryTest(unittest.TestCase):
         client = module.ShopeeClient.__new__(module.ShopeeClient)
         client._decode = lambda response: response
         return module, client
+
+    def test_first_request_with_fresh_access_token_does_not_force_refresh(self):
+        module, client = self._client()
+        client.refresh_token = "refresh-token"
+        client.access_token = "access-token"
+        client.access_expires_at = 5000
+        client._last_refresh_attempt_monotonic = 0.0
+        with (
+            patch.object(module.time, "monotonic", return_value=100.0),
+            patch.object(module.time, "time", return_value=1000.0),
+            patch.object(client, "_refresh_access_token") as refresh,
+        ):
+            client._refresh_if_due()
+        refresh.assert_not_called()
+        self.assertEqual(client._last_refresh_attempt_monotonic, 100.0)
+
+    def test_first_request_still_refreshes_when_access_token_near_expiry(self):
+        module, client = self._client()
+        client.refresh_token = "refresh-token"
+        client.access_token = "access-token"
+        client.access_expires_at = 1500
+        client._last_refresh_attempt_monotonic = 0.0
+        with (
+            patch.object(module.time, "monotonic", return_value=100.0),
+            patch.object(module.time, "time", return_value=1000.0),
+            patch.object(client, "_refresh_access_token") as refresh,
+        ):
+            client._refresh_if_due()
+        refresh.assert_called_once_with(required=True)
 
     def test_transient_timeout_retries_up_to_four_attempts(self):
         module, client = self._client()

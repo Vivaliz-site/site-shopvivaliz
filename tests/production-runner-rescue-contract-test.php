@@ -21,7 +21,7 @@ $required = [
     "OCI_CLI_KEY_CONTENT",
     "SITE_INSTANCE_NAME: shopvivaliz-free-a1",
     "ComputeInstanceAgentClient",
-    "Runner.Worker",
+    "Runner[.]Worker",
     "RUNNER_RESCUE=refused_worker_active",
     "shopvivaliz-actions-runner.service",
     "systemctl --user restart",

@@ -15,6 +15,7 @@ import json
 import os
 import re
 import signal
+import shlex
 import socket
 import sqlite3
 import subprocess
@@ -26,8 +27,9 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
 LISTEN_HOST = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "5580"))
@@ -39,7 +41,8 @@ MAX_OUTPUT = int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_OUTPUT", str(65536))
 AUTH_TOKEN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_TOKEN", "")
 DEFAULT_TIMEOUT = 30
 MAX_TIMEOUT = 900
-TASK_WAIT_MAX_SECONDS = 25
+MAX_DURABLE_TIMEOUT = max(MAX_TIMEOUT, min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT", "7200")), 86400))
+TASK_WAIT_MAX_SECONDS = 5
 MAX_INLINE_COMMANDS = max(1, int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_MAX_INLINE_COMMANDS", "4")))
 INLINE_COMMAND_SLOTS = threading.BoundedSemaphore(MAX_INLINE_COMMANDS)
 SYSTEMD_RUN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_SYSTEMD_RUN", "/usr/bin/systemd-run")
@@ -49,6 +52,44 @@ TASKS_DIR = STATE_DIR / "tasks"
 TERMINAL_STATES = {"succeeded", "failed", "expired", "cancelled", "indeterminate"}
 ACTIVE_STATES = {"starting", "running", "cancel_requested"}
 STARTING_UNIT_VISIBILITY_GRACE_SECONDS = 15
+CONTROLLER_REPO = Path(os.environ.get("SHOPVIVALIZ_CONTROLLER_REPO", "/home/ubuntu/shopvivaliz-deploy/repo"))
+CONTROLLER_STATE_FILE = Path(os.environ.get(
+    "SHOPVIVALIZ_CONTROLLER_STATE_FILE",
+    "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_gemini-24x7-controller-state.json",
+))
+CONTROLLER_RUNTIME_DIR = Path(os.environ.get(
+    "SHOPVIVALIZ_CONTROLLER_RUNTIME_DIR",
+    "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
+))
+CONTROLLER_WORKTREE_ROOT = Path(os.environ.get("SHOPVIVALIZ_CONTROLLER_WORKTREE_ROOT", "/home/ubuntu/worktrees"))
+CONTROLLER_SERVICE = "shopvivaliz-gemini-24x7-controller.service"
+CONTROLLER_BACKEND_HOST = "always-free-arm-1787907847-26"
+CLAUDE_REMOTE_CONTROL_SERVICE = "shopvivaliz-claude-remote-control.service"
+CLAUDE_REMOTE_CONTROL_POINTER_FILE = Path(os.environ.get(
+    "SHOPVIVALIZ_CLAUDE_REMOTE_CONTROL_POINTER_FILE",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-shopvivaliz-claude-workspace-site-shopvivaliz/bridge-pointer.json",
+))
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
+def resolve_continuity_lib_dir(server_path: Path | str | None = None, override: str | None = None) -> Path:
+    explicit = (override if override is not None else os.environ.get("SHOPVIVALIZ_CONTINUITY_LIB_DIR", "")).strip()
+    if explicit:
+        return Path(explicit)
+    resolved = Path(server_path or __file__).resolve()
+    installed = resolved.parent / "scripts" / "continuity"
+    if installed.is_dir():
+        return installed
+    return resolved.parents[1] / "scripts" / "continuity"
+
+
+CONTINUITY_LIB_DIR = resolve_continuity_lib_dir()
+if str(CONTINUITY_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(CONTINUITY_LIB_DIR))
+import runtime_lock
+import conversation_lease
+import mutation_gate
+import foreground_handoff
+
 
 HOSTS = {
     "always-free-arm-1787907847-26": {
@@ -69,6 +110,59 @@ HOSTS = {
     },
 }
 
+# Keep enough durable capacity for a control/diagnostic task even when one
+# long job is active. Windows relay work stays serialized.
+DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV")
+RUSTDESK_ID_RE = re.compile(r"^[0-9]{6,20}$")
+
+
+def validate_desktop_host(host: str) -> dict[str, Any]:
+    if host not in DESKTOP_HOSTS:
+        raise ValueError("unsupported_desktop_host")
+    return validate_host(host)
+
+
+def rustdesk_host_id(host: str) -> str:
+    validate_desktop_host(host)
+    raw = os.environ.get("SHOPVIVALIZ_RUSTDESK_HOST_IDS", "").strip()
+    if not raw:
+        raise ValueError("rustdesk_host_id_unavailable")
+    try:
+        mapping = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid_rustdesk_host_ids_config") from exc
+    if not isinstance(mapping, dict):
+        raise ValueError("invalid_rustdesk_host_ids_config")
+    value = str(mapping.get(host) or "").strip()
+    if not value:
+        raise ValueError("rustdesk_host_id_unavailable")
+    if not RUSTDESK_ID_RE.fullmatch(value):
+        raise ValueError("invalid_rustdesk_host_id")
+    return value
+
+
+HOST_DURABLE_LIMITS = {
+    "always-free-arm-1787907847-26": 2,
+    "shopvivaliz-free-a1": 2,
+    "Fred-Win": 1,
+    "KOCEPSV": 1,
+}
+
+REVERSE_SSH_RECOVERABLE_ERRORS = (
+    "connection timed out during banner exchange",
+    "connection closed by remote host",
+    "connection reset by peer",
+    "kex_exchange_identification",
+)
+REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS = (
+    "connection timed out during banner exchange",
+    "kex_exchange_identification",
+)
+REVERSE_SSH_RECONNECT_WAIT_SECONDS = max(
+    1,
+    min(int(os.environ.get("SHOPVIVALIZ_REMOTE_MCP_REVERSE_SSH_RECONNECT_WAIT", "12")), 60),
+)
+
 SENSITIVE_PATH_PARTS = (
     "/.ssh/", "\\.ssh\\", ".env", "credential", "secret", "token", "cookie",
     "id_rsa", "id_ed25519", ".pem", ".pfx", ".key", "totp", "auth.json",
@@ -79,6 +173,13 @@ SECRET_PATTERNS = (
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]{12,}"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"-----BEGIN [^-]+ PRIVATE KEY-----.*?-----END [^-]+ PRIVATE KEY-----", re.S),
+    # Preserve existing Bearer/key scrubbing before consuming CLI flag values.
+    # Process inventories never collect argv; flag scrubbing is defense in depth.
+    re.compile(
+        r"(?i)((?<!\S)--?(?:setcookie|password|passwd|token|api[-_]?key|"
+        r"client[-_]?secret|access[-_]?token|refresh[-_]?token)(?:\s*=\s*|\s+))"
+        r"(?:\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|[^\s]+)"
+    ),
 )
 STOP_EVENT = threading.Event()
 
@@ -115,12 +216,460 @@ def validate_host(host: str) -> dict[str, Any]:
     return HOSTS[host]
 
 
-def validate_timeout(value: Any) -> int:
+BROWSER_MCP_DROPIN_DIR = "/etc/systemd/system/shopvivaliz-remote-control-browser-mcp.service.d"
+BROWSER_MCP_FORBIDDEN_DROPIN = BROWSER_MCP_DROPIN_DIR + "/40-authenticated-session.conf"
+
+
+def validate_admin_command_policy(host: str, command: str) -> None:
+    """Reject shell commands that can re-couple general browser MCP to continuity."""
+    if host != CONTROLLER_BACKEND_HOST:
+        return
+    normalized = command.lower()
+    if BROWSER_MCP_FORBIDDEN_DROPIN.lower() in normalized:
+        raise ValueError("browser_mcp_session_coupling_forbidden")
+    if BROWSER_MCP_DROPIN_DIR.lower() in normalized and any(
+        marker in normalized for marker in ("fredrdp", "display=:99", "shopvivaliz-atendimento")
+    ):
+        raise ValueError("browser_mcp_session_coupling_forbidden")
+
+
+def _decode_output(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _run_local(argv: list[str], *, timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(argv, capture_output=True, check=False, timeout=timeout)
+
+
+def _run_local_checked(argv: list[str], *, timeout: int = 60) -> str:
+    completed = _run_local(argv, timeout=timeout)
+    stdout = _decode_output(completed.stdout)
+    stderr = _decode_output(completed.stderr)
+    if completed.returncode != 0:
+        raise RuntimeError(redact_text(stderr or stdout or "local_command_failed"))
+    return stdout.strip()
+
+
+def _run_as_ubuntu(argv: list[str], *, timeout: int = 60) -> str:
+    return _run_local_checked(["runuser", "-u", "ubuntu", "--", *argv], timeout=timeout)
+
+
+def _validate_expected_sha(value: Any) -> str:
+    sha = str(value or "").strip().lower()
+    if not FULL_SHA_RE.fullmatch(sha):
+        raise ValueError("invalid_expected_sha")
+    return sha
+
+
+def _validate_conversation_id(value: Any) -> str:
+    conversation_id = str(value or "").strip()
+    if not CONVERSATION_ID_RE.fullmatch(conversation_id):
+        raise ValueError("invalid_conversation_id")
+    return conversation_id
+
+
+def _controller_origin_main_sha(*, refresh: bool = False) -> str:
+    if refresh:
+        _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "fetch", "origin", "main", "--quiet"], timeout=60)
+    sha = _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "rev-parse", "origin/main"], timeout=30).lower()
+    if not FULL_SHA_RE.fullmatch(sha):
+        raise RuntimeError("controller_origin_main_invalid")
+    return sha
+
+
+def _controller_active_sha() -> str:
+    try:
+        pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
+        pid = int(pid_text or "0")
+    except (RuntimeError, ValueError):
+        return ""
+    if pid <= 0:
+        return ""
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    match = re.search(r"/releases/([0-9a-f]{40})/", cmdline)
+    return match.group(1) if match else ""
+
+
+RUNTIME_PRIVATE_KEYS = {
+    "sessionid", "environmentid", "pid", "procstart", "token", "secret",
+    "cookie", "authorization", "password",
+}
+
+
+def _sanitize_runtime_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized = str(key).replace("_", "").replace("-", "").lower()
+            if normalized in RUNTIME_PRIVATE_KEYS:
+                continue
+            safe[str(key)] = _sanitize_runtime_value(item)
+        return safe
+    if isinstance(value, list):
+        return [_sanitize_runtime_value(item) for item in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
+
+
+def _read_controller_state() -> dict[str, Any]:
+    try:
+        payload = json.loads(CONTROLLER_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    allowed = {
+        "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
+        "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
+        "watchdog", "dispatcher", "chatgpt_nudge",
+    }
+    return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
+
+
+def _process_start_ticks(pid: int) -> str:
+    if pid <= 0:
+        return ""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
+    except (OSError, UnicodeError):
+        return ""
+    return fields[21] if len(fields) > 21 else ""
+
+
+def claude_remote_control_status() -> dict[str, Any]:
+    active_result = _run_local([SYSTEMCTL, "is-active", CLAUDE_REMOTE_CONTROL_SERVICE], timeout=15)
+    service_active = active_result.returncode == 0 and _decode_output(active_result.stdout).strip() == "active"
+    exec_result = _run_local(
+        [SYSTEMCTL, "show", CLAUDE_REMOTE_CONTROL_SERVICE, "-p", "ExecStart", "--value"],
+        timeout=15,
+    )
+    exec_start = _decode_output(exec_result.stdout) if exec_result.returncode == 0 else ""
+    session_recovery_enabled = bool(exec_start) and "--no-create-session-in-dir" not in exec_start
+
+    try:
+        pointer = json.loads(CLAUDE_REMOTE_CONTROL_POINTER_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        pointer = {}
+    if not isinstance(pointer, dict):
+        pointer = {}
+    try:
+        pid = int(pointer.get("pid") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    expected_start = str(pointer.get("procStart") or "").strip()
+    actual_start = _process_start_ticks(pid)
+    source = str(pointer.get("source") or "").strip()
+    pointer_present = bool(pointer)
+    process_alive = bool(actual_start)
+    identity_match = bool(expected_start and actual_start and expected_start == actual_start)
+    session_present = bool(str(pointer.get("sessionId") or "").strip())
+    environment_present = bool(str(pointer.get("environmentId") or "").strip())
+    ok = bool(
+        service_active
+        and pointer_present
+        and process_alive
+        and identity_match
+        and source == "standalone"
+        and session_present
+        and environment_present
+        and session_recovery_enabled
+    )
+    return {
+        "ok": ok,
+        "service": CLAUDE_REMOTE_CONTROL_SERVICE,
+        "service_active": service_active,
+        "pointer_present": pointer_present,
+        "process_alive": process_alive,
+        "identity_match": identity_match,
+        "source": source,
+        "session_present": session_present,
+        "environment_present": environment_present,
+        "session_recovery_enabled": session_recovery_enabled,
+    }
+
+
+def controller_status() -> dict[str, Any]:
+    service_state = _run_local([SYSTEMCTL, "is-active", CONTROLLER_SERVICE], timeout=15)
+    active = _decode_output(service_state.stdout).strip() == "active"
+    active_sha = _controller_active_sha()
+    try:
+        origin_main_sha = _controller_origin_main_sha(refresh=False)
+    except Exception:
+        origin_main_sha = ""
+    state = _read_controller_state()
+    return {
+        "ok": active and bool(active_sha),
+        "host": CONTROLLER_BACKEND_HOST,
+        "service": CONTROLLER_SERVICE,
+        "service_active": active,
+        "active_sha": active_sha,
+        "origin_main_sha": origin_main_sha,
+        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "state": state,
+    }
+
+
+def _controller_worktree(sha: str) -> Path:
+    CONTROLLER_WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
+    path = CONTROLLER_WORKTREE_ROOT / f"controller-promote-{sha[:8]}-{uuid.uuid4().hex[:8]}"
+    _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "worktree", "add", "--detach", str(path), sha], timeout=120)
+    return path
+
+
+def _remove_controller_worktree(path: Path) -> None:
+    try:
+        _run_as_ubuntu(["git", "-C", str(CONTROLLER_REPO), "worktree", "remove", "--force", str(path)], timeout=60)
+    except Exception:
+        pass
+
+
+def _controller_promote_sync(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    previous_generated_at = (_read_controller_state().get("generated_at") or "")
+    worktree = _controller_worktree(sha)
+    try:
+        installer = worktree / "scripts" / "install-gemini-24x7-controller.sh"
+        if not installer.is_file():
+            raise RuntimeError("controller_installer_missing")
+        _run_as_ubuntu(["bash", str(installer), str(worktree), sha], timeout=timeout)
+        deadline = time.monotonic() + 60
+        status = controller_status()
+        while time.monotonic() < deadline:
+            state = status.get("state") or {}
+            generated_at = str(state.get("generated_at") or "")
+            if (
+                status.get("active_sha") == sha
+                and status.get("service_active") is True
+                and generated_at
+                and generated_at != previous_generated_at
+            ):
+                return {"ok": True, "promoted_sha": sha, "status": status}
+            time.sleep(1)
+            status = controller_status()
+        raise RuntimeError("controller_promotion_not_observed")
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def continuity_status() -> dict[str, Any]:
+    status = controller_status()
+    state = status.get("state") or {}
+    ready = (
+        bool(status.get("service_active"))
+        and state.get("liveness_ok") is True
+        and state.get("continuity_ready") is True
+    )
+    return {
+        "ok": ready,
+        "controller": status,
+        "continuity_ready": state.get("continuity_ready"),
+        "degraded": state.get("degraded"),
+        "degraded_reasons": state.get("degraded_reasons") or [],
+        "chatgpt_browser": state.get("chatgpt_browser") or {},
+        "chatgpt_monitor": state.get("chatgpt_monitor") or {},
+        "claude_remote_control": state.get("claude_remote_control") or {},
+        "generated_at": state.get("generated_at"),
+    }
+
+
+def _parse_trailing_json_report(stdout: str) -> dict[str, Any]:
+    """Return the final JSON object even when earlier probe output precedes it."""
+    text = str(stdout or "").strip()
+    if not text:
+        return {}
+    decoder = json.JSONDecoder()
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] != "{":
+            continue
+        try:
+            value, end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if text[index + end :].strip():
+            continue
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def _continuity_e2e_sync(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+    cid = _validate_conversation_id(conversation_id)
+    timeout_seconds = max(30, min(int(timeout_seconds), 600))
+    status = controller_status()
+    active_sha = str(status.get("active_sha") or "")
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if not active_sha or active_sha != origin_main:
+        raise RuntimeError("controller_not_current")
+    worktree = _controller_worktree(active_sha)
+    try:
+        probe = worktree / "scripts" / "task_continuity_e2e.py"
+        if not probe.is_file():
+            raise RuntimeError("continuity_e2e_probe_missing")
+        completed = _run_local(
+            [
+                "runuser", "-u", "ubuntu", "--", "python3", str(probe),
+                "--runtime-dir", str(CONTROLLER_RUNTIME_DIR),
+                "--timeout-seconds", str(timeout_seconds),
+                "--poll-interval-seconds", "2",
+                "--repository", "Vivaliz-site/site-shopvivaliz",
+                "--conversation-id", cid,
+            ],
+            timeout=timeout_seconds + 45,
+        )
+        stdout = _decode_output(completed.stdout).strip()
+        stderr = redact_text(_decode_output(completed.stderr))
+        report = _parse_trailing_json_report(stdout)
+        ok = (
+            completed.returncode == 0
+            and report.get("pass") is True
+            and report.get("observed_request") is True
+            and report.get("final_verification") == "continuity_e2e_pass"
+        )
+        return {
+            "ok": ok,
+            "controller_sha": active_sha,
+            "report": report,
+            "probe_returncode": completed.returncode,
+            "probe_output_parse_error": bool(stdout and not report),
+            "probe_stdout_tail": redact_text(stdout[-4096:]) if (not ok and not report) else "",
+            "stderr": stderr if not ok else "",
+        }
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def _durable_operation_command(operation: str, value: str, timeout: int) -> str:
+    if operation not in {"controller-promote", "continuity-e2e", "claude-reconcile"}:
+        raise ValueError("unsupported_durable_operation")
+    if operation in {"controller-promote", "claude-reconcile"}:
+        _validate_expected_sha(value)
+    else:
+        _validate_conversation_id(value)
+    return (
+        "/usr/bin/python3 /opt/shopvivaliz-remote-control/server.py "
+        f"--{operation}-run {value} {int(timeout)}"
+    )
+
+
+def _claude_remote_control_reconcile_sync(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    worktree = _controller_worktree(sha)
+    try:
+        setup = worktree / "scripts" / "setup-claude-remote-control.sh"
+        bridge = worktree / "scripts" / "claude-remote-control-mcp-stdio.py"
+        unit = worktree / "deploy" / "systemd" / "shopvivaliz-claude-remote-control.service"
+        trust = worktree / "scripts" / "claude_workspace_trust_bootstrap.py"
+        for required in (setup, bridge, unit, trust):
+            if not required.is_file():
+                raise RuntimeError("claude_reconcile_source_missing")
+        _run_local_checked(
+            ["bash", str(setup), "install", str(bridge), str(unit), str(trust)],
+            timeout=timeout,
+        )
+        deadline = time.monotonic() + 60
+        status = claude_remote_control_status()
+        while time.monotonic() < deadline:
+            if status.get("ok") is True:
+                return {"ok": True, "reconciled_sha": sha, "status": status}
+            time.sleep(1)
+            status = claude_remote_control_status()
+        raise RuntimeError("claude_reconcile_not_healthy")
+    finally:
+        _remove_controller_worktree(worktree)
+
+
+def claude_remote_control_reconcile(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    current = claude_remote_control_status()
+    if current.get("ok") is True:
+        return {"ok": True, "already_healthy": True, "reconciled_sha": sha, "status": current}
+    command = _durable_operation_command("claude-reconcile", sha, timeout)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout + 120),
+        },
+    )
+    return {
+        **task,
+        "ok": True,
+        "durable": True,
+        "operation": "claude_remote_control_reconcile",
+        "expected_sha": sha,
+    }
+
+
+def controller_promote(expected_sha: str, *, timeout: int = 240) -> dict[str, Any]:
+    sha = _validate_expected_sha(expected_sha)
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if origin_main != sha:
+        raise ValueError("expected_sha_not_origin_main")
+    current = controller_status()
+    if current.get("active_sha") == sha and current.get("service_active") is True:
+        return {"ok": True, "already_current": True, "promoted_sha": sha, "status": current}
+    command = _durable_operation_command("controller-promote", sha, timeout)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout + 120),
+        },
+    )
+    return {**task, "ok": True, "durable": True, "operation": "controller_promote", "expected_sha": sha}
+
+
+def continuity_e2e(conversation_id: str, *, timeout_seconds: int = 240) -> dict[str, Any]:
+    cid = _validate_conversation_id(conversation_id)
+    timeout_seconds = max(30, min(int(timeout_seconds), 600))
+    status = controller_status()
+    active_sha = str(status.get("active_sha") or "")
+    origin_main = _controller_origin_main_sha(refresh=True)
+    if not active_sha or active_sha != origin_main:
+        raise RuntimeError("controller_not_current")
+    command = _durable_operation_command("continuity-e2e", cid, timeout_seconds)
+    task = execute_tool(
+        "task_submit",
+        {
+            "host": CONTROLLER_BACKEND_HOST,
+            "command": command,
+            "timeout": min(MAX_TIMEOUT, timeout_seconds + 120),
+        },
+    )
+    return {
+        **task,
+        "ok": True,
+        "durable": True,
+        "operation": "continuity_e2e",
+        "controller_sha": active_sha,
+    }
+
+
+def validate_timeout(value: Any, *, max_timeout: int = MAX_TIMEOUT) -> int:
     try:
         timeout = int(value if value is not None else DEFAULT_TIMEOUT)
     except (TypeError, ValueError):
         raise ValueError("invalid_timeout")
-    if timeout < 1 or timeout > MAX_TIMEOUT:
+    if timeout < 1 or timeout > max_timeout:
         raise ValueError("timeout_out_of_range")
     return timeout
 
@@ -134,10 +683,9 @@ def deny_sensitive_path(path: str) -> None:
 @contextmanager
 def db_conn():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA busy_timeout=30000")
     try:
         with conn:
             yield conn
@@ -147,6 +695,9 @@ def db_conn():
 
 def init_db() -> None:
     with db_conn() as db:
+        # Set WAL once during schema initialization. Reissuing journal_mode=WAL on
+        # every concurrent connection can itself require a database lock.
+        db.execute("PRAGMA journal_mode=WAL")
         db.executescript("""
         CREATE TABLE IF NOT EXISTS audit (
           id TEXT PRIMARY KEY,
@@ -183,6 +734,11 @@ def init_db() -> None:
         ensure_column(db, "tasks", "result_dir", "TEXT")
         ensure_column(db, "tasks", "attempt", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(db, "tasks", "recovery_note", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_status", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_result", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_evidence_json", "TEXT NOT NULL DEFAULT '{}'")
+        ensure_column(db, "tasks", "analyzed_at", "TEXT")
+        ensure_column(db, "tasks", "analysis_intervention_required", "INTEGER NOT NULL DEFAULT 0")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
         db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_state_created ON tasks(state,created_at)")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_execution_unit ON tasks(execution_unit) WHERE execution_unit IS NOT NULL")
@@ -228,6 +784,33 @@ def load_task(task_id: str) -> sqlite3.Row:
     if not row:
         raise ValueError("task_not_found")
     return row
+
+def queued_task_context(task_id: str) -> dict[str, Any]:
+    with db_conn() as db:
+        row = db.execute(
+            "SELECT id,host,created_at,state FROM tasks WHERE id=?",
+            (task_id,),
+        ).fetchone()
+        if not row or row["state"] != "queued":
+            return {}
+        active_count = int(db.execute(
+            "SELECT COUNT(*) FROM tasks WHERE host=? "
+            "AND state IN ('starting','running','cancel_requested')",
+            (row["host"],),
+        ).fetchone()[0])
+        ahead = db.execute(
+            "SELECT COUNT(*) FROM tasks WHERE host=? AND state='queued' "
+            "AND (created_at < ? OR (created_at = ? AND id < ?))",
+            (row["host"], row["created_at"], row["created_at"], row["id"]),
+        ).fetchone()[0]
+    limit = HOST_DURABLE_LIMITS.get(str(row["host"]), 1)
+    return {
+        "queue_position": int(ahead) + 1,
+        "blocked_by_active": active_count >= limit,
+        "active_for_host": active_count,
+        "host_concurrency_limit": limit,
+    }
+
 
 
 def systemd_unit_state(unit: str) -> str:
@@ -307,10 +890,112 @@ def finalize_task(task_id: str, state: str, exit_code: int | None, result_dir: P
 def mark_indeterminate(task_id: str, note: str) -> None:
     with db_conn() as db:
         db.execute(
-            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=? "
+            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=?,"
+            "analysis_status='pending',analysis_result='',analysis_evidence_json='{}',"
+            "analyzed_at=NULL,analysis_intervention_required=0 "
             "WHERE id=? AND state NOT IN ('succeeded','failed','expired','cancelled','indeterminate')",
             (now(), now(), note, task_id),
         )
+
+
+INDETERMINATE_POSITIVE_RE = re.compile(r"(?i)(?<![a-z])(?:pass(?:ed)?|success(?:ful|fully)?|ok)(?![a-z])")
+INDETERMINATE_NEGATIVE_RE = re.compile(
+    r"(?i)(?<![a-z])(?:not\s+ok|bail\s+out!|fail(?:ed|ure)?|error|traceback)(?![a-z])"
+)
+
+
+def _indeterminate_marker_counts(value: str) -> tuple[int, int]:
+    negative = len(INDETERMINATE_NEGATIVE_RE.findall(value))
+    # Remove recognized failure phrases before looking for standalone positive
+    # tokens so TAP's "not ok" cannot be double-counted as success.
+    positive_source = INDETERMINATE_NEGATIVE_RE.sub(" ", value)
+    positive = len(INDETERMINATE_POSITIVE_RE.findall(positive_source))
+    return positive, negative
+
+
+def _indeterminate_log_evidence(task_id: str, result_dir: str | None) -> dict[str, Any]:
+    path = Path(result_dir) if result_dir else task_result_dir(task_id)
+    stdout = read_capped_text(path / "stdout.log")
+    stderr = read_capped_text(path / "stderr.log")
+    stdout_positive, stdout_negative = _indeterminate_marker_counts(stdout)
+    stderr_positive, stderr_negative = _indeterminate_marker_counts(stderr)
+    positive = stdout_positive + stderr_positive
+    negative = stdout_negative + stderr_negative
+    stdout_bytes = len(stdout.encode("utf-8"))
+    stderr_bytes = len(stderr.encode("utf-8"))
+    if positive and not negative:
+        classification = "positive_evidence"
+    elif negative and not positive:
+        classification = "negative_evidence"
+    elif positive and negative:
+        classification = "mixed_evidence"
+    elif stdout_bytes or stderr_bytes:
+        classification = "logs_without_terminal_markers"
+    else:
+        classification = "no_persisted_output"
+    return {
+        "classification": classification,
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+        "positive_markers": positive,
+        "negative_markers": negative,
+        "result_json_present": (path / "result.json").is_file(),
+    }
+
+
+def analyze_indeterminate_task(task_id: str) -> dict[str, Any]:
+    row = load_task(task_id)
+    if row["state"] != "indeterminate":
+        raise ValueError("task_not_indeterminate")
+    evidence = _indeterminate_log_evidence(task_id, row["result_dir"])
+    analyzed_at = now()
+    with db_conn() as db:
+        changed = db.execute(
+            "UPDATE tasks SET analysis_status='processed',analysis_result=?,analysis_evidence_json=?,"
+            "analyzed_at=?,analysis_intervention_required=0 "
+            "WHERE id=? AND state='indeterminate'",
+            (
+                evidence["classification"],
+                json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+                analyzed_at,
+                task_id,
+            ),
+        ).rowcount
+    if not changed:
+        raise ValueError("task_not_indeterminate")
+    return {
+        "task_id": task_id,
+        "state": "indeterminate",
+        "analysis_status": "processed",
+        "analysis_result": evidence["classification"],
+        "analysis_intervention_required": 0,
+        "analyzed_at": analyzed_at,
+        "evidence": evidence,
+    }
+
+
+def process_indeterminate_tasks(limit: int = 200) -> dict[str, Any]:
+    bounded = max(1, min(int(limit), 200))
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT id FROM tasks WHERE state='indeterminate' "
+            "AND COALESCE(analysis_status,'') != 'processed' ORDER BY created_at LIMIT ?",
+            (bounded,),
+        ).fetchall()
+    classifications: dict[str, int] = {}
+    processed_ids: list[str] = []
+    for row in rows:
+        result = analyze_indeterminate_task(str(row["id"]))
+        classification = str(result["analysis_result"])
+        classifications[classification] = classifications.get(classification, 0) + 1
+        processed_ids.append(str(row["id"]))
+    return {
+        "processed": len(processed_ids),
+        "task_ids": processed_ids,
+        "classifications": classifications,
+        "analysis_only": True,
+        "external_intervention": False,
+    }
 
 
 def finalize_cancelled_without_result(task_id: str) -> None:
@@ -386,7 +1071,8 @@ def launch_task_service(task_id: str, timeout: int) -> None:
     unit = task_unit_name(task_id)
     args = [
         SYSTEMD_RUN, f"--unit={unit[:-8]}", "--collect", "--quiet", "--service-type=exec",
-        "--property=CPUWeight=50", "--property=IOWeight=50", "--property=KillMode=control-group",
+        "--property=CPUWeight=25", "--property=IOWeight=25", "--property=CPUQuota=80%",
+        "--property=Nice=5", "--property=KillMode=control-group",
         "--property=Restart=no", f"--property=RuntimeMaxSec={int(timeout) + 30}s", "--",
         "/usr/bin/python3", "/opt/shopvivaliz-remote-control/server.py", "--run-task", task_id,
     ]
@@ -448,25 +1134,89 @@ def run_task_entrypoint(task_id: str) -> int:
             finalize_cancelled_without_result(task_id)
             return 0
         deadline = time.monotonic() + int(row["timeout"])
-        while proc.poll() is None:
-            state = load_task(task_id)["state"]
-            if state == "cancel_requested":
-                terminate_process_group(proc)
-                return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
-            if time.monotonic() >= deadline:
-                terminate_process_group(proc)
-                return finalize_task(task_id, "expired", proc.poll(), result_dir)
-            update_heartbeat_and_progress(task_id, result_dir)
-            time.sleep(0.2)
-        return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
+        transport_retry_used = False
+        while True:
+            while proc.poll() is None:
+                state = load_task(task_id)["state"]
+                if state == "cancel_requested":
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
+                if time.monotonic() >= deadline:
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "expired", proc.poll(), result_dir)
+                update_heartbeat_and_progress(task_id, result_dir)
+                time.sleep(0.2)
+
+            if (
+                proc.returncode != 0
+                and not transport_retry_used
+                and is_safe_pre_execution_reverse_ssh_error(str(row["host"]), read_capped_text(stderr_path))
+                and time.monotonic() < deadline
+            ):
+                if load_task(task_id)["state"] == "cancel_requested":
+                    return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                if recover_reverse_ssh_transport(str(row["host"])) and time.monotonic() < deadline:
+                    if load_task(task_id)["state"] == "cancel_requested":
+                        return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                    out.seek(0)
+                    out.truncate(0)
+                    err.seek(0)
+                    err.truncate(0)
+                    with db_conn() as db:
+                        db.execute(
+                            "UPDATE tasks SET heartbeat_at=?,progress='transport_retry',"
+                            "recovery_note='reverse_ssh_transport_recovered_retry' WHERE id=?",
+                            (now(), task_id),
+                        )
+                    proc = subprocess.Popen(
+                        remote_invocation(str(row["host"]), str(row["command"])),
+                        stdout=out, stderr=err, start_new_session=True,
+                    )
+                    transport_retry_used = True
+                    continue
+
+            return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
-def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
-    aid = str(uuid.uuid4())
+AUDIT_RESULT_METADATA_KEYS = (
+    "queue_position", "foreground_duration_ms", "mutation_rejection_reason",
+    "e2e_evidence_type", "owner_kind", "owner_id", "checkpoint_version",
+    "lease_id", "conversation_lease_id", "runtime_lease_id",
+    "fencing_token", "conversation_fencing_token", "runtime_fencing_token",
+)
+
+
+def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+        # Unsalted digests of low-entropy secrets remain guessable metadata.
+        # Preserve event identity and length, not a searchable secret digest.
+        safe_args.pop(f"{secret_key}_sha256", None)
+        if secret_key in safe_args:
+            secret_value = str(safe_args.pop(secret_key))
+            safe_args[f"{secret_key}_length"] = len(secret_value)
+    if "email" in safe_args:
+        email_value = str(safe_args.pop("email"))
+        safe_args["email_sha256"] = hashlib.sha256(email_value.encode()).hexdigest()
+    if tool == "browser_navigate" and "url" in safe_args:
+        parsed = urlsplit(str(safe_args["url"]))
+        safe_args["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    return safe_args
+
+
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str, *, output: dict[str, Any] | None = None) -> str:
+    aid = str(uuid.uuid4())
+    safe_args = sanitize_audit_args(tool, args)
+    result = output if isinstance(output, dict) else {}
+    durable_execution_id = str(result.get("task_id") or "").strip()
+    if durable_execution_id:
+        safe_args["durable_execution_id"] = durable_execution_id
+    for key in AUDIT_RESULT_METADATA_KEYS:
+        if key in result and result.get(key) not in (None, ""):
+            safe_args[key] = result.get(key)
     with db_conn() as db:
         db.execute(
             "INSERT INTO audit(id,ts,tool,host,args_json,ok,result_summary) VALUES(?,?,?,?,?,?,?)",
@@ -501,6 +1251,76 @@ def remote_invocation(host: str, command: str) -> list[str]:
     return base + ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
 
+def is_recoverable_reverse_ssh_error(host: str, stderr: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    lowered = str(stderr or "").lower()
+    return any(marker in lowered for marker in REVERSE_SSH_RECOVERABLE_ERRORS)
+
+
+def is_safe_pre_execution_reverse_ssh_error(host: str, stderr: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    lowered = str(stderr or "").lower()
+    return any(marker in lowered for marker in REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS)
+
+
+def reverse_ssh_listener_pid(port: int) -> int | None:
+    try:
+        result = subprocess.run(
+            ["ss", "-ltnp"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    port_re = re.compile(rf"(?:127\.0\.0\.1|\[::1\]):{int(port)}\b")
+    pid_re = re.compile(r'users:\(\("sshd",pid=(\d+)')
+    for line in result.stdout.splitlines():
+        if not port_re.search(line):
+            continue
+        match = pid_re.search(line)
+        if not match:
+            continue
+        pid = int(match.group(1))
+        try:
+            if Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip() != "sshd":
+                continue
+        except (OSError, UnicodeError):
+            continue
+        return pid
+    return None
+
+
+def recover_reverse_ssh_transport(host: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    port = int(cfg.get("port", 0))
+    if port <= 0:
+        return False
+    old_pid = reverse_ssh_listener_pid(port)
+    if old_pid is None:
+        return False
+    try:
+        os.kill(old_pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        return False
+    deadline = time.monotonic() + REVERSE_SSH_RECONNECT_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        new_pid = reverse_ssh_listener_pid(port)
+        if new_pid is not None and new_pid != old_pid:
+            return True
+    return False
+
+
 def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
     """Run command payload outside the controller cgroup when systemd is available."""
     if os.geteuid() != 0 or not Path(SYSTEMD_RUN).is_file():
@@ -514,6 +1334,26 @@ def isolated_invocation(args: list[str], label: str = "inline") -> list[str]:
         "--",
         *args,
     ]
+
+
+def _cleanup_isolated_scope(invocation: list[str]) -> None:
+    """Stop residual descendants left by a bounded systemd scope."""
+    if not invocation or invocation[0] != SYSTEMD_RUN or "--scope" not in invocation:
+        return
+    try:
+        idx = invocation.index("--unit")
+        unit = invocation[idx + 1]
+    except (ValueError, IndexError):
+        return
+    if not unit.endswith(".scope"):
+        unit += ".scope"
+    subprocess.run(
+        [SYSTEMCTL, "stop", unit],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=10,
+    )
 
 
 def terminate_process_group(proc: subprocess.Popen[bytes], grace_seconds: float = 1.0) -> None:
@@ -555,9 +1395,92 @@ def run_host_command(
     command: str,
     timeout: int = DEFAULT_TIMEOUT,
     cancel_check: Callable[[], bool] | None = None,
+    *,
+    recover_transport: bool = True,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
-    args = isolated_invocation(remote_invocation(host, command))
+    started = time.monotonic()
+    deadline = started + timeout
+    if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
+        raise RuntimeError("controller_busy_retry_or_use_task_submit")
+
+    def run_once() -> dict[str, Any]:
+        invocation = isolated_invocation(remote_invocation(host, command))
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                invocation,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            stdout = b""
+            stderr = b""
+            while True:
+                if cancel_check is not None and cancel_check():
+                    terminate_process_group(proc)
+                    try:
+                        proc.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc, grace_seconds=0.2)
+                    raise ClientDisconnected("client_disconnected")
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    terminate_process_group(proc)
+                    try:
+                        proc.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc, grace_seconds=0.2)
+                    raise subprocess.TimeoutExpired(invocation, timeout)
+
+                try:
+                    stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+
+            return {
+                "host": host,
+                "exit_code": proc.returncode,
+                "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
+                "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
+                "duration_ms": int((time.monotonic() - started) * 1000),
+            }
+        finally:
+            _cleanup_isolated_scope(invocation)
+
+    try:
+        result = run_once()
+        recoverable_transport_error = (
+            result["exit_code"] != 0
+            and is_safe_pre_execution_reverse_ssh_error(host, str(result.get("stderr") or ""))
+        )
+        if recoverable_transport_error and not recover_transport:
+            result["transport_recovery_available"] = True
+        elif (
+            recoverable_transport_error
+            and deadline - time.monotonic() > 1
+            and recover_reverse_ssh_transport(host)
+            and deadline - time.monotonic() > 1
+        ):
+            result = run_once()
+            result["transport_recovered"] = True
+        return result
+    finally:
+        INLINE_COMMAND_SLOTS.release()
+
+
+def run_local_command_with_stdin(
+    args: list[str],
+    stdin_text: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    cancel_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    timeout = validate_timeout(timeout)
+    if len(stdin_text) > 4096:
+        raise ValueError("browser_text_too_long")
+    invocation = isolated_invocation(args, label="browser-input")
     started = time.monotonic()
     deadline = started + timeout
     if not INLINE_COMMAND_SLOTS.acquire(blocking=False):
@@ -565,45 +1488,43 @@ def run_host_command(
     proc = None
     try:
         proc = subprocess.Popen(
-            args,
+            invocation,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        assert proc.stdin is not None
+        try:
+            proc.stdin.write(stdin_text.encode("utf-8"))
+            proc.stdin.flush()
+        finally:
+            proc.stdin.close()
+            proc.stdin = None
         stdout = b""
         stderr = b""
         while True:
             if cancel_check is not None and cancel_check():
                 terminate_process_group(proc)
-                try:
-                    proc.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    terminate_process_group(proc, grace_seconds=0.2)
                 raise ClientDisconnected("client_disconnected")
-
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 terminate_process_group(proc)
-                try:
-                    proc.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    terminate_process_group(proc, grace_seconds=0.2)
-                raise subprocess.TimeoutExpired(args, timeout)
-
+                raise subprocess.TimeoutExpired(invocation, timeout)
             try:
                 stdout, stderr = proc.communicate(timeout=min(0.1, remaining))
                 break
             except subprocess.TimeoutExpired:
                 continue
-
         return {
-            "host": host,
+            "host": CONTROLLER_BACKEND_HOST,
             "exit_code": proc.returncode,
             "stdout": redact_text(stdout.decode("utf-8", errors="replace")),
             "stderr": redact_text(stderr.decode("utf-8", errors="replace")),
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
     finally:
+        _cleanup_isolated_scope(invocation)
         INLINE_COMMAND_SLOTS.release()
 
 
@@ -632,32 +1553,44 @@ def service_command(
             return f"Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
         verb = {"start": "Start-Service", "stop": "Stop-Service", "restart": "Restart-Service"}[action]
         return f"{verb} -Name '{q}' -ErrorAction Stop; Get-Service -Name '{q}' | Select-Object Name,Status,StartType | ConvertTo-Json -Compress"
-    if action == "status":
-        # Fail closed. Check the system manager first, then the configured
-        # non-root user's manager when this host owns user-scoped services.
-        user_probe = ""
-        if service_user_owner:
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
-                raise ValueError("invalid_service_user_owner")
-            user_probe = (
-                f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
-                f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
-                f"if [ \"$load\" = loaded ]; then "
+
+    user_probe = ""
+    if service_user_owner:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
+            raise ValueError("invalid_service_user_owner")
+        if action == "status":
+            user_operation = (
                 f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
                 f"systemctl --user --no-pager --full status {service}; "
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user is-active {service}; exit $?; fi; "
             )
-        return (
-            f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
-            f"if [ \"$load\" = loaded ]; then "
-            f"systemctl --no-pager --full status {service}; "
-            f"systemctl is-active {service}; exit $?; fi; "
-            f"{user_probe}"
-            f"printf '%s\\n' 'service_not_found' >&2; exit 4"
+        else:
+            user_operation = (
+                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+                f"systemctl --user {action} {service}; "
+            )
+        user_probe = (
+            f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
+            f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f'if [ "$load" = loaded ]; then '
+            f"{user_operation}"
+            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            f"systemctl --user is-active {service}; exit $?; fi; "
         )
-    return f"systemctl {action} {service} && systemctl is-active {service}"
+
+    system_operation = (
+        f"systemctl --no-pager --full status {service}; "
+        if action == "status"
+        else f"systemctl {action} {service}; "
+    )
+    return (
+        f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
+        f'if [ "$load" = loaded ]; then '
+        f"{system_operation}"
+        f"systemctl is-active {service}; exit $?; fi; "
+        f"{user_probe}"
+        f"printf '%s\n' 'service_not_found' >&2; exit 4"
+    )
 
 
 def file_read_command(platform: str, path: str, max_bytes: int) -> str:
@@ -692,7 +1625,331 @@ def logs_tail_command(platform: str, path: str, lines: int) -> str:
 def processes_command(platform: str) -> str:
     if platform == "windows":
         return "Get-Process | Sort-Object CPU -Descending | Select-Object -First 100 Id,ProcessName,CPU,WorkingSet64 | ConvertTo-Json -Compress"
-    return "ps -eo pid,user,pcpu,pmem,etime,comm,args --sort=-pcpu | head -n 101"
+    return "ps -eo pid,user,pcpu,pmem,etime,comm --sort=-pcpu | head -n 101"
+
+
+BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}
+BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
+BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
+BROWSER_SESSION_NAME = os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "atendimento").strip() or "atendimento"
+BROWSER_CDP_URL = os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL", "http://127.0.0.1:9556").rstrip("/")
+
+
+def _safe_browser_token(value: str, label: str) -> str:
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.:#@()=[]-")
+    if not value or len(value) > 240 or any(ch not in allowed for ch in value):
+        raise ValueError(f"invalid_{label}")
+    return value
+
+
+def browser_tabs_command() -> str:
+    session = json.dumps(BROWSER_SESSION_NAME)
+    endpoint = json.dumps(BROWSER_CDP_URL + "/json")
+    return (
+        "python3 - <<'PY'\n"
+        "import json,urllib.request,urllib.parse\n"
+        f"session={session}; endpoint={endpoint}\n"
+        "out=[]\n"
+        "allowed={'chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
+        "try:\n"
+        " with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
+        "except Exception: pages=[]\n"
+        "for x in pages:\n"
+        " if x.get('type')!='page': continue\n"
+        " u=urllib.parse.urlparse(x.get('url',''))\n"
+        " if u.hostname not in allowed: continue\n"
+        " tab_id=x.get('id')\n"
+        " if tab_id: out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
+        "print(json.dumps({'tabs':out},separators=(',',':')))\n"
+        "PY"
+    )
+
+
+def _browser_cdp_command(tab_id: str, expression: str) -> str:
+    _safe_browser_token(tab_id, "tab_id")
+    tid = base64.b64encode(tab_id.encode()).decode()
+    expr = base64.b64encode(expression.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_TAB_ID_B64={tid} SHOPVIVALIZ_EXPR_B64={expr}; "
+        "node --input-type=module <<'JS'\n"
+        f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
+        "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
+        "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
+        f"const sources=[[{json.dumps(BROWSER_SESSION_NAME)},{json.dumps(BROWSER_CDP_URL + '/json')}]]; "
+        "const matches=[]; "
+        "for(const [session,endpoint] of sources){try{const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();for(const candidate of tabs){if(candidate?.id===id)matches.push({t:candidate,session});}}catch{}} "
+        "if(matches.length===0) throw new Error('tab_not_found'); if(matches.length>1) throw new Error('tab_id_ambiguous'); "
+        "const {t,session}=matches[0]; "
+        "const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']); "
+        "const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted'); "
+        "const ws=new WebSocket(t.webSocketDebuggerUrl); "
+        "await Promise.race([new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))]); "
+        "const c=new Cdp(ws); "
+        "const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); "
+        "if(r.exceptionDetails) throw new Error('browser_runtime_exception'); "
+        "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
+        "JS"
+    )
+
+def browser_open_command(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    encoded = base64.b64encode(url.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_OPEN_URL_B64={encoded}; "
+        "python3 - <<'PY'\n"
+        "import base64,json,os,urllib.request,urllib.parse\n"
+        "url=base64.b64decode(os.environ['SHOPVIVALIZ_OPEN_URL_B64']).decode()\n"
+        f"req=urllib.request.Request({json.dumps(BROWSER_CDP_URL + '/json/new?')}+urllib.parse.quote(url,safe=':/'),method='PUT')\n"
+        "with urllib.request.urlopen(req,timeout=5) as r: x=json.load(r)\n"
+        f"print(json.dumps({{'opened':True,'id':x.get('id'),'origin':url.split('/',3)[0]+'//'+url.split('/',3)[2],'session':{json.dumps(BROWSER_SESSION_NAME)}}},separators=(',',':')))\n"
+        "PY"
+    )
+
+
+def browser_controls_expression() -> str:
+    return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
+
+
+def browser_controls_command(tab_id: str) -> str:
+    return _browser_cdp_command(tab_id, browser_controls_expression())
+
+
+def browser_navigate_command(tab_id: str, url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    expression = f"(()=>{{location.href={json.dumps(url)};return {{navigated:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_focused_navigate_command(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    encoded = base64.b64encode(url.encode()).decode()
+    allowed = json.dumps(sorted(BROWSER_ALLOWED_HOSTS))
+    return (
+        f"export SHOPVIVALIZ_NAV_URL_B64={encoded}; "
+        "node --input-type=module <<'JS'\n"
+        f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
+        "const url=Buffer.from(process.env.SHOPVIVALIZ_NAV_URL_B64,'base64').toString(); "
+        f"const tabs=await (await fetch({json.dumps(BROWSER_CDP_URL + '/json')})).json(); "
+        f"const allowed=new Set({allowed}); "
+        "const focused=[]; "
+        "for(const t of tabs){if(t?.type!=='page'||!t?.webSocketDebuggerUrl)continue; let u;try{u=new URL(String(t.url||''));}catch{continue;} if(!allowed.has(u.hostname))continue; "
+        "let ws;let c;try{ws=new WebSocket(t.webSocketDebuggerUrl);await Promise.race([new Promise((res,rej)=>{ws.addEventListener('open',res,{once:true});ws.addEventListener('error',rej,{once:true});}),new Promise((_,rej)=>setTimeout(()=>rej(new Error('websocket_open_timeout')),2500))]);c=new Cdp(ws);const r=await c.send('Runtime.evaluate',{expression:'document.hasFocus()',returnByValue:true,awaitPromise:true});if(!r.exceptionDetails&&r.result?.value===true)focused.push(t);}finally{try{if(c?.close)c.close();}catch{} try{if(ws?.close)ws.close();}catch{}}} "
+        "if(focused.length===0)throw new Error('focused_tab_not_found'); if(focused.length>1)throw new Error('focused_tab_ambiguous'); "
+        "const t=focused[0]; const ws=new WebSocket(t.webSocketDebuggerUrl); await Promise.race([new Promise((res,rej)=>{ws.addEventListener('open',res,{once:true});ws.addEventListener('error',rej,{once:true});}),new Promise((_,rej)=>setTimeout(()=>rej(new Error('websocket_open_timeout')),2500))]); const c=new Cdp(ws); "
+        "const expression='(()=>{location.href='+JSON.stringify(url)+';return {navigated:true}})()'; const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); if(r.exceptionDetails)throw new Error('browser_runtime_exception'); if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
+        "JS"
+    )
+
+
+def browser_click_command(tab_id: str, selector: str) -> str:
+    selector = _safe_browser_token(selector, "selector")
+    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
+    return _browser_cdp_command(tab_id, expression)
+
+
+def browser_click_control_command(tab_id: str, index: int) -> str:
+    _safe_browser_token(tab_id, "tab_id")
+    try:
+        idx = int(index)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid_control_index") from exc
+    if idx < 0 or idx >= 120:
+        raise ValueError("invalid_control_index")
+    expression = (
+        "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
+        f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
+        "if(typeof e.focus==='function')e.focus({preventScroll:true});"
+        f"e.click();if(typeof e.focus==='function')e.focus({{preventScroll:true}});return {{clicked:true,index:{idx}}}}})()"
+    )
+    return _browser_cdp_command(tab_id, expression)
+
+
+BROWSER_TYPE_NODE_SCRIPT = r"""
+const mod='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+const {Cdp}=await import('file://'+mod);
+const [id,selector,submitRaw]=process.argv.slice(1);
+let secret='';
+for await (const chunk of process.stdin) secret += chunk;
+if(secret.length>4096) throw new Error('browser_text_too_long');
+const sources=[[process.env.SHOPVIVALIZ_BROWSER_SESSION_NAME||'atendimento',(process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json']];
+const matches=[];
+for(const [session,endpoint] of sources){
+  try{
+    const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();
+    for(const candidate of tabs){if(candidate?.id===id) matches.push({t:candidate,session});}
+  }catch{}
+}
+if(matches.length===0) throw new Error('tab_not_found');
+if(matches.length>1) throw new Error('tab_id_ambiguous');
+const {t}=matches[0];
+const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai']);
+const u=new URL(String(t.url||'')); if(!allowed.has(u.hostname)) throw new Error('tab_origin_not_allowlisted');
+const ws=new WebSocket(t.webSocketDebuggerUrl);
+await Promise.race([
+  new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+]);
+const c=new Cdp(ws);
+const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
+const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+if(r.exceptionDetails) throw new Error('browser_runtime_exception');
+if(c.close)c.close();
+console.log(JSON.stringify(r.result?.value ?? null));
+"""
+
+
+def browser_type_invocation(tab_id: str, selector: str, submit: bool) -> list[str]:
+    _safe_browser_token(tab_id, "tab_id")
+    _safe_browser_token(selector, "selector")
+    return [BROWSER_NODE_BIN, "--input-type=module", "-e", BROWSER_TYPE_NODE_SCRIPT, tab_id, selector, "1" if submit else "0"]
+
+
+BROWSER_FOCUSED_TYPE_NODE_SCRIPT = r"""
+const mod='/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs';
+const {Cdp}=await import('file://'+mod);
+const [submitRaw]=process.argv.slice(1);
+let secret='';
+for await (const chunk of process.stdin) secret += chunk;
+if(secret.length>4096) throw new Error('browser_text_too_long');
+const tabs=await (await fetch((process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json')).json();
+const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai','127.0.0.1','localhost']);
+const candidates=[];
+for(const t of tabs){
+  if(t?.type!=='page'||!t?.webSocketDebuggerUrl) continue;
+  let u; try{u=new URL(String(t.url||''));}catch{continue;}
+  if(!allowed.has(u.hostname)) continue;
+  let ws; let c;
+  try{
+    ws=new WebSocket(t.webSocketDebuggerUrl);
+    await Promise.race([
+      new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+    ]);
+    c=new Cdp(ws);
+    const probe=await c.send('Runtime.evaluate',{
+      expression:"(()=>{const e=document.activeElement;const editable=!!e&&((e.matches?.('input,textarea'))||e.isContentEditable);return {focused:document.hasFocus(),editable}})()",
+      returnByValue:true,
+      awaitPromise:true
+    });
+    if(!probe.exceptionDetails&&probe.result?.value?.editable){
+      candidates.push({t,focused:probe.result.value.focused===true});
+    }
+  } finally {
+    try{if(c?.close)c.close();}catch{}
+    try{if(ws?.close)ws.close();}catch{}
+  }
+}
+let chosen=null;
+const focused=candidates.filter(x=>x.focused);
+if(focused.length===1) chosen=focused[0];
+else if(candidates.length===1) chosen=candidates[0];
+else if(candidates.length===0) throw new Error('focused_editable_not_found');
+else throw new Error('focused_editable_ambiguous');
+const ws=new WebSocket(chosen.t.webSocketDebuggerUrl);
+await Promise.race([
+  new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});}),
+  new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
+]);
+const c=new Cdp(ws);
+const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
+const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+if(r.exceptionDetails) throw new Error('browser_runtime_exception');
+if(c.close)c.close();
+console.log(JSON.stringify(r.result?.value ?? null));
+"""
+
+
+def browser_focused_type_invocation(press_enter: bool) -> list[str]:
+    return [
+        BROWSER_NODE_BIN,
+        "--input-type=module",
+        "-e",
+        BROWSER_FOCUSED_TYPE_NODE_SCRIPT,
+        "1" if press_enter else "0",
+    ]
+
+
+def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
+    result["ok"] = result["exit_code"] == 0
+    return result
+
+
+MUTATING_RUNTIME_ACTIONS = {
+    "controller_promote": "controller_promote",
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+    "service_action": "service_action",
+    "desktop_open": "desktop_open",
+    "desktop_click": "desktop_click",
+    "desktop_type": "desktop_type",
+}
+
+def _durable_handoff_enabled() -> bool:
+    return os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+def _assert_runtime_mutation(name: str, args: dict[str, Any]) -> None:
+    action = MUTATING_RUNTIME_ACTIONS.get(name)
+    if not action or not _durable_handoff_enabled():
+        return
+    lease_id = str(args.get("runtime_lease_id") or "").strip()
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("runtime_lock_required")
+    try:
+        runtime_lock.assert_runtime_lock(lease_id, int(token), action)
+    except (runtime_lock.RuntimeLockConflict, TypeError, ValueError) as exc:
+        raise ValueError("runtime_lock_invalid") from exc
+
+BROWSER_CONVERSATION_MUTATIONS = {
+    "browser_navigate": "browser_navigate",
+    "browser_click": "browser_click",
+    "browser_click_control": "browser_click_control",
+    "browser_type": "browser_type",
+}
+
+def _assert_conversation_mutation(name: str, args: dict[str, Any]) -> None:
+    action = BROWSER_CONVERSATION_MUTATIONS.get(name)
+    if not action or not _durable_handoff_enabled():
+        return
+    required = {
+        "task_id": str(args.get("task_id") or "").strip(),
+        "conversation_id": str(args.get("conversation_id") or "").strip(),
+        "session_identity": str(args.get("session_identity") or "").strip(),
+        "conversation_lease_id": str(args.get("conversation_lease_id") or "").strip(),
+        "runtime_lease_id": str(args.get("runtime_lease_id") or "").strip(),
+    }
+    checkpoint_version = args.get("checkpoint_version")
+    conversation_token = args.get("conversation_fencing_token")
+    runtime_token = args.get("runtime_fencing_token")
+    if not all(required.values()) or checkpoint_version is None or conversation_token is None or runtime_token is None:
+        raise ValueError("conversation_mutation_gate_required")
+    conversation_id = _validate_conversation_id(required["conversation_id"])
+    try:
+        conversation_lease.assert_conversation_lease(
+            conversation_id, required["conversation_lease_id"], int(conversation_token), action
+        )
+        outcome = mutation_gate.authorize_current(
+            required["task_id"], conversation_id, int(checkpoint_version), action, required["session_identity"],
+            required["conversation_lease_id"], int(conversation_token), required["runtime_lease_id"], int(runtime_token),
+        )
+    except (conversation_lease.LeaseConflict, TypeError, ValueError, OSError) as exc:
+        raise ValueError("conversation_mutation_gate_invalid") from exc
+    if not outcome.get("authorized"):
+        raise ValueError(f"conversation_mutation_gate:{outcome.get('reason', 'rejected')}")
 
 
 def execute_tool(
@@ -701,6 +1958,117 @@ def execute_tool(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     host = args.get("host")
+    _assert_runtime_mutation(name, args)
+    _assert_conversation_mutation(name, args)
+    if name == "claude_remote_control_status":
+        return claude_remote_control_status()
+    if name == "claude_remote_control_reconcile":
+        return claude_remote_control_reconcile(
+            _validate_expected_sha(args.get("expected_sha")),
+            timeout=validate_timeout(args.get("timeout", 240)),
+        )
+    if name == "controller_status":
+        return controller_status()
+    if name == "controller_promote":
+        return controller_promote(
+            _validate_expected_sha(args.get("expected_sha")),
+            timeout=validate_timeout(args.get("timeout", 240)),
+        )
+    if name == "continuity_status":
+        return continuity_status()
+    if name == "continuity_e2e":
+        return continuity_e2e(
+            _validate_conversation_id(args.get("conversation_id")),
+            timeout_seconds=int(args.get("timeout_seconds", 240)),
+        )
+    if name == "browser_tabs":
+        return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
+    if name == "browser_open":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_open_command(str(args.get("url") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_controls":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_controls_command(str(args.get("tab_id") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_navigate":
+        tab_id = str(args.get("tab_id") or "")
+        url = str(args.get("url") or "")
+        command = browser_navigate_command(tab_id, url) if tab_id else browser_focused_navigate_command(url)
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            command,
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_click":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_click_command(str(args.get("tab_id") or ""), str(args.get("selector") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_click_control":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_click_control_command(str(args.get("tab_id") or ""), args.get("index")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == "browser_type":
+        text_value = str(args.get("text") or "")
+        if not text_value:
+            raise ValueError("browser_text_required")
+        if len(text_value) > 4096:
+            raise ValueError("browser_text_too_long")
+        tab_id = str(args.get("tab_id") or "")
+        selector = str(args.get("selector") or "")
+        if tab_id or selector:
+            invocation = browser_type_invocation(
+                tab_id,
+                selector,
+                bool(args.get("submit", False)),
+            )
+        else:
+            invocation = browser_focused_type_invocation(bool(args.get("press_enter", False)))
+        return _browser_result(run_local_command_with_stdin(
+            invocation,
+            text_value,
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
+    if name == 'foreground_renew':
+        return foreground_handoff.renew_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), ttl_seconds=int(args.get('ttl_seconds')))
+    if name == 'foreground_release':
+        return foreground_handoff.release_foreground(str(args.get('task_id') or '').strip(), lease_id=str(args.get('lease_id') or '').strip(), fencing_token=int(args.get('fencing_token')), reason=str(args.get('reason') or '').strip())
+    if name == 'foreground_handoff':
+        task_id = str(args.get('task_id') or '').strip()
+        conversation_id = _validate_conversation_id(args.get('conversation_id'))
+        checkpoint_version = int(args.get('checkpoint_version'))
+        durable_command = args.get('durable_command') or []
+        if not isinstance(durable_command, list) or not durable_command:
+            raise ValueError('durable_command_required')
+        def submitter(argv: list[str]) -> dict[str, Any]:
+            command = shlex.join([str(item) for item in argv])
+            result = execute_tool('task_submit', {
+                'host': CONTROLLER_BACKEND_HOST,
+                'command': command,
+                'timeout': int(args.get('durable_timeout', 300)),
+                'request_id': str(args.get('request_id') or '') or None,
+            })
+            if result.get('task_id'):
+                result.update(queued_task_context(str(result['task_id'])))
+            return result
+        return foreground_handoff.handoff_foreground(
+            task_id, conversation_id, checkpoint_version,
+            [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
+            _submitter=submitter)
     if name == "hosts_list":
         return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
     if name == "audit_recent":
@@ -711,6 +2079,8 @@ def execute_tool(
                 (limit,),
             ).fetchall()
         return {"events": [dict(r) for r in rows]}
+    if name == "task_process_indeterminate":
+        return process_indeterminate_tasks(args.get("limit", 200))
     if name == "task_status":
         tid = str(args.get("task_id") or "")
         row = load_task(tid)
@@ -718,6 +2088,8 @@ def execute_tool(
             reconcile_task(row)
             row = load_task(tid)
         result = dict(row)
+        if result["state"] == "queued":
+            result.update(queued_task_context(tid))
         heartbeat = result.get("heartbeat_at")
         if heartbeat:
             try:
@@ -739,6 +2111,11 @@ def execute_tool(
         while True:
             result = execute_tool("task_status", {"task_id": tid})
             if result["state"] in TERMINAL_STATES or time.monotonic() >= deadline:
+                return result
+            if result["state"] == "queued" and (
+                result.get("blocked_by_active") or int(result.get("queue_position", 1)) > 1
+            ):
+                result["detached"] = True
                 return result
             if cancel_check and cancel_check():
                 return {"id": tid, "state": result["state"], "detached": True}
@@ -763,7 +2140,8 @@ def execute_tool(
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
-        timeout = validate_timeout(args.get("timeout", 300))
+        validate_admin_command_policy(str(host), command)
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
         digest = hashlib.sha256(command.encode()).hexdigest()
         request_id = str(args.get("request_id") or "").strip() or None
         if request_id and len(request_id) > 200:
@@ -787,11 +2165,24 @@ def execute_tool(
 
     cfg = validate_host(str(host))
     platform = str(cfg["platform"])
+    if name == "admin_command_run" and bool(args.get("durable", False)):
+        command = str(args.get("command") or "")
+        if not command.strip():
+            raise ValueError("command_required")
+        validate_admin_command_policy(str(host), command)
+        timeout = validate_timeout(args.get("timeout", 300), max_timeout=MAX_DURABLE_TIMEOUT)
+        durable = execute_tool(
+            "task_submit",
+            {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")},
+            None,
+        )
+        durable["durable"] = True
+        return durable
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
-        result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), health_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "processes_list":
-        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "service_status":
         result = run_host_command(
             str(host),
@@ -803,26 +2194,34 @@ def execute_tool(
             ),
             timeout,
             cancel_check,
+            recover_transport=False,
         )
     elif name == "service_action":
         action = str(args.get("action") or "")
         if action not in {"start", "stop", "restart"}:
             raise ValueError("invalid_service_action")
-        result = run_host_command(str(host), service_command(platform, str(args.get("service") or ""), action), timeout, cancel_check)
+        result = run_host_command(
+            str(host),
+            service_command(
+                platform,
+                str(args.get("service") or ""),
+                action,
+                str(cfg.get("service_user_owner") or "") or None,
+            ),
+            timeout,
+            cancel_check,
+        )
     elif name == "file_read":
-        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
+        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check, recover_transport=False)
     elif name == "file_list":
-        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check)
+        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check, recover_transport=False)
     elif name == "logs_tail":
-        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check)
+        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check, recover_transport=False)
     elif name == "admin_command_run":
         command = str(args.get("command") or "")
         if not command.strip():
             raise ValueError("command_required")
-        if bool(args.get("durable", False)):
-            durable = execute_tool("task_submit", {"host": host, "command": command, "timeout": timeout, "request_id": args.get("request_id")}, None)
-            durable["durable"] = True
-            return durable
+        validate_admin_command_policy(str(host), command)
         result = run_host_command(str(host), command, timeout, cancel_check)
     else:
         raise ValueError("unknown_tool")
@@ -831,6 +2230,27 @@ def execute_tool(
 
 
 TOOLS = [
+    ("claude_remote_control_status", "Inspect sanitized Claude Remote Control service, session pointer identity and session-recovery health on the canonical backend.", {}, True, False),
+    ("claude_remote_control_reconcile", "Reconcile Claude Remote Control from exactly the expected origin/main SHA using the canonical installer and durable execution.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
+    ("controller_status", "Inspect the active 24x7 continuity controller release and sanitized runtime state on the canonical backend.", {}, True, False),
+    ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
+    ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
+    ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
+    ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
+    ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
+    ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_click", "Click an explicit constrained CSS selector in an allowlisted canonical backend browser tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}}, False, True),
+    ("browser_click_control", "Click exactly one sanitized control by its browser_controls index in an allowlisted canonical backend tab.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, False, True),
+    ("browser_type", "Type into an explicit constrained CSS selector in the canonical backend browser. Text is sent only over stdin and hashed in audit records.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "selector": {"type": "string", "maxLength": 240}, "text": {"type": "string", "maxLength": 4096}, "submit": {"type": "boolean"}}, False, True),
+    ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_DURABLE_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
+    ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
+    ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
+    ("desktop_health", "Check the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV uses the backend RustDesk path without exposing target IDs.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_open", "Prepare the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV opens or focuses the protected RustDesk target.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
+    ("desktop_screenshot", "Capture the constrained graphical surface for a canonical Windows support host: the interactive Windows desktop on Fred-Win or the resolved RustDesk window on KOCEPSV.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_click", "Click bounded coordinates on the constrained graphical surface for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
+    ("desktop_type", "Type into the active constrained graphical surface. Text is transported only through protected stdin/request files and is redacted from audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -839,11 +2259,12 @@ TOOLS = [
     ("file_read", "Read a non-sensitive file from a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 262144}}, True, False),
     ("file_list", "List a non-sensitive directory on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}}, True, False),
     ("logs_tail", "Tail a non-sensitive log file on a host.", {"host": {"type": "string", "enum": list(HOSTS)}, "path": {"type": "string"}, "lines": {"type": "integer", "minimum": 1, "maximum": 1000}}, True, False),
-    ("admin_command_run", "Run a bounded administrative shell or PowerShell command on a named host. Use durable=true for work that must survive client disconnects.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
-    ("task_submit", "Queue a durable administrative command that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("admin_command_run", "Run an administrative shell or PowerShell command on a named host, including package-manager and application installation commands. Use durable=true for long work; inline calls stay bounded.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "durable": {"type": "boolean"}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
+    ("task_submit", "Queue a durable administrative shell or PowerShell command, including long package/application installs, that continues independently of the chat.", {"host": {"type": "string", "enum": list(HOSTS)}, "command": {"type": "string"}, "timeout": {"type": "integer", "minimum": 1, "maximum": MAX_DURABLE_TIMEOUT}, "request_id": {"type": "string", "maxLength": 200}}, False, True),
     ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
+    ("task_process_indeterminate", "Process pending indeterminate durable tasks by persisted-log analysis only. Never re-executes the original command, restarts transports/services, or changes the indeterminate terminal state.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, False, False),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
 ]
 
@@ -851,12 +2272,30 @@ TOOLS = [
 def tool_specs() -> list[dict[str, Any]]:
     specs = []
     for name, desc, props, readonly, destructive in TOOLS:
+        optional = {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable", "timeout_seconds", "submit", "lease_ttl_seconds", "durable_timeout", "button", "clicks", "press_enter"}
+        if name == "browser_navigate":
+            optional.add("tab_id")
+        schema_props = dict(props)
+        if name in MUTATING_RUNTIME_ACTIONS:
+            schema_props.update({
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            })
+        if name in BROWSER_CONVERSATION_MUTATIONS:
+            schema_props.update({
+                "task_id": {"type": "string", "maxLength": 200},
+                "conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"},
+                "checkpoint_version": {"type": "integer", "minimum": 1},
+                "session_identity": {"type": "string", "maxLength": 200},
+                "conversation_lease_id": {"type": "string", "maxLength": 200},
+                "conversation_fencing_token": {"type": "integer", "minimum": 1},
+            })
         specs.append({
             "name": name,
             "description": desc,
             "inputSchema": {
-                "type": "object", "properties": props,
-                "required": [k for k in props if k not in {"timeout", "max_bytes", "lines", "limit", "request_id", "wait_seconds", "durable"}],
+                "type": "object", "properties": schema_props,
+                "required": [k for k in props if k not in optional],
                 "additionalProperties": False,
             },
             "annotations": {
@@ -869,19 +2308,32 @@ def tool_specs() -> list[dict[str, Any]]:
 
 
 def task_worker() -> None:
+    next_analysis_at = 0.0
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
             reconcile_tasks()
+            current = time.monotonic()
+            if current >= next_analysis_at:
+                process_indeterminate_tasks(limit=50)
+                next_analysis_at = current + 1.0
             with db_conn() as db:
-                active = db.execute(
-                    "SELECT 1 FROM tasks WHERE state IN ('starting','running','cancel_requested') LIMIT 1"
-                ).fetchone()
-                if active:
-                    continue
-                row = db.execute(
-                    "SELECT id,timeout FROM tasks WHERE state='queued' ORDER BY created_at LIMIT 1"
-                ).fetchone()
+                active_rows = db.execute(
+                    "SELECT host,COUNT(*) AS count FROM tasks "
+                    "WHERE state IN ('starting','running','cancel_requested') GROUP BY host"
+                ).fetchall()
+                active_counts = {str(item["host"]): int(item["count"]) for item in active_rows}
+                candidates = db.execute(
+                    "SELECT id,host,timeout FROM tasks WHERE state='queued' ORDER BY created_at"
+                ).fetchall()
+                row = next(
+                    (
+                        item for item in candidates
+                        if active_counts.get(str(item["host"]), 0)
+                        < HOST_DURABLE_LIMITS.get(str(item["host"]), 1)
+                    ),
+                    None,
+                )
                 if not row:
                     continue
                 result_dir = str(ensure_task_result_dir(str(row["id"])))
@@ -895,7 +2347,7 @@ def task_worker() -> None:
                 continue
             tid = str(row["id"])
             if launch_claimed_task(tid, int(row["timeout"])):
-                audit("task_worker", None, {"task_id": tid}, True, "durable_task_service_launched")
+                audit("task_worker", str(row["host"]), {"task_id": tid}, True, "durable_task_service_launched")
         except Exception as exc:
             try:
                 if tid:
@@ -913,11 +2365,18 @@ def durable_health_summary() -> dict[str, Any]:
         rows = db.execute(
             "SELECT state,COUNT(*) AS count FROM tasks WHERE state IN ('queued','starting','running','cancel_requested','indeterminate') GROUP BY state"
         ).fetchall()
+        analyzed = db.execute(
+            "SELECT COUNT(*) AS count FROM tasks WHERE state='indeterminate' AND analysis_status='processed'"
+        ).fetchone()
         heartbeat = db.execute(
             "SELECT heartbeat_at FROM tasks WHERE state IN ('starting','running','cancel_requested') AND heartbeat_at IS NOT NULL ORDER BY heartbeat_at LIMIT 1"
         ).fetchone()
     summary = {state: 0 for state in ("queued", "starting", "running", "cancel_requested", "indeterminate")}
     summary.update({str(row["state"]): int(row["count"]) for row in rows})
+    summary["indeterminate_processed"] = int(analyzed["count"]) if analyzed else 0
+    summary["indeterminate_pending_analysis"] = max(
+        0, summary["indeterminate"] - summary["indeterminate_processed"]
+    )
     age: float | None = None
     if heartbeat:
         try:
@@ -925,7 +2384,7 @@ def durable_health_summary() -> dict[str, Any]:
         except ValueError:
             age = None
     summary["oldest_heartbeat_age_seconds"] = age
-    summary["degraded"] = age is not None and age > 10
+    summary["degraded"] = summary["indeterminate_pending_analysis"] > 0 or (age is not None and age > 10)
     return summary
 
 
@@ -1002,7 +2461,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {
@@ -1053,4 +2512,28 @@ def main() -> None:
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--run-task":
         raise SystemExit(run_task_entrypoint(sys.argv[2]))
+    if len(sys.argv) == 4 and sys.argv[1] == "--controller-promote-run":
+        try:
+            result = _controller_promote_sync(_validate_expected_sha(sys.argv[2]), timeout=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
+    if len(sys.argv) == 4 and sys.argv[1] == "--claude-reconcile-run":
+        try:
+            result = _claude_remote_control_reconcile_sync(_validate_expected_sha(sys.argv[2]), timeout=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
+    if len(sys.argv) == 4 and sys.argv[1] == "--continuity-e2e-run":
+        try:
+            result = _continuity_e2e_sync(_validate_conversation_id(sys.argv[2]), timeout_seconds=int(sys.argv[3]))
+            print(json.dumps(result, ensure_ascii=False))
+            raise SystemExit(0 if result.get("ok") else 1)
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": redact_text(str(exc))}, ensure_ascii=False))
+            raise SystemExit(1)
     main()

@@ -43,6 +43,37 @@ async function challengeRequired(page) {
   return /2-Step Verification|Verify it.?s you|Enter (?:the )?(?:verification )?code|Try another way|captcha|security key/i.test(text);
 }
 
+async function tryGoogleChallengeRecovery(page) {
+  if (!page || page.isClosed() || classifyLocation(page.url()) !== 'google') return 'not_google';
+
+  const password = page.locator('input[type="password"]').first();
+  if ((await password.count().catch(() => 0)) > 0) {
+    await password.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1200).catch(() => {});
+    const autofilled = await password.evaluate(el => Boolean(el?.value)).catch(() => false);
+    if (autofilled) {
+      const next = page.getByRole('button', { name: /^(Next|Continue|Avançar|Continuar|Próxima)$/i }).first();
+      if ((await next.count().catch(() => 0)) > 0) {
+        await next.click();
+        await page.waitForTimeout(1500).catch(() => {});
+        return 'password_autofill_submitted';
+      }
+    }
+  }
+
+  const alternate = page
+    .getByRole('button', { name: /Try another way|Tentar outra forma|Tentar outra maneira|Escolher outra opção/i })
+    .or(page.getByRole('link', { name: /Try another way|Tentar outra forma|Tentar outra maneira|Escolher outra opção/i }))
+    .first();
+  if ((await alternate.count().catch(() => 0)) > 0) {
+    await alternate.click();
+    await page.waitForTimeout(1200).catch(() => {});
+    return 'alternate_method_opened';
+  }
+
+  return 'no_automatic_recovery';
+}
+
 async function waitForHumanMfa(primaryPage, authPage, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -112,6 +143,7 @@ let finalLocation = 'not_observed';
 let authBlocker = 'not_observed';
 let oauthHandoffResult = 'not_observed';
 let oauthCompletionResult = 'not_observed';
+let googleChallengeRecovery = 'not_attempted';
 try {
   let chromium = null;
   for (const candidate of playwrightCandidates) {
@@ -179,6 +211,12 @@ try {
         const anotherAccountCount = await authPage.getByText(/Use another account/i).count().catch(() => 0);
         accountChooserPresent = identifierCount > 0 || anotherAccountCount > 0;
         challenge = await challengeRequired(authPage);
+        if (challenge) {
+          googleChallengeRecovery = await tryGoogleChallengeRecovery(authPage);
+          if (googleChallengeRecovery !== 'no_automatic_recovery') {
+            challenge = await challengeRequired(authPage).catch(() => true);
+          }
+        }
         if (!challenge) {
           const account = authPage
             .locator('[data-identifier], [role="link"], [role="button"]')
@@ -200,6 +238,15 @@ try {
         else if (oauthCompletionResult === 'login') authStage = 'oauth_returned_login';
         else if (oauthCompletionResult === 'other') authStage = 'oauth_returned_other';
         else if (oauthCompletionResult === 'closed') authStage = 'oauth_popup_closed_without_session';
+      }
+
+      if (challenge && !['account_match_missing'].includes(authStage) && classifyLocation(authPage?.url?.() || '') === 'google') {
+        googleChallengeRecovery = await tryGoogleChallengeRecovery(authPage);
+        if (googleChallengeRecovery !== 'no_automatic_recovery') {
+          oauthCompletionResult = await waitForOAuthCompletion(page, authPage, 30000);
+          if (oauthCompletionResult === 'completed') challenge = false;
+          else challenge = await challengeRequired(authPage).catch(() => true);
+        }
       }
 
       if (challenge && !['account_match_missing'].includes(authStage)) {
@@ -242,6 +289,7 @@ try {
   console.log('OPENAI_PLATFORM_POST_GOOGLE_LOCATION=' + safeTag(postGoogleLocation));
   console.log('OPENAI_PLATFORM_OAUTH_HANDOFF_RESULT=' + safeTag(oauthHandoffResult));
   console.log('OPENAI_PLATFORM_OAUTH_COMPLETION_RESULT=' + safeTag(oauthCompletionResult));
+  console.log('OPENAI_PLATFORM_GOOGLE_CHALLENGE_RECOVERY=' + safeTag(googleChallengeRecovery));
   console.log('OPENAI_PLATFORM_FINAL_LOCATION=' + safeTag(finalLocation));
   console.log('OPENAI_PLATFORM_AUTH_BLOCKER=' + safeTag(authBlocker));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=' + String(authenticated));
@@ -265,6 +313,7 @@ try {
   console.log('OPENAI_PLATFORM_POST_GOOGLE_LOCATION=' + safeTag(postGoogleLocation));
   console.log('OPENAI_PLATFORM_OAUTH_HANDOFF_RESULT=' + safeTag(oauthHandoffResult));
   console.log('OPENAI_PLATFORM_OAUTH_COMPLETION_RESULT=' + safeTag(oauthCompletionResult));
+  console.log('OPENAI_PLATFORM_GOOGLE_CHALLENGE_RECOVERY=' + safeTag(googleChallengeRecovery));
   console.log('OPENAI_PLATFORM_FINAL_LOCATION=' + safeTag(finalLocation));
   console.log('OPENAI_PLATFORM_AUTH_BLOCKER=' + safeTag(authBlocker));
   console.log('OPENAI_PLATFORM_AUTHENTICATED=false');

@@ -9,6 +9,7 @@ profile parsing is used.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import importlib.util
 import json
@@ -17,20 +18,35 @@ from pathlib import Path
 import pwd
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Any
+import zlib
 from urllib.parse import urlsplit, urlunsplit
 
 BASE_SERVER = os.environ.get(
     "SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER",
     "/opt/shopvivaliz-remote-control/server.py",
 )
-GUI_USER = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_GUI_USER", "fredrdp")
+GUI_USER = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_GUI_USER", "fredconsole")
 DISPLAY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_DISPLAY", ":0")
+BROWSER_BINARY = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome")
+BROWSER_PROFILE_DIR = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium")
+BROWSER_WINDOW_CLASS = os.environ.get("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS", "shopvivaliz-general")
+RUSTDESK_BINARY = os.environ.get("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY", "/usr/bin/rustdesk")
+FREDWIN_NATIVE_DESKTOP_BRIDGE = os.environ.get(
+    "SHOPVIVALIZ_FREDWIN_NATIVE_DESKTOP_BRIDGE",
+    r"C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1",
+)
+DESKTOP_ALIASES = {
+    "KOCEPSV": ("kocepsv", "desktop-kocepsv"),
+    "Fred-Win": ("fred-win", "laptop-nig4ifuu"),
+}
 MAX_SCREENSHOT_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_SCREENSHOT_BYTES", str(8 * 1024 * 1024)))
+MAX_XWD_BYTES = int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_XWD_BYTES", str(64 * 1024 * 1024)))
 MAX_TABS = max(1, min(int(os.environ.get("SHOPVIVALIZ_BROWSER_MCP_MAX_TABS", "32")), 64))
 
 BASE_SERVER_DIR = str(Path(BASE_SERVER).resolve().parent)
@@ -43,16 +59,27 @@ if spec is None or spec.loader is None:
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 
-VERSION = "1.0.0-browser"
+VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
 BROWSER_TOOLS = {
-    "browser_tabs",
+    "browser_health",
+    "browser_gui_tabs",
     "browser_open",
-    "browser_navigate",
+    "browser_gui_navigate",
     "browser_screenshot",
-    "browser_click",
-    "browser_type",
+    "browser_gui_click",
+    "browser_gui_type",
 }
+
+ATTENDIMENTO_TOOL_MAP = {
+    "browser_atendimento_tabs": "browser_tabs",
+    "browser_atendimento_controls": "browser_controls",
+    "browser_atendimento_navigate": "browser_navigate",
+    "browser_atendimento_click": "browser_click",
+    "browser_atendimento_click_control": "browser_click_control",
+    "browser_atendimento_type": "browser_type",
+}
+ATTENDIMENTO_TOOLS = set(ATTENDIMENTO_TOOL_MAP)
 URL_RE = re.compile(r"^https?://", re.I)
 
 
@@ -68,6 +95,7 @@ def gui_prefix() -> list[str]:
         f"USER={GUI_USER}",
         f"LOGNAME={GUI_USER}",
         f"XDG_RUNTIME_DIR=/run/user/{info.pw_uid}",
+        "TMPDIR=/var/tmp",
     ]
     return ["sudo", "-n", "-u", GUI_USER, "env", *env]
 
@@ -97,12 +125,11 @@ def require_binary(name: str) -> str:
 def browser_windows() -> list[str]:
     require_binary("xdotool")
     found: list[str] = []
-    for klass in ("google-chrome", "Google-chrome", "chromium", "Chromium"):
-        r = run_gui(["xdotool", "search", "--onlyvisible", "--class", klass], check=False)
-        if r.returncode == 0:
-            for item in (r.stdout or "").split():
-                if item.isdigit() and item not in found:
-                    found.append(item)
+    r = run_gui(["xdotool", "search", "--onlyvisible", "--class", BROWSER_WINDOW_CLASS], check=False)
+    if r.returncode == 0:
+        for item in (r.stdout or "").split():
+            if item.isdigit() and item not in found:
+                found.append(item)
     return found
 
 
@@ -115,26 +142,51 @@ def active_browser_window() -> str:
     if current in windows:
         return current
     window = windows[0]
-    run_gui(["xdotool", "windowactivate", "--sync", window])
+    focus(window)
     return window
 
 
 def focus(window: str) -> None:
-    run_gui(["xdotool", "windowactivate", "--sync", window])
+    activated = run_gui(["xdotool", "windowactivate", "--sync", window], check=False)
+    if activated.returncode == 0:
+        return
+    run_gui(["xdotool", "windowfocus", "--sync", window])
 
 
 def key(*keys: str) -> None:
     run_gui(["xdotool", "key", "--clearmodifiers", *keys])
 
 
-def type_text(value: str) -> None:
+def check_text(value: str) -> None:
     if len(value) > 20000:
         raise ValueError("browser_text_too_long")
-    run_gui(["xdotool", "type", "--clearmodifiers", "--delay", "1", "--", value], timeout=30)
+    if "\x00" in value:
+        raise ValueError("browser_text_contains_nul")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("browser_text_not_utf8") from None
+
+
+def type_text(value: str) -> None:
+    check_text(value)
+    try:
+        run_gui(
+            ["xdotool", "type", "--clearmodifiers", "--delay", "1", "--file", "-"],
+            timeout=30,
+            input_text=value,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("browser_type_timeout") from None
+    except RuntimeError:
+        raise RuntimeError("browser_type_command_failed") from None
 
 
 def validate_url(value: Any) -> str:
-    url = str(value or "").strip()
+    raw = str(value or "")
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7f for ch in raw):
+        raise ValueError("browser_url_control_character")
+    url = raw.strip()
     if not URL_RE.match(url):
         raise ValueError("browser_url_must_be_http_or_https")
     parts = urlsplit(url)
@@ -170,6 +222,221 @@ def selected_url(window: str) -> str:
     if copied.returncode != 0:
         return ""
     return safe_url(copied.stdout or "")
+
+
+def rustdesk_windows(host: str, target_id: str) -> list[str]:
+    base.validate_desktop_host(host)
+    require_binary("xdotool")
+    aliases = tuple(item.lower() for item in DESKTOP_ALIASES.get(host, (host.lower(),)))
+    found: list[str] = []
+    result = run_gui(["xdotool", "search", "--onlyvisible", "--class", "rustdesk"], check=False)
+    if result.returncode != 0:
+        return found
+    for item in (result.stdout or "").split():
+        if not item.isdigit() or item in found:
+            continue
+        title = window_title(item).lower()
+        if target_id in title or any(alias in title for alias in aliases):
+            found.append(item)
+    return found
+
+
+def active_desktop_window(host: str, target_id: str) -> str:
+    windows = rustdesk_windows(host, target_id)
+    if not windows:
+        raise RuntimeError("rustdesk_session_window_not_found")
+    if len(windows) != 1:
+        raise RuntimeError("rustdesk_session_window_ambiguous")
+    window = windows[0]
+    active = run_gui(["xdotool", "getactivewindow"], check=False)
+    if (active.stdout or "").strip() != window:
+        focus(window)
+    return window
+
+
+def _completed_text(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value or "")
+
+
+def native_desktop_bridge(host: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if host != "Fred-Win":
+        raise ValueError("native_desktop_bridge_host_unsupported")
+    cfg = base.validate_desktop_host(host)
+    address = str(cfg.get("address") or "")
+    user = str(cfg.get("user") or "")
+    port = int(cfg.get("port", 22))
+    argv = base.ssh_base(address, user, port) + [
+        "powershell.exe",
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        FREDWIN_NATIVE_DESKTOP_BRIDGE,
+    ]
+    request = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    try:
+        completed = subprocess.run(
+            argv,
+            input=request,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=35,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("native_desktop_bridge_timeout") from None
+    stdout = _completed_text(completed.stdout).strip().lstrip("\ufeff")
+    if completed.returncode != 0:
+        raise RuntimeError("native_desktop_bridge_failed")
+    try:
+        result = json.loads(stdout)
+    except (TypeError, ValueError):
+        raise RuntimeError("native_desktop_bridge_invalid_response") from None
+    if not isinstance(result, dict):
+        raise RuntimeError("native_desktop_bridge_invalid_response")
+    result.setdefault("host", host)
+    return result
+
+
+def desktop_health(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "health"})
+        result["surface"] = "windows_interactive"
+        result["display_accessible"] = bool(result.get("ok"))
+        result["session_open"] = bool(result.get("ok"))
+        return result
+    target_id = base.rustdesk_host_id(host)
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot", "xwd")}
+    rustdesk_launchable = os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)
+    display_accessible = dependencies["xdotool"] and run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
+    windows = rustdesk_windows(host, target_id) if display_accessible else []
+    return {
+        "ok": all(dependencies.values()) and rustdesk_launchable and display_accessible and len(windows) <= 1,
+        "host": host,
+        "gui_user": GUI_USER,
+        "display": DISPLAY,
+        "dependencies": dependencies,
+        "rustdesk_launchable": rustdesk_launchable,
+        "display_accessible": bool(display_accessible),
+        "session_window_count": len(windows),
+        "session_open": len(windows) == 1,
+        "surface": "rustdesk",
+    }
+
+
+def desktop_open(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "health"})
+        result["surface"] = "windows_interactive"
+        result["action"] = "native_bridge_ready"
+        return result
+    target_id = base.rustdesk_host_id(host)
+    windows = rustdesk_windows(host, target_id)
+    if len(windows) > 1:
+        raise RuntimeError("rustdesk_session_window_ambiguous")
+    if len(windows) == 1:
+        focus(windows[0])
+        return {"ok": True, "host": host, "window_id": windows[0], "action": "focus_existing"}
+    if not (os.path.isfile(RUSTDESK_BINARY) and os.access(RUSTDESK_BINARY, os.X_OK)):
+        raise RuntimeError("rustdesk_binary_not_found")
+    subprocess.Popen(
+        gui_prefix() + [RUSTDESK_BINARY, "--connect", target_id],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    for _ in range(40):
+        time.sleep(0.25)
+        windows = rustdesk_windows(host, target_id)
+        if len(windows) > 1:
+            raise RuntimeError("rustdesk_session_window_ambiguous")
+        if len(windows) == 1:
+            focus(windows[0])
+            return {"ok": True, "host": host, "window_id": windows[0], "action": "opened"}
+    raise RuntimeError("rustdesk_session_window_timeout")
+
+
+def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    x = int(args.get("x"))
+    y = int(args.get("y"))
+    button_name = str(args.get("button") or "left")
+    clicks = max(1, min(int(args.get("clicks", 1)), 3))
+    if host == "Fred-Win":
+        result = native_desktop_bridge(
+            host,
+            {"action": "click", "x": x, "y": y, "button": button_name, "clicks": clicks},
+        )
+        result["surface"] = "windows_interactive"
+        return result
+    target_id = base.rustdesk_host_id(host)
+    button = {"left": "1", "middle": "2", "right": "3"}.get(button_name)
+    if button is None:
+        raise ValueError("desktop_invalid_mouse_button")
+    window = active_desktop_window(host, target_id)
+    focus(window)
+    geo = parse_geometry(window)
+    if not (0 <= x < geo["WIDTH"] and 0 <= y < geo["HEIGHT"]):
+        raise ValueError("desktop_click_outside_window")
+    absolute_x = geo["X"] + x
+    absolute_y = geo["Y"] + y
+    run_gui(["xdotool", "mousemove", str(absolute_x), str(absolute_y)])
+    for _ in range(clicks):
+        run_gui(["xdotool", "click", button])
+    return {"ok": True, "host": host, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
+
+
+def desktop_type(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    text = str(args.get("text") or "")
+    if not text:
+        raise ValueError("desktop_text_required")
+    if len(text) > 4096:
+        raise ValueError("desktop_text_too_long")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(
+            host,
+            {"action": "type", "text": text, "press_enter": bool(args.get("press_enter", False))},
+        )
+        result["surface"] = "windows_interactive"
+        return result
+    target_id = base.rustdesk_host_id(host)
+    window = active_desktop_window(host, target_id)
+    focus(window)
+    require_binary("xclip")
+    try:
+        run_gui(["xclip", "-selection", "clipboard", "-i"], input_text=text)
+        key("ctrl+v")
+    finally:
+        run_gui(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False)
+    if bool(args.get("press_enter", False)):
+        key("Return")
+    return {"ok": True, "host": host, "window_id": window, "typed_characters": len(text), "press_enter": bool(args.get("press_enter", False))}
+
+
+def browser_health() -> dict[str, Any]:
+    dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot", "xwd")}
+    display_accessible = False
+    if dependencies["xdotool"]:
+        display_accessible = run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
+    windows = browser_windows() if dependencies["xdotool"] and display_accessible else []
+    browser_launchable = os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK)
+    return {
+        "ok": all(dependencies.values()) and display_accessible and (bool(windows) or browser_launchable),
+        "host": BROWSER_HOST,
+        "display": DISPLAY,
+        "gui_user": GUI_USER,
+        "dependencies": dependencies,
+        "display_accessible": display_accessible,
+        "browser_launchable": browser_launchable,
+        "window_count": len(windows),
+    }
 
 
 def browser_tabs() -> dict[str, Any]:
@@ -210,18 +477,27 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
         key("ctrl+t")
         type_text(url)
         key("Return")
-        return {"ok": True, "host": BROWSER_HOST, "action": "new_tab", "url": safe_url(url)}
+        return {"ok": True, "host": BROWSER_HOST, "surface": "isolated_gui", "action": "new_tab", "url": safe_url(url)}
     candidates = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]
-    binary = next((name for name in candidates if shutil.which(name)), None)
+    binary = BROWSER_BINARY if os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK) else next((name for name in candidates if shutil.which(name)), None)
     if not binary:
         raise RuntimeError("browser_binary_not_found")
     subprocess.Popen(
-        gui_prefix() + [binary, "--new-window", url],
+        gui_prefix() + [
+            binary,
+            f"--user-data-dir={BROWSER_PROFILE_DIR}",
+            f"--class={BROWSER_WINDOW_CLASS}",
+            "--no-sandbox",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--new-window",
+            url,
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    return {"ok": True, "host": BROWSER_HOST, "action": "new_window", "url": safe_url(url)}
+    return {"ok": True, "host": BROWSER_HOST, "surface": "isolated_gui", "action": "new_window", "url": safe_url(url)}
 
 
 def browser_navigate(args: dict[str, Any]) -> dict[str, Any]:
@@ -261,7 +537,7 @@ def browser_click(args: dict[str, Any]) -> dict[str, Any]:
     geo = parse_geometry(window)
     if not (geo["X"] <= x < geo["X"] + geo["WIDTH"] and geo["Y"] <= y < geo["Y"] + geo["HEIGHT"]):
         raise ValueError("browser_click_outside_active_window")
-    run_gui(["xdotool", "mousemove", "--sync", str(x), str(y)])
+    run_gui(["xdotool", "mousemove", str(x), str(y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": BROWSER_HOST, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -271,6 +547,7 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     text = str(args.get("text") or "")
     if not text:
         raise ValueError("browser_text_required")
+    check_text(text)
     window = active_browser_window()
     focus(window)
     type_text(text)
@@ -285,10 +562,98 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def browser_screenshot() -> dict[str, Any]:
-    window = active_browser_window()
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    checksum = binascii.crc32(kind + payload) & 0xFFFFFFFF
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+
+def _xwd_channel(value: int, mask: int) -> int:
+    if mask <= 0:
+        raise ValueError("xwd_color_mask_invalid")
+    shift = (mask & -mask).bit_length() - 1
+    maximum = mask >> shift
+    if maximum <= 0:
+        raise ValueError("xwd_color_mask_invalid")
+    sample = (value & mask) >> shift
+    return (sample * 255 + maximum // 2) // maximum
+
+
+def xwd_to_png_bytes(raw: bytes) -> bytes:
+    if len(raw) < 100 or len(raw) > MAX_XWD_BYTES:
+        raise ValueError("xwd_size_invalid")
+    fields = struct.unpack(">25I", raw[:100])
+    (
+        header_size, file_version, pixmap_format, _pixmap_depth, width, height,
+        _xoffset, byte_order, _bitmap_unit, _bitmap_bit_order, _bitmap_pad,
+        bits_per_pixel, bytes_per_line, _visual_class, red_mask, green_mask,
+        blue_mask, _bits_per_rgb, _colormap_entries, ncolors, *_window_fields,
+    ) = fields
+    if file_version != 7 or pixmap_format != 2:
+        raise ValueError("xwd_format_unsupported")
+    if width < 1 or height < 1 or width * height > 16_777_216:
+        raise ValueError("xwd_dimensions_invalid")
+    if bits_per_pixel not in {16, 24, 32} or byte_order not in {0, 1}:
+        raise ValueError("xwd_pixel_format_unsupported")
+    bytes_per_pixel = bits_per_pixel // 8
+    if bytes_per_line < width * bytes_per_pixel:
+        raise ValueError("xwd_stride_invalid")
+    pixel_offset = header_size + ncolors * 12
+    pixel_bytes = bytes_per_line * height
+    if header_size < 100 or pixel_offset < header_size or pixel_offset + pixel_bytes > len(raw):
+        raise ValueError("xwd_payload_invalid")
+    if red_mask & green_mask or red_mask & blue_mask or green_mask & blue_mask:
+        raise ValueError("xwd_color_mask_invalid")
+
+    endian = "little" if byte_order == 0 else "big"
+    scanlines = bytearray()
+    pixels = memoryview(raw)
+    for y in range(height):
+        scanlines.append(0)
+        row_start = pixel_offset + y * bytes_per_line
+        for x in range(width):
+            start = row_start + x * bytes_per_pixel
+            value = int.from_bytes(pixels[start:start + bytes_per_pixel], endian)
+            scanlines.extend((
+                _xwd_channel(value, red_mask),
+                _xwd_channel(value, green_mask),
+                _xwd_channel(value, blue_mask),
+            ))
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(bytes(scanlines), 6))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+def capture_xwd_window(window: str, host: str, prefix: str) -> dict[str, Any]:
     focus(window)
-    tmpdir = tempfile.mkdtemp(prefix="shopvivaliz-browser-")
+    require_binary("xwd")
+    tmpdir = tempfile.mkdtemp(prefix=prefix)
+    gui = pwd.getpwnam(GUI_USER)
+    os.chown(tmpdir, gui.pw_uid, gui.pw_gid)
+    os.chmod(tmpdir, 0o700)
+    path = str(Path(tmpdir) / "screenshot.xwd")
+    try:
+        run_gui(["xwd", "-silent", "-id", window, "-out", path], timeout=20)
+        xwd = Path(path).read_bytes()
+        raw = xwd_to_png_bytes(xwd)
+        if not raw or len(raw) > MAX_SCREENSHOT_BYTES:
+            raise RuntimeError("screenshot_size_invalid")
+        return {
+            "ok": True, "host": host, "window_id": window, "mime_type": "image/png",
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
+            "__mcp_image__": base64.b64encode(raw).decode("ascii"),
+        }
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def capture_window(window: str, host: str, prefix: str) -> dict[str, Any]:
+    focus(window)
+    tmpdir = tempfile.mkdtemp(prefix=prefix)
     gui = pwd.getpwnam(GUI_USER)
     os.chown(tmpdir, gui.pw_uid, gui.pw_gid)
     os.chmod(tmpdir, 0o700)
@@ -299,23 +664,40 @@ def browser_screenshot() -> dict[str, Any]:
         elif shutil.which("gnome-screenshot"):
             run_gui(["gnome-screenshot", "-f", path], timeout=20)
         elif shutil.which("import"):
-            run_gui(["import", "-window", "root", path], timeout=20)
+            run_gui(["import", "-window", window, path], timeout=20)
         else:
-            raise RuntimeError("browser_screenshot_dependency_missing")
+            raise RuntimeError("screenshot_dependency_missing")
         raw = Path(path).read_bytes()
         if not raw or len(raw) > MAX_SCREENSHOT_BYTES:
-            raise RuntimeError("browser_screenshot_size_invalid")
+            raise RuntimeError("screenshot_size_invalid")
         return {
-            "ok": True,
-            "host": BROWSER_HOST,
-            "window_id": window,
-            "mime_type": "image/png",
-            "sha256": hashlib.sha256(raw).hexdigest(),
-            "bytes": len(raw),
+            "ok": True, "host": host, "window_id": window, "mime_type": "image/png",
+            "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw),
             "__mcp_image__": base64.b64encode(raw).decode("ascii"),
         }
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def browser_screenshot() -> dict[str, Any]:
+    return capture_window(active_browser_window(), BROWSER_HOST, "shopvivaliz-browser-")
+
+
+def desktop_screenshot(args: dict[str, Any]) -> dict[str, Any]:
+    host = str(args.get("host") or "")
+    if host == "Fred-Win":
+        result = native_desktop_bridge(host, {"action": "screenshot"})
+        image_b64 = result.pop("image_b64", None)
+        if not image_b64:
+            raise RuntimeError("native_desktop_screenshot_missing")
+        result["surface"] = "windows_interactive"
+        result["__mcp_image__"] = image_b64
+        return result
+    target_id = base.rustdesk_host_id(host)
+    window = active_desktop_window(host, target_id)
+    result = capture_xwd_window(window, host, "shopvivaliz-desktop-")
+    result["surface"] = "rustdesk"
+    return result
 
 
 BASE_EXECUTE_TOOL = base.execute_tool
@@ -324,48 +706,81 @@ BASE_AUDIT = base.audit
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
-    if name == "browser_tabs":
+    if name in {"desktop_open", "desktop_click", "desktop_type"}:
+        base._assert_runtime_mutation(name, args)
+    if name == "desktop_health":
+        return desktop_health(args)
+    if name == "desktop_open":
+        return desktop_open(args)
+    if name == "desktop_screenshot":
+        return desktop_screenshot(args)
+    if name == "desktop_click":
+        return desktop_click(args)
+    if name == "desktop_type":
+        return desktop_type(args)
+    if name in ATTENDIMENTO_TOOL_MAP:
+        return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
+    if name == "browser_health":
+        return browser_health()
+    if name == "browser_gui_tabs":
         return browser_tabs()
     if name == "browser_open":
         return browser_open(args)
-    if name == "browser_navigate":
+    if name == "browser_gui_navigate":
         return browser_navigate(args)
     if name == "browser_screenshot":
         return browser_screenshot()
-    if name == "browser_click":
+    if name == "browser_gui_click":
         return browser_click(args)
-    if name == "browser_type":
+    if name == "browser_gui_type":
         return browser_type(args)
+
+    # Compatibility shim for connectors that expose the graphical browser
+    # contracts under the legacy public names. Preserve the canonical CDP
+    # actions when their tab_id/selector arguments are present.
+    if name == "browser_navigate" and "tab_id" not in args:
+        return browser_navigate(args)
+    if name == "browser_click" and "x" in args and "y" in args:
+        return browser_click(args)
+    if name == "browser_type" and "tab_id" not in args and "selector" not in args:
+        return browser_type(args)
+
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool == "browser_type" and "text" in safe:
+    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type"} and "text" in safe:
         raw = str(safe.pop("text"))
-        safe["text_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
+        safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
-    if tool in {"browser_open", "browser_navigate"} and "url" in safe:
+    if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
 
 
 BROWSER_TOOL_SPECS = [
     {
-        "name": "browser_tabs",
-        "description": "List Chrome/Chromium tabs from the authenticated graphical backend session using GUI automation only.",
+        "name": "browser_health",
+        "description": "Check graphical backend browser dependencies and visible browser window availability.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_gui_tabs",
+        "description": "List tabs from the isolated graphical helper browser; canonical continuity tabs use browser_tabs.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
     },
     {
         "name": "browser_open",
-        "description": "Open an http(s) URL in a new Chrome/Chromium tab on the authenticated graphical backend session.",
+        "description": "Open an http(s) URL in the isolated graphical helper browser. The returned surface is isolated_gui; browser_tabs lists the canonical continuity session, while browser_gui_tabs lists this helper.",
         "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
         "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
     },
     {
-        "name": "browser_navigate",
-        "description": "Navigate the active graphical Chrome/Chromium tab to an http(s) URL.",
+        "name": "browser_gui_navigate",
+        "description": "Navigate the isolated graphical helper browser; canonical continuity navigation uses browser_navigate.",
         "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
         "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
     },
@@ -376,8 +791,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
     },
     {
-        "name": "browser_click",
-        "description": "Click absolute screen coordinates only when they fall inside the active browser window.",
+        "name": "browser_gui_click",
+        "description": "Click absolute coordinates in the isolated graphical helper browser.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -392,8 +807,8 @@ BROWSER_TOOL_SPECS = [
         "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
     },
     {
-        "name": "browser_type",
-        "description": "Type text into the focused element of the active graphical browser. Typed text is never persisted in audit logs.",
+        "name": "browser_gui_type",
+        "description": "Type text into the focused element of the isolated graphical helper browser. Typed text is never persisted in audit logs.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -408,8 +823,23 @@ BROWSER_TOOL_SPECS = [
 ]
 
 
+def atendimento_tool_specs() -> list[dict[str, Any]]:
+    base_specs = {spec["name"]: spec for spec in BASE_TOOL_SPECS()}
+    out = []
+    for public_name, base_name in ATTENDIMENTO_TOOL_MAP.items():
+        src = base_specs[base_name]
+        spec = dict(src)
+        spec["name"] = public_name
+        spec["description"] = f"Use the isolated atendimento ChatGPT session: {src['description']}"
+        out.append(spec)
+    return out
+
+
 def tool_specs() -> list[dict[str, Any]]:
-    return BASE_TOOL_SPECS() + BROWSER_TOOL_SPECS
+    browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
+    atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
+    inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
+    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
 
 
 base.execute_tool = execute_tool
@@ -423,17 +853,15 @@ class BrowserHandler(base.Handler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            dependencies = {name: bool(shutil.which(name)) for name in ("xdotool", "xclip", "scrot")}
-            self._json(200, {
-                "ok": True,
+            health = browser_health()
+            health.update({
                 "endpoint": "shopvivaliz-remote-control-browser-mcp",
                 "version": VERSION,
                 "base_endpoint": "shopvivaliz-remote-control-mcp",
                 "browser_host": BROWSER_HOST,
-                "display": DISPLAY,
-                "dependencies": dependencies,
                 "timestamp": base.now(),
             })
+            self._json(200, health)
             return
         self._json(405, {"error": "method_not_allowed"})
 
@@ -466,7 +894,7 @@ class BrowserHandler(base.Handler):
                 params = req.get("params") or {}
                 name = str(params.get("name") or "")
                 args = params.get("arguments") or {}
-                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS else None)
+                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS or name in ATTENDIMENTO_TOOLS else None)
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None

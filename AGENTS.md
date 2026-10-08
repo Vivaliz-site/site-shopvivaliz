@@ -1,3 +1,7 @@
+
+<!-- BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+> 🔐 **SESSÕES CHATGPT FIXAS:** leia `docs/knowledge/browser-sessions.md`. Na VM backend, `shopvivaliz-dev-chromium`/CDP 9559 pertence a `dev@shopvivaliz.com.br` e `shopvivaliz-atendimento-chromium`/CDP 9556 pertence a `atendimento@shopvivaliz.com.br`; o antigo perfil Fred/CDP 9555 é somente compatibilidade temporária para checkpoints pré-migração. **Nunca faça logout para alternar contas, nunca autentique uma conta no perfil da outra e nunca misture cookies/storage.** Se uma sessão falhar, repare o perfil correspondente e preserve o login da outra.
+<!-- /BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 > **AUDITORIA EXTERNA TAMBÉM É CORRETIVA:** auditoria interna, externa, independente, contraditória ou feita por outro agente/revisor segue o mesmo ciclo. Auditor externo com autorização deve corrigir, testar e reauditar. Se for read-only, o relatório não encerra: os achados corrigíveis seguem para executor autorizado e permanecem em andamento até correção + revalidação independente ou bloqueio externo comprovado.
 <!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->

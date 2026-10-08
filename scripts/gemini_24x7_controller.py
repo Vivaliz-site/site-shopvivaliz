@@ -27,11 +27,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
+    from . import agent_task_state as task_state
     from .agent_task_state import RUNTIME_DIR
     from . import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
     from . import task_continuation_watchdog as watchdog
     from . import task_resume_dispatcher as dispatcher
 except ImportError:  # direct execution from a release checkout
+    from scripts import agent_task_state as task_state
     from scripts.agent_task_state import RUNTIME_DIR
     from scripts import chatgpt_continuity_nudge_dispatcher as nudge_dispatcher
     from scripts import task_continuation_watchdog as watchdog
@@ -43,11 +45,14 @@ LOCK_FILE = "_gemini-24x7-controller.lock"
 DAEMON_LOCK_FILE = "_gemini-24x7-controller-daemon.lock"
 EVENTS_FILE = "_gemini-24x7-controller-events.jsonl"
 STATE_FILE = "_gemini-24x7-controller-state.json"
-DEFAULT_LEASE_SECONDS = 960
+DEFAULT_LEASE_SECONDS = 120
 DEFAULT_INTERVAL_SECONDS = 30
 CHATGPT_MONITOR_STATE_FILE = "_chatgpt-continuity-monitor-state.json"
+CHATGPT_MONITOR_FALLBACK_FILE = Path(os.environ.get("CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE", "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/_chatgpt-continuity-monitor-state.json"))
 CHATGPT_BROWSER_HEALTH_STATE_FILE = "_chatgpt-browser-health.json"
 DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS = 90
+DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS = 180
+CLAUDE_REMOTE_CONTROL_POINTER_FILE = "/home/ubuntu/.claude/projects/-home-ubuntu-shopvivaliz-claude-workspace-site-shopvivaliz/bridge-pointer.json"
 
 
 def utc_now() -> str:
@@ -148,15 +153,188 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _completion_sweep(
+    root: Path,
+    *,
+    durable_handoff_enabled: bool = False,
+) -> dict[str, Any]:
+    """Inspect every recent active checkpoint and close verified READY work.
+
+    RUNNING checkpoints are queued by the proactive watchdog. READY_TO_COMPLETE
+    checkpoints are terminalized deterministically, but never by racing the
+    interactive foreground: bound conversations first acquire the same fenced
+    recovery ownership used by detached executors.
+    """
+    runtime = Path(root)
+    current = datetime.now(timezone.utc)
+    lookback_days = max(1, int(getattr(watchdog, "DEFAULT_LOOKBACK_DAYS", 10)))
+    lookback_cutoff = current - timedelta(days=lookback_days)
+    summary = {
+        "scanned": 0,
+        "active": 0,
+        "bound_conversations": 0,
+        "unbound_active": 0,
+        "ready": 0,
+        "completed": 0,
+        "requeued": 0,
+        "failed": 0,
+        "deferred_foreground": 0,
+        "deferred_ownership_busy": 0,
+        "deferred_unbound_session": 0,
+        "skipped_invalid_timestamp": 0,
+        "skipped_outside_lookback": 0,
+    }
+
+    previous_runtime = task_state.RUNTIME_DIR
+    task_state.RUNTIME_DIR = runtime
+    try:
+        for path in sorted(runtime.glob("*.json")):
+            if not path.is_file() or path.name.startswith("_"):
+                continue
+            payload = _read_json(path)
+            if not payload:
+                continue
+            created = _parse_utc(payload.get("created_at"))
+            if created is None:
+                summary["skipped_invalid_timestamp"] += 1
+                continue
+            if created < lookback_cutoff:
+                summary["skipped_outside_lookback"] += 1
+                continue
+
+            summary["scanned"] += 1
+            status = str(payload.get("status", "")).strip()
+            if status not in {"RUNNING", "READY_TO_COMPLETE"}:
+                continue
+
+            summary["active"] += 1
+            conversation_id = str(payload.get("conversation_id", "")).strip()
+            if conversation_id:
+                summary["bound_conversations"] += 1
+            else:
+                summary["unbound_active"] += 1
+
+            if status != "READY_TO_COMPLETE":
+                continue
+
+            summary["ready"] += 1
+            task_id = str(payload.get("task_id", "")).strip()
+            if not task_id:
+                summary["failed"] += 1
+                continue
+
+            recovery_owner = ""
+            if durable_handoff_enabled and conversation_id:
+                browser_session = str(payload.get("browser_session", "")).strip()
+                if browser_session not in {"dev", "atendimento", "fred"}:
+                    # Never bypass the single-writer contract merely to move a
+                    # checkpoint from READY to terminal.
+                    summary["deferred_unbound_session"] += 1
+                    continue
+                recovery_owner = f"controller-terminalize:{task_id}"
+                try:
+                    claimed = task_state.claim_recovery_ownership(
+                        task_id,
+                        owner_id=recovery_owner,
+                        allowed_actions=["checkpoint_mutation"],
+                        ttl_seconds=60,
+                    )
+                except task_state.TaskStateError as exc:
+                    message = str(exc).strip().lower()
+                    if (
+                        "ownership is busy" in message
+                        or "lease already held" in message
+                        or "runtime lock already held" in message
+                    ):
+                        summary["deferred_ownership_busy"] += 1
+                    else:
+                        summary["failed"] += 1
+                    continue
+                if str(claimed.get("recovery_state", "")).strip() == "FOREGROUND_ACTIVE":
+                    summary["deferred_foreground"] += 1
+                    recovery_owner = ""
+                    continue
+
+            try:
+                completed = task_state.complete_task(task_id)
+            except task_state.TaskStateError:
+                try:
+                    current_state = task_state.load_task(task_id)
+                except task_state.TaskStateError:
+                    current_state = {}
+                if str(current_state.get("status", "")).strip() == "RUNNING":
+                    summary["requeued"] += 1
+                else:
+                    summary["failed"] += 1
+                continue
+            finally:
+                if recovery_owner:
+                    try:
+                        task_state.release_recovery_ownership(
+                            task_id,
+                            owner_id=recovery_owner,
+                            reason="controller_terminalization_finished",
+                        )
+                    except task_state.TaskStateError:
+                        # The terminal transition is already durable. A stale
+                        # release is forensic noise, not permission to undo it.
+                        pass
+
+            if str(completed.get("status", "")).strip() == "CONCLUIDO":
+                summary["completed"] += 1
+            else:
+                summary["failed"] += 1
+    finally:
+        task_state.RUNTIME_DIR = previous_runtime
+
+    return summary
+
 def _chatgpt_monitor_health(root: Path) -> dict[str, Any]:
-    state = _read_json(root / CHATGPT_MONITOR_STATE_FILE)
-    if not state:
-        return {"degraded": False, "action": "", "updated_at": ""}
+    runtime_root = Path(root).resolve()
+    primary = _read_json(runtime_root / CHATGPT_MONITOR_STATE_FILE)
+    fallback_path = Path(CHATGPT_MONITOR_FALLBACK_FILE).resolve()
+    canonical_runtime = Path(RUNTIME_DIR).resolve()
+    # The installed worker fallback belongs to the canonical production runtime.
+    # Never let it leak into an isolated/test runtime unless that runtime
+    # explicitly points the fallback inside its own directory.
+    fallback_allowed = runtime_root == canonical_runtime or fallback_path.parent == runtime_root
+    fallback = _read_json(fallback_path) if fallback_allowed else {}
+    primary_updated = _parse_utc(primary.get("updated_at"))
+    fallback_updated = _parse_utc(fallback.get("updated_at"))
+    state = primary
+    source = "primary"
+    if fallback_updated is not None and (primary_updated is None or fallback_updated > primary_updated):
+        state = fallback
+        source = "fallback"
+    updated_at = str(state.get("updated_at", "")).strip()
+    updated = _parse_utc(updated_at)
+    try:
+        max_age_seconds = max(
+            60,
+            int(os.environ.get(
+                "CHATGPT_CONTINUITY_MONITOR_HEALTH_MAX_AGE_SECONDS",
+                DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS,
+            )),
+        )
+    except (TypeError, ValueError):
+        max_age_seconds = DEFAULT_MONITOR_HEALTH_MAX_AGE_SECONDS
+
+    age_seconds: int | None = None
+    fresh = False
+    if updated is not None:
+        age_seconds = int(max(0, (datetime.now(timezone.utc) - updated).total_seconds()))
+        fresh = age_seconds <= max_age_seconds
+
     return {
         "degraded": state.get("degraded") is True,
         "action": str(state.get("action", "")).strip(),
-        "updated_at": str(state.get("updated_at", "")).strip(),
+        "last_cycle_action": str(state.get("last_cycle_action", "")).strip(),
+        "updated_at": updated_at,
         "failure_reason": str(state.get("failure_reason", "")).strip(),
+        "fresh": fresh,
+        "age_seconds": age_seconds,
+        "max_age_seconds": max_age_seconds,
+        "source": source,
     }
 
 
@@ -166,12 +344,23 @@ def _chatgpt_browser_health(root: Path) -> dict[str, Any]:
     updated_at = str(state.get("updated_at", "")).strip()
     updated = _parse_utc(updated_at)
     try:
-        max_age_seconds = max(
-            30,
-            int(os.environ.get("CHATGPT_BROWSER_HEALTH_MAX_AGE_SECONDS", DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS)),
+        configured_max_age = int(
+            os.environ.get("CHATGPT_BROWSER_HEALTH_MAX_AGE_SECONDS", DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS)
         )
     except (TypeError, ValueError):
-        max_age_seconds = DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS
+        configured_max_age = DEFAULT_BROWSER_HEALTH_MAX_AGE_SECONDS
+    try:
+        probe_interval_seconds = max(0, int(state.get("probe_interval_seconds") or 0))
+    except (TypeError, ValueError):
+        probe_interval_seconds = 0
+    # A health sample must remain fresh for at least one full probe interval.
+    # Otherwise a healthy authenticated browser oscillates to AUTH_UNKNOWN
+    # between probes (production probes currently run every 300 seconds).
+    max_age_seconds = max(
+        30,
+        configured_max_age,
+        probe_interval_seconds + 60 if probe_interval_seconds else 0,
+    )
     age_seconds: int | None = None
     fresh = False
     if updated is not None:
@@ -189,6 +378,42 @@ def _chatgpt_browser_health(root: Path) -> dict[str, Any]:
         "updated_at": updated_at,
         "age_seconds": age_seconds,
         "max_age_seconds": max_age_seconds,
+    }
+
+
+def _claude_remote_control_health() -> dict[str, Any]:
+    pointer_path = Path(
+        os.environ.get("CLAUDE_REMOTE_CONTROL_POINTER_FILE", CLAUDE_REMOTE_CONTROL_POINTER_FILE)
+    ).expanduser()
+    state = _read_json(pointer_path)
+    try:
+        pid = int(state.get("pid"))
+    except (TypeError, ValueError):
+        pid = 0
+    expected_start = str(state.get("procStart", "")).strip()
+    actual_start = _process_start_ticks(pid) if pid > 0 else ""
+    source = str(state.get("source", "")).strip()
+    pointer_present = bool(state)
+    process_alive = bool(actual_start)
+    identity_match = bool(expected_start and actual_start and expected_start == actual_start)
+    session_present = bool(str(state.get("sessionId", "")).strip())
+    environment_present = bool(str(state.get("environmentId", "")).strip())
+    connected = bool(
+        pointer_present
+        and process_alive
+        and identity_match
+        and source == "standalone"
+        and session_present
+        and environment_present
+    )
+    return {
+        "connected": connected,
+        "pointer_present": pointer_present,
+        "process_alive": process_alive,
+        "identity_match": identity_match,
+        "source": source,
+        "session_present": session_present,
+        "environment_present": environment_present,
     }
 
 
@@ -313,6 +538,10 @@ def _has_material_activity(
     dispatched = (
         "eligible",
         "executed",
+        "launched",
+        "in_flight",
+        "reconciled",
+        "recovered",
         "progressed",
         "terminal",
         "no_progress",
@@ -334,32 +563,52 @@ def run_once(
     root = Path(runtime_dir or RUNTIME_DIR)
     root.mkdir(parents=True, exist_ok=True)
     owner = owner_id or f"gemini-24x7-{uuid.uuid4()}"
-    lease = acquire_lease(root, owner_id=owner, ttl_seconds=max(DEFAULT_LEASE_SECONDS, timeout_seconds + 60))
+    lease = acquire_lease(root, owner_id=owner, ttl_seconds=DEFAULT_LEASE_SECONDS)
     if not lease.acquired:
         _append_event(root, "duplicate_suppressed", reason=lease.reason)
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
-        watch = watchdog.run_once(stale_seconds=max(1, int(stale_seconds)), runtime_dir=root)
+        durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+        completion_sweep = _completion_sweep(
+            root,
+            durable_handoff_enabled=durable_handoff_enabled,
+        )
+        watch = watchdog.run_once(
+            stale_seconds=max(1, int(stale_seconds)),
+            runtime_dir=root,
+            proactive=durable_handoff_enabled,
+        )
         nudge = nudge_dispatcher.run_once(runtime_dir=root)
-        # The canonical dispatcher itself retains ChatGPT's first recovery
-        # window and owns the Gemini-only execution boundary.
+        # The dispatcher only enqueues/reconciles durable work. Provider execution
+        # runs in the independent resume worker and must never block this cycle.
         resumed = dispatcher.run_once(runtime_dir=root, timeout_seconds=max(1, int(timeout_seconds)))
         no_progress = int(resumed.get("no_progress") or 0)
         failed = int(resumed.get("failed") or 0)
         monitor = _chatgpt_monitor_health(root)
+        monitor_required = os.environ.get("CHATGPT_CONTINUITY_MONITOR_REQUIRED", "1").strip().lower() not in {"0", "false", "no", "off"}
+        monitor["required"] = monitor_required
         browser_health = _chatgpt_browser_health(root)
+        claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
         if failed > 0:
             degraded_reasons.append("dispatcher_failed")
+        if int(completion_sweep.get("failed") or 0) > 0:
+            degraded_reasons.append("completion_sweep_failed")
+        if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
+            degraded_reasons.append("completion_sweep_unbound_session")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
         if int(nudge.get("skipped_no_token") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_send_budget_exhausted")
-        if monitor.get("degraded") is True:
+        if int(nudge.get("skipped_session_unavailable") or 0) > 0:
+            degraded_reasons.append("chatgpt_bound_session_unavailable")
+        if monitor_required and monitor.get("fresh") is not True:
+            degraded_reasons.append("chatgpt_browser_monitor_stale")
+        if monitor_required and monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
         if browser_health.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_auth_unknown")
@@ -370,6 +619,14 @@ def run_once(
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
             else:
                 degraded_reasons.append("chatgpt_browser_auth_unknown")
+        if claude_health.get("pointer_present") is not True:
+            degraded_reasons.append("claude_remote_control_pointer_missing")
+        elif claude_health.get("process_alive") is not True:
+            degraded_reasons.append("claude_remote_control_process_missing")
+        elif claude_health.get("identity_match") is not True:
+            degraded_reasons.append("claude_remote_control_pointer_stale")
+        elif claude_health.get("connected") is not True:
+            degraded_reasons.append("claude_remote_control_not_connected")
         continuity_ready = not degraded_reasons
         summary = {
             # "ok" is intentionally readiness, not mere process liveness.  A
@@ -382,20 +639,28 @@ def run_once(
             "degraded_reasons": degraded_reasons,
             "owner_id": owner,
             "lease_recovered": lease.recovered,
-            "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit")},
-            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "durable_handoff_enabled": durable_handoff_enabled,
+            "single_writer_enforced": durable_handoff_enabled,
+            "completion_sweep": completion_sweep,
+            "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
+            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,
+            "claude_remote_control": claude_health,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
-        if _has_material_activity(lease, watch, nudge, resumed):
+        if _has_material_activity(lease, watch, nudge, resumed) or any(
+            int(completion_sweep.get(key) or 0) > 0
+            for key in ("completed", "requeued", "failed")
+        ):
             _append_event(
                 root,
                 "cycle_completed",
                 owner_id=owner,
                 lease_recovered=lease.recovered,
+                completion_sweep=summary["completion_sweep"],
                 watchdog=summary["watchdog"],
                 chatgpt_nudge=summary["chatgpt_nudge"],
                 dispatcher=summary["dispatcher"],

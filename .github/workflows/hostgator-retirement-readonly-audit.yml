@@ -1,0 +1,162 @@
+name: HostGator Retirement Read-Only Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FTP_SERVER_VALUE: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME_VALUE: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD_VALUE: ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT_VALUE: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR_VALUE: ${{ secrets.FTP_REMOTE_DIR }}
+    steps:
+      - name: Audit Cloudflare cdn3 origin and recent traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
+            exit 1
+          fi
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=shopvivaliz.com.br")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          test -n "$zone_id" || { echo 'ZONE_NOT_FOUND'; exit 2; }
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?name=cdn3.shopvivaliz.com.br")
+          jq -r '.result[]? | "CDN3_DNS type=\(.type) content=\(.content) proxied=\(.proxied)"' <<<"$dns"
+
+          start=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          end=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          query='query Cdn3Traffic($zoneTag: string!, $start: Time!, $end: Time!) { viewer { zones(filter: { zoneTag: $zoneTag }) { httpRequestsAdaptiveGroups(limit: 100, filter: { datetime_geq: $start, datetime_leq: $end, clientRequestHTTPHost: "cdn3.shopvivaliz.com.br" }, orderBy: [count_DESC]) { count dimensions { clientRequestPath edgeResponseStatus } } } } }'
+          vars=$(jq -nc --arg zoneTag "$zone_id" --arg start "$start" --arg end "$end" '{zoneTag:$zoneTag,start:$start,end:$end}')
+          body=$(jq -nc --arg query "$query" --argjson variables "$vars" '{query:$query,variables:$variables}')
+          analytics=$(curl -sS -X POST "${auth[@]}" --data "$body" "$api/graphql")
+          if [ "$(jq -r 'has("errors") and (.errors|length>0)' <<<"$analytics")" = true ]; then
+            echo 'CDN3_ANALYTICS_QUERY_UNAVAILABLE'
+            jq -c '.errors | map({message})' <<<"$analytics"
+          else
+            echo 'CDN3_TRAFFIC_BEGIN'
+            jq -r '[.data.viewer.zones[0].httpRequestsAdaptiveGroups[]?.count] | add // 0 | "CDN3_REQUESTS_24H=\(.)"' <<<"$analytics"
+            jq -r '.data.viewer.zones[0].httpRequestsAdaptiveGroups[]? | [.count,.dimensions.edgeResponseStatus,.dimensions.clientRequestPath] | @tsv' <<<"$analytics" | head -n 100
+            echo 'CDN3_TRAFFIC_END'
+          fi
+
+      - name: Inventory HostGator account through FTPS without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import ftplib
+          import os
+          import posixpath
+          import sys
+          from collections import Counter
+
+          host=(os.environ.get("FTP_SERVER_VALUE") or "").strip()
+          user=(os.environ.get("FTP_USERNAME_VALUE") or "").strip()
+          password=(os.environ.get("FTP_PASSWORD_VALUE") or "").strip()
+          port=int((os.environ.get("FTP_PORT_VALUE") or "21").strip() or "21")
+          configured=(os.environ.get("FTP_REMOTE_DIR_VALUE") or "").strip()
+          if not host or not user or not password:
+              print("FTP_CREDENTIALS_MISSING")
+              raise SystemExit(2)
+          host=host.replace("ftps://","").replace("ftp://","").split("/",1)[0].split(":",1)[0]
+
+          ftp=ftplib.FTP_TLS(timeout=20)
+          try:
+              ftp.connect(host,port)
+              ftp.login(user,password)
+              ftp.prot_p()
+          except Exception as exc:
+              print("FTPS_CONNECT_FAILED="+exc.__class__.__name__)
+              raise SystemExit(3)
+
+          def names(path):
+              try:
+                  rows=list(ftp.mlsd(path))
+                  return [(name,facts) for name,facts in rows if name not in (".","..")]
+              except Exception:
+                  old=ftp.pwd()
+                  try:
+                      ftp.cwd(path)
+                      vals=ftp.nlst()
+                      return [(posixpath.basename(v.rstrip("/")),{}) for v in vals]
+                  finally:
+                      try: ftp.cwd(old)
+                      except Exception: pass
+
+          print("FTP_ROOT_ENTRIES_BEGIN")
+          try:
+              for name,_ in names("/"):
+                  print(name)
+          except Exception as exc:
+              print("FTP_ROOT_LIST_FAILED="+exc.__class__.__name__)
+          print("FTP_ROOT_ENTRIES_END")
+
+          candidates=[]
+          for raw in (configured,"/public_html_cdn3","public_html_cdn3","/cdn3","cdn3"):
+              if raw and raw not in candidates:
+                  candidates.append(raw)
+
+          chosen=None
+          for candidate in candidates:
+              try:
+                  old=ftp.pwd()
+                  ftp.cwd(candidate)
+                  chosen=ftp.pwd()
+                  ftp.cwd(old)
+                  break
+              except Exception:
+                  continue
+
+          if not chosen:
+              print("CDN3_REMOTE_DIR_NOT_FOUND")
+              ftp.quit()
+              raise SystemExit(0)
+
+          print("CDN3_REMOTE_DIR_FOUND="+chosen)
+          stack=[chosen]
+          files=0
+          dirs=0
+          total_bytes=0
+          extensions=Counter()
+          samples=[]
+          while stack and files+dirs < 50000:
+              current=stack.pop()
+              try:
+                  rows=names(current)
+              except Exception:
+                  continue
+              for name,facts in rows:
+                  path=posixpath.join(current,name)
+                  typ=facts.get("type","")
+                  if typ=="dir":
+                      dirs+=1
+                      stack.append(path)
+                      continue
+                  if typ=="file" or typ=="":
+                      files+=1
+                      try: total_bytes+=int(facts.get("size") or 0)
+                      except Exception: pass
+                      ext=posixpath.splitext(name)[1].lower() or "<none>"
+                      extensions[ext]+=1
+                      if len(samples)<100: samples.append(path)
+          print("CDN3_FILE_COUNT="+str(files))
+          print("CDN3_DIR_COUNT="+str(dirs))
+          print("CDN3_TOTAL_BYTES="+str(total_bytes))
+          print("CDN3_EXTENSIONS="+",".join(f"{k}:{v}" for k,v in extensions.most_common(30)))
+          print("CDN3_SAMPLE_PATHS_BEGIN")
+          for path in samples: print(path)
+          print("CDN3_SAMPLE_PATHS_END")
+          ftp.quit()
+          PY
