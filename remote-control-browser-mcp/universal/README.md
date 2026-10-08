@@ -18,7 +18,7 @@ This adapter provides 14 tools for public-site browser interaction through a sep
 
 - `tabs_*` are **live Playwright pages** during the worker lifetime: switching does not reload or lose unsaved form data. After service/worker restart the bookmark URL is restored lazily, but unsaved JavaScript/UI state cannot be recovered.
 - `upload` only reads a named file in `upload-staging/`; `download` saves into `downloads/`, both below the isolated runtime folder. No arbitrary path arguments.
-- Private/loopback addresses are rejected when resolving URLs and HTTP(S) resource requests. Additional DNS rebinding, proxy, IPv6 and cross-origin security testing is required before treating this as a complete SSRF defense.
+- Private/loopback addresses and IANA documentation/legacy special-use IPv4 ranges are rejected when resolving URLs and HTTP(S) resource requests. Additional DNS rebinding, proxy, IPv6 and cross-origin security testing is required before treating this as a complete SSRF defense.
 - Browser clicks and form submits can cause real-world effects on third-party sites. Require explicit task-specific authorization for consequential financial or irreversible actions.
 - No CAPTCHA bypass or credential extraction. Do not log passwords, text entered into forms, cookies or authentication headers.
 - Chromium retains **persistent cookies with expiry** in the dedicated profile across a clean worker restart; **session cookies without Expires/Max-Age may be removed** when Chromium fully exits. Never export, copy, or log cookies as a workaround.
