@@ -8,7 +8,7 @@ import { createCopyModule } from '../copy-module.mjs';
 const UID = '822315791411831486';
 const SLIME_CODE='6A48C398F18CB31C';
 function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped=false, renamedOld=false, publicTarget=false, volatileEq=false}={}) {
-  const calls=[];let balanceReads=0;
+  const calls=[];let balanceReads=0;let transferSeq=0;
   const old1Code=SLIME_CODE;
   const old1Name='史莱姆冲冲冲!';
   let traders=(stopped?[]:[{uniqueCode:old1Code,nickName:old1Name}]).concat([
@@ -37,6 +37,7 @@ function fakeApi({uid=UID, restUid=uid, uncertain=false, balance='12.5', stopped
       positions=positions.filter(x=>x.uniqueCode!==body.uniqueCode);
     }
     if(path==='/api/v5/copytrading/first-copy-settings')traders.push({uniqueCode:body.uniqueCode,nickName:'Xiaoyao Lee'});
+    if(path==='/api/v5/asset/transfer')return [{transId:'T'+(++transferSeq)}];
     return [{result:true}];
   }};
 }
@@ -54,10 +55,13 @@ test('wrong UID is fail-closed before balance query',async()=>{
   await assert.rejects(()=>mod.call('okx.copy.balance.available',{}),/UID_MISMATCH/);
   assert.equal(api.calls.filter(c=>c.path.includes('balance')).length,0);
 });
-test('previews show positions, balance and never POST',async()=>{
+test('supported write previews never depend on delisted copy-position endpoints',async()=>{
   const {mod,api}=await harness();
   const out=await mod.call('okx.copy.stop',{phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,confirmSmartSync:true}, {requestId:'p1'});
-  assert.equal(out.code,'APPROVAL_REQUIRED');assert.ok(out.plan_id);assert.equal(out.open_positions.length,1);
+  assert.equal(out.code,'APPROVAL_REQUIRED');assert.ok(out.plan_id);
+  assert.equal(out.open_positions,'UNAVAILABLE_BY_OKX_API');
+  const delisted=new Set(['/api/v5/copytrading/current-subpositions','/api/v5/copytrading/subpositions-history','/api/v5/copytrading/close-subposition']);
+  assert.equal(api.calls.filter(c=>delisted.has(c.path)).length,0);
   assert.equal(api.calls.filter(c=>c.method==='POST').length,0);
 });
 test('writes remain disabled without gate even with a plan',async()=>{
@@ -150,11 +154,12 @@ test('transaction verify reconciles an unknown stop from read-only absence and n
  }),{mode:0o600});
  const out=await mod.call('okx.copy.transaction.verify',{operation_id:operationId});
  assert.equal(out.status,'VERIFIED');
- assert.equal(out.verification_basis,'READ_ONLY_STOP_ABSENT');
+ assert.equal(out.verification_basis,'READ_ONLY_TRADER_ABSENT');
  assert.equal(api.calls.filter(x=>x.method==='POST').length,0);
+ assert.equal(api.calls.filter(x=>x.path==='/api/v5/copytrading/current-subpositions').length,0);
  const saved=JSON.parse(await readFile(join(stateDir,'operations',operationId+'.json'),'utf8'));
  assert.equal(saved.status,'VERIFIED');
- assert.equal(saved.verification_basis,'READ_ONLY_STOP_ABSENT');
+ assert.equal(saved.verification_basis,'READ_ONLY_TRADER_ABSENT');
  assert.ok(saved.verified_at);
 });
 
@@ -175,13 +180,21 @@ test('historical stopped-trader alias is pinned to the current exact OKX identit
  assert.equal(out.code,'APPROVAL_REQUIRED');
 });
 
-test('copy position and history reads do not send obsolete subPosType',async()=>{
+test('delisted copy-position tools fail closed to assisted execution without calling removed endpoints',async()=>{
  const {mod,api}=await harness();
- await mod.call('okx.copy.positions.list',{instType:'SWAP'});
- await mod.call('okx.copy.history',{instType:'SWAP'});
- const calls=api.calls.filter(x=>x.path==='/api/v5/copytrading/current-subpositions'||x.path==='/api/v5/copytrading/subpositions-history');
- assert.equal(calls.length,2);
- for(const c of calls)assert.equal(Object.hasOwn(c.params,'subPosType'),false);
+ for(const [tool,args] of [
+   ['okx.copy.positions.list',{instType:'SWAP'}],
+   ['okx.copy.positions.details',{instType:'SWAP',uniqueCode:SLIME_CODE,subPosId:'P1'}],
+   ['okx.copy.history',{instType:'SWAP'}],
+   ['okx.copy.profit_loss',{instType:'SWAP'}],
+   ['okx.copy.positions.close',{phase:'preview',instType:'SWAP',trader:'slime198888',uniqueCode:SLIME_CODE,subPosId:'P1'}]
+ ]){
+   const out=await mod.call(tool,args);
+   assert.equal(out.code,'UNSUPPORTED_BY_OKX',tool);
+   assert.equal(out.assisted_execution?.mode,'AUTHENTICATED_OKX_UI',tool);
+ }
+ const delisted=new Set(['/api/v5/copytrading/current-subpositions','/api/v5/copytrading/subpositions-history','/api/v5/copytrading/close-subposition']);
+ assert.equal(api.calls.filter(c=>delisted.has(c.path)).length,0);
 });
 
 test('new trader identity is verified from wrapped public ranks even when other traders are active',async()=>{
@@ -204,4 +217,27 @@ test('preflight ignores volatile equity fields but still executes only once with
  const out=await mod.call('okx.copy.stop',{...common,phase:'execute',plan_id:plan.plan_id,approval_id:'VOL1'},{requestId:'volatile-execute'});
  assert.equal(out.code,'VERIFIED');
  assert.equal(api.calls.filter(x=>x.method==='POST').length,1);
+});
+
+
+test('identical independently approved operations get distinct idempotency scopes',async()=>{
+ const {mod,api,stateDir}=await harness({writeEnabled:true,balance:'100'});
+ const common={instType:'SWAP',from:'18',to:'6',amount:'1'};
+ async function executeOnce(label){
+   const plan=await mod.call('okx.copy.funds.internal_transfer',{...common,phase:'preview'},{requestId:'preview-'+label});
+   await mkdir(join(stateDir,'grants'),{recursive:true});
+   const approval='APP-'+label;
+   await writeFile(join(stateDir,'grants',approval+'.json'),JSON.stringify({
+     plan_id:plan.plan_id,tool:'okx.copy.funds.internal_transfer',uid:UID,expires_at:Date.now()+60000
+   }),{mode:0o600});
+   return mod.call('okx.copy.funds.internal_transfer',{
+     ...common,phase:'execute',plan_id:plan.plan_id,approval_id:approval
+   },{requestId:'execute-'+label});
+ }
+ const first=await executeOnce('ONE');
+ const second=await executeOnce('TWO');
+ assert.equal(first.code,'VERIFIED');
+ assert.equal(second.code,'VERIFIED');
+ assert.notEqual(first.operation_id,second.operation_id);
+ assert.equal(api.calls.filter(x=>x.method==='POST'&&x.path==='/api/v5/asset/transfer').length,2);
 });

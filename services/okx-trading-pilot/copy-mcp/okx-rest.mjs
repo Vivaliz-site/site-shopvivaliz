@@ -5,8 +5,8 @@ import { homedir } from 'node:os';
 import { parse as parseToml } from 'smol-toml';
 
 const ALLOWED_BASE_URLS=new Set(['https://www.okx.com','https://openapi.okx.com','https://us.okx.com','https://eea.okx.com']);
-const READ_PATHS=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/copytrading/current-lead-traders','/api/v5/copytrading/current-subpositions','/api/v5/copytrading/subpositions-history','/api/v5/copytrading/copy-settings','/api/v5/copytrading/public-stats','/api/v5/copytrading/public-lead-traders','/api/v5/copytrading/config','/api/v5/asset/transfer-state']);
-const WRITE_PATHS=new Set(['/api/v5/copytrading/stop-copy-trading','/api/v5/copytrading/close-subposition','/api/v5/copytrading/first-copy-settings','/api/v5/copytrading/amend-copy-settings','/api/v5/asset/transfer']);
+const READ_PATHS=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/copytrading/current-lead-traders','/api/v5/copytrading/copy-settings','/api/v5/copytrading/public-stats','/api/v5/copytrading/public-lead-traders','/api/v5/copytrading/config','/api/v5/asset/transfer-state']);
+const WRITE_PATHS=new Set(['/api/v5/copytrading/stop-copy-trading','/api/v5/copytrading/first-copy-settings','/api/v5/copytrading/amend-copy-settings','/api/v5/asset/transfer']);
 export class OkxApiError extends Error{
   constructor(code,providerCode=''){super(code);this.name='OkxApiError';this.code=code;this.providerCode=providerCode}
 }

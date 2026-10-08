@@ -49,3 +49,16 @@ test('credential provider fails closed on a partially configured environment',as
  const provider=environmentCredentialProvider({OKX_COPY_API_KEY:'only-key'},{configPath:'/does/not/matter'});
  await assert.rejects(()=>provider(),/INCOMPLETE_OKX_CREDENTIAL_ENV/);
 });
+
+
+test('REST allowlist rejects delisted copy-position endpoints before network access',async()=>{
+ const fetchImpl=async()=>{throw new Error('NETWORK_SHOULD_NOT_BE_CALLED')};
+ const client=createOkxRestClient({credentials:async()=>({key:'k',secret:'s',passphrase:'p'}),fetchImpl});
+ for(const [method,path] of [
+   ['get','/api/v5/copytrading/current-subpositions'],
+   ['get','/api/v5/copytrading/subpositions-history'],
+   ['post','/api/v5/copytrading/close-subposition']
+ ]){
+   await assert.rejects(()=>client[method](path,{}),/NON_ALLOWLISTED_PATH/);
+ }
+});
