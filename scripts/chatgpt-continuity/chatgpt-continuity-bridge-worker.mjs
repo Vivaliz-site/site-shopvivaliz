@@ -156,7 +156,11 @@ const RECENT_CONVERSATION_MAX_AGE_MS = Math.max(
 );
 const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
-  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 2 * 60 * 60_000),
+  Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
+);
+const REINFORCEMENT_RECENT_MAX_AGE_MS = Math.max(
+  RECENT_CONVERSATION_MAX_AGE_MS,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECENT_MAX_AGE_MS || 2 * 60 * 60_000),
 );
 const CHECKPOINT_TARGET_MAX_DELTA_MS = Math.max(
   60_000,
@@ -2255,7 +2259,7 @@ async function alignLatestForReinforcement(
   cdp,
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
-  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  maxAgeMs = REINFORCEMENT_RECENT_MAX_AGE_MS,
 ) {
   const probe = await probeLatest(cdp);
   const rawStatus = Number(probe?.http_status || 0);
@@ -2268,7 +2272,7 @@ async function alignLatestForReinforcement(
       REINFORCEMENT_RECENT_CANDIDATES,
       discoveredCandidates,
       nowMs,
-      CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+      REINFORCEMENT_RECENT_MAX_AGE_MS,
     );
     REINFORCEMENT_LATEST_ID = discoveredCandidates[0].id;
   }
