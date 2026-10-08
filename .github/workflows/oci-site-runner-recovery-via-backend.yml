@@ -1,0 +1,188 @@
+name: OCI Site Runner Recovery Via Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/oci-site-runner-recovery-via-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: oci-site-runner-recovery-via-backend
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 18
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      SITE_PRIVATE_HOST: 10.0.1.112
+
+    steps:
+      - name: Record GitHub OIDC execution attestation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          response="$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=shopvivaliz-runner-recovery")"
+          token="$(jq -r '.value // empty' <<<"$response")"
+          test -n "$token"
+          digest="$(printf '%s' "$token" | sha256sum | awk '{print $1}')"
+          unset token response
+          echo "EXECUTION_ID=gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+          echo "EXECUTION_ORIGIN_REF=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "EXECUTION_SIGNATURE_ID=github-oidc:$GITHUB_RUN_ID:${digest:0:16}"
+          echo "EXECUTION_ATTESTATION_SHA256=$digest"
+
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI recovery secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Resolve exact backend and verify Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1 || { echo "::error::Expected one backend instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Backend is not RUNNING"; exit 3; }
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING || { echo "::error::Backend Run Command plugin is not RUNNING"; exit 4; }
+          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo "BACKEND_IDENTITY=PASS"
+          echo "BACKEND_RUN_COMMAND=RUNNING"
+
+      - name: Recover site runner through private backend peer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          site_script="$RUNNER_TEMP/site-runner-recover.sh"
+          cat > "$site_script" <<'SITE'
+          set -Eeuo pipefail
+          test "$(hostname)" = shopvivaliz-free-a1
+          service='shopvivaliz-actions-runner.service'
+          worker_pattern='^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner\.Worker( |$)'
+          worker_count="$(ps -eo args= | awk -v pattern="$worker_pattern" '$0 ~ pattern { count++ } END { print count + 0 }')"
+          printf 'RUNNER_WORKER_COUNT=%s\n' "$worker_count"
+          if [ "$worker_count" -ne 0 ]; then
+            echo 'RUNNER_RESCUE=refused_worker_active'
+            exit 23
+          fi
+
+          uid="$(id -u)"
+          export XDG_RUNTIME_DIR="/run/user/$uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          test -S "$XDG_RUNTIME_DIR/bus"
+          systemctl --user is-enabled --quiet "$service"
+          systemctl --user restart "$service"
+
+          active=false
+          for _ in $(seq 1 15); do
+            if systemctl --user is-active --quiet "$service"; then
+              active=true
+              break
+            fi
+            sleep 2
+          done
+          test "$active" = true
+          mainpid="$(systemctl --user show -p MainPID --value "$service")"
+          [[ "$mainpid" =~ ^[0-9]+$ ]]
+          test "$mainpid" -gt 1
+          listener_count="$(pgrep -fc '^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner\.Listener( |$)' || true)"
+          test "$listener_count" -ge 1
+          echo 'RUNNER_RESCUE=listener_restarted'
+          echo 'RUNNER_SERVICE_ACTIVE=true'
+          echo "RUNNER_MAINPID=$mainpid"
+          SITE
+
+          site_b64="$(base64 -w0 "$site_script")"
+          backend_script="$RUNNER_TEMP/backend-site-runner-recover.sh"
+          cat > "$backend_script" <<BACKEND
+          set -Eeuo pipefail
+          test "\$(hostname)" = always-free-arm-1787907847-26
+          peer_key=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+          test -s "\$peer_key"
+          tmp=\$(mktemp)
+          trap 'rm -f "\$tmp"' EXIT
+          printf '%s' '$site_b64' | base64 -d > "\$tmp"
+          chmod 600 "\$tmp"
+          ssh -i "\$peer_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            ubuntu@$SITE_PRIVATE_HOST 'bash -s' < "\$tmp"
+          BACKEND
+
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          command_content="$RUNNER_TEMP/backend-command-content.json"
+          command_target="$RUNNER_TEMP/backend-command-target.json"
+          jq -n --rawfile text "$backend_script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$command_content"
+          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$command_target"
+          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$BACKEND_COMPARTMENT_ID"             --display-name "Recover site runner through backend peer"             --content "file://$command_content"             --target "file://$command_target"             --timeout-in-seconds 180             --query 'data.id' --raw-output)"
+
+          execution=''
+          for _ in $(seq 1 48); do
+            execution="$("${OCI[@]}" instance-agent command-execution get               --command-id "$command_id"               --instance-id "$BACKEND_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+              ACCEPTED|IN_PROGRESS) sleep 5 ;;
+              *) echo "::error::Unexpected command state: $state"; exit 31 ;;
+            esac
+          done
+          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output" | grep -E '^(RUNNER_|BACKEND_)' || true
+          test "$state" = SUCCEEDED
+          test "$code" = 0
+          grep -Fq 'RUNNER_RESCUE=listener_restarted' <<<"$output"
+          grep -Fq 'RUNNER_SERVICE_ACTIVE=true' <<<"$output"
+          echo "SITE_RUNNER_PRIVATE_RECOVERY=PASS"
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -n "${OCI_KEY_FILE:-}" && test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -n "${OCI_CONFIG_FILE:-}" && test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
