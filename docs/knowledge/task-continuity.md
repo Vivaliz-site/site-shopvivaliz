@@ -14,7 +14,9 @@ certificada ou browser autenticado isoladamente nao significam retomada.
 
 Novos checkpoints interativos devem registrar imediatamente o ID da conversa
 real e a sessao correspondente (`dev`/CDP9559 ou `atendimento`/CDP9556),
-antes do handoff duravel. Checkpoints legados sem vinculacao precisam de
+antes do handoff duravel. O CLI aceita criacao atomica com
+`agent_task_state.py start --task <task-id> --goal <objetivo> --conversation-id <id-exato> --browser-session dev|atendimento`.
+Passar apenas um dos campos falha antes de criar o checkpoint. Checkpoints legados sem vinculacao precisam de
 confirmacao exata da conversa para `bind-conversation` e, depois,
 `bind-browser-session`. Nunca inferir ID por titulo, horario, aba recente ou
 transferir cookies entre perfis. O dispatcher detached aceita ambas as sessoes
