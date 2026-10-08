@@ -97,6 +97,50 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
         self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
 
+    def test_old_running_task_is_visible_as_outside_recovery_window(self) -> None:
+        controller = load_controller()
+        old = (datetime.now(timezone.utc) - timedelta(days=45)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        for task_id, status in (("very-old-open", "RUNNING"), ("very-old-done", "CONCLUIDO")):
+            (self.runtime / f"{task_id}.json").write_text(
+                json.dumps({
+                    "task_id": task_id, "created_at": old, "updated_at": old,
+                    "status": status, "next_action": "preserve original intent",
+                }),
+                encoding="utf-8",
+            )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="old-running-task")
+        self.assertEqual(result["completion_sweep"]["active_outside_lookback"], 1)
+        self.assertEqual(result["completion_sweep"]["skipped_outside_lookback"], 2)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_outside_recovery_window", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
+    def test_malformed_timestamp_on_active_task_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / "malformed-active.json").write_text(
+            json.dumps({
+                "task_id": "malformed-active", "created_at": "not-a-time",
+                "updated_at": "not-a-time", "status": "READY_TO_COMPLETE",
+                "next_action": "verify before finishing",
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="malformed-running-task")
+        self.assertEqual(result["completion_sweep"]["active_invalid_timestamp"], 1)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_invalid_timestamp", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
     def test_unbound_running_checkpoint_must_fail_readiness_closed(self) -> None:
         controller = load_controller()
         now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
