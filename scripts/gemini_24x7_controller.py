@@ -638,6 +638,8 @@ def run_once(
             degraded_reasons.append("chatgpt_browser_auth_unknown")
         elif browser_health.get("session_state") == "AUTH_FLOW":
             degraded_reasons.append("chatgpt_browser_auth_in_progress")
+        elif browser_health.get("session_state") == "IDENTITY_MISMATCH":
+            degraded_reasons.append("chatgpt_browser_identity_mismatch")
         elif browser_health.get("authenticated") is not True:
             if browser_health.get("session_state") == "LOGGED_OUT":
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
