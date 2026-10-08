@@ -26,6 +26,7 @@ import time
 from typing import Any
 import zlib
 from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 BASE_SERVER = os.environ.get(
     "SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER",
@@ -386,7 +387,7 @@ def desktop_click(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("desktop_click_outside_window")
     absolute_x = geo["X"] + x
     absolute_y = geo["Y"] + y
-    run_gui(["xdotool", "mousemove", "--sync", str(absolute_x), str(absolute_y)])
+    run_gui(["xdotool", "mousemove", str(absolute_x), str(absolute_y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": host, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -537,7 +538,7 @@ def browser_click(args: dict[str, Any]) -> dict[str, Any]:
     geo = parse_geometry(window)
     if not (geo["X"] <= x < geo["X"] + geo["WIDTH"] and geo["Y"] <= y < geo["Y"] + geo["HEIGHT"]):
         raise ValueError("browser_click_outside_active_window")
-    run_gui(["xdotool", "mousemove", "--sync", str(x), str(y)])
+    run_gui(["xdotool", "mousemove", str(x), str(y)])
     for _ in range(clicks):
         run_gui(["xdotool", "click", button])
     return {"ok": True, "host": BROWSER_HOST, "window_id": window, "x": x, "y": y, "button": button_name, "clicks": clicks}
@@ -705,7 +706,100 @@ BASE_TOOL_SPECS = base.tool_specs
 BASE_AUDIT = base.audit
 
 
+def desktop_session_attach(args: dict[str, Any]) -> dict[str, Any]:
+    """Attach to an existing authorized desktop without launching duplicates."""
+    host = str(args.get("host") or "")
+    base.validate_desktop_host(host)
+    result = desktop_open({"host": host})
+    if not result.get("ok", False):
+        return result
+    return {**result, "attached": True, "host": host}
+
+
+def browser_dom_inspect(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    """Return sanitized interactive DOM controls for one canonical tab."""
+    tab_id = str(args.get("tab_id") or "")
+    if not tab_id:
+        raise ValueError("tab_id_required")
+    return BASE_EXECUTE_TOOL("browser_controls", {"tab_id": tab_id}, cancel_check=cancel_check)
+
+
+def browser_click_index(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    """Click an inspected control index in an allowlisted canonical browser tab."""
+    tab_id = str(args.get("tab_id") or "")
+    index = args.get("index")
+    if not tab_id:
+        raise ValueError("tab_id_required")
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < 120:
+        raise ValueError("invalid_control_index")
+    base._assert_runtime_mutation("browser_click_control", args)
+    return BASE_EXECUTE_TOOL("browser_click_control", {"tab_id": tab_id, "index": index}, cancel_check=cancel_check)
+
+
+UNIVERSAL_MCP_TOOLS = {
+    "browser_universal_probe", "browser_universal_open", "browser_universal_inspect",
+    "browser_universal_click", "browser_universal_fill", "browser_universal_select",
+    "browser_universal_check", "browser_universal_press", "browser_universal_upload",
+    "browser_universal_download", "browser_universal_tabs_list",
+    "browser_universal_tabs_open", "browser_universal_tabs_switch",
+    "browser_universal_tabs_close",
+}
+
+UNIVERSAL_MCP_SCHEMAS: list[dict[str, Any]] = [
+    {"name": name,
+     "description": "Isolated Playwright browser; public websites only. " + name,
+     "inputSchema": {"type": "object", "properties": props, "required": req, "additionalProperties": False},
+     "annotations": {"readOnlyHint": name.endswith(("_list", "_inspect", "_probe")), "openWorldHint": True,
+                     "destructiveHint": not name.endswith(("_list", "_inspect", "_probe", "_open"))}}
+    for name, props, req in [
+        ("browser_universal_probe", {}, []),
+        ("browser_universal_open", {"url": {"type": "string"}}, ["url"]),
+        ("browser_universal_inspect", {"url": {"type": "string"}}, ["url"]),
+        ("browser_universal_click", {"url": {"type": "string"}, "selector": {"type": "string"}}, ["url", "selector"]),
+        ("browser_universal_fill", {"url": {"type": "string"}, "selector": {"type": "string"}, "text": {"type": "string"}}, ["url", "selector", "text"]),
+        ("browser_universal_select", {"url": {"type": "string"}, "selector": {"type": "string"}, "value": {"type": "string"}}, ["url", "selector", "value"]),
+        ("browser_universal_check", {"url": {"type": "string"}, "selector": {"type": "string"}}, ["url", "selector"]),
+        ("browser_universal_press", {"url": {"type": "string"}, "selector": {"type": "string"}, "key": {"type": "string", "enum": ["Enter", "Tab", "Escape", "ArrowUp", "ArrowDown", "Space"]}}, ["url", "selector", "key"]),
+        ("browser_universal_upload", {"url": {"type": "string"}, "selector": {"type": "string"}, "filename": {"type": "string"}}, ["url", "selector", "filename"]),
+        ("browser_universal_download", {"url": {"type": "string"}, "selector": {"type": "string"}}, ["url", "selector"]),
+        ("browser_universal_tabs_list", {}, []),
+        ("browser_universal_tabs_open", {"url": {"type": "string"}}, ["url"]),
+        ("browser_universal_tabs_switch", {"tab_id": {"type": "string"}}, ["tab_id"]),
+        ("browser_universal_tabs_close", {"tab_id": {"type": "string"}}, ["tab_id"]),
+    ]
+]
+
+
+def universal_browser_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    if name not in UNIVERSAL_MCP_TOOLS:
+        raise ValueError("unknown_universal_browser_tool")
+    request = Request(
+        "http://127.0.0.1:5595/mcp",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                         "params": {"name": name, "arguments": args}}).encode("utf-8"),
+        headers={"Authorization": "Bearer " + base.AUTH_TOKEN, "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=60) as response:
+        payload = json.load(response)
+    if payload.get("error"):
+        return {"ok": False, "error": base.redact_text(str(payload["error"].get("message", "browser_backend_error")))}
+    items = payload.get("result", {}).get("content", [])
+    if not items or items[0].get("type") != "text":
+        return {"ok": False, "error": "invalid_universal_browser_response"}
+    value = json.loads(items[0].get("text", "{}"))
+    return value if isinstance(value, dict) else {"ok": False, "error": "invalid_universal_browser_result"}
+
+
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name in UNIVERSAL_MCP_TOOLS:
+        return universal_browser_call(name, args)
+    if name == "desktop.session.attach":
+        return desktop_session_attach(args)
+    if name == "browser.dom.inspect":
+        return browser_dom_inspect(args, cancel_check=cancel_check)
+    if name == "browser.click":
+        return browser_click_index(args, cancel_check=cancel_check)
     if name in {"desktop_open", "desktop_click", "desktop_type"}:
         base._assert_runtime_mutation(name, args)
     if name == "desktop_health":
@@ -750,16 +844,34 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type"} and "text" in safe:
+    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type", "browser_universal_fill"} and "text" in safe:
         raw = str(safe.pop("text"))
         safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
-    if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
+    if (tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} or tool in UNIVERSAL_MCP_TOOLS) and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "desktop.session.attach",
+        "description": "Attach or focus an existing approved Fred-Win or KOCEPSV desktop session without creating duplicate sessions.",
+        "inputSchema": {"type": "object", "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}}, "required": ["host"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.dom.inspect",
+        "description": "Inspect sanitized visible interactive DOM controls in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}}, "required": ["tab_id"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.click",
+        "description": "Click a DOM control by index from browser.dom.inspect in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, "required": ["tab_id", "index"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
     {
         "name": "browser_health",
         "description": "Check graphical backend browser dependencies and visible browser window availability.",
@@ -839,7 +951,7 @@ def tool_specs() -> list[dict[str, Any]]:
     browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
     atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
     inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
-    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
+    return inherited + BROWSER_TOOL_SPECS + UNIVERSAL_MCP_SCHEMAS + atendimento_tool_specs()
 
 
 base.execute_tool = execute_tool
