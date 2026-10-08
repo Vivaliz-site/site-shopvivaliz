@@ -330,7 +330,7 @@ def main() -> int:
     parser.add_argument("--task-id", default="")
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--conversation-id", required=True)
-    parser.add_argument("--browser-session", choices=["fred", "atendimento"], default="atendimento")
+    parser.add_argument("--browser-session", choices=["dev", "atendimento"], default="atendimento")
     parser.add_argument(
         "--report-path",
         default="",
