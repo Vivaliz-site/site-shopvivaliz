@@ -112,8 +112,10 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             "ReadWritePaths=$install_root $config_root /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state",
             body,
         )
-        self.assertIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0", body)
-        self.assertNotIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1", body)
+        self.assertIn('stall_monitor="${CHATGPT_CONTINUITY_STALL_MONITOR:-1}"', body)
+        self.assertIn('case "$stall_monitor" in 0|1)', body)
+        self.assertIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=$stall_monitor", body)
+        self.assertNotIn("Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0", body)
         self.assertNotIn("C:\\ShopVivaliz", body)
         self.assertIn("90-atendimento-cdp.conf", body)
         self.assertIn("90-atendimento-browser.conf", body)
@@ -221,6 +223,19 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         install_body = installer.read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-chatgpt-browser-guardian.timer", install_body)
         self.assertIn('sudo -n systemctl enable --now "$browser_guardian_timer"', install_body)
+
+    def test_guardian_probes_many_tabs_in_bounded_parallel_without_mislabeling_timeout(self) -> None:
+        guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
+        body = guardian.read_text(encoding="utf-8")
+        start = body.index("browser_session_state()")
+        end = body.index("persist_browser_health()", start)
+        probe = body[start:end]
+        self.assertIn("sessionProbeBudgetMs = 10500", probe)
+        self.assertIn("maxParallel: 8", probe)
+        self.assertIn("connectFirstUsableChatgptTab(tabs", probe)
+        self.assertIn("AUTH_FLOW", probe)
+        self.assertIn('2>/dev/null || printf \'%s\\n\' "UNKNOWN"', probe)
+        self.assertNotIn('2>/dev/null || printf \'%s\\n\' "UNREACHABLE"', probe)
 
     def test_guardian_session_probe_classifies_auth_denial_without_false_unreachable(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
@@ -367,7 +382,8 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         self.assertIn(marker, body)
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        connect_idx = probe.index("const c = await connectFirstUsableChatgptTab")
+        connect_idx = probe.index("const c = await Promise.race([")
+        self.assertIn("connectFirstUsableChatgptTab(tabs", probe)
         authenticated_idx = probe.index('state === "AUTHENTICATED"')
         oauth_fallback_idx = probe.rindex('if (authFlow)')
         self.assertLess(connect_idx, oauth_fallback_idx)
@@ -606,7 +622,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         body = guardian.read_text(encoding="utf-8")
         marker = "// CONTINUITY_BROWSER_SESSION_STATE_PROBE"
         probe = body.split(marker, 1)[1].split("' 2>/dev/null ||", 1)[0]
-        connector = probe.split("const c = await connectFirstUsableChatgptTab", 1)[1]
+        connector = probe.split("connectFirstUsableChatgptTab(tabs", 1)[1]
         self.assertIn('candidate.evaluate("true")', connector)
         self.assertIn('evaluate timeout', connector)
         self.assertIn('candidate?.close()', connector)

@@ -497,6 +497,66 @@ async function run() {
   }
 
   {
+    // A busy browser restores many tabs. Guardian probes may use bounded
+    // parallelism, but never accept an unauthenticated first response.
+    const connections = [];
+    let concurrent = 0;
+    let peak = 0;
+    const targets = Array.from({ length: 13 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/tab-' + i,
+      webSocketDebuggerUrl: 'ws://candidate-' + i,
+    }));
+    const selected = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        concurrent += 1;
+        peak = Math.max(peak, concurrent);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        concurrent -= 1;
+        const candidate = {
+          name: tab.webSocketDebuggerUrl,
+          closed: false,
+          close() { this.closed = true; },
+        };
+        connections.push(candidate);
+        return candidate;
+      },
+      async candidate => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return candidate.name === 'ws://candidate-10';
+      },
+      { maxParallel: 5 },
+    );
+    assert.equal(selected?.name, 'ws://candidate-10');
+    assert.ok(peak > 1 && peak <= 5, 'guardian must inspect tabs concurrently but never exceed its limit');
+    assert.ok(connections.every(candidate => candidate === selected || candidate.closed),
+      'all losing CDP connections must be closed');
+    selected.close();
+  }
+
+  {
+    const targets = Array.from({ length: 8 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/test-' + i,
+      webSocketDebuggerUrl: 'ws://rejected-' + i,
+    }));
+    const connections = [];
+    const fallback = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        const c = { name: tab.webSocketDebuggerUrl, closed: false, close() { this.closed = true; } };
+        connections.push(c);
+        return c;
+      },
+      async () => false,
+      { maxParallel: 4 },
+    );
+    assert.equal(fallback, connections[0], 'fallback should be the first healthy tab, not random completion order');
+    assert.ok(connections.slice(1).every(candidate => candidate.closed),
+      'unaccepted parallel candidates must not leak browser connections');
+    fallback.close();
+  }
+
+  {
     const originalFetch = globalThis.fetch;
     try {
       globalThis.fetch = async url => {
