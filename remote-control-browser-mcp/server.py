@@ -26,6 +26,7 @@ import time
 from typing import Any
 import zlib
 from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 BASE_SERVER = os.environ.get(
     "SHOPVIVALIZ_BROWSER_MCP_BASE_SERVER",
@@ -735,7 +736,64 @@ def browser_click_index(args: dict[str, Any], cancel_check=None) -> dict[str, An
     return BASE_EXECUTE_TOOL("browser_click_control", {"tab_id": tab_id, "index": index}, cancel_check=cancel_check)
 
 
+UNIVERSAL_MCP_TOOLS = {
+    "browser_universal_probe", "browser_universal_open", "browser_universal_inspect",
+    "browser_universal_click", "browser_universal_fill", "browser_universal_select",
+    "browser_universal_check", "browser_universal_press", "browser_universal_upload",
+    "browser_universal_download", "browser_universal_tabs_list",
+    "browser_universal_tabs_open", "browser_universal_tabs_switch",
+    "browser_universal_tabs_close",
+}
+
+UNIVERSAL_MCP_SCHEMAS: list[dict[str, Any]] = [
+    {"name": name,
+     "description": "Isolated Playwright browser; public websites only. " + name,
+     "inputSchema": {"type": "object", "properties": props, "required": req, "additionalProperties": False},
+     "annotations": {"readOnlyHint": name.endswith(("_list", "_inspect", "_probe")), "openWorldHint": True,
+                     "destructiveHint": not name.endswith(("_list", "_inspect", "_probe", "_open"))}}
+    for name, props, req in [
+        ("browser_universal_probe", {}, []),
+        ("browser_universal_open", {"url": {"type": "string"}}, ["url"]),
+        ("browser_universal_inspect", {"url": {"type": "string"}, "tab_id": {"type": "string"}}, []),
+        ("browser_universal_click", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}}, ["selector"]),
+        ("browser_universal_fill", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}, "text": {"type": "string"}}, ["selector", "text"]),
+        ("browser_universal_select", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}, "value": {"type": "string"}}, ["selector", "value"]),
+        ("browser_universal_check", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}}, ["selector"]),
+        ("browser_universal_press", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}, "key": {"type": "string", "enum": ["Enter", "Tab", "Escape", "ArrowUp", "ArrowDown", "Space"]}}, ["selector", "key"]),
+        ("browser_universal_upload", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}, "filename": {"type": "string"}}, ["selector", "filename"]),
+        ("browser_universal_download", {"url": {"type": "string"}, "tab_id": {"type": "string"}, "selector": {"type": "string"}}, ["selector"]),
+        ("browser_universal_tabs_list", {}, []),
+        ("browser_universal_tabs_open", {"url": {"type": "string"}}, ["url"]),
+        ("browser_universal_tabs_switch", {"tab_id": {"type": "string"}}, ["tab_id"]),
+        ("browser_universal_tabs_close", {"tab_id": {"type": "string"}}, ["tab_id"]),
+    ]
+]
+
+
+def universal_browser_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    if name not in UNIVERSAL_MCP_TOOLS:
+        raise ValueError("unknown_universal_browser_tool")
+    request = Request(
+        "http://127.0.0.1:5595/mcp",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                         "params": {"name": name, "arguments": args}}).encode("utf-8"),
+        headers={"Authorization": "Bearer " + base.AUTH_TOKEN, "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=60) as response:
+        payload = json.load(response)
+    if payload.get("error"):
+        return {"ok": False, "error": base.redact_text(str(payload["error"].get("message", "browser_backend_error")))}
+    items = payload.get("result", {}).get("content", [])
+    if not items or items[0].get("type") != "text":
+        return {"ok": False, "error": "invalid_universal_browser_response"}
+    value = json.loads(items[0].get("text", "{}"))
+    return value if isinstance(value, dict) else {"ok": False, "error": "invalid_universal_browser_result"}
+
+
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name in UNIVERSAL_MCP_TOOLS:
+        return universal_browser_call(name, args)
     if name == "desktop.session.attach":
         return desktop_session_attach(args)
     if name == "browser.dom.inspect":
@@ -786,11 +844,11 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
 
 def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
     safe = dict(args)
-    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type"} and "text" in safe:
+    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type", "browser_universal_fill"} and "text" in safe:
         raw = str(safe.pop("text"))
         safe.pop("text_sha256", None)
         safe["text_length"] = len(raw)
-    if tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} and "url" in safe:
+    if (tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} or tool in UNIVERSAL_MCP_TOOLS) and "url" in safe:
         safe["url"] = safe_url(str(safe["url"]))
     return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
 
@@ -893,7 +951,7 @@ def tool_specs() -> list[dict[str, Any]]:
     browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
     atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
     inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
-    return inherited + BROWSER_TOOL_SPECS + atendimento_tool_specs()
+    return inherited + BROWSER_TOOL_SPECS + UNIVERSAL_MCP_SCHEMAS + atendimento_tool_specs()
 
 
 base.execute_tool = execute_tool
