@@ -109,32 +109,8 @@ def create_synthetic_task(
             "chatgpt-common",
             "--repository",
             repository,
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "bind-conversation",
-            "--task",
-            task_id,
             "--conversation-id",
             conversation_id,
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "bind-browser-session",
-            "--task",
-            task_id,
             "--browser-session",
             browser_session,
         ],
