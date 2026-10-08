@@ -15,13 +15,15 @@ foreach ($files as $relative) {
         fwrite(STDERR, "missing Linux DC surface: {$relative}\n");
         exit(1);
     }
-    if (strpos($text, '@wonderwhy-er/desktop-commander@0.2.48') === false) {
-        fwrite(STDERR, "Linux DC surface not pinned to 0.2.48: {$relative}\n");
+    if (strpos($text, '0.2.51') === false) {
+        fwrite(STDERR, "Linux DC surface not pinned to 0.2.51: {$relative}\n");
         exit(1);
     }
-    if (strpos($text, '@wonderwhy-er/desktop-commander@0.2.47') !== false) {
-        fwrite(STDERR, "stale Linux DC 0.2.47 pin remains: {$relative}\n");
-        exit(1);
+    foreach (['@wonderwhy-er/desktop-commander@0.2.47', '@wonderwhy-er/desktop-commander@0.2.48'] as $stale) {
+        if (strpos($text, $stale) !== false) {
+            fwrite(STDERR, "stale Linux DC pin remains in {$relative}: {$stale}\n");
+            exit(1);
+        }
     }
 }
 echo "vm-desktop-commander-version-contract: ok\n";

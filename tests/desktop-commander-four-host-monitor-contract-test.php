@@ -23,7 +23,6 @@ foreach (['LAPTOP-NIG4IFUU','DESKTOP-KOCEPSV','shopvivaliz-a1-backend','shopviva
 $logonContracts = [
     "def win_healthy(values, expected_logon):",
     "and values.get('TASK_LOGON_TYPE', '').lower() == expected_logon",
-    "expected_logon='interactive'",
     "expected_logon='s4u'",
     'php tests/fredwin-desktop-commander-interactive-session-contract-test.php',
 ];
@@ -33,8 +32,8 @@ foreach ($logonContracts as $needle) {
         exit(1);
     }
 }
-if (substr_count($health, "expected_logon='interactive'") !== 1 || substr_count($health, "expected_logon='s4u'") !== 1) {
-    fwrite(STDERR, "four-host monitor must map exactly one Interactive Fred-Win and one S4U DESKTOP-KOCEPSV probe\n");
+if (substr_count($health, "expected_logon='interactive'") !== 0 || substr_count($health, "expected_logon='s4u'") !== 2) {
+    fwrite(STDERR, "four-host monitor must map both Windows hosts to S4U persistence\n");
     exit(1);
 }
 echo "desktop-commander-four-host-monitor-contract: ok\n";
