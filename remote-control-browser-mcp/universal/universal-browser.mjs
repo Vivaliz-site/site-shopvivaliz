@@ -1,5 +1,5 @@
 import { chromium } from 'playwright-core';
-import { readFileSync, mkdirSync, statSync, writeFileSync, renameSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, statSync, lstatSync, realpathSync, unlinkSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { resolve, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lookup } from 'node:dns/promises';
@@ -118,8 +118,11 @@ try {
     } else if (action === 'upload') {
       if (typeof input.filename !== 'string' || basename(input.filename) !== input.filename || !/^[a-zA-Z0-9_.-]{1,120}$/.test(input.filename)) throw new Error('invalid_filename');
       const source=resolve(root,'upload-staging',input.filename);
-      const st=statSync(source);
-      if(!st.isFile() || st.size>10_000_000)throw new Error('upload_file_invalid');
+      const staging=resolve(root,'upload-staging');
+      if(realpathSync(staging)!==staging)throw new Error('upload_staging_symlink_blocked');
+      const st=lstatSync(source);
+      if(st.isSymbolicLink() || !st.isFile() || st.size>10_000_000)throw new Error('upload_file_invalid');
+      if(realpathSync(source)!==source)throw new Error('upload_file_symlink_blocked');
       await el.setInputFiles(source);
     } else if (action === 'download') {
       const [download]=await Promise.all([page.waitForEvent('download',{timeout:15000}),el.click()]);
@@ -129,7 +132,9 @@ try {
       mkdirSync(folder,{recursive:true,mode:0o700});
       const target=resolve(folder,Date.now()+'-'+name);
       await download.saveAs(target);
-      result({ok:true,action,filename:basename(target),bytes:statSync(target).size});
+      const saved=statSync(target);
+      if(saved.size>10_000_000){unlinkSync(target);throw new Error('download_too_large');}
+      result({ok:true,action,filename:basename(target),bytes:saved.size});
     } else if (action === 'press') {
       if (!['Enter','Tab','Escape','ArrowUp','ArrowDown','Space'].includes(input.key)) throw new Error('invalid_key');
       await el.press(input.key);
