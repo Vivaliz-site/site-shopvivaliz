@@ -1063,7 +1063,7 @@ async function connectReinforcementChatgptTab({
     for (const row of neutralHomes) {
       try {
         const livePath = String(await row.cdp.evaluate('location.pathname') || '');
-        if (livePath !== '/') continue;
+        if (livePath && livePath !== '/') continue;
         if (await composerIsUsable(row.cdp)) {
           readyHome = row;
           break;
