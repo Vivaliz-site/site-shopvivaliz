@@ -45,12 +45,15 @@ class FredWinMcpPersistenceContract(unittest.TestCase):
             "if ($ssh.Count -eq 1)",
             "Start-Sleep -Seconds 2",
             "Get-Service -Name sshd",
+            "SSH protocol probe inconclusive; leaving existing tunnel intact",
+            "if ($ssh.Count -ne 1)",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, self.bootstrap)
 
     def test_watchdog_runs_every_two_minutes_and_keeps_noninteractive_startup(self):
         self.assertIn("New-TimeSpan -Minutes 2", self.bootstrap)
+        self.assertNotIn("if ($ssh.Count -ne 1 -or -not $protocolOk)", self.bootstrap)
         self.assertIn("New-ScheduledTaskTrigger -AtStartup", self.bootstrap)
         self.assertIn("-MultipleInstances IgnoreNew", self.bootstrap)
         self.assertIn("-LogonType S4U", self.bootstrap)
