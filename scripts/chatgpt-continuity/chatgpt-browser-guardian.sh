@@ -88,7 +88,9 @@ browser_session_state() {
       let authTerminal = false;
       let residualAuthTerminal = false;
       let validOpenAiAuthFlow = false;
-      for (const page of authPages) {
+      // One stalled OAuth target must not monopolize the 15-second guardian probe.
+      // Inspect at most eight tabs simultaneously; each costs <= 2.7 seconds.
+      await Promise.allSettled(authPages.slice(0, 8).map(async page => {
         let authCdp;
         let pageHost = "";
         try {
@@ -99,7 +101,7 @@ browser_session_state() {
               ws.addEventListener("open", resolve, { once: true });
               ws.addEventListener("error", reject, { once: true });
             }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 1200)),
           ]);
           authCdp = new Cdp(ws);
           const authProbe = await Promise.race([
@@ -119,7 +121,7 @@ browser_session_state() {
                 && Boolean(document.querySelector("input[name=code]"));
               return { terminal, activeOpenAiVerification };
             })()`),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 2500)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 1500)),
           ]);
           if (authProbe?.activeOpenAiVerification === true) validOpenAiAuthFlow = true;
           if (authProbe?.terminal === true) {
@@ -134,7 +136,7 @@ browser_session_state() {
         } finally {
           try { authCdp?.close(); } catch {}
         }
-      }
+      }));
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const probeChatgptSessionState = async candidate => candidate.evaluate(`(async()=>{
         try {
