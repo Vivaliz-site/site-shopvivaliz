@@ -2381,8 +2381,10 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
     ];
+    const opened = [];
     const closed = [];
     const connector = async tab => {
+      opened.push(tab.webSocketDebuggerUrl);
       const cdp = fakeCdp({ pageText: 'normal reply' });
       cdp.marker = tab.webSocketDebuggerUrl;
       cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
@@ -2442,9 +2444,14 @@ async function run() {
       'ws://home-a',
       'multiple neutral home tabs must select the first home deterministically for cross-device discovery',
     );
-    assert.ok(closed.includes('ws://conversation'), 'conversation CDP must not remain selected when neutral home context exists');
-    assert.ok(closed.includes('ws://home-b'), 'unused neutral home CDP must be closed');
+    assert.deepEqual(
+      opened,
+      ['ws://home-a'],
+      'cross-device discovery should attach directly to the first neutral home without opening historical conversation renderers',
+    );
+    assert.deepEqual(closed, [], 'no unused CDP should be opened merely to select the neutral home');
     selected.close();
+    assert.deepEqual(closed, ['ws://home-a']);
   }
 
   // Live backend topology 2026-09-30: multiple conversation tabs, no neutral
