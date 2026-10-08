@@ -137,6 +137,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 2)
         self.assertEqual(result["dispatcher"]["deferred_unbound_session"], 1)
 
+    def test_legacy_handoff_disabled_allows_unbound_fallback_without_false_red(self) -> None:
+        controller = load_controller()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 1}),
+            patch.object(controller.dispatcher, "run_once", return_value={"launched": 1, "in_flight": 1}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="legacy-unbound-fallback")
+        self.assertFalse(result["durable_handoff_enabled"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["degraded_reasons"], [])
+        self.assertEqual(result["dispatcher"]["in_flight"], 1)
+
     def test_controller_can_retry_after_repeated_restart_failures(self) -> None:
         unit = (ROOT / "deploy/systemd/shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
         self.assertIn("StartLimitIntervalSec=0", unit)
