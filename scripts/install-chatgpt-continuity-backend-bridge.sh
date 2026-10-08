@@ -39,6 +39,8 @@ bridge_host_header="${CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER:-shopvivaliz.com.br}
 poll_ms="${CHATGPT_CONTINUITY_POLL_MS:-15000}"
 durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}"
 case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff" >&2; exit 64 ;; esac
+stall_monitor="${CHATGPT_CONTINUITY_STALL_MONITOR:-1}"
+case "$stall_monitor" in 0|1) ;; *) echo "ERROR invalid CHATGPT_CONTINUITY_STALL_MONITOR=$stall_monitor" >&2; exit 64 ;; esac
 
 fail() {
   printf 'ERROR %s\n' "$1" >&2
@@ -142,7 +144,7 @@ Environment=CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=$bridge_host_header
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE=$install_root/_chatgpt-continuity-monitor-state.json
-Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0
+Environment=CHATGPT_CONTINUITY_STALL_MONITOR=$stall_monitor
 Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
 Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
 Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
