@@ -26,6 +26,21 @@ class BrowserSessionBindingTests(unittest.TestCase):
         self.assertEqual(after['browser_session'], 'atendimento')
         self.assertEqual(after['updated_at'], before['updated_at'])
         self.assertEqual(after['history'][-1]['event'], 'browser_session_bound')
+    def test_cli_accepts_dev_and_atendimento_and_rejects_new_fred_binding(self):
+        parser = state._parser()
+        for session in ('dev', 'atendimento'):
+            args = parser.parse_args(['bind-browser-session', '--task', 'corporate-fixture', '--browser-session', session])
+            self.assertEqual(args.browser_session, session)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(['bind-browser-session', '--task', 'corporate-fixture', '--browser-session', 'fred'])
+
+    def test_dev_binding_is_persistent_and_idempotent(self):
+        before = state.load_task('corporate-fixture')
+        first = self.bind('dev')
+        self.assertEqual(first['browser_session'], 'dev')
+        self.assertEqual(first['updated_at'], before['updated_at'])
+        self.assertEqual(first, self.bind('dev'))
+
     def test_binding_is_idempotent(self):
         first = self.bind('atendimento')
         self.assertEqual(first, self.bind('atendimento'))
