@@ -602,12 +602,15 @@ def run_once(
             degraded_reasons.append("completion_sweep_unbound_session")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
-        if int(nudge.get("skipped_unbound") or 0) > 0:
-            degraded_reasons.append("chatgpt_resume_unbound_conversation")
-        if int(resumed.get("deferred_unbound") or 0) > 0:
-            degraded_reasons.append("dispatcher_unbound_conversation")
-        if int(resumed.get("deferred_unbound_session") or 0) > 0:
-            degraded_reasons.append("dispatcher_unbound_session")
+        # Without durable handoff, the legacy detached fallback is allowed to
+        # progress without a browser binding; do not misclassify it as unhealthy.
+        if durable_handoff_enabled:
+            if int(nudge.get("skipped_unbound") or 0) > 0:
+                degraded_reasons.append("chatgpt_resume_unbound_conversation")
+            if int(resumed.get("deferred_unbound") or 0) > 0:
+                degraded_reasons.append("dispatcher_unbound_conversation")
+            if int(resumed.get("deferred_unbound_session") or 0) > 0:
+                degraded_reasons.append("dispatcher_unbound_session")
         if int(nudge.get("skipped_no_token") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
