@@ -109,32 +109,8 @@ def create_synthetic_task(
             "chatgpt-common",
             "--repository",
             repository,
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "bind-conversation",
-            "--task",
-            task_id,
             "--conversation-id",
             conversation_id,
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "bind-browser-session",
-            "--task",
-            task_id,
             "--browser-session",
             browser_session,
         ],
@@ -354,7 +330,7 @@ def main() -> int:
     parser.add_argument("--task-id", default="")
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--conversation-id", required=True)
-    parser.add_argument("--browser-session", choices=["fred", "atendimento"], default="atendimento")
+    parser.add_argument("--browser-session", choices=["dev", "atendimento"], default="atendimento")
     parser.add_argument(
         "--report-path",
         default="",

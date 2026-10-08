@@ -371,7 +371,7 @@ def _run_completion_checks(payload: dict[str, Any]) -> None:
 
 
 @_serialized_transition
-def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = ()) -> dict[str, Any]:
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = (), conversation_id: str = "", browser_session: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
@@ -383,6 +383,14 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         or DEFAULT_REPOSITORY
     )
     checks = _normalize_completion_checks(completion_checks)
+    conversation = str(conversation_id).strip()
+    session = str(browser_session).strip()
+    if bool(conversation) != bool(session):
+        raise TaskStateError("bound task start requires both conversation_id and browser_session")
+    if conversation:
+        conversation = _safe_conversation_id(conversation)
+        if session not in {"dev", "atendimento"}:
+            raise TaskStateError("new tasks must bind to dev or atendimento browser session")
     path = _path(task)
     if path.is_file():
         existing = _load(task)
@@ -390,6 +398,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
             str(existing.get("goal", "")).strip() == goal_text
             and str(existing.get("repository", "")).strip() == repository_name
             and (not checks or existing.get("completion_checks", []) == checks)
+            and (not conversation or (existing.get("conversation_id") == conversation and existing.get("browser_session") == session))
         ):
             return existing
         raise TaskStateError(
@@ -416,6 +425,9 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
     if checks:
         payload["schema_version"] = PROOF_SCHEMA_VERSION
         payload["completion_checks"] = checks
+    if conversation:
+        payload["conversation_id"] = conversation
+        payload["browser_session"] = session
     _atomic_write(path, payload)
     return payload
 
@@ -918,6 +930,8 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--agent", default="")
     start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
     start.add_argument("--completion-check", action="append", default=[], help="Pinned JSON argv check, rerun at ready and complete; never include secrets")
+    start.add_argument("--conversation-id", default="", help="Exact ChatGPT conversation id; requires --browser-session")
+    start.add_argument("--browser-session", default="", choices=["dev", "atendimento"], help="Dedicated account session; requires --conversation-id")
 
     successor = sub.add_parser("successor")
     successor.add_argument("--task", required=True)
@@ -956,7 +970,7 @@ def _parser() -> argparse.ArgumentParser:
 
     browser = sub.add_parser("bind-browser-session")
     browser.add_argument("--task", required=True)
-    browser.add_argument("--browser-session", required=True, choices=["fred", "atendimento"])
+    browser.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
 
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
@@ -970,7 +984,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check)
+            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check, conversation_id=args.conversation_id, browser_session=args.browser_session)
         elif args.command == "successor":
             payload = start_successor_task(
                 args.task,
