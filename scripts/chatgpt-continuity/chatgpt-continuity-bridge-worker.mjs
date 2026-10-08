@@ -310,6 +310,46 @@ function readMonitorState(file) {
   }
 }
 
+const MONITOR_ORPHAN_TEMP_MIN_AGE_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_MAX_REMOVALS = 512;
+const monitorOrphanSweepDue = new Map();
+
+// A killed worker can leave its atomic-write .tmp.<pid> behind. These files
+// are not checkpoints or source-of-truth. Prune only old regular files from
+// this exact monitor basename after proving that the owning PID is gone.
+// Errors must never stop the durable monitor heartbeat.
+function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
+  const slash = file.lastIndexOf('/');
+  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  const prefix = file.slice(slash + 1) + '.tmp.';
+  let removed = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (removed >= MONITOR_ORPHAN_MAX_REMOVALS) break;
+      if (!entry.isFile() || !entry.name.startsWith(prefix)) continue;
+      const rawPid = entry.name.slice(prefix.length);
+      if (!/^[0-9]{1,10}$/.test(rawPid)) continue;
+      const pid = Number(rawPid);
+      if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2147483647 || pid === process.pid) continue;
+      try {
+        process.kill(pid, 0);
+        continue; // PID is alive, or was recycled: never touch its file.
+      } catch (error) {
+        if (error?.code !== 'ESRCH') continue; // EPERM and unknown errors fail closed.
+      }
+      const candidate = dir + '/' + entry.name;
+      try {
+        const st = fs.lstatSync(candidate);
+        if (!st.isFile() || nowMs - st.mtimeMs < MONITOR_ORPHAN_TEMP_MIN_AGE_MS) continue;
+        fs.unlinkSync(candidate);
+        removed += 1;
+      } catch {} // Race with another worker or removal; preserve the heartbeat.
+    }
+  } catch {}
+  return removed;
+}
+
 function persistMonitorStateFile(file, payload) {
   const slash = file.lastIndexOf('/');
   const dir = slash > 0 ? file.slice(0, slash) : '.';
@@ -327,6 +367,11 @@ function persistMonitorStateFile(file, payload) {
     const dirFd = fs.openSync(dir, 'r');
     try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
   } catch {}
+  const nowMs = Date.now();
+  if (nowMs >= (monitorOrphanSweepDue.get(file) || 0)) {
+    monitorOrphanSweepDue.set(file, nowMs + MONITOR_ORPHAN_SWEEP_INTERVAL_MS);
+    pruneStaleMonitorTempFiles(file, nowMs);
+  }
 }
 
 function persistReinforcementHealth(outcome) {
@@ -4148,6 +4193,7 @@ export {
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
