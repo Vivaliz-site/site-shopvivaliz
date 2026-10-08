@@ -35,3 +35,35 @@ test('old read tools remain callable, writes blocked, and 18-tool extension expo
   assert.equal((await (await fetch(env.url+'/v1/copy/health')).json()).write_enabled,false);
  }finally{await env.close()}
 });
+
+
+test('gated Spot/Futures writes are exposed only when runtime metadata and explicit gates allow them',async()=>{
+ const oldReadOnly=process.env.OKX_MCP_READ_ONLY;
+ const oldWrite=process.env.OKX_SPOT_FUTURES_WRITE_ENABLED;
+ process.env.OKX_MCP_READ_ONLY='0';
+ process.env.OKX_SPOT_FUTURES_WRITE_ENABLED='1';
+ let launchArgs=[];let invokes=[];
+ const conn={listTools:async()=>({tools:[
+   {name:'account_get_config',inputSchema:{type:'object'},annotations:{readOnlyHint:true}},
+   {name:'spot_place_order',inputSchema:{type:'object'},annotations:{readOnlyHint:false}}
+ ]}),callTool:async ({name})=>{invokes.push(name);return fakeReply},close:async()=>{},ping:async()=>{}};
+ const copy={listTools:()=>[],call:async()=>({}),health:async()=>({enabled:true,write_enabled:false})};
+ const srv=createOkxReadBridge({port:0,transportFactory:async({args})=>{launchArgs=args;return conn},
+   copyFactory:()=>copy,restClient:{get:async()=>[],post:async()=>[]}});
+ await once(srv,'listening');
+ const url='http://127.0.0.1:'+srv.address().port;
+ try{
+   const health=await (await fetch(url+'/health')).json();
+   assert.equal(health.read_only,false);
+   assert.equal(health.spot_futures_writes_enabled,true);
+   assert.equal(launchArgs.includes('--read-only'),false);
+   const res=await fetch(url+'/v1/call',{method:'POST',headers:{'content-type':'application/json'},
+     body:JSON.stringify({request_id:'write-gate-test',tool:'spot_place_order',arguments:{instId:'BTC-USDT'}})});
+   assert.equal(res.status,200);
+   assert.deepEqual(invokes,['spot_place_order']);
+ }finally{
+   await new Promise((resolve,reject)=>srv.close(e=>e?reject(e):resolve()));
+   if(oldReadOnly===undefined)delete process.env.OKX_MCP_READ_ONLY;else process.env.OKX_MCP_READ_ONLY=oldReadOnly;
+   if(oldWrite===undefined)delete process.env.OKX_SPOT_FUTURES_WRITE_ENABLED;else process.env.OKX_SPOT_FUTURES_WRITE_ENABLED=oldWrite;
+ }
+});

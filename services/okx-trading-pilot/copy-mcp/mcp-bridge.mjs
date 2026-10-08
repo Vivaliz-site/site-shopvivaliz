@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { authorizeReadTool } from './tool-policy.mjs';
+import { authorizeTool } from './tool-policy.mjs';
 import { createCopyModule } from './copy-module.mjs';
 import { createOkxRestClient, environmentCredentialProvider } from './okx-rest.mjs';
 
@@ -62,12 +62,15 @@ function safeCode(e){
   return /^[A-Z][A-Z0-9_]{1,80}$/.test(code)?code:'COPY_MODULE_FAILED';
 }
 export function createOkxReadBridge({port=17671,transportFactory=defaultTransportFactory,copyFactory,restClient}={}){
-  const args=['--profile',PROFILE,'--modules','all','--read-only'];
-  let runtimeTools=new Set(),upstreamTools=[],copyModule=null;
+  const readOnly=process.env.OKX_MCP_READ_ONLY!=='0';
+  const writeEnabled=process.env.OKX_SPOT_FUTURES_WRITE_ENABLED==='1';
+  const args=['--profile',PROFILE,'--modules','all',...(readOnly?['--read-only']:[])];
+  let runtimeTools=new Set(),runtimeToolMeta=new Map(),upstreamTools=[],copyModule=null;
   const connectionPromise=Promise.resolve(transportFactory({command:MCP_COMMAND,args})).then(async connection=>{
     const listed=await connection.listTools();
     upstreamTools=listed?.tools||[];
     runtimeTools=new Set(upstreamTools.map(t=>t?.name).filter(Boolean));
+    runtimeToolMeta=new Map(upstreamTools.filter(t=>t?.name).map(t=>[t.name,t]));
     const rest=restClient||createOkxRestClient({
       credentials:environmentCredentialProvider(),
       baseUrl:process.env.OKX_COPY_API_BASE||'https://www.okx.com'
@@ -85,7 +88,8 @@ export function createOkxReadBridge({port=17671,transportFactory=defaultTranspor
         const connection=await connectionPromise;
         if(connection.ping)await connection.ping();
         return sendJson(res,200,{package:PACKAGE,version:VERSION,profile:PROFILE,
-          read_only:true,copy_writes_enabled:process.env.OKX_COPY_WRITE_ENABLED==='1',
+          read_only:readOnly,spot_futures_writes_enabled:writeEnabled,
+          copy_writes_enabled:process.env.OKX_COPY_WRITE_ENABLED==='1',
           tool_count:runtimeTools.size,copy_tool_count:copyModule.listTools().length,upstream_connected:true});
       }
       if(req.method==='GET'&&req.url==='/v1/tools'){
@@ -115,7 +119,7 @@ export function createOkxReadBridge({port=17671,transportFactory=defaultTranspor
             return sendJson(res,status,{request_id:body.request_id,error});
           }
         }
-        const access=authorizeReadTool({tool:body.tool,runtimeTools});
+        const access=authorizeTool({tool:body.tool,runtimeTools,runtimeToolMeta,writeEnabled});
         if(!access.allowed)return sendJson(res,access.code==='READ_ONLY'?403:503,
           {error:access.code,request_id:body.request_id});
         const connection=await connectionPromise;

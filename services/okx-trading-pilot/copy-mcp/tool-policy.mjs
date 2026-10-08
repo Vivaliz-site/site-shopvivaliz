@@ -8,8 +8,20 @@ export function isReadTool(tool) {
     /^(spot|swap|futures|option)_get_/.test(name);
 }
 
-export function authorizeReadTool({tool,runtimeTools}) {
-  if (!isReadTool(tool)) return {allowed:false,code:'READ_ONLY'};
+export function isWriteTool(tool, runtimeToolMeta = new Map()) {
+  const name=String(tool || '');
+  const meta=runtimeToolMeta instanceof Map ? runtimeToolMeta.get(name) : undefined;
+  return Boolean(meta && (meta.isWrite === true || meta.annotations?.readOnlyHint === false)) &&
+    /^(spot|swap|futures)_/.test(name);
+}
+
+export function authorizeTool({tool,runtimeTools,runtimeToolMeta,writeEnabled=false}) {
   if (!runtimeTools.has(tool)) return {allowed:false,code:'UPSTREAM_TOOL_UNAVAILABLE'};
-  return {allowed:true,code:'READ_ALLOWED'};
+  if (isReadTool(tool)) return {allowed:true,code:'READ_ALLOWED'};
+  if (isWriteTool(tool,runtimeToolMeta) && writeEnabled) return {allowed:true,code:'WRITE_ALLOWED'};
+  return {allowed:false,code:'READ_ONLY'};
+}
+
+export function authorizeReadTool({tool,runtimeTools}) {
+  return authorizeTool({tool,runtimeTools,writeEnabled:false});
 }
