@@ -8,6 +8,10 @@ on:
       - 'tests/test_agent_clone_lifecycle.py'
       - '.github/workflows/agent-clone-lifecycle-ci.yml'
       - 'docs/knowledge/task-continuity.md'
+      - 'scripts/install-agent-clone-lifecycle.sh'
+      - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.service'
+      - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.timer'
+      - 'AGENTS.md'
   push:
     branches: [main]
     paths:
@@ -16,6 +20,10 @@ on:
       - 'tests/test_agent_clone_lifecycle.py'
       - '.github/workflows/agent-clone-lifecycle-ci.yml'
       - 'docs/knowledge/task-continuity.md'
+      - 'scripts/install-agent-clone-lifecycle.sh'
+      - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.service'
+      - 'deploy/systemd/shopvivaliz-agent-clone-cleanup.timer'
+      - 'AGENTS.md'
 
 permissions:
   contents: read
@@ -28,6 +36,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Python compile
         run: python3 -m py_compile scripts/agent_clone_lifecycle.py scripts/agent_task_state.py
+      - name: Installer syntax and durable timer contract
+        run: |
+          bash -n scripts/install-agent-clone-lifecycle.sh
+          grep -q 'OnUnitActiveSec=15min' deploy/systemd/shopvivaliz-agent-clone-cleanup.timer
+          grep -q 'Persistent=true' deploy/systemd/shopvivaliz-agent-clone-cleanup.timer
+          grep -q 'PrivateTmp=false' deploy/systemd/shopvivaliz-agent-clone-cleanup.service
+          grep -q 'sweep' deploy/systemd/shopvivaliz-agent-clone-cleanup.service
       - name: Clone cleanup integration tests
         run: python3 -m unittest discover -s tests -p 'test_agent_clone_lifecycle.py' -v
       - name: Existing task continuity regression
