@@ -1,0 +1,4 @@
+[runtime]
+mode = "PAPER"
+scanner_interval_seconds = 5
+max_candidates = 12

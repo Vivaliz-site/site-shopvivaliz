@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +41,11 @@ class DetachedTaskResumeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _state(self, *, updated_at: str = "2026-09-26T20:00:00Z", next_action: str = "continue real work") -> dict:
+    def _state(self, *, updated_at: str = "", next_action: str = "continue real work") -> dict:
+        if not updated_at:
+            updated_at = (
+                datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         payload = {
             "schema_version": 1,
             "task_id": "resume-e2e",
@@ -51,7 +56,7 @@ class DetachedTaskResumeTests(unittest.TestCase):
             "evidence": ["checkpoint before interrupted stream"],
             "verification": None,
             "blocker": None,
-            "created_at": "2026-09-26T19:59:00Z",
+            "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "updated_at": updated_at,
             "history": [],
         }
@@ -107,6 +112,218 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
 """
         script.write_text(body, encoding="utf-8")
         return [sys.executable, str(script)]
+
+    def test_durable_handoff_defers_unbound_legacy_task_instead_of_crashing(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_unbound"], 1)
+
+    def test_durable_handoff_defers_bound_conversation_without_browser_session(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "conversation_12345678"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_unbound_session"], 1)
+
+    def test_durable_handoff_supports_dedicated_dev_browser_session(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "dev_conversation_123456"
+        state["browser_session"] = "dev"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: state
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["deferred_unbound_session"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+
+    def test_durable_handoff_defers_busy_recovery_owner_instead_of_crashing(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "conversation_busy123"
+        state["browser_session"] = "fred"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            dispatcher.continuity_state.TaskStateError("conversation recovery ownership is busy")
+        )
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_ownership_busy"], 1)
+
+    def test_dispatcher_enqueues_without_calling_provider_inline(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        original_execute = dispatcher._execute
+        dispatcher._execute = lambda **kwargs: (_ for _ in ()).throw(AssertionError("provider executed inline"))
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            dispatcher._execute = original_execute
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+        records = list(self.runtime.glob("_resume-execution-*.json"))
+        self.assertEqual(len(records), 1)
+        record = json.loads(records[0].read_text())
+        self.assertEqual(record["fingerprint"], "fingerprint-v1")
+        self.assertEqual(record["status"], "queued")
+
+    def test_live_execution_record_prevents_duplicate_launch(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+
+        first = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        second = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(first["launched"], 1)
+        self.assertEqual(first["in_flight"], 1)
+        self.assertEqual(second["launched"], 0)
+        self.assertEqual(second["in_flight"], 1)
+        self.assertEqual(len(list(self.runtime.glob("_resume-execution-*.json"))), 1)
+
+    def test_task_older_than_ten_days_cannot_create_execution_record_after_recent_update(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=11)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 0)
+        self.assertEqual(list(self.runtime.glob("_resume-execution-*.json")), [])
+
+    def test_task_at_ten_day_cutoff_keeps_current_boundary_semantics(self) -> None:
+        dispatcher = load_dispatcher()
+        fixed_now = datetime(2026, 10, 5, 8, 0, tzinfo=timezone.utc)
+        original_datetime = dispatcher.datetime
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+        state = self._state(updated_at=fixed_now.isoformat().replace("+00:00", "Z"))
+        state["created_at"] = (fixed_now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        dispatcher.datetime = FixedDateTime
+        try:
+            result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+        finally:
+            dispatcher.datetime = original_datetime
+
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
+
+    def test_completed_worker_execution_is_reconciled_into_ledger(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        request = json.loads((self.runtime / "_resume-requests.jsonl").read_text().splitlines()[0])
+        dispatcher.enqueue_execution(self.runtime, self.project, request, state, 30)
+        record_path = next(self.runtime.glob("_resume-execution-*.json"))
+        record = json.loads(record_path.read_text())
+        record.update(
+            status="completed",
+            result="progress",
+            executor_exit_code=0,
+            checkpoint_after="2026-10-05T08:10:00Z",
+            diagnostic={"provider": "test"},
+        )
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+        result = dispatcher.run_once(runtime_dir=self.runtime, project_dir=self.project, max_requests=1)
+
+        self.assertEqual(result["reconciled"], 1)
+        self.assertEqual(result["progressed"], 1)
+        ledger = [json.loads(line) for line in (self.runtime / "_resume-executions.jsonl").read_text().splitlines() if line.strip()]
+        self.assertEqual(ledger[-1]["result"], "progress")
+        self.assertEqual(ledger[-1]["fingerprint"], "fingerprint-v1")
+        self.assertEqual(ledger[-1]["evidence"]["checkpoint_after"], "2026-10-05T08:10:00Z")
+        self.assertEqual(ledger[-1]["evidence"]["diagnostic"]["provider"], "test")
+        reconciled = json.loads(record_path.read_text())
+        self.assertEqual(reconciled["status"], "reconciled")
+        self.assertTrue(reconciled["reconciled_at"])
 
     def test_dispatcher_executes_matching_checkpoint_and_requires_real_state_advance(self) -> None:
         dispatcher = load_dispatcher()
@@ -336,6 +553,55 @@ state_path.write_text(json.dumps(state))
                 executor=self._executor(advance=True),
                 timeout_seconds=30,
                 max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 1)
+        self.assertEqual(result["progressed"], 1)
+
+    def test_new_failed_chatgpt_nudge_bypasses_detached_retry_cooldown(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        now = datetime.now(timezone.utc)
+        previous_at = (now - timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
+        failed_at = now.isoformat().replace("+00:00", "Z")
+        (self.runtime / "_resume-executions.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "result": "no_progress",
+                "created_at": previous_at,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps({
+                "fingerprint": "fingerprint-v1",
+                "task_id": "resume-e2e",
+                "repository": "Vivaliz-site/site-shopvivaliz",
+                "dispatched_at": failed_at,
+                "worker_status_observed_at": failed_at,
+                "bridge_ok": True,
+                "http_status": 200,
+                "worker_status": "SENT_UNCONFIRMED",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+                retry_after_seconds=900,
             )
         finally:
             if old_capture is None:
@@ -607,6 +873,7 @@ state_path.write_text(json.dumps(state))
             result = dispatcher.run_once(
                 runtime_dir=self.runtime,
                 project_dir=self.project,
+                executor=[sys.executable],
                 timeout_seconds=30,
                 max_requests=1,
             )

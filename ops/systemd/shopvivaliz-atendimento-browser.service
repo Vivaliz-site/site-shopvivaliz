@@ -1,0 +1,31 @@
+[Unit]
+Description=ShopVivaliz atendimento ChatGPT browser
+After=network-online.target display-manager.service
+Wants=network-online.target display-manager.service
+
+[Service]
+Type=simple
+CPUWeight=300
+IOWeight=300
+CPUQuota=80%
+MemoryHigh=2G
+MemoryMax=3G
+TasksMax=384
+User=fredrdp
+Group=fredrdp
+Environment=HOME=/home/fredrdp
+Environment=DISPLAY=:99
+Environment=XAUTHORITY=/home/fredrdp/.Xauthority
+ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X99
+ExecStartPre=/usr/bin/test -x /usr/bin/dbus-run-session
+ExecStart=/usr/bin/dbus-run-session -- /opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-atendimento-chromium --class=shopvivaliz-atendimento --remote-debugging-address=127.0.0.1 --remote-debugging-port=9556 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu --hide-crash-restore-bubble https://chatgpt.com/
+Restart=always
+RestartSec=8
+KillMode=control-group
+TimeoutStopSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+BindReadOnlyPaths=/tmp/.X11-unix
+
+[Install]
+WantedBy=multi-user.target

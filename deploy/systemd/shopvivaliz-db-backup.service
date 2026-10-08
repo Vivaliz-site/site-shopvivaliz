@@ -1,0 +1,12 @@
+[Unit]
+Description=ShopVivaliz verified PostgreSQL backup to OCI Object Storage
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shopvivaliz-db-backup
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=0

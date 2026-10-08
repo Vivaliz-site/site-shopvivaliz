@@ -7,10 +7,13 @@ on:
       - 'scripts/shopee_production_seo_apply.py'
       - 'scripts/shopee_runtime_exec.py'
       - 'scripts/shopee_runtime_preflight.py'
+      - 'daemon-shopee-token-renewer.py'
+      - 'deploy/systemd/shopvivaliz-shopee-token-renewer.service'
       - 'scripts/utils/shopee_client.py'
       - 'tests/test_shopee_optimizer_safety.py'
       - 'tests/test_shopee_production_seo.py'
       - 'tests/test_shopee_runtime_credentials.py'
+      - 'tests/test_shopee_runtime_token_path_alignment.py'
       - '.github/workflows/shopee-optimizer-safety.yml'
       - '.github/workflows/shopee-production-seo.yml'
       - '.github/workflows/shopee-runtime-health.yml'
@@ -43,6 +46,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile optimizers and runtime helpers
-        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/shopee_runtime_exec.py scripts/shopee_runtime_preflight.py scripts/utils/shopee_client.py
+        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/shopee_runtime_exec.py scripts/shopee_runtime_preflight.py scripts/utils/shopee_client.py daemon-shopee-token-renewer.py
       - name: Run safety tests
-        run: python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py tests/test_shopee_runtime_credentials.py
+        run: |
+          python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py tests/test_shopee_runtime_credentials.py
+          python tests/test_shopee_runtime_token_path_alignment.py

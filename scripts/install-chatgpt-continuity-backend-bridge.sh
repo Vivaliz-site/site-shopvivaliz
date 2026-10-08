@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 unit='shopvivaliz-chatgpt-continuity.service'
 tunnel_unit='shopvivaliz-chatgpt-continuity-a1-tunnel.service'
-browser_unit='shopvivaliz-chatgpt-browser.service'
+browser_unit='shopvivaliz-dev-browser.service'
 browser_guardian_service='shopvivaliz-chatgpt-browser-guardian.service'
 browser_guardian_timer='shopvivaliz-chatgpt-browser-guardian.timer'
 legacy_browser_healthcheck_timer='shopvivaliz-browser-healthcheck.timer'
@@ -11,6 +11,8 @@ legacy_browser_healthcheck_service='shopvivaliz-browser-healthcheck.service'
 legacy_browser_healthcheck_timer_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.timer'
 legacy_browser_healthcheck_service_path='/etc/systemd/system/shopvivaliz-browser-healthcheck.service'
 legacy_browser_healthcheck_script='/usr/local/sbin/shopvivaliz-browser-healthcheck.sh'
+legacy_continuity_atendimento_override="$HOME/.config/systemd/user/$unit.d/90-atendimento-cdp.conf"
+legacy_guardian_atendimento_override="/etc/systemd/system/$browser_guardian_service.d/90-atendimento-browser.conf"
 tunnel_key='/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor'
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -19,6 +21,9 @@ browser_unit_source="$repo_root/ops/systemd/$browser_unit"
 browser_unit_target="/etc/systemd/system/$browser_unit"
 browser_guardian_source="$script_dir/chatgpt-continuity/chatgpt-browser-guardian.sh"
 browser_guardian_target="/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh"
+probe_cache_source="$script_dir/chatgpt-continuity/chatgpt-browser-probe-cache.py"
+probe_cache_helper="/usr/local/libexec/chatgpt-browser-probe-cache.py"
+browser_health_file="${CHATGPT_BROWSER_HEALTH_FILE:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_chatgpt-browser-health.json}"
 browser_guardian_service_source="$repo_root/ops/systemd/$browser_guardian_service"
 browser_guardian_service_target="/etc/systemd/system/$browser_guardian_service"
 browser_guardian_timer_source="$repo_root/ops/systemd/$browser_guardian_timer"
@@ -28,10 +33,12 @@ restart_pending="$install_root/.continuity-restart-required"
 config_root='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity'
 worker="$install_root/chatgpt-continuity-bridge-worker.mjs"
 token_file='/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
-cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9555}"
+cdp_url="${CHATGPT_CONTINUITY_CDP_URL:-http://127.0.0.1:9559}"
 bridge_endpoint="${CHATGPT_CONTINUITY_BRIDGE_ENDPOINT:-http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php}"
 bridge_host_header="${CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER:-shopvivaliz.com.br}"
 poll_ms="${CHATGPT_CONTINUITY_POLL_MS:-15000}"
+durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}"
+case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff" >&2; exit 64 ;; esac
 
 fail() {
   printf 'ERROR %s\n' "$1" >&2
@@ -75,6 +82,7 @@ sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser 
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
 [[ -f "$browser_unit_source" ]] || fail "browser systemd unit missing: $browser_unit_source"
 [[ -f "$browser_guardian_source" ]] || fail "browser guardian missing: $browser_guardian_source"
+[[ -f "$probe_cache_source" ]] || fail "browser probe helper missing: $probe_cache_source"
 [[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
 [[ -f "$browser_guardian_timer_source" ]] || fail "browser guardian timer missing: $browser_guardian_timer_source"
 [[ -s "$token_file" ]] || fail "protected bridge token missing: $token_file"
@@ -86,6 +94,11 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${runtime
 [[ -S "${runtime_dir}/bus" ]] || fail 'user systemd bus unavailable; linger/user manager must be active'
 
 install -d -m 700 "$install_root" "$config_root" "$HOME/.config/systemd/user"
+continuity_override_removed=false
+if [[ -e "$legacy_continuity_atendimento_override" ]]; then
+  rm -f "$legacy_continuity_atendimento_override"
+  continuity_override_removed=true
+fi
 worker_changed=false
 if install_if_changed "$worker_source" "$worker" 700; then
   worker_changed=true
@@ -129,10 +142,11 @@ Environment=CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=$bridge_host_header
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE=$install_root/_chatgpt-continuity-monitor-state.json
-Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
+Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0
 Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
 Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
 Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+Environment=SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=$durable_handoff
 ExecStart=$node_bin $worker
 Restart=always
 RestartSec=5
@@ -163,6 +177,10 @@ fi
 
 sudo -n install -d -m 755 /usr/local/libexec
 system_units_changed=false
+if sudo -n test -e "$legacy_guardian_atendimento_override"; then
+  sudo -n rm -f "$legacy_guardian_atendimento_override"
+  system_units_changed=true
+fi
 
 # A legacy one-minute CDP-only healthcheck predates the canonical guardian and
 # can race it by restarting the same authenticated browser. Retire it before
@@ -191,6 +209,9 @@ if sudo_install_if_changed "$browser_unit_source" "$browser_unit_target" 644; th
   browser_unit_changed=true
   system_units_changed=true
 fi
+if sudo_install_if_changed "$probe_cache_source" "$probe_cache_helper" 755; then
+  system_units_changed=true
+fi
 if sudo_install_if_changed "$browser_guardian_source" "$browser_guardian_target" 755; then
   system_units_changed=true
 fi
@@ -209,7 +230,7 @@ if sudo -n systemctl is-active --quiet "$browser_unit" && [[ "$browser_unit_chan
 fi
 sudo -n systemctl enable --now "$browser_guardian_timer" >/dev/null
 
-if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true ]]; then
+if [[ "$tunnel_unit_changed" = true || "$continuity_unit_changed" = true || "$continuity_override_removed" = true ]]; then
   systemctl --user daemon-reload
 fi
 systemctl --user enable --now "$tunnel_unit" >/dev/null
@@ -237,8 +258,15 @@ if [[ -f "$restart_pending" ]]; then
   rm -f "$restart_pending"
 fi
 
-curl -fsS --connect-timeout 3 --max-time 5 "$cdp_url/json/version" >/dev/null \
-  || fail "canonical ChatGPT CDP endpoint is unavailable at $cdp_url"
+cdp_ready=false
+for _ in $(seq 1 30); do
+  if curl -fsS --connect-timeout 1 --max-time 2 "$cdp_url/json/version" >/dev/null 2>&1; then
+    cdp_ready=true
+    break
+  fi
+  sleep 1
+done
+[[ "$cdp_ready" = true ]] || fail "canonical ChatGPT CDP endpoint did not become ready at $cdp_url"
 
 # Authenticate a heartbeat without printing or persisting the token outside
 # its protected file. This proves that backend and production agree on the
@@ -265,3 +293,8 @@ sudo -n systemctl start "$browser_guardian_service"
 echo "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS"
 echo "UNIT=$unit"
 echo "CDP_URL=$cdp_url"
+
+# AUTH_SESSION_READINESS_GATE
+# A successful oneshot can mean healthy transport with a pending login.
+# Only a recent, actually observed authenticated session establishes readiness.
+python3 "$probe_cache_helper" verify-ready --health "$browser_health_file"

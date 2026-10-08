@@ -172,5 +172,30 @@ class TaskResumeQueueCertificationTests(unittest.TestCase):
         self.assertEqual(len(queue.read_requests(self.runtime)), 1)
 
 
+    def test_compaction_archives_request_for_task_older_than_ten_days(self) -> None:
+        now = datetime(2026, 10, 5, 0, 0, 0, tzinfo=timezone.utc)
+        state.start_task("historical-queue", "historical goal", "gpt")
+        state.record_progress("historical-queue", next_action="must not resume")
+        payload = self._payload("historical-queue")
+        payload["created_at"] = (
+            now - timedelta(days=11)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        payload["updated_at"] = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        (self.runtime / "historical-queue.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        self._write_lines([
+            json.dumps(self._request_for(payload), sort_keys=True),
+        ])
+
+        result = queue.compact_queue(self.runtime, now=now)
+
+        self.assertEqual(result["after"]["analysis_window_days"], 10)
+        self.assertEqual(result["after"]["actionable_rows"], 0)
+        self.assertEqual(result["archived_rows"], 1)
+        self.assertEqual(queue.read_requests(self.runtime), [])
+
+
+
 if __name__ == "__main__":
     unittest.main()

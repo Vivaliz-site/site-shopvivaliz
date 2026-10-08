@@ -251,7 +251,11 @@ def persist_task_continuity(
     try:
         current = load_task(task_id)
     except TaskStateError:
-        current = start_task(task_id, goal, agent_id)
+        current = start_task(
+            task_id, goal, agent_id,
+            conversation_id=str(task.get("conversation_id") or ""),
+            browser_session=str(task.get("browser_session") or ""),
+        )
     if is_terminal(current):
         return
     record_progress(task_id, next_action=action, evidence=evidence)

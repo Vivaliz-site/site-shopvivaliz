@@ -1,0 +1,8 @@
+[Unit]
+Description=ShopVivaliz disk guard
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shopvivaliz-disk-guard
+Nice=10
+IOSchedulingClass=idle
