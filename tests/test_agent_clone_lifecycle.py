@@ -126,6 +126,32 @@ class CloneLifecycleTests(unittest.TestCase):
             child.wait(timeout=5)
         self.assertEqual(self.cleanup()["removed"], 1)
 
+    def test_replaced_path_preserves_new_clone(self):
+        """Never delete a different checkout substituted at a registered path."""
+        self.register()
+        old = self.allowed / "original-moved"
+        self.clone.rename(old)
+        self.git("clone", str(self.origin), str(self.clone), cwd=self.base)
+        self.write_task("CONCLUIDO")
+        result = self.cleanup()
+        self.assertEqual(result["removed"], 0)
+        self.assertTrue(self.clone.exists(), "replacement clone belongs to another operation")
+        self.assertTrue(old.exists(), "previous registered clone was moved elsewhere")
+
+    def test_cleanup_invoked_from_clone_cwd_defers_deletion(self):
+        """When the completing agent is inside its clone, the sweeper must wait."""
+        self.register()
+        self.write_task("CONCLUIDO")
+        previous = Path.cwd()
+        try:
+            os.chdir(self.clone)
+            result = self.cleanup()
+            self.assertEqual(result["removed"], 0)
+            self.assertTrue(self.clone.exists())
+        finally:
+            os.chdir(previous)
+        self.assertEqual(self.cleanup()["removed"], 1)
+
     def test_locked_worktree_preserved(self):
         wt = self.allowed / "worktree"
         self.git("worktree", "add", "-b", "fixture-locked", str(wt), "HEAD", cwd=self.work)
