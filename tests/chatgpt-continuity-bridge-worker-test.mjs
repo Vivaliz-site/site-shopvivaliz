@@ -1952,7 +1952,7 @@ async function run() {
     assert.equal(recoverable.latest_age_seconds >= 13 * 60 - 2, true);
     assert.equal(recoverable.candidate_count, 1);
 
-    const tooOld = await alignLatestForReinforcement(
+    const stillRecoverable = await alignLatestForReinforcement(
       cdp,
       async () => ({
         http_status: 200,
@@ -1961,6 +1961,27 @@ async function run() {
           {
             id: 'thirty-one-minute-old',
             update_time: (nowMs - 31 * 60_000) / 1000,
+            source: 'global',
+          },
+        ],
+      }),
+      nowMs,
+    );
+    assert.equal(
+      stillRecoverable.action,
+      'navigated',
+      'passive account-wide stall recovery may inspect a recent conversation beyond the 30-minute checkpoint-binding window',
+    );
+
+    const tooOld = await alignLatestForReinforcement(
+      cdp,
+      async () => ({
+        http_status: 200,
+        project_count: 0,
+        candidates: [
+          {
+            id: 'two-hours-one-minute-old',
+            update_time: (nowMs - 121 * 60_000) / 1000,
             source: 'global',
           },
         ],
@@ -2360,8 +2381,10 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/c/older-two', webSocketDebuggerUrl: 'ws://older-two' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home' },
     ];
+    const opened = [];
     const closed = [];
     const connector = async tab => {
+      opened.push(tab.webSocketDebuggerUrl);
       const cdp = fakeCdp({ pageText: 'normal reply' });
       cdp.marker = tab.webSocketDebuggerUrl;
       cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
@@ -2403,8 +2426,10 @@ async function run() {
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-a' },
       { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://home-b' },
     ];
+    const opened = [];
     const closed = [];
     const connector = async tab => {
+      opened.push(tab.webSocketDebuggerUrl);
       const cdp = fakeCdp({ pageText: 'normal reply' });
       cdp.marker = tab.webSocketDebuggerUrl;
       cdp.close = () => { closed.push(tab.webSocketDebuggerUrl); };
@@ -2421,9 +2446,14 @@ async function run() {
       'ws://home-a',
       'multiple neutral home tabs must select the first home deterministically for cross-device discovery',
     );
-    assert.ok(closed.includes('ws://conversation'), 'conversation CDP must not remain selected when neutral home context exists');
-    assert.ok(closed.includes('ws://home-b'), 'unused neutral home CDP must be closed');
+    assert.deepEqual(
+      opened,
+      ['ws://home-a'],
+      'cross-device discovery should attach directly to the first neutral home without opening historical conversation renderers',
+    );
+    assert.deepEqual(closed, [], 'no unused CDP should be opened merely to select the neutral home');
     selected.close();
+    assert.deepEqual(closed, ['ws://home-a']);
   }
 
   // Live backend topology 2026-09-30: multiple conversation tabs, no neutral

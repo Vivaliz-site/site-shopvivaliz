@@ -158,6 +158,10 @@ const CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS = Math.max(
   RECENT_CONVERSATION_MAX_AGE_MS,
   Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_LATEST_MAX_AGE_MS || 30 * 60_000),
 );
+const REINFORCEMENT_RECENT_MAX_AGE_MS = Math.max(
+  RECENT_CONVERSATION_MAX_AGE_MS,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECENT_MAX_AGE_MS || 2 * 60 * 60_000),
+);
 const CHECKPOINT_TARGET_MAX_DELTA_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_CHECKPOINT_TARGET_MAX_DELTA_MS || 15 * 60_000),
@@ -180,11 +184,11 @@ const CHECKPOINT_LATEST_NOT_OPEN_MAX_AGE_MS = Math.min(
 );
 const LATEST_CONVERSATION_PROBE_TIMEOUT_MS = Math.max(
   1000,
-  Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 12000),
+  Number(process.env.CHATGPT_CONTINUITY_LATEST_PROBE_TIMEOUT_MS || 20000),
 );
 const LATEST_CONVERSATION_FETCH_TIMEOUT_MS = Math.min(
   LATEST_CONVERSATION_PROBE_TIMEOUT_MS,
-  Math.max(500, Number(process.env.CHATGPT_CONTINUITY_LATEST_FETCH_TIMEOUT_MS || 1500) || 1500),
+  Math.max(500, Number(process.env.CHATGPT_CONTINUITY_LATEST_FETCH_TIMEOUT_MS || 5000) || 5000),
 );
 const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
@@ -256,6 +260,10 @@ function reinforcementHealthPayload(
   const action = text(outcome?.action) || 'heartbeat';
   const degradedAction = action === 'sent_unconfirmed'
     || action === 'send_failed'
+    || action === 'native_retry_unconfirmed'
+    || action === 'native_retry_unavailable'
+    || action === 'passive_recovery_only'
+    || action === 'latest_unavailable'
     || action === 'error'
     || action === 'auth_quiescent'
     || action === 'additional_checks_cooldown'
@@ -263,6 +271,10 @@ function reinforcementHealthPayload(
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
+    || action === 'no_banner'
+    || action === 'stale_latest'
+    || action === 'already_latest'
+    || action === 'navigated'
     || action === 'idle_no_checkpoint'
     || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
@@ -727,6 +739,17 @@ async function connectBoundConversationWithReentry(
   const navigated = await navigate(reentryTab, id, connector);
   if (!navigated) throw new Error('bound conversation could not be opened');
 
+  try {
+    const refreshedTabs = await (await fetch(`${browserCdpBase()}/json`)).json();
+    const refreshedBound = selectBoundConversationTabs(refreshedTabs, id);
+    const refreshed = await connectFirstUsableChatgptTab(
+      refreshedBound,
+      connector,
+      refreshedBound.length > 1 ? preferred : null,
+    );
+    if (refreshed) return refreshed;
+  } catch {}
+
   const reentered = await connector(reentryTab);
   if (!reentered) throw new Error('bound conversation reentry target is not usable');
   return reentered;
@@ -981,6 +1004,21 @@ async function connectReinforcementChatgptTab({
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => row.rank === 0 || row.rank === 1)
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // Cross-device discovery needs a neutral authenticated shell, not a scan
+  // of every historical conversation renderer. Prefer the first live Home
+  // target so stale duplicate tabs cannot make the monitor time out.
+  if (allowCrossDeviceDiscovery) {
+    for (const row of ranked.filter(item => item.rank === 1)) {
+      let neutral;
+      try {
+        neutral = await connector(row.tab);
+        if (neutral) return neutral;
+      } catch {
+        try { neutral?.close(); } catch {}
+      }
+    }
+  }
 
   const opened = [];
   for (const row of ranked) {
@@ -2191,14 +2229,14 @@ async function alignToLatestConversation(
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
   const currentMatch = currentPath.match(/^\/(?:c|uc)\/([^/?#]+)/);
   if (currentMatch && currentMatch[1] === latest.id) {
-    return { action: 'already_latest', restore_path: '' };
+    return { action: 'already_latest', restore_path: '', conversation_id: latest.id };
   }
 
   const target = '/c/' + latest.id;
   const navigated = await cdp.evaluate(`(()=>{location.assign(${JSON.stringify(target)});return true})()`);
-  if (!navigated) return { action: 'navigation_failed', restore_path: '' };
+  if (!navigated) return { action: 'navigation_failed', restore_path: '', conversation_id: latest.id };
   await sleep(1500);
-  return { action: 'navigated', restore_path: currentPath };
+  return { action: 'navigated', restore_path: currentPath, conversation_id: latest.id };
 }
 
 async function alignLocalSidebarForReinforcement(cdp) {
@@ -2221,7 +2259,7 @@ async function alignLatestForReinforcement(
   cdp,
   probeLatest = latestConversationProbe,
   nowMs = Date.now(),
-  maxAgeMs = CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+  maxAgeMs = REINFORCEMENT_RECENT_MAX_AGE_MS,
 ) {
   const probe = await probeLatest(cdp);
   const rawStatus = Number(probe?.http_status || 0);
@@ -2234,7 +2272,7 @@ async function alignLatestForReinforcement(
       REINFORCEMENT_RECENT_CANDIDATES,
       discoveredCandidates,
       nowMs,
-      CHECKPOINT_AMBIGUOUS_CONVERSATION_MAX_AGE_MS,
+      REINFORCEMENT_RECENT_MAX_AGE_MS,
     );
     REINFORCEMENT_LATEST_ID = discoveredCandidates[0].id;
   }
@@ -3559,9 +3597,9 @@ async function reinforcementCheckOnce(
   alignLatest = alignLatestForReinforcement,
   { allowCrossDeviceDiscovery = true } = {},
 ) {
-  if (DURABLE_HANDOFF_ENABLED) {
-    return { action: 'owned_recovery_required', sent: false, progress_confirmed: false, cross_device_discovery: false };
-  }
+  // Durable handoff fences synthetic continuation sends to task ownership.
+  // Account-wide monitoring may still perform passive UI recovery that does
+  // not create a new user turn (native Retry/Regenerate or reload).
   let cdp;
   let crossDeviceDiscovery = false;
   let alignmentHttpStatus = 0;
@@ -3596,6 +3634,11 @@ async function reinforcementCheckOnce(
         ? Math.max(0, Math.min(599, Math.trunc(Number(alignment.http_status))))
         : 0;
       restorePath = safeReinforcementRestorePath(alignment?.restore_path);
+      if (alignment?.action === 'navigated' && safeConversationId(alignment?.conversation_id)) {
+        try { cdp?.close(); } catch {}
+        await sleep(750);
+        cdp = await Cdp.connectToChatgptTab({ targetConversationId: alignment.conversation_id });
+      }
       if (
         alignment.action === 'latest_unavailable'
         || alignment.action === 'stale_latest'
@@ -3716,6 +3759,20 @@ async function reinforcementCheckOnce(
         );
       }
 
+      if (DURABLE_HANDOFF_ENABLED) {
+        return {
+          action: 'passive_recovery_only',
+          sent: false,
+          progress_confirmed: false,
+          failure_class: 'RECOVERABLE_CHAT_FAILURE',
+          failure_reason: failureReason || 'silent_stall',
+          recovery_attempt: 1,
+          recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+
       if (!(await waitForComposerUsable(cdp))) {
         console.log('chatgpt_continuity_reinforcement silent_stall_confirmed composer=false');
         return {
@@ -3748,6 +3805,72 @@ async function reinforcementCheckOnce(
         action,
         sent: true,
         progress_confirmed: progressed,
+        http_status: alignmentHttpStatus,
+        cross_device_discovery: crossDeviceDiscovery,
+      };
+    }
+
+    if (DURABLE_HANDOFF_ENABLED) {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryClicked = await clickRecoverableRetryButton(
+        cdp,
+        retryBaseline?.conversationFingerprint,
+      );
+      if (retryClicked) {
+        const retryProgressed = await confirmProgress(
+          cdp,
+          retryBaseline,
+          PROGRESS_CONFIRM_MS,
+          PROGRESS_POLL_MS,
+          retryTurnBaseline,
+        );
+        return {
+          action: retryProgressed ? 'confirmed_progress' : 'native_retry_unconfirmed',
+          sent: false,
+          progress_confirmed: retryProgressed,
+          failure_class: 'RECOVERABLE_CHAT_FAILURE',
+          failure_reason: failureReason || 'generation_error',
+          recovery_attempt: 1,
+          recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+          http_status: alignmentHttpStatus,
+          cross_device_discovery: crossDeviceDiscovery,
+        };
+      }
+      if (await conversationStreamComplete(cdp)) {
+        const passiveBaseline = await assistantSnapshot(cdp);
+        const passiveTurn = await conversationTurnState(cdp);
+        await cdp.evaluate(`(()=>{location.reload();return true})()`);
+        await sleep(1200);
+        const passiveProgressed = await confirmProgress(
+          cdp,
+          passiveBaseline,
+          PASSIVE_REATTACH_CONFIRM_MS,
+          PROGRESS_POLL_MS,
+          passiveTurn,
+        );
+        if (passiveProgressed) {
+          return {
+            action: 'confirmed_progress',
+            sent: false,
+            progress_confirmed: true,
+            failure_class: 'RECOVERABLE_CHAT_FAILURE',
+            failure_reason: failureReason || 'generation_error',
+            recovery_attempt: 1,
+            recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
+            http_status: alignmentHttpStatus,
+            cross_device_discovery: crossDeviceDiscovery,
+          };
+        }
+      }
+      return {
+        action: 'native_retry_unavailable',
+        sent: false,
+        progress_confirmed: false,
+        failure_class: 'RECOVERABLE_CHAT_FAILURE',
+        failure_reason: failureReason || 'generation_error',
+        recovery_attempt: 1,
+        recovery_latency_ms: Math.max(0, Date.now() - recoveryStartedAtMs),
         http_status: alignmentHttpStatus,
         cross_device_discovery: crossDeviceDiscovery,
       };
@@ -3843,7 +3966,7 @@ async function reinforcementLoop(
   let nextRecoveryRetryAt = 0;
   let recoveryRetryFailureReason = '';
   for (;;) {
-    if (checkpointActive && !(await checkpointActive())) {
+    if (checkpointActive && !DURABLE_HANDOFF_ENABLED && !(await checkpointActive())) {
       REINFORCEMENT_RECENT_CANDIDATES = [];
       REINFORCEMENT_RECENT_CURSOR = 0;
       REINFORCEMENT_LATEST_ID = '';
