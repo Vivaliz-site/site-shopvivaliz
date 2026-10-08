@@ -12,21 +12,21 @@ Security target: LIVE sub-account UID `822315791411831486`, never the parent UID
 | `account.verify` | GET /api/v5/account/config | Read, authenticated via existing upstream |
 | `traders.list` | GET /api/v5/copytrading/current-lead-traders | Read, requires dedicated REST auth |
 | `trader.details` | GET /api/v5/copytrading/copy-settings + public-stats | Read, requires REST auth |
-| `positions.list`, `positions.details` | GET /api/v5/copytrading/current-subpositions | Read, requires REST auth |
+| `positions.list`, `positions.details` | Delisted by OKX on 2024-12-16 | `UNSUPPORTED_BY_OKX`, assisted UI |
 | `balance.available` | GET /api/v5/account/balance | Read, authenticated via existing upstream |
-| `balance.allocated` | GET /api/v5/copytrading/current-lead-traders, current-subpositions, copy-settings + account/balance | Estimate only |
-| `history` | GET /api/v5/copytrading/subpositions-history | Read, limited by provider retention |
-| `profit_loss` | GET /api/v5/copytrading/current-subpositions + subpositions-history | Estimate, not full settled PnL |
-| `spot.status`, `futures.status` | GET /api/v5/copytrading/config + current-lead-traders + current-subpositions | Read |
+| `balance.allocated` | GET /api/v5/copytrading/current-lead-traders + copy-settings + account/balance | Estimate only; position-level data unavailable by official API |
+| `history` | Delisted by OKX on 2024-12-16 | `UNSUPPORTED_BY_OKX`, assisted UI |
+| `profit_loss` | Position/history APIs delisted by OKX on 2024-12-16 | `UNSUPPORTED_BY_OKX`, assisted UI |
+| `spot.status`, `futures.status` | GET /api/v5/copytrading/config + current-lead-traders | Read; open-position detail unavailable by official API |
 | `stop` | POST /api/v5/copytrading/stop-copy-trading | Write gated; journal-first, read-only reconciliation supported |
-| `positions.close` | POST /api/v5/copytrading/close-subposition | Write gated, not live exercised |
+| `positions.close` | Delisted by OKX on 2024-12-16 | `UNSUPPORTED_BY_OKX`, assisted UI |
 | `funds.release` | No distinct official API method | UNSUPPORTED_BY_OKX, assisted UI |
 | `funds.internal_transfer` | POST /api/v5/asset/transfer, restricted funding/trading, same UID | Write gated, not live exercised |
 | `trader.start` | POST /api/v5/copytrading/first-copy-settings | Write gated, not live exercised |
 | `trader.settings.update` | POST /api/v5/copytrading/amend-copy-settings | Write gated, not live exercised |
-| `transaction.verify` | Persistent local operation journal and provider follow-up reads for writes | Unknown operations never auto replay |
+| `transaction.verify` | Persistent local operation journal + supported provider follow-up reads | Unknown operations never auto replay; stop reconciliation proves trader-follow state only |
 
-Reference: https://www.okx.com/docs-v5/en/ and https://www.okx.com/docs-v5/log_en/ (not all methods available in all jurisdictions/account modes).
+Reference: https://www.okx.com/docs-v5/en/ and https://www.okx.com/docs-v5/log_en/. The official changelog delisted copy-position, copy-position-history and close-copy-position APIs on 2024-12-16; on 2024-12-18 OKX reopened First copy settings, Amend copy settings, Stop copying, Copy settings and My lead traders. The adapter therefore does not depend on the delisted APIs.
 
 ## Deployment and access requirements
 

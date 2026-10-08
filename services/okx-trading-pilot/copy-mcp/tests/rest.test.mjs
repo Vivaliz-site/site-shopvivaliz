@@ -52,8 +52,8 @@ test('credential provider fails closed on a partially configured environment',as
 
 
 test('REST allowlist rejects delisted copy-position endpoints before network access',async()=>{
- const fetchImpl=async()=>{throw new Error('NETWORK_SHOULD_NOT_BE_CALLED')};
- const client=createOkxRestClient({credentials:async()=>({key:'k',secret:'s',passphrase:'p'}),fetchImpl});
+ const fetcher=async()=>{throw new Error('NETWORK_SHOULD_NOT_BE_CALLED')};
+ const client=createOkxRestClient({credentials:async()=>({key:'k',secret:'s',passphrase:'p'}),fetcher});
  for(const [method,path] of [
    ['get','/api/v5/copytrading/current-subpositions'],
    ['get','/api/v5/copytrading/subpositions-history'],
