@@ -43,3 +43,7 @@ jobs:
           npm test
       - name: Python MCP adapter syntax
         run: python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("../server.py").read_text())'
+      - name: Validate installer downgrade guard
+        run: |
+          bash -n ../../scripts/setup-remote-control-browser-mcp.sh
+          bash ../../tests/browser-universal-installer-test.sh
