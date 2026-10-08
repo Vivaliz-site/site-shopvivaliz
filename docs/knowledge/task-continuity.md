@@ -739,3 +739,15 @@ Auditoria operacional registra somente metadados de ownership/execução necess�
 ### Foreground lease release contract
 
 A successful foreground handoff does not mean the foreground lease should remain live until TTL. Normal completion is explicit: the foreground caller releases the exact lease immediately before returning the user-facing response. Lease TTL is only the disconnect/crash fallback. A bounded renew is allowed only while foreground preparation is still active; it cannot be used to keep an interactive turn open while waiting on durable/background work. Recovery remains read-only while the foreground lease is live and can acquire mutation ownership only after explicit release or expiry.
+
+
+## Checkpoint-first obrigatório no fallback finito (NO_ORPHAN_FAILOVER_V1)
+
+Em produção, SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1: o executor de
+fallback não pode criar automaticamente um checkpoint RUNNING genérico ao
+falhar. O originador deve criar a tarefa antes de delegá-la, com identidade
+de conversa e sessão verificadas. Ausência de checkpoint retorna código 76
+sem criar estado órfão ou forjar progresso. Fallback detached nunca cria
+checkpoint, mesmo no modo legado. Somente o opt-out foreground explicitamente
+não durável (SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) conserva a compatibilidade
+legada; o deploy canônico não utiliza esse modo.
