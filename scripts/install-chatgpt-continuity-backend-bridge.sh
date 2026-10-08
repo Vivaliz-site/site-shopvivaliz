@@ -142,7 +142,7 @@ Environment=CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=$bridge_host_header
 Environment=CHATGPT_CONTINUITY_CDP_URL=$cdp_url
 Environment=CHATGPT_CONTINUITY_POLL_MS=$poll_ms
 Environment=CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE=$install_root/_chatgpt-continuity-monitor-state.json
-Environment=CHATGPT_CONTINUITY_STALL_MONITOR=0
+Environment=CHATGPT_CONTINUITY_STALL_MONITOR=1
 Environment=CHATGPT_CONTINUITY_AUTO_ALLOW=1
 Environment=CHATGPT_CONTINUITY_AUTHORIZATION_POLL_MS=3000
 Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
