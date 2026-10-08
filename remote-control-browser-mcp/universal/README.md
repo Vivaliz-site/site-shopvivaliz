@@ -20,6 +20,7 @@ This adapter provides 14 tools for public-site browser interaction through a sep
 - Private/loopback addresses are rejected when resolving URLs and HTTP(S) resource requests. Additional DNS rebinding, proxy, IPv6 and cross-origin security testing is required before treating this as a complete SSRF defense.
 - Browser clicks and form submits can cause real-world effects on third-party sites. Require explicit task-specific authorization for consequential financial or irreversible actions.
 - No CAPTCHA bypass or credential extraction. Do not log passwords, text entered into forms, cookies or authentication headers.
+- Chromium retains **persistent cookies with expiry** in the dedicated profile across a clean worker restart; **session cookies without Expires/Max-Age may be removed** when Chromium fully exits. Never export, copy, or log cookies as a workaround.
 - Normal MCP actions share one persistent browser worker; the legacy one-shot CLI is retained only for maintenance testing. The in-memory worker self-recovers on later requests if it exits, restoring saved public URLs.
 - Download file results are local to the host and do not automatically appear as ChatGPT attachments.
 

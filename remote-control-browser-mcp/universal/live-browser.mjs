@@ -48,6 +48,16 @@ async function validateUrl(value) {
   return u.toString();
 }
 
+export async function routeAllowedWebSocket(route) {
+  const target=route.url().replace(/^wss:/i,'https:').replace(/^ws:/i,'http:');
+  try {
+    await validateUrl(target);
+    return route.connectToServer();
+  } catch {
+    return route.close({code:1008,reason:'private_network_blocked'});
+  }
+}
+
 function publicUrl(value) {
   try {
     const u=new URL(value);
@@ -94,6 +104,7 @@ export class BrowserSession {
       try {await validateUrl(url);return route.continue();}
       catch {return route.abort('blockedbyclient');}
     });
+    await this.context.routeWebSocket('**/*',routeAllowedWebSocket);
     if(existsSync(this.tabsPath)){
       const saved=JSON.parse(readFileSync(this.tabsPath,'utf8'));
       if(saved && Array.isArray(saved.tabs))for(const t of saved.tabs.slice(0,16)){

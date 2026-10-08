@@ -7,7 +7,7 @@ import { BrowserSession } from '../live-browser.mjs';
 
 const html = '<!doctype html><title>Fixture</title><input id="name"><button id="change" onclick="document.title=\'Changed\'">Change</button>';
 const mk = () => mkdtempSync(resolve(tmpdir(),'sv-browser-live-test-'));
-const chromium = '/opt/shopvivaliz-browser/chrome-linux/chrome';
+const chromium = process.env.SHOPVIVALIZ_BROWSER_UNIVERSAL_BINARY || '/opt/shopvivaliz-browser/chrome-linux/chrome';
 
 test('live tabs preserve unsaved form data when switched', { timeout: 75000 }, async () => {
   const dir=mk();
@@ -56,12 +56,34 @@ test('browser restart restores tab references without claiming JavaScript state'
   }
 });
 
+test('isolated browser profile preserves cookie with Max-Age after restart', {timeout:75000}, async () => {
+  const dir=mk();
+  let s=new BrowserSession({root:dir,profileDir:resolve(dir,'profile'),binary:chromium});
+  try {
+    await s.start();
+    await s.context.route('https://example.com/*',r=>r.fulfill({status:200,contentType:'text/html',body:html}));
+    const opened=await s.execute('tabs_open',{url:'https://example.com/form1'});
+    await s.activePage().evaluate(()=>{document.cookie='sv_test_cookie=persisted; Max-Age=3600; SameSite=Lax; path=/';});
+    assert.match(await s.activePage().evaluate(()=>document.cookie),/sv_test_cookie=persisted/);
+    await s.close();
+    s=new BrowserSession({root:dir,profileDir:resolve(dir,'profile'),binary:chromium});
+    await s.start();
+    await s.context.route('https://example.com/*',r=>r.fulfill({status:200,contentType:'text/html',body:html}));
+    const recovered=await s.execute('tabs_switch',{tab_id:opened.active});
+    assert.equal(recovered.reloaded,true);
+    assert.match(await s.activePage().evaluate(()=>document.cookie),/sv_test_cookie=persisted/);
+  } finally {
+    await s.close().catch(()=>{});
+    rmSync(dir,{recursive:true,force:true});
+  }
+});
+
 test('browser refuses internal and private hostnames', { timeout: 45000 }, async () => {
   const dir=mk();
   const session=new BrowserSession({root:dir,profileDir:resolve(dir,'profile'),binary:chromium});
   try {
     await session.start();
-    for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/', 'http://192.168.1.1/', 'http://[::1]/']) {
+    for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/', 'http://192.168.1.1/', 'http://[::1]/', 'http://[::ffff:127.0.0.1]/', 'http://100.64.1.1/']) {
       await assert.rejects(()=>session.execute('tabs_open',{url}),/blocked|private|local/i);
     }
     assert.equal((await session.execute('tabs_list',{})).tabs.length,0);
