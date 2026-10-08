@@ -52,6 +52,9 @@ using System.Runtime.InteropServices;
 public static class ShopVivalizDesktopInput {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll", SetLastError = true)] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }
 "@
 
@@ -61,6 +64,9 @@ public static class ShopVivalizDesktopInput {
     $request = Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $action = [string]$request.action
     $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $currentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+
     $base = @{
         ok = $true
         action = $action
@@ -68,7 +74,10 @@ public static class ShopVivalizDesktopInput {
         top = [int]$bounds.Top
         width = [int]$bounds.Width
         height = [int]$bounds.Height
-        session_id = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+        session_id = $currentSessionId
+        user = $currentUser
+        multi_monitor_support = $true
+        dpi_aware = $true
     }
 
     switch ($action) {
@@ -191,7 +200,7 @@ function Invoke-Dispatch {
         Register-ScheduledTask -TaskName $taskName -Action $taskAction -Principal $principal -Settings $settings -Force | Out-Null
         Start-ScheduledTask -TaskName $taskName
 
-        $deadline = (Get-Date).AddSeconds(25)
+        $deadline = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $deadline) {
             if (Test-Path -LiteralPath $responseFile) { break }
             Start-Sleep -Milliseconds 100
@@ -211,7 +220,14 @@ function Invoke-Dispatch {
             if ($bytes.Length -lt 100 -or $bytes.Length -gt 12000000) { throw 'desktop_screenshot_size_invalid' }
             $out.mime_type = 'image/png'
             $out.bytes = $bytes.Length
-            $out.image_b64 = [Convert]::ToBase64String($bytes)
+            $out.file_path = $screenshotFile
+            $out.file_size_bytes = $bytes.Length
+            if ($bytes.Length -lt 5242880) {
+                $out.image_b64 = [Convert]::ToBase64String($bytes)
+            } else {
+                $out.image_b64_truncated = 'true'
+                $out.note = 'Screenshot saved to file. Base64 omitted due to size. Use file_path to retrieve.'
+            }
         }
         Write-JsonResponse $out
     } finally {
