@@ -15,7 +15,7 @@ const until = guardian.indexOf(tick + ');', from);
 assert.ok(from > 0 && until > from);
 const expression = vm.runInNewContext(tick + guardian.slice(from, until) + tick);
 
-async function state({ status = 200, session = {}, body = '', pathname = '/', composer = false } = {}) {
+async function state({ status = 200, session = {}, body = '', pathname = '/', composer = false, emailField = false } = {}) {
   const context = {
     fetch: async () => ({
       status, ok: status >= 200 && status < 300,
@@ -25,7 +25,8 @@ async function state({ status = 200, session = {}, body = '', pathname = '/', co
     location: { pathname },
     document: {
       body: { innerText: body },
-      querySelector: () => composer ? {} : null,
+      querySelector: selector => selector === 'input[type=email]' && emailField ? {} : null,
+      querySelectorAll: selector => selector === '[contenteditable]' && composer ? [{ getAttribute: () => 'true' }] : [],
     },
   };
   return await vm.runInNewContext(expression, context);
@@ -47,4 +48,13 @@ test('composer or profile shell never substitutes for verified email', async () 
 test('real 401 and visible login state are negative', async () => {
   assert.equal(await state({ status: 401 }), 'LOGGED_OUT');
   assert.equal(await state({ session: {}, body: 'Log in or sign up' }), 'LOGGED_OUT');
+});
+
+test('unauthenticated root landing with email, log in and sign up is LOGGED_OUT', async () => {
+  assert.equal(await state({ session: {}, pathname: '/', body: 'Welcome to ChatGPT Log in Sign up', emailField: true }), 'LOGGED_OUT');
+});
+test('loading root and partial shell without decisive login evidence remain UNKNOWN', async () => {
+  assert.equal(await state({ session: {}, pathname: '/', body: 'Log in Sign up', emailField: false }), 'UNKNOWN');
+  assert.equal(await state({ session: {}, pathname: '/', body: 'Log in Sign up', emailField: true, composer: true }), 'UNKNOWN');
+  assert.equal(await state({ session: {}, pathname: '/c/fixture', body: 'Log in Sign up', emailField: true }), 'UNKNOWN');
 });
