@@ -369,6 +369,31 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertNotIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
         self.assertFalse(result["chatgpt_monitor"]["required"])
 
+    def test_required_reinforcement_monitor_disabled_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "degraded": False,
+                    "action": "monitor_disabled",
+                    "sent": False,
+                    "progress_confirmed": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"CHATGPT_CONTINUITY_MONITOR_REQUIRED": "1"}),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="required-monitor-disabled")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_monitor_disabled", result["degraded_reasons"])
+
     def test_missing_reinforcement_monitor_fails_readiness_closed(self) -> None:
         controller = load_controller()
         (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).unlink()

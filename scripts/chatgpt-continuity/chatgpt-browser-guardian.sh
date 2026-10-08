@@ -162,7 +162,11 @@ browser_session_state() {
         return "UNKNOWN";
       })()`);
 
-      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+      // Inspect multiple independent tabs concurrently with a bounded global
+      // budget: serial probes exceeded the 15s guardian timeout on busy profiles.
+      const sessionProbeBudgetMs = 10500;
+      const c = await Promise.race([
+        connectFirstUsableChatgptTab(tabs, async page => {
         let ws;
         let candidate;
         try {
@@ -196,7 +200,9 @@ browser_session_state() {
         } catch {
           return false;
         }
-      });
+      }, { maxParallel: 8 }),
+        new Promise(resolve => setTimeout(() => resolve(null), sessionProbeBudgetMs)),
+      ]);
       if (!c) {
         console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
         process.exit(0);
@@ -215,7 +221,7 @@ browser_session_state() {
       } finally {
         c.close();
       }
-    ' 2>/dev/null || printf '%s\n' "UNREACHABLE"
+    ' 2>/dev/null || printf '%s\n' "UNKNOWN"
 }
 
 persist_browser_health() {

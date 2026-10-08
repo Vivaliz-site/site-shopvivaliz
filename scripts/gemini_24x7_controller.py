@@ -619,6 +619,8 @@ def run_once(
             degraded_reasons.append("chatgpt_bound_session_unavailable")
         if monitor_required and monitor.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_monitor_stale")
+        if monitor_required and str(monitor.get("action") or "") == "monitor_disabled":
+            degraded_reasons.append("chatgpt_browser_monitor_disabled")
         if monitor_required and monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
         if browser_health.get("fresh") is not True:
