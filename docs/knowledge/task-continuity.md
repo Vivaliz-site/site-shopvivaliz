@@ -1,4 +1,32 @@
 
+<!-- CONTINUITY_UNBOUND_DIAGNOSTICS_V1 -->
+## Recuperacao real: tarefas sem vinculo e falha do servico
+
+Com `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`, um checkpoint
+`RUNNING` sem `conversation_id` (ou sem `browser_session` permitido)
+nao pode adquirir leases/fencing. Tanto o nudge ChatGPT quanto o executor
+detached precisam adiar a tarefa, nunca escolher outra conversa ou perfil
+automaticamente. O controlador publica `completion_sweep.unbound_active`,
+`chatgpt_nudge.skipped_unbound`, `dispatcher.deferred_unbound` e
+`dispatcher.deferred_unbound_session`; pendencias nao roteaveis deixam
+`continuity_ready=false` com causa explicita. Processo `active`, fila
+certificada ou browser autenticado isoladamente nao significam retomada.
+
+Novos checkpoints interativos devem registrar imediatamente o ID da conversa
+real e a sessao correspondente (`dev`/CDP9559 ou `atendimento`/CDP9556),
+antes do handoff duravel. Checkpoints legados sem vinculacao precisam de
+confirmacao exata da conversa para `bind-conversation` e, depois,
+`bind-browser-session`. Nunca inferir ID por titulo, horario, aba recente ou
+transferir cookies entre perfis. O dispatcher detached aceita ambas as sessoes
+corporativas, com o mesmo fencing exigido pelo state CLI.
+
+A unidade systemd do controlador usa `Restart=always`, backoff de 60 s e
+`StartLimitIntervalSec=0`: quedas transitorias devem continuar recuperaveis
+apos varias falhas, sem parada permanente por rate limit. Uma tarefa so pode
+ser declarada retomada quando houver progresso material do checkpoint; a
+mesma conversa ChatGPT exige `PROGRESS_CONFIRMED` observado pelo worker.
+<!-- /CONTINUITY_UNBOUND_DIAGNOSTICS_V1 -->
+
 <!-- CONTINUITY_TASK_LOOKBACK_V1 -->
 ## Janela de análise do controlador
 
