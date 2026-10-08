@@ -1994,8 +1994,8 @@ async function run() {
         project_count: 0,
         candidates: [
           {
-            id: 'thirty-one-minute-old',
-            update_time: (nowMs - 31 * 60_000) / 1000,
+            id: 'two-hour-one-minute-old',
+            update_time: (nowMs - 121 * 60_000) / 1000,
             source: 'global',
           },
         ],
