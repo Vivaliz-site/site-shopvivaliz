@@ -125,6 +125,7 @@ class CodexBridgeDecisionProvider:
 
     def _prompt(self, snapshot: MarketSnapshot, context: dict) -> str:
         layers = [{"id": i + 1, "name": name} for i, name in enumerate(REQUIRED_LAYER_NAMES)]
+        prompt_now = datetime.now(timezone.utc)
         output_example = {
             "decision_id": "uuid",
             "decision": "TRADE",
@@ -145,8 +146,8 @@ class CodexBridgeDecisionProvider:
             "contrary_evidence": ["fact"],
             "invalidation": "specific invalidation",
             "market_snapshot_ts": snapshot.timestamp.isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=90)).isoformat(),
+            "created_at": prompt_now.isoformat(),
+            "expires_at": (prompt_now + timedelta(seconds=120)).isoformat(),
             "layers": [
                 {"id": row["id"], "name": row["name"], "assessment": "neutral", "evidence": ["fact"], "risk_flags": []}
                 for row in layers
@@ -176,6 +177,12 @@ class CodexBridgeDecisionProvider:
             "Expiry must be no more than 120 seconds after created_at. "
             "supporting_evidence and contrary_evidence must both be non-empty. "
             "Adversarial review must actively try to refute a TRADE. "
+            "direction must always be exactly LONG or SHORT; never NONE. "
+            "STRICT_COMPACTNESS: Keep the exact schema and all 20 layers, but be terse. "
+            "Each layers[].assessment <= 24 characters; each layers[].evidence must contain exactly 1 string <= 60 characters; "
+            "each layers[].risk_flags must contain at most 2 strings <= 32 characters each; thesis <= 120 characters; "
+            "invalidation <= 120 characters; supporting_evidence exactly 1 string <= 96 characters; "
+            "contrary_evidence exactly 1 string <= 96 characters. Do not explain beyond the JSON fields. "
             "REQUIRED_LAYERS=" + json.dumps(layers, separators=(",", ":")) +
             "\nOUTPUT_SCHEMA_EXAMPLE=" + json.dumps(output_example, separators=(",", ":")) +
             "\nMARKET_SNAPSHOT=" + json.dumps(market, separators=(",", ":")) +
@@ -194,6 +201,7 @@ class CodexBridgeDecisionProvider:
             "prompt": self._prompt(snapshot, context),
             "web_search": False,
         }
+        requested_at = datetime.now(timezone.utc)
         result = self.transport(self.url, payload, self.timeout_seconds)
         if not isinstance(result, dict) or result.get("ok") is not True:
             reason = result.get("error") if isinstance(result, dict) else "non_object"
@@ -211,6 +219,9 @@ class CodexBridgeDecisionProvider:
             raise DecisionValidationError("decision_bridge:non_json_response") from exc
         if not isinstance(parsed, dict):
             raise DecisionValidationError("decision_bridge:non_object_response")
+        parsed["created_at"] = requested_at.isoformat()
+        parsed["expires_at"] = (requested_at + timedelta(seconds=120)).isoformat()
+        parsed["market_snapshot_ts"] = snapshot.timestamp.isoformat()
         return parsed
 
 

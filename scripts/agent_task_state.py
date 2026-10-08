@@ -543,7 +543,7 @@ def mark_ready(
 
 
 @_serialized_transition
-def complete_task(task_id: str) -> dict[str, Any]:
+def _complete_task_transition(task_id: str) -> dict[str, Any]:
     payload = _load(task_id)
     if payload.get("status") != "READY_TO_COMPLETE":
         raise TaskStateError("completion rejected: task must pass READY_TO_COMPLETE first")
@@ -568,6 +568,28 @@ def complete_task(task_id: str) -> dict[str, Any]:
     _history(payload, "completed")
     _atomic_write(_path(task_id), payload)
     return payload
+
+
+
+def complete_task(task_id: str) -> dict[str, Any]:
+    """Commit terminal state first, then release owned clones outside state lock.
+
+    If cleanup is interrupted, the separate clone registry remains intact and
+    the periodic sweeper retries only this task's registered workspaces.
+    """
+    payload = _complete_task_transition(task_id)
+    try:
+        from agent_clone_lifecycle import cleanup_task
+        payload["clone_cleanup"] = cleanup_task(task_id, state_dir=RUNTIME_DIR)
+    except (OSError, ValueError, ImportError) as exc:
+        payload["clone_cleanup"] = {
+            "ok": False,
+            "removed": 0,
+            "error": type(exc).__name__,
+            "recovery": "agent_clone_lifecycle sweep",
+        }
+    return payload
+
 
 
 @_serialized_transition
