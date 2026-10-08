@@ -322,7 +322,7 @@ jobs:
               trap 'rm -f "$state_file"' EXIT
 
               if [ ! -f "$successor_file" ]; then
-                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927 --goal "Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption" --agent gpt-5.6-sol >/dev/null
+                SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py successor --task chatgpt-freeze-root-cause-20260928-g2 --predecessor chatgpt-freeze-root-cause-20260927 --goal "Continue ChatGPT freeze root-cause investigation after fresh natural post-tool/stream failures invalidated the prior terminal assumption" --agent gpt-6-luna >/dev/null
                 SHOPVIVALIZ_AGENT_TASK_STATE_DIR="$state_dir" python3 scripts/agent_task_state.py progress --task chatgpt-freeze-root-cause-20260928-g2 --next-action "Validate post-2103 live continuity runtime, preserve automatic checkpoint resume, and continue tool-result to stream reconciliation root-cause investigation until verified completion or a proved external blocker" --evidence "Fresh natural freezes and lifecycle evidence occurred after predecessor completion at 2026-09-27T23:45:43Z" >/dev/null
               fi
 

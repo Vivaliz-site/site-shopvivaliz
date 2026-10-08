@@ -130,7 +130,7 @@ jobs:
           out="$RUNNER_TEMP/codex-global-issue-comment-routing-v1.output"
           rm -f -- "$out"
           rc=0
-          env -u GH_TOKEN -u GITHUB_TOKEN "$CODEX_LAUNCHER" exec             --approve-for-me             --model gpt-5.6-terra             --config 'model_reasoning_effort="medium"'             - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
+          env -u GH_TOKEN -u GITHUB_TOKEN "$CODEX_LAUNCHER" exec             --approve-for-me             --model gpt-6-luna             --config 'model_reasoning_effort="medium"'             - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
 
           bytes="$(wc -c < "$out" | tr -d ' ')"
           digest="$(sha256sum "$out" | awk '{print $1}')"

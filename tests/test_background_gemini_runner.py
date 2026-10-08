@@ -543,7 +543,7 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertIn("codex_auto", failover)
         self.assertIn("--sandbox danger-full-access", failover)
         self.assertIn("--ask-for-approval never", failover)
-        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', failover)
+        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-6-luna}}"', failover)
         self.assertIn('GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"', failover)
 
 

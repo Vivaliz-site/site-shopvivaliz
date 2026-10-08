@@ -23,7 +23,7 @@ def valid_status(release: Path):
         "mode": "PAPER",
         "real_orders_enabled": False,
         "decision_provider": "CODEX_20_LAYER",
-        "decision_model": "gpt-5.6-terra",
+        "decision_model": "gpt-6-luna",
         "ai_20_layers_configured": True,
         "ai_20_layers_active": True,
         "run_id": "runtime-1",
@@ -68,6 +68,6 @@ def test_verify_runtime_rejects_configured_but_inactive_ai(tmp_path, monkeypatch
 def test_verify_runtime_requires_exact_terra_model(tmp_path, monkeypatch):
     release = tmp_path / "placeholder"
     status = valid_status(release)
-    status["decision_model"] = "gpt-5.6-sol"
+    status["decision_model"] = "gpt-6-sol"
     with pytest.raises(AssertionError, match="wrong_decision_model"):
         run_validation(tmp_path, monkeypatch, status)
