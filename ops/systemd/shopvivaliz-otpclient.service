@@ -1,0 +1,31 @@
+[Unit]
+Description=ShopVivaliz protected OTPClient MFA interface for corporate ChatGPT
+After=shopvivaliz-virtual-display.service shopvivaliz-xvfb99.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=fredrdp
+Group=fredrdp
+Environment=HOME=/home/fredrdp
+Environment=DISPLAY=:99
+Environment=XAUTHORITY=/home/fredrdp/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/1002
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus
+ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X99
+ExecStartPre=/usr/bin/test -s /home/fredrdp/.local/share/otpclient.enc
+ExecStart=/usr/bin/otpclient
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=20
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=full
+ProtectHome=false
+UMask=0077
+MemoryMax=500M
+TasksMax=96
+
+[Install]
+WantedBy=multi-user.target

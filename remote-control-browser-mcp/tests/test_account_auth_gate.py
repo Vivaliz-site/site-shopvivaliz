@@ -111,6 +111,54 @@ class AccountAuthGateTests(unittest.TestCase):
                     "https://example.com/log-in", "http://auth.openai.com/log-in"):
             self.assertIsNone(m._auth_stage(url))
 
+    def test_official_method_selection_stages_are_sanitized(self):
+        self.assertEqual("/log-in-or-create-account", m._auth_stage(
+            "https://auth.openai.com/log-in-or-create-account?nonce=SECRET"
+        ))
+        self.assertEqual("/auth/login_with", m._auth_stage(
+            "https://chatgpt.com/auth/login_with?state=SECRET"
+        ))
+        for url in (
+            "https://auth.openai.com/log-in-or-create-account/consent",
+            "https://chatgpt.com/auth/login_with/authorize",
+            "https://accounts.google.com/auth/login_with",
+            "http://chatgpt.com/auth/login_with",
+        ):
+            self.assertIsNone(m._auth_stage(url))
+
+    def test_prelogin_navigation_actions_require_account_scoped_maintenance_lease(self):
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("atendimento")):
+                with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake) as run:
+                    for action in ("back_to_methods", "open_login", "continue_google", "continue_microsoft"):
+                        args = payload(session="atendimento", action=action, value="")
+                        result = m.browser_auth_action(args)
+                        self.assertTrue(result["ok"])
+                        argv, value, *_ = run.call_args.args
+                        self.assertEqual(value, "")
+                        self.assertEqual(argv[-3:], ["atendimento", "example-tab", action])
+                        with self.assertRaisesRegex(ValueError, "account_auth_value_not_allowed"):
+                            m.browser_auth_action({**args, "value": "unexpected"})
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
+                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
+                    m.browser_auth_action(payload(session="atendimento", action="continue_google", value=""))
+
+    def test_prelogin_links_are_exact_path_and_host_scoped(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        for item in (
+            "back_to_methods", "open_login", "continue_google",
+            "u.pathname!=='/log-in/password'",
+            "u.pathname!=='/log-in-or-create-account'",
+            "u.pathname==='/auth/login_with'",
+            "u.pathname==='/log-in'",
+            "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
+            "safeLink(a,'https://chatgpt.com','/auth/login_with')",
+            "new RegExp('^continue with '+provider+'$','i')",
+            "if(choices.length!==1)",
+        ):
+            self.assertIn(item, source)
+
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
             {"type": "page", "id": "tab_a", "url": "https://auth.openai.com/email-verification?state=SECRET"},
@@ -121,6 +169,34 @@ class AccountAuthGateTests(unittest.TestCase):
             result = m.browser_auth_tabs({"session":"dev"})
         self.assertEqual([{"tab_id":"tab_a","stage":"/email-verification","session":"dev"}], result["tabs"])
         self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_login_tab_activation_is_bounded_and_after_official_origin_check(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn('c = new Cdp(ws, { commandTimeoutMs: 7000 })', script)
+        self.assertIn('await c.send("Page.bringToFront")', script)
+        self.assertIn("auth_tab_activate_failed", script)
+        self.assertLess(script.index("if (!validStage(targetUrl))"),
+                        script.index('await c.send("Page.bringToFront")'))
+        self.assertLess(script.index('await c.send("Page.bringToFront")'),
+                        script.index('c.send("Runtime.evaluate"'))
+        self.assertNotIn('c.send("Page.reload")', script)
+        self.assertNotIn('c.send("Page.navigate")', script)
+
+    def test_resend_email_matches_real_openai_login_button_without_consent_controls(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        marker = "const labels=action==='resend'?/"
+        self.assertIn(marker, script)
+        expression = script.split(marker, 1)[1].split("/i:", 1)[0]
+        js = (
+            "const match=new RegExp(" + json.dumps(expression) + ",'i');"
+            "const good=['Resend email','Resend e-mail','Resend code','Resend',"
+            "'Send a new code','Reenviar código','Reenviar e-mail'];"
+            "const bad=['Advanced','Allow access','Grant permissions','Login'];"
+            "if(good.some(x=>!match.test(x))||bad.some(x=>match.test(x)))process.exit(3);"
+        )
+        proc = subprocess.run(["node", "--input-type=module", "-e", js],
+                              text=True, capture_output=True, check=False)
+        self.assertEqual(0, proc.returncode, proc.stderr)
 
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,

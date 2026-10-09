@@ -786,3 +786,32 @@ da conversa pelo worker antes de qualquer ação externa. O modo não durável
 
 Estes marcadores são diagnóstico de roteamento da fila, não comprovam
 retomada nem devem ser interpretados como PROGRESS_CONFIRMED.
+
+
+<!-- ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->
+## Vinculo atomico de conversa e sessao (2026-10-09)
+
+O checkpoint de ChatGPT so pode ser retomado em uma conversa autenticada se
+`conversation_id` e `browser_session` (`dev` ou `atendimento`) forem ambos
+comprovados. O comando para vincular um checkpoint legado e:
+
+```bash
+python3 scripts/agent_task_state.py bind-route --task TASK_ID \
+  --conversation-id EXACT_CHATGPT_CONVERSATION_ID --browser-session dev
+```
+
+O `bind-route` e atomico, idempotente, nao muda `updated_at` nem o fingerprint
+de progresso, rejeita conflitos e aceita `--expected-checkpoint-version` para
+fencing. Na criacao de tarefas, prefira `start --conversation-id ...
+--browser-session ...`. Integracoes foreground podem usar as variaveis
+`SHOPVIVALIZ_TASK_ROUTE_TASK_ID`, `SHOPVIVALIZ_TASK_CONVERSATION_ID` e
+`SHOPVIVALIZ_TASK_BROWSER_SESSION` juntas: o identificador da tarefa precisa
+coincidir exatamente para evitar heranca acidental entre conversas.
+
+O controlador tenta reparar vinculos somente com recibos
+`PROGRESS_CONFIRMED` do worker que correspondam ao fingerprint atual e
+contenham ID de conversa e perfil autenticado. Recibos ambiguos, sem sessao,
+obsoletos ou baseados apenas em titulo, agente ou horario nunca geram vinculo.
+As tarefas sem prova continuam visiveis como degradadas; nao ha rota
+sintetica nem desligamento das travas de concorrencia.
+<!-- /ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->

@@ -40,6 +40,12 @@ except ImportError:  # direct execution from a release checkout
     from scripts import task_resume_dispatcher as dispatcher
 
 
+try:
+    from .continuity import route_reconciler
+except ImportError:
+    from scripts.continuity import route_reconciler
+
+
 LEASE_FILE = "_gemini-24x7-controller-lease.json"
 LOCK_FILE = "_gemini-24x7-controller.lock"
 DAEMON_LOCK_FILE = "_gemini-24x7-controller-daemon.lock"
@@ -576,6 +582,9 @@ def run_once(
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
         durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+        # Repair exact attested routes before either browser or detached dispatch.
+        # Never guess missing conversation IDs from titles or agent names.
+        route_recovery = route_reconciler.reconcile(root)
         completion_sweep = _completion_sweep(
             root,
             durable_handoff_enabled=durable_handoff_enabled,
@@ -597,6 +606,8 @@ def run_once(
         browser_health = _chatgpt_browser_health(root)
         claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
+        if int(route_recovery.get("failed") or 0) > 0:
+            degraded_reasons.append("conversation_route_recovery_failed")
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
         if failed > 0:
@@ -667,6 +678,7 @@ def run_once(
             "lease_recovered": lease.recovered,
             "durable_handoff_enabled": durable_handoff_enabled,
             "single_writer_enforced": durable_handoff_enabled,
+            "route_recovery": route_recovery,
             "completion_sweep": completion_sweep,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
             "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "skipped_unbound", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
@@ -677,7 +689,7 @@ def run_once(
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
-        if _has_material_activity(lease, watch, nudge, resumed) or any(
+        if int(route_recovery.get("bound") or 0) > 0 or _has_material_activity(lease, watch, nudge, resumed) or any(
             int(completion_sweep.get(key) or 0) > 0
             for key in ("completed", "requeued", "failed")
         ):
@@ -686,6 +698,7 @@ def run_once(
                 "cycle_completed",
                 owner_id=owner,
                 lease_recovered=lease.recovered,
+                route_recovery=summary["route_recovery"],
                 completion_sweep=summary["completion_sweep"],
                 watchdog=summary["watchdog"],
                 chatgpt_nudge=summary["chatgpt_nudge"],
