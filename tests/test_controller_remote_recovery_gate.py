@@ -131,7 +131,7 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
                 return subprocess.CompletedProcess(cmd, 0, stdout="b" * 40 + "\trefs/heads/main\n")
             with self.assertRaisesRegex(ValueError, "expected_sha_not_remote_main"):
                 helper.promote(root, SHA, runtime=runtime, run=run)
-        self.assertEqual(["acquire", "release"], runtime.events)
+        self.assertEqual(["acquire", "assert", "release"], runtime.events)
 
 
 if __name__ == "__main__":
