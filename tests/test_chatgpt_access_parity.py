@@ -33,3 +33,9 @@ def test_access_parity_policy_is_referenced_by_both_corporate_bootstraps():
     for expectation in ('who_am_i.email', 'Both ChatGPT accounts',
                         'approval', 'OAuth', 'CDP `9559`', 'CDP `9556`'):
         assert expectation in policy
+
+
+if __name__ == '__main__':
+    test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric()
+    test_access_parity_policy_is_referenced_by_both_corporate_bootstraps()
+    print('CHATGPT_ACCOUNT_ACCESS_PARITY_CONTRACT=PASS')
