@@ -1,7 +1,7 @@
 [Unit]
 Description=ShopVivaliz dev ChatGPT browser
-After=network-online.target shopvivaliz-virtual-display.service
-Wants=network-online.target
+After=network-online.target shopvivaliz-virtual-display.service user@1002.service
+Wants=network-online.target user@1002.service
 Requires=shopvivaliz-virtual-display.service
 
 [Service]
@@ -17,9 +17,11 @@ Group=fredrdp
 Environment=HOME=/home/fredrdp
 Environment=DISPLAY=:99
 Environment=XAUTHORITY=/home/fredrdp/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/1002
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus
 ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X99
-ExecStartPre=/usr/bin/test -x /usr/bin/dbus-run-session
-ExecStart=/usr/bin/dbus-run-session -- /opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium --class=shopvivaliz-dev --remote-debugging-address=127.0.0.1 --remote-debugging-port=9559 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu --hide-crash-restore-bubble https://chatgpt.com/
+ExecStartPre=/usr/bin/test -S /run/user/1002/bus
+ExecStart=/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium --class=shopvivaliz-dev --remote-debugging-address=127.0.0.1 --remote-debugging-port=9559 --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --disable-gpu --hide-crash-restore-bubble https://chatgpt.com/
 Restart=always
 RestartSec=8
 KillMode=control-group
