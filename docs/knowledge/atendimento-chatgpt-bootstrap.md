@@ -166,4 +166,4 @@ Atendimento must have the same authorized apps, tools, workspace role and
 effective permissions as Dev. Use its own provider grants, ChatGPT browser
 profile and authentication, never Dev's credentials or session. Follow
 [`chatgpt-access-parity.md`](chatgpt-access-parity.md) and prove an
-independent RDC 2 `who_am_i` identity before declaring parity.
+independently authorized RDC 2 connection and `who_am_i` result before declaring parity.
