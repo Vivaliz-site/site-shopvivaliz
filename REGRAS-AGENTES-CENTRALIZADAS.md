@@ -1,3 +1,17 @@
+<!-- AUTONOMOUS_RESUME_TO_VALIDATED_COMPLETION_V1 -->
+## Politica global de execucao autonoma com retomada ate conclusao comprovada
+
+Toda tarefa em repositorios ShopVivaliz deve partir do ultimo estado confiavel, preservando checkpoints, logs, progresso, autenticacoes e operacoes ja aplicadas. O agente deve continuar dentro da sessao e das autorizacoes existentes enquanto houver caminho tecnicamente viavel e seguro.
+
+Ciclo obrigatorio: **verificar estado -> executar -> detectar erro/bloqueio -> investigar causa raiz -> corrigir -> prevenir -> testar -> retomar -> validar**.
+
+Erro de API, browser, MCP, RDC, terminal, CLI, rede, servico, workflow, timeout ou sessao nao equivale a conclusao. Antes de repetir operacao, comprovar se a tentativa anterior produziu efeitos e usar retries idempotentes, restauracao de sessao e alternativas autorizadas. Diagnostico, relatorio, issue, PR ou merge isolados nao encerram a tarefa quando ha verificacao, deploy ou validacao pendente.
+
+Estados: `RUNNING` enquanto houver proxima acao segura e possivel; `CONCLUIDO` apenas com verificacao fresca, testes de regressao e runtime/E2E aplicavel; `BLOCKED_EXTERNAL` ou `AWAITING_APPROVAL` apenas com bloqueio real documentado, evidencias, checkpoint e acao exata para destravar. Nao inventar execucao em segundo plano: continuacao apos termino de sessao depende de worker/controlador de persistencia realmente configurado.
+
+Esta politica nao autoriza contornar MFA, protecao de branches, revisao/CI obrigatorios, controles de acesso, autorizacoes, nem operacoes destrutivas fora do escopo. Aplicavel a todos os agentes, subagentes, Codex, automacoes e repositórios, preservadas as regras especificas de cada projeto.
+<!-- /AUTONOMOUS_RESUME_TO_VALIDATED_COMPLETION_V1 -->
+
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 ## Auditoria externa também é corretiva
 
