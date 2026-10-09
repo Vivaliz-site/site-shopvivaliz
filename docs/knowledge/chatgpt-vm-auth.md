@@ -9,7 +9,7 @@ As duas contas ChatGPT operacionais após a migração são:
 
 A referência antiga `fredmourao` é legado de migração e não deve ser usada para novos logins. A existência de senha/TOTP para `dev` só pode ser tratada como provisionada após validação da fonte segura local; nunca inferir a partir da documentação.
 
-O OTPClient é executado na sessão gráfica usada pelo RustDesk/ChatGPT em `DISPLAY=:99`, usuário `fredrdp`.
+**Runtime em 2026-10-09 UTC:** OTPClient (`shopvivaliz-otpclient-gui.service`) esta como `fredconsole`, `DISPLAY=:0`. O navegador Atendimento esta como `fredrdp`, `DISPLAY=:99`. Sao sessoes distintas. Validar `systemctl show` (User, Environment, ActiveState) antes de atuar. Nunca mover segredos entre sessoes sem mecanismo protegido autorizado.
 
 ## Regra de segurança
 
