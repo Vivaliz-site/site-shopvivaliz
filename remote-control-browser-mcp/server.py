@@ -62,9 +62,9 @@ spec.loader.exec_module(base)
 
 VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
+ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_action"}
+
 BROWSER_TOOLS = {
-    "browser_auth_tabs",
-    "browser_auth_action",
     "browser_health",
     "browser_gui_tabs",
     "browser_open",
@@ -1194,7 +1194,7 @@ class BrowserHandler(base.Handler):
                 params = req.get("params") or {}
                 name = str(params.get("name") or "")
                 args = params.get("arguments") or {}
-                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS or name in ATTENDIMENTO_TOOLS else None)
+                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS or name in ATTENDIMENTO_TOOLS or name in ACCOUNT_AUTH_TOOLS else None)
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None
