@@ -295,7 +295,7 @@ def _controller_remote_main_sha() -> str:
         )
     except Exception:
         return ""
-    match = re.fullmatch(r"([0-9a-f]{40})\\s+refs/heads/main", listing.strip())
+    match = re.fullmatch(r"([0-9a-f]{40})\s+refs/heads/main", listing.strip())
     return match.group(1) if match else ""
 
 
