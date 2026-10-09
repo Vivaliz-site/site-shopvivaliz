@@ -387,6 +387,48 @@ class RemoteControlMcpTests(unittest.TestCase):
             if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
             else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
 
+    def test_controller_remote_main_probe_is_read_only_and_validates_head(self):
+        remote = "b" * 40
+        with mock.patch.object(m, "_run_as_ubuntu", return_value=f"{remote}\\trefs/heads/main\\n") as runner:
+            self.assertEqual(m._controller_remote_main_sha(), remote)
+        argv = runner.call_args.args[0]
+        self.assertIn("ls-remote", argv)
+        self.assertNotIn("fetch", argv)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", argv)
+
+    def test_controller_remote_main_probe_fails_closed_when_unavailable(self):
+        with mock.patch.object(m, "_run_as_ubuntu", side_effect=RuntimeError("remote-unavailable")):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+        with mock.patch.object(m, "_run_as_ubuntu", return_value="not-a-commit\\trefs/heads/main"):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+
+    def test_controller_status_does_not_claim_freshness_from_stale_tracking_ref(self):
+        active = "a" * 40
+        current_main = "b" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\\n")), \\
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \\
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \\
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=current_main), \\
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["service_active"])
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertTrue(status["remote_head_verified"])
+        self.assertEqual(status["remote_main_sha"], current_main)
+        self.assertFalse(status["up_to_date"])
+
+    def test_controller_status_remote_unavailable_never_certifies_current(self):
+        active = "a" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\\n")), \\
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \\
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \\
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=""), \\
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertFalse(status["remote_head_verified"])
+        self.assertFalse(status["up_to_date"])
+
     def test_controller_promote_requires_full_expected_sha(self):
         with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
             m.execute_tool("controller_promote", {"expected_sha": "abc123"})
