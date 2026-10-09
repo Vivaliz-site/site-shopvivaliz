@@ -111,6 +111,24 @@ the bounded login attempt.
 ChatGPT app permissions and individual OAuth grants for RDC 2 and other
 providers from EACH principal before checking account parity.
 
+The pre-login Browser MCP additionally supports
+`browser_auth_open(session, runtime_lease_id, runtime_fencing_token)`.
+It opens **only a new tab** with the fixed URL
+`https://chatgpt.com/auth/login` in the already-isolated
+account CDP profile, with no caller URL, tab ID or input values. Both the
+primary Remote Control proxy and the browser MCP independently verify a
+live maintenance lease owned by `shopvivaliz-account-auth:<session>`.
+The operation refuses to create duplicates if an official login-stage tab
+already exists and never navigates an existing conversation. After opening,
+use `browser_auth_tabs` and the existing `browser_auth_action` for login
+and verify the exact email with `/api/auth/session`.
+
+Both dedicated corporate Chrome services use the protected persistent
+`fredrdp` user D-Bus (`/run/user/1002/bus`) rather than a private
+`dbus-run-session`. This permits native password-manager access
+to the user's GNOME Keyring but **does not unlock the collection**.
+The profile, cookies, Chrome user-data-dir and CDP port remain isolated.
+
 ## Parity requirements
 
 1. Both accounts have the same approved ShopVivaliz workspace membership,
