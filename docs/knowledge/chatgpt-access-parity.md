@@ -47,24 +47,24 @@ effective app permissions are separate checks. Installed != connected.
 ## Official sign-in before a conversation exists
 
 A user-authorized corporate login **cannot** reuse the ordinary
-\`browser_type\` / \`browser_click\` mutation tools while the relevant
+`browser_type` / `browser_click` mutation tools while the relevant
 ChatGPT conversation is unbound: those actions correctly require conversation
 and runtime leases. Never disable their gate or forge a conversation.
 
 The browser MCP instead provides two narrowly scoped operations:
 
-- \`browser_auth_tabs(session)\`: read-only discovery of official login pages
+- `browser_auth_tabs(session)`: read-only discovery of official login pages
   in the session-specific CDP 9559 (Dev) or 9556 (Atendimento); returns only
   tab ID, session and URL *path*, never query/fragment/OTP.
-- \`browser_auth_action(session, tab_id, action, ...)\`: login-only
-  \`fill_email\`, \`fill_password\`, \`fill_code\`, \`continue\` and \`resend\`.
+- `browser_auth_action(session, tab_id, action, ...)`: login-only
+  `fill_email`, `fill_password`, `fill_code`, `continue` and `resend`.
   Requires a **live maintenance runtime lock** authorizing the action with
-  exact owner \`shopvivaliz-account-auth:<session>\`, a matching fencing token,
-  and \`SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1\`. Normal browser mutation
+  exact owner `shopvivaliz-account-auth:<session>`, a matching fencing token,
+  and `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`. Normal browser mutation
   gates and in-progress conversations are unchanged.
 
-The implementation enforces the official \`chatgpt.com/auth/login\` or
-\`auth.openai.com/log-in\` / \`email-verification\` paths *again inside the
+The implementation enforces the official `chatgpt.com/auth/login` or
+`auth.openai.com/log-in` / `email-verification` paths *again inside the
 focused browser evaluation*, not solely in the tab list, and restricts the
 editable field or selected button by login action. It does not operate on
 consent/authorization pages, OAuth grants, CAPTCHA or recovery challenges.
@@ -79,8 +79,8 @@ debugging, command output, chat or GitHub. Release the runtime lease after
 the bounded login attempt.
 
 **A successful input/click is not authentication.** Verify
-\`/api/auth/session\` in the correct profile with the exact
-\`user.email\` before allowing conversation recovery. Separately verify
+`/api/auth/session` in the correct profile with the exact
+`user.email` before allowing conversation recovery. Separately verify
 ChatGPT app permissions and individual OAuth grants for RDC 2 and other
 providers from EACH principal before checking account parity.
 
