@@ -824,7 +824,9 @@ const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
 const matches = tabs.filter(t => t?.type === "page" && t?.id === tabId && t.webSocketDebuggerUrl);
 if (matches.length !== 1) throw new Error("auth_tab_not_unique");
 const t = matches[0];
-if (!validStage(new URL(String(t.url || "")))) throw new Error("auth_stage_not_allowed");
+let targetUrl;
+try { targetUrl = new URL(String(t.url || "")); } catch { throw new Error("auth_stage_not_allowed"); }
+if (!validStage(targetUrl)) throw new Error("auth_stage_not_allowed");
 let c, ws;
 try {
     ws = new WebSocket(t.webSocketDebuggerUrl);
@@ -897,7 +899,12 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("account_auth_session_invalid")
     endpoint = "http://127.0.0.1:" + str(ACCOUNT_AUTH_PORTS[session]) + "/json"
     with urlopen(endpoint, timeout=4) as response:
-        pages = json.load(response)
+        raw = response.read(1_048_577)
+    if len(raw) > 1_048_576:
+        raise ValueError("account_auth_tabs_oversized")
+    pages = json.loads(raw)
+    if not isinstance(pages, list) or len(pages) > 512:
+        raise ValueError("account_auth_tabs_invalid")
     tabs = []
     for item in pages[:128]:
         if not isinstance(item, dict) or item.get("type") != "page":
