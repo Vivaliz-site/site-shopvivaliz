@@ -114,6 +114,7 @@ jobs:
           php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           python3 -m py_compile scripts/ecommerce-excellence-audit.py
+          bash -n scripts/setup-remote-control-browser-mcp.sh
           python3 tests/test_chatgpt_access_parity.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
