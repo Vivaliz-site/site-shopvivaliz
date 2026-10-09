@@ -24,6 +24,16 @@ def test_browser_only_changes_use_targeted_backend_job():
     ])
 
 
+def test_display_recovery_changes_are_backend_only():
+    assert scope.is_browser_only([
+        "scripts/setup-remote-control-browser-mcp.sh",
+        "scripts/setup-shopvivaliz-display-recovery.sh",
+        "scripts/shopvivaliz-xvfb99-prepare.sh",
+        "ops/systemd/shopvivaliz-xvfb99.service",
+        "tests/test_shopvivaliz_display_recovery.py",
+    ])
+
+
 def test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap():
     # Regression: PR #2849 failed a full bootstrap because the browser-only
     # regression test path was mistakenly excluded from the scope allowlist.
@@ -68,6 +78,7 @@ def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
 
 if __name__ == "__main__":
     test_browser_only_changes_use_targeted_backend_job()
+    test_display_recovery_changes_are_backend_only()
     test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap()
     test_controller_or_windows_changes_still_require_four_host_bootstrap()
     test_empty_or_untrusted_diff_fails_closed()
