@@ -2018,6 +2018,8 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     action = str(args["action"])
     status_key = "typed" if action.startswith("fill_") else "clicked"
     status = bool(child.get(status_key) or output.get(status_key))
+    if not status:
+        raise RuntimeError("account_auth_status_unconfirmed")
     return {"ok": True, "session": session, "action": action, status_key: status}
 
 
