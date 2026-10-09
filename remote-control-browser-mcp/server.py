@@ -463,7 +463,7 @@ def browser_service_health() -> dict[str, Any]:
         "host": BROWSER_HOST,
         "session": session,
         "cdp_reachable": False,
-        "account_authenticated": False,
+        "account_authenticated": None,
         "account_identity_verified": False,
     }
     if (os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "").strip() != session
