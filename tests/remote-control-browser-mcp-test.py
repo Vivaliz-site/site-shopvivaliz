@@ -200,17 +200,14 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("tempfile.mkdtemp", src)
         self.assertNotIn("tempfile.mkstemp", src)
 
-    def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
+    def test_browser_source_does_not_automate_debug_ports_or_profile_cookies(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
-        forbidden_runtime_tokens = (
-            "remote-debugging-port",
-            "devtoolsactiveport",
-            "/json/version",
-            "/json/list",
-            "cookies sqlite",
-        )
-        for token in forbidden_runtime_tokens:
+        for token in ("remote-debugging-port", "devtoolsactiveport", "/json/list", "cookies sqlite"):
             self.assertNotIn(token, src)
+        # CDP /json/version is allowed exclusively for bounded dedicated
+        # transport health, never for general GUI browsing or cookie access.
+        self.assertEqual(src.count('endpoint + "/json/version"'), 1)
+        self.assertIn("health = browser_service_health()", src)
 
     def test_tool_specs_remain_unique_when_base_exposes_browser_actions(self):
         names = [spec["name"] for spec in m.tool_specs()]
