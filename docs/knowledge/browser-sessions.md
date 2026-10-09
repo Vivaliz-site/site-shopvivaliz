@@ -100,9 +100,13 @@ O servico `shopvivaliz-virtual-display.service` executa `Xvfb :99` como
 autenticacao `-auth /home/fredrdp/.Xauthority`. Sua rotina
 `shopvivaliz-virtual-display-guard.sh` cria apenas o registro de
 MIT-MAGIC-COOKIE para `:99` quando ausente; a chave entra no `xauth` por
-stdin, jamais no argv/log/auditoria. A rotina falha fechada quando outro
-servidor ja ocupa `:99` e confirma socket e autorizacao X11 antes de
-liberar os navegadores.
+stdin, jamais no argv/log/auditoria. Quando um display `:99` ja
+existe, o supervisor **nao** o substitui: adota somente quando o Xauthority
+atual comprova acesso e monitora sua disponibilidade. Se esse display
+desaparecer e liberar o socket, o supervisor assume `:99` com Xvfb
+proprio. Socket ainda ocupado, mas sem identidade/autorizacao verificavel,
+permanece bloqueado, sem alterar perfis nem cookies.
+Antes de liberar navegadores, confirma o socket e autorizacao X11 real.
 
 As unidades `shopvivaliz-dev-browser.service` (9559),
 `shopvivaliz-atendimento-browser.service` (9556) e
