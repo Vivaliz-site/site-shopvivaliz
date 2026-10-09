@@ -1,3 +1,9 @@
+<!-- MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+## Preflight obrigatorio antes de Retome ou qualquer acao
+
+Antes da PRIMEIRA ferramenta que altera estado e sempre que receber `Retome`, `Continue`, `Prossiga` ou `Siga`, todo agente deve LER EFETIVAMENTE, na revisao `main` atual, `AGENTS.md`, `docs/knowledge/atendimento-chatgpt-bootstrap.md`, `docs/knowledge/host-access.md`, `docs/knowledge/README.md`, `docs/knowledge/agent-rules.md` e a documentacao do modulo. Ler somente uma mensagem de chat ou citar nomes de arquivos nao comprova leitura. Checar SHA/revisao e guardar checkpoint nao secreto `rules_loaded` contendo caminho, ref, SHA, timestamp e agente/sessao; se nao houver ferramenta de leitura, registrar `RULES_NOT_LOADED` e recuperar acesso antes de alterar estado. A leitura das regras e precondicao (fail closed) para mutacoes, mas nao impede diagnosticos read-only seguros. Nao declarar `rules_loaded` sem evidencias reais de leitura. Toda retomada revalida revisao e recarrega se mudou; obedecer regras vigentes sem fingir que arquivos em PR ja estao em `main`.
+<!-- /MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+
 <!-- EXHAUST_AUTHORIZED_PATHS_BEFORE_BLOCKED_V1 -->
 ## Bloqueio somente apos esgotamento comprovado dos caminhos viaveis
 
