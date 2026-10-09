@@ -111,6 +111,53 @@ class AccountAuthGateTests(unittest.TestCase):
                     "https://example.com/log-in", "http://auth.openai.com/log-in"):
             self.assertIsNone(m._auth_stage(url))
 
+    def test_official_method_selection_stages_are_sanitized(self):
+        self.assertEqual("/log-in-or-create-account", m._auth_stage(
+            "https://auth.openai.com/log-in-or-create-account?nonce=SECRET"
+        ))
+        self.assertEqual("/auth/login_with", m._auth_stage(
+            "https://chatgpt.com/auth/login_with?state=SECRET"
+        ))
+        for url in (
+            "https://auth.openai.com/log-in-or-create-account/consent",
+            "https://chatgpt.com/auth/login_with/authorize",
+            "https://accounts.google.com/auth/login_with",
+            "http://chatgpt.com/auth/login_with",
+        ):
+            self.assertIsNone(m._auth_stage(url))
+
+    def test_prelogin_navigation_actions_require_account_scoped_maintenance_lease(self):
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("atendimento")):
+                with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake) as run:
+                    for action in ("back_to_methods", "open_login", "continue_google"):
+                        args = payload(session="atendimento", action=action, value="")
+                        result = m.browser_auth_action(args)
+                        self.assertTrue(result["ok"])
+                        argv, value, *_ = run.call_args.args
+                        self.assertEqual(value, "")
+                        self.assertEqual(argv[-3:], ["atendimento", "example-tab", action])
+                        with self.assertRaisesRegex(ValueError, "account_auth_value_not_allowed"):
+                            m.browser_auth_action({**args, "value": "unexpected"})
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("dev")):
+                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
+                    m.browser_auth_action(payload(session="atendimento", action="continue_google", value=""))
+
+    def test_prelogin_links_are_exact_path_and_host_scoped(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        for item in (
+            "back_to_methods", "open_login", "continue_google",
+            "u.pathname!=='/log-in/password'",
+            "u.pathname!=='/log-in-or-create-account'",
+            "u.pathname!=='/auth/login_with'",
+            "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
+            "safeLink(a,'https://chatgpt.com','/auth/login_with')",
+            "/^continue with google$/i",
+            "if(choices.length!==1)",
+        ):
+            self.assertIn(item, source)
+
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
             {"type": "page", "id": "tab_a", "url": "https://auth.openai.com/email-verification?state=SECRET"},
