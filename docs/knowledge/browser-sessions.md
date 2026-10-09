@@ -86,3 +86,38 @@ parcial/carregando ou resposta de sessão sem identidade continua UNKNOWN.
 Isso reduz probes repetidos no perfil sem criar/fechar abas, navegar,
 alterar login ou buscar tokens. A autenticação de verdade continua
 dependendo de /api/auth/session com o e-mail Dev exato.
+
+
+## Boot sem sessao XRDP — display X11 persistente
+
+Os tres perfis de navegador podem usar o mesmo **servidor grafico local**
+`DISPLAY=:99` sem compartilhar cookies, perfis Chromium, contas ChatGPT
+ou autorizacoes de terceiros. Nao confundir o cookie Xauthority (acesso local
+ao display) com cookies de autenticacao web.
+
+O servico `shopvivaliz-virtual-display.service` executa `Xvfb :99` como
+`fredrdp`, somente no socket Unix local, com `-nolisten tcp` e
+autenticacao `-auth /home/fredrdp/.Xauthority`. Sua rotina
+`shopvivaliz-virtual-display-guard.sh` cria apenas o registro de
+MIT-MAGIC-COOKIE para `:99` quando ausente; a chave entra no `xauth` por
+stdin, jamais no argv/log/auditoria. Quando um display `:99` ja
+existe, o supervisor **nao** o substitui: adota somente quando o Xauthority
+atual comprova acesso e monitora sua disponibilidade. Se esse display
+desaparecer e liberar o socket, o supervisor assume `:99` com Xvfb
+proprio. Socket ainda ocupado, mas sem identidade/autorizacao verificavel,
+permanece bloqueado, sem alterar perfis nem cookies.
+Antes de liberar navegadores, confirma o socket e autorizacao X11 real.
+
+As unidades `shopvivaliz-dev-browser.service` (9559),
+`shopvivaliz-atendimento-browser.service` (9556) e
+`shopvivaliz-chatgpt-browser.service` (9555 legado) possuem
+`Requires/After=shopvivaliz-virtual-display.service`; nao dependem de
+um login interativo XRDP para criar o socket `/tmp/.X11-unix/X99`.
+A unidade grafica e instalada antes dos navegadores pelo instalador
+canonico `scripts/install-chatgpt-continuity-backend-bridge.sh`.
+
+Falha de inicio do Xvfb e degradacao de transporte sao distintas de
+`AUTH_FLOW` e de `AUTHENTICATED`: nao usar a presenca de X99 como prova
+de login. Verificar CDP 9559 e `/api/auth/session` com o e-mail Dev real.
+A UI do OTPClient historicamente usa `fredconsole` em `DISPLAY=:0` e
+permanece isolada deste display.

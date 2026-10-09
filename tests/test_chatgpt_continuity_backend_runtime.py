@@ -741,6 +741,83 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertIn("restart shopvivaliz-dev-browser.service", calls)
             self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
 
+    def test_persistent_x99_unit_uses_authenticated_unprivileged_xvfb(self) -> None:
+        unit = (ROOT / "ops" / "systemd" / "shopvivaliz-virtual-display.service").read_text()
+        self.assertIn("User=fredrdp", unit)
+        self.assertIn("Group=fredrdp", unit)
+        self.assertIn("Environment=DISPLAY=:99", unit)
+        self.assertIn("ExecStart=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh serve", unit)
+        self.assertIn("ExecStartPre=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh prepare", unit)
+        self.assertIn("ExecStartPost=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh wait", unit)
+        self.assertNotIn(" -ac", unit)
+        self.assertNotIn("DISPLAY=:0", unit)
+
+    def test_all_chatgpt_profiles_require_same_persistent_x99_without_profile_swap(self) -> None:
+        specs = [
+            ("shopvivaliz-dev-browser.service", "shopvivaliz-dev-chromium", "9559"),
+            ("shopvivaliz-atendimento-browser.service", "shopvivaliz-atendimento-chromium", "9556"),
+            ("shopvivaliz-chatgpt-browser.service", "shopvivaliz-chromium", "9555"),
+        ]
+        for unit_name, profile, port in specs:
+            with self.subTest(unit=unit_name):
+                body = (ROOT / "ops" / "systemd" / unit_name).read_text()
+                self.assertIn("Requires=shopvivaliz-virtual-display.service", body)
+                self.assertIn("After=network-online.target shopvivaliz-virtual-display.service", body)
+                self.assertIn("ExecStartPre=/usr/bin/test -S /tmp/.X11-unix/X99", body)
+                self.assertIn("Environment=XAUTHORITY=/home/fredrdp/.Xauthority", body)
+                self.assertIn(f"--user-data-dir=/home/fredrdp/.config/{profile}", body)
+                self.assertIn(f"--remote-debugging-port={port}", body)
+
+    def test_x99_auth_guard_adds_cookie_over_stdin_and_waits_for_live_xserver(self) -> None:
+        guard = ROOT / "scripts" / "chatgpt-continuity" / "shopvivaliz-virtual-display-guard.sh"
+        text = guard.read_text()
+        self.assertEqual(subprocess.run(["bash", "-n", str(guard)], capture_output=True).returncode, 0)
+        self.assertIn('[[ "$(id -un)" == \'fredrdp\' ]]', text)
+        self.assertIn("display_99_unverified_owner", text)
+        self.assertIn("existing_display_became_unverifiable", text)
+        self.assertIn('exec /usr/bin/Xvfb :99 -screen 0 1600x900x24 -nolisten tcp -auth "$auth_file"', text)
+        self.assertIn('while [[ -S "$socket" ]]', text)
+        self.assertIn("/usr/bin/openssl rand -hex 16", text)
+        self.assertIn('/usr/bin/xauth -q -f "$auth_file" -', text)
+        self.assertIn('unset cookie', text)
+        self.assertIn('/usr/bin/xset -display "$display" q', text)
+        self.assertIn('seq 1 40', text)
+        self.assertNotIn('echo "$cookie"', text)
+        self.assertNotIn('Xvfb -ac', text)
+
+    def test_backend_installer_bootstraps_x99_before_browser_start(self) -> None:
+        body = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text()
+        start_display = 'sudo -n systemctl enable --now "$virtual_display_unit"'
+        start_browser = 'sudo -n systemctl start "$browser_unit"'
+        self.assertIn("shopvivaliz-virtual-display.service", body)
+        self.assertIn("shopvivaliz-virtual-display-guard.sh", body)
+        self.assertIn("sudo_install_if_changed \"$virtual_display_unit_source\"", body)
+        self.assertIn("sudo_install_if_changed \"$virtual_display_guard_source\"", body)
+        self.assertIn(start_display, body)
+        self.assertIn(start_browser, body)
+        self.assertLess(body.index(start_display), body.index(start_browser))
+        self.assertNotIn('companion_browser_units=', body)
+        self.assertEqual(
+            subprocess.run(["bash", "-n", str(ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh")], capture_output=True).returncode,
+            0,
+        )
+
+    def test_remote_repair_stages_virtual_display_dependencies_before_installer(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text()
+        start = workflow.index("            chatgpt_continuity_repair)")
+        end = workflow.index("            chatgpt_continuity_diagnostic)", start)
+        repair = workflow[start:end]
+        for path in (
+            "scripts/chatgpt-continuity/shopvivaliz-virtual-display-guard.sh",
+            "ops/systemd/shopvivaliz-virtual-display.service",
+            "ops/systemd/shopvivaliz-dev-browser.service",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(f"< {path}", repair)
+        self.assertNotIn("ops/systemd/shopvivaliz-atendimento-browser.service", repair)
+        self.assertNotIn("ops/systemd/shopvivaliz-chatgpt-browser.service", repair)
+        self.assertIn("CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559'", repair)
+
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", bridge)
