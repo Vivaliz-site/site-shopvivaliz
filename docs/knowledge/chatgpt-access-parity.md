@@ -73,11 +73,22 @@ The browser MCP instead provides two narrowly scoped operations:
   in the session-specific CDP 9559 (Dev) or 9556 (Atendimento); returns only
   tab ID, session and URL *path*, never query/fragment/OTP.
 - `browser_auth_action(session, tab_id, action, ...)`: login-only
-  `fill_email`, `fill_password`, `fill_code`, `continue` and `resend`.
+  `fill_email`, `fill_password`, `fill_code`, `continue`, `resend`,
+  `back_to_methods`, `open_login`, `continue_google` and `continue_microsoft`.
+  The provider actions click only exact official button labels on the observed
+  `auth.openai.com/log-in` stage, without selecting an OAuth account or granting
+  consent. The account email must still be verified after the provider flow.
   Requires a **live maintenance runtime lock** authorizing the action with
   exact owner `shopvivaliz-account-auth:<session>`, a matching fencing token,
   and `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`. Normal browser mutation
   gates and in-progress conversations are unchanged.
+
+As an idempotent preflight, the action **brings only the already verified
+official login tab to the foreground** using CDP `Page.bringToFront` before
+evaluating controls. This wakes background/frozen authentication pages without
+reloading or navigating, and uses a bounded CDP timeout. A failed activation
+returns `auth_tab_activate_failed` without submitting or logging credentials.
+The page origin/path is checked again inside the browser before input or click.
 
 The implementation enforces the official `chatgpt.com/auth/login` or
 `auth.openai.com/log-in` / `email-verification` paths *again inside the
