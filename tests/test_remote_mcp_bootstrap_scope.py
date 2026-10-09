@@ -41,6 +41,8 @@ def test_empty_or_untrusted_diff_fails_closed():
 def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
     yml = (ROOT / ".github/workflows/remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
     assert "needs: scope" in yml
+    assert "group: shopvivaliz-remote-control-backend-bootstrap" in yml
+    assert "cancel-in-progress: false" in yml
     assert "browser_only: " in yml
     assert "needs.scope.outputs.browser_only == 'true'" in yml
     assert "needs.scope.outputs.browser_only != 'true'" in yml
