@@ -15,6 +15,10 @@ on:
       - 'remote-control-browser-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
       - 'scripts/remote_mcp_bootstrap_scope.py'
       - 'tests/test_remote_mcp_bootstrap_scope.py'
       - 'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service'
@@ -84,6 +88,8 @@ jobs:
           python3 tests/test_chatgpt_access_parity.py
           python3 tests/test_remote_mcp_bootstrap_scope.py
           bash -n scripts/setup-remote-control-browser-mcp.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
+          python3 tests/test_shopvivaliz_display_recovery.py
           python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
       - name: Install browser bridges (no production SSH or Windows bootstrap)
         shell: bash
@@ -127,6 +133,8 @@ jobs:
           python3 tests/remote-control-browser-mcp-test.py
           bash -n scripts/setup-remote-control-access.sh
           bash -n scripts/setup-remote-control-browser-mcp.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
+          python3 tests/test_shopvivaliz_display_recovery.py
 
       - name: Configure verified bootstrap SSH
         env:
