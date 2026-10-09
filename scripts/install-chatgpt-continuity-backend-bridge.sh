@@ -19,6 +19,12 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 worker_source="${CHATGPT_CONTINUITY_WORKER_SOURCE:-$script_dir/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
 browser_unit_source="$repo_root/ops/systemd/$browser_unit"
 browser_unit_target="/etc/systemd/system/$browser_unit"
+virtual_display_unit='shopvivaliz-virtual-display.service'
+virtual_display_unit_source="$repo_root/ops/systemd/$virtual_display_unit"
+virtual_display_unit_target="/etc/systemd/system/$virtual_display_unit"
+virtual_display_guard_source="$script_dir/chatgpt-continuity/shopvivaliz-virtual-display-guard.sh"
+virtual_display_guard_target="/usr/local/libexec/shopvivaliz-virtual-display-guard.sh"
+companion_browser_units=('shopvivaliz-atendimento-browser.service' 'shopvivaliz-chatgpt-browser.service')
 browser_guardian_source="$script_dir/chatgpt-continuity/chatgpt-browser-guardian.sh"
 browser_guardian_target="/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh"
 probe_cache_source="$script_dir/chatgpt-continuity/chatgpt-browser-probe-cache.py"
@@ -83,6 +89,11 @@ command -v sudo >/dev/null || fail 'sudo is required'
 sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser supervision'
 [[ -f "$worker_source" ]] || fail "worker source missing: $worker_source"
 [[ -f "$browser_unit_source" ]] || fail "browser systemd unit missing: $browser_unit_source"
+[[ -f "$virtual_display_unit_source" ]] || fail "virtual display unit missing: $virtual_display_unit_source"
+[[ -f "$virtual_display_guard_source" ]] || fail "virtual display guard missing: $virtual_display_guard_source"
+for companion in "${companion_browser_units[@]}"; do
+  [[ -f "$repo_root/ops/systemd/$companion" ]] || fail "browser companion unit missing: $companion"
+done
 [[ -f "$browser_guardian_source" ]] || fail "browser guardian missing: $browser_guardian_source"
 [[ -f "$probe_cache_source" ]] || fail "browser probe helper missing: $probe_cache_source"
 [[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
@@ -179,6 +190,20 @@ fi
 
 sudo -n install -d -m 755 /usr/local/libexec
 system_units_changed=false
+# Xvfb is an explicit boot dependency; do not require an interactive XRDP
+# login to create :99. The guard verifies ownership and creates only a
+# protected Xauthority cookie when the target display lacks one.
+if sudo_install_if_changed "$virtual_display_guard_source" "$virtual_display_guard_target" 755; then
+  system_units_changed=true
+fi
+if sudo_install_if_changed "$virtual_display_unit_source" "$virtual_display_unit_target" 644; then
+  system_units_changed=true
+fi
+for companion in "${companion_browser_units[@]}"; do
+  if sudo_install_if_changed "$repo_root/ops/systemd/$companion" "/etc/systemd/system/$companion" 644; then
+    system_units_changed=true
+  fi
+done
 if sudo -n test -e "$legacy_guardian_atendimento_override"; then
   sudo -n rm -f "$legacy_guardian_atendimento_override"
   system_units_changed=true
@@ -226,9 +251,17 @@ fi
 if [[ "$system_units_changed" = true ]]; then
   sudo -n systemctl daemon-reload
 fi
+# Ordering guarantee: display must be both active and accepting the expected
+# Xauthority cookie before any browser profile starts.
+sudo -n systemctl enable --now "$virtual_display_unit" >/dev/null
+sudo -n systemctl is-active --quiet "$virtual_display_unit" || fail 'virtual display did not become active'
 sudo -n systemctl enable "$browser_unit" >/dev/null
-if sudo -n systemctl is-active --quiet "$browser_unit" && [[ "$browser_unit_changed" = true ]]; then
-  sudo -n systemctl try-restart "$browser_unit"
+if sudo -n systemctl is-active --quiet "$browser_unit"; then
+  if [[ "$browser_unit_changed" = true ]]; then
+    sudo -n systemctl try-restart "$browser_unit"
+  fi
+else
+  sudo -n systemctl start "$browser_unit"
 fi
 sudo -n systemctl enable --now "$browser_guardian_timer" >/dev/null
 
