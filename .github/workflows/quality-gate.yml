@@ -40,6 +40,9 @@ on:
       - 'scripts/production-runtime-parity.mjs'
       - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/remote_mcp_bootstrap_scope.py'
+      - 'tests/test_remote_mcp_bootstrap_scope.py'
+      - '.github/workflows/remote-control-mcp-bootstrap.yml'
       - 'tests/public-layout-*.sh'
       - 'tests/chatgpt-account-diagnostic-contract-test.sh'
       - 'tests/test_chatgpt_access_parity.py'
@@ -118,6 +121,7 @@ jobs:
           python3 -m py_compile scripts/ecommerce-excellence-audit.py
           bash -n scripts/setup-remote-control-browser-mcp.sh
           python3 tests/test_chatgpt_access_parity.py
+          python3 tests/test_remote_mcp_bootstrap_scope.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
