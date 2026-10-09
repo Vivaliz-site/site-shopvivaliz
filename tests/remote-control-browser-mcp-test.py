@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import os
 from pathlib import Path
 import struct
@@ -73,6 +75,92 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_health"]["annotations"]["destructiveHint"])
 
+    def test_dedicated_bridge_health_uses_only_its_cdp_and_no_gui(self):
+        for port, session, cdp in (
+            ("5582", "atendimento", "9556"),
+            ("5583", "dev", "9559"),
+        ):
+            with self.subTest(session=session):
+                env = {
+                    "SHOPVIVALIZ_REMOTE_MCP_PORT": port,
+                    "SHOPVIVALIZ_BROWSER_SESSION_NAME": session,
+                    "SHOPVIVALIZ_BROWSER_CDP_URL": f"http://127.0.0.1:{cdp}",
+                }
+                document = json.dumps({
+                    "webSocketDebuggerUrl": f"ws://127.0.0.1:{cdp}/devtools/browser/identifier"
+                }).encode("utf-8")
+                with (
+                    mock.patch.dict(m.os.environ, env),
+                    mock.patch.object(m, "urlopen", return_value=io.BytesIO(document)) as fetch,
+                    mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+                ):
+                    health = m.browser_service_health()
+                self.assertTrue(health["ok"])
+                self.assertTrue(health["cdp_reachable"])
+                self.assertEqual(session, health["session"])
+                self.assertIsNone(health["account_authenticated"])
+                self.assertFalse(health["account_identity_verified"])
+                self.assertEqual(2, fetch.call_args.kwargs["timeout"])
+                self.assertEqual(f"http://127.0.0.1:{cdp}/json/version", fetch.call_args.args[0])
+
+    def test_dedicated_bridge_health_fails_closed_for_wrong_session(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5582",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen") as fetch,
+            mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+        ):
+            health = m.browser_service_health()
+        self.assertFalse(health["ok"])
+        self.assertEqual("cdp_session_binding_mismatch", health["reason"])
+        fetch.assert_not_called()
+
+    def test_dedicated_bridge_health_times_out_as_degraded_not_healthy(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen", side_effect=TimeoutError("CDP overloaded")),
+            mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+        ):
+            health = m.browser_service_health()
+        self.assertFalse(health["ok"])
+        self.assertEqual("cdp_unavailable", health["reason"])
+
+    def test_dedicated_bridge_health_rejects_untrusted_cdp_metadata(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        for data in (
+            {"webSocketDebuggerUrl": "ws://evil.example:9559/browser/test"},
+            {"webSocketDebuggerUrl": "ws://127.0.0.1:9556/browser/test"},
+            {"token": "not-proof-of-a-browser"},
+        ):
+            with self.subTest(data=data):
+                with (
+                    mock.patch.dict(m.os.environ, env),
+                    mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(data).encode())),
+                ):
+                    health = m.browser_service_health()
+                self.assertFalse(health["ok"])
+
+    def test_general_bridge_health_retains_gui_contract(self):
+        with (
+            mock.patch.dict(m.os.environ, {"SHOPVIVALIZ_REMOTE_MCP_PORT": "5581"}),
+            mock.patch.object(m, "browser_health", return_value={"ok": True, "mode": "gui"}) as gui,
+        ):
+            self.assertEqual({"ok": True, "mode": "gui"}, m.browser_service_health())
+        gui.assert_called_once_with()
+
     def test_browser_type_audit_redacts_text(self):
         captured = {}
         def fake_audit(tool, host, args, ok, summary):
@@ -112,17 +200,14 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("tempfile.mkdtemp", src)
         self.assertNotIn("tempfile.mkstemp", src)
 
-    def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
+    def test_browser_source_does_not_automate_debug_ports_or_profile_cookies(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
-        forbidden_runtime_tokens = (
-            "remote-debugging-port",
-            "devtoolsactiveport",
-            "/json/version",
-            "/json/list",
-            "cookies sqlite",
-        )
-        for token in forbidden_runtime_tokens:
+        for token in ("remote-debugging-port", "devtoolsactiveport", "/json/list", "cookies sqlite"):
             self.assertNotIn(token, src)
+        # CDP /json/version is allowed exclusively for bounded dedicated
+        # transport health, never for general GUI browsing or cookie access.
+        self.assertEqual(src.count('endpoint + "/json/version"'), 1)
+        self.assertIn("health = browser_service_health()", src)
 
     def test_tool_specs_remain_unique_when_base_exposes_browser_actions(self):
         names = [spec["name"] for spec in m.tool_specs()]

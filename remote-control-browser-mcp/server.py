@@ -442,6 +442,57 @@ def browser_health() -> dict[str, Any]:
     }
 
 
+# Dedicated corporate-account MCP bridges use CDP rather than the general GUI
+# browser. Their liveness must not block on X11/xdotool in fredconsole/:0.
+# This is a TRANSPORT check only, never evidence of ChatGPT sign-in.
+DEDICATED_BROWSER_BRIDGES = {
+    "5582": ("atendimento", "http://127.0.0.1:9556"),
+    "5583": ("dev", "http://127.0.0.1:9559"),
+}
+
+
+def browser_service_health() -> dict[str, Any]:
+    service_port = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "").strip()
+    binding = DEDICATED_BROWSER_BRIDGES.get(service_port)
+    if binding is None:
+        return browser_health()
+
+    session, endpoint = binding
+    result: dict[str, Any] = {
+        "ok": False,
+        "host": BROWSER_HOST,
+        "session": session,
+        "cdp_reachable": False,
+        "account_authenticated": None,
+        "account_identity_verified": False,
+    }
+    if (os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "").strip() != session
+            or os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL", "").rstrip("/") != endpoint):
+        result["reason"] = "cdp_session_binding_mismatch"
+        return result
+
+    # Never ask GUI automation for a health request. An overloaded/missing
+    # Chromium process returns a bounded, honest negative result.
+    try:
+        with urlopen(endpoint + "/json/version", timeout=2) as response:
+            raw = response.read(65537)
+        if len(raw) > 65536:
+            raise ValueError("cdp_version_oversized")
+        version = json.loads(raw)
+        ws = version.get("webSocketDebuggerUrl") if isinstance(version, dict) else None
+        if not isinstance(ws, str):
+            raise ValueError("cdp_browser_socket_missing")
+        parsed = urlsplit(ws)
+        cdp_port = int(urlsplit(endpoint).port or 0)
+        if parsed.scheme != "ws" or parsed.hostname not in {"127.0.0.1", "localhost"} or parsed.port != cdp_port:
+            raise ValueError("cdp_browser_socket_invalid")
+    except (OSError, ValueError, TypeError):
+        result["reason"] = "cdp_unavailable"
+        return result
+    result.update({"ok": True, "cdp_reachable": True})
+    return result
+
+
 def browser_tabs() -> dict[str, Any]:
     require_binary("xclip")
     windows = browser_windows()
@@ -1160,7 +1211,7 @@ class BrowserHandler(base.Handler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            health = browser_health()
+            health = browser_service_health()
             health.update({
                 "endpoint": "shopvivaliz-remote-control-browser-mcp",
                 "version": VERSION,
