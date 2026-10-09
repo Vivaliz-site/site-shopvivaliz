@@ -853,14 +853,14 @@ ACCOUNT_AUTH_EMAILS = {
     "dev": "dev@shopvivaliz.com.br",
     "atendimento": "atendimento@shopvivaliz.com.br",
 }
-ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google"}
+ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
 
 ACCOUNT_AUTH_NODE_SCRIPT = r"""
 const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
 const [session, tabId, action] = process.argv.slice(1);
 const ports = {dev: 9559, atendimento: 9556};
 if (!Object.prototype.hasOwnProperty.call(ports, session)) throw new Error("invalid_auth_session");
-if (!["fill_email","fill_password","fill_code","continue","resend","back_to_methods","open_login","continue_google"].includes(action)) throw new Error("invalid_auth_action");
+if (!["fill_email","fill_password","fill_code","continue","resend","back_to_methods","open_login","continue_google","continue_microsoft"].includes(action)) throw new Error("invalid_auth_action");
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
@@ -894,7 +894,7 @@ try {
         "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
-        "if(['back_to_methods','open_login','continue_google'].includes(action)){" +
+        "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
         "let choices=[];" +
         "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
@@ -906,9 +906,427 @@ try {
         "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in-or-create-account')throw Error('auth_stage_not_allowed');" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a)));" +
         "}" +
-        "if(action==='continue_google'){" +
-        "if(u.hostname!=='chatgpt.com'||u.pathname!=='/auth/login_with')throw Error('auth_stage_not_allowed');" +
-        "choices=[...document.querySelectorAll('button,a')].filter(e=>!e.disabled&&/^continue with google$/i.test(label(e)));" +
+        "if(action==='continue_google'||action==='continue_microsoft'){" +
+        "if(!((u.hostname==='auth.openai.com'&&u.pathname==='/log-in')||(u.hostname==='chatgpt.com'&&u.pathname==='/auth/login_with')))throw Error('auth_stage_not_allowed');" +
+        "const provider=action==='continue_google'?'google':'microsoft';choices=[...document.querySelectorAll('button,a')].filter(e=>!e.disabled&&new RegExp('^continue with '+provider+'" +
+        "}" +
+        "if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "choices[0].click();return {clicked:true};" +
+        "}" +
+        "if(action.startsWith('fill_')){" +
+        "let e=null;" +
+        "if(action==='fill_email')e=document.querySelector('input[type=email],input[name=email]');" +
+        "if(action==='fill_password')e=document.querySelector('input[type=password]');" +
+        "if(action==='fill_code')e=document.querySelector('input[autocomplete=one-time-code],input[name=code]');" +
+        "if(!e||e.tagName!=='INPUT'||e.disabled||e.readOnly)throw Error('auth_field_unavailable');" +
+        "e.focus();e.select();return {ready:true};" +
+        "}" +
+        "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
+        "const labels=action==='resend'?/^(?:resend(?: (?:email|e-mail|code))?|send a new (?:email|code)|reenviar(?: (?:e-?mail|c[oó]digo))?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
+        "const matches=buttons.filter(b=>labels.test(String(b.innerText||b.value||'').trim()));" +
+        "if(matches.length!==1)throw Error('auth_button_ambiguous_or_unavailable');" +
+        "matches[0].click();return {clicked:true};" +
+        "})()";
+    const r = await c.send("Runtime.evaluate",{expression:expr,returnByValue:true,awaitPromise:true});
+    if (r.exceptionDetails) throw new Error("auth_ui_preflight_failed");
+    const state = r.result?.value || {};
+    if (action.startsWith("fill_")) {
+        if (state.ready !== true) throw new Error("auth_field_unavailable");
+        await c.send("Input.insertText", {text:input});
+        console.log(JSON.stringify({ok:true,session,action,typed:true}));
+    } else {
+        if (state.clicked !== true) throw new Error("auth_button_unavailable");
+        console.log(JSON.stringify({ok:true,session,action,clicked:true}));
+    }
+} catch (error) {
+    const reason = String(error?.message || "auth_action_failed");
+    const known = /^(auth_[a-z_]+|invalid_auth_session|invalid_auth_action)$/;
+    console.error(known.test(reason) ? reason : "auth_action_failed");
+    process.exitCode = 1;
+} finally {
+    try { c?.close(); } catch {}
+    try { ws?.close(); } catch {}
+}
+"""
+
+def _auth_stage(url: str) -> str | None:
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https":
+            return None
+        if parsed.hostname == "auth.openai.com" and (
+            parsed.path == "/log-in-or-create-account"
+            or re.match(r"^/(log-in|email-verification)(/|$)", parsed.path)
+        ):
+            return parsed.path
+        if parsed.hostname == "chatgpt.com" and (
+            parsed.path == "/auth/login_with"
+            or re.match(r"^/auth/login(/|$)", parsed.path)
+        ):
+            return parsed.path
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_auth_session_invalid")
+    endpoint = "http://127.0.0.1:" + str(ACCOUNT_AUTH_PORTS[session]) + "/json"
+    with urlopen(endpoint, timeout=4) as response:
+        raw = response.read(1_048_577)
+    if len(raw) > 1_048_576:
+        raise ValueError("account_auth_tabs_oversized")
+    pages = json.loads(raw)
+    if not isinstance(pages, list) or len(pages) > 512:
+        raise ValueError("account_auth_tabs_invalid")
+    tabs = []
+    for item in pages[:128]:
+        if not isinstance(item, dict) or item.get("type") != "page":
+            continue
+        stage = _auth_stage(str(item.get("url") or ""))
+        if stage is not None and re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(item.get("id") or "")):
+            tabs.append({"tab_id": item["id"], "stage": stage, "session": session})
+    return {"ok": True, "session": session, "tabs": tabs}
+
+
+def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    session = str(args.get("session") or "")
+    action = str(args.get("action") or "")
+    tab_id = str(args.get("tab_id") or "")
+    if session not in ACCOUNT_AUTH_PORTS or action not in ACCOUNT_AUTH_ACTIONS:
+        raise ValueError("account_auth_scope_invalid")
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
+        raise ValueError("account_auth_tab_invalid")
+    if not base._durable_handoff_enabled():
+        raise ValueError("account_auth_lease_mode_required")
+    lease_id = str(args.get("runtime_lease_id") or "")
+    fencing_token = args.get("runtime_fencing_token")
+    if not lease_id or fencing_token is None:
+        raise ValueError("account_auth_runtime_lock_required")
+    try:
+        lease = base.runtime_lock.assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")
+    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
+        raise ValueError("account_auth_runtime_lock_invalid") from None
+    if (lease.get("owner_kind") != "maintenance"
+            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
+        raise ValueError("account_auth_maintenance_owner_required")
+    value = str(args.get("value") or "")
+    if action.startswith("fill_"):
+        if not value or len(value) > 512 or "\x00" in value or "\n" in value:
+            raise ValueError("account_auth_value_invalid")
+        if action == "fill_email" and value.strip().lower() != ACCOUNT_AUTH_EMAILS[session]:
+            raise ValueError("account_auth_email_mismatch")
+        if action == "fill_code" and not re.fullmatch(r"[A-Za-z0-9]{4,32}", value):
+            raise ValueError("account_auth_code_invalid")
+    elif value:
+        raise ValueError("account_auth_value_not_allowed")
+    invocation = [
+        base.BROWSER_NODE_BIN, "--input-type=module", "-e",
+        ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id, action,
+    ]
+    result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
+    result["ok"] = result.get("exit_code") == 0
+    return result
+
+
+def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if name == "browser_auth_tabs":
+        return browser_auth_tabs(args)
+    if name == "browser_auth_action":
+        return browser_auth_action(args, cancel_check=cancel_check)
+    if name in UNIVERSAL_MCP_TOOLS:
+        return universal_browser_call(name, args)
+    if name == "desktop.session.attach":
+        return desktop_session_attach(args)
+    if name == "browser.dom.inspect":
+        return browser_dom_inspect(args, cancel_check=cancel_check)
+    if name == "browser.click":
+        return browser_click_index(args, cancel_check=cancel_check)
+    if name in {"desktop_open", "desktop_click", "desktop_type"}:
+        base._assert_runtime_mutation(name, args)
+    if name == "desktop_health":
+        return desktop_health(args)
+    if name == "desktop_open":
+        return desktop_open(args)
+    if name == "desktop_screenshot":
+        return desktop_screenshot(args)
+    if name == "desktop_click":
+        return desktop_click(args)
+    if name == "desktop_type":
+        return desktop_type(args)
+    if name in ATTENDIMENTO_TOOL_MAP:
+        return BASE_EXECUTE_TOOL(ATTENDIMENTO_TOOL_MAP[name], args, cancel_check=cancel_check)
+    if name == "browser_health":
+        return browser_health()
+    if name == "browser_gui_tabs":
+        return browser_tabs()
+    if name == "browser_open":
+        return browser_open(args)
+    if name == "browser_gui_navigate":
+        return browser_navigate(args)
+    if name == "browser_screenshot":
+        return browser_screenshot()
+    if name == "browser_gui_click":
+        return browser_click(args)
+    if name == "browser_gui_type":
+        return browser_type(args)
+
+    # Compatibility shim for connectors that expose the graphical browser
+    # contracts under the legacy public names. Preserve the canonical CDP
+    # actions when their tab_id/selector arguments are present.
+    if name == "browser_navigate" and "tab_id" not in args:
+        return browser_navigate(args)
+    if name == "browser_click" and "x" in args and "y" in args:
+        return browser_click(args)
+    if name == "browser_type" and "tab_id" not in args and "selector" not in args:
+        return browser_type(args)
+
+    return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
+
+
+def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: str) -> str:
+    safe = dict(args)
+    if tool == "browser_auth_action" and "value" in safe:
+        raw = str(safe.pop("value"))
+        safe["value_length"] = len(raw)
+    if tool in {"browser_gui_type", "browser_type", "browser_atendimento_type", "browser_universal_fill"} and "text" in safe:
+        raw = str(safe.pop("text"))
+        safe.pop("text_sha256", None)
+        safe["text_length"] = len(raw)
+    if (tool in {"browser_open", "browser_gui_navigate", "browser_atendimento_navigate"} or tool in UNIVERSAL_MCP_TOOLS) and "url" in safe:
+        safe["url"] = safe_url(str(safe["url"]))
+    return BASE_AUDIT(tool, host or (BROWSER_HOST if tool in BROWSER_TOOLS else host), safe, ok, summary)
+
+
+BROWSER_TOOL_SPECS = [
+    {
+        "name": "browser_auth_tabs",
+        "description": "List only official login-stage tabs for one isolated Dev or Atendimento ChatGPT profile, excluding URLs, query parameters, and secrets.",
+        "inputSchema": {"type": "object", "properties": {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, "required": ["session"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_auth_action",
+        "description": "Perform a tightly restricted official ChatGPT login step for one isolated session only with a live account-specific maintenance runtime lease. Values use protected stdin and are never recorded; does not bypass MFA, CAPTCHA, OAuth consent, or conversation mutation gates.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session": {"type": "string", "enum": ["dev", "atendimento"]},
+                "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
+                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+                "value": {"type": "string", "maxLength": 512},
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            },
+            "required": ["session", "tab_id", "action", "runtime_lease_id", "runtime_fencing_token"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
+    {
+        "name": "desktop.session.attach",
+        "description": "Attach or focus an existing approved Fred-Win or KOCEPSV desktop session without creating duplicate sessions.",
+        "inputSchema": {"type": "object", "properties": {"host": {"type": "string", "enum": ["Fred-Win", "KOCEPSV"]}}, "required": ["host"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.dom.inspect",
+        "description": "Inspect sanitized visible interactive DOM controls in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}}, "required": ["tab_id"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser.click",
+        "description": "Click a DOM control by index from browser.dom.inspect in an allowlisted canonical browser tab.",
+        "inputSchema": {"type": "object", "properties": {"tab_id": {"type": "string", "minLength": 1}, "index": {"type": "integer", "minimum": 0, "maximum": 119}}, "required": ["tab_id", "index"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
+    {
+        "name": "browser_health",
+        "description": "Check graphical backend browser dependencies and visible browser window availability.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_gui_tabs",
+        "description": "List tabs from the isolated graphical helper browser; canonical continuity tabs use browser_tabs.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_open",
+        "description": "Open an http(s) URL in the isolated graphical helper browser. The returned surface is isolated_gui; browser_tabs lists the canonical continuity session, while browser_gui_tabs lists this helper.",
+        "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
+    },
+    {
+        "name": "browser_gui_navigate",
+        "description": "Navigate the isolated graphical helper browser; canonical continuity navigation uses browser_navigate.",
+        "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": False, "openWorldHint": True, "destructiveHint": False},
+    },
+    {
+        "name": "browser_screenshot",
+        "description": "Capture the current graphical backend display and return it as a PNG image.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_gui_click",
+        "description": "Click absolute coordinates in the isolated graphical helper browser.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "integer", "minimum": 0},
+                "y": {"type": "integer", "minimum": 0},
+                "button": {"type": "string", "enum": ["left", "middle", "right"]},
+                "clicks": {"type": "integer", "minimum": 1, "maximum": 3},
+            },
+            "required": ["x", "y"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
+    {
+        "name": "browser_gui_type",
+        "description": "Type text into the focused element of the isolated graphical helper browser. Typed text is never persisted in audit logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "maxLength": 20000},
+                "press_enter": {"type": "boolean"},
+            },
+            "required": ["text"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": True},
+    },
+]
+
+
+def atendimento_tool_specs() -> list[dict[str, Any]]:
+    base_specs = {spec["name"]: spec for spec in BASE_TOOL_SPECS()}
+    out = []
+    for public_name, base_name in ATTENDIMENTO_TOOL_MAP.items():
+        src = base_specs[base_name]
+        spec = dict(src)
+        spec["name"] = public_name
+        spec["description"] = f"Use the isolated atendimento ChatGPT session: {src['description']}"
+        out.append(spec)
+    return out
+
+
+def tool_specs() -> list[dict[str, Any]]:
+    browser_names = {spec["name"] for spec in BROWSER_TOOL_SPECS}
+    atendimento_names = set(ATTENDIMENTO_TOOL_MAP)
+    inherited = [spec for spec in BASE_TOOL_SPECS() if spec["name"] not in browser_names and spec["name"] not in atendimento_names]
+    return inherited + BROWSER_TOOL_SPECS + UNIVERSAL_MCP_SCHEMAS + atendimento_tool_specs()
+
+
+base.execute_tool = execute_tool
+base.tool_specs = tool_specs
+base.audit = audit
+base.VERSION = VERSION
+
+
+class BrowserHandler(base.Handler):
+    server_version = "ShopVivalizRemoteControlBrowserMCP/" + VERSION
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            health = browser_service_health()
+            health.update({
+                "endpoint": "shopvivaliz-remote-control-browser-mcp",
+                "version": VERSION,
+                "base_endpoint": "shopvivaliz-remote-control-mcp",
+                "browser_host": BROWSER_HOST,
+                "timestamp": base.now(),
+            })
+            self._json(200, health)
+            return
+        self._json(405, {"error": "method_not_allowed"})
+
+    def do_POST(self) -> None:
+        if self.path != "/mcp":
+            self._json(404, {"error": "not_found"})
+            return
+        if self.client_address[0] not in {"127.0.0.1", "::1"}:
+            self._json(403, {"error": "loopback_only"})
+            return
+        if not base.is_authorized(self.headers.get("Authorization", "")):
+            self._json(401, {"error": "unauthorized"})
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size <= 0 or size > 1_048_576:
+                raise ValueError("invalid_body_size")
+            req = json.loads(self.rfile.read(size))
+            method = req.get("method")
+            rid = req.get("id")
+            if method == "initialize":
+                result = {
+                    "protocolVersion": base.PROTOCOL_VERSION,
+                    "capabilities": {"tools": {"listChanged": False}},
+                    "serverInfo": {"name": "shopvivaliz-remote-control-browser", "version": VERSION},
+                }
+            elif method == "tools/list":
+                result = {"tools": tool_specs()}
+            elif method == "tools/call":
+                params = req.get("params") or {}
+                name = str(params.get("name") or "")
+                args = params.get("arguments") or {}
+                host = args.get("host") or (BROWSER_HOST if name in BROWSER_TOOLS or name in ATTENDIMENTO_TOOLS or name in ACCOUNT_AUTH_TOOLS else None)
+                try:
+                    output = execute_tool(name, args, cancel_check=self._client_disconnected)
+                    image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None
+                    ok = not (isinstance(output, dict) and output.get("ok") is False)
+                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    if isinstance(output, dict):
+                        output["audit_id"] = aid
+                    content = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
+                    if image_data:
+                        content.append({"type": "image", "data": image_data, "mimeType": "image/png"})
+                    result = {"content": content, "structuredContent": output, "isError": not ok}
+                except base.ClientDisconnected:
+                    audit(name, host, args, False, "client_disconnected_command_cancelled")
+                    raise
+                except Exception as exc:
+                    aid = audit(name, host, args, False, str(exc))
+                    output = {"error": base.redact_text(str(exc)), "audit_id": aid}
+                    result = {
+                        "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}],
+                        "structuredContent": output,
+                        "isError": True,
+                    }
+            elif method and method.startswith("notifications/"):
+                self.send_response(202)
+                self.end_headers()
+                return
+            else:
+                self._json(200, {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "Method not found"}})
+                return
+            self._json(200, {"jsonrpc": "2.0", "id": rid, "result": result})
+        except base.ClientDisconnected:
+            self.close_connection = True
+        except Exception as exc:
+            self._json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": base.redact_text(str(exc))}})
+
+
+def main() -> None:
+    base.STATE_DIR.mkdir(parents=True, exist_ok=True)
+    base.init_db()
+    server = base.ThreadingHTTPServer((base.LISTEN_HOST, base.LISTEN_PORT), BrowserHandler)
+    try:
+        server.serve_forever(poll_interval=0.5)
+    finally:
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()
+,'i').test(label(e)));" +
         "}" +
         "if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "choices[0].click();return {clicked:true};" +
