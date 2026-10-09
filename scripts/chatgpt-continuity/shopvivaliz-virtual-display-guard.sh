@@ -31,14 +31,16 @@ case "$mode" in
     fi
     ;;
   wait)
+    display_ready=false
     for _ in $(seq 1 40); do
       if [[ -S "$socket" ]] && DISPLAY="$display" XAUTHORITY="$auth_file" /usr/bin/xset -display "$display" q >/dev/null 2>&1; then
-        echo 'VIRTUAL_DISPLAY_99=READY'
-        exit 0
+        display_ready=true
+        break
       fi
       sleep 0.25
     done
-    fail 'x11_socket_or_authorization_not_ready'
+    [[ "$display_ready" == true ]] || fail 'x11_socket_or_authorization_not_ready'
+    echo 'VIRTUAL_DISPLAY_99=READY'
     ;;
   *)
     fail 'invalid_mode'
