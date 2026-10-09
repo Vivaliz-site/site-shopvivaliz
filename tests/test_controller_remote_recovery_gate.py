@@ -61,6 +61,7 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(match, "missing canonical backend recovery action")
         stage = match.group(1)
         self.assertIn("task_resume_worker.py", stage)
+        self.assertIn("shopvivaliz-task-resume-worker.service", stage)
         self.assertIn("scripts/continuity/*.py", stage)
         self.assertIn("controller-recovery-with-lease.py", stage)
         self.assertNotIn("bash '$remote_dir/scripts/install-gemini-24x7-controller.sh'", stage)
