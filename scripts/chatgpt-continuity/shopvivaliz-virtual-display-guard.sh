@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Secure, persistent :99 X11 display for the isolated ChatGPT browser profiles.
+set -Eeuo pipefail
+
+mode="${1:-}"
+display=':99'
+socket='/tmp/.X11-unix/X99'
+auth_file='/home/fredrdp/.Xauthority'
+
+fail() { printf 'VIRTUAL_DISPLAY_ERROR=%s\n' "$1" >&2; exit 2; }
+[[ "$(id -un)" == 'fredrdp' ]] || fail 'wrong_runtime_user'
+[[ -x /usr/bin/Xvfb && -x /usr/bin/xauth && -x /usr/bin/openssl && -x /usr/bin/xset ]] || fail 'missing_x11_binary'
+
+case "$mode" in
+  prepare)
+    # A verified existing :99 session may be adopted without changing its
+    # cookie or interrupting live authenticated browser profiles. Unknown
+    # owners and unauthenticated sockets must fail closed.
+    if [[ -S "$socket" ]] && ! DISPLAY="$display" XAUTHORITY="$auth_file" /usr/bin/xset -display "$display" q >/dev/null 2>&1; then
+      fail 'display_99_unverified_owner'
+    fi
+    umask 077
+    if [[ ! -e "$auth_file" ]]; then
+      : > "$auth_file"
+    fi
+    [[ -f "$auth_file" && -O "$auth_file" ]] || fail 'authority_owner_invalid'
+    chmod 600 "$auth_file"
+    if [[ ! -S "$socket" ]] && ! /usr/bin/xauth -f "$auth_file" list :99 2>/dev/null | grep -q .; then
+      # Feed a fresh cookie to xauth via stdin. Never put it in process argv,
+      # command logging, CI output or the ChatGPT/browser audit trail.
+      cookie="$(/usr/bin/openssl rand -hex 16)"
+      printf 'add :99 MIT-MAGIC-COOKIE-1 %s\n' "$cookie" | /usr/bin/xauth -q -f "$auth_file" -
+      unset cookie
+    fi
+    ;;
+  serve)
+    if [[ -S "$socket" ]]; then
+      # The prepare phase proved this exact Xauthority can access the already
+      # running display. Do not replace it or interrupt existing sessions.
+      while [[ -S "$socket" ]] && DISPLAY="$display" XAUTHORITY="$auth_file" /usr/bin/xset -display "$display" q >/dev/null 2>&1; do
+        sleep 2
+      done
+      [[ ! -S "$socket" ]] || fail 'existing_display_became_unverifiable'
+    fi
+    # A freed display can now be taken over by this dedicated systemd unit.
+    # Xvfb inherits the authenticated fredrdp identity; no -ac or TCP port.
+    exec /usr/bin/Xvfb :99 -screen 0 1600x900x24 -nolisten tcp -auth "$auth_file"
+    ;;
+  wait)
+    display_ready=false
+    for _ in $(seq 1 40); do
+      if [[ -S "$socket" ]] && DISPLAY="$display" XAUTHORITY="$auth_file" /usr/bin/xset -display "$display" q >/dev/null 2>&1; then
+        display_ready=true
+        break
+      fi
+      sleep 0.25
+    done
+    [[ "$display_ready" == true ]] || fail 'x11_socket_or_authorization_not_ready'
+    echo 'VIRTUAL_DISPLAY_99=READY'
+    ;;
+  *)
+    fail 'invalid_mode'
+    ;;
+esac

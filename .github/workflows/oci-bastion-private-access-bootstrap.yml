@@ -323,8 +323,12 @@ jobs:
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
-          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service; rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
+          test -f scripts/continuity/conversation_lease.py
+          test -f scripts/continuity/runtime_lock.py
+          test -f scripts/continuity/mutation_gate.py
+          test -f scripts/continuity/foreground_handoff.py
+          "${BACKEND_SCP[@]}" -r remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity ubuntu@127.0.0.1:/tmp/
+          "${BACKEND_SSH[@]}" 'sudo -n bash /tmp/setup-remote-control-access.sh install-controller /tmp/server.py /tmp/shopvivaliz-remote-control-mcp.service /tmp/agent_task_state.py /tmp/continuity; rm -rf /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service /tmp/agent_task_state.py /tmp/continuity'
           PUBKEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub')"
           test -n "$PUBKEY"
           PUB_B64="$(printf '%s' "$PUBKEY" | base64 -w0)"
@@ -522,7 +526,11 @@ jobs:
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
           BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
           BACKEND_SCP=(scp "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -P "$BACKEND_TUNNEL_PORT")
-          "${BACKEND_SCP[@]}" remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service ubuntu@127.0.0.1:/tmp/
+          test -f scripts/continuity/conversation_lease.py
+          test -f scripts/continuity/runtime_lock.py
+          test -f scripts/continuity/mutation_gate.py
+          test -f scripts/continuity/foreground_handoff.py
+          "${BACKEND_SCP[@]}" -r remote-control-mcp/server.py scripts/setup-remote-control-access.sh deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity ubuntu@127.0.0.1:/tmp/
           expected_server="$(sha256sum remote-control-mcp/server.py | awk '{print $1}')"
           expected_unit="$(sha256sum deploy/systemd/shopvivaliz-remote-control-mcp.service | awk '{print $1}')"
           "${BACKEND_SSH[@]}" "sudo -n env EXPECTED_SERVER='$expected_server' EXPECTED_UNIT='$expected_unit' python3 -" <<'PY'
@@ -563,6 +571,7 @@ jobs:
               subprocess.run([
                   'bash', '/tmp/setup-remote-control-access.sh', 'install-controller',
                   '/tmp/server.py', '/tmp/shopvivaliz-remote-control-mcp.service',
+                  '/tmp/agent_task_state.py', '/tmp/continuity',
               ], check=True)
               installed_server = subprocess.check_output(['sha256sum', '/opt/shopvivaliz-remote-control/server.py'], text=True).split()[0]
               installed_unit = subprocess.check_output(['sha256sum', '/etc/systemd/system/shopvivaliz-remote-control-mcp.service'], text=True).split()[0]
@@ -664,7 +673,7 @@ jobs:
           print('DURABLE_V2_FOUR_HOST_SMOKE=PASS')
           print('DURABLE_V2_PRODUCTION_E2E=PASS')
           PY
-          "${BACKEND_SSH[@]}" 'rm -f /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service'
+          "${BACKEND_SSH[@]}" 'rm -rf /tmp/server.py /tmp/setup-remote-control-access.sh /tmp/shopvivaliz-remote-control-mcp.service /tmp/agent_task_state.py /tmp/continuity'
 
       - name: Submit disconnected runtime proof
         if: github.event.issue.body == 'action=runtime-proof-submit'
@@ -739,7 +748,7 @@ jobs:
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-guardian.sh "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
           "${BACKEND_SCP[@]}" scripts/chatgpt-continuity/chatgpt-browser-probe-cache.py "ubuntu@127.0.0.1:$remote_dir/scripts/chatgpt-continuity/"
-          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
+          "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-dev-browser.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.service "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
           "${BACKEND_SCP[@]}" ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer "ubuntu@127.0.0.1:$remote_dir/ops/systemd/"
 
@@ -778,7 +787,7 @@ jobs:
           "${BACKEND_SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'
           install_output=''
           install_rc=0
-          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9555'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
+          if install_output="$("${BACKEND_SSH[@]}" "env             CHATGPT_CONTINUITY_WORKER_SOURCE='$remote_dir/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs'             CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER='shopvivaliz.com.br'             CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559'             bash '$remote_dir/scripts/install-chatgpt-continuity-backend-bridge.sh'" 2>&1)"
           then
             install_rc=0
           else

@@ -6,12 +6,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   validateRequest,
   classifyRateLimit,
+  readRateLimitState,
   exactModelMatches,
   sanitizeBridgeError,
   remainingRequestMs,
   resolveCodexWebSearchMode,
   isDirectInvocation,
   beginHeartbeat,
+  profileHomesForRequest,
+  accountReadParams,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -23,6 +26,28 @@ const valid = validateRequest({
 assert.equal(valid.model, 'gpt-5.6-sol');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
+
+const devScoped = validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'dev',
+});
+assert.equal(devScoped.profile, 'dev');
+assert.deepEqual(
+  profileHomesForRequest('dev', '/home/ubuntu/.codex-business'),
+  ['/home/ubuntu/.codex-business/dev'],
+);
+assert.throws(() => validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'fredmourao',
+}), /invalid_profile/);
+
+assert.deepEqual(accountReadParams(), { refreshToken: false });
 
 assert.equal(resolveCodexWebSearchMode(true, undefined), 'live');
 assert.equal(resolveCodexWebSearchMode(true, 'cached'), 'cached');
@@ -53,6 +78,13 @@ assert.equal(classifyRateLimit({
   rateLimitReachedType: null,
 }), 'available');
 
+assert.equal(await readRateLimitState(async () => {
+  throw new Error('rate telemetry unavailable');
+}), 'unknown');
+assert.equal(await readRateLimitState(async () => ({
+  rateLimits: { primary: { usedPercent: 2 }, rateLimitReachedType: null },
+})), 'available');
+
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-sol'), true);
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
 
@@ -69,6 +101,11 @@ assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, import.meta.fi
 fs.rmSync(invocationDir, { recursive: true, force: true });
 
 const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
+assert.match(
+  bridgeSource,
+  /const profiles = profileHomesForRequest\(request\.profile\)/,
+  'request-scoped dev profile must control inference routing',
+);
 assert.match(
   bridgeSource,
   /Promise\.allSettled\(profiles\.map/,
@@ -104,9 +141,11 @@ assert.equal(heartbeatHeaders[0].status, 200);
 assert.equal(endedPayload, JSON.stringify({ ok: true }));
 assert.equal(clearedTimer, fakeTimer);
 const safe = sanitizeBridgeError(
-  'Authorization: Bearer sk-secret-token quota reached for user@example.com'
+  'Authorization: Bearer [REDACTED] quota reached for user@example.com'
 );
-assert(!safe.includes('sk-secret-token'));
+assert(!safe.includes('[REDACTED_PRIVATE_KEY]'));
 assert(!safe.includes('user@example.com'));
 
 console.log('AI_SQUAD_CODEX_BRIDGE_TEST=PASS');
+const bridgeSourceAuth = fs.readFileSync(new URL('../ops/ai-squad/codex-bridge.mjs', import.meta.url), 'utf8');
+assert.match(bridgeSourceAuth, /account\/read[\s\S]*accountReadParams\(\)/);

@@ -77,3 +77,9 @@ def test_root_htaccess_blocks_public_technical_artifacts() -> None:
     active_rules = {line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")}
     assert r"RewriteRule \.(?:md|py|sh|ps1|bat|ya?ml|csv|xlsx?|toml|vsix)(?:/|$) - [F,L,NC]" in active_rules
     assert r"RewriteRule ^[^/]+\.(?:json|lock)(?:/|$) - [F,L,NC]" in active_rules
+
+
+def test_server_side_php_includes_not_http_executable() -> None:
+    rules = (ROOT / ".htaccess").read_text(encoding="utf-8")
+    assert r"RewriteRule ^includes/.*\.php$ - [F,L,NC]" in rules
+    # PHP internal require/include statements are not HTTP requests and remain unaffected.

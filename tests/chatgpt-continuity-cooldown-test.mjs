@@ -31,7 +31,7 @@ test('five-minute cooldown renews local heartbeat without a browser check', asyn
   }, () => true, () => true), error => error===stop);
  assert.equal(calls,1);
 });
-function adapter({initialChecks=false,checksAfterReload=false}={}) {
+function adapter({initialChecks=false,checksAfterReload=false,streamStatus='IN_PROGRESS'}={}) {
  let checks=initialChecks,generating=true;
  const writes=[];
  return {writes,async evaluate(expression) {
@@ -41,7 +41,7 @@ function adapter({initialChecks=false,checksAfterReload=false}={}) {
   if(source.includes('continuity-additional-checks-probe')) return checks;
   if(source.includes('location.reload()')) {writes.push('reload');checks||=checksAfterReload;return true;}
   if(source.includes('stale-complete-stop-clear')) {writes.push('stop');generating=false;return true;}
-  if(source.includes('/stream_status')) return {http_status:200,status:'IN_PROGRESS'};
+  if(source.includes('/stream_status')) return {http_status:200,status:streamStatus};
   if(source.includes('stop-button')) return generating;
   if(source.includes('snapshotSource')) return {count:0,lastText:'',lastLength:0,surfaceText:'',surfaceLength:0,conversationPath:'/c/test-bound-conversation'};
   if(source.includes('continuity-conversation-identity-probe')) return '/c/test-bound-conversation';
@@ -51,7 +51,7 @@ function adapter({initialChecks=false,checksAfterReload=false}={}) {
  },close(){}};
 }
 test('checks appearing after reattach prevent Stop and continuation', async () => {
- const cdp=adapter({checksAfterReload:true});
+ const cdp=adapter({checksAfterReload:true,streamStatus:'COMPLETE'});
  const result=await attemptNudge('isolated-test',async()=>cdp,async()=>false,async()=>true);
  assert.equal(result.failure_reason,'additional_checks');
  assert.equal(result.sent,false);

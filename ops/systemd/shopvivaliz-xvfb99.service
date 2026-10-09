@@ -1,0 +1,24 @@
+[Unit]
+Description=ShopVivaliz protected Xvfb display 99 for corporate ChatGPT profiles
+After=systemd-tmpfiles-setup.service
+Before=shopvivaliz-dev-browser.service shopvivaliz-atendimento-browser.service shopvivaliz-chatgpt-browser.service shopvivaliz-authenticated-browser-wm.service
+
+[Service]
+Type=exec
+User=fredrdp
+Group=fredrdp
+Environment=HOME=/home/fredrdp
+ExecStartPre=+/usr/bin/install -d -m 1777 /tmp/.X11-unix
+ExecStartPre=/usr/local/libexec/shopvivaliz-xvfb99-prepare.sh ensure
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1600x900x24 -nolisten tcp -auth /home/fredrdp/.Xauthority
+ExecStartPost=/usr/local/libexec/shopvivaliz-xvfb99-prepare.sh wait
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

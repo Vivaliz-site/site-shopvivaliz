@@ -51,17 +51,33 @@ while ($true) {
             -R 2222:127.0.0.1:22 `
             -R 5557:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
-            -o 'ServerAliveInterval=30' `
-            -o 'ServerAliveCountMax=3' `
+            -o 'ConnectTimeout=8' `
+            -o 'ServerAliveInterval=15' `
+            -o 'ServerAliveCountMax=2' `
             -o 'ExitOnForwardFailure=yes' `
             -o 'StrictHostKeyChecking=yes' `
             -o ("UserKnownHostsFile=" + $KnownHostsPath) `
             ${VMUser}@${VMHost} `
-            -N -T 2>&1 | ForEach-Object { Write-TunnelLog 'SSH lifecycle message received' }
+            -N -T 2>&1 | ForEach-Object {
+                # Record only a reason class; never persist raw SSH output, paths or secrets.
+                $line = [string]$_
+                $reason = 'other'
+                if ($line -match '(?i)remote port forwarding failed|cannot listen to port') {
+                    $reason = 'remote_forward_bind_failed'
+                } elseif ($line -match '(?i)timed out|timeout') {
+                    $reason = 'transport_timeout'
+                } elseif ($line -match '(?i)connection (reset|refused|closed)|broken pipe') {
+                    $reason = 'transport_closed'
+                } elseif ($line -match '(?i)host key verification failed|permission denied') {
+                    $reason = 'ssh_authentication_failed'
+                }
+                Write-TunnelLog ("SSH lifecycle reason=" + $reason)
+            }
+        Write-TunnelLog ("SSH exit_code=" + [string]$LASTEXITCODE)
     }
     catch {
         Write-TunnelLog ('ERROR tunnel exception type=' + $_.Exception.GetType().Name)
     }
-    Write-TunnelLog 'Tunnel disconnected; retrying in 10 seconds'
-    Start-Sleep -Seconds 10
+    Write-TunnelLog 'Tunnel disconnected; retrying in 5 seconds'
+    Start-Sleep -Seconds 5
 }

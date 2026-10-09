@@ -101,8 +101,11 @@ def backup_target(profile, target):
         manifest.write_text(f"{digest}  {Path(obj).name}\n")
         put_object(dump, obj)
         put_object(manifest, obj + ".sha256")
-        verify_remote_size(obj, size)
-        print(f"backup_verified name={target['name']} bytes={size} restore_entries={entries} sha256={digest}")
+        remote_entries = verify_remote_copy(obj, size, digest)
+        print(
+            f"backup_verified name={target['name']} bytes={size} "
+            f"restore_entries={entries} remote_restore_entries={remote_entries} sha256={digest}"
+        )
 
 
 def put_object(path, name):
@@ -111,14 +114,38 @@ def put_object(path, name):
                  "--file", str(path), "--name", name, "--force"], stdout=subprocess.DEVNULL)
 
 
-def verify_remote_size(name, expected):
-    raw = subprocess.check_output([OCI, "os", "object", "head", "--auth", "instance_principal",
-                                   "--namespace-name", NAMESPACE, "--bucket-name", BUCKET,
-                                   "--name", name], text=True)
-    data = json.loads(raw)["data"] if "data" in json.loads(raw) else json.loads(raw)
-    actual = int(data.get("content-length") or data.get("content_length") or 0)
-    if actual != expected:
-        raise RuntimeError(f"remote size mismatch for {name}: local={expected} remote={actual}")
+def verify_remote_copy(name, expected_size, expected_digest):
+    with tempfile.TemporaryDirectory(prefix="shopvivaliz-db-remote-verify-") as td:
+        remote_dump = Path(td) / "remote.dump"
+        remote_manifest = Path(td) / "remote.sha256"
+        remote_listing = Path(td) / "remote.restore.list"
+        run_checked([OCI, "os", "object", "get", "--auth", "instance_principal",
+                     "--namespace-name", NAMESPACE, "--bucket-name", BUCKET,
+                     "--name", name, "--file", str(remote_dump)], stdout=subprocess.DEVNULL)
+        run_checked([OCI, "os", "object", "get", "--auth", "instance_principal",
+                     "--namespace-name", NAMESPACE, "--bucket-name", BUCKET,
+                     "--name", name + ".sha256", "--file", str(remote_manifest)], stdout=subprocess.DEVNULL)
+        actual_size = remote_dump.stat().st_size
+        if actual_size != expected_size:
+            raise RuntimeError(
+                f"remote size mismatch for {name}: local={expected_size} remote={actual_size}"
+            )
+        manifest_fields = remote_manifest.read_text().split()
+        manifest_digest = manifest_fields[0] if manifest_fields else ""
+        if manifest_digest != expected_digest:
+            raise RuntimeError(f"remote checksum manifest mismatch for {name}")
+        actual_digest = sha256_file(remote_dump)
+        if actual_digest != expected_digest:
+            raise RuntimeError(f"remote sha256 mismatch for {name}")
+        with open(remote_listing, "w") as out:
+            run_checked([PG_RESTORE, "-l", str(remote_dump)], stdout=out)
+        entries = sum(
+            1 for line in remote_listing.read_text().splitlines()
+            if line and not line.startswith(";")
+        )
+        if entries < 5:
+            raise RuntimeError(f"remote restore list too small for {name}: {entries}")
+        return entries
 
 
 def main():

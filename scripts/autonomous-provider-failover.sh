@@ -13,12 +13,28 @@ OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
 CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
-CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.05}"
+CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.50}"
 CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
+CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"
+SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK:-0}"
 SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK="${SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK:-0}"
 mkdir -p "$LOG_DIR"
 : > "$ATTEMPTS"
 : > "$OUTPUT"
+
+if [ "${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}" = "1" ] && [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  required_resume_vars=(
+    SHOPVIVALIZ_RESUME_CONVERSATION_ID SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION SHOPVIVALIZ_RESUME_OWNER_ID
+    SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN
+    SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN
+  )
+  for required_var in "${required_resume_vars[@]}"; do
+    if [ -z "${!required_var:-}" ]; then
+      echo "durable resume ownership metadata missing: $required_var" >&2
+      exit 76
+    fi
+  done
+fi
 
 has_change() {
   ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]
@@ -59,6 +75,13 @@ persist_running_checkpoint() {
   [ -n "$SHOPVIVALIZ_TASK_ID" ] || return 0
 
   if ! python3 scripts/agent_task_state.py show --task "$SHOPVIVALIZ_TASK_ID" >/dev/null 2>&1; then
+    # CHECKPOINT_FIRST_NO_ORPHAN: detached recovery must never invent RUNNING.
+    # Durable foreground origin must start with verified binding before fallback.
+    if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ] || [ "${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}" = "1" ]; then
+      echo "durable checkpoint missing; task origin must start and bind the conversation before fallback" >&2
+      return 76
+    fi
+    # Legacy non-durable foreground opt-out only.
     python3 scripts/agent_task_state.py start       --task "$SHOPVIVALIZ_TASK_ID"       --goal "Continuar tarefa finita delegada ate estado terminal"       --agent executor-failover >/dev/null
   fi
 
@@ -96,6 +119,16 @@ try_provider() {
   return 1
 }
 
+run_claude() (
+  unset ANTHROPIC_API_KEY
+  local launcher="$CLAUDE_BIN"
+  if [ ! -x "$launcher" ]; then
+    launcher="$(command -v claude || true)"
+  fi
+  [ -n "$launcher" ] && [ -x "$launcher" ] || return 127
+  "$launcher" --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT"
+)
+
 run_codex_auto() (
   unset OPENAI_API_KEY CODEX_API_KEY
   local launcher="$CODEX_AUTO_BIN"
@@ -124,14 +157,23 @@ if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
 fi
 
 # Esta e a terceira camada (CLI) da politica de retomada.
-# Em recovery de background, a politica recorrente permite apenas IA gratuita/local
-# aprovada. Claude/Codex continuam exigindo gatilho humano explicito.
+# Em recovery de background, provedores pagos/subscription só entram quando a
+# autorização humana foi materializada explicitamente pelo instalador.
+# A ordem preserva Codex como última opção: Gemini -> Claude -> Codex.
 BACKGROUND_ORDER=(gemini)
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
+  background_paid_fallback_enabled=false
+  if [ "$SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK" = "1" ]; then
+    BACKGROUND_ORDER+=(anthropic)
+    background_paid_fallback_enabled=true
+    echo "background_claude_fallback_authorized=true" | tee -a "$OUTPUT"
+  fi
   if [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
     BACKGROUND_ORDER+=(codex_auto)
+    background_paid_fallback_enabled=true
     echo "background_codex_fallback_authorized=true" | tee -a "$OUTPUT"
-  else
+  fi
+  if [ "$background_paid_fallback_enabled" != "true" ]; then
     echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
   fi
   ORDER=("${BACKGROUND_ORDER[@]}")
@@ -154,8 +196,7 @@ for provider in "${ORDER[@]}"; do
       try_provider gemini env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
       ;;
     anthropic)
-      command -v claude >/dev/null 2>&1 || { record anthropic missing_cli 127; continue; }
-      try_provider anthropic env -u ANTHROPIC_API_KEY claude --print --model "$ANTHROPIC_MODEL" --effort low --max-budget-usd "$CLAUDE_MAX_BUDGET_USD" --permission-mode acceptEdits "$PROMPT" && exit 0
+      try_provider anthropic run_claude && exit 0
       ;;
     codex_auto)
       try_provider codex_auto run_codex_auto && exit 0

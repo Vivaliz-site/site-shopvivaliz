@@ -42,3 +42,25 @@ one durable result and no duplicate execution. Keep all output free of secrets.
 
 The platform's additional-check banner is a separate symptom. Transport
 reliability evidence does not establish the cause of that banner.
+
+## Browser session isolation
+
+The general Remote Control Browser MCP and the ChatGPT continuity browser must
+never share a graphical session, Chrome profile, or target window.
+
+- General browser automation runs as `fredconsole` on `DISPLAY=:0`, using the
+  dedicated profile `/home/fredconsole/.config/shopvivaliz-general-chromium`
+  and window class `shopvivaliz-general`.
+- ChatGPT continuity remains isolated as `fredrdp` on `DISPLAY=:99` with CDP on
+  `127.0.0.1:9555`. General browser tools must never navigate, click, type in,
+  or enumerate that window.
+- The browser MCP may report ready with zero general-browser windows only when
+  the desktop display is accessible and its configured browser binary is
+  executable; `browser_open` then creates the dedicated general window.
+- Deployment verification must open/navigate a benign page through the general
+  browser MCP and prove that the CDP 9559 Dev target set is unchanged. A browser MCP
+  health result alone is not sufficient evidence of isolation.
+
+This boundary is mandatory because sharing `:99` previously allowed unrelated
+Google/Tiny automation to repurpose the continuity browser and invalidate its
+authenticated ChatGPT session.

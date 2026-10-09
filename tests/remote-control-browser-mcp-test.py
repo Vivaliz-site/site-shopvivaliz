@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import os
 from pathlib import Path
+import struct
 import unittest
+import zlib
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,15 +31,135 @@ class BrowserMcpTests(unittest.TestCase):
         base_names = {item["name"] for item in m.base.tool_specs()}
         self.assertTrue(base_names <= names)
         self.assertEqual(
-            {"browser_health", "browser_tabs", "browser_open", "browser_navigate", "browser_screenshot", "browser_click", "browser_type"},
+            {"browser_health", "browser_gui_tabs", "browser_open", "browser_gui_navigate", "browser_screenshot", "browser_gui_click", "browser_gui_type"},
             m.BROWSER_TOOLS,
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
+
+    def test_browser_open_routes_to_isolated_gui_browser(self):
+        args = {"url": "https://claude.ai/login"}
+        with (
+            mock.patch.object(m, "browser_open", return_value={"route": "gui-open"}) as gui,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
+            result = m.execute_tool("browser_open", args)
+        self.assertEqual({"route": "gui-open"}, result)
+        gui.assert_called_once_with(args)
+        base.assert_not_called()
+
+    def test_atendimento_browser_tools_are_explicit_and_preserve_base_contracts(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        base_specs = {item["name"]: item for item in m.base.tool_specs()}
+        expected = {
+            "browser_atendimento_tabs": "browser_tabs",
+            "browser_atendimento_controls": "browser_controls",
+            "browser_atendimento_navigate": "browser_navigate",
+            "browser_atendimento_click": "browser_click",
+            "browser_atendimento_click_control": "browser_click_control",
+            "browser_atendimento_type": "browser_type",
+        }
+        self.assertEqual(expected, m.ATTENDIMENTO_TOOL_MAP)
+        for public_name, base_name in expected.items():
+            self.assertIn(public_name, specs)
+            self.assertEqual(specs[public_name]["inputSchema"], base_specs[base_name]["inputSchema"])
+
+    def test_atendimento_tools_route_only_to_canonical_base_browser(self):
+        args = {"tab_id": "tab-one", "selector": "input[name=Company]", "text": "sample"}
+        with mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base:
+            result = m.execute_tool("browser_atendimento_type", args)
+        self.assertEqual({"route": "base"}, result)
+        base.assert_called_once_with("browser_type", args, cancel_check=None)
 
     def test_browser_health_is_read_only(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_health"]["annotations"]["destructiveHint"])
+
+    def test_dedicated_bridge_health_uses_only_its_cdp_and_no_gui(self):
+        for port, session, cdp in (
+            ("5582", "atendimento", "9556"),
+            ("5583", "dev", "9559"),
+        ):
+            with self.subTest(session=session):
+                env = {
+                    "SHOPVIVALIZ_REMOTE_MCP_PORT": port,
+                    "SHOPVIVALIZ_BROWSER_SESSION_NAME": session,
+                    "SHOPVIVALIZ_BROWSER_CDP_URL": f"http://127.0.0.1:{cdp}",
+                }
+                document = json.dumps({
+                    "webSocketDebuggerUrl": f"ws://127.0.0.1:{cdp}/devtools/browser/identifier"
+                }).encode("utf-8")
+                with (
+                    mock.patch.dict(m.os.environ, env),
+                    mock.patch.object(m, "urlopen", return_value=io.BytesIO(document)) as fetch,
+                    mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+                ):
+                    health = m.browser_service_health()
+                self.assertTrue(health["ok"])
+                self.assertTrue(health["cdp_reachable"])
+                self.assertEqual(session, health["session"])
+                self.assertIsNone(health["account_authenticated"])
+                self.assertFalse(health["account_identity_verified"])
+                self.assertEqual(2, fetch.call_args.kwargs["timeout"])
+                self.assertEqual(f"http://127.0.0.1:{cdp}/json/version", fetch.call_args.args[0])
+
+    def test_dedicated_bridge_health_fails_closed_for_wrong_session(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5582",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen") as fetch,
+            mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+        ):
+            health = m.browser_service_health()
+        self.assertFalse(health["ok"])
+        self.assertEqual("cdp_session_binding_mismatch", health["reason"])
+        fetch.assert_not_called()
+
+    def test_dedicated_bridge_health_times_out_as_degraded_not_healthy(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen", side_effect=TimeoutError("CDP overloaded")),
+            mock.patch.object(m, "browser_health", side_effect=AssertionError("GUI must not be called")),
+        ):
+            health = m.browser_service_health()
+        self.assertFalse(health["ok"])
+        self.assertEqual("cdp_unavailable", health["reason"])
+
+    def test_dedicated_bridge_health_rejects_untrusted_cdp_metadata(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9559",
+        }
+        for data in (
+            {"webSocketDebuggerUrl": "ws://evil.example:9559/browser/test"},
+            {"webSocketDebuggerUrl": "ws://127.0.0.1:9556/browser/test"},
+            {"token": "not-proof-of-a-browser"},
+        ):
+            with self.subTest(data=data):
+                with (
+                    mock.patch.dict(m.os.environ, env),
+                    mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(data).encode())),
+                ):
+                    health = m.browser_service_health()
+                self.assertFalse(health["ok"])
+
+    def test_general_bridge_health_retains_gui_contract(self):
+        with (
+            mock.patch.dict(m.os.environ, {"SHOPVIVALIZ_REMOTE_MCP_PORT": "5581"}),
+            mock.patch.object(m, "browser_health", return_value={"ok": True, "mode": "gui"}) as gui,
+        ):
+            self.assertEqual({"ok": True, "mode": "gui"}, m.browser_service_health())
+        gui.assert_called_once_with()
 
     def test_browser_type_audit_redacts_text(self):
         captured = {}
@@ -43,11 +167,11 @@ class BrowserMcpTests(unittest.TestCase):
             captured.update(args)
             return "audit-id"
         with mock.patch.object(m, "BASE_AUDIT", fake_audit):
-            aid = m.audit("browser_type", None, {"text": "top-secret-value", "press_enter": True}, True, "ok")
+            aid = m.audit("browser_gui_type", None, {"text": "top-secret-value", "press_enter": True}, True, "ok")
         self.assertEqual("audit-id", aid)
         self.assertNotIn("text", captured)
         self.assertEqual(len("top-secret-value"), captured["text_length"])
-        self.assertIn("text_sha256", captured)
+        self.assertNotIn("text_sha256", captured)
 
     def test_url_audit_strips_query_fragment_and_credentials_are_rejected(self):
         self.assertEqual("https://chatgpt.com/account", m.safe_url("https://chatgpt.com/account?token=abc#secret"))
@@ -57,11 +181,18 @@ class BrowserMcpTests(unittest.TestCase):
             m.validate_url("file:///tmp/a")
 
     def test_click_must_remain_inside_active_browser_window(self):
-        with mock.patch.object(m, "active_browser_window", return_value="123"),              mock.patch.object(m, "focus"),              mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),              mock.patch.object(m, "run_gui"):
+        with (
+            mock.patch.object(m, "active_browser_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 100, "WIDTH": 500, "HEIGHT": 400}),
+            mock.patch.object(m, "run_gui") as run,
+        ):
             with self.assertRaisesRegex(ValueError, "outside_active_window"):
                 m.browser_click({"x": 50, "y": 50})
             result = m.browser_click({"x": 150, "y": 150})
             self.assertTrue(result["ok"])
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "150"]), run.call_args_list)
+        self.assertNotIn(mock.call(["xdotool", "mousemove", "--sync", "150", "150"]), run.call_args_list)
 
     def test_screenshot_uses_active_window_capture(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8")
@@ -69,23 +200,282 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("tempfile.mkdtemp", src)
         self.assertNotIn("tempfile.mkstemp", src)
 
-    def test_source_has_no_cdp_devtools_or_profile_cookie_automation(self):
+    def test_browser_source_does_not_automate_debug_ports_or_profile_cookies(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
-        forbidden_runtime_tokens = (
-            "remote-debugging-port",
-            "devtoolsactiveport",
-            "/json/version",
-            "/json/list",
-            "cookies sqlite",
-        )
-        for token in forbidden_runtime_tokens:
+        for token in ("remote-debugging-port", "devtoolsactiveport", "/json/list", "cookies sqlite"):
             self.assertNotIn(token, src)
+        # CDP /json/version is allowed exclusively for bounded dedicated
+        # transport health, never for general GUI browsing or cookie access.
+        self.assertEqual(src.count('endpoint + "/json/version"'), 1)
+        self.assertIn("health = browser_service_health()", src)
 
     def test_tool_specs_remain_unique_when_base_exposes_browser_actions(self):
         names = [spec["name"] for spec in m.tool_specs()]
         self.assertEqual(len(names), len(set(names)))
         for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
             self.assertEqual(names.count(name), 1)
+
+        specs = {spec["name"]: spec for spec in m.tool_specs()}
+        base_specs = {spec["name"]: spec for spec in m.base.tool_specs()}
+        for name in ("browser_tabs", "browser_navigate", "browser_click", "browser_type"):
+            self.assertEqual(specs[name]["inputSchema"], base_specs[name]["inputSchema"])
+
+    def test_public_gui_aliases_route_by_argument_shape(self):
+        with (
+            mock.patch.object(m, "browser_navigate", return_value={"route": "gui-navigate"}) as navigate,
+            mock.patch.object(m, "browser_click", return_value={"route": "gui-click"}) as click,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as type_,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"route": "base"}) as base,
+        ):
+            self.assertEqual(
+                {"route": "gui-navigate"},
+                m.execute_tool("browser_navigate", {"url": "https://chatgpt.com/"}),
+            )
+            self.assertEqual(
+                {"route": "gui-click"},
+                m.execute_tool("browser_click", {"x": 10, "y": 20}),
+            )
+            self.assertEqual(
+                {"route": "gui-type"},
+                m.execute_tool("browser_type", {"text": "123456", "press_enter": False}),
+            )
+            self.assertEqual(
+                {"route": "base"},
+                m.execute_tool("browser_type", {"tab_id": "abc", "selector": "#code", "text": "123456"}),
+            )
+
+        navigate.assert_called_once()
+        click.assert_called_once()
+        type_.assert_called_once()
+        base.assert_called_once()
+
+    def test_public_browser_type_without_selector_stays_on_isolated_gui_surface(self):
+        args = {"text": "123456", "press_enter": False}
+        with (
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+            mock.patch.object(m, "browser_type", return_value={"route": "gui-type"}) as gui_type,
+        ):
+            result = m.execute_tool("browser_type", args)
+        self.assertEqual({"route": "gui-type"}, result)
+        gui_type.assert_called_once_with(args)
+        base.assert_not_called()
+
+    def test_public_browser_type_alias_audit_redacts_text(self):
+        captured = {}
+        def fake_audit(tool, host, args, ok, summary):
+            captured.update(args)
+            return "audit-id"
+        with mock.patch.object(m, "BASE_AUDIT", fake_audit):
+            aid = m.audit("browser_type", None, {"text": "458170", "press_enter": False}, True, "ok")
+        self.assertEqual("audit-id", aid)
+        self.assertNotIn("text", captured)
+        self.assertEqual(6, captured["text_length"])
+        self.assertNotIn("text_sha256", captured)
+
+    def test_gui_browser_actions_are_explicitly_namespaced(self):
+        specs = {spec["name"]: spec for spec in m.tool_specs()}
+        for name in ("browser_gui_tabs", "browser_gui_navigate", "browser_gui_click", "browser_gui_type"):
+            self.assertIn(name, specs)
+        self.assertIn("tab_id", specs["browser_type"]["inputSchema"]["properties"])
+        self.assertNotIn("tab_id", specs["browser_gui_type"]["inputSchema"]["properties"])
+
+    def test_desktop_window_resolution_is_target_bound_and_ambiguous_fails_closed(self):
+        search = mock.Mock(returncode=0, stdout="101\n202\n")
+        with (
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m, "run_gui", return_value=search),
+            mock.patch.object(m, "window_title", side_effect=lambda w: {"101": "DESKTOP-KOCEPSV - RustDesk", "202": "RustDesk"}[w]),
+        ):
+            self.assertEqual(["101"], m.rustdesk_windows("KOCEPSV", "123456789"))
+        with mock.patch.object(m, "rustdesk_windows", return_value=["101", "102"]):
+            with self.assertRaisesRegex(RuntimeError, "rustdesk_session_window_ambiguous"):
+                m.active_desktop_window("KOCEPSV", "123456789")
+
+    def test_native_desktop_bridge_uses_script_scope_path_for_worker_task(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertIn("$ScriptPath = $PSCommandPath", script)
+        self.assertIn("$scriptPath = $ScriptPath", script)
+        self.assertNotIn("$scriptPath = $MyInvocation.MyCommand.Path", script)
+
+    def test_native_desktop_bridge_acl_uses_language_neutral_sids(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertIn("S-1-5-18", script)
+        self.assertIn("S-1-5-32-544", script)
+        self.assertNotIn("'SYSTEM'", script)
+        self.assertNotIn("'BUILTIN\\Administrators'", script)
+
+    def test_native_desktop_bridge_dispatcher_fails_closed(self):
+        script = (ROOT / "scripts" / "shopvivaliz-native-desktop-bridge.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("exit 0", script)
+        self.assertIn("exit 1", script)
+
+    def test_fredwin_native_bridge_sends_typed_text_only_on_stdin(self):
+        secret = "sample-sensitive-input"
+        completed = mock.Mock(returncode=0, stdout='{"ok":true,"typed_characters":22}', stderr="")
+        cfg = {"platform": "windows", "transport": "reverse_ssh", "address": "127.0.0.1", "port": 2222, "user": "FRED"}
+        with (
+            mock.patch.object(m.base, "validate_desktop_host", return_value=cfg),
+            mock.patch.object(m.base, "ssh_base", return_value=["ssh", "FRED@127.0.0.1"]),
+            mock.patch.object(m.subprocess, "run", return_value=completed) as run,
+        ):
+            result = m.native_desktop_bridge("Fred-Win", {"action": "type", "text": secret, "press_enter": True})
+        self.assertTrue(result["ok"])
+        argv = run.call_args.args[0]
+        self.assertNotIn(secret, repr(argv))
+        self.assertIn(secret, run.call_args.kwargs["input"].decode("utf-8"))
+        self.assertIn("shopvivaliz-native-desktop-bridge.ps1", repr(argv))
+
+    def test_fredwin_desktop_screenshot_uses_native_bridge(self):
+        native = {
+            "ok": True,
+            "action": "screenshot",
+            "mime_type": "image/png",
+            "image_b64": "cG5n",
+            "bytes": 3,
+            "width": 1920,
+            "height": 1080,
+        }
+        with mock.patch.object(m, "native_desktop_bridge", return_value=native) as bridge:
+            result = m.desktop_screenshot({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "screenshot"})
+        self.assertEqual("cG5n", result["__mcp_image__"])
+        self.assertNotIn("image_b64", result)
+        self.assertEqual("windows_interactive", result["surface"])
+
+    def test_fredwin_desktop_click_and_type_route_to_native_bridge(self):
+        calls = []
+        def fake_bridge(host, payload):
+            calls.append((host, payload))
+            if payload["action"] == "click":
+                return {"ok": True, "action": "click", "x": payload["x"], "y": payload["y"], "clicks": payload["clicks"]}
+            return {"ok": True, "action": "type", "typed_characters": len(payload["text"]), "press_enter": payload["press_enter"]}
+        with mock.patch.object(m, "native_desktop_bridge", side_effect=fake_bridge):
+            clicked = m.desktop_click({"host": "Fred-Win", "x": 40, "y": 50, "button": "left", "clicks": 2})
+            typed = m.desktop_type({"host": "Fred-Win", "text": "abc", "press_enter": True})
+        self.assertTrue(clicked["ok"])
+        self.assertEqual(3, typed["typed_characters"])
+        self.assertEqual(
+            [
+                ("Fred-Win", {"action": "click", "x": 40, "y": 50, "button": "left", "clicks": 2}),
+                ("Fred-Win", {"action": "type", "text": "abc", "press_enter": True}),
+            ],
+            calls,
+        )
+
+    def test_fredwin_desktop_health_uses_native_interactive_bridge(self):
+        with mock.patch.object(m, "native_desktop_bridge", return_value={"ok": True, "action": "health", "width": 1920, "height": 1080}) as bridge:
+            result = m.desktop_health({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "health"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("windows_interactive", result["surface"])
+        self.assertTrue(result["display_accessible"])
+
+    def test_fredwin_desktop_open_uses_native_interactive_bridge(self):
+        with mock.patch.object(m, "native_desktop_bridge", return_value={"ok": True, "action": "health", "width": 1920, "height": 1080}) as bridge:
+            result = m.desktop_open({"host": "Fred-Win"})
+        bridge.assert_called_once_with("Fred-Win", {"action": "health"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("windows_interactive", result["surface"])
+        self.assertEqual("native_bridge_ready", result["action"])
+
+    def test_desktop_click_is_relative_and_bounded_to_rustdesk_window(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "parse_geometry", return_value={"X": 100, "Y": 200, "WIDTH": 500, "HEIGHT": 400}),
+            mock.patch.object(m, "run_gui") as run,
+        ):
+            with self.assertRaisesRegex(ValueError, "desktop_click_outside_window"):
+                m.desktop_click({"host": "KOCEPSV", "x": 500, "y": 10})
+            result = m.desktop_click({"host": "KOCEPSV", "x": 50, "y": 60, "button": "left", "clicks": 1})
+        self.assertTrue(result["ok"])
+        self.assertEqual(50, result["x"])
+        self.assertEqual(60, result["y"])
+        self.assertIn(mock.call(["xdotool", "mousemove", "150", "260"]), run.call_args_list)
+
+    def test_desktop_type_uses_stdin_clipboard_and_never_puts_text_in_argv(self):
+        secret = "sample-sensitive-input"
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="123"),
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xclip"),
+            mock.patch.object(m, "run_gui") as run,
+            mock.patch.object(m, "key") as key,
+        ):
+            result = m.desktop_type({"host": "KOCEPSV", "text": secret, "press_enter": True})
+        self.assertEqual(len(secret), result["typed_characters"])
+        for call in run.call_args_list:
+            argv = call.args[0]
+            self.assertNotIn(secret, argv)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text=secret), run.call_args_list)
+        self.assertIn(mock.call(["xclip", "-selection", "clipboard", "-i"], input_text="", check=False), run.call_args_list)
+        self.assertIn(mock.call("ctrl+v"), key.call_args_list)
+        self.assertIn(mock.call("Return"), key.call_args_list)
+
+    def test_xwd_to_png_converts_lsb_bgrx_truecolor_pixels(self):
+        header = struct.pack(
+            ">25I",
+            100, 7, 2, 24, 2, 1, 0, 0, 32, 0, 32, 32, 8, 4,
+            0x00FF0000, 0x0000FF00, 0x000000FF, 8, 256, 0,
+            2, 1, 0, 0, 0,
+        )
+        xwd = header + bytes((0, 0, 255, 0, 0, 255, 0, 0))
+
+        png = m.xwd_to_png_bytes(xwd)
+
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        pos = 8
+        width = height = None
+        idat = bytearray()
+        while pos < len(png):
+            length = struct.unpack(">I", png[pos:pos + 4])[0]
+            kind = png[pos + 4:pos + 8]
+            data = png[pos + 8:pos + 8 + length]
+            pos += 12 + length
+            if kind == b"IHDR":
+                width, height = struct.unpack(">II", data[:8])
+            elif kind == b"IDAT":
+                idat.extend(data)
+            elif kind == b"IEND":
+                break
+        self.assertEqual((2, 1), (width, height))
+        self.assertEqual(
+            b"\x00\xff\x00\x00\x00\xff\x00",
+            zlib.decompress(bytes(idat)),
+        )
+
+    def test_desktop_screenshot_prefers_xwd_window_backing_store(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "active_desktop_window", return_value="321") as active,
+            mock.patch.object(m, "capture_xwd_window", return_value={"ok": True, "window_id": "321", "mime_type": "image/png"}) as capture,
+        ):
+            result = m.desktop_screenshot({"host": "KOCEPSV"})
+        self.assertTrue(result["ok"])
+        active.assert_called_once_with("KOCEPSV", mock.ANY)
+        capture.assert_called_once_with("321", "KOCEPSV", "shopvivaliz-desktop-")
+
+    def test_desktop_open_uses_runtime_target_id_but_does_not_return_it(self):
+        proc = mock.Mock()
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m, "rustdesk_windows", side_effect=[[], ["901"]]),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=proc) as popen,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m.time, "sleep"),
+        ):
+            result = m.desktop_open({"host": "KOCEPSV"})
+        self.assertTrue(result["ok"])
+        self.assertEqual("901", result["window_id"])
+        self.assertNotIn("123456789", repr(result))
+        argv = popen.call_args.args[0]
+        self.assertEqual("--connect", argv[-2])
+        self.assertEqual("123456789", argv[-1])
 
     def test_unit_is_loopback_and_separate_port(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
@@ -125,11 +515,142 @@ class BrowserMcpTests(unittest.TestCase):
             run.call_args_list,
         )
 
-    def test_browser_mcp_targets_canonical_chatgpt_xvfb_display(self):
+    def test_browser_mcp_is_isolated_from_chatgpt_continuity_session(self):
         unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
-        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
-        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
-        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_BROWSER_BINARY=/opt/shopvivaliz-browser/chrome-linux/chrome", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium", unit)
+        self.assertIn("Environment=SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general", unit)
+        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredrdp", unit)
+        self.assertNotIn("Environment=SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:99", unit)
+
+    def test_browser_health_requires_xwd_for_complete_browser_mcp_capability(self):
+        with (
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "browser_windows", return_value=[]),
+        ):
+            health = m.browser_health()
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
+    def test_rustdesk_desktop_health_and_setup_require_xwd_for_backing_store_capture(self):
+        with (
+            mock.patch.object(m.base, "rustdesk_host_id", return_value="123456789"),
+            mock.patch.object(m.shutil, "which", side_effect=lambda name: None if name == "xwd" else "/usr/bin/" + name),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+            mock.patch.object(m, "rustdesk_windows", return_value=[]),
+        ):
+            health = m.desktop_health({"host": "KOCEPSV"})
+        self.assertIn("xwd", health["dependencies"])
+        self.assertFalse(health["dependencies"]["xwd"])
+        self.assertFalse(health["ok"])
+
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("for bin in xdotool xclip scrot xwd", setup)
+        self.assertIn("x11-apps", setup)
+        self.assertIn("assert deps.get('scrot') is True\nassert deps.get('xwd') is True", setup)
+        self.assertNotIn(r"True\nassert", setup)
+
+    def test_desktop_runtime_config_uses_separate_protected_env_file(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        self.assertIn("EnvironmentFile=-/var/lib/shopvivaliz-remote-control/desktop.env", unit)
+        self.assertIn("SHOPVIVALIZ_DESKTOP_RUSTDESK_BINARY=/usr/bin/rustdesk", unit)
+        self.assertIn('DESKTOP_ENV="/var/lib/shopvivaliz-remote-control/desktop.env"', setup)
+        self.assertIn('command -v rustdesk >/dev/null 2>&1', setup)
+        self.assertIn('stat -c %a "$DESKTOP_ENV"', setup)
+        self.assertIn('stat -c %U:%G "$DESKTOP_ENV"', setup)
+        self.assertIn("grep -q '^SHOPVIVALIZ_RUSTDESK_HOST_IDS=' \"$DESKTOP_ENV\"", setup)
+        self.assertNotIn('cat "$DESKTOP_ENV"', setup)
+        self.assertNotRegex(unit, r"SHOPVIVALIZ_RUSTDESK_HOST_IDS=.*[0-9]{6}")
+
+    def test_desktop_contract_is_documented_without_hardcoded_target_ids(self):
+        browser_spec = (ROOT / "remote-control-browser-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        base_spec = (ROOT / "remote-control-mcp" / "SPEC.md").read_text(encoding="utf-8")
+        host_access = (ROOT / "docs" / "knowledge" / "host-access.md").read_text(encoding="utf-8")
+        for token in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
+            self.assertIn(token, browser_spec)
+        self.assertIn("desktop.env", browser_spec)
+        self.assertIn("xwd", browser_spec.lower())
+        self.assertIn("backing store", browser_spec.lower())
+        self.assertIn("desktop.env", base_spec)
+        self.assertIn("desktop_*", host_access)
+        self.assertIn("fredconsole", browser_spec)
+        self.assertNotIn("A automação usa somente a sessão gráfica X11 do usuário `fredrdp`", browser_spec)
+
+    def test_browser_mcp_execstart_overrides_shared_env_for_session_isolation(self):
+        unit = (ROOT / "deploy" / "systemd" / "shopvivaliz-remote-control-browser-mcp.service").read_text(encoding="utf-8")
+        exec_line = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+        self.assertIn("/usr/bin/env", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_GUI_USER=fredconsole", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_DISPLAY=:0", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_PROFILE_DIR=/home/fredconsole/.config/shopvivaliz-general-chromium", exec_line)
+        self.assertIn("SHOPVIVALIZ_BROWSER_MCP_WINDOW_CLASS=shopvivaliz-general", exec_line)
+
+    def test_browser_windows_only_targets_dedicated_general_browser_class(self):
+        found = mock.Mock(returncode=0, stdout="123\n")
+        with (
+            mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
+            mock.patch.object(m, "require_binary", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m, "run_gui", return_value=found) as run,
+        ):
+            self.assertEqual(["123"], m.browser_windows())
+        run.assert_called_once_with(["xdotool", "search", "--onlyvisible", "--class", "shopvivaliz-general"], check=False)
+
+    def test_browser_health_is_ready_when_general_browser_is_launchable_without_window(self):
+        with (
+            mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="1\n")),
+        ):
+            result = m.browser_health()
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["browser_launchable"], result)
+        self.assertEqual(0, result["window_count"])
+
+    def test_browser_open_uses_configured_binary_when_general_session_has_no_window(self):
+        launched = {}
+        class FakeProcess:
+            pass
+        def fake_popen(argv, **kwargs):
+            launched["argv"] = argv
+            launched["kwargs"] = kwargs
+            return FakeProcess()
+        with (
+            mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
+            mock.patch.object(m, "BROWSER_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium", create=True),
+            mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "gui_prefix", return_value=["gui-prefix"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=fake_popen),
+        ):
+            result = m.browser_open({"url": "https://example.com/"})
+        self.assertEqual("new_window", result["action"])
+        self.assertIn("/opt/shopvivaliz-browser/chrome-linux/chrome", launched["argv"])
+        self.assertIn("--new-window", launched["argv"])
+        self.assertIn("--no-sandbox", launched["argv"])
+        self.assertIn("--class=shopvivaliz-general", launched["argv"])
+        self.assertIn("--user-data-dir=/home/fredconsole/.config/shopvivaliz-general-chromium", launched["argv"])
+        self.assertEqual("isolated_gui", result["surface"])
+
+    def test_browser_open_tool_description_disambiguates_helper_surface(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        description = specs["browser_open"]["description"]
+        self.assertIn("isolated graphical helper browser", description)
+        self.assertIn("browser_gui_tabs", description)
+        self.assertIn("browser_tabs", description)
 
     def test_setup_restarts_existing_browser_service_after_install(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")

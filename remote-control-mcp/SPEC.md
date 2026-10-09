@@ -34,7 +34,7 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Production web host: `shopvivaliz-free-a1` (private `10.0.1.112`).
 - Support hosts: `Fred-Win` and `KOCEPSV`.
 - Private transport: VCN/Tailscale/OpenSSH using the dedicated `shopvivaliz-agent` identity and existing restricted wrappers/relays.
-- GUI fallback: self-hosted RustDesk.
+- GUI control: native interactive Windows bridge for `Fred-Win`; self-hosted RustDesk remains the graphical path for `KOCEPSV` and human fallback.
 - ChatGPT connects to the private MCP endpoint through Secure MCP Tunnel; the MCP service itself is not publicly exposed.
 - GitHub may store source code and may be used for one-time bootstrap/recovery, but it is not part of normal command transport, task queue, heartbeat, execution or state.
 - Browser automation for ShopVivaliz remains on the backend VM, not Windows hosts.
@@ -59,6 +59,15 @@ Provide an internal, GitHub-independent remote control plane for ShopVivaliz hos
 - Secrets are never returned in tool output.
 - File access is restricted to configured roots per host.
 - Sessions/tasks have TTL and cancellation support.
+
+## Universal administrative execution and software installation
+- `admin_command_run` is the universal privileged escape hatch for legitimate host administration on the four canonical hosts.
+- Linux commands execute as root locally or through the dedicated administrative SSH target; Windows commands execute in the configured Administrator context through PowerShell.
+- Package-manager and application-install commands are in scope (for example apt/dpkg and winget/MSI/PowerShell installers) when requested by an authorized operator.
+- Long-running installs and upgrades must use durable execution (`durable=true` or `task_submit`) so they survive caller disconnects. The default durable ceiling is 7200 seconds and can be changed by protected runtime configuration up to the server hard cap.
+- Structured tools remain preferred for common operations because they provide tighter schemas, but their existence does not remove the universal administrative command path.
+- Secrets remain non-exportable, production active releases remain immutable, and explicit destructive/high-impact operations remain subject to their normal safety gates.
+- Browser navigation/click/type/screenshot and Windows `desktop_*` controls complement shell/PowerShell execution for workflows that require GUI interaction. `Fred-Win` uses the native interactive bridge; `KOCEPSV` retains the protected RustDesk path.
 
 ## Durable Task Model
 - Local SQLite database in WAL mode on the backend controller.
@@ -126,6 +135,16 @@ controller_promote, continuity_e2e and claude_remote_control_reconcile are alway
 
 Tools: `task_submit`, `task_status`, `task_cancel`.
 
+### Process indeterminate durable cases by API analysis only
+1. An execution that started but has no live unit and no persisted terminal result remains terminal `indeterminate`; the original command is never replayed automatically.
+2. The API analyzes only persisted stdout/stderr/result metadata and classifies the case as positive evidence, negative evidence, mixed evidence, logs without terminal markers, or no persisted output.
+3. Processing records sanitized evidence counts and timestamps in the task row, without storing new raw command/log content.
+4. Analytical processing never restarts transports/services, launches a process, cancels work, or changes the task's `indeterminate` state.
+5. The worker processes pending analytical cases automatically; `task_process_indeterminate` is the explicit batch API for immediate processing.
+6. Durable health reports total, processed and pending-analysis indeterminate counts. Historical cases that have been analytically processed do not by themselves degrade API availability.
+
+Tool: `task_process_indeterminate`.
+
 ### Review control-plane activity
 1. Request recent audit events.
 2. Inspect redacted inputs, host, actor, status and timestamps.
@@ -157,3 +176,12 @@ No custom UI is required in V1; these are tool-only conversational flows.
 - The relay restart may be asynchronous because restarting the tunnel intentionally drops the legacy `5558` request path.
 - A normal `push` bootstrap performs installation, Windows bootstrap and controller host-key pinning only.
 - Stage 5 four-host health/durable-task E2E runs only from an explicit `workflow_dispatch` with `run_e2e=true`.
+
+
+## Contrato de desktop
+
+O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open`, `desktop_screenshot`, `desktop_click` e `desktop_type` somente para `Fred-Win` e `KOCEPSV`; a implementação fica no wrapper `remote-control-browser-mcp` da backend.
+
+No `Fred-Win`, o wrapper usa o reverse SSH canônico para invocar `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe a requisição JSON por stdin e executa um worker efêmero na sessão Windows interativa, permitindo screenshot, mouse e teclado sem transportar senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. Texto digitado não entra em argv nem no audit.
+
+No `KOCEPSV`, a rota permanece RustDesk/X11. IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.

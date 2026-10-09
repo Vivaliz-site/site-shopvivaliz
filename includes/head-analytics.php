@@ -61,7 +61,7 @@ HTML;
 
 $trackingCode = $GLOBALS['analytics']->getTrackingCode();
 
-$verifiedGtmId = trim((string)(getenv('GOOGLE_TAG_MANAGER_ID') ?: (getenv('GTM_ID') ?: (getenv('TAG_MANAGER') ?: ''))));
+$verifiedGtmId = svat_google_tag_manager_id();
 $hasVerifiedGtmLoader = $verifiedGtmId !== ''
     && str_contains($trackingCode, 'googletagmanager.com/gtm.js')
     && str_contains($trackingCode, $verifiedGtmId);

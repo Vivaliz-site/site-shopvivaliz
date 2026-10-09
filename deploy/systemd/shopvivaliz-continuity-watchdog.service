@@ -1,0 +1,15 @@
+[Unit]
+Description=ShopVivaliz continuity watchdog fast lane
+Documentation=file:/opt/shopvivaliz-gemini-24x7-controller/README
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+EnvironmentFile=/etc/shopvivaliz-gemini-24x7-controller.env
+WorkingDirectory=/opt/shopvivaliz-gemini-24x7-controller
+ExecStart=/usr/bin/python3 ${SHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY} --runtime-dir ${SHOPVIVALIZ_AGENT_TASK_STATE_DIR} --stale-seconds 120
+TimeoutStartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
