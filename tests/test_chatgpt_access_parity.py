@@ -22,6 +22,31 @@ def test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric():
     assert atendimento == dev
 
 
+def test_dev_and_atendimento_chromium_units_have_identical_effective_limits():
+    # Ignore ONLY the account-bound identifiers. CPU, memory, security,
+    # browser command-line options and restart policy must remain identical.
+    def normalized_unit(session, port):
+        path = ROOT / 'ops' / 'systemd' / f'shopvivaliz-{session}-browser.service'
+        body = path.read_text(encoding='utf-8')
+        expected = (
+            (f'Description=ShopVivaliz {session} ChatGPT browser',
+             'Description=ShopVivaliz ACCOUNT ChatGPT browser'),
+            (f'--user-data-dir=/home/fredrdp/.config/shopvivaliz-{session}-chromium',
+             '--user-data-dir=/home/fredrdp/.config/shopvivaliz-ACCOUNT-chromium'),
+            (f'--class=shopvivaliz-{session}', '--class=shopvivaliz-ACCOUNT'),
+            (f'--remote-debugging-port={port}', '--remote-debugging-port=PORT'),
+        )
+        for original, normalized in expected:
+            assert body.count(original) == 1, (session, original)
+            body = body.replace(original, normalized)
+        for invariant in ('User=fredrdp', 'NoNewPrivileges=true',
+                          'PrivateTmp=true', 'KillMode=control-group'):
+            assert invariant in body, (session, invariant)
+        return body
+
+    assert normalized_unit('dev', 9559) == normalized_unit('atendimento', 9556)
+
+
 def test_access_parity_policy_is_referenced_by_both_corporate_bootstraps():
     policy = (ROOT / 'docs/knowledge/chatgpt-access-parity.md').read_text(encoding='utf-8')
     for account in ('dev@shopvivaliz.com.br', 'atendimento@shopvivaliz.com.br'):
@@ -53,6 +78,7 @@ def test_dedicated_browser_mcp_services_reload_installed_server():
 
 if __name__ == '__main__':
     test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric()
+    test_dev_and_atendimento_chromium_units_have_identical_effective_limits()
     test_access_parity_policy_is_referenced_by_both_corporate_bootstraps()
     test_dedicated_browser_mcp_services_reload_installed_server()
     print('CHATGPT_ACCOUNT_ACCESS_PARITY_CONTRACT=PASS')

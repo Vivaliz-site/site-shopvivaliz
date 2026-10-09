@@ -48,6 +48,8 @@ on:
       - 'docs/knowledge/atendimento-chatgpt-bootstrap.md'
       - 'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service'
       - 'deploy/systemd/shopvivaliz-browser-dev-mcp.service'
+      - 'ops/systemd/shopvivaliz-dev-browser.service'
+      - 'ops/systemd/shopvivaliz-atendimento-browser.service'
   workflow_dispatch:
 
 permissions:
