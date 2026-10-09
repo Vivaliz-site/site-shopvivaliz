@@ -11,7 +11,7 @@ IOWeight=300
 CPUQuota=80%
 MemoryHigh=2G
 MemoryMax=3G
-TasksMax=384
+TasksMax=512
 User=fredrdp
 Group=fredrdp
 Environment=HOME=/home/fredrdp
