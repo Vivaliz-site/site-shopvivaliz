@@ -1925,7 +1925,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     origin and specific input/button. This layer independently rejects wrong
     sessions and stale/non-maintenance leases before invoking the local peer.
     """
-    if name not in {"browser_auth_tabs", "browser_auth_action"}:
+    if name not in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
         raise ValueError("account_auth_tool_invalid")
     session = str(args.get("session") or "")
     if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
@@ -1933,6 +1933,21 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "browser_auth_tabs":
         if set(args) != {"session"}:
             raise ValueError("account_auth_scope_invalid")
+    elif name == "browser_auth_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
     else:
         allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
         if set(args) - allowed_keys:
@@ -1971,7 +1986,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         method="POST",
     )
     try:
-        with urlopen(request, timeout=35 if name == "browser_auth_action" else 8) as response:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open"} else 8) as response:
             payload = response.read(524289)
     except (HTTPError, URLError, TimeoutError, OSError):
         raise RuntimeError("account_auth_browser_proxy_unavailable") from None
@@ -2008,6 +2023,19 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
     # The downstream action returns protected child stdout as a JSON
     # status. Parse booleans only; never surface the raw child output.
+    if name == "browser_auth_open":
+        try:
+            child = json.loads(str(output.get("stdout") or ""))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if (not isinstance(child, dict)
+                or child.get("ok") is not True
+                or child.get("session") != session
+                or child.get("stage") != "/auth/login"
+                or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(child.get("tab_id") or ""))):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "stage": "/auth/login",
+                "tab_id": child["tab_id"]}
     child = {}
     try:
         child = json.loads(str(output.get("stdout") or ""))
@@ -2026,6 +2054,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
     "browser_auth_action": "browser_auth_action",
+    "browser_auth_open": "browser_auth_open",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -2119,7 +2148,7 @@ def execute_tool(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
-    if name in {"browser_auth_tabs", "browser_auth_action"}:
+    if name in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
         return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
@@ -2378,6 +2407,11 @@ TOOLS = [
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
     ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
