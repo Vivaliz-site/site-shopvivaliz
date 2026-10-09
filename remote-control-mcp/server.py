@@ -1915,7 +1915,7 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
 # MCP. No arbitrary host, port or URL is accepted from tool callers.
 ACCOUNT_AUTH_BROWSER_MCP_URL = "http://127.0.0.1:5581/mcp"
 ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
-ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend"}
+ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
 
 
 def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -2381,7 +2381,7 @@ TOOLS = [
     ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
-        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend"]},
+        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
         "value": {"type": "string", "maxLength": 512},
         "runtime_lease_id": {"type": "string", "maxLength": 200},
         "runtime_fencing_token": {"type": "integer", "minimum": 1},

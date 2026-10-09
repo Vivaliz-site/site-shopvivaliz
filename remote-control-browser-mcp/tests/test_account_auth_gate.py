@@ -131,7 +131,7 @@ class AccountAuthGateTests(unittest.TestCase):
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
             with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("atendimento")):
                 with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake) as run:
-                    for action in ("back_to_methods", "open_login", "continue_google"):
+                    for action in ("back_to_methods", "open_login", "continue_google", "continue_microsoft"):
                         args = payload(session="atendimento", action=action, value="")
                         result = m.browser_auth_action(args)
                         self.assertTrue(result["ok"])
@@ -150,10 +150,11 @@ class AccountAuthGateTests(unittest.TestCase):
             "back_to_methods", "open_login", "continue_google",
             "u.pathname!=='/log-in/password'",
             "u.pathname!=='/log-in-or-create-account'",
-            "u.pathname!=='/auth/login_with'",
+            "u.pathname==='/auth/login_with'",
+            "u.pathname==='/log-in'",
             "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
             "safeLink(a,'https://chatgpt.com','/auth/login_with')",
-            "/^continue with google$/i",
+            "new RegExp('^continue with '+provider+'$','i')",
             "if(choices.length!==1)",
         ):
             self.assertIn(item, source)
