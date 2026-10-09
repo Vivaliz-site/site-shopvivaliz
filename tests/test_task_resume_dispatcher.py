@@ -525,6 +525,34 @@ state_path.write_text(json.dumps(state))
         self.assertEqual(result.get("deferred_chatgpt"), 1)
         self.assertFalse(self.capture.exists(), "detached executor must not run while ChatGPT gets first recovery window")
 
+    def test_chatgpt_has_120_seconds_plus_10_seconds_margin(self) -> None:
+        dispatcher = load_dispatcher()
+        self.assertEqual(dispatcher.DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS, 130)
+        request = {
+            "fingerprint": "fingerprint-v1",
+            "task_id": "resume-e2e",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "preferred_executor": "chatgpt_common",
+        }
+        ledger = self.runtime / "_chatgpt-continuity-nudges.jsonl"
+        for elapsed, expected_deferred in ((120, True), (125, True), (150, False)):
+            with self.subTest(elapsed=elapsed):
+                dispatched = (
+                    datetime.now(timezone.utc) - timedelta(seconds=elapsed)
+                ).isoformat().replace("+00:00", "Z")
+                ledger.write_text(json.dumps({
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": dispatched,
+                    "bridge_ok": True,
+                    "worker_status": "SENT_UNCONFIRMED",
+                }) + "\n", encoding="utf-8")
+                self.assertEqual(
+                    dispatcher._recent_successful_chatgpt_nudge(self.runtime, request),
+                    expected_deferred,
+                )
+
     def test_recent_unconfirmed_chatgpt_send_preserves_conversation_priority(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
@@ -627,7 +655,7 @@ state_path.write_text(json.dumps(state))
                 "worker_status_observed_at": failed_at,
                 "bridge_ok": True,
                 "http_status": 200,
-                "worker_status": "SENT_UNCONFIRMED",
+                "worker_status": "STALLED_NOT_CONFIRMED",
             }) + "\n",
             encoding="utf-8",
         )
