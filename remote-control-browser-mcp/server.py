@@ -888,7 +888,15 @@ try {
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error("auth_socket_timeout")), 2500))
     ]);
-    c = new Cdp(ws);
+    // A previously backgrounded login page can be frozen even when CDP's
+    // /json endpoint remains healthy. Activate only the already verified
+    // official login tab; do not reload, navigate or change browser profiles.
+    c = new Cdp(ws, { commandTimeoutMs: 7000 });
+    try {
+        await c.send("Page.bringToFront");
+    } catch {
+        throw new Error("auth_tab_activate_failed");
+    }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
         "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +

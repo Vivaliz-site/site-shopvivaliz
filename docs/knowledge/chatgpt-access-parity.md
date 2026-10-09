@@ -83,6 +83,13 @@ The browser MCP instead provides two narrowly scoped operations:
   and `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`. Normal browser mutation
   gates and in-progress conversations are unchanged.
 
+As an idempotent preflight, the action **brings only the already verified
+official login tab to the foreground** using CDP `Page.bringToFront` before
+evaluating controls. This wakes background/frozen authentication pages without
+reloading or navigating, and uses a bounded CDP timeout. A failed activation
+returns `auth_tab_activate_failed` without submitting or logging credentials.
+The page origin/path is checked again inside the browser before input or click.
+
 The implementation enforces the official `chatgpt.com/auth/login` or
 `auth.openai.com/log-in` / `email-verification` paths *again inside the
 focused browser evaluation*, not solely in the tab list, and restricts the
