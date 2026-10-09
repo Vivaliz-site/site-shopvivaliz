@@ -18,6 +18,12 @@ effective app permissions are separate checks. Installed != connected.
 
 - Dev Chromium: `shopvivaliz-dev-chromium`, CDP `9559`, dedicated MCP `5583`.
 - Atendimento Chromium: `shopvivaliz-atendimento-chromium`, CDP `9556`, dedicated MCP `5582`.
+- The dedicated bridges on ports `5582`/`5583` must check their own
+  canonical CDP `/json/version` with a bounded timeout for `/health`.
+  Their health checks must not invoke generic X11 / `xdotool` actions on
+  `fredconsole:0`: those checks belong only to the general graphical MCP.
+  A healthy CDP connection is a transport signal, not an account login or
+  exact identity proof; do not treat it as `AUTHENTICATED`.
 - The dedicated browser MCP services must use the same server source, runtime
   options and authorization policy. Only the session name, CDP URL, TCP port
   and corresponding identity binding may differ.
