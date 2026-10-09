@@ -340,6 +340,23 @@ registra PID, boot id e start ticks; se o processo proprietário morrer, o resta
 recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
 continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
+### Prioridade da conversa ChatGPT (130 segundos)
+
+O executor prioritario de uma tarefa vinculada e a **conversa ChatGPT de origem**;
+o dispatcher detached/worker e **fallback**, nunca um executor concorrente por
+padrao. Apos um nudge aceito pelo bridge, reservar ate **120 segundos + 10
+segundos de margem** (130 segundos desde `dispatched_at`) para resposta e
+progresso observaveis. `SENT` e `SENT_UNCONFIRMED` nao significam falha e
+mantem a preferencia ChatGPT dentro desse prazo; `PENDING` e `CLAIMED`
+tambem. Falhas explicitas (`STALLED_NOT_CONFIRMED`,
+`CONVERSATION_NOT_FOUND`, `ERROR`) podem liberar o fallback antes.
+
+Ao vencer a janela sem progresso, o dispatcher pode acionar o worker somente
+com checkpoint/conversa/sessao autenticos e com ownership/lease exclusivo;
+nenhuma execucao paralela, nenhum rebinding por titulo e nenhuma troca de conta
+implicita. `PROGRESS_CONFIRMED` exige resposta real na conversa. A liberacao
+do fallback nao constitui conclusao da tarefa.
+
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
