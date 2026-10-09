@@ -19,6 +19,7 @@ BROWSER_FILES = frozenset({
     "deploy/systemd/shopvivaliz-browser-atendimento-mcp.service",
     "deploy/systemd/shopvivaliz-browser-dev-mcp.service",
     "deploy/systemd/shopvivaliz-browser-universal-mcp.service",
+    "tests/remote-control-browser-mcp-test.py",
     "tests/test_chatgpt_access_parity.py",
     "tests/test_remote_mcp_bootstrap_scope.py",
     "docs/knowledge/chatgpt-access-parity.md",

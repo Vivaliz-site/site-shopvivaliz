@@ -24,6 +24,21 @@ def test_browser_only_changes_use_targeted_backend_job():
     ])
 
 
+def test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap():
+    # Regression: PR #2849 failed a full bootstrap because the browser-only
+    # regression test path was mistakenly excluded from the scope allowlist.
+    assert scope.is_browser_only([
+        "remote-control-browser-mcp/server.py",
+        "tests/remote-control-browser-mcp-test.py",
+        "docs/knowledge/chatgpt-access-parity.md",
+    ])
+    assert not scope.is_browser_only([
+        "remote-control-browser-mcp/server.py",
+        "tests/remote-control-browser-mcp-test.py",
+        "remote-control-mcp/server.py",
+    ])
+
+
 def test_controller_or_windows_changes_still_require_four_host_bootstrap():
     assert not scope.is_browser_only(["remote-control-mcp/server.py"])
     assert not scope.is_browser_only(["scripts/setup-remote-control-windows.ps1"])
@@ -53,6 +68,7 @@ def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
 
 if __name__ == "__main__":
     test_browser_only_changes_use_targeted_backend_job()
+    test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap()
     test_controller_or_windows_changes_still_require_four_host_bootstrap()
     test_empty_or_untrusted_diff_fails_closed()
     test_workflow_keeps_full_bootstrap_and_browser_only_separate()
