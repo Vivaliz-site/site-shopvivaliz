@@ -10,7 +10,7 @@ COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
 PACKAGE='@wonderwhy-er/desktop-commander@0.2.48'
-NPX_BIN="${NPX_BIN:-npx}"
+DC_BIN="${DC_BIN:-/opt/shopvivaliz-desktop-commander/node_modules/.bin/desktop-commander}"
 NODE_BIN="${NODE_BIN:-node}"
 SESSION_PATCHER="${SESSION_PATCHER:-/usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs}"
 AUTH_REGEX='Please complete authentication|Starting device authorization flow|device code|Authorization required|Persisted session invalid'
@@ -42,7 +42,6 @@ if [[ ! -f "$SESSION_PATCHER" ]]; then
   exit 22
 fi
 
-DC_BIN="$("$NPX_BIN" --yes --package "$PACKAGE" sh -c 'command -v desktop-commander')"
 if [[ -z "$DC_BIN" || ! -x "$DC_BIN" ]]; then
   echo 'SESSION_REFRESH_PATCH=false reason=package_binary_missing'
   exit 22
@@ -67,7 +66,7 @@ device_state_newer_than_cooldown() {
 }
 
 find_competing_remote_sessions() {
-  pgrep -f 'npm exec @wonderwhy-er/desktop-commander@0\.2\.47 remote --persist-session' 2>/dev/null || :
+  pgrep -f 'desktop-commander/dist/index[.]js remote --persist-session' 2>/dev/null || :
 }
 
 terminate_process_tree() {
@@ -143,7 +142,7 @@ ready_is_current() {
 }
 
 echo "REMOTE_OWNER_PID=$REMOTE_OWNER_PID REMOTE_OWNER_SESSION=$REMOTE_OWNER_SESSION"
-setsid "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1 &
+setsid "$DC_BIN" remote --persist-session >"$tmp" 2>&1 &
 child=$!
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do

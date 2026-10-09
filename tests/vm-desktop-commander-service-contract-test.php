@@ -21,11 +21,11 @@ foreach ($requiredUnit as $needle) {
 }
 $installer = file_get_contents($installerPath);
 foreach ([
-    'sudo -u', 'NODE_BIN', 'NPX_BIN', 'systemctl daemon-reload',
+    'sudo -u', 'NODE_BIN', 'NPM_BIN', "DC_INSTALL_ROOT='/opt/shopvivaliz-desktop-commander'", '"$NPM_BIN" install --prefix "$DC_INSTALL_ROOT"', 'systemctl daemon-reload',
     'systemctl enable "$SERVICE"', 'systemctl restart "$SERVICE"',
     'LEGACY_SERVICE=', 'desktop-commander.service', 'disable --now',
     'kill_tree', 'CANONICAL_REMOTE_COUNT', 'NONCANONICAL_REMOTE_COUNT',
-    '@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session',
+    '@wonderwhy-er/desktop-commander@0.2.48', 'desktop-commander/dist/index.js remote --persist-session',
     'for attempt in {1..12}', 'sleep 5',
     'is-enabled', 'is-active'
 ] as $needle) {
@@ -35,7 +35,7 @@ $supervisor = file_get_contents($supervisorPath);
 $requiredSupervisor = [
     'DEVICE_DIR="$HOME_DIR/.desktop-commander-device"',
     'DEVICE_FILE="$DEVICE_DIR/device.json"',
-    'NPX_BIN','@wonderwhy-er/desktop-commander@0.2.48','AUTH_REQUIRED','exit 20','remote --persist-session'
+    'DC_BIN="${DC_BIN:-/opt/shopvivaliz-desktop-commander/node_modules/.bin/desktop-commander}"','@wonderwhy-er/desktop-commander@0.2.48','AUTH_REQUIRED','exit 20','setsid "$DC_BIN" remote --persist-session'
 ];
 foreach ($requiredSupervisor as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
@@ -44,6 +44,16 @@ if (strpos($supervisor, 'HOME_DIR="${HOME:-/home/ubuntu}"') === false) {
     fwrite(STDERR, "FALHOU: supervisor sem HOME_DIR canonico\n");
     exit(1);
 }
+
+if (strpos($supervisor, 'NPX_BIN=') !== false || strpos($supervisor, 'npx --yes') !== false) {
+    fwrite(STDERR, "FALHOU: runtime ainda depende de cache efemero npx\n");
+    exit(1);
+}
+if (strpos($installer, 'DC_BIN=%s') === false) {
+    fwrite(STDERR, "FALHOU: installer nao persiste DC_BIN estavel\n");
+    exit(1);
+}
+
 $all = $unit . $installer . $supervisor;
 $forbidden = [
     'access_token','refresh_token','auth_token','0.0.0.0',

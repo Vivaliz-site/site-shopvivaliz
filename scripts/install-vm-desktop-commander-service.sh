@@ -22,7 +22,9 @@ GUARDIAN_TIMER='shopvivaliz-desktop-commander-guardian.timer'
 LEGACY_SERVICE='desktop-commander.service'
 LEGACY_UNIT_TARGET='/etc/systemd/system/desktop-commander.service'
 TARGET_USER='ubuntu'
-CANONICAL_SIGNATURE='@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session'
+PACKAGE='@wonderwhy-er/desktop-commander@0.2.48'
+DC_INSTALL_ROOT='/opt/shopvivaliz-desktop-commander'
+CANONICAL_SIGNATURE="$DC_INSTALL_ROOT/node_modules/@wonderwhy-er/desktop-commander/dist/index.js remote --persist-session"
 
 kill_tree() {
   local root="$1" child
@@ -44,20 +46,25 @@ count_remote_roots() {
     else
       NONCANONICAL_REMOTE_COUNT=$((NONCANONICAL_REMOTE_COUNT + 1))
     fi
-  done < <(pgrep -af 'npm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || :)
+  done < <(pgrep -af 'desktop-commander/dist/index[.]js remote --persist-session' 2>/dev/null || :)
 }
 
 if ! id "$TARGET_USER" >/dev/null 2>&1; then echo 'ERROR target user missing'; exit 2; fi
 if NODE_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v node' 2>/dev/null)"; then :; else NODE_BIN=''; fi
-if NPX_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v npx' 2>/dev/null)"; then :; else NPX_BIN=''; fi
+if NPM_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v npm' 2>/dev/null)"; then :; else NPM_BIN=''; fi
 if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then echo 'ERROR node missing for target user'; exit 3; fi
-if [[ -z "$NPX_BIN" || ! -x "$NPX_BIN" ]]; then echo 'ERROR npx missing for target user'; exit 4; fi
+if [[ -z "$NPM_BIN" || ! -x "$NPM_BIN" ]]; then echo 'ERROR npm missing for target user'; exit 4; fi
 if [[ ! -f "$UNIT_SOURCE" ]]; then echo 'ERROR unit template missing'; exit 5; fi
 if [[ ! -f "$SUPERVISOR_SOURCE" ]]; then echo 'ERROR supervisor missing'; exit 6; fi
 if [[ ! -f "$SESSION_PATCHER_SOURCE" ]]; then echo 'ERROR session patcher missing'; exit 8; fi
 if [[ ! -f "$GUARDIAN_SOURCE" ]]; then echo 'ERROR guardian script missing'; exit 9; fi
 if [[ ! -f "$GUARDIAN_SERVICE_SOURCE" ]]; then echo 'ERROR guardian service missing'; exit 10; fi
 if [[ ! -f "$GUARDIAN_TIMER_SOURCE" ]]; then echo 'ERROR guardian timer missing'; exit 11; fi
+
+install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 0755 "$DC_INSTALL_ROOT"
+sudo -u "$TARGET_USER" -H "$NPM_BIN" install --prefix "$DC_INSTALL_ROOT" --no-audit --no-fund "$PACKAGE"
+DC_BIN="$DC_INSTALL_ROOT/node_modules/.bin/desktop-commander"
+if [[ ! -x "$DC_BIN" ]]; then echo 'ERROR stable Desktop Commander binary missing'; exit 12; fi
 
 install -d -m 0755 "$LIB_DIR"
 install -m 0755 "$SUPERVISOR_SOURCE" "$SUPERVISOR_TARGET"
@@ -67,7 +74,7 @@ install -m 0755 "$GUARDIAN_SOURCE" "$GUARDIAN_TARGET"
 install -m 0644 "$GUARDIAN_SERVICE_SOURCE" "$GUARDIAN_SERVICE_TARGET"
 install -m 0644 "$GUARDIAN_TIMER_SOURCE" "$GUARDIAN_TIMER_TARGET"
 NODE_BIN_DIR="$(dirname "$NODE_BIN")"
-printf 'NODE_BIN=%s\nNPX_BIN=%s\nPATH=%s:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' "$NODE_BIN" "$NPX_BIN" "$NODE_BIN_DIR" > "$ENV_TARGET"
+printf 'NODE_BIN=%s\nDC_BIN=%s\nPATH=%s:%s/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' "$NODE_BIN" "$DC_BIN" "$NODE_BIN_DIR" "$DC_INSTALL_ROOT" > "$ENV_TARGET"
 chmod 0644 "$ENV_TARGET"
 systemctl daemon-reload
 systemctl enable "$SERVICE"
@@ -103,7 +110,7 @@ while read -r pid args; do
   if [[ "$args" != *"$CANONICAL_SIGNATURE"* ]]; then
     kill_tree "$pid"
   fi
-done < <(pgrep -af 'npm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || :)
+done < <(pgrep -af 'desktop-commander/dist/index[.]js remote --persist-session' 2>/dev/null || :)
 
 systemctl restart "$SERVICE"
 CANONICAL_REMOTE_COUNT=0
