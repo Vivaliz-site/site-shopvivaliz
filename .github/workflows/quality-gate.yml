@@ -39,6 +39,7 @@ on:
       - 'scripts/chatgpt-account-diagnostic.mjs'
       - 'scripts/production-runtime-parity.mjs'
       - 'scripts/install-shopvivaliz-backend-browser-runner.sh'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
       - 'tests/public-layout-*.sh'
       - 'tests/chatgpt-account-diagnostic-contract-test.sh'
       - 'tests/test_chatgpt_access_parity.py'
