@@ -131,7 +131,7 @@ class AccountAuthGateTests(unittest.TestCase):
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
             with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=allowed_lease("atendimento")):
                 with mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake) as run:
-                    for action in ("back_to_methods", "open_login", "continue_google", "continue_microsoft", "continue_microsoft"):
+                    for action in ("back_to_methods", "open_login", "continue_google", "continue_microsoft"):
                         args = payload(session="atendimento", action=action, value="")
                         result = m.browser_auth_action(args)
                         self.assertTrue(result["ok"])
