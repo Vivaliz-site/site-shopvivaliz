@@ -64,15 +64,23 @@ For EACH account, using its own authenticated ChatGPT session:
 
 1. Confirm exact account email and workspace membership/role.
 2. Enumerate required apps and compare installed and connected status.
-3. Inspect global/default and individual app permission modes; compare the
+3. For **every shared MCP provider** (including ShopVivaliz Remote Control
+   and RDC 2), call its authorized `tools/list` endpoint independently from
+   EACH ChatGPT account. Capture the COMPLETE tool-name catalog and each
+   tool's `inputSchema`, normalize JSON key ordering, and compare both
+   catalogs for equality. Compare the complete set, not only `hosts_list`,
+   `who_am_i` or `list_devices`; differences or missing schemas are FAIL.
+   If a provider does not expose a complete catalog through a supported
+   interface, record NOT_VERIFIED and do not claim full parity.
+4. Inspect global/default and individual app permission modes; compare the
    effective modes by app without weakening approvals.
-4. Call ShopVivaliz `hosts_list` and compare the canonical host set.
-5. Call RDC 2 `who_am_i` from each ChatGPT account, verify the expected
+5. Call ShopVivaliz `hosts_list` and compare the canonical host set.
+6. Call RDC 2 `who_am_i` from each ChatGPT account, verify the expected
    authorized provider identity for that connection, then `list_devices`;
    compare device availability and scoped settings.
-6. Check the dedicated browser MCP service health and identity binding;
+7. Check the dedicated browser MCP service health and identity binding;
    health HTTP 200 alone is not an authenticated-browser E2E proof.
-7. Record a redacted evidence summary with account identifier, timestamp,
+8. Record a redacted evidence summary with account identifier, timestamp,
    check name, PASS/FAIL and audit ID; never record secrets.
 
 Do not declare `CONCLUIDO` while either account is signed out, a
