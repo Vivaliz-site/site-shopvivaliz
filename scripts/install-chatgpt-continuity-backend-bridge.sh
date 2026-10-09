@@ -24,7 +24,6 @@ virtual_display_unit_source="$repo_root/ops/systemd/$virtual_display_unit"
 virtual_display_unit_target="/etc/systemd/system/$virtual_display_unit"
 virtual_display_guard_source="$script_dir/chatgpt-continuity/shopvivaliz-virtual-display-guard.sh"
 virtual_display_guard_target="/usr/local/libexec/shopvivaliz-virtual-display-guard.sh"
-companion_browser_units=('shopvivaliz-atendimento-browser.service' 'shopvivaliz-chatgpt-browser.service')
 browser_guardian_source="$script_dir/chatgpt-continuity/chatgpt-browser-guardian.sh"
 browser_guardian_target="/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh"
 probe_cache_source="$script_dir/chatgpt-continuity/chatgpt-browser-probe-cache.py"
@@ -91,9 +90,6 @@ sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser 
 [[ -f "$browser_unit_source" ]] || fail "browser systemd unit missing: $browser_unit_source"
 [[ -f "$virtual_display_unit_source" ]] || fail "virtual display unit missing: $virtual_display_unit_source"
 [[ -f "$virtual_display_guard_source" ]] || fail "virtual display guard missing: $virtual_display_guard_source"
-for companion in "${companion_browser_units[@]}"; do
-  [[ -f "$repo_root/ops/systemd/$companion" ]] || fail "browser companion unit missing: $companion"
-done
 [[ -f "$browser_guardian_source" ]] || fail "browser guardian missing: $browser_guardian_source"
 [[ -f "$probe_cache_source" ]] || fail "browser probe helper missing: $probe_cache_source"
 [[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
@@ -199,11 +195,6 @@ fi
 if sudo_install_if_changed "$virtual_display_unit_source" "$virtual_display_unit_target" 644; then
   system_units_changed=true
 fi
-for companion in "${companion_browser_units[@]}"; do
-  if sudo_install_if_changed "$repo_root/ops/systemd/$companion" "/etc/systemd/system/$companion" 644; then
-    system_units_changed=true
-  fi
-done
 if sudo -n test -e "$legacy_guardian_atendimento_override"; then
   sudo -n rm -f "$legacy_guardian_atendimento_override"
   system_units_changed=true
