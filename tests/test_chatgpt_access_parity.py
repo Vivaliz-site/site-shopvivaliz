@@ -94,10 +94,33 @@ def test_dedicated_browser_mcp_services_reload_installed_server():
     assert 'shopvivaliz-browser-${session}-mcp.service' in block
 
 
+
+def test_corporate_chromium_uses_persistent_keyring_user_bus_without_secret_exposure():
+    # A per-browser dbus-run-session creates an isolated bus, invisible to the
+    # GNOME Keyring session servicing the fredrdp desktop and OTPClient.
+    for session in ("dev", "atendimento"):
+        body = (ROOT / "ops" / "systemd" /
+                f"shopvivaliz-{session}-browser.service").read_text(encoding="utf-8")
+        for line in (
+            "After=network-online.target shopvivaliz-virtual-display.service user@1002.service",
+            "Wants=network-online.target user@1002.service",
+            "Environment=XDG_RUNTIME_DIR=/run/user/1002",
+            "Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus",
+            "ExecStartPre=/usr/bin/test -S /run/user/1002/bus",
+            "ExecStart=/opt/shopvivaliz-browser/chrome-linux/chrome",
+        ):
+            assert line in body, (session, line)
+        assert "dbus-run-session" not in body, session
+        for safeguard in ("NoNewPrivileges=true", "PrivateTmp=true",
+                          "MemoryMax=3G", "KillMode=control-group"):
+            assert safeguard in body, (session, safeguard)
+
+
 if __name__ == '__main__':
     test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric()
     test_dev_and_atendimento_chromium_units_have_identical_effective_limits()
     test_corporate_browser_units_preserve_task_headroom_under_many_open_tabs()
+    test_corporate_chromium_uses_persistent_keyring_user_bus_without_secret_exposure()
     test_access_parity_policy_is_referenced_by_both_corporate_bootstraps()
     test_dedicated_browser_mcp_services_reload_installed_server()
     print('CHATGPT_ACCOUNT_ACCESS_PARITY_CONTRACT=PASS')
