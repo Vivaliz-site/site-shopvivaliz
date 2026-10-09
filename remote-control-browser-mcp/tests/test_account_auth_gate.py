@@ -197,6 +197,34 @@ class AccountAuthGateTests(unittest.TestCase):
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
 
+    def test_continue_retries_only_official_openai_login_error_stage(self):
+        # The official /log-in error page exposes only "Try again". The
+        # existing account-scoped 'continue' tool must be able to recover it,
+        # but NEVER match retry controls on consent or other auth stages.
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        marker = "const retryAllowed="
+        self.assertIn(marker, script)
+        expression = script.split(marker, 1)[1].split(";", 1)[0]
+        cases = (
+            ("continue", "https://auth.openai.com/log-in", True),
+            ("continue", "https://auth.openai.com/log-in/password", False),
+            ("continue", "https://auth.openai.com/email-verification", False),
+            ("continue", "https://auth.openai.com/authorize", False),
+            ("continue", "https://chatgpt.com/auth/login", False),
+            ("resend", "https://auth.openai.com/log-in", False),
+            ("fill_password", "https://auth.openai.com/log-in", False),
+        )
+        js = "const cases=" + json.dumps(cases) + ";" + (
+            "for(const [action,url,expected] of cases){"
+            "const u=new URL(url);const retryAllowed=" + expression + ";"
+            "if(retryAllowed!==expected)process.exit(3);}"
+        )
+        proc = subprocess.run(["node", "--input-type=module", "-e", js],
+                              text=True, capture_output=True, check=False)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertIn("retryAllowed && /^try again$/i.test", script)
+        self.assertIn("matches.length!==1", script)
+
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
                               text=True,capture_output=True,check=False)
