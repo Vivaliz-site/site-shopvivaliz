@@ -349,7 +349,7 @@ def _read_controller_state() -> dict[str, Any]:
     allowed = {
         "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
         "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
-        "watchdog", "dispatcher", "chatgpt_nudge",
+        "watchdog", "dispatcher", "chatgpt_nudge", "route_recovery",
     }
     return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
 
