@@ -15,6 +15,10 @@ on:
       - 'remote-control-browser-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/remote_mcp_bootstrap_scope.py'
+      - 'tests/test_remote_mcp_bootstrap_scope.py'
+      - 'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service'
+      - 'deploy/systemd/shopvivaliz-browser-dev-mcp.service'
       - 'scripts/shopvivaliz-native-desktop-bridge.ps1'
       - 'scripts/agent_task_state.py'
       - 'scripts/continuity/**'
@@ -33,7 +37,75 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      browser_only: ${{ steps.classify.outputs.browser_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed files (fail closed to full bootstrap)
+        id: classify
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$GITHUB_EVENT_NAME" != push ] || [[ ! "${BEFORE_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+            echo 'browser_only=false' >> "$GITHUB_OUTPUT"
+            echo 'REMOTE_CONTROL_BOOTSTRAP_SCOPE=FULL reason=dispatch_or_unknown_diff'
+          else
+            git diff --no-renames --name-only "$BEFORE_SHA" "$GITHUB_SHA" | python3 scripts/remote_mcp_bootstrap_scope.py --github-output "$GITHUB_OUTPUT"
+          fi
+
+  browser_only:
+    needs: scope
+    if: needs.scope.outputs.browser_only == 'true'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate browser-only MCP installer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_chatgpt_access_parity.py
+          python3 tests/test_remote_mcp_bootstrap_scope.py
+          bash -n scripts/setup-remote-control-browser-mcp.sh
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Install browser bridges (no production SSH or Windows bootstrap)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service
+      - name: Verify both dedicated bridges loaded the installed source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import datetime,json,os,subprocess,urllib.request
+          source_mtime=os.stat('/opt/shopvivaliz-remote-control-browser/server.py').st_mtime
+          for session,unit,port in [('atendimento','shopvivaliz-browser-atendimento-mcp.service',5582),('dev','shopvivaliz-browser-dev-mcp.service',5583)]:
+              state=subprocess.check_output(['systemctl','is-active',unit],text=True).strip()
+              assert state=='active',f'{unit} not active'
+              started=subprocess.check_output(['systemctl','show',unit,'-p','ExecMainStartTimestamp','--value'],text=True).strip()
+              start=datetime.datetime.strptime(started,'%a %Y-%m-%d %H:%M:%S %Z').replace(tzinfo=datetime.timezone.utc)
+              assert start.timestamp()>=source_mtime-1,f'{unit} running stale source'
+              with urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=5) as response:
+                  health=json.load(response)
+                  assert response.status==200 and health.get('ok') is True,f'{unit} health failed'
+              print(f'BROWSER_ONLY_MCP_RELOAD_{session.upper()}=PASS')
+          PY
+
   bootstrap:
+    needs: scope
+    if: needs.scope.outputs.browser_only != 'true'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
