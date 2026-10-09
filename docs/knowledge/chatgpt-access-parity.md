@@ -21,6 +21,10 @@ effective app permissions are separate checks. Installed != connected.
 - The dedicated browser MCP services must use the same server source, runtime
   options and authorization policy. Only the session name, CDP URL, TCP port
   and corresponding identity binding may differ.
+- The Dev and Atendimento Chromium systemd services must maintain equal
+  CPU, memory, process limits, security hardening, restart policy and browser
+  flags, except their explicit session-specific profile, class and CDP port.
+  `tests/test_chatgpt_access_parity.py` enforces this at the blocking CI gate.
 - Never share or copy cookies, browser storage, TOTP, passwords, provider
   sessions, OAuth grants or token files between the accounts.
 - Each account must be authenticated and confirmed to match its expected
