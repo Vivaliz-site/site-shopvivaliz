@@ -796,7 +796,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn(start_display, body)
         self.assertIn(start_browser, body)
         self.assertLess(body.index(start_display), body.index(start_browser))
-        self.assertIn("shopvivaliz-atendimento-browser.service", body)
+        self.assertNotIn('companion_browser_units=', body)
         self.assertEqual(
             subprocess.run(["bash", "-n", str(ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh")], capture_output=True).returncode,
             0,
