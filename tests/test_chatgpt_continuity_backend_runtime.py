@@ -810,12 +810,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         for path in (
             "scripts/chatgpt-continuity/shopvivaliz-virtual-display-guard.sh",
             "ops/systemd/shopvivaliz-virtual-display.service",
-            "ops/systemd/shopvivaliz-atendimento-browser.service",
-            "ops/systemd/shopvivaliz-chatgpt-browser.service",
             "ops/systemd/shopvivaliz-dev-browser.service",
         ):
             with self.subTest(path=path):
                 self.assertIn(f"< {path}", repair)
+        self.assertNotIn("ops/systemd/shopvivaliz-atendimento-browser.service", repair)
+        self.assertNotIn("ops/systemd/shopvivaliz-chatgpt-browser.service", repair)
         self.assertIn("CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559'", repair)
 
     def test_php_bridge_supports_file_backed_secret(self) -> None:
