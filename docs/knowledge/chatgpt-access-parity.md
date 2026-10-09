@@ -36,12 +36,14 @@ effective app permissions are separate checks. Installed != connected.
 2. Both ChatGPT accounts have the ShopVivaliz Remote Control MCP installed
    and connected, with identical tool names and input schemas for shared
    functions. Test `hosts_list` independently on each account.
-3. Both ChatGPT accounts have RDC 2 installed and connected. For each
-   individual connection, `who_am_i.email` MUST equal that account's email.
-   A label such as `Primary`, `dev` or `Atendimento` is not evidence of
-   identity. Two link IDs that both resolve to Dev do NOT satisfy parity.
-   Compare online device access and effective per-host file/command settings
-   after proving distinct provider identities.
+3. Both ChatGPT accounts have RDC 2 installed and connected through an
+   independent ChatGPT-to-provider authorization. Record `who_am_i.email`
+   for each to establish the expected provider identity, which may be the
+   SAME provider account in two separately authorized ChatGPT connections
+   when the owner/provider permits it. A label such as `Primary`, `dev`
+   or `Atendimento` is not identity evidence, and two link IDs in a single
+   ChatGPT session are NOT proof that the other ChatGPT account is connected.
+   Compare online device access and effective per-host file/command settings.
 4. In ChatGPT plugin settings, compare the *effective* global/default and
    plugin-specific permission mode per account and app. Keep the same
    approval requirements for sensitive actions. Do not set `full_access`
@@ -65,8 +67,9 @@ For EACH account, using its own authenticated ChatGPT session:
 3. Inspect global/default and individual app permission modes; compare the
    effective modes by app without weakening approvals.
 4. Call ShopVivaliz `hosts_list` and compare the canonical host set.
-5. Call RDC 2 `who_am_i`, assert the account-specific provider email,
-   then `list_devices`; compare device availability and scoped settings.
+5. Call RDC 2 `who_am_i` from each ChatGPT account, verify the expected
+   authorized provider identity for that connection, then `list_devices`;
+   compare device availability and scoped settings.
 6. Check the dedicated browser MCP service health and identity binding;
    health HTTP 200 alone is not an authenticated-browser E2E proof.
 7. Record a redacted evidence summary with account identifier, timestamp,
