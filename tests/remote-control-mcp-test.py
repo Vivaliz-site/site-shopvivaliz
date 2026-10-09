@@ -98,7 +98,7 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_controller_service_env_carries_single_durable_handoff_flag(self):
         setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
         self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", setup)
-        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}", setup)
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}", setup)
         browser=(ROOT/"deploy"/"systemd"/"shopvivaliz-remote-control-browser-mcp.service").read_text()
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", browser)
 
