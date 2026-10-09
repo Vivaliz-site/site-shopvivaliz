@@ -799,6 +799,22 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             0,
         )
 
+    def test_remote_repair_stages_virtual_display_dependencies_before_installer(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text()
+        start = workflow.index("            chatgpt_continuity_repair)")
+        end = workflow.index("            chatgpt_continuity_diagnostic)", start)
+        repair = workflow[start:end]
+        for path in (
+            "scripts/chatgpt-continuity/shopvivaliz-virtual-display-guard.sh",
+            "ops/systemd/shopvivaliz-virtual-display.service",
+            "ops/systemd/shopvivaliz-atendimento-browser.service",
+            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-dev-browser.service",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(f"< {path}", repair)
+        self.assertIn("CHATGPT_CONTINUITY_CDP_URL='http://127.0.0.1:9559'", repair)
+
     def test_php_bridge_supports_file_backed_secret(self) -> None:
         bridge = (ROOT / "api" / "chatgpt-continuity" / "bridge.php").read_text(encoding="utf-8")
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE", bridge)
