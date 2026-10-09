@@ -1,3 +1,9 @@
+<!-- MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+## Leitura comprovada antes de executar "Retome"
+
+Qualquer comando curto `Retome`, `Continue`, `Prossiga` ou `Siga` dispara a retomada operacional integral. O agente deve consultar o `AGENTS.md` e esta base de conhecimento diretamente no `main` atual, incluindo `host-access.md`, `README.md`, `agent-rules.md` e as instrucoes especificas do modulo. Antes de alteracoes, registrar checkpoint nao secreto de leitura: caminhos, ref, SHA e instante; um simples reconhecimento textual nao vale como prova. Revalidar a revisao a cada nova sessao/retomada. Sem acesso de leitura, evitar mutacoes ate restaurar as fontes; manter apenas diagnosticos read-only seguros.
+<!-- /MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+
 # Bootstrap da conta ChatGPT Atendimento
 
 Este documento é o bootstrap canônico, **não secreto**, da conta corporativa `atendimento@shopvivaliz.com.br`. Ele existe para que uma nova sessão dessa conta consiga operar os projetos ShopVivaliz sem depender de memória informal, de outra conta ChatGPT ou de credenciais versionadas.
