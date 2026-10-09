@@ -1,3 +1,19 @@
+<!-- RESUME_COMMAND_HARD_GATE_V2 -->
+## GATILHO IMPERATIVO: RETOME / CONTINUE / PROSSIGA / SIGA
+
+Qualquer mensagem do proprietario contendo somente `Retome`, `Continue`, `Prossiga` ou `Siga` (independentemente de maiusculas, minusculas ou pontuacao) e uma **ordem completa de execucao**, nao pedido de status, resumo, proposta, plano ou novo prompt. Nao exigir que o usuario repita a tarefa ou estas regras.
+
+Obrigacoes de cada agente/subagente/worker:
+1. Identificar a ultima tarefa pendente no contexto, checkpoints e estado vivo; comprovar o que ja foi feito e a proxima acao executavel.
+2. Consultar AGENTS.md, regras centralizadas e runbooks do projeto; preservar sessoes, autenticacoes e progresso validos.
+3. Executar a proxima acao imediatamente, continuando em sequencia ate entrega validada enquanto houver capacidade real, autorizacao e caminho seguro. Corrigir falhas de ferramentas, CI, APIs, MCP/RDC, navegador ou infra encontradas no caminho; usar fallback autorizado e retries idempotentes.
+4. Nao encerrar por diagnostico, plano, PR, merge, timeout ou erro transitorio; executar testes, checks, integracao/deploy pertinentes e validacao funcional/E2E antes de `CONCLUIDO`.
+5. Se a sessao/limite de ferramenta impedir continuar, registrar checkpoint fiel e dependencia exata; nao prometer execucao assincrona sem controlador de continuidade comprovadamente ativo.
+6. Nunca burlar politicas de seguranca, revisao, CI, branch protection, MFA ou aprovacao necessaria. Diante de bloqueio externo real, documentar evidencias, alternativas tentadas e passo de desbloqueio; nunca marcar `CONCLUIDO` sem evidencias.
+
+A simples resposta "retomado", um relatorio de problemas ou solicitar "diga prossiga" **nao satisfaz** esta regra. Evidencia de execucao e resultado funcional sao requisitos de aceite. Esta norma complementa, sem enfraquecer, as politicas especificas do repositorio.
+<!-- /RESUME_COMMAND_HARD_GATE_V2 -->
+
 <!-- AUTONOMOUS_RESUME_TO_VALIDATED_COMPLETION_V1 -->
 ## Regra obrigatoria: retomar e executar ate conclusao comprovada
 
