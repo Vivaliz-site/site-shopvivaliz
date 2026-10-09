@@ -36,6 +36,12 @@ on:
 permissions:
   contents: read
 
+# Prevent competing full/bootstrap-only runs from restarting the same backend
+# bridge services simultaneously. Never cancel a deploy already in progress.
+concurrency:
+  group: shopvivaliz-remote-control-backend-bootstrap
+  cancel-in-progress: false
+
 jobs:
   scope:
     runs-on: ubuntu-latest
