@@ -62,7 +62,7 @@ spec.loader.exec_module(base)
 
 VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
-ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_action"}
+ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}
 
 BROWSER_TOOLS = {
     "browser_health",
@@ -957,6 +957,61 @@ try {
 }
 """
 
+ACCOUNT_AUTH_OPEN_NODE_SCRIPT = r"""
+// Open a NEW fixed official sign-in tab in the already dedicated browser
+// profile. No existing tab, conversation, cookies or local storage is edited.
+const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
+const [session] = process.argv.slice(1);
+const ports = { dev: 9559, atendimento: 9556 };
+if (!Object.prototype.hasOwnProperty.call(ports, session)) throw new Error("invalid_auth_session");
+const port = ports[session];
+const origin = "http://127.0.0.1:" + port;
+const preflight = await (await fetch(origin + "/json", {signal:AbortSignal.timeout(3000)})).json();
+if (!Array.isArray(preflight) || preflight.length > 512) throw new Error("auth_tabs_invalid");
+const stage = u => u.protocol === "https:" && (
+    (u.hostname === "auth.openai.com" &&
+        (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
+    (u.hostname === "chatgpt.com" &&
+        (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
+);
+if (preflight.some(t => {
+    if (t?.type !== "page") return false;
+    try { return stage(new URL(t.url)); } catch { return false; }
+})) throw new Error("auth_stage_already_open");
+const version = await (await fetch(origin + "/json/version", {signal:AbortSignal.timeout(3000)})).json();
+const endpoint = new URL(String(version.webSocketDebuggerUrl || ""));
+if (endpoint.protocol !== "ws:" ||
+    !["127.0.0.1", "localhost"].includes(endpoint.hostname) ||
+    Number(endpoint.port) !== port ||
+    !endpoint.pathname.startsWith("/devtools/browser/"))
+    throw new Error("auth_browser_socket_invalid");
+let ws, c;
+try {
+    ws = new WebSocket(endpoint.href);
+    await Promise.race([
+        new Promise((resolve, reject) => {
+            ws.addEventListener("open", resolve, {once:true});
+            ws.addEventListener("error", reject, {once:true});
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("auth_socket_timeout")), 2500))
+    ]);
+    c = new Cdp(ws, {commandTimeoutMs:7000});
+    const result = await c.send("Target.createTarget", {
+        url:"https://chatgpt.com/auth/login", background:true, newWindow:false
+    });
+    const tabId = String(result?.targetId || "");
+    if (!/^[A-F0-9]{32}$/i.test(tabId)) throw new Error("auth_open_no_tab");
+    console.log(JSON.stringify({ok:true, session, tab_id:tabId, stage:"/auth/login"}));
+} catch (error) {
+    const reason = String(error?.message || "auth_open_failed");
+    console.error(/^auth_[a-z_]+$/.test(reason) ? reason : "auth_open_failed");
+    process.exitCode = 1;
+} finally {
+    try { c?.close(); } catch {}
+    try { ws?.close(); } catch {}
+}
+"""
+
 def _auth_stage(url: str) -> str | None:
     try:
         parsed = urlsplit(url)
@@ -997,6 +1052,31 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
         if stage is not None and re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(item.get("id") or "")):
             tabs.append({"tab_id": item["id"], "stage": stage, "session": session})
     return {"ok": True, "session": session, "tabs": tabs}
+
+
+def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    """Open only a new official sign-in tab under a real account maintenance lease."""
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_auth_session_invalid")
+    if not base._durable_handoff_enabled():
+        raise ValueError("account_auth_lease_mode_required")
+    lease_id = str(args.get("runtime_lease_id") or "")
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("account_auth_runtime_lock_required")
+    try:
+        lease = base.runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
+        raise ValueError("account_auth_runtime_lock_invalid") from None
+    if (lease.get("owner_kind") != "maintenance"
+            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
+        raise ValueError("account_auth_maintenance_owner_required")
+    invocation = [base.BROWSER_NODE_BIN, "--input-type=module", "-e",
+                  ACCOUNT_AUTH_OPEN_NODE_SCRIPT, session]
+    result = base.run_local_command_with_stdin(invocation, "", base.DEFAULT_TIMEOUT, cancel_check)
+    result["ok"] = result.get("exit_code") == 0
+    return result
 
 
 def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
@@ -1042,6 +1122,8 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     if name == "browser_auth_tabs":
         return browser_auth_tabs(args)
+    if name == "browser_auth_open":
+        return browser_auth_open(args, cancel_check=cancel_check)
     if name == "browser_auth_action":
         return browser_auth_action(args, cancel_check=cancel_check)
     if name in UNIVERSAL_MCP_TOOLS:
@@ -1109,6 +1191,21 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "browser_auth_open",
+        "description": "Open a new fixed official ChatGPT sign-in tab only in the requested isolated corporate profile using a valid account-specific maintenance runtime lease. Never touches an existing conversation or secrets.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session": {"type": "string", "enum": ["dev", "atendimento"]},
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            },
+            "required": ["session", "runtime_lease_id", "runtime_fencing_token"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
     {
         "name": "browser_auth_tabs",
         "description": "List only official login-stage tabs for one isolated Dev or Atendimento ChatGPT profile, excluding URLs, query parameters, and secrets.",
