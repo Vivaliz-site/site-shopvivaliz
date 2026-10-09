@@ -30,6 +30,7 @@ if (is_file($envFile)) {
 require_once __DIR__ . '/../includes/mercadopago-gateway.php';
 require_once __DIR__ . '/../includes/OrderNotificationService.class.php';
 require_once __DIR__ . '/../includes/ga4-order-conversion.php';
+require_once __DIR__ . '/../includes/google-ads-order-conversion.php';
 
 $orderNumberArgument = trim((string)($argv[1] ?? ''));
 $orderPath = trim((string)($argv[2] ?? ''));
@@ -66,6 +67,7 @@ try {
             'payment_approved' => false,
             'customer_email_sent' => false,
             'ga4_purchase_sent' => false,
+            'google_ads_purchase_sent' => false,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
         exit(0);
     }
@@ -106,6 +108,14 @@ try {
         $orderData['analytics_purchase_sent_at'] = $ga4Sent ? date(DATE_ATOM) : null;
     }
 
+    $googleAdsSent = (bool)($orderData['google_ads_purchase_sent'] ?? false);
+    [$googleAdsClickType] = svgads_click_identifier($orderData);
+    if ($googleAdsClickType !== '' && !$googleAdsSent) {
+        $googleAdsSent = svgads_send_approved_purchase($orderData);
+        $orderData['google_ads_purchase_sent'] = $googleAdsSent;
+        $orderData['google_ads_purchase_sent_at'] = $googleAdsSent ? date(DATE_ATOM) : null;
+    }
+
     $encoded = json_encode(
         $orderData,
         JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
@@ -120,6 +130,7 @@ try {
         '[PaymentPostProcessor] order=' . $orderNumber
         . ' email=' . ($emailSent ? 'sent' : 'failed')
         . ' ga4=' . ($ga4Sent ? 'sent' : 'not_sent')
+        . ' google_ads=' . ($googleAdsSent ? 'sent' : 'not_sent')
     );
 
     echo json_encode([
@@ -128,6 +139,7 @@ try {
         'payment_approved' => true,
         'customer_email_sent' => $emailSent,
         'ga4_purchase_sent' => $ga4Sent,
+        'google_ads_purchase_sent' => $googleAdsSent,
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
     exit($emailSent ? 0 : 1);
 } catch (Throwable $exception) {

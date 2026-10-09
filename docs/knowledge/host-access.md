@@ -96,6 +96,8 @@ O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e
 3. **GitHub Actions/OCI Bastion** — bootstrap, recovery e reparo.
 4. **RustDesk** — GUI/validacao visual; navegador de agente permanece na backend.
 
+Para GUI de `Fred-Win`/`KOCEPSV`, prefira as ferramentas `desktop_*` do Remote Control quando disponíveis. No `Fred-Win`, a rota normal é o bridge interativo nativo por reverse SSH (`scripts/shopvivaliz-native-desktop-bridge.ps1`), que executa screenshot/mouse/teclado na sessão Windows logada sem senha RustDesk e sem depender de registro cloud de ferramenta legada de desktop remoto. No `KOCEPSV`, `desktop_*` continua operando o cliente RustDesk na sessão `fredconsole` da backend. O mapeamento de IDs RustDesk fica somente em `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`); nunca versionar nem imprimir esse conteúdo. Nenhuma dessas rotas transforma o Windows em host de navegador de agente.
+
 Antes de operar qualquer host, valide `hostname`, identidade e contexto do repositorio sem expor credenciais.
 
 ## Repositório principal
@@ -173,3 +175,10 @@ Ao validar os quatro hosts, exigir evidência real de:
 4. execução de tarefa durável via controller;
 5. recuperação de status/resultado sem usar GitHub como transporte de runtime.
 <!-- /REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
+
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->
+## ChatGPT corporativo — referência de credencial
+
+A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. O segredo não é versionado neste repositório. Para autenticação, reutilizar primeiro o perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e as fontes seguras autorizadas. Não solicitar novamente a senha ao usuário sem evidência de que a credencial provisionada está ausente, revogada ou inválida.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->

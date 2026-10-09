@@ -185,3 +185,54 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 - The dispatcher must classify each authorized comment into at most one route. Explicit slash commands take precedence over generic mentions such as `@claude`.
 - Adding a new comment command requires updating `scripts/issue-comment-router.py`, the dispatcher reusable-workflow route, and `tests/test_issue_comment_router.py`.
 - Unrelated or unauthorized comments must produce route `none`; they must not wake command workflows that will only become `skipped`.
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
+## Credencial do ChatGPT — atendimento@shopvivaliz.com.br
+
+- A conta `atendimento@shopvivaliz.com.br` possui senha própria já criada pelo usuário.
+- O valor da senha **não deve ser versionado, escrito em docs, logs, issues, comentários, memória de agente ou mensagens**.
+- Agentes devem reutilizar primeiro a credencial segura já provisionada no perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e demais fontes seguras autorizadas.
+- **Não pedir novamente a senha ao usuário como primeira ação.** Antes de solicitar intervenção humana, comprovar que a credencial segura existente está ausente, revogada ou inválida.
+- Se a credencial precisar ser reprovisionada, fazê-lo apenas por canal seguro que não persista o valor em auditoria ou Git.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_V1 -->
+
+<!-- BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+## Vínculo obrigatório entre sessão de navegador e conta
+
+- Fonte canônica: `docs/knowledge/browser-sessions.md`.
+- `shopvivaliz-dev-chromium` / CDP `9559` é dedicado a `dev@shopvivaliz.com.br`; `fred`/CDP `9555` é somente compatibilidade temporária para checkpoints pré-migração.
+- `shopvivaliz-atendimento-chromium` / CDP `9556` é dedicado a `atendimento@shopvivaliz.com.br`.
+- É proibido fazer logout para trocar de conta, autenticar a outra conta no perfil errado ou migrar cookies/storage entre esses perfis.
+- Se a sessão correta falhar, reparar/reabrir o mesmo perfil; nunca usar a outra sessão como atalho.
+- Preservar os logins existentes e validar perfil/porta antes de qualquer ação de autenticação.
+<!-- /BROWSER_SESSION_ACCOUNT_BINDING_V1 -->
+
+<!-- CHATGPT_VM_AUTH_V1 -->
+## ChatGPT VM: autenticação local obrigatória
+
+- As contas ChatGPT operacionais são `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`. Fontes locais de MFA só podem ser declaradas provisionadas após validação real; referências antigas de `fredmourao` são legado de migração.
+- A fonte operacional é a instância OTPClient realmente ativa, identificada por UID e `DISPLAY` do processo e janela correspondente; `fredrdp`/`:99` era apenas o registro histórico. A sessão do OTPClient não precisa coincidir com o display do navegador ChatGPT. Seeds, senhas e códigos nunca podem ser versionados ou impressos.
+- O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
+- Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.
+- Se faltar capacidade segura de digitação em aplicação desktop, tratar como lacuna do Remote Control MCP a ser corrigida, mantendo a tarefa em andamento até existir rota segura.
+- Runbook: `docs/knowledge/chatgpt-vm-auth.md`.
+<!-- /CHATGPT_VM_AUTH_V1 -->
+
+## ChatGPT: foreground curto e ownership obrigatório
+
+- Após o recibo/handoff durável, o turno foreground retorna imediatamente. É proibido executar `task_wait`, sleep, espera de CI/deploy ou polling repetido de `task_status` no mesmo turno; o trabalho e sua observação pertencem ao executor durável.
+- Browser/continuity/controller são single-writer: qualquer ação mutável exige lease/lock atual e fencing token. Agentes concorrentes podem observar, mas não navegar, clicar, digitar, reiniciar serviço ou promover controller sem ownership válido.
+- Enquanto existir lease foreground vivo para a conversa, background é somente leitura. Recovery só assume ownership após release/expiry e revalidação da checkpoint version.
+- Nunca declarar recuperação E2E por saúde do bridge, HTTP 200, ACK, tool activity ou mudança genérica da UI. Sucesso exige nova resposta real do assistente na `conversation_id` vinculada.
+### Foreground durable handoff lease lifecycle
+
+When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `foreground_handoff`, the returned conversation lease is part of the user-turn lifecycle. The foreground agent MUST call `foreground_release` with the exact `task_id`, `lease_id`, and `fencing_token` immediately before returning its user-facing final response. If bounded foreground preparation genuinely approaches lease expiry, it MAY call `foreground_renew`; renewal MUST NOT be used to wait for CI, deploy, durable task completion, sleeps, or background polling. If the client stream disappears before release, the bounded TTL remains the crash/disconnect fallback and recovery may claim ownership only after that lease expires.
+
+<!-- CONTINUITY_AUTH_REMEDIATION_V2 -->
+## Gate de autenticacao e continuidade: correcao obrigatoria
+- Diagnostico, health check e auditoria de continuidade com bloqueio material exigem remediacao e revalidacao E2E, nao apenas status de servico.
+- Validar a identidade e a sessao antes de qualquer login. OTPClient e navegador podem pertencer a usuarios/displays diferentes; verificar em runtime, nao presumir pelo documento.
+- Segredos permanecem no contexto protegido de origem: proibido imprimir, ler em saida de ferramentas, transportar por argumentos de comando, copiar entre contas ou registrar em auditorias. A ausencia de ponte protegida e bloqueio de capacidade, nao autorizacao para exfiltrar valores.
+- Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
+- Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
+<!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->

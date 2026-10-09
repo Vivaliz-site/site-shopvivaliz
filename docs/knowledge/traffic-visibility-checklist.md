@@ -93,7 +93,7 @@ Agentes devem implementar automaticamente todos os itens gratuitos e tecnicament
 | GTM | DESATIVADO_INTENCIONALMENTE | O container legado `GTM-PHZ55CP3` publicava o stream divergente `G-QWYPLYMZ9`. A auditoria V5 preserva o GA4 oficial `G-1H55K1TZ5D` via tag direta/first-party e só permite GTM quando explicitamente configurado. |
 | GA4 | IMPLEMENTADO | Stream `G-1H55K1TZ5D` acessível e recebendo tráfego. |
 | Funil GA4 e-commerce | IMPLEMENTADO | Eventos `view_item`, `add_to_cart`, `begin_checkout`, `purchase` presentes no código. |
-| Purchase GA4 server-side | BLOQUEADO_POR_CREDENCIAL | `GA4_SECRET` não está materializado no runtime; a credencial OAuth disponível não possui permissão de Analytics Admin para criar o secret. O funil browser permanece ativo, mas o webhook de pagamento aprovado não consegue publicar `purchase` server-side até o secret existir. |
+| Purchase GA4 server-side | CONFIGURACAO_PENDENTE | A Admin API foi habilitada e o OAuth existente consultou o stream oficial e os metadados da chave com HTTP 200. Uma chave ja existe; `GA4_SECRET` ainda esta ausente no runtime e sua instalacao nesta conversa foi bloqueada pela plataforma. Nao pedir novo token nem contornar a protecao. Seguir `ga4-server-validation.md`; validacao estrutural nao prova entrega de compra. |
 | Enhanced Conversions | BLOQUEADO_POR_CREDENCIAL | Código existe, mas faltam `GOOGLE_ADS_ID` e `GOOGLE_ADS_CONVERSION_LABEL` reais. |
 | Google Merchant Center | IMPLEMENTADO | Feed dedicado por URL cadastrado; 177 produtos adicionados; arquivo sem problema básico. |
 | Google Shopping / PMax | BLOQUEADO_POR_APROVACAO | Não ativar campanha paga sem aprovação de orçamento e conta Ads liberada. |

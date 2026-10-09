@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
-NEGATIVE = {'AUTH_FLOW', 'AUTH_TERMINAL', 'LOGGED_OUT'}
+NEGATIVE = {'AUTH_FLOW', 'AUTH_TERMINAL', 'LOGGED_OUT', 'IDENTITY_MISMATCH'}
 STATES = NEGATIVE | {'AUTHENTICATED', 'UNKNOWN', 'UNREACHABLE'}
 MAX_WAIT_SECONDS = 300
 MAX_JSON = 1_048_576
@@ -85,7 +85,7 @@ def context_digest(base: str, tasks: Path) -> str:
         if not isinstance(page, dict) or page.get('type') != 'page':
             continue
         url = urlsplit(str(page.get('url', '')))
-        if url.hostname in {'chatgpt.com', 'auth.openai.com', 'accounts.google.com', 'appleid.apple.com'}:
+        if url.hostname in {'chatgpt.com', 'auth.openai.com', 'accounts.google.com', 'login.microsoftonline.com', 'appleid.apple.com'}:
             # Exclude OAuth state, nonce, code, query strings and fragments.
             page_keys.append((str(page.get('id', '')), url.scheme, url.hostname, url.path))
     if not page_keys or not tasks.is_dir():

@@ -25,16 +25,25 @@ def test_env_file_is_loaded_when_present():
     assert gemini_key == "" or len(gemini_key) >= 10
 
 
-def test_load_env_file_supports_simple_key_values(tmp_path):
-    from ai_collaboration import load_env_file
+def test_active_ads_env_loader_supports_simple_key_values_without_export(tmp_path):
+    from scripts.google_ads.client import load_env
 
     env_path = tmp_path / ".env.local"
-    env_path.write_text("OPENAI_API_KEY=abc123\nGEMINI_API_KEY=def456\n", encoding="utf-8")
+    env_path.write_text("FIXTURE_FIRST=abc123\nFIXTURE_SECOND=def456\n", encoding="utf-8")
 
-    os.environ.pop("OPENAI_API_KEY", None)
-    os.environ.pop("GEMINI_API_KEY", None)
+    before = dict(os.environ)
 
-    loaded = load_env_file(env_path)
+    loaded = load_env(env_path)
 
-    assert loaded["OPENAI_API_KEY"] == "abc123"
-    assert loaded["GEMINI_API_KEY"] == "def456"
+    assert loaded == {"FIXTURE_FIRST": "abc123", "FIXTURE_SECOND": "def456"}
+    assert dict(os.environ) == before
+
+
+def test_retired_collaboration_entrypoint_stays_blocked(tmp_path, monkeypatch, capsys):
+    import ai_collaboration
+    from scripts.ai import retired_executor
+
+    monkeypatch.setattr(retired_executor, 'REPORT_DIR', tmp_path / 'reports')
+    assert ai_collaboration.iniciar_super_agente_trio() == 2
+    assert '"external_operation_performed": false' in capsys.readouterr().err
+    assert not hasattr(ai_collaboration, 'load_env_file')

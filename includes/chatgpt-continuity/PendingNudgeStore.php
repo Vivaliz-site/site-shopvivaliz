@@ -251,6 +251,7 @@ final class SvChatgptContinuityPendingNudgeStore
             str_contains($normalized, 'transmission error persisted after bounded recovery retry') => 'TRANSMISSION_PERSISTED_AFTER_RETRY',
             str_contains($normalized, 'multiple open chatgpt conversation tabs found') => 'AMBIGUOUS_CONVERSATION_TARGET',
             str_contains($normalized, 'cdp endpoint unreachable') => 'CDP_ENDPOINT_UNREACHABLE',
+            str_contains($normalized, 'browser session account mismatch or bound conversation mismatch') => 'BOUND_SESSION_IDENTITY_MISMATCH',
             default => 'UNCLASSIFIED_RUNTIME_ERROR',
         };
         return ['code' => $code, 'sha256' => hash('sha256', $raw)];
