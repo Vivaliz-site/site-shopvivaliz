@@ -31,6 +31,11 @@ effective app permissions are separate checks. Installed != connected.
   reload an already-active Python process. Verify both service start times
   are newer than the installed server.py mtime, then recheck their health.
   Never restart/copy the authenticated Chromium profile as part of this.
+- Automatic backend updates limited to the browser MCP use the browser-only
+  deployment job; a support Windows machine going offline must not prevent
+  refreshing the Dev/Atendimento bridges. Controller, SSH or Windows changes
+  still use the fail-closed four-host bootstrap. Browser-only success is NOT
+  evidence that every Windows host is reachable.
 - Never share or copy cookies, browser storage, TOTP, passwords, provider
   sessions, OAuth grants or token files between the accounts.
 - Each account must be authenticated and confirmed to match its expected
