@@ -173,15 +173,18 @@ final class SvAmazonGmailApiClient
         $direct = $this->config->get('GMAIL_OAUTH_ACCESS_TOKEN');
         if ($direct !== '') return $this->accessToken = $direct;
 
-        $clientId = $this->config->first('GMAIL_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_ID');
-        $clientSecret = $this->config->first('GMAIL_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_CLIENT_SECRET');
-        $refreshToken = $this->config->first('GMAIL_OAUTH_REFRESH_TOKEN','GOOGLE_OAUTH_REFRESH_TOKEN');
-        if ($clientId === '' || $clientSecret === '' || $refreshToken === '') {
+        $credentials = $this->config->gmailOAuthCredentials();
+        if ($credentials === null) {
             throw new RuntimeException('Gmail OAuth credentials are incomplete.');
         }
         $response = $this->httpForm(
             'https://oauth2.googleapis.com/token',
-            ['client_id'=>$clientId,'client_secret'=>$clientSecret,'refresh_token'=>$refreshToken,'grant_type'=>'refresh_token']
+            [
+                'client_id'=>$credentials['client_id'],
+                'client_secret'=>$credentials['client_secret'],
+                'refresh_token'=>$credentials['refresh_token'],
+                'grant_type'=>'refresh_token',
+            ]
         );
         $token = trim((string)($response['access_token'] ?? ''));
         if ($token === '') throw new RuntimeException('Gmail OAuth did not return access_token.');
