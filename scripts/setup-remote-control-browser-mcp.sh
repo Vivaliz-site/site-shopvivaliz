@@ -56,6 +56,10 @@ if [ "${#missing[@]}" -gt 0 ]; then
   apt-get install -y --no-install-recommends xdotool xclip scrot x11-apps
 fi
 
+# The corporate CDP browser units require a protected Xvfb :99 display.
+# Reinstall only systemd dependencies; do not restart authenticated profiles.
+bash scripts/setup-shopvivaliz-display-recovery.sh
+
 install -d -m 0755 "$INSTALL_DIR"
 install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
