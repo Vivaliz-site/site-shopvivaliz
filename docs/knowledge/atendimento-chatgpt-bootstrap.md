@@ -159,3 +159,11 @@ Considere esse material como contexto operacional persistente da ShopVivaliz. Hi
 ## Estado de conectores
 
 A presença de um plugin no diretório não prova OAuth concluído. Gmail, Drive, Calendar e Contacts só são considerados conectados quando o fluxo corporativo Google terminar e uma chamada real do conector passar. Se o Google exigir CAPTCHA/Turnstile ou verificação humana, registrar o ponto exato e continuar o restante do onboarding sem usar uma conta pessoal como atalho.
+
+## Account access parity
+
+Atendimento must have the same authorized apps, tools, workspace role and
+effective permissions as Dev. Use its own provider grants, ChatGPT browser
+profile and authentication, never Dev's credentials or session. Follow
+[`chatgpt-access-parity.md`](chatgpt-access-parity.md) and prove an
+independently authorized RDC 2 connection and `who_am_i` result before declaring parity.
