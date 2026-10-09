@@ -122,6 +122,22 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertEqual([{"tab_id":"tab_a","stage":"/email-verification","session":"dev"}], result["tabs"])
         self.assertNotIn("SECRET", json.dumps(result))
 
+    def test_resend_email_matches_real_openai_login_button_without_consent_controls(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        marker = "const labels=action==='resend'?/"
+        self.assertIn(marker, script)
+        expression = script.split(marker, 1)[1].split("/i:", 1)[0]
+        js = (
+            "const match=new RegExp(" + json.dumps(expression) + ",'i');"
+            "const good=['Resend email','Resend e-mail','Resend code','Resend',"
+            "'Send a new code','Reenviar código','Reenviar e-mail'];"
+            "const bad=['Advanced','Allow access','Grant permissions','Login'];"
+            "if(good.some(x=>!match.test(x))||bad.some(x=>match.test(x)))process.exit(3);"
+        )
+        proc = subprocess.run(["node", "--input-type=module", "-e", js],
+                              text=True, capture_output=True, check=False)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
                               text=True,capture_output=True,check=False)

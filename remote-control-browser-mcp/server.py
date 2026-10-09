@@ -903,7 +903,7 @@ try {
         "e.focus();e.select();return {ready:true};" +
         "}" +
         "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
-        "const labels=action==='resend'?/^(?:resend(?: code)?|send a new code|reenviar(?: c[oó]digo)?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
+        "const labels=action==='resend'?/^(?:resend(?: (?:email|e-mail|code))?|send a new (?:email|code)|reenviar(?: (?:e-?mail|c[oó]digo))?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
         "const matches=buttons.filter(b=>labels.test(String(b.innerText||b.value||'').trim()));" +
         "if(matches.length!==1)throw Error('auth_button_ambiguous_or_unavailable');" +
         "matches[0].click();return {clicked:true};" +
