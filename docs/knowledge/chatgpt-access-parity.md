@@ -57,6 +57,16 @@ A user-authorized corporate login **cannot** reuse the ordinary
 ChatGPT conversation is unbound: those actions correctly require conversation
 and runtime leases. Never disable their gate or forge a conversation.
 
+The primary ShopVivaliz Remote Control MCP now also exposes these **same
+restricted tool names** through a fixed loopback proxy to the installed browser
+MCP on `127.0.0.1:5581/mcp`. It uses the existing peer's authorization and
+re-checks the account-specific maintenance lease and fencing token before
+forwarding. It does **not** expose general browser mutation, desktop input or
+OAuth consent through these login tools. Their `value` arguments are removed
+from both layers of audit (length only); only boolean input/click outcomes are
+returned. If the browser MCP is unavailable, return an explicit failure rather
+than retrying against the Atendimento profile or switching CDP globally.
+
 The browser MCP instead provides two narrowly scoped operations:
 
 - `browser_auth_tabs(session)`: read-only discovery of official login pages
