@@ -33,6 +33,32 @@ Para navegador, ações de digitação devem manter o valor digitado redigido da
 Se a ferramenta atual não expuser uma ação segura para digitar um segredo em aplicação desktop, isso é uma lacuna de capacidade do MCP e deve ser corrigida no MCP; não é motivo para voltar a depender rotineiramente da interação do usuário.
 
 
+
+## Persistencia do OTPClient apos reinicio da VM
+
+A fonte local autorizada de MFA deve continuar criptografada em
+`/home/fredrdp/.local/share/otpclient.enc` (permissoes restritas ao dono).
+O servico `shopvivaliz-otpclient.service` executa somente a interface
+`/usr/bin/otpclient` como `fredrdp` no display `:99`, condicionado
+ao socket X11 e a existencia do cofre. A unidade suporta tanto o
+provedor de display `shopvivaliz-virtual-display.service` do repositorio
+como `shopvivaliz-xvfb99.service` instalado no backend durante a recuperacao.
+A instalacao aprovada e idempotente usa
+`bash scripts/setup-shopvivaliz-otpclient.sh` a partir do clone canônico,
+com acesso root via MCP autorizado. A instalação **não lê a senha do cofre**
+e nao fornece MFA por si so.
+
+Validar separadamente: (1) unidade `enabled` e `active`,
+(2) processo pertencente a `fredrdp`, (3) socket e perfil certos,
+(4) cofre criptografado intacto, (5) desbloqueio do cofre efetivamente
+autorizado e (6) identidade da conta ChatGPT validada na sessao correta.
+Se o cofre ou GNOME Keyring permanecer bloqueado após o reboot, registrar
+`VAULT_LOCKED`, **nao tentar contornar a senha ou a criptografia**.
+O usuário pode desbloquear uma vez por meio da interface oficial protegida
+ou provisionar um mecanismo de desbloqueio automático autorizado e seguro.
+Nunca transferir senha, seed TOTP, OTP ou chave do cofre para logs, Git,
+argumentos de processos ou conversa.
+
 ## Gmail no controlador autonomo: permissao e isolamento
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
