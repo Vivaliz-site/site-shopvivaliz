@@ -227,3 +227,12 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ### Foreground durable handoff lease lifecycle
 
 When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `foreground_handoff`, the returned conversation lease is part of the user-turn lifecycle. The foreground agent MUST call `foreground_release` with the exact `task_id`, `lease_id`, and `fencing_token` immediately before returning its user-facing final response. If bounded foreground preparation genuinely approaches lease expiry, it MAY call `foreground_renew`; renewal MUST NOT be used to wait for CI, deploy, durable task completion, sleeps, or background polling. If the client stream disappears before release, the bounded TTL remains the crash/disconnect fallback and recovery may claim ownership only after that lease expires.
+
+<!-- CONTINUITY_AUTH_REMEDIATION_V2 -->
+## Gate de autenticacao e continuidade: correcao obrigatoria
+- Diagnostico, health check e auditoria de continuidade com bloqueio material exigem remediacao e revalidacao E2E, nao apenas status de servico.
+- Validar a identidade e a sessao antes de qualquer login. OTPClient e navegador podem pertencer a usuarios/displays diferentes; verificar em runtime, nao presumir pelo documento.
+- Segredos permanecem no contexto protegido de origem: proibido imprimir, ler em saida de ferramentas, transportar por argumentos de comando, copiar entre contas ou registrar em auditorias. A ausencia de ponte protegida e bloqueio de capacidade, nao autorizacao para exfiltrar valores.
+- Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
+- Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
+<!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->
