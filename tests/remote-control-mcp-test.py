@@ -312,6 +312,71 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
 
+    def test_scoped_account_auth_tools_are_exposed_with_gate_metadata(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_auth_tabs", specs)
+        self.assertIn("browser_auth_action", specs)
+        self.assertTrue(specs["browser_auth_tabs"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_auth_action"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
+        props = specs["browser_auth_action"]["inputSchema"]
+        self.assertIn("runtime_lease_id", props["required"])
+        self.assertIn("runtime_fencing_token", props["required"])
+        self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
+
+    def test_account_auth_audit_never_records_secret_or_low_entropy_digest(self):
+        args = {
+            "session": "dev", "action": "fill_code",
+            "value": "SYNTHETIC_CODE", "value_sha256": "guessable-digest"
+        }
+        safe = m.sanitize_audit_args("browser_auth_action", args)
+        self.assertNotIn("value", safe)
+        self.assertNotIn("value_sha256", safe)
+        self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
+
+    def test_account_auth_mutation_denies_missing_maintenance_lease(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.execute_tool(
+                    "browser_auth_action",
+                    {"session": "dev", "tab_id": "synthetic-tab", "action": "continue"},
+                )
+
+    def test_account_auth_proxy_routes_only_to_protected_local_browser_mcp(self):
+        import io
+        args = {
+            "session": "dev", "tab_id": "synthetic-tab",
+            "action": "fill_code", "value": "SYNTHETIC_CODE",
+            "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 8,
+        }
+        lease = {
+            "owner_kind": "maintenance",
+            "owner_id": "shopvivaliz-account-auth:dev",
+            "allowed_actions": ["browser_auth_action"],
+        }
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {"ok": True, "session": "dev", "action": "fill_code", "typed": True},
+                "isError": False,
+            }
+        }
+        with (
+            mock.patch.object(m, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())) as run,
+        ):
+            outcome = m.execute_tool("browser_auth_action", args)
+        request = run.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual("http://127.0.0.1:5581/mcp", request.full_url)
+        self.assertEqual("Bearer synthetic-service-token", request.get_header("Authorization"))
+        self.assertEqual("browser_auth_action", payload["params"]["name"])
+        self.assertEqual("SYNTHETIC_CODE", payload["params"]["arguments"]["value"])
+        self.assertEqual({"ok": True, "session": "dev", "action": "fill_code", "typed": True}, outcome)
+        self.assertNotIn("SYNTHETIC_CODE", json.dumps(outcome))
+
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
