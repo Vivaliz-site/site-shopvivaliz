@@ -59,6 +59,30 @@ ou provisionar um mecanismo de desbloqueio automático autorizado e seguro.
 Nunca transferir senha, seed TOTP, OTP ou chave do cofre para logs, Git,
 argumentos de processos ou conversa.
 
+## Chromium Atendimento e GNOME Keyring
+
+A senha corporativa do ChatGPT Atendimento consta como uma entrada salva
+para `auth.openai.com` e o usuario `atendimento@shopvivaliz.com.br` em
+`/home/fredrdp/.config/shopvivaliz-atendimento-chromium/Profile 1`
+(comprovacao por **metadados somente**, sem ler a senha). Isso nao prova
+que a entrada possa ser descriptografada ou que a senha seja aceita.
+
+O Chrome corporativo deve compartilhar o D-Bus persistente do proprio
+`fredrdp` (`XDG_RUNTIME_DIR=/run/user/1002`,
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus`).
+Iniciar Chrome com `dbus-run-session` pode isola-lo do GNOME Keyring
+em uso. A correcao do transporte nao desbloqueia a colecao criptografada
+e nao elimina a necessidade de autenticacao legitima. O navegador
+Atendimento permanece em perfil proprio/CDP9556; Dev CDP9559 usa
+perfil distinto. Nunca copiar cookies ou senhas entre eles.
+
+**Separacao historica:** o OTPClient criptografado criado em 04/10
+pertencia ao fluxo RustDesk, conforme esclarecimento do proprietario.
+Isso **nao** comprova TOTP provisionado para o ChatGPT Dev ou Atendimento,
+cujos logins foram realizados posteriormente. Nao utilizar o OTP do
+RustDesk como se fosse um codigo ChatGPT. Confirmar cada mecanismo MFA
+separadamente no fluxo oficial, sem ler ou imprimir segredos.
+
 ## Gmail no controlador autonomo: permissao e isolamento
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
