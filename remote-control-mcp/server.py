@@ -28,6 +28,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -1214,7 +1216,7 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload", "value"):
         # Unsalted digests of low-entropy secrets remain guessable metadata.
         # Preserve event identity and length, not a searchable secret digest.
         safe_args.pop(f"{secret_key}_sha256", None)
@@ -1909,8 +1911,119 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# Deliberately fixed localhost endpoint for the *existing*, isolated browser
+# MCP. No arbitrary host, port or URL is accepted from tool callers.
+ACCOUNT_AUTH_BROWSER_MCP_URL = "http://127.0.0.1:5581/mcp"
+ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
+ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend"}
+
+
+def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Expose the existing browser MCP login gate without weakening its lease.
+
+    Browser MCP re-checks the maintenance owner, fencing token, official page
+    origin and specific input/button. This layer independently rejects wrong
+    sessions and stale/non-maintenance leases before invoking the local peer.
+    """
+    if name not in {"browser_auth_tabs", "browser_auth_action"}:
+        raise ValueError("account_auth_tool_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
+        raise ValueError("account_auth_session_invalid")
+    if name == "browser_auth_tabs":
+        if set(args) != {"session"}:
+            raise ValueError("account_auth_scope_invalid")
+    else:
+        allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
+        if set(args) - allowed_keys:
+            raise ValueError("account_auth_scope_invalid")
+        action = str(args.get("action") or "")
+        tab_id = str(args.get("tab_id") or "")
+        if action not in ACCOUNT_AUTH_ALLOWED_ACTIONS:
+            raise ValueError("account_auth_action_invalid")
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
+            raise ValueError("account_auth_tab_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+
+    if not AUTH_TOKEN:
+        raise RuntimeError("account_auth_browser_proxy_unavailable")
+    request = Request(
+        ACCOUNT_AUTH_BROWSER_MCP_URL,
+        data=json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer " + AUTH_TOKEN,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=35 if name == "browser_auth_action" else 8) as response:
+            payload = response.read(524289)
+    except (HTTPError, URLError, TimeoutError, OSError):
+        raise RuntimeError("account_auth_browser_proxy_unavailable") from None
+    if len(payload) > 524288:
+        raise RuntimeError("account_auth_browser_proxy_oversized")
+    try:
+        envelope = json.loads(payload)
+        result = envelope["result"]
+        output = result["structuredContent"]
+        if not isinstance(output, dict):
+            raise ValueError("invalid_result")
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("account_auth_browser_proxy_invalid_response") from None
+    if result.get("isError") or output.get("ok") is not True:
+        raise ValueError("account_auth_backend_denied")
+
+    # Return only allowlisted outcome fields. In particular, never echo
+    # the value, remote stdout/stderr, request body or Chromium DOM text.
+    if name == "browser_auth_tabs":
+        tabs = output.get("tabs", [])
+        if not isinstance(tabs, list):
+            raise RuntimeError("account_auth_browser_proxy_invalid_response")
+        clean = []
+        for tab in tabs[:128]:
+            if not isinstance(tab, dict) or tab.get("session") != session:
+                continue
+            tab_id = str(tab.get("tab_id") or "")
+            stage = str(tab.get("stage") or "")
+            if re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id) and (
+                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage == "/email-verification"
+            ):
+                clean.append({"tab_id": tab_id, "session": session, "stage": stage})
+        return {"ok": True, "session": session, "tabs": clean}
+
+    # The downstream action returns protected child stdout as a JSON
+    # status. Parse booleans only; never surface the raw child output.
+    child = {}
+    try:
+        child = json.loads(str(output.get("stdout") or ""))
+    except (ValueError, TypeError):
+        pass
+    if not isinstance(child, dict):
+        child = {}
+    action = str(args["action"])
+    status_key = "typed" if action.startswith("fill_") else "clicked"
+    status = bool(child.get(status_key) or output.get(status_key))
+    return {"ok": True, "session": session, "action": action, status_key: status}
+
+
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
+    "browser_auth_action": "browser_auth_action",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -2004,6 +2117,8 @@ def execute_tool(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
+    if name in {"browser_auth_tabs", "browser_auth_action"}:
+        return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
     if name == "browser_open":
@@ -2260,6 +2375,15 @@ TOOLS = [
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
+        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend"]},
+        "value": {"type": "string", "maxLength": 512},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, True),
     ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
