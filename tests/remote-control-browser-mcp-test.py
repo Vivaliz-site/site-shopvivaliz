@@ -98,7 +98,7 @@ class BrowserMcpTests(unittest.TestCase):
                 self.assertTrue(health["ok"])
                 self.assertTrue(health["cdp_reachable"])
                 self.assertEqual(session, health["session"])
-                self.assertFalse(health["account_authenticated"])
+                self.assertIsNone(health["account_authenticated"])
                 self.assertFalse(health["account_identity_verified"])
                 self.assertEqual(2, fetch.call_args.kwargs["timeout"])
                 self.assertEqual(f"http://127.0.0.1:{cdp}/json/version", fetch.call_args.args[0])
