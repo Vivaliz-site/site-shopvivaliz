@@ -10,6 +10,7 @@ Group=www-data
 WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
 EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/.env
 Environment=PYTHONUNBUFFERED=1
+Environment=SHOPEE_TOKEN_FILE=/home/ubuntu/shopvivaliz-deploy/shared/shopee-tokens.json
 ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/daemon-shopee-token-renewer.py --interval 10800 --retry-interval 900
 Restart=always
 RestartSec=60

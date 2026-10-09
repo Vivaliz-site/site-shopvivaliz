@@ -128,6 +128,20 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assert_cache_skip()
 
+    def test_wrong_account_fails_closed_and_cached_mismatch_stays_failed(self):
+        self.session_file.write_text('IDENTITY_MISMATCH')
+        first = self.run_guardian()
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn('DEGRADED_IDENTITY_MISMATCH', first.stdout)
+        data = json.loads(self.health.read_text())
+        self.assertEqual(data['session_state'], 'IDENTITY_MISMATCH')
+        self.assertFalse(data['authenticated'])
+        before = self.probes()
+        second = self.run_guardian()
+        self.assertNotEqual(second.returncode, 0)
+        self.assertEqual(self.probes(), before)
+        self.assertIn('QUIESCENT_AUTH_CACHE', second.stdout)
+
     def test_changed_page_resumes_probe_and_can_observe_authentication(self):
         self.run_guardian()
         before = self.probes()
@@ -181,13 +195,57 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.run_guardian()
         self.assertGreater(self.probes(), before)
 
+    def test_healthy_browser_recovers_stopped_continuity_worker(self):
+        self.session_file.write_text('AUTHENTICATED')
+        worker_state = self.root / 'worker.active'
+        self.executable(
+            'systemctl',
+            f"""printf '%s\\n' "$*" >> "$FIXTURE_SYSTEM_LOG"
+if [[ "$*" == *"--user --machine=ubuntu@ is-active --quiet shopvivaliz-chatgpt-continuity.service"* ]]; then
+  [[ -f "{worker_state}" ]] && exit 0 || exit 3
+fi
+if [[ "$*" == *"--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service"* ]]; then
+  : > "{worker_state}"
+  exit 0
+fi
+exit 0
+""",
+        )
+        result = self.run_guardian()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
+        self.assertTrue(worker_state.exists())
+
+    def test_healthy_browser_does_not_restart_active_continuity_worker(self):
+        self.session_file.write_text('AUTHENTICATED')
+        worker_state = self.root / 'worker.active'
+        worker_state.write_text('active')
+        self.executable(
+            'systemctl',
+            f"""printf '%s\\n' "$*" >> "$FIXTURE_SYSTEM_LOG"
+if [[ "$*" == *"--user --machine=ubuntu@ is-active --quiet shopvivaliz-chatgpt-continuity.service"* ]]; then
+  [[ -f "{worker_state}" ]] && exit 0 || exit 3
+fi
+if [[ "$*" == *"--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service"* ]]; then
+  : > "{worker_state}"
+  exit 0
+fi
+exit 0
+""",
+        )
+        result = self.run_guardian()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertNotIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
+
     def test_failed_transport_is_not_hidden_by_negative_cache(self):
         self.run_guardian()
         self.assert_cache_skip()
         self.transport_up = False
         result = self.run_guardian()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('restart shopvivaliz-chatgpt-browser.service', self.system_log.read_text())
+        self.assertIn('restart shopvivaliz-dev-browser.service', self.system_log.read_text())
 
     def test_corrupt_cache_forces_real_probe(self):
         self.run_guardian()

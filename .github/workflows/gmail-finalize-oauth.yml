@@ -16,7 +16,22 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect OAuth request change
+        id: request_change
+        env:
+          BEFORE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" -- ops/gmail-oauth-finalize.json | grep -Fxq 'ops/gmail-oauth-finalize.json'; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate job
+        if: steps.request_change.outputs.changed == 'true'
         id: req
         shell: bash
         run: |
@@ -25,6 +40,7 @@ jobs:
           [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || exit 2
           echo "job=$JOB" >> "$GITHUB_OUTPUT"
       - name: Configure VM key
+        if: steps.request_change.outputs.changed == 'true'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
           VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || '127.0.0.1' }}
@@ -38,6 +54,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
           echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
       - name: Recover and install Gmail token
+        if: steps.request_change.outputs.changed == 'true'
         env:
           JOB: ${{ steps.req.outputs.job }}
         shell: bash
@@ -46,8 +63,8 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
           set -euo pipefail
           job="$1"
-          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
-          current='/home/ubuntu/shopvivaliz-deploy/current'
+          site_env='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          safet_env='/home/ubuntu/amazon-returns-deploy/shared/.env'
           recovered='/tmp/gmail-refresh-recovered.token'
           found=''
           while IFS= read -r candidate; do
@@ -57,27 +74,43 @@ jobs:
           sudo cp "$found" "$recovered"
           sudo chown ubuntu:ubuntu "$recovered"
           chmod 600 "$recovered"
-          python3 - "$envfile" "$recovered" <<'PY'
-          import os, sys
+          sudo python3 - "$recovered" "$site_env" "$safet_env" <<'PY'
+          import os, stat, sys
           from pathlib import Path
-          envfile, tokenfile = map(Path, sys.argv[1:])
+
+          tokenfile = Path(sys.argv[1])
+          envfiles = [Path(value) for value in sys.argv[2:]]
           token = tokenfile.read_text().strip()
-          if not token or any(c.isspace() for c in token): raise SystemExit('invalid token')
-          lines = envfile.read_text().splitlines()
+          if not token or any(c.isspace() for c in token):
+              raise SystemExit('invalid token')
+
           key = 'GMAIL_OAUTH_REFRESH_TOKEN'
-          out=[]; replaced=False
-          for line in lines:
-              if line.startswith(key+'='):
-                  out.append(key+'='+token); replaced=True
-              else: out.append(line)
-          if not replaced: out.append(key+'='+token)
-          tmp=envfile.with_suffix('.gmail.tmp'); tmp.write_text('\n'.join(out)+'\n'); os.chmod(tmp,0o600); os.replace(tmp,envfile)
+          for envfile in envfiles:
+              if not envfile.is_file():
+                  raise SystemExit(f'missing Gmail OAuth env target: {envfile}')
+              metadata = envfile.stat()
+              lines = envfile.read_text().splitlines()
+              out = []
+              replaced = False
+              for line in lines:
+                  if line.startswith(key + '='):
+                      out.append(key + '=' + token)
+                      replaced = True
+                  else:
+                      out.append(line)
+              if not replaced:
+                  out.append(key + '=' + token)
+              tmp = envfile.with_name(envfile.name + '.gmail.tmp')
+              tmp.write_text('\n'.join(out) + '\n')
+              os.chown(tmp, metadata.st_uid, metadata.st_gid)
+              os.chmod(tmp, stat.S_IMODE(metadata.st_mode))
+              os.replace(tmp, envfile)
           PY
           sudo rm -f "$found"
           rm -f "$recovered"
-          sudo systemctl restart shopvivaliz-amazon-returns.service
+          sudo systemctl restart amazon-returns-safet.service
           sleep 3
-          systemctl is-active --quiet shopvivaliz-amazon-returns.service
+          systemctl is-active --quiet amazon-returns-safet.service
           echo 'GMAIL_OAUTH_INSTALLED=true'
           REMOTE
       - name: Cleanup

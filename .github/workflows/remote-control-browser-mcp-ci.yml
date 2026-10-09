@@ -4,19 +4,39 @@ on:
   pull_request:
     paths:
       - 'remote-control-browser-mcp/**'
+      - 'ops/systemd/shopvivaliz-otpclient.service'
+      - 'scripts/setup-shopvivaliz-otpclient.sh'
+      - 'tests/test_otpclient_persistence.py'
       - 'remote-control-mcp/server.py'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_mcp_desktop_browser_named_tools.py'
+      - 'tests/browser-gui-stdin-x11-test.py'
+      - 'tests/audit-v5-gui-input-privacy-test.py'
       - '.github/workflows/remote-control-browser-mcp-ci.yml'
   push:
     branches: [main]
     paths:
       - 'remote-control-browser-mcp/**'
+      - 'ops/systemd/shopvivaliz-otpclient.service'
+      - 'scripts/setup-shopvivaliz-otpclient.sh'
+      - 'tests/test_otpclient_persistence.py'
       - 'remote-control-mcp/server.py'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_mcp_desktop_browser_named_tools.py'
+      - 'tests/browser-gui-stdin-x11-test.py'
+      - 'tests/audit-v5-gui-input-privacy-test.py'
       - '.github/workflows/remote-control-browser-mcp-ci.yml'
 
 permissions:
@@ -32,11 +52,35 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Authenticated display persistence regression
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_shopvivaliz_display_recovery.py
+          bash -n scripts/shopvivaliz-xvfb99-prepare.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
       - name: Browser MCP contract tests
         run: |
           set -Eeuo pipefail
           python3 tests/remote-control-browser-mcp-test.py
+      - name: Protected account-auth maintenance contract
+        run: |
+          set -Eeuo pipefail
+          python3 remote-control-browser-mcp/tests/test_account_auth_gate.py
+      - name: Encrypted OTPClient boot persistence contract
+        run: python3 tests/test_otpclient_persistence.py
+      - name: Named desktop/browser tools contracts
+        run: python3 -m unittest discover -s tests -p 'test_mcp_desktop_browser_named_tools.py'
       - name: Existing Remote Control MCP regression tests
         run: |
           set -Eeuo pipefail
           python3 tests/remote-control-mcp-test.py
+      - name: GUI input privacy focused regression
+        run: |
+          set -Eeuo pipefail
+          python3 tests/audit-v5-gui-input-privacy-test.py
+      - name: Real isolated X11 stdin regression
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils xdotool
+          SHOPVIVALIZ_TEST_X11_FIXTURE=1 xvfb-run -a -s '-screen 0 800x600x24 -nolisten tcp' python3 tests/browser-gui-stdin-x11-test.py

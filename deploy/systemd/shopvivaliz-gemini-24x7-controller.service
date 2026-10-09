@@ -3,8 +3,9 @@ Description=ShopVivaliz Gemini 24x7 task-continuity controller
 Documentation=file:/opt/shopvivaliz-gemini-24x7-controller/README
 After=network-online.target
 Wants=network-online.target
-StartLimitIntervalSec=10min
-StartLimitBurst=5
+# Retry indefinitely at a bounded rate; never latch the 24x7 controller
+# in failed state after five consecutive transient restarts.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -14,7 +15,9 @@ EnvironmentFile=/etc/shopvivaliz-gemini-24x7-controller.env
 WorkingDirectory=/opt/shopvivaliz-gemini-24x7-controller
 ExecStart=/usr/bin/python3 ${SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY} --daemon --interval-seconds 30
 Restart=on-failure
-RestartSec=20
+RestartSec=60
+CPUWeight=900
+IOWeight=900
 KillMode=control-group
 TimeoutStopSec=45
 NoNewPrivileges=true
