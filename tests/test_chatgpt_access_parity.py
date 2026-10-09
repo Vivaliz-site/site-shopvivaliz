@@ -31,7 +31,8 @@ def test_access_parity_policy_is_referenced_by_both_corporate_bootstraps():
                  'docs/knowledge/README.md'):
         assert 'chatgpt-access-parity.md' in (ROOT / path).read_text(encoding='utf-8')
     for expectation in ('who_am_i.email', 'Both ChatGPT accounts',
-                        'approval', 'OAuth', 'CDP `9559`', 'CDP `9556`'):
+                        'approval', 'OAuth', 'CDP `9559`', 'CDP `9556`',
+                        '`tools/list`', 'COMPLETE tool-name catalog', 'inputSchema'):
         assert expectation in policy
 
 
