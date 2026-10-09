@@ -21,6 +21,12 @@ effective app permissions are separate checks. Installed != connected.
 - The dedicated browser MCP services must use the same server source, runtime
   options and authorization policy. Only the session name, CDP URL, TCP port
   and corresponding identity binding may differ.
+- After installing updated MCP code, restart **both** dedicated systemd
+  bridge services (`shopvivaliz-browser-atendimento-mcp` and
+  `shopvivaliz-browser-dev-mcp`). `systemctl enable --now` alone does not
+  reload an already-active Python process. Verify both service start times
+  are newer than the installed server.py mtime, then recheck their health.
+  Never restart/copy the authenticated Chromium profile as part of this.
 - Never share or copy cookies, browser storage, TOTP, passwords, provider
   sessions, OAuth grants or token files between the accounts.
 - Each account must be authenticated and confirmed to match its expected
