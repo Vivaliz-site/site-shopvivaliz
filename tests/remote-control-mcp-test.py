@@ -544,6 +544,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         for forbidden in ("sessionId", "environmentId", "pid", "procStart"):
             self.assertNotIn(forbidden, status)
 
+    def test_controller_state_exposes_attested_route_recovery_counters(self):
+        state_file = Path(self.tmp.name) / "controller-route-state.json"
+        expected = {
+            "scanned": 9, "bound": 0, "ambiguous": 0,
+            "skipped_no_proof": 9, "skipped_stale": 0, "failed": 0,
+        }
+        state_file.write_text(json.dumps({
+            "route_recovery": expected,
+            "conversation_id": "must-not-escape",
+            "continuity_ready": False,
+        }), encoding="utf-8")
+        with mock.patch.object(m, "CONTROLLER_STATE_FILE", state_file):
+            result = m._read_controller_state()
+        self.assertEqual(expected, result["route_recovery"])
+        self.assertNotIn("conversation_id", result)
+
     def test_controller_state_strips_internal_identifiers(self):
         original = m.CONTROLLER_STATE_FILE
         state = Path(self.tmp.name) / "controller-state.json"
