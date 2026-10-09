@@ -211,7 +211,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ## ChatGPT VM: autenticação local obrigatória
 
 - As contas ChatGPT operacionais são `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`. Fontes locais de MFA só podem ser declaradas provisionadas após validação real; referências antigas de `fredmourao` são legado de migração.
-- A fonte operacional é o OTPClient da sessão `fredrdp` em `DISPLAY=:99`; seeds, senhas e códigos nunca podem ser versionados ou impressos.
+- A fonte operacional é a instância OTPClient realmente ativa, identificada por UID e `DISPLAY` do processo e janela correspondente; `fredrdp`/`:99` era apenas o registro histórico. A sessão do OTPClient não precisa coincidir com o display do navegador ChatGPT. Seeds, senhas e códigos nunca podem ser versionados ou impressos.
 - O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
 - Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.
 - Se faltar capacidade segura de digitação em aplicação desktop, tratar como lacuna do Remote Control MCP a ser corrigida, mantendo a tarefa em andamento até existir rota segura.
