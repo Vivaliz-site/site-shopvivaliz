@@ -23,7 +23,7 @@ Quando uma tarefa exigir login ou MFA nas contas ChatGPT acima, o agente deve us
 
 O fluxo de automação deve permitir que o agente:
 
-1. abra/focalize a aplicação ou navegador correto na sessão `:99`;
+1. identifique o UID e `DISPLAY` efetivos do processo OTPClient e focalize sua janela nessa sessão, separadamente do display do navegador ChatGPT;
 2. obtenha o OTP pela fonte local autorizada;
 3. digite senha e OTP no campo focado por uma ação que não persista o valor em logs, argumentos de processo, histórico de shell ou auditoria;
 4. confirme o resultado do login sem revelar o segredo usado.
