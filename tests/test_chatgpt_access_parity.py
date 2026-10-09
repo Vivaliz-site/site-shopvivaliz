@@ -36,7 +36,23 @@ def test_access_parity_policy_is_referenced_by_both_corporate_bootstraps():
         assert expectation in policy
 
 
+def test_dedicated_browser_mcp_services_reload_installed_server():
+    # Regression: enable --now left the old Python processes running while
+    # the shared server.py on disk changed, causing cross-account drift.
+    setup = (ROOT / 'scripts/setup-remote-control-browser-mcp.sh').read_text(encoding='utf-8')
+    marker = 'systemctl daemon-reload\\nfor session in atendimento dev; do'
+    assert marker.replace('\\n', '\n') in setup
+    block = setup.split(marker.replace('\\n', '\n'), 1)[1]
+    assert 'systemctl enable --now "$unit"' not in block
+    assert 'systemctl enable "$unit"' in block
+    assert 'systemctl restart "$unit"' in block
+    assert block.index('systemctl enable "$unit"') < block.index('systemctl restart "$unit"')
+    assert block.index('systemctl restart "$unit"') < block.index('  ready=0')
+    assert 'shopvivaliz-browser-${session}-mcp.service' in block
+
+
 if __name__ == '__main__':
     test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric()
     test_access_parity_policy_is_referenced_by_both_corporate_bootstraps()
+    test_dedicated_browser_mcp_services_reload_installed_server()
     print('CHATGPT_ACCOUNT_ACCESS_PARITY_CONTRACT=PASS')
