@@ -281,6 +281,24 @@ def _controller_origin_main_sha(*, refresh: bool = False) -> str:
     return sha
 
 
+def _controller_remote_main_sha() -> str:
+    """Read the real GitHub main head without changing the local tracking ref.
+
+    The cached origin/main ref may be stale when the deploy checkout has not
+    fetched recently. A failed probe must never certify the release as current.
+    """
+    try:
+        listing = _run_as_ubuntu(
+            ["env", "GIT_TERMINAL_PROMPT=0", "git", "-C", str(CONTROLLER_REPO),
+             "ls-remote", "--heads", "origin", "main"],
+            timeout=15,
+        )
+    except Exception:
+        return ""
+    match = re.fullmatch(r"([0-9a-f]{40})\s+refs/heads/main", listing.strip())
+    return match.group(1) if match else ""
+
+
 def _controller_active_sha() -> str:
     try:
         pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
@@ -404,6 +422,7 @@ def controller_status() -> dict[str, Any]:
         origin_main_sha = _controller_origin_main_sha(refresh=False)
     except Exception:
         origin_main_sha = ""
+    remote_main_sha = _controller_remote_main_sha()
     state = _read_controller_state()
     return {
         "ok": active and bool(active_sha),
@@ -412,7 +431,11 @@ def controller_status() -> dict[str, Any]:
         "service_active": active,
         "active_sha": active_sha,
         "origin_main_sha": origin_main_sha,
-        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "remote_main_sha": remote_main_sha,
+        "remote_head_verified": bool(remote_main_sha),
+        "matches_tracking_main": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        # Only the verified remote head can establish true freshness.
+        "up_to_date": bool(active_sha and remote_main_sha and active_sha == remote_main_sha),
         "state": state,
     }
 

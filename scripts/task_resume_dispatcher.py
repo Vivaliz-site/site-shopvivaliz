@@ -41,7 +41,7 @@ TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
 DEFAULT_RETRY_AFTER_SECONDS = 900
-DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS = 900
+DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS = 130
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 ALLOWED_REPOSITORIES = frozenset({
     "Vivaliz-site/site-shopvivaliz",
@@ -314,21 +314,17 @@ def _recent_successful_chatgpt_nudge(
             return False
 
         worker_status = str(row.get("worker_status", "")).strip().upper()
-        if worker_status in {
-            "SENT",
-            "SENT_UNCONFIRMED",
-            "STALLED_NOT_CONFIRMED",
-            "CONVERSATION_NOT_FOUND",
-            "ERROR",
-        }:
-            # A bridge enqueue/click without observed assistant progress is
-            # not enough to block the detached recovery tier.
+        if worker_status in {"STALLED_NOT_CONFIRMED", "CONVERSATION_NOT_FOUND", "ERROR"}:
+            # Explicit browser failure can release the bounded fallback early.
             return False
 
-        # While the worker is still pending/claimed we preserve ChatGPT's
-        # bounded first chance. Once progress is explicitly confirmed, the
-        # same grace window continues to avoid parallel executors.
-        return worker_status in {"", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"}
+        # SENT/SENT_UNCONFIRMED means delivery was attempted, not that the
+        # conversation failed. Preserve its finite reply window to avoid a
+        # parallel worker mutating the same task before the response arrives.
+        return worker_status in {
+            "", "PENDING", "CLAIMED", "SENT", "SENT_UNCONFIRMED",
+            "PROGRESS_CONFIRMED",
+        }
     return False
 
 
