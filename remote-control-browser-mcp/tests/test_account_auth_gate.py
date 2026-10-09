@@ -169,6 +169,18 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertEqual([{"tab_id":"tab_a","stage":"/email-verification","session":"dev"}], result["tabs"])
         self.assertNotIn("SECRET", json.dumps(result))
 
+    def test_login_tab_activation_is_bounded_and_after_official_origin_check(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn('c = new Cdp(ws, { commandTimeoutMs: 7000 })', script)
+        self.assertIn('await c.send("Page.bringToFront")', script)
+        self.assertIn("auth_tab_activate_failed", script)
+        self.assertLess(script.index("if (!validStage(targetUrl))"),
+                        script.index('await c.send("Page.bringToFront")'))
+        self.assertLess(script.index('await c.send("Page.bringToFront")'),
+                        script.index('c.send("Runtime.evaluate"'))
+        self.assertNotIn('c.send("Page.reload")', script)
+        self.assertNotIn('c.send("Page.navigate")', script)
+
     def test_resend_email_matches_real_openai_login_button_without_consent_controls(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         marker = "const labels=action==='resend'?/"
