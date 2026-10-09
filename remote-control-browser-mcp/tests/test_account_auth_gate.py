@@ -24,7 +24,7 @@ def allowed_lease(session="dev"):
     return {
         "owner_kind": "maintenance",
         "owner_id": "shopvivaliz-account-auth:" + session,
-        "allowed_actions": ["browser_auth_action"],
+        "allowed_actions": ["browser_auth_action", "browser_auth_open"],
         "lease_id": "example-lease",
         "fencing_token": 1,
     }
@@ -41,6 +41,9 @@ class AccountAuthGateTests(unittest.TestCase):
         specs = {s["name"]: s for s in m.tool_specs()}
         self.assertIn("browser_auth_action", specs)
         self.assertIn("browser_auth_tabs", specs)
+        self.assertIn("browser_auth_open", specs)
+        self.assertFalse(specs["browser_auth_open"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_auth_open"]["annotations"]["destructiveHint"])
         self.assertFalse(specs["browser_auth_action"]["annotations"]["readOnlyHint"])
         self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["browser_auth_tabs"]["annotations"]["readOnlyHint"])
@@ -195,6 +198,52 @@ class AccountAuthGateTests(unittest.TestCase):
             "if(good.some(x=>!match.test(x))||bad.some(x=>match.test(x)))process.exit(3);"
         )
         proc = subprocess.run(["node", "--input-type=module", "-e", js],
+                              text=True, capture_output=True, check=False)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+
+    def test_auth_open_requires_live_maintenance_lease_and_matching_account(self):
+        args = {
+            "session": "atendimento",
+            "runtime_lease_id": "example-lease", "runtime_fencing_token": 1,
+        }
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with self.assertRaisesRegex(ValueError, "account_auth_runtime_lock_required"):
+                m.browser_auth_open({"session": "atendimento"})
+            with self.assertRaisesRegex(ValueError, "account_auth_session_invalid"):
+                m.browser_auth_open({**args, "session": "other"})
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                                   return_value=allowed_lease("dev")):
+                with self.assertRaisesRegex(ValueError, "account_auth_maintenance_owner_required"):
+                    m.browser_auth_open(args)
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=False):
+            with self.assertRaisesRegex(ValueError, "account_auth_lease_mode_required"):
+                m.browser_auth_open(args)
+
+    def test_auth_open_never_transmits_secret_or_arbitrary_url(self):
+        args = {
+            "session": "atendimento",
+            "runtime_lease_id": "example-lease", "runtime_fencing_token": 1,
+        }
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                                   return_value=allowed_lease("atendimento")):
+                with mock.patch.object(m.base, "run_local_command_with_stdin",
+                                       return_value=fake) as run:
+                    result = m.browser_auth_open(args)
+        self.assertTrue(result["ok"])
+        invocation, typed, *_ = run.call_args.args
+        self.assertEqual("", typed)
+        self.assertEqual(invocation[-1], "atendimento")
+        self.assertEqual(invocation[3], m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn("https://chatgpt.com/auth/login", m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn('Target.createTarget', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertIn('auth_stage_already_open', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertNotIn('Target.closeTarget', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertNotIn('Page.navigate', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        self.assertNotIn('password_value', m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT)
+        proc = subprocess.run(["node", "--check", "--input-type=module"],
+                              input=m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT,
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
 
