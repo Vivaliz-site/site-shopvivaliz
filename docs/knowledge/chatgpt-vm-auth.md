@@ -31,3 +31,30 @@ O fluxo de automação deve permitir que o agente:
 Para navegador, ações de digitação devem manter o valor digitado redigido da auditoria. Para aplicações desktop, qualquer capacidade de `secret typing` deve seguir o mesmo contrato: entrada write-only, sem echo e sem persistência do conteúdo.
 
 Se a ferramenta atual não expuser uma ação segura para digitar um segredo em aplicação desktop, isso é uma lacuna de capacidade do MCP e deve ser corrigida no MCP; não é motivo para voltar a depender rotineiramente da interação do usuário.
+
+
+## Gmail no controlador autonomo: permissao e isolamento
+
+O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
+na caixa Gmail conectada ao ChatGPT **nao** demonstra que o backend tenha
+autorizacao OAuth independente para ler essa caixa. Para operar sem conversa
+ativa, exigir concessao propria e verificavel de **Gmail readonly** ao servico,
+com refresh autorizado em armazenamento protegido e acesso estritamente
+limitado a conta/remetentes/destinatarios esperados. Nunca reutilizar o
+OAuth de Google Ads por presumir que inclui escopo Gmail.
+
+O cliente em `includes/amazon-returns/GmailApi.php` seleciona somente
+uma familia completa `GMAIL_OAUTH_*` ou `GOOGLE_OAUTH_*`; misturar
+client ID/secret e refresh token de concessoes distintas e invalido.
+`SvAmazonReturnsConfig::readiness()['gmail']['ready']` comprova apenas
+a completude da configuracao, **nao** autentica nem valida escopo.
+A prova de disponibilidade e uma chamada real da Gmail API na caixa
+esperada, com permissoes verificadas e sem registrar tokens/codigos.
+
+O consentimento Google, quando exigido, usa exclusivamente o fluxo OAuth
+oficial e uma autorizacao inicial legitima. Tokens invalidados ou revogados
+nao podem ser recuperados nem ter MFA burlado por inferencia. Enquanto a
+autorizacao Gmail estiver ausente, apenas a etapa dependente de email fica
+em espera de autenticacao; tarefas independentes continuam via worker
+normal sob leases exclusivos e invariantes de conta/conversa. Nenhum
+codigo temporario deve aparecer em logs, comandos, PRs ou auditorias.
