@@ -12,7 +12,7 @@ Environment=DISPLAY=:99
 Environment=XAUTHORITY=/home/fredrdp/.Xauthority
 UMask=0077
 ExecStartPre=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh prepare
-ExecStart=/usr/bin/Xvfb :99 -screen 0 1600x900x24 -nolisten tcp -auth /home/fredrdp/.Xauthority
+ExecStart=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh serve
 ExecStartPost=/usr/local/libexec/shopvivaliz-virtual-display-guard.sh wait
 Restart=always
 RestartSec=5
