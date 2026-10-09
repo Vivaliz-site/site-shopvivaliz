@@ -853,21 +853,21 @@ ACCOUNT_AUTH_EMAILS = {
     "dev": "dev@shopvivaliz.com.br",
     "atendimento": "atendimento@shopvivaliz.com.br",
 }
-ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend"}
+ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google"}
 
 ACCOUNT_AUTH_NODE_SCRIPT = r"""
 const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
 const [session, tabId, action] = process.argv.slice(1);
 const ports = {dev: 9559, atendimento: 9556};
 if (!Object.prototype.hasOwnProperty.call(ports, session)) throw new Error("invalid_auth_session");
-if (!["fill_email","fill_password","fill_code","continue","resend"].includes(action)) throw new Error("invalid_auth_action");
+if (!["fill_email","fill_password","fill_code","continue","resend","back_to_methods","open_login","continue_google"].includes(action)) throw new Error("invalid_auth_action");
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
 const validStage = u => u.protocol === "https:" && (
-    (u.hostname === "auth.openai.com" && /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname)) ||
-    (u.hostname === "chatgpt.com" && /^\/auth\/login(?:\/|$)/.test(u.pathname))
+    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
+    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
     signal: AbortSignal.timeout(2500)
@@ -891,9 +891,28 @@ try {
     c = new Cdp(ws);
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname))||(u.hostname==='chatgpt.com'&&/^\\/auth\\/login(?:\\/|$)/.test(u.pathname)));" +
+        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
+        "if(['back_to_methods','open_login','continue_google'].includes(action)){" +
+        "let choices=[];" +
+        "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
+        "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
+        "if(action==='back_to_methods'){" +
+        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
+        "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://auth.openai.com','/log-in-or-create-account')&&/^edit$/i.test(label(a)));" +
+        "}" +
+        "if(action==='open_login'){" +
+        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in-or-create-account')throw Error('auth_stage_not_allowed');" +
+        "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a)));" +
+        "}" +
+        "if(action==='continue_google'){" +
+        "if(u.hostname!=='chatgpt.com'||u.pathname!=='/auth/login_with')throw Error('auth_stage_not_allowed');" +
+        "choices=[...document.querySelectorAll('button,a')].filter(e=>!e.disabled&&/^continue with google$/i.test(label(e)));" +
+        "}" +
+        "if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "choices[0].click();return {clicked:true};" +
+        "}" +
         "if(action.startsWith('fill_')){" +
         "let e=null;" +
         "if(action==='fill_email')e=document.querySelector('input[type=email],input[name=email]');" +
@@ -935,9 +954,15 @@ def _auth_stage(url: str) -> str | None:
         parsed = urlsplit(url)
         if parsed.scheme != "https":
             return None
-        if parsed.hostname == "auth.openai.com" and re.match(r"^/(log-in|email-verification)(/|$)", parsed.path):
+        if parsed.hostname == "auth.openai.com" and (
+            parsed.path == "/log-in-or-create-account"
+            or re.match(r"^/(log-in|email-verification)(/|$)", parsed.path)
+        ):
             return parsed.path
-        if parsed.hostname == "chatgpt.com" and re.match(r"^/auth/login(/|$)", parsed.path):
+        if parsed.hostname == "chatgpt.com" and (
+            parsed.path == "/auth/login_with"
+            or re.match(r"^/auth/login(/|$)", parsed.path)
+        ):
             return parsed.path
     except (TypeError, ValueError):
         return None
@@ -1090,7 +1115,7 @@ BROWSER_TOOL_SPECS = [
             "properties": {
                 "session": {"type": "string", "enum": ["dev", "atendimento"]},
                 "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
-                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend"]},
+                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google"]},
                 "value": {"type": "string", "maxLength": 512},
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
