@@ -14,6 +14,10 @@ from pathlib import Path
 BROWSER_PREFIXES = ("remote-control-browser-mcp/",)
 BROWSER_FILES = frozenset({
     "scripts/setup-remote-control-browser-mcp.sh",
+    "scripts/setup-shopvivaliz-display-recovery.sh",
+    "scripts/shopvivaliz-xvfb99-prepare.sh",
+    "ops/systemd/shopvivaliz-xvfb99.service",
+    "tests/test_shopvivaliz_display_recovery.py",
     "scripts/remote_mcp_bootstrap_scope.py",
     "deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
     "deploy/systemd/shopvivaliz-browser-atendimento-mcp.service",

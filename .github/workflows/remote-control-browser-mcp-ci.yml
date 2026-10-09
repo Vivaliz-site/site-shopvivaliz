@@ -9,6 +9,10 @@ on:
       - 'tests/test_otpclient_persistence.py'
       - 'remote-control-mcp/server.py'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
       - 'tests/test_mcp_desktop_browser_named_tools.py'
@@ -24,6 +28,10 @@ on:
       - 'tests/test_otpclient_persistence.py'
       - 'remote-control-mcp/server.py'
       - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
       - 'tests/test_mcp_desktop_browser_named_tools.py'
@@ -44,6 +52,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Authenticated display persistence regression
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_shopvivaliz_display_recovery.py
+          bash -n scripts/shopvivaliz-xvfb99-prepare.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
       - name: Browser MCP contract tests
         run: |
           set -Eeuo pipefail
