@@ -153,7 +153,11 @@ systemctl daemon-reload
 for session in atendimento dev; do
   unit="shopvivaliz-browser-${session}-mcp.service"
   if [ "$session" = atendimento ]; then port=5582; else port=5583; fi
-  systemctl enable --now "$unit"
+  # enable --now is a no-op for an already running unit. Both session MCPs
+  # must reload the newly installed server.py and service unit on every deploy.
+  # This restarts only the MCP bridge, never the authenticated Chromium profile.
+  systemctl enable "$unit"
+  systemctl restart "$unit"
   ready=0
   for _ in $(seq 1 20); do
     if curl -fsS "http://127.0.0.1:${port}/health" >"/tmp/${unit}.health.json"; then
