@@ -116,11 +116,30 @@ def test_corporate_chromium_uses_persistent_keyring_user_bus_without_secret_expo
             assert safeguard in body, (session, safeguard)
 
 
+
+def test_login_tab_proxy_refuses_cross_account_lease_and_raw_secret_echo():
+    source = (ROOT / "remote-control-mcp/server.py").read_text(encoding="utf-8")
+    for check in (
+        'if name == "browser_auth_open":',
+        'runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")',
+        '"owner_id") != "shopvivaliz-account-auth:" + session',
+        '"session", "runtime_lease_id", "runtime_fencing_token"',
+        '"account_auth_status_unconfirmed"',
+        'return {"ok": True, "session": session, "stage": "/auth/login"',
+    ):
+        assert check in source, check
+    assert '"browser_auth_open": "browser_auth_open"' in source
+    assert '"browser_auth_open", "browser_auth_action"' in source or (
+        '"browser_auth_action", "browser_auth_open"' in source
+    )
+
+
 if __name__ == '__main__':
     test_dev_and_atendimento_browser_mcp_runtime_policy_is_symmetric()
     test_dev_and_atendimento_chromium_units_have_identical_effective_limits()
     test_corporate_browser_units_preserve_task_headroom_under_many_open_tabs()
     test_corporate_chromium_uses_persistent_keyring_user_bus_without_secret_exposure()
+    test_login_tab_proxy_refuses_cross_account_lease_and_raw_secret_echo()
     test_access_parity_policy_is_referenced_by_both_corporate_bootstraps()
     test_dedicated_browser_mcp_services_reload_installed_server()
     print('CHATGPT_ACCOUNT_ACCESS_PARITY_CONTRACT=PASS')
