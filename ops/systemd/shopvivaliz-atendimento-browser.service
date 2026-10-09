@@ -1,7 +1,8 @@
 [Unit]
 Description=ShopVivaliz atendimento ChatGPT browser
-After=network-online.target display-manager.service
-Wants=network-online.target display-manager.service
+After=network-online.target shopvivaliz-virtual-display.service
+Wants=network-online.target
+Requires=shopvivaliz-virtual-display.service
 
 [Service]
 Type=simple
