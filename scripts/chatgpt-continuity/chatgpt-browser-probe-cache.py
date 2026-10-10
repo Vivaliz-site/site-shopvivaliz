@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from urllib.parse import urlsplit
 
-NEGATIVE = {'AUTH_FLOW', 'AUTH_TERMINAL', 'LOGGED_OUT'}
+NEGATIVE = {'AUTH_FLOW', 'AUTH_TERMINAL', 'LOGGED_OUT', 'IDENTITY_MISMATCH'}
 STATES = NEGATIVE | {'AUTHENTICATED', 'UNKNOWN', 'UNREACHABLE'}
 MAX_WAIT_SECONDS = 300
 MAX_JSON = 1_048_576
@@ -151,7 +151,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=['check', 'record', 'verify-ready'])
     parser.add_argument('--health', required=True, type=Path)
-    parser.add_argument('--base', default='http://127.0.0.1:9556')
+    parser.add_argument('--base', default='http://127.0.0.1:9555')
     parser.add_argument('--tasks', type=Path, default=Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state'))
     parser.add_argument('--state', default='UNKNOWN', choices=sorted(STATES))
     args = parser.parse_args()

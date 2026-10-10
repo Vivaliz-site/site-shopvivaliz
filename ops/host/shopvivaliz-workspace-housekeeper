@@ -5,9 +5,14 @@ ROOT=/home/ubuntu/chat-workspaces
 STATE_DIR=/var/lib/shopvivaliz-workspace-housekeeper
 LOG=/var/log/shopvivaliz-workspace-housekeeper.log
 LOCK=/run/lock/shopvivaliz-workspace-housekeeper.lock
-FULL_TTL_HOURS=24
-CACHE_TTL_HOURS=12
+FULL_TTL_HOURS="${FULL_TTL_HOURS:-24}"
+CACHE_TTL_HOURS="${CACHE_TTL_HOURS:-12}"
+ORPHAN_WORKTREE_TTL_HOURS="${ORPHAN_WORKTREE_TTL_HOURS:-2}"
+ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"
+PRESSURE_RECLAIM_PUSHED="${PRESSURE_RECLAIM_PUSHED:-0}"
 DRY_RUN="${DRY_RUN:-0}"
+# A queued task has no process/cwd yet, even when its new HEAD is in main.
+WORKTREE_MIN_AGE_SECONDS=1800
 
 mkdir -p "$STATE_DIR"
 exec 9>"$LOCK"
@@ -37,6 +42,55 @@ path_active() {
   while IFS= read -r q; do
     case "$q" in "$p"|"$p"/*) return 0;; esac
   done <<< "$ACTIVE_CWDS"
+  return 1
+}
+
+# Preserve reserved/recent workspaces, including their enclosing chat wrapper.
+# Call again immediately before destructive steps. This narrows TOCTOU windows;
+# it is not an atomic reservation protocol. Owners must lock before eligibility.
+worktree_protected() {
+  local root="$1" container="${2:-$1}" candidate modified git_dir
+  for candidate in "$root" "$container"; do
+    if ! modified="$(stat -c %Y "$candidate" 2>/dev/null)" || ! [[ "$modified" =~ ^[0-9]+$ ]]; then
+      log "workspace_preserved reason=metadata path=$root"
+      return 0
+    fi
+    if [ "$((now_epoch-modified))" -lt "$WORKTREE_MIN_AGE_SECONDS" ]; then
+      log "workspace_preserved reason=grace path=$root"
+      return 0
+    fi
+  done
+  if ! git_dir="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse --absolute-git-dir 2>/dev/null)" ||
+     [ -z "$git_dir" ] || [ ! -d "$git_dir" ] || [ ! -r "$git_dir" ] || [ ! -x "$git_dir" ]; then
+    log "workspace_preserved reason=metadata path=$root"
+    return 0
+  fi
+  if [ -e "$git_dir/locked" ] || [ -L "$git_dir/locked" ]; then
+    log "workspace_preserved reason=locked path=$root"
+    return 0
+  fi
+  return 1
+}
+
+canonical_clone() {
+  case "$1" in
+    /home/ubuntu/shopvivaliz-deploy/repo|/home/ubuntu/shopvivaliz-deploy/releases/*|    /home/ubuntu/solange-rolla-consultorio|    /home/ubuntu/mei-mg-email|    /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz|    /home/ubuntu/src/site-shopvivaliz-remote-control-codex|    /home/ubuntu/shopvivaliz-revenue-recovery-20260911)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+clone_has_unpushed_commits() {
+  local root="$1" ref sha
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    sha="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse "$ref" 2>/dev/null || true)"
+    [ -n "$sha" ] || continue
+    if ! sudo -u ubuntu git -c safe.directory="$root" -C "$root" branch -r --contains "$sha" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+  done < <(sudo -u ubuntu git -c safe.directory="$root" -C "$root" for-each-ref --format='%(refname)' refs/heads 2>/dev/null || true)
   return 1
 }
 
@@ -74,11 +128,20 @@ delivered() {
   [ "$result" = true ]
 }
 
+pushed_worktree() {
+  local root="$1" head
+  head="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" rev-parse HEAD 2>/dev/null || true)"
+  [ -n "$head" ] || return 1
+  sudo -u ubuntu git -c safe.directory="$root" -C "$root" branch -r --contains "$head" 2>/dev/null | grep -q .
+}
+
 cleanup_cache() {
-  local root="$1" x b
+  local root="$1" container="${2:-$1}" x b
   for x in node_modules .next test-results coverage .pytest_cache .eslintcache; do
     [ -e "$root/$x" ] || continue
+    worktree_protected "$root" "$container" && return 0
     b="$(du -sx -B1 "$root/$x" 2>/dev/null | awk '{print $1}' || echo 0)"
+    worktree_protected "$root" "$container" && return 0
     if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root/$x"; fi
     freed_bytes=$((freed_bytes+b))
     cache_cleaned=$((cache_cleaned+1))
@@ -89,6 +152,7 @@ cleanup_cache() {
       log "cache_preserved_tracked path=$(basename "$(dirname "$root")")/$(basename "$root")/tsconfig.tsbuildinfo"
     else
       b="$(stat -c %s "$root/tsconfig.tsbuildinfo" 2>/dev/null || echo 0)"
+      worktree_protected "$root" "$container" && return 0
       if [ "$DRY_RUN" = 0 ]; then rm -f -- "$root/tsconfig.tsbuildinfo"; fi
       freed_bytes=$((freed_bytes+b))
       cache_cleaned=$((cache_cleaned+1))
@@ -105,8 +169,12 @@ if [ -d "$ROOT" ]; then
       continue
     fi
     root="$(git_root "$d" || true)"
+    if [ -n "$root" ] && worktree_protected "$root" "$d"; then
+      preserved=$((preserved+1))
+      continue
+    fi
     if [ "$age" -ge "$CACHE_TTL_HOURS" ] && [ -n "$root" ]; then
-      cleanup_cache "$root"
+      cleanup_cache "$root" "$d"
     fi
     [ "$age" -ge "$FULL_TTL_HOURS" ] || { preserved=$((preserved+1)); continue; }
     [ -n "$root" ] || { preserved=$((preserved+1)); continue; }
@@ -116,6 +184,10 @@ if [ -d "$ROOT" ]; then
     fi
     if delivered "$root"; then
       b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+      if worktree_protected "$root" "$d"; then
+        preserved=$((preserved+1))
+        continue
+      fi
       if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
       freed_bytes=$((freed_bytes+b))
       removed=$((removed+1))
@@ -151,13 +223,13 @@ root_pct_pre="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
 TEMP_TTL_HOURS=24
 SNAPSHOT_TTL_HOURS=24
 if [ "$root_pct_pre" -ge 70 ]; then
-  FULL_TTL_HOURS=4
-  CACHE_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
+  [ "$CACHE_TTL_HOURS" -le 1 ] || CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=12
   SNAPSHOT_TTL_HOURS=12
 fi
 if [ "$root_pct_pre" -ge 80 ]; then
-  FULL_TTL_HOURS=2
+  [ "$FULL_TTL_HOURS" -le 1 ] || FULL_TTL_HOURS=1
   CACHE_TTL_HOURS=1
   TEMP_TTL_HOURS=6
   SNAPSHOT_TTL_HOURS=6
@@ -168,7 +240,7 @@ if [ "$root_pct_pre" -ge 85 ]; then
 fi
 
 temp_removed=0
-for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
+for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/shopvivaliz-db-backup-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
 do
   for d in $pattern; do
     [ -d "$d" ] || continue
@@ -197,22 +269,82 @@ for d in /home/ubuntu/worktrees/continuity-deploy-* /home/ubuntu/worktrees/remot
   log "metadata_snapshot_removed path=$d age_hours=$age bytes=$b pressure_root_pct=$root_pct_pre dry_run=$DRY_RUN"
 done
 
+orphan_worktree_removed=0
+for d in \
+  /home/ubuntu/worktrees/browser-type-fix-* \
+  /home/ubuntu/worktrees/continuity-report-* \
+  /home/ubuntu/worktrees/guardian-drift-* \
+  /home/ubuntu/worktrees/guardian-runtime-* \
+  /home/ubuntu/worktrees/remote-report-deploy-* \
+  /home/ubuntu/worktrees/sqlite-lock-fix-*
+do
+  [ -d "$d" ] || continue
+  [ ! -e "$d/.git" ] || continue
+  age=$(( (now_epoch-$(stat -c %Y "$d" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge "$ORPHAN_WORKTREE_TTL_HOURS" ] || continue
+  path_active "$d" && continue
+  b="$(du -sx -B1 "$d" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$d"; fi
+  freed_bytes=$((freed_bytes+b))
+  orphan_worktree_removed=$((orphan_worktree_removed+1))
+  log "orphan_worktree_copy_removed path=$d age_hours=$age bytes=$b dry_run=$DRY_RUN"
+done
+
+abandoned_clone_removed=0
+while IFS= read -r root; do
+  [ -d "$root/.git" ] || continue
+  canonical_clone "$root" && continue
+  path_active "$root" && continue
+  age=$(( (now_epoch-$(stat -c %Y "$root" 2>/dev/null || echo "$now_epoch"))/3600 ))
+  [ "$age" -ge "$ABANDONED_CLONE_TTL_HOURS" ] || continue
+  [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
+  linked_worktrees="$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" worktree list --porcelain 2>/dev/null | grep -c '^worktree ' || true)"
+  [ "$linked_worktrees" -le 1 ] || continue
+  clone_has_unpushed_commits "$root" && continue
+  b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
+  freed_bytes=$((freed_bytes+b))
+  abandoned_clone_removed=$((abandoned_clone_removed+1))
+  log "abandoned_clone_removed path=$root age_hours=$age bytes=$b dry_run=$DRY_RUN"
+done < <(find /home/ubuntu -mindepth 2 -maxdepth 4 -type d -name .git -printf '%h
+' 2>/dev/null | sort -u)
+
 worktree_removed=0
+pushed_worktree_removed=0
 if [ -d /home/ubuntu/worktrees ]; then
   while IFS= read -r root; do
     [ -d "$root" ] || continue
+    if worktree_protected "$root"; then
+      preserved=$((preserved+1))
+      continue
+    fi
     path_active "$root" && continue
     age=$(( (now_epoch-$(stat -c %Y "$root" 2>/dev/null || echo "$now_epoch"))/3600 ))
     if [ "$age" -ge "$CACHE_TTL_HOURS" ]; then cleanup_cache "$root"; fi
     [ "$age" -ge "$FULL_TTL_HOURS" ] || continue
     [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
+    removal_reason=""
     if delivered "$root"; then
-      b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
-      if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
-      freed_bytes=$((freed_bytes+b))
-      worktree_removed=$((worktree_removed+1))
-      log "delivered_worktree_removed path=$root age_hours=$age bytes=$b dry_run=$DRY_RUN"
+      removal_reason="delivered_worktree_removed"
+    elif [ "$PRESSURE_RECLAIM_PUSHED" = 1 ] && pushed_worktree "$root"; then
+      removal_reason="pushed_worktree_removed"
+    else
+      continue
     fi
+    b="$(du -sx -B1 "$root" 2>/dev/null | awk '{print $1}' || echo 0)"
+    if worktree_protected "$root"; then
+      preserved=$((preserved+1))
+      continue
+    fi
+    path_active "$root" && continue
+    [ -z "$(sudo -u ubuntu git -c safe.directory="$root" -C "$root" status --porcelain 2>/dev/null || true)" ] || continue
+    if [ "$DRY_RUN" = 0 ]; then rm -rf --one-file-system -- "$root"; fi
+    freed_bytes=$((freed_bytes+b))
+    worktree_removed=$((worktree_removed+1))
+    if [ "$removal_reason" = pushed_worktree_removed ]; then
+      pushed_worktree_removed=$((pushed_worktree_removed+1))
+    fi
+    log "$removal_reason path=$root age_hours=$age bytes=$b dry_run=$DRY_RUN"
   done < <(find /home/ubuntu/worktrees -mindepth 2 -maxdepth 4 \( -type f -o -type d \) -name .git -printf '%h\n' 2>/dev/null | sort -u)
 fi
 
@@ -238,11 +370,14 @@ preserved=$preserved
 freed_bytes=$freed_bytes
 temp_removed=$temp_removed
 snapshot_removed=$snapshot_removed
+orphan_worktree_removed=$orphan_worktree_removed
+abandoned_clone_removed=$abandoned_clone_removed
 worktree_removed=$worktree_removed
+pushed_worktree_removed=$pushed_worktree_removed
 dry_run=$DRY_RUN
 STATE
-log "summary root_pct=$root_pct workspaces=$workspace_count removed=$removed cache_cleaned=$cache_cleaned preserved=$preserved temp_removed=$temp_removed snapshot_removed=$snapshot_removed worktree_removed=$worktree_removed freed_bytes=$freed_bytes dry_run=$DRY_RUN"
+log "summary root_pct=$root_pct workspaces=$workspace_count removed=$removed cache_cleaned=$cache_cleaned preserved=$preserved temp_removed=$temp_removed snapshot_removed=$snapshot_removed orphan_worktree_removed=$orphan_worktree_removed abandoned_clone_removed=$abandoned_clone_removed worktree_removed=$worktree_removed pushed_worktree_removed=$pushed_worktree_removed freed_bytes=$freed_bytes dry_run=$DRY_RUN"
 if [ "$root_pct" -ge 80 ] || [ "$workspace_count" -ge 30 ]; then
   logger -p daemon.warning -t shopvivaliz-workspace-housekeeper "storage pressure root=${root_pct}% workspaces=$workspace_count"
 fi
-printf 'root_pct=%s workspaces=%s removed=%s cache_cleaned=%s preserved=%s temp_removed=%s snapshot_removed=%s worktree_removed=%s freed_bytes=%s dry_run=%s\n' "$root_pct" "$workspace_count" "$removed" "$cache_cleaned" "$preserved" "$temp_removed" "$snapshot_removed" "$worktree_removed" "$freed_bytes" "$DRY_RUN"
+printf 'root_pct=%s workspaces=%s removed=%s cache_cleaned=%s preserved=%s temp_removed=%s snapshot_removed=%s orphan_worktree_removed=%s abandoned_clone_removed=%s worktree_removed=%s pushed_worktree_removed=%s freed_bytes=%s dry_run=%s\n' "$root_pct" "$workspace_count" "$removed" "$cache_cleaned" "$preserved" "$temp_removed" "$snapshot_removed" "$orphan_worktree_removed" "$abandoned_clone_removed" "$worktree_removed" "$pushed_worktree_removed" "$freed_bytes" "$DRY_RUN"

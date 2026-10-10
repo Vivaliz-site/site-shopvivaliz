@@ -44,7 +44,7 @@ jobs:
         env:
           CHATGPT_CONTINUITY_WORKER_SOURCE: ${{ github.workspace }}/scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
           CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER: shopvivaliz.com.br
-          CHATGPT_CONTINUITY_CDP_URL: http://127.0.0.1:9556
+          CHATGPT_CONTINUITY_CDP_URL: http://127.0.0.1:9555
         run: |
           set -Eeuo pipefail
           output=''
@@ -82,7 +82,7 @@ jobs:
           grep -Fq 'continuity-authorization-button-target' "$worker"
           grep -Fq 'authorizationLoop' "$worker"
 
-          curl -fsS --connect-timeout 3 --max-time 5             http://127.0.0.1:9556/json/version >/dev/null
+          curl -fsS --connect-timeout 3 --max-time 5             http://127.0.0.1:9555/json/version >/dev/null
 
           token_file=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token
           test -s "$token_file"

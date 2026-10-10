@@ -61,6 +61,43 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(watchdog.read_requests(self.runtime), [])
 
+    def test_watchdog_analyzes_only_tasks_created_within_last_10_days(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("recent-task", "recent", "gpt")
+        state.record_progress("recent-task", next_action="continue recent work")
+        recent_path = self.runtime / "recent-task.json"
+        recent = json.loads(recent_path.read_text(encoding="utf-8"))
+        recent["created_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=9)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        recent["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=600)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        recent_path.write_text(json.dumps(recent), encoding="utf-8")
+
+        state.start_task("historical-task", "historical", "gpt")
+        state.record_progress("historical-task", next_action="do not revisit old work")
+        historical_path = self.runtime / "historical-task.json"
+        historical = json.loads(historical_path.read_text(encoding="utf-8"))
+        historical["created_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=11)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        # Prove a recent update cannot bring an old task back into scope.
+        historical["updated_at"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=600)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        historical_path.write_text(json.dumps(historical), encoding="utf-8")
+
+        result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
+
+        self.assertEqual(result["lookback_days"], 10)
+        self.assertEqual(result["scanned"], 1)
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["dispatched"], 1)
+        self.assertEqual(result["skipped_outside_lookback"], 1)
+        self.assertEqual([row["task_id"] for row in watchdog.read_requests(self.runtime)], ["recent-task"])
+
     def test_stale_running_task_dispatches_once_per_checkpoint_revision(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
@@ -291,6 +328,29 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertIn("nao comprova execucao", lowered)
         self.assertNotIn("retomada automatica acionada", lowered)
 
+
+
+    def test_proactive_mode_dispatches_fresh_running_checkpoint(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("fresh-proactive", "acompanhar ate concluir", "gpt")
+        state.record_progress(
+            "fresh-proactive",
+            next_action="continuar a tarefa sem aguardar travamento",
+            evidence="checkpoint fresco",
+        )
+
+        result = watchdog.run_once(
+            stale_seconds=120,
+            runtime_dir=self.runtime,
+            proactive=True,
+        )
+
+        self.assertEqual(result["mode"], "proactive")
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["dispatched"], 1)
+        requests = watchdog.read_requests(self.runtime)
+        self.assertEqual([row["task_id"] for row in requests], ["fresh-proactive"])
 
 
 if __name__ == "__main__":

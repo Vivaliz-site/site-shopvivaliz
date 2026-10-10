@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import copy
+import os
 import importlib.util
 import sys
 import tempfile
 import unittest
+import time
 from unittest import mock
 from pathlib import Path
 
@@ -49,6 +51,37 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(state.load_task("race-proof")["status"], "RUNNING")
         self.assertEqual(state.load_task("race-proof")["next_action"], "deployment still missing")
 
+    def test_stale_fenced_resume_cannot_mutate_after_conversation_rebind(self) -> None:
+        state.start_task("fenced-resume", "continue durable work", "work")
+        state.bind_conversation("fenced-resume", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("fenced-resume", browser_session="dev")
+        before = state.load_task("fenced-resume")
+        claimed = state.claim_recovery_ownership(
+            "fenced-resume", owner_id="resume:old-request",
+            allowed_actions=["checkpoint_mutation"], ttl_seconds=60,
+        )
+        env = {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+            "SHOPVIVALIZ_RESUME_BACKGROUND": "1",
+            "SHOPVIVALIZ_RESUME_OWNER_ID": "resume:old-request",
+            "SHOPVIVALIZ_RESUME_CONVERSATION_ID": claimed["conversation_id"],
+            "SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION": str(claimed["recovery_checkpoint_version"]),
+            "SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID": claimed["recovery_lease_id"],
+            "SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN": str(claimed["recovery_fencing_token"]),
+            "SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID": claimed["runtime_lease_id"],
+            "SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN": str(claimed["runtime_fencing_token"]),
+        }
+        state.rebind_conversation(
+            "fenced-resume", conversation_id="66666666-7777-8888-9999-aaaaaaaaaaaa",
+            expected_checkpoint_version=claimed["checkpoint_version"],
+        )
+        with mock.patch.dict(state.os.environ, env, clear=False):
+            with self.assertRaisesRegex(state.TaskStateError, "stale|ownership|conversation"):
+                state.record_progress("fenced-resume", next_action="stale writer attempted mutation")
+        current = state.load_task("fenced-resume")
+        self.assertNotEqual(current["conversation_id"], before["conversation_id"] if before.get("conversation_id") else "")
+        self.assertNotEqual(current["next_action"], "stale writer attempted mutation")
+
     def test_background_cannot_certify_terminal_without_pinned_completion_checks(self) -> None:
         state.start_task("owned-proof", "verify", "work")
         with mock.patch.dict(state.os.environ, {
@@ -90,6 +123,51 @@ class AgentTaskStateTests(unittest.TestCase):
         self.assertEqual(same, bound)
         with self.assertRaisesRegex(state.TaskStateError, "cannot be replaced"):
             state.bind_conversation("bound-task", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    def test_recovery_state_machine_suppresses_foreground_and_claims_after_expiry(self) -> None:
+        state.start_task("recovery-state", "recover", "work")
+        state.bind_conversation("recovery-state", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("recovery-state", browser_session="dev")
+        version = state.load_task("recovery-state")["checkpoint_version"]
+        state.acquire_foreground_lease_for_task("recovery-state", owner_id="turn-1", ttl_seconds=1)
+        blocked = state.claim_recovery_ownership("recovery-state", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        self.assertEqual(blocked["recovery_state"], "FOREGROUND_ACTIVE")
+        time.sleep(1.05)
+        claimed = state.claim_recovery_ownership("recovery-state", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        self.assertEqual(claimed["recovery_state"], "RECOVERY_CLAIMED")
+        self.assertEqual(claimed["recovery_checkpoint_version"], version)
+        transitions = [row["state"] for row in claimed["recovery_history"]]
+        self.assertIn("LEASE_EXPIRED", transitions)
+        self.assertEqual(transitions[-1], "RECOVERY_CLAIMED")
+
+    def test_rebind_increments_checkpoint_and_invalidates_old_recovery_owner(self) -> None:
+        state.start_task("rebind-recovery", "recover", "work")
+        first = state.bind_conversation("rebind-recovery", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("rebind-recovery", browser_session="dev")
+        before = state.load_task("rebind-recovery")["checkpoint_version"]
+        state.acquire_foreground_lease_for_task("rebind-recovery", owner_id="turn-1", ttl_seconds=1)
+        time.sleep(1.05)
+        claimed = state.claim_recovery_ownership("rebind-recovery", owner_id="recovery-1", allowed_actions=["continuation_send"], ttl_seconds=30)
+        old_lease = claimed["recovery_lease_id"]
+        rebound = state.rebind_conversation("rebind-recovery", conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", expected_checkpoint_version=before)
+        self.assertGreater(rebound["checkpoint_version"], before)
+        self.assertNotIn("recovery_lease_id", rebound)
+        with self.assertRaisesRegex(state.TaskStateError, "conversation|checkpoint"):
+            state.record_recovery_state("rebind-recovery", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=before, real_response_observed=True)
+        self.assertTrue(old_lease)
+
+    def test_progress_confirmed_requires_real_assistant_response(self) -> None:
+        state.start_task("real-response", "recover", "work")
+        state.bind_conversation("real-response", conversation_id="11111111-2222-3333-4444-555555555555")
+        state.bind_browser_session("real-response", browser_session="dev")
+        version = state.load_task("real-response")["checkpoint_version"]
+        state.record_recovery_state("real-response", state="RECOVERY_CLAIMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        state.record_recovery_state("real-response", state="RECOVERY_ACTIONED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        state.record_recovery_state("real-response", state="WAITING_FOR_REAL_RESPONSE", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version)
+        with self.assertRaisesRegex(state.TaskStateError, "real assistant response"):
+            state.record_recovery_state("real-response", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version, real_response_observed=False)
+        confirmed = state.record_recovery_state("real-response", state="PROGRESS_CONFIRMED", expected_conversation_id="11111111-2222-3333-4444-555555555555", expected_checkpoint_version=version, real_response_observed=True)
+        self.assertEqual(confirmed["recovery_state"], "PROGRESS_CONFIRMED")
 
     def test_duplicate_background_progress_is_exact_noop(self) -> None:
         state.start_task("duplicate-background", "verify", "work")
@@ -400,6 +478,98 @@ class OperationsWorkerContinuityTests(unittest.TestCase):
         self.assertEqual(assigned[0]["agent_id"], "gpt")
         self.assertEqual(assigned[0]["phase"], "docs_preflight")
         self.assertTrue(saved, "ownership must be persisted even before docs receipt")
+
+
+class OperationsWorkerOriginGuardTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.original_runtime = state.RUNTIME_DIR
+        state.RUNTIME_DIR = Path(self.temp.name)
+        self.worker = load_operations_worker()
+        self.env = mock.patch.dict(os.environ, {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+        }, clear=False)
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        state.RUNTIME_DIR = self.original_runtime
+        self.temp.cleanup()
+
+    def test_autonomous_queue_does_not_fabricate_chatgpt_checkpoint(self) -> None:
+        task = {"id": "autonomous-only", "title": "Review safe signals",
+                "auto_generated": True, "source": "real-project-signals"}
+        self.worker.persist_task_continuity("gpt", task, next_action="read source")
+        self.assertEqual(task["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS")
+        self.assertFalse((state.RUNTIME_DIR / "autonomous-only.json").exists())
+
+    def test_queue_persists_autonomous_route_status_without_chat_checkpoint(self) -> None:
+        queue = {"queue": [{"id": "auto-pending", "title": "Review safe signals",
+                            "status": "pending", "auto_generated": True}]}
+        saved = []
+        with (
+            mock.patch.object(self.worker, "load_queue", return_value=queue),
+            mock.patch.object(self.worker, "save_queue",
+                              side_effect=lambda value, **kw: saved.append(copy.deepcopy(value))),
+            mock.patch.object(self.worker, "choose_agent", return_value="gpt"),
+            mock.patch.object(self.worker, "docs_preflight",
+                              return_value=(False, "missing docs")),
+            mock.patch.object(self.worker, "push_step"),
+            mock.patch.object(self.worker, "set_focus"),
+        ):
+            assigned = self.worker.assign_pending_tasks({"agents": {}})
+        self.assertEqual(len(assigned), 1)
+        self.assertTrue(saved)
+        self.assertEqual(
+            saved[0]["queue"][0]["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS",
+        )
+        self.assertFalse((state.RUNTIME_DIR / "auto-pending.json").exists())
+
+    def test_human_queue_without_verified_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "missing-origin", "title": "Continue customer issue"}
+        self.worker.persist_task_continuity("gpt", task, next_action="resume source")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "missing-origin.json").exists())
+
+    def test_partial_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "partial-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check session")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "partial-origin.json").exists())
+
+    def test_explicitly_bound_queue_checkpoint_advances(self) -> None:
+        task = {"id": "verified-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev",
+                "continuity_binding_status": "AWAIT_VERIFIED_BROWSER_ORIGIN"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check system",
+                                            evidence="origin route provided")
+        stored = state.load_task("verified-origin")
+        self.assertEqual(stored["conversation_id"], task["conversation_id"])
+        self.assertEqual(stored["browser_session"], "dev")
+        self.assertEqual(stored["next_action"], "check system")
+        self.assertNotIn("continuity_binding_status", task)
+
+    def test_legacy_orphan_is_not_rewritten_by_generic_worker(self) -> None:
+        state.start_task("legacy-orphan", "Original work", "gpt")
+        before = state.load_task("legacy-orphan")
+        task = {"id": "legacy-orphan", "title": "Original work",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev"}
+        self.worker.persist_task_continuity("gpt", task, next_action="generic ACK")
+        after = state.load_task("legacy-orphan")
+        self.assertEqual(task["continuity_binding_status"], "LEGACY_UNBOUND_CHECKPOINT")
+        self.assertEqual(after, before)
+
+    def test_non_durable_legacy_mode_keeps_original_queue_behavior(self) -> None:
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "0"
+        task = {"id": "legacy-queue", "title": "Legacy standalone job",
+                "auto_generated": True}
+        self.worker.persist_task_continuity("gpt", task, next_action="legacy fallback")
+        stored = state.load_task("legacy-queue")
+        self.assertEqual(stored["status"], "RUNNING")
+        self.assertEqual(stored["next_action"], "legacy fallback")
 
 
 class TaskContinuityPolicyTests(unittest.TestCase):

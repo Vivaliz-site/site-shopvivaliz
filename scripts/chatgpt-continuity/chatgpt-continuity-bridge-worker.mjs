@@ -19,16 +19,93 @@
 // remote-debugging port open. If that port is not reachable, the worker
 // fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const BRIDGE_ENDPOINT = process.env.CHATGPT_CONTINUITY_BRIDGE_ENDPOINT
   || 'http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php';
 const BRIDGE_HOST_HEADER = process.env.CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER || 'shopvivaliz.com.br';
 const TOKEN_FILE = process.env.CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE
   || '/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token';
-const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9556';
+const CDP_BASE = process.env.CHATGPT_CONTINUITY_CDP_URL || 'http://127.0.0.1:9555';
 const TASK_STATE_DIR = process.env.SHOPVIVALIZ_AGENT_TASK_STATE_DIR
   || '/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state';
+const DURABLE_HANDOFF_ENABLED = ['1','true','yes','on'].includes(String(process.env.SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF || '0').toLowerCase());
+const MUTATION_GATE_PATH = process.env.SHOPVIVALIZ_CONTINUITY_MUTATION_GATE_PATH
+  || fileURLToPath(new URL('../continuity/mutation_gate.py', import.meta.url));
+
+function mutationAuthorizationAllows(result) {
+  return result?.authorized === true;
+}
+
+async function authorizeMutationForTask(taskId, action, conversationId = '') {
+  if (!DURABLE_HANDOFF_ENABLED) return { authorized: true, reason: 'feature_disabled' };
+  let checkpoint;
+  try { checkpoint = JSON.parse(fs.readFileSync(`${TASK_STATE_DIR}/${taskId}.json`, 'utf8')); }
+  catch { return { authorized: false, reason: 'checkpoint_unreadable' }; }
+  const cid = safeConversationId(conversationId || checkpoint?.conversation_id || '');
+  if (!cid) return { authorized: false, reason: 'conversation_missing' };
+  const session = String(checkpoint?.browser_session || '').trim();
+  if (!session) return { authorized: false, reason: 'session_identity_required' };
+  const version = Array.isArray(checkpoint?.history) ? checkpoint.history.length : 0;
+  const conversationLeaseId = String(checkpoint?.recovery_lease_id || '').trim();
+  const conversationFence = Number(checkpoint?.recovery_fencing_token || 0);
+  const runtimeLeaseId = String(checkpoint?.runtime_lease_id || '').trim();
+  const runtimeFence = Number(checkpoint?.runtime_fencing_token || 0);
+  if (!conversationLeaseId || !conversationFence) return { authorized: false, reason: 'conversation_lease_identity_required' };
+  if (!runtimeLeaseId || !runtimeFence) return { authorized: false, reason: 'runtime_lock_identity_required' };
+  const proc = spawnSync('python3', [MUTATION_GATE_PATH, 'authorize-current',
+    '--task-id', String(taskId), '--conversation-id', cid, '--checkpoint-version', String(version),
+    '--action', String(action), '--session-identity', session,
+    '--conversation-lease-id', conversationLeaseId, '--conversation-fencing-token', String(conversationFence),
+    '--runtime-lease-id', runtimeLeaseId, '--runtime-fencing-token', String(runtimeFence)],
+  { encoding: 'utf8', env: process.env, timeout: 3000 });
+  const line = String(proc.stdout || '').trim().split(/\r?\n/).filter(Boolean).at(-1) || '';
+  try { return JSON.parse(line); } catch { return { authorized: false, reason: 'mutation_gate_error' }; }
+}
+
+async function guardedRecoveryMutation(taskId, action, conversationId, mutate, authorize = authorizeMutationForTask) {
+  const auth = await authorize(taskId, action, conversationId);
+  if (!mutationAuthorizationAllows(auth)) return { authorized: false, reason: String(auth?.reason || 'mutation_gate_rejected') };
+  return { authorized: true, reason: String(auth?.reason || 'authorized'), value: await mutate() };
+}
+// Keep one queue consumer. Scope each explicitly bound checkpoint to its own
+// browser without changing the concurrent legacy reinforcement context.
+const BROWSER_SESSION_CONTEXT = new AsyncLocalStorage();
+const BROWSER_SESSIONS = Object.freeze({
+  dev: Object.freeze({ cdpBase: 'http://127.0.0.1:9559', expectedEmail: 'dev@shopvivaliz.com.br' }),
+  atendimento: Object.freeze({ cdpBase: 'http://127.0.0.1:9556', expectedEmail: 'atendimento@shopvivaliz.com.br' }),
+  // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
+  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
+});
+function browserCdpBase() {
+  return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
+}
+function taskBrowserSession(taskId, requestedConversationId = '') {
+  if (!/^[A-Za-z0-9._-]{1,160}$/.test(String(taskId)) || String(taskId).includes('..')) {
+    throw new Error('invalid browser session checkpoint identity');
+  }
+  let checkpoint;
+  try { checkpoint = JSON.parse(fs.readFileSync(`${TASK_STATE_DIR}/${taskId}.json`, 'utf8')); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return Object.freeze({ cdpBase: CDP_BASE });
+    throw new Error('browser session checkpoint unreadable');
+  }
+  if (!Object.hasOwn(checkpoint || {}, 'browser_session')) return Object.freeze({ cdpBase: CDP_BASE });
+  const name = checkpoint.browser_session;
+  if (typeof name !== 'string' || !Object.hasOwn(BROWSER_SESSIONS, name)) {
+    throw new Error('invalid browser session binding');
+  }
+  const bound = safeConversationId(checkpoint.conversation_id);
+  if (!['RUNNING', 'READY_TO_COMPLETE'].includes(checkpoint.status) || !bound
+      || (requestedConversationId && requestedConversationId !== bound)) {
+    throw new Error('browser session checkpoint conversation mismatch or terminal state');
+  }
+  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+}
+
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
 const STALL_REINFORCEMENT_ENABLED = process.env.CHATGPT_CONTINUITY_STALL_MONITOR !== '0';
 const AUTO_ALLOW_ENABLED = process.env.CHATGPT_CONTINUITY_AUTO_ALLOW !== '0';
@@ -49,6 +126,10 @@ const REINFORCEMENT_429_BACKOFF_MS = Math.max(
 const ADDITIONAL_CHECKS_COOLDOWN_MS = Math.max(
   60_000,
   Number(process.env.CHATGPT_CONTINUITY_ADDITIONAL_CHECKS_COOLDOWN_MS || 5 * 60_000),
+);
+const REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS = Math.max(
+  60_000,
+  Number(process.env.CHATGPT_CONTINUITY_REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS || 5 * 60_000),
 );
 const CONTINUE_MESSAGE = process.env.CHATGPT_CONTINUITY_MESSAGE || 'continue';
 const PROGRESS_CONFIRM_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_PROGRESS_CONFIRM_MS || 90000));
@@ -109,6 +190,13 @@ const STREAM_STATUS_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.CHATGPT_CONTINUITY_STREAM_STATUS_TIMEOUT_MS || 5000),
 );
+// Full conversation reads can exceed the lightweight stream probe budget.
+// Keep their total deadline below the 15s CDP command timeout.
+const requestedTurnStateTimeoutMs = Number(process.env.CHATGPT_CONTINUITY_TURN_STATE_TIMEOUT_MS || 10000);
+const CONVERSATION_TURN_TIMEOUT_MS = Math.min(
+  12_000,
+  Math.max(1000, Number.isFinite(requestedTurnStateTimeoutMs) ? requestedTurnStateTimeoutMs : 10000),
+);
 const REINFORCEMENT_SWEEP_BATCH_SIZE = Math.max(
   1,
   Math.min(6, Number(process.env.CHATGPT_CONTINUITY_SWEEP_BATCH_SIZE || 3)),
@@ -131,6 +219,12 @@ const MONITOR_FALLBACK_FILE = process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FI
 function outcomeDetailCode(detail) {
   const normalized = text(detail).toLowerCase();
   if (!normalized) return 'NONE';
+  if (normalized.includes('canonical history read rate limited')) return 'CANONICAL_READ_RATE_LIMITED';
+  if (normalized.includes('bound browser session stream active or unconfirmed')) return 'BOUND_STREAM_NOT_COMPLETE';
+  if (normalized.includes('another conversation in the same browser session is active')) return 'SIBLING_STREAM_ACTIVE';
+  if (normalized.includes('canonical presence could not be confirmed')) return 'CONVERSATION_PRESENCE_UNCONFIRMED';
+  if (normalized.includes('no unfinished response is confirmed')) return 'CANONICAL_NO_UNFINISHED_RESPONSE';
+  if (normalized.includes('active stream remains unconfirmed')) return 'ACTIVE_STREAM_AFTER_REATTACH';
   if (normalized.includes('failure_reason=additional_checks')) return 'RECOVERABLE_ADDITIONAL_CHECKS';
   if (normalized.includes('failure_reason=stopped_thinking')) return 'RECOVERABLE_STOPPED_THINKING';
   if (normalized.includes('failure_reason=streaming_interrupted')) return 'RECOVERABLE_STREAMING_INTERRUPTED';
@@ -144,6 +238,7 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('multiple open chatgpt conversation tabs found')) return 'AMBIGUOUS_CONVERSATION_TARGET';
   if (normalized.includes('cdp endpoint unreachable')) return 'CDP_ENDPOINT_UNREACHABLE';
   if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
+  if (normalized.includes('browser session account mismatch or bound conversation mismatch')) return 'BOUND_SESSION_IDENTITY_MISMATCH';
   return 'UNCLASSIFIED_RUNTIME_ERROR';
 }
 
@@ -164,10 +259,12 @@ function reinforcementHealthPayload(
     || action === 'error'
     || action === 'auth_quiescent'
     || action === 'additional_checks_cooldown'
+    || action === 'recovery_retry_cooldown'
     || (outcome?.sent === true && outcome?.progress_confirmed !== true);
   const recoveredAction = action === 'self_resolved'
     || action === 'confirmed_progress'
-    || action === 'idle_no_checkpoint';
+    || action === 'idle_no_checkpoint'
+    || action === 'monitor_disabled';
   const prior = previous && typeof previous === 'object' ? previous : {};
 
   let degraded = prior.degraded === true;
@@ -213,6 +310,46 @@ function readMonitorState(file) {
   }
 }
 
+const MONITOR_ORPHAN_TEMP_MIN_AGE_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_MAX_REMOVALS = 512;
+const monitorOrphanSweepDue = new Map();
+
+// A killed worker can leave its atomic-write .tmp.<pid> behind. These files
+// are not checkpoints or source-of-truth. Prune only old regular files from
+// this exact monitor basename after proving that the owning PID is gone.
+// Errors must never stop the durable monitor heartbeat.
+function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
+  const slash = file.lastIndexOf('/');
+  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  const prefix = file.slice(slash + 1) + '.tmp.';
+  let removed = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (removed >= MONITOR_ORPHAN_MAX_REMOVALS) break;
+      if (!entry.isFile() || !entry.name.startsWith(prefix)) continue;
+      const rawPid = entry.name.slice(prefix.length);
+      if (!/^[0-9]{1,10}$/.test(rawPid)) continue;
+      const pid = Number(rawPid);
+      if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2147483647 || pid === process.pid) continue;
+      try {
+        process.kill(pid, 0);
+        continue; // PID is alive, or was recycled: never touch its file.
+      } catch (error) {
+        if (error?.code !== 'ESRCH') continue; // EPERM and unknown errors fail closed.
+      }
+      const candidate = dir + '/' + entry.name;
+      try {
+        const st = fs.lstatSync(candidate);
+        if (!st.isFile() || nowMs - st.mtimeMs < MONITOR_ORPHAN_TEMP_MIN_AGE_MS) continue;
+        fs.unlinkSync(candidate);
+        removed += 1;
+      } catch {} // Race with another worker or removal; preserve the heartbeat.
+    }
+  } catch {}
+  return removed;
+}
+
 function persistMonitorStateFile(file, payload) {
   const slash = file.lastIndexOf('/');
   const dir = slash > 0 ? file.slice(0, slash) : '.';
@@ -230,6 +367,11 @@ function persistMonitorStateFile(file, payload) {
     const dirFd = fs.openSync(dir, 'r');
     try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
   } catch {}
+  const nowMs = Date.now();
+  if (nowMs >= (monitorOrphanSweepDue.get(file) || 0)) {
+    monitorOrphanSweepDue.set(file, nowMs + MONITOR_ORPHAN_SWEEP_INTERVAL_MS);
+    pruneStaleMonitorTempFiles(file, nowMs);
+  }
 }
 
 function persistReinforcementHealth(outcome) {
@@ -334,7 +476,7 @@ async function bridge(operation, payload = {}) {
 
 async function cdpReady() {
   try {
-    const response = await fetch(`${CDP_BASE}/json/version`, { signal: AbortSignal.timeout(2500) });
+    const response = await fetch(`${browserCdpBase()}/json/version`, { signal: AbortSignal.timeout(2500) });
     if (!response.ok) return false;
     const data = await response.json();
     return typeof data?.webSocketDebuggerUrl === 'string'
@@ -342,6 +484,14 @@ async function cdpReady() {
   } catch {
     return false;
   }
+}
+
+function classifyChatgptPath(pathname) {
+  const conversation = String(pathname || '').match(/^\/(?:g\/[^/]+\/)?(?:c|uc)\/([^/]+)/);
+  if (conversation) return { rank: 0, conversationId: conversation[1] };
+  if (pathname === '/' || pathname === '') return { rank: 1, conversationId: '' };
+  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(pathname)) return { rank: 3, conversationId: '' };
+  return { rank: 2, conversationId: '' };
 }
 
 function chatgptTabRank(tab) {
@@ -353,10 +503,7 @@ function chatgptTabRank(tab) {
     return Number.POSITIVE_INFINITY;
   }
   if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com') return Number.POSITIVE_INFINITY;
-  if (/^\/c\/[^/]+/.test(url.pathname)) return 0;
-  if (url.pathname === '/' || url.pathname === '') return 1;
-  if (/^\/(?:auth|login|logout)(?:\/|$)/.test(url.pathname)) return 3;
-  return 2;
+  return classifyChatgptPath(url.pathname).rank;
 }
 
 function selectChatgptTab(tabs) {
@@ -373,12 +520,56 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
-async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
+async function connectFirstUsableChatgptTab(tabs, connector, preferred = null, { maxParallel = 1 } = {}) {
   if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
   const ranked = tabs
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => Number.isFinite(row.rank))
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // The guardian may inspect many restored tabs. Probe small, bounded batches
+  // in parallel instead of serial 2.5s session fetches, while retaining the
+  // original deterministic first-preferred/fallback selection and closing all
+  // unselected CDP connections. All other callers remain strictly serial.
+  const parallel = Math.max(1, Math.min(8, Math.trunc(Number(maxParallel) || 1)));
+  if (parallel > 1 && typeof preferred === 'function') {
+    let fallback = null;
+    for (let index = 0; index < ranked.length; index += parallel) {
+      const batch = ranked.slice(index, index + parallel);
+      const checked = await Promise.all(batch.map(async ({ tab }) => {
+        let connected = null;
+        try {
+          connected = await connector(tab);
+          if (!connected) return { connected: null, accepted: false };
+          let accepted = false;
+          try { accepted = Boolean(await preferred(connected, tab)); } catch {}
+          return { connected, accepted };
+        } catch {
+          try { connected?.close(); } catch {}
+          return { connected: null, accepted: false };
+        }
+      }));
+      const winner = checked.find(result => result.accepted)?.connected || null;
+      if (winner) {
+        if (fallback && fallback !== winner) {
+          try { fallback.close(); } catch {}
+        }
+        for (const result of checked) {
+          if (result.connected && result.connected !== winner) {
+            try { result.connected.close(); } catch {}
+          }
+        }
+        return winner;
+      }
+      for (const result of checked) {
+        if (!result.connected) continue;
+        if (!fallback) fallback = result.connected;
+        else { try { result.connected.close(); } catch {} }
+      }
+    }
+    return fallback;
+  }
+
   let fallback = null;
   for (const { tab } of ranked) {
     try {
@@ -401,6 +592,7 @@ async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
 }
 
 async function boundConversationRecoveryReady(cdp) {
+  try { if (await conversationUnavailablePresent(cdp)) return false; } catch {}
   try { if (await composerIsUsable(cdp)) return true; } catch {}
   try { if (await conversationIsGenerating(cdp)) return true; } catch {}
   try { if (await recoverableFailureReason(cdp)) return true; } catch {}
@@ -435,7 +627,7 @@ async function selectBoundConversationReentryTab(
 function conversationIdFromTab(tab) {
   if (chatgptTabRank(tab) !== 0) return '';
   try {
-    return new URL(String(tab.url || '')).pathname.match(/^\/c\/([^/]+)/)?.[1] || '';
+    return classifyChatgptPath(new URL(String(tab.url || '')).pathname).conversationId;
   } catch {
     return '';
   }
@@ -460,6 +652,11 @@ function hasActiveContinuityCheckpoint(taskStateDir = TASK_STATE_DIR) {
       if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.startsWith('_')) continue;
       try {
         const payload = JSON.parse(fs.readFileSync(taskStateDir + '/' + entry.name, 'utf8'));
+        // The reinforcement loop belongs only to the legacy/personal browser.
+        // Global/detached tasks without a bound browser conversation must not
+        // keep the Fred browser hot with account-scoped reinforcement sweeps.
+        if (Object.hasOwn(payload || {}, 'browser_session') && payload.browser_session !== 'fred') continue;
+        if (!safeConversationId(payload?.conversation_id)) continue;
         const status = text(payload?.status).toUpperCase();
         if (status === 'RUNNING' || status === 'READY_TO_COMPLETE') return true;
       } catch {
@@ -587,16 +784,69 @@ async function resolveAmbiguousConversationTabs(
   }
 }
 
+async function connectBoundConversationWithReentry(
+  tabs,
+  conversationId,
+  {
+    connector = connectCdpTarget,
+    selectReentry = selectBoundConversationReentryTab,
+    navigate = navigateNeutralTabToConversation,
+    preferred = boundConversationRecoveryReady,
+  } = {},
+) {
+  const id = safeConversationId(conversationId);
+  if (!id) throw new Error('invalid bound conversation id');
+
+  const boundTabs = selectBoundConversationTabs(tabs, id);
+  const existing = await connectFirstUsableChatgptTab(
+    boundTabs,
+    connector,
+    boundTabs.length > 1 ? preferred : null,
+  );
+  if (existing) return existing;
+
+  // A target can remain listed by /json while its renderer no longer answers
+  // Runtime.evaluate. Re-enter the exact immutable conversation id through a
+  // neutral authenticated Home target instead of declaring the conversation
+  // unavailable or selecting another conversation.
+  const reentryTab = await selectReentry(tabs);
+  if (!reentryTab) {
+    throw new Error('bound conversation is not available in the attached browser');
+  }
+  const navigated = await navigate(reentryTab, id, connector);
+  if (!navigated) throw new Error('bound conversation could not be opened');
+
+  const reentered = await connector(reentryTab);
+  if (!reentered) throw new Error('bound conversation reentry target is not usable');
+  return reentered;
+}
+
 class Cdp {
-  constructor(ws) {
+  constructor(ws, { commandTimeoutMs = 15_000 } = {}) {
     this.ws = ws;
     this.id = 0;
     this.pending = new Map();
+    this.closed = false;
+    this.commandTimeoutMs = Number.isFinite(commandTimeoutMs) && commandTimeoutMs > 0
+      ? commandTimeoutMs : 15_000;
+    const disconnected = () => {
+      this.closed = true;
+      for (const waiter of this.pending.values()) {
+        clearTimeout(waiter.timer);
+        waiter.reject(new Error('CDP connection closed'));
+      }
+      this.pending.clear();
+    };
+    this.disconnect = disconnected;
+    ws.addEventListener('close', disconnected);
+    ws.addEventListener('error', disconnected);
     ws.addEventListener('message', event => {
-      const message = JSON.parse(event.data);
-      if (!message.id || !this.pending.has(message.id)) return;
+      let message;
+      try { message = JSON.parse(event.data); } catch { return; }
+      if (!message?.id || !this.pending.has(message.id)) return;
       const waiter = this.pending.get(message.id);
       this.pending.delete(message.id);
+      clearTimeout(waiter.timer);
       message.error ? waiter.reject(new Error(message.error.message || 'CDP error')) : waiter.resolve(message.result);
     });
   }
@@ -608,12 +858,12 @@ class Cdp {
   } = {}) {
     if (!(await cdpReady())) {
       throw new Error(
-        `CDP endpoint unreachable at ${CDP_BASE}. This worker never launches its own browser -- `
+        `CDP endpoint unreachable at ${browserCdpBase()}. This worker never launches its own browser -- `
         + 'it only attaches to one you already have open and logged into ChatGPT. Launch it with '
-        + `--remote-debugging-port=${new URL(CDP_BASE).port} (see docs/AGENT-VM-PROMPTS.md).`
+        + `--remote-debugging-port=${new URL(browserCdpBase()).port} (see docs/AGENT-VM-PROMPTS.md).`
       );
     }
-    const tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+    const tabs = await (await fetch(`${browserCdpBase()}/json`)).json();
     const conversationIds = new Set(
       (Array.isArray(tabs) ? tabs : []).map(conversationIdFromTab).filter(Boolean),
     );
@@ -622,25 +872,7 @@ class Cdp {
     const boundConversationId = safeConversationId(targetConversationId);
     const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
     if (boundConversationId) {
-      candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
-      if (candidateTabs.length === 0) {
-        // Never guess among multiple neutral tabs and never repurpose another
-        // real conversation. A single neutral home tab is safe to reuse; when
-        // there are zero or multiple neutral homes, create one isolated target
-        // exclusively for exact bound-conversation reentry.
-        const neutralHomeTab = await selectBoundConversationReentryTab(tabs);
-        if (!neutralHomeTab) {
-          throw new Error('bound conversation is not available in the attached browser');
-        }
-        const navigated = await navigateNeutralTabToConversation(
-          neutralHomeTab,
-          boundConversationId,
-          connectCdpTarget,
-        );
-        if (!navigated) throw new Error('bound conversation could not be opened');
-        candidateTabs = [neutralHomeTab];
-      }
-      if (candidateTabs.length > 1) preferredCandidate = boundConversationRecoveryReady;
+      return await connectBoundConversationWithReentry(tabs, boundConversationId);
     } else if (allowLatestDisambiguation && checkpointTargetMs > 0) {
       // Checkpoint-driven recovery must bind to the intended conversation
       // even when the persistent browser currently has only a neutral home
@@ -675,10 +907,21 @@ class Cdp {
   }
 
   send(method, params = {}) {
+    if (this.closed) return Promise.reject(new Error('CDP connection closed'));
     return new Promise((resolve, reject) => {
       const id = ++this.id;
-      this.pending.set(id, { resolve, reject });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error('CDP command timed out'));
+      }, this.commandTimeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
 
@@ -694,6 +937,7 @@ class Cdp {
   }
 
   close() {
+    this.disconnect();
     try { this.ws.close(); } catch {}
   }
 }
@@ -750,7 +994,7 @@ async function clickAuthorizationIfPresent(cdp) {
 async function authorizationCheckOnce(
   listTabs = async () => {
     if (!(await cdpReady())) return [];
-    const response = await fetch(`${CDP_BASE}/json`, { signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`${browserCdpBase()}/json`, { signal: AbortSignal.timeout(3000) });
     return response.ok ? await response.json() : [];
   },
   connector = connectCdpTarget,
@@ -816,10 +1060,10 @@ async function connectReinforcementChatgptTab({
   if (!Array.isArray(tabs)) {
     if (!(await cdpReady())) {
       throw new Error(
-        `CDP endpoint unreachable at ${CDP_BASE}. This worker only attaches to the canonical authenticated browser.`,
+        `CDP endpoint unreachable at ${browserCdpBase()}. This worker only attaches to the canonical authenticated browser.`,
       );
     }
-    tabs = await (await fetch(`${CDP_BASE}/json`)).json();
+    tabs = await (await fetch(`${browserCdpBase()}/json`)).json();
   }
 
   const ranked = (Array.isArray(tabs) ? tabs : [])
@@ -974,21 +1218,21 @@ async function sidebarLatestConversationId(cdp) {
     // sidebar-latest-conversation: local, already-synchronized fallback only.
     const unique=[];
     const seen=new Set();
-    for(const anchor of document.querySelectorAll('a[href^="/c/"]')){
+    for(const anchor of document.querySelectorAll('a[href]')){
       const value=String(anchor.getAttribute('href')||'').trim();
-      if(!/^\\/c\\/[A-Za-z0-9_-]{8,160}$/.test(value) || seen.has(value)) continue;
+      if(!/^\\/(?:c|uc)\\/[A-Za-z0-9_-]{8,160}$/.test(value) || seen.has(value)) continue;
       seen.add(value);
       unique.push(value);
     }
     return unique[0]||'';
   })()`);
-  const match = String(href || '').match(/^\/c\/([A-Za-z0-9_-]{8,160})$/);
+  const match = String(href || '').match(/^\/(?:c|uc)\/([A-Za-z0-9_-]{8,160})$/);
   return match?.[1] || '';
 }
 
 async function alignToSidebarLatestConversation(cdp) {
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  const currentConversation = /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
+  const currentConversation = /^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(currentPath);
   const homeContext = currentPath === '/';
   const uniqueConversationContext = currentConversation && (
     SINGLE_SAFE_REINFORCEMENT_CDPS.has(cdp)
@@ -1029,7 +1273,7 @@ async function alignToSidebarLatestConversation(cdp) {
 function safeReinforcementRestorePath(value) {
   const path = String(value || '');
   if (path === '/') return path;
-  return /^\/c\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
+  return /^\/(?:c|uc)\/[A-Za-z0-9_-]{8,160}$/.test(path) ? path : '';
 }
 
 async function restoreReinforcementPath(cdp, requestedPath) {
@@ -1062,7 +1306,6 @@ async function navigateNeutralTabToConversation(
     cdp = await connector(tab);
     if (!cdp) return false;
 
-    const target = '/c/' + id;
     const requestedTimeout = Number(timeoutMs);
     const requestedPoll = Number(pollMs);
     const totalTimeoutMs = Number.isFinite(requestedTimeout)
@@ -1073,46 +1316,57 @@ async function navigateNeutralTabToConversation(
       : 250;
     const startedAt = Date.now();
     const deadline = startedAt + totalTimeoutMs;
+    const readBoundId = async () => {
+      try {
+        const pathname = String(await cdp.evaluate('location.pathname') || '');
+        return pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '';
+      } catch {
+        return '';
+      }
+    };
 
     // A freshly created neutral CDP target can be connected before the
-    // authenticated ChatGPT shell/sidebar has hydrated. Wait a bounded window
-    // for the exact existing conversation link instead of immediately falling
-    // back to direct /c/<id> navigation, which can render an unavailable shell.
+    // authenticated ChatGPT shell/sidebar has hydrated. Prefer the exact
+    // existing sidebar route, whether ChatGPT exposes it as /c/<id> or
+    // /uc/<id>, before trying direct navigation.
     const sidebarDeadline = Math.min(deadline, startedAt + Math.min(5000, totalTimeoutMs));
     let route = 'waiting';
     while (Date.now() < sidebarDeadline) {
       route = await cdp.evaluate(
         `(()=>{
           /* continuity-bound-sidebar-route */
-          const target=${JSON.stringify('/c/')}+${JSON.stringify(id)};
+          const id=${JSON.stringify(id)};
           const link=[...document.querySelectorAll('a[href]')].find(anchor=>{
-            try{return new URL(anchor.href,location.href).pathname===target;}catch{return false;}
+            try {
+              const pathname=new URL(anchor.href,location.href).pathname;
+              const match=pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
+              return match?.[1]===id;
+            } catch { return false; }
           });
           if(!link) return 'waiting';
+          const pathname=new URL(link.href,location.href).pathname;
           link.click();
-          return 'sidebar';
+          return pathname;
         })()`,
       );
-      if (route === 'sidebar') break;
+      if (typeof route === 'string' && /^\/(?:c|uc)\//.test(route)) break;
+      if (await readBoundId() === id) return true;
       await sleep(intervalMs);
     }
 
-    if (route !== 'sidebar') {
-      route = await cdp.evaluate(
-        `(()=>{location.assign(${JSON.stringify(target)});return 'direct';})()`,
+    if (await readBoundId() === id) return true;
+
+    // Direct /c is the long-standing route. Some current ChatGPT surfaces use
+    // /uc instead, so fail over to /uc when /c redirects to Home/unavailable.
+    for (const prefix of ['/c/', '/uc/']) {
+      if (Date.now() >= deadline) break;
+      await cdp.evaluate(
+        `(()=>{location.assign(${JSON.stringify(prefix + id)});return true;})()`,
       );
-    }
-    if (route !== 'sidebar' && route !== 'direct') return false;
-
-    while (Date.now() < deadline) {
-      await sleep(intervalMs);
-      try {
-        const pathname = await cdp.evaluate('location.pathname');
-        const currentId = String(pathname || '').match(/^\/c\/([^/?#]+)/)?.[1] || '';
-        if (currentId === id) return true;
-      } catch {
-        // Navigation can transiently detach the execution context. Keep the
-        // check bounded and fail closed if the target never becomes readable.
+      const routeDeadline = Math.min(deadline, Date.now() + Math.max(750, Math.floor((deadline - Date.now()) / 2)));
+      while (Date.now() < routeDeadline) {
+        await sleep(intervalMs);
+        if (await readBoundId() === id) return true;
       }
     }
     return false;
@@ -1125,7 +1379,7 @@ async function navigateNeutralTabToConversation(
 
 async function createNeutralChatgptTab(fetcher = fetch) {
   try {
-    const response = await fetcher(`${CDP_BASE}/json/new?https://chatgpt.com/`, { method: 'PUT' });
+    const response = await fetcher(`${browserCdpBase()}/json/new?https://chatgpt.com/`, { method: 'PUT' });
     if (!response?.ok) return null;
     const tab = await response.json();
     return chatgptTabRank(tab) === 1 ? tab : null;
@@ -1188,14 +1442,34 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
   try {
     return await Promise.race([
       cdp.evaluate(`(async()=>{
-        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
         if(!match) return {http_status:0,status:'NO_CONVERSATION'};
+        const deadline=Date.now()+${boundedTimeoutMs};
+        let accountId='';
+        let accessToken='';
+        try{
+          const remaining=Math.max(1,deadline-Date.now());
+          const sessionResponse=await fetch('/api/auth/session',{
+            credentials:'same-origin',
+            cache:'no-store',
+            signal:AbortSignal.timeout(remaining)
+          });
+          if(sessionResponse.ok){
+            let session=null;
+            try{session=await sessionResponse.json();}catch{}
+            accountId=String(session?.account?.id||'').trim();
+            accessToken=String(session?.accessToken||session?.access_token||'').trim();
+          }
+        }catch{}
+        const headers={Accept:'application/json'};
+        if(accessToken) headers.Authorization='Bearer '+accessToken;
+        if(accountId) headers['ChatGPT-Account-Id']=accountId;
         const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        const timer=setTimeout(()=>controller.abort(), Math.max(1,deadline-Date.now()));
         try{
           const response=await fetch(
             '/backend-api/conversation/'+encodeURIComponent(match[1])+'/stream_status',
-            {credentials:'same-origin',cache:'no-store',signal:controller.signal}
+            {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
           let body=null;
           try{body=await response.json();}catch{}
@@ -1221,17 +1495,19 @@ async function conversationStreamStatus(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_M
   }
 }
 
-async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) {
+async function conversationTurnState(cdp, timeoutMs = CONVERSATION_TURN_TIMEOUT_MS) {
   const requestedTimeout = Number(timeoutMs);
-  const boundedTimeoutMs = Number.isFinite(requestedTimeout)
-    ? Math.max(10, requestedTimeout)
-    : STREAM_STATUS_TIMEOUT_MS;
+  const boundedTimeoutMs = Math.min(
+    12_000,
+    Number.isFinite(requestedTimeout) ? Math.max(10, requestedTimeout) : CONVERSATION_TURN_TIMEOUT_MS,
+  );
   let outerTimeoutHandle;
   try {
     return await Promise.race([
       cdp.evaluate(`(async()=>{
         /* conversation-turn-state */
-        const match=location.pathname.match(/^\\/c\\/([^/?#]+)/);
+        const deadline = Date.now() + ${boundedTimeoutMs};
+        const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
         if(!match) {
           return {
             http_status:0,
@@ -1243,10 +1519,23 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
             message_status:'NO_CONVERSATION'
           };
         }
+        // Persist only a non-secret deadline in this browser profile. A new
+        // tab or worker restart must not immediately repeat a throttled read.
+        const backoffKey='shopvivaliz.canonical-read-backoff-until.v1';
+        let backoffUntil=Number(globalThis.__shopvivalizCanonicalReadBackoffUntil||0);
+        if(!Number.isFinite(backoffUntil)) backoffUntil=0;
+        try{
+          const stored=Number(localStorage.getItem(backoffKey)||0);
+          if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+        }catch{}
+        const rateLimited=()=>({http_status:429,node_id:'',role:'',end_turn:null,
+          child_count:-1,content_text_length:0,message_status:'RATE_LIMIT_BACKOFF',
+          retry_after_ms:Math.max(0,backoffUntil-Date.now())});
+        if(backoffUntil>Date.now()) return rateLimited();
         let accountId='';
         let accessToken='';
         try{
-          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${LATEST_CONVERSATION_FETCH_TIMEOUT_MS})});
+          const sessionResponse=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(${Math.min(LATEST_CONVERSATION_FETCH_TIMEOUT_MS, boundedTimeoutMs)})});
           if(sessionResponse.ok){
             let session=null;
             try{session=await sessionResponse.json();}catch{}
@@ -1259,12 +1548,28 @@ async function conversationTurnState(cdp, timeoutMs = STREAM_STATUS_TIMEOUT_MS) 
         if(accountId) headers['ChatGPT-Account-Id']=accountId;
 
         const controller=new AbortController();
-        const timer=setTimeout(()=>controller.abort(), ${boundedTimeoutMs});
+        const timer=setTimeout(()=>controller.abort(), Math.max(1, deadline - Date.now()));
         try{
           const response=await fetch(
             '/backend-api/conversation/'+encodeURIComponent(match[1]),
             {credentials:'same-origin',cache:'no-store',headers,signal:controller.signal}
           );
+          if(response.status===429){
+            const retryAfter=String(response.headers?.get?.('retry-after')||'').trim();
+            const seconds=Number(retryAfter);
+            const retryDate=Date.parse(retryAfter);
+            const requestedWait=retryAfter&&Number.isFinite(seconds)&&seconds>=0
+              ? seconds*1000 : (Number.isFinite(retryDate)?retryDate-Date.now():0);
+            const waitMs=Number.isFinite(requestedWait)?Math.max(300000,requestedWait):300000;
+            backoffUntil=Date.now()+waitMs;
+            globalThis.__shopvivalizCanonicalReadBackoffUntil=backoffUntil;
+            try{
+              const stored=Number(localStorage.getItem(backoffKey)||0);
+              if(Number.isFinite(stored)) backoffUntil=Math.max(backoffUntil,stored);
+              localStorage.setItem(backoffKey,String(backoffUntil));
+            }catch{}
+            return {...rateLimited(),message_status:'HTTP_ERROR'};
+          }
           let body=null;
           try{body=await response.json();}catch{}
           if(!response.ok){
@@ -1346,6 +1651,112 @@ function realAssistantResponseCompletedSince(before, after) {
   return before?.end_turn === false;
 }
 
+function canonicalSubmissionOutcome(progressed, submissionState) {
+  if (progressed) {
+    return { result_status: 'PROGRESS_CONFIRMED', canonical_submission_confirmed: true };
+  }
+  if (Number(submissionState?.http_status || 0) === 200 && submissionState?.confirmed === false) {
+    return { result_status: 'STALLED_NOT_CONFIRMED', canonical_submission_confirmed: false };
+  }
+  if (submissionState?.confirmed === true) {
+    return { result_status: 'SENT_UNCONFIRMED', canonical_submission_confirmed: true };
+  }
+  return { result_status: 'SENT_UNCONFIRMED', canonical_submission_confirmed: null };
+}
+
+async function canonicalContinuationSubmissionState(
+  cdp,
+  beforeTurn,
+  expectedMessage = CONTINUE_MESSAGE,
+) {
+  const beforeStatus = Number(beforeTurn?.http_status || 0);
+  const baselineNodeId = String(beforeTurn?.node_id || '').trim();
+  const expected = String(expectedMessage || '').trim().toLowerCase();
+  if (beforeStatus !== 200 || !baselineNodeId || !expected) {
+    return { http_status: beforeStatus, confirmed: null };
+  }
+  try {
+    const result = await cdp.evaluate(`(async()=>{
+      /* canonical-continuation-submission-proof */
+      const baselineNodeId=${JSON.stringify(baselineNodeId)};
+      const expected=${JSON.stringify(expected)};
+      const match=location.pathname.match(/^\\/(?:c|uc)\\/([^/?#]+)/);
+      if(!match) return {http_status:0,confirmed:null};
+
+      let accountId='';
+      let accessToken='';
+      try{
+        const sessionResponse=await fetch('/api/auth/session',{
+          credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(2000)
+        });
+        if(sessionResponse.ok){
+          let session=null;
+          try{session=await sessionResponse.json();}catch{}
+          accountId=String(session?.account?.id||'').trim();
+          accessToken=String(session?.accessToken||session?.access_token||'').trim();
+        }
+      }catch{}
+      const headers={Accept:'application/json'};
+      if(accessToken) headers.Authorization='Bearer '+accessToken;
+      if(accountId) headers['ChatGPT-Account-Id']=accountId;
+
+      let response;
+      try{
+        response=await fetch('/backend-api/conversation/'+encodeURIComponent(match[1]),{
+          credentials:'same-origin',cache:'no-store',headers,signal:AbortSignal.timeout(7000)
+        });
+      }catch{
+        return {http_status:0,confirmed:null};
+      }
+      if(response.status===429) return {http_status:429,confirmed:null};
+      if(!response.ok) return {http_status:Number(response.status||0),confirmed:null};
+
+      let body=null;
+      try{body=await response.json();}catch{}
+      const mapping=body?.mapping||{};
+      const baseline=mapping[baselineNodeId];
+      if(!baseline) return {http_status:200,confirmed:null};
+
+      const normalize=value=>String(value||'').trim().toLowerCase();
+      const messageText=message=>{
+        const parts=Array.isArray(message?.content?.parts)?message.content.parts:[];
+        return parts.map(part=>{
+          if(typeof part==='string') return part;
+          if(part&&typeof part==='object') return String(part?.text||part?.content||'');
+          return '';
+        }).join(' ').trim();
+      };
+      const stack=Array.isArray(baseline.children)?[...baseline.children]:[];
+      const seen=new Set();
+      while(stack.length){
+        const nodeId=String(stack.pop()||'');
+        if(!nodeId||seen.has(nodeId)) continue;
+        seen.add(nodeId);
+        const node=mapping[nodeId];
+        if(!node) continue;
+        const message=node.message;
+        if(
+          String(message?.author?.role||'').toLowerCase()==='user'
+          && normalize(messageText(message))===expected
+        ){
+          return {http_status:200,confirmed:true};
+        }
+        if(Array.isArray(node.children)) stack.push(...node.children);
+      }
+      return {http_status:200,confirmed:false};
+    })()`);
+    const status = Number(result?.http_status || 0);
+    const confirmed = result?.confirmed === true
+      ? true
+      : result?.confirmed === false
+        ? false
+        : null;
+    return { http_status: status, confirmed };
+  } catch {
+    return { http_status: 0, confirmed: null };
+  }
+}
+
 async function localIncompleteTurnPresent(cdp) {
   return cdp.evaluate(`(()=>{
     /* local-incomplete-turn */
@@ -1405,7 +1816,15 @@ async function silentStallPresent(cdp) {
   return Boolean(await localIncompleteTurnPresent(cdp));
 }
 
+// Fresh server bookkeeping is required at the actuator boundary as well as
+// in callers: reinforcement and delayed keyboard fallbacks share these helpers.
+async function conversationStreamComplete(cdp) {
+  const stream = await conversationStreamStatus(cdp);
+  return stream?.http_status === 200 && String(stream?.status || '').toUpperCase() === 'COMPLETE';
+}
+
 async function clearStaleCompleteGeneration(cdp) {
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     /* stale-complete-stop-clear */
     const button=document.querySelector('[data-testid="stop-button"]');
@@ -1509,7 +1928,7 @@ async function assistantSnapshot(cdp) {
   })()`);
   if (snapshot && Object.hasOwn(snapshot, 'conversationPath')) {
     const { conversationPath, ...content } = snapshot;
-    const path = String(conversationPath || '').match(/^\/c\/[^/]+/)?.[0] || '';
+    const path = String(conversationPath || '').match(/^\/(?:c|uc)\/[^/]+/)?.[0] || '';
     return { ...content, conversationFingerprint: path ? sha(path) : '' };
   }
   // Older injected adapters may lack route metadata; live snapshots always
@@ -1576,35 +1995,23 @@ async function confirmAssistantProgress(
   const canonicalBaseline = turnBaseline || await conversationTurnState(cdp);
   if (!String(canonicalBaseline?.node_id || '')) return false;
   const deadline = Date.now() + Math.max(1000, Number(timeoutMs || PROGRESS_CONFIRM_MS));
-  let lastCanonicalProbeAt = 0;
   while (Date.now() < deadline) {
     await sleep(Math.max(250, Number(pollMs || PROGRESS_POLL_MS)));
     const current = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(baseline, current)) return false;
-    // DOM assistant-turn growth is only a cue to query canonical state. It is
-    // never the success proof itself; only a completed backend assistant reply
-    // can certify recovery.
-    const domAdvanced = assistantProgressed(baseline, current);
-    const nowMs = Date.now();
-    if (domAdvanced || nowMs - lastCanonicalProbeAt >= 1500) {
-      const turn = await conversationTurnState(cdp);
-      lastCanonicalProbeAt = nowMs;
-      if (realAssistantResponseCompletedSince(canonicalBaseline, turn)) return true;
-    }
 
-    // An explicit transmission failure is terminal for this send attempt;
-    // do not burn the full progress-confirmation window before recovery.
+    // UI growth is diagnostic only. Re-reading the full conversation while a
+    // response is still streaming can issue dozens of expensive history reads
+    // during a single 90s confirmation window and drive the account into 429.
+    // Poll the lightweight account-scoped stream endpoint instead.
     if (await transmissionErrorPresent(cdp)) return false;
-
-    // Once the transport is COMPLETE, take one final canonical response probe.
-    // UI growth alone (Pensando/tool activity/hydration) is never sufficient.
-    const generating = await conversationIsGenerating(cdp);
-    if (!generating) {
-      const stream = await conversationStreamStatus(cdp);
-      if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
-        const turn = await conversationTurnState(cdp);
-        return realAssistantResponseCompletedSince(canonicalBaseline, turn);
-      }
+    const stream = await conversationStreamStatus(cdp);
+    if (stream?.http_status === 200 && stream?.status === 'COMPLETE') {
+      // The user's requirement is a real response, not bridge activity: take
+      // exactly one canonical history read after transport completion and
+      // require a completed assistant turn with content.
+      const turn = await conversationTurnState(cdp);
+      return realAssistantResponseCompletedSince(canonicalBaseline, turn);
     }
   }
   return false;
@@ -1871,7 +2278,7 @@ async function alignToLatestConversation(
   }
 
   const currentPath = String(await cdp.evaluate('location.pathname') || '');
-  const currentMatch = currentPath.match(/^\/c\/([^/?#]+)/);
+  const currentMatch = currentPath.match(/^\/(?:c|uc)\/([^/?#]+)/);
   if (currentMatch && currentMatch[1] === latest.id) {
     return { action: 'already_latest', restore_path: '' };
   }
@@ -1927,7 +2334,10 @@ async function alignLatestForReinforcement(
     ? Math.max(0, Math.round((Number(nowMs) - Number(latest.update_time) * 1000) / 1000))
     : null;
   if (!latest) {
-    if (httpStatus === 429) {
+    // A 200 response without valid conversations is no stronger evidence
+    // than a rate limit. Recover only from a locally synchronized, provably
+    // unique sidebar context; never select an ambiguous active tab.
+    if (httpStatus === 429 || httpStatus === 200) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
       if (
         sidebar.action === 'navigated_sidebar_fallback'
@@ -1995,9 +2405,30 @@ async function currentConversationSurfaceContains(cdp, markers, probeToken) {
         }
       }
     }else{
-      // Some loading/virtualized ChatGPT surfaces do not expose role markers.
-      // Keep only the tail so historical failures near the top cannot retrigger.
-      scope=String(body.innerText||body.textContent||'').slice(-16000);
+      // The current ChatGPT UI can omit data-message-author-role entirely.
+      // Never scan a large history tail in that case: quoted/historical failure
+      // text in an old turn would retrigger recovery forever. Anchor at the
+      // latest completed assistant turn (identified by its Regenerate action)
+      // and inspect only content rendered after that turn. Live alerts are
+      // appended below regardless, so current failures remain observable.
+      const retryButtons=[...body.querySelectorAll('button[aria-label="Regenerate response"]')];
+      const lastRetry=retryButtons[retryButtons.length-1]||null;
+      const completedTurn=lastRetry?.closest('.group.flex.flex-col')||null;
+      if(completedTurn){
+        // Use rendered text, not Range.toString(): React hydration scripts can
+        // contain serialized historical turns and would reintroduce the same
+        // false-positive through invisible script content.
+        const visibleBody=String(body.innerText||'');
+        const completedText=String(completedTurn.innerText||'').trim();
+        const boundary=completedText ? visibleBody.lastIndexOf(completedText) : -1;
+        scope=boundary>=0
+          ? visibleBody.slice(boundary+completedText.length)
+          : visibleBody.slice(-1200);
+      }else{
+        // Fail closed when no reliable turn boundary exists. Keep a very small
+        // tail for transient current-page status text; live alerts are added below.
+        scope=String(body.innerText||body.textContent||'').slice(-1200);
+      }
     }
 
     // Error/status UI often lives in a portal outside the turn subtree.
@@ -2040,6 +2471,8 @@ async function errorBannerPresent(cdp) {
       'transmissao interrompida',
       'stopped thinking',
       'parou de pensar',
+      'thinking failed',
+      'o pensamento falhou',
       'nossos sistemas estão fazendo verificações adicionais',
       'nossos sistemas estao fazendo verificacoes adicionais',
       'verificações adicionais antes de responder',
@@ -2058,6 +2491,35 @@ async function errorBannerPresent(cdp) {
     ],
     'continuity-error-banner-probe',
   );
+}
+
+async function conversationUnavailablePresent(cdp) {
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* continuity-conversation-unavailable-probe */
+    const path=String(location.pathname||'');
+    const parts=path.split('/');
+    if(parts.length!==3||!['c','uc'].includes(parts[1])||!/^[A-Za-z0-9_-]{8,160}$/.test(parts[2])) return false;
+    // Error strings quoted by the user/assistant, present in another chat,
+    // or left in a draft are not an unavailable conversation surface.
+    const main=document.querySelector('main');
+    if(!main) return false;
+    const surface=main.cloneNode(true);
+    const excluded=[
+      '[data-message-author-role]', '[data-conversation-role]', '[data-turn-key]',
+      '[data-testid^="conversation-turn-"]', 'article', 'pre', 'code', 'blockquote',
+      'nav', 'aside', '[role="navigation"]', '[role="dialog"]',
+      '[contenteditable="true"]', '[role="textbox"]', 'textarea',
+      '[hidden]', '[aria-hidden="true"]', 'script', 'style', 'template',
+    ].join(',');
+    for(const node of surface.querySelectorAll(excluded)) node.remove();
+    const text=String(surface.textContent||'').toLowerCase().replace(/\\s+/g,' ').trim();
+    return [
+      'could not load this chatgpt conversation',
+      'unable to load this chatgpt conversation',
+      'não foi possível carregar esta conversa',
+      'nao foi possivel carregar esta conversa',
+    ].some(value=>text.includes(value));
+  })()`));
 }
 
 async function recoverableFailureReason(cdp) {
@@ -2111,9 +2573,115 @@ async function conversationMatchesFingerprint(cdp, expectedFingerprint) {
   if (!expectedFingerprint) return true;
   const path = await cdp.evaluate(`(()=>{
     /* continuity-conversation-identity-probe */
-    return String(location.pathname||'').match(/^\\/c\\/[^/]+/)?.[0]||'';
+    return String(location.pathname||'').match(/^\\/(?:c|uc)\\/[^/]+/)?.[0]||'';
   })()`);
   return Boolean(path) && sha(path) === expectedFingerprint;
+}
+
+async function recoverableRetryButtonTarget(cdp) {
+  return cdp.evaluate(`(()=>{
+    /* continuity-retry-button-target */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
+    const surface=document.querySelector('main');
+    if(!surface) return null;
+    const retryCandidates=[];
+    const regenerateCandidates=[];
+    for(const button of surface.querySelectorAll('button')){
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) continue;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) continue;
+      const style=getComputedStyle(button);
+      if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
+      const target={x:rect.left+rect.width/2,y:rect.top+rect.height/2,top:rect.top};
+      if(retryLabels.has(label)) retryCandidates.push(target);
+      else regenerateCandidates.push(target);
+    }
+    if(retryCandidates.length===1) return retryCandidates[0];
+    if(retryCandidates.length>1||regenerateCandidates.length===0) return null;
+    regenerateCandidates.sort((a,b)=>b.top-a.top);
+    return regenerateCandidates[0];
+  })()`);
+}
+
+async function orphanedFinishedAssistantRetryReady(cdp, stream = null, turn = null) {
+  try {
+    const observedStream = stream || await conversationStreamStatus(cdp);
+    const streamStatus = String(observedStream?.status || '').toUpperCase();
+    if (Number(observedStream?.http_status || 0) !== 200
+        || !['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus)) return false;
+    // A native Retry is the first fail-closed discriminator: ordinary active
+    // generations without a recovery control never incur extra canonical reads.
+    if (!(await recoverableRetryButtonTarget(cdp))) return false;
+    if (await conversationIsGenerating(cdp)) return false;
+    if (!(await composerIsUsable(cdp))) return false;
+    const observedTurn = turn || await conversationTurnState(cdp);
+    return Number(observedTurn?.http_status || 0) === 200
+      && Boolean(String(observedTurn?.node_id || ''))
+      && String(observedTurn?.role || '').toLowerCase() === 'assistant'
+      && observedTurn?.end_turn === false
+      && Number(observedTurn?.child_count) === 0
+      && Number(observedTurn?.content_text_length || 0) === 0
+      && String(observedTurn?.message_status || '').toLowerCase() === 'finished_successfully';
+  } catch {
+    return false;
+  }
+}
+
+async function clickRecoverableRetryButton(cdp, expectedFingerprint = '', { allowOrphanedFinishedAssistant = false } = {}) {
+  const target = await recoverableRetryButtonTarget(cdp);
+  if (!target) return false;
+  if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) {
+    if (!allowOrphanedFinishedAssistant || !(await orphanedFinishedAssistantRetryReady(cdp))) return false;
+  }
+
+  if (typeof cdp?.send === 'function') {
+    try {
+      const x=Number(target.x);
+      const y=Number(target.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
+      await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x,y,button:'none'});
+      await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
+      await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Legacy/mock compatibility only. Production Cdp exposes send() and uses
+  // trusted pointer events above.
+  return Boolean(await cdp.evaluate(`(()=>{
+    /* continuity-retry-button-click-legacy */
+    const normalize=value=>String(value||'')
+      .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+      .replace(/\\s+/g,' ').trim().toLowerCase();
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
+    const surface=document.querySelector('main');
+    if(!surface) return false;
+    const rows=[...surface.querySelectorAll('button')].map(button=>{
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') return null;
+      const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) return null;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return null;
+      return {button,label,top:rect.top};
+    }).filter(Boolean);
+    const retries=rows.filter(row=>retryLabels.has(row.label));
+    if(retries.length===1){retries[0].button.click();return true;}
+    if(retries.length>1) return false;
+    const regenerates=rows.filter(row=>regenerateLabels.has(row.label)).sort((a,b)=>b.top-a.top);
+    if(!regenerates.length) return false;
+    regenerates[0].button.click();
+    return true;
+  })()`));
 }
 
 async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
@@ -2154,6 +2722,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
     if (submitTarget?.state === 'ready') {
       if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+      if (!(await conversationStreamComplete(cdp))) return false;
       try {
         const x=Number(submitTarget.x);
         const y=Number(submitTarget.y);
@@ -2183,6 +2752,7 @@ async function clickTrustedSendButton(cdp, expectedFingerprint = '') {
 
 async function sendContinueMessage(cdp, expectedFingerprint = '') {
   if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   if (await recoverableFailureReason(cdp) === 'additional_checks') return false;
   const trustedProbe = typeof cdp?.send === 'function'
     ? await cdp.evaluate(`(()=>{
@@ -2293,6 +2863,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
         if (String(insertedDraft || '').trim() !== expected) return false;
         if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
         if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+        if (!(await conversationStreamComplete(cdp))) return false;
         try {
           await cdp.send('Input.dispatchKeyEvent', {
             type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2387,6 +2958,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
     if (await clickTrustedSendButton(cdp, expectedFingerprint)) return true;
 
     if (!(await conversationMatchesFingerprint(cdp, expectedFingerprint))) return false;
+    if (!(await conversationStreamComplete(cdp))) return false;
     try {
       await cdp.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown', key: 'Enter', code: 'Enter',
@@ -2421,6 +2993,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (!typed) return false;
   await sleep(300);
+  if (!(await conversationStreamComplete(cdp))) return false;
   const clicked = await cdp.evaluate(`(()=>{
     const exactSelectors=[
       '[data-testid="send-button"]',
@@ -2454,6 +3027,7 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   })()`);
   if (clicked) return true;
   if (typeof cdp?.send !== 'function') return false;
+  if (!(await conversationStreamComplete(cdp))) return false;
   try {
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyDown', key: 'Enter', code: 'Enter',
@@ -2469,12 +3043,84 @@ async function sendContinueMessage(cdp, expectedFingerprint = '') {
   }
 }
 
-async function attemptNudge(
+// Check only sibling ChatGPT conversation tabs inside the browser profile
+// selected by BROWSER_SESSION_CONTEXT. A sibling Stop state is treated as
+// active unless the server explicitly proves that sibling stream COMPLETE.
+// Transport/probe failures do not invent activity; the bound conversation's
+// existing fail-closed checks still govern its own recovery.
+async function anotherConversationActiveInSession(
+  targetConversationId,
+  fetcher = fetch,
+  connector = connectCdpTarget,
+) {
+  const target = safeConversationId(targetConversationId);
+  if (!target) return false;
+  let tabs;
+  try {
+    const response = await fetcher(browserCdpBase() + '/json', {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response?.ok) return false;
+    tabs = await response.json();
+  } catch {
+    return false;
+  }
+
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const siblingId = safeConversationId(conversationIdFromTab(tab));
+    if (!siblingId || siblingId === target) continue;
+    let sibling;
+    try {
+      sibling = await connector(tab);
+      if (!sibling || !(await conversationIsGenerating(sibling))) continue;
+      const stream = await conversationStreamStatus(
+        sibling,
+        Math.min(2500, STREAM_STATUS_TIMEOUT_MS),
+      );
+      const status = String(stream?.status || '').toUpperCase();
+      if (Number(stream?.http_status || 0) === 200 && status === 'COMPLETE') continue;
+      return true;
+    } catch {
+      // One unreadable sibling must not disable recovery for the whole profile.
+    } finally {
+      try { sibling?.close(); } catch {}
+    }
+  }
+  return false;
+}
+// Returns only a boolean: no credentials, cookies or session payload leave
+// the authenticated tab. A changed path is rejected before touching the UI.
+async function boundBrowserAccountMatches(cdp, session) {
+  return (await cdp.evaluate(`(async()=>{
+    /* continuity-browser-account-match */
+    const id=String(location.pathname||'').match(/^\\/(?:c|uc)\\/([^/?#]+)/)?.[1]||'';
+    if(id!==${JSON.stringify(session.conversationId)}) return false;
+    try{
+      const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(2000)});
+      if(!r.ok) return false;
+      const d=await r.json();
+      return String(d?.user?.email||'').toLowerCase()===${JSON.stringify(session.expectedEmail)};
+    }catch{return false;}
+  })()`)) === true;
+}
+
+async function attemptNudge(taskId, connect = null, confirmProgress = confirmAssistantProgress, waitComposer = waitForComposerUsable, conversationId = '', sameSessionBusy = anotherConversationActiveInSession) {
+  let session;
+  try { session = taskBrowserSession(taskId, conversationId); }
+  catch (error) { return { result_status: 'ERROR', sent: false, detail: text(error?.message) }; }
+  return BROWSER_SESSION_CONTEXT.run(session, () => attemptNudgeInSession(
+    taskId, connect, confirmProgress, waitComposer, session.conversationId || conversationId,
+    sameSessionBusy,
+  ));
+}
+
+async function attemptNudgeInSession(
   taskId,
   connect = null,
   confirmProgress = confirmAssistantProgress,
   waitComposer = waitForComposerUsable,
   conversationId = '',
+  sameSessionBusy = anotherConversationActiveInSession,
 ) {
   const recoveryStartedAtMs = Date.now();
   let detectedFailureReason = '';
@@ -2492,6 +3138,24 @@ async function attemptNudge(
       }
     : {})});
   let cdp;
+  let boundSessionStream = null;
+  let boundOrphanedFinishedRetry = false;
+  const canonicalRateLimitDeferral = turn => {
+    if (Number(turn?.http_status || 0) !== 429) return null;
+    return {
+      result_status: continuationSent ? 'SENT_UNCONFIRMED' : 'STALLED_NOT_CONFIRMED',
+      detail: 'canonical history read rate limited; waiting without reload or continuation',
+      ...recoveryMetadata(),
+    };
+  };
+  const streamCompletionDeferral = async () => {
+    if (await conversationStreamComplete(cdp)) return null;
+    return {
+      result_status: 'STALLED_NOT_CONFIRMED',
+      detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+      ...recoveryMetadata(),
+    };
+  };
   try {
     const connector = connect || (() => Cdp.connectToChatgptTab({
       allowLatestDisambiguation: true,
@@ -2499,12 +3163,117 @@ async function attemptNudge(
       targetConversationId: conversationId,
     }));
     cdp = await connector();
+    const browserSession = BROWSER_SESSION_CONTEXT.getStore();
+    if (browserSession?.expectedEmail) {
+      if (!(await boundBrowserAccountMatches(cdp, browserSession))) {
+        return { result_status: 'ERROR', detail: 'browser session account mismatch or bound conversation mismatch', ...recoveryMetadata() };
+      }
+      // A missing DOM Stop does not prove an inactive server stream.
+      boundSessionStream = await conversationStreamStatus(cdp);
+      if (boundSessionStream?.http_status !== 200
+          || String(boundSessionStream?.status || '').toUpperCase() !== 'COMPLETE') {
+        if (!(await conversationUnavailablePresent(cdp))) {
+          boundOrphanedFinishedRetry = await orphanedFinishedAssistantRetryReady(cdp, boundSessionStream);
+          if (boundOrphanedFinishedRetry) {
+            detectedFailureReason = 'orphaned_finished_assistant_leaf';
+          } else {
+            return { result_status: 'STALLED_NOT_CONFIRMED', detail: 'bound browser session stream active or unconfirmed; deferred without reload or continuation', ...recoveryMetadata() };
+          }
+        }
+      }
+      if (await sameSessionBusy(browserSession.conversationId || conversationId)) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'another conversation in the same browser session is active; deferred without reload or continuation',
+          ...recoveryMetadata(),
+        };
+      }
+    }
     try {
       const pathname = String(await cdp.evaluate('location.pathname') || '');
-      const actualConversationId = safeConversationId(pathname.match(/^\/c\/([^/?#]+)/)?.[1] || '');
+      const actualConversationId = safeConversationId(pathname.match(/^\/(?:c|uc)\/([^/?#]+)/)?.[1] || '');
       if (actualConversationId) resolvedConversationId = actualConversationId;
     } catch {}
-    detectedFailureReason = await recoverableFailureReason(cdp);
+    if (boundOrphanedFinishedRetry) {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
+      if (!(await orphanedFinishedAssistantRetryReady(cdp, boundSessionStream, retryTurnBaseline))) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'orphaned finished assistant leaf changed before native Retry; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const retryClicked = await clickRecoverableRetryButton(
+        cdp, retryBaseline?.conversationFingerprint, { allowOrphanedFinishedAssistant: true },
+      );
+      if (!retryClicked) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'orphaned finished assistant leaf could not be retried safely; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const retryProgressed = await confirmProgress(
+        cdp, retryBaseline, PROGRESS_CONFIRM_MS, PROGRESS_POLL_MS, retryTurnBaseline,
+      );
+      if (retryProgressed) {
+        return {
+          result_status: 'PROGRESS_CONFIRMED',
+          detail: 'native Retry resumed orphaned finished assistant leaf without sending continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'native Retry issued for orphaned finished assistant leaf but assistant progress is unconfirmed',
+        ...recoveryMetadata(),
+      };
+    }
+    if (await conversationUnavailablePresent(cdp)) {
+      const unavailableTurn = await conversationTurnState(cdp);
+      const unavailableStream = boundSessionStream || await conversationStreamStatus(cdp);
+      const canonicalStatus = Number(unavailableTurn?.http_status || 0);
+      const canonicalPresent = canonicalStatus === 200 && Boolean(String(unavailableTurn?.node_id || ''));
+      const canonicalMissing = canonicalStatus === 404 || canonicalStatus === 410;
+      if (canonicalMissing) {
+        return {
+          result_status: 'CONVERSATION_NOT_FOUND',
+          detail: 'bound conversation is unavailable in the UI and canonically confirmed missing',
+          ...recoveryMetadata(),
+        };
+      }
+      if (canonicalStatus === 429) {
+        return { result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'canonical history read rate limited; waiting without reload or continuation',
+          ...recoveryMetadata() };
+      }
+      if (!canonicalPresent) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation UI is unavailable but canonical presence could not be confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      const streamStatus = String(unavailableStream?.status || '').toUpperCase();
+      const canonicalActive = unavailableTurn?.end_turn === false
+        || ['IS_STREAMING', 'IN_PROGRESS', 'STREAMING'].includes(streamStatus);
+      // COMPLETE describes the server stream, not successful UI hydration.
+      // A tool leaf (end_turn=null), or even an existing final answer, can
+      // still need passive reattachment. This never authorizes a new send.
+      const canonicalComplete = unavailableStream?.http_status === 200 && streamStatus === 'COMPLETE';
+      if (!canonicalActive && !canonicalComplete) {
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'bound conversation exists canonically but no unfinished response is confirmed; deferred without continuation',
+          ...recoveryMetadata(),
+        };
+      }
+      detectedFailureReason = 'conversation_hydration_error';
+    }
+    if (!detectedFailureReason) detectedFailureReason = await recoverableFailureReason(cdp);
     if (detectedFailureReason === 'additional_checks') {
       return {
         result_status: 'STALLED_NOT_CONFIRMED',
@@ -2513,7 +3282,6 @@ async function attemptNudge(
       };
     }
     let recoveredStaleComplete = false;
-    let recoveredTerminalFailure = false;
 
     // A real 2026-09-30 silent-stall capture proved that ChatGPT can expose no
     // Stop button while the canonical current_node still ends in an assistant
@@ -2552,8 +3320,11 @@ async function attemptNudge(
       || Boolean(detectedFailureReason)
       || silentStallBeforeReattach;
     const passiveTurnBaseline = await conversationTurnState(cdp);
+    const passiveTurnBaselineRateLimit = canonicalRateLimitDeferral(passiveTurnBaseline);
+    if (passiveTurnBaselineRateLimit) return passiveTurnBaselineRateLimit;
     const passiveBaseline = await assistantSnapshot(cdp);
-    await cdp.evaluate(`(()=>{location.reload();return true})()`);
+    const passiveReload = await guardedRecoveryMutation(taskId, 'browser_reload', resolvedConversationId || conversationId, () => cdp.evaluate(`(()=>{location.reload();return true})()`));
+    if (!passiveReload.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected browser_reload: ${passiveReload.reason}`, ...recoveryMetadata() };
     await sleep(1200);
     const passiveProgressed = await confirmProgress(
       cdp,
@@ -2565,13 +3336,72 @@ async function attemptNudge(
     if (passiveProgressed && passiveRecoveryEligible) {
       return {
         result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
         detail: 'passive reattach restored assistant progress without sending continuation',
+        ...recoveryMetadata(),
+      };
+    }
+
+    if (detectedFailureReason === 'conversation_hydration_error') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'canonical conversation remains recoverable after passive reattach; deferred without sending continuation',
         ...recoveryMetadata(),
       };
     }
 
     const postReattachFailureReason = await recoverableFailureReason(cdp);
     if (postReattachFailureReason) detectedFailureReason = postReattachFailureReason;
+
+    if (detectedFailureReason === 'additional_checks') {
+      return {
+        result_status: 'STALLED_NOT_CONFIRMED',
+        detail: 'additional checks appeared after reattach; deferred without stop or continuation',
+        ...recoveryMetadata(),
+      };
+    }
+    // DOM controls and banners can be stale after reattach. Every recovery
+    // actuator needs fresh canonical COMPLETE evidence, including silent stalls.
+    const postReattachStreamDeferral = await streamCompletionDeferral();
+    if (postReattachStreamDeferral) return postReattachStreamDeferral;
+
+    // Recoverable generation failures can expose a native Retry action in the
+    // current ChatGPT UI. Prefer that platform-native retry once before writing
+    // a new continuation message. This preserves the exact conversation and
+    // avoids accumulating duplicate "continue" turns when generation failed.
+    if (['stopped_thinking', 'streaming_interrupted', 'request_timeout', 'generation_error'].includes(detectedFailureReason)) {
+      const retryBaseline = await assistantSnapshot(cdp);
+      const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
+      const retryStreamDeferral = await streamCompletionDeferral();
+      if (retryStreamDeferral) return retryStreamDeferral;
+      const retryMutation = await guardedRecoveryMutation(taskId, 'browser_click', resolvedConversationId || conversationId, () => clickRecoverableRetryButton(
+        cdp,
+        retryBaseline?.conversationFingerprint,
+      ));
+      if (!retryMutation.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected browser_click: ${retryMutation.reason}`, ...recoveryMetadata() };
+      const retryClicked = Boolean(retryMutation.value);
+      if (retryClicked) {
+        const retryProgressed = await confirmProgress(
+          cdp,
+          retryBaseline,
+          PROGRESS_CONFIRM_MS,
+          PROGRESS_POLL_MS,
+          retryTurnBaseline,
+        );
+        if (retryProgressed) {
+          return {
+            result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
+            detail: 'native Retry restored assistant progress without sending continuation',
+            ...recoveryMetadata(),
+          };
+        }
+        detectedFailureReason = await recoverableFailureReason(cdp) || detectedFailureReason;
+      }
+    }
+
     if (detectedFailureReason === 'additional_checks') {
       return {
         result_status: 'STALLED_NOT_CONFIRMED',
@@ -2582,37 +3412,20 @@ async function attemptNudge(
 
     const generatingAfterReattach = await conversationIsGenerating(cdp);
     if (wasGenerating || generatingAfterReattach) {
-      // Re-read server bookkeeping only after the passive recovery window.
-      // Anything other than a confirmed COMPLETE remains potentially active
-      // and must not receive a duplicate continuation.
-      const stream = await conversationStreamStatus(cdp);
-      const streamComplete = stream?.http_status === 200 && stream?.status === 'COMPLETE';
-      if (!streamComplete && !detectedFailureReason) {
+      const stopStreamDeferral = await streamCompletionDeferral();
+      if (stopStreamDeferral) return stopStreamDeferral;
+      const stopMutation = generatingAfterReattach
+        ? await guardedRecoveryMutation(taskId, 'browser_stop', resolvedConversationId || conversationId, () => clearStaleCompleteGeneration(cdp))
+        : { authorized: true, value: true };
+      if (!stopMutation.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected browser_stop: ${stopMutation.reason}`, ...recoveryMetadata() };
+      if (generatingAfterReattach && !stopMutation.value) {
         return {
           result_status: 'STALLED_NOT_CONFIRMED',
-          detail: 'passive reattach observed no assistant progress; active stream remains unconfirmed',
+          detail: 'stale COMPLETE stream detected but Stop state did not clear',
           ...recoveryMetadata(),
         };
       }
-
-      // A persisted terminal/degraded failure is stronger evidence than a
-      // stale Stop control or server-side IN_PROGRESS bookkeeping. The
-      // reinforcement path already gives ChatGPT its own retry grace window;
-      // after no progress, clear only that stale UI control and resume the
-      // checkpoint on the same model.
-      if (generatingAfterReattach) {
-        if (!(await clearStaleCompleteGeneration(cdp))) {
-          return {
-            result_status: 'STALLED_NOT_CONFIRMED',
-            detail: detectedFailureReason
-              ? 'recoverable failure detected but stale Stop state did not clear'
-              : 'stale COMPLETE stream detected but Stop state did not clear',
-            ...recoveryMetadata(),
-          };
-        }
-      }
-      recoveredStaleComplete = streamComplete;
-      recoveredTerminalFailure = !streamComplete && Boolean(detectedFailureReason);
+      recoveredStaleComplete = true;
     }
     if (!(await waitComposer(cdp))) {
       return {
@@ -2624,14 +3437,21 @@ async function attemptNudge(
     let baseline = await assistantSnapshot(cdp);
     if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
     let turnBaseline = await conversationTurnState(cdp);
-    let sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
+    const initialReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+    if (initialReadRateLimit) return initialReadRateLimit;
+    const sendStreamDeferral = await streamCompletionDeferral();
+    if (sendStreamDeferral) return sendStreamDeferral;
+    const initialSendMutation = await guardedRecoveryMutation(taskId, 'continuation_send', resolvedConversationId || conversationId, () => sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint));
+    if (!initialSendMutation.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected continuation_send: ${initialSendMutation.reason}`, ...recoveryMetadata() };
+    let sent = Boolean(initialSendMutation.value);
     continuationSent = Boolean(sent);
     if (!sent) {
       // Live production evidence 2026-10-01: the error banner can be visible
       // while the composer remains temporarily disabled. Reattach once before
       // declaring send failure; otherwise the watchdog loses the conversation
       // exactly when "Parou de pensar" is displayed.
-      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      const retryReload = await guardedRecoveryMutation(taskId, 'browser_reload', resolvedConversationId || conversationId, () => cdp.evaluate(`(()=>{location.reload();return true})()`));
+      if (!retryReload.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected browser_reload: ${retryReload.reason}`, ...recoveryMetadata() };
       await sleep(1200);
       if (!(await waitComposer(cdp))) {
         return {
@@ -2643,7 +3463,13 @@ async function attemptNudge(
       baseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, baseline)) throw new Error('conversation changed during recovery');
       turnBaseline = await conversationTurnState(cdp);
-      sent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
+      const resendReadRateLimit = canonicalRateLimitDeferral(turnBaseline);
+      if (resendReadRateLimit) return resendReadRateLimit;
+      const resendStreamDeferral = await streamCompletionDeferral();
+      if (resendStreamDeferral) return resendStreamDeferral;
+      const resendMutation = await guardedRecoveryMutation(taskId, 'continuation_send', resolvedConversationId || conversationId, () => sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint));
+      if (!resendMutation.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected continuation_send: ${resendMutation.reason}`, ...recoveryMetadata() };
+      sent = Boolean(resendMutation.value);
       continuationSent = continuationSent || Boolean(sent);
       if (!sent) {
         return {
@@ -2654,18 +3480,23 @@ async function attemptNudge(
       }
     }
 
+    let submissionTurnBaseline = turnBaseline;
     let progressed = await confirmAfterSend(cdp, baseline, confirmProgress, turnBaseline);
     if (!progressed && await transmissionErrorPresent(cdp)) {
       // A real iOS capture shows an explicit "Erro na transmissão de mensagem".
       // Treat this as a transport failure, not as an ambiguous unconfirmed send:
       // reload/reattach once and retry only after the UI still reports the error.
       const retryTurnBaseline = await conversationTurnState(cdp);
+      const retryTurnBaselineRateLimit = canonicalRateLimitDeferral(retryTurnBaseline);
+      if (retryTurnBaselineRateLimit) return retryTurnBaselineRateLimit;
       const retryBaseline = await assistantSnapshot(cdp);
-      await cdp.evaluate(`(()=>{location.reload();return true})()`);
+      const transmissionReload = await guardedRecoveryMutation(taskId, 'browser_reload', resolvedConversationId || conversationId, () => cdp.evaluate(`(()=>{location.reload();return true})()`));
+      if (!transmissionReload.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected browser_reload: ${transmissionReload.reason}`, ...recoveryMetadata() };
       await sleep(1200);
       if (await confirmProgress(cdp, retryBaseline, PASSIVE_REATTACH_CONFIRM_MS, PROGRESS_POLL_MS, retryTurnBaseline)) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
           detail: 'transmission error recovered during passive reattach without duplicate continuation',
           ...recoveryMetadata(),
         };
@@ -2680,7 +3511,14 @@ async function attemptNudge(
       const retryAfterReattachBaseline = await assistantSnapshot(cdp);
       if (!sameConversationSnapshot(passiveBaseline, retryAfterReattachBaseline)) throw new Error('conversation changed during recovery');
       const retryAfterReattachTurnBaseline = await conversationTurnState(cdp);
-      const retrySent = await sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint);
+      submissionTurnBaseline = retryAfterReattachTurnBaseline;
+      const retryAfterReattachTurnBaselineRateLimit = canonicalRateLimitDeferral(retryAfterReattachTurnBaseline);
+      if (retryAfterReattachTurnBaselineRateLimit) return retryAfterReattachTurnBaselineRateLimit;
+      const transmissionStreamDeferral = await streamCompletionDeferral();
+      if (transmissionStreamDeferral) return transmissionStreamDeferral;
+      const transmissionSendMutation = await guardedRecoveryMutation(taskId, 'continuation_send', resolvedConversationId || conversationId, () => sendContinueMessage(cdp, passiveBaseline?.conversationFingerprint));
+      if (!transmissionSendMutation.authorized) return { result_status: 'STALLED_NOT_CONFIRMED', detail: `mutation gate rejected continuation_send: ${transmissionSendMutation.reason}`, ...recoveryMetadata() };
+      const retrySent = Boolean(transmissionSendMutation.value);
       if (!retrySent) {
         return {
           result_status: 'ERROR',
@@ -2692,6 +3530,7 @@ async function attemptNudge(
       if (progressed) {
         return {
           result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
           detail: 'transmission error recovered by one bounded reattach and retry',
           ...recoveryMetadata(),
         };
@@ -2705,23 +3544,33 @@ async function attemptNudge(
       }
     }
     if (!progressed) {
+      const submissionState = await canonicalContinuationSubmissionState(
+        cdp,
+        submissionTurnBaseline,
+      );
+      const submissionOutcome = canonicalSubmissionOutcome(false, submissionState);
+      if (submissionOutcome.result_status === 'STALLED_NOT_CONFIRMED') {
+        continuationSent = false;
+        return {
+          result_status: 'STALLED_NOT_CONFIRMED',
+          detail: 'continuation UI submit was not canonically persisted; retry remains allowed without consuming send budget',
+          ...recoveryMetadata(),
+        };
+      }
       return {
         result_status: 'SENT_UNCONFIRMED',
         detail: recoveredStaleComplete
-          ? 'recovered stale COMPLETE stream and sent continuation, but no assistant progress was observed'
-          : recoveredTerminalFailure
-            ? 'recovered terminal generation state and sent continuation, but no assistant progress was observed'
-            : 'sent continuation, but no assistant progress was observed',
+          ? 'recovered stale COMPLETE stream and canonically submitted continuation, but no assistant progress was observed'
+          : 'canonically submitted continuation, but no assistant progress was observed',
         ...recoveryMetadata(),
       };
     }
     return {
       result_status: 'PROGRESS_CONFIRMED',
+          real_response_observed: true,
       detail: recoveredStaleComplete
         ? 'recovered stale COMPLETE stream; continuation produced assistant progress'
-        : recoveredTerminalFailure
-          ? 'recovered terminal generation state; continuation produced assistant progress'
-          : 'continuation produced assistant progress',
+        : 'continuation produced assistant progress',
       ...recoveryMetadata(),
     };
   } catch (error) {
@@ -2731,9 +3580,28 @@ async function attemptNudge(
   }
 }
 
+function recoveryStateForOutcome(outcome) {
+  const status = text(outcome?.result_status).toUpperCase();
+  if (status === 'PROGRESS_CONFIRMED' && outcome?.real_response_observed === true) return 'PROGRESS_CONFIRMED';
+  if (status === 'SENT' || status === 'SENT_UNCONFIRMED') return 'WAITING_FOR_REAL_RESPONSE';
+  if (status === 'PROGRESS_CONFIRMED') return 'WAITING_FOR_REAL_RESPONSE';
+  if (status === 'ERROR' || status === 'CONVERSATION_NOT_FOUND') return 'RECOVERY_EXHAUSTED';
+  return 'RECOVERY_ACTIONED';
+}
+
 function bridgeResultPayload(taskId, outcome, persistedDetail) {
-  const payload = { task_id: taskId, ...outcome, detail: persistedDetail };
-  if (outcome?.result_status !== 'PROGRESS_CONFIRMED') delete payload.conversation_id;
+  const normalized = { ...(outcome || {}) };
+  if (normalized.result_status === 'PROGRESS_CONFIRMED' && normalized.real_response_observed !== true) {
+    normalized.result_status = normalized.sent === true ? 'SENT_UNCONFIRMED' : 'STALLED_NOT_CONFIRMED';
+    delete normalized.conversation_id;
+  }
+  const payload = {
+    task_id: taskId,
+    ...normalized,
+    recovery_state: recoveryStateForOutcome(normalized),
+    detail: persistedDetail,
+  };
+  if (payload.result_status !== 'PROGRESS_CONFIRMED') delete payload.conversation_id;
   return payload;
 }
 
@@ -2780,6 +3648,9 @@ async function reinforcementCheckOnce(
   alignLatest = alignLatestForReinforcement,
   { allowCrossDeviceDiscovery = true } = {},
 ) {
+  if (DURABLE_HANDOFF_ENABLED) {
+    return { action: 'owned_recovery_required', sent: false, progress_confirmed: false, cross_device_discovery: false };
+  }
   let cdp;
   let crossDeviceDiscovery = false;
   let alignmentHttpStatus = 0;
@@ -2831,7 +3702,6 @@ async function reinforcementCheckOnce(
         failureSignal = 'banner';
         failureReason = await recoverableFailureReason(cdp) || 'generation_error';
         failureBaseline = await assistantSnapshot(cdp);
-        failureTurnBaseline = await conversationTurnState(cdp);
         failureTurnBaseline = await conversationTurnState(cdp);
       } else if (await silentStallPresent(cdp)) {
         // The iOS client can show "Transmissão interrompida" while the same
@@ -3059,6 +3929,8 @@ async function reinforcementLoop(
 ) {
   let nextAccountDiscoveryAt = 0;
   let nextReinforcementCheckAt = 0;
+  let nextRecoveryRetryAt = 0;
+  let recoveryRetryFailureReason = '';
   for (;;) {
     if (checkpointActive && !(await checkpointActive())) {
       REINFORCEMENT_RECENT_CANDIDATES = [];
@@ -3082,6 +3954,21 @@ async function reinforcementLoop(
         action: 'auth_quiescent',
         sent: false,
         progress_confirmed: false,
+        cross_device_discovery: false,
+      });
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
+
+    if (now() < nextRecoveryRetryAt) {
+      // The checkpoint-driven dispatcher remains fully enabled during this
+      // cooldown. This only prevents the secondary reinforcement loop from
+      // repeatedly reloading/sending against the same persistent failed turn.
+      persistReinforcementHealth({
+        action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        failure_reason: recoveryRetryFailureReason,
         cross_device_discovery: false,
       });
       await wait(REINFORCEMENT_POLL_MS);
@@ -3127,6 +4014,19 @@ async function reinforcementLoop(
     }
 
     persistReinforcementHealth(outcome);
+
+    if (outcome?.action === 'send_failed' || outcome?.action === 'sent_unconfirmed') {
+      recoveryRetryFailureReason = text(outcome?.failure_reason);
+      nextRecoveryRetryAt = Math.max(
+        nextRecoveryRetryAt,
+        now() + REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS,
+      );
+      console.log(
+        `chatgpt_continuity_reinforcement recovery_retry_backoff_ms=${REINFORCEMENT_RECOVERY_RETRY_COOLDOWN_MS} action=${text(outcome?.action)} checkpoint_dispatcher_remains_enabled=true`,
+      );
+      await wait(REINFORCEMENT_POLL_MS);
+      continue;
+    }
 
     if (outcome?.action === 'additional_checks_cooldown') {
       nextReinforcementCheckAt = Math.max(
@@ -3217,15 +4117,36 @@ async function reinforcementLoop(
   }
 }
 
+async function disabledReinforcementHeartbeatLoop(
+  persist = persistReinforcementHealth,
+  wait = sleep,
+  heartbeatIntervalMs = REINFORCEMENT_POLL_MS,
+) {
+  for (;;) {
+    persist({
+      action: 'monitor_disabled',
+      sent: false,
+      progress_confirmed: false,
+      cross_device_discovery: false,
+    });
+    await wait(heartbeatIntervalMs);
+  }
+}
+
 async function mainLoop(
   runBridgeLoop = bridgeLoop,
   runReinforcementLoop = reinforcementLoop,
   reinforcementEnabled = STALL_REINFORCEMENT_ENABLED,
   runAuthorizationLoop = authorizationLoop,
   autoAllowEnabled = AUTO_ALLOW_ENABLED,
+  runDisabledMonitorHeartbeatLoop = disabledReinforcementHeartbeatLoop,
 ) {
   const loops = [runBridgeLoop()];
-  if (reinforcementEnabled) loops.push(runReinforcementLoop());
+  if (reinforcementEnabled) {
+    loops.push(runReinforcementLoop());
+  } else {
+    loops.push(runDisabledMonitorHeartbeatLoop());
+  }
   if (autoAllowEnabled) loops.push(runAuthorizationLoop());
   await Promise.all(loops);
 }
@@ -3235,11 +4156,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export {
+  recoveryStateForOutcome,
+  bridgeResultPayload,
+  mutationAuthorizationAllows,
+  guardedRecoveryMutation,
   Cdp,
   selectChatgptTab,
   safeConversationId,
   selectBoundConversationTabs,
   selectBoundConversationReentryTab,
+  connectBoundConversationWithReentry,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
@@ -3250,18 +4176,24 @@ export {
   browserSessionReadyForReinforcement,
   selectCheckpointConversationCandidate,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
+  canonicalSubmissionOutcome,
+  canonicalContinuationSubmissionState,
   silentStallPresent,
   composerIsUsable,
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
-  bridgeResultPayload,
+  pruneStaleMonitorTempFiles,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,
@@ -3284,6 +4216,7 @@ export {
   withBrowserRecoveryLock,
   bridgeLoop,
   reinforcementLoop,
+  disabledReinforcementHeartbeatLoop,
   authorizationButtonTarget,
   clickAuthorizationIfPresent,
   authorizationCheckOnce,

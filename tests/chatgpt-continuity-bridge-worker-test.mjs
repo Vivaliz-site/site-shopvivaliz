@@ -11,6 +11,7 @@ process.env.CHATGPT_CONTINUITY_MONITOR_FALLBACK_FILE = testMonitorFallbackFile;
 const {
   Cdp,
   conversationIsGenerating,
+  anotherConversationActiveInSession,
   conversationStreamStatus,
   conversationTurnState,
   realAssistantResponseCompletedSince,
@@ -19,10 +20,15 @@ const {
   waitForComposerUsable,
   errorBannerPresent,
   recoverableFailureReason,
+  conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
+  clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   reinforcementHealthPayload,
   bridgeResultPayload,
+  recoveryStateForOutcome,
   transmissionErrorPresent,
   latestConversationProbe,
   latestConversationMeta,
@@ -59,7 +65,39 @@ const {
   createNeutralChatgptTab,
   navigateNeutralTabToConversation,
   selectCheckpointConversationCandidate,
+  mutationAuthorizationAllows,
+  guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// A crashed monitor writer may leave temp files, but its janitor must never
+// touch the current process, recent writes, or unrelated artifacts.
+{
+  const target = path.join(testTaskStateDir, '_monitor-janitor-fixture.json');
+  const stale = target + '.tmp.99999999';
+  const current = target + '.tmp.' + process.pid;
+  const recent = target + '.tmp.99999998';
+  const notMonitor = target + '.tmp.99999997.backup';
+  for (const filename of [stale, current, recent, notMonitor]) fs.writeFileSync(filename, 'fixture');
+  const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  for (const filename of [stale, current, notMonitor]) fs.utimesSync(filename, old, old);
+  const removed = pruneStaleMonitorTempFiles(target);
+  assert.equal(removed, 1, 'only an old, dead-PID regular monitor temp may be removed');
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(fs.existsSync(current), true, 'live writer files must never be removed');
+  assert.equal(fs.existsSync(recent), true, 'recent interrupted writes must be retained');
+  assert.equal(fs.existsSync(notMonitor), true, 'unrelated artifacts must be retained');
+}
+
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerate response/,
+  'retry target must recognize the current Regenerate response control label',
+);
+assert.match(
+  recoverableRetryButtonTarget.toString(),
+  /regenerateCandidates\.sort/,
+  'when multiple historical regenerate controls are visible, the latest visible control must be selected deterministically',
+);
 
 // Fake CDP objects let the decision logic (when to nudge, what result to
 // report) be tested without a real browser or WebSocket -- exactly the
@@ -70,7 +108,7 @@ function fakeCdp({
   composerUsable = true,
   pageText = '',
   sendSucceeds = true,
-  streamStatus = 'IN_PROGRESS',
+  streamStatus = generating ? 'IN_PROGRESS' : 'COMPLETE',
   staleStopClearSucceeds = true,
 } = {}) {
   const calls = [];
@@ -86,11 +124,20 @@ function fakeCdp({
       if (expression.includes('continuity-additional-checks-probe')) {
         return /(nossos sistemas estão fazendo verificações adicionais|nossos sistemas estao fazendo verificacoes adicionais|additional checks before responding|try again with a faster model)/i.test(pageText);
       }
+      if (expression.includes('continuity-stopped-thinking-probe')) {
+        return /(stopped thinking|parou de pensar)/i.test(pageText);
+      }
+      if (expression.includes('continuity-streaming-interrupted-probe')) {
+        return /(streaming interrupted|transmissão interrompida|transmissao interrompida)/i.test(pageText);
+      }
       if (expression.includes('continuity-transmission-error-probe')) {
         return /(erro na transmissão|erro na transmissao|error sending message|error in message transmission|message transmission error)/i.test(pageText);
       }
       if (expression.includes('continuity-request-timeout-probe')) {
         return /(esgotou-se o tempo limite da solicitação|esgotou-se o tempo limite da solicitacao|request timed out|request timeout)/i.test(pageText);
+      }
+      if (expression.includes('continuity-conversation-unavailable-probe')) {
+        return /(could not load this chatgpt conversation|unable to load this chatgpt conversation|não foi possível carregar esta conversa|nao foi possivel carregar esta conversa)/i.test(pageText);
       }
       if (expression.includes('continuity-responding-indicator-probe')) {
         return /(chatgpt is responding|chatgpt está respondendo|chatgpt esta respondendo)/i.test(pageText);
@@ -124,7 +171,7 @@ async function run() {
     assert.equal(errorPayload.conversation_id, undefined);
     const confirmedPayload = bridgeResultPayload(
       'task-1',
-      { result_status: 'PROGRESS_CONFIRMED', conversation_id: bound, detail: 'ok' },
+      { result_status: 'PROGRESS_CONFIRMED', real_response_observed: true, conversation_id: bound, detail: 'ok' },
       'ok',
     );
     assert.equal(confirmedPayload.conversation_id, bound);
@@ -159,6 +206,9 @@ async function run() {
     const tabs = [
       { type: 'page', webSocketDebuggerUrl: 'ws://a', url: 'https://chatgpt.com/c/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
       { type: 'page', webSocketDebuggerUrl: 'ws://b', url: 'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://uc', url: 'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-c', url: 'https://chatgpt.com/g/g-p-returns/c/11111111-2222-3333-4444-555555555555' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://project-uc', url: 'https://chatgpt.com/g/g-p-returns/uc/99999999-2222-3333-4444-555555555555' },
       { type: 'page', webSocketDebuggerUrl: 'ws://home', url: 'https://chatgpt.com/' },
     ];
     assert.equal(safeConversationId('bad/id'), '');
@@ -166,14 +216,23 @@ async function run() {
       tabs,
       '11111111-2222-3333-4444-555555555555',
     );
-    assert.equal(bound.length, 1);
+    assert.equal(bound.length, 2, 'plain and Project routes must share the same conversation identity');
     assert.equal(
       bound[0].url,
       'https://chatgpt.com/c/11111111-2222-3333-4444-555555555555',
       'explicit binding must select only the requested conversation',
     );
+    const ucBound = selectBoundConversationTabs(
+      tabs,
+      '99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(ucBound.length, 2, 'plain and Project /uc routes must share the same conversation identity');
     assert.equal(
-      selectBoundConversationTabs(tabs, '99999999-2222-3333-4444-555555555555').length,
+      ucBound[0].url,
+      'https://chatgpt.com/uc/99999999-2222-3333-4444-555555555555',
+    );
+    assert.equal(
+      selectBoundConversationTabs(tabs, '77777777-2222-3333-4444-555555555555').length,
       0,
       'missing explicit binding must fail closed rather than choose another tab',
     );
@@ -214,6 +273,55 @@ async function run() {
   }
 
   {
+    const workerModule = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+    assert.equal(
+      typeof workerModule.connectBoundConversationWithReentry,
+      'function',
+      'bound recovery needs an explicit reentry path when the existing exact tab is hung',
+    );
+    const id = '11111111-2222-3333-4444-555555555555';
+    const bound = {
+      type: 'page',
+      url: `https://chatgpt.com/c/${id}`,
+      webSocketDebuggerUrl: 'ws://hung-bound',
+    };
+    const home = {
+      type: 'page',
+      url: 'https://chatgpt.com/',
+      webSocketDebuggerUrl: 'ws://neutral-home',
+    };
+    const live = { marker: 'reentered-bound-conversation', close() {} };
+    const connectorCalls = [];
+    let navigations = 0;
+
+    const connected = await workerModule.connectBoundConversationWithReentry(
+      [bound, home],
+      id,
+      {
+        connector: async tab => {
+          connectorCalls.push(tab.webSocketDebuggerUrl);
+          if (tab === bound) throw new Error('CDP command timed out');
+          return live;
+        },
+        selectReentry: async tabs => {
+          assert.deepEqual(tabs, [bound, home]);
+          return home;
+        },
+        navigate: async (tab, conversationId) => {
+          navigations += 1;
+          assert.equal(tab, home);
+          assert.equal(conversationId, id);
+          return true;
+        },
+      },
+    );
+
+    assert.equal(connected, live, 'a hung exact target must fall back through a neutral authenticated tab');
+    assert.deepEqual(connectorCalls, ['ws://hung-bound', 'ws://neutral-home']);
+    assert.equal(navigations, 1, 'reentry must navigate the neutral target exactly once');
+  }
+
+  {
     const stale = { ready: false, closed: false, close() { this.closed = true; } };
     const healthy = { ready: true, closed: false, close() { this.closed = true; } };
     const tabs = [
@@ -237,8 +345,8 @@ async function run() {
       async evaluate(expression) {
         expressions.push(String(expression));
         if (String(expression).includes('continuity-bound-sidebar-route')) {
-          pathname = `/c/${id}`;
-          return 'sidebar';
+          pathname = `/uc/${id}`;
+          return `/uc/${id}`;
         }
         if (String(expression) === 'location.pathname') return pathname;
         return null;
@@ -252,7 +360,7 @@ async function run() {
       600,
       50,
     );
-    assert.equal(ok, true);
+    assert.equal(ok, true, 'bound recovery must accept a /uc sidebar route');
     assert.ok(
       expressions.some(expression => expression.includes("document.querySelectorAll('a[href]')")),
       'bound recovery must prefer the real sidebar SPA route before direct URL navigation',
@@ -406,6 +514,66 @@ async function run() {
     });
     assert.deepEqual(attempts, ['ws://stale', 'ws://live'], 'must fall through stale same-rank target before lower-rank home');
     assert.equal(connected?.marker, 'ws://live');
+  }
+
+  {
+    // A busy browser restores many tabs. Guardian probes may use bounded
+    // parallelism, but never accept an unauthenticated first response.
+    const connections = [];
+    let concurrent = 0;
+    let peak = 0;
+    const targets = Array.from({ length: 13 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/tab-' + i,
+      webSocketDebuggerUrl: 'ws://candidate-' + i,
+    }));
+    const selected = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        concurrent += 1;
+        peak = Math.max(peak, concurrent);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        concurrent -= 1;
+        const candidate = {
+          name: tab.webSocketDebuggerUrl,
+          closed: false,
+          close() { this.closed = true; },
+        };
+        connections.push(candidate);
+        return candidate;
+      },
+      async candidate => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return candidate.name === 'ws://candidate-10';
+      },
+      { maxParallel: 5 },
+    );
+    assert.equal(selected?.name, 'ws://candidate-10');
+    assert.ok(peak > 1 && peak <= 5, 'guardian must inspect tabs concurrently but never exceed its limit');
+    assert.ok(connections.every(candidate => candidate === selected || candidate.closed),
+      'all losing CDP connections must be closed');
+    selected.close();
+  }
+
+  {
+    const targets = Array.from({ length: 8 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/test-' + i,
+      webSocketDebuggerUrl: 'ws://rejected-' + i,
+    }));
+    const connections = [];
+    const fallback = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        const c = { name: tab.webSocketDebuggerUrl, closed: false, close() { this.closed = true; } };
+        connections.push(c);
+        return c;
+      },
+      async () => false,
+      { maxParallel: 4 },
+    );
+    assert.equal(fallback, connections[0], 'fallback should be the first healthy tab, not random completion order');
+    assert.ok(connections.slice(1).every(candidate => candidate.closed),
+      'unaccepted parallel candidates must not leak browser connections');
+    fallback.close();
   }
 
   {
@@ -797,6 +965,7 @@ async function run() {
     let composerProbes = 0;
     let platformChecks = 0;
     await sendContinueMessage({ async evaluate(source) {
+      if (String(source).includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
       if (String(source).includes('continuity-conversation-identity-probe')) {
         return Function('location', 'return ' + source)({ pathname: '/c/thread-a' });
       }
@@ -983,6 +1152,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(expression);
         if (expression.includes('insertText') || expression.includes('proto.value')) {
           return expression.includes('[role="textbox"][contenteditable="true"]');
@@ -1007,6 +1177,7 @@ async function run() {
     let sendEnabled = false;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1087,6 +1258,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1130,6 +1302,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1169,6 +1342,7 @@ async function run() {
     let draft = '';
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) return { usable: true, text: draft };
@@ -1201,6 +1375,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         const source = String(expression);
         calls.push(['evaluate', source]);
         if (source.includes('continuity-composer-draft-probe')) {
@@ -1243,6 +1418,7 @@ async function run() {
     let sendCalls = 0;
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         if (String(expression).includes('continuity-composer-draft-probe')) {
           return { usable: true, text: 'unsent customer draft' };
         }
@@ -1265,6 +1441,7 @@ async function run() {
     const calls = [];
     const cdp = {
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         calls.push(['evaluate', expression]);
         if (expression.includes('insertText') || expression.includes('proto.value')) return true;
         if (expression.includes('b.click()')) return false;
@@ -1292,6 +1469,7 @@ async function run() {
         return { href: 'https://chatgpt.com/c/long', title: 'ChatGPT', text: 'x'.repeat(6000) };
       },
       async evaluate(expression) {
+        if (expression.includes('/stream_status')) return { http_status: 200, status: 'COMPLETE' };
         evaluateCalls += 1;
         if (String(expression).includes('continuity-error-banner-probe')) return true;
         return false;
@@ -1465,6 +1643,87 @@ async function run() {
   {
     const cdp = fakeCdp({
       pageText: 'Parou de pensar',
+      generating: false,
+      composerUsable: true,
+      sendSucceeds: true,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-stopped-thinking-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => true,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.sent, false, 'native Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'stopped-thinking recovery must click Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful native Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Something went wrong',
+      generating: false,
+      composerUsable: false,
+      sendSucceeds: false,
+      streamStatus: 'COMPLETE',
+    });
+    const originalEvaluate = cdp.evaluate.bind(cdp);
+    let trustedRetryClicks = 0;
+    cdp.evaluate = async expression => {
+      if (String(expression).includes('continuity-retry-button-target')) {
+        return { x: 40, y: 50 };
+      }
+      return originalEvaluate(expression);
+    };
+    cdp.send = async (method, params = {}) => {
+      cdp.calls.push(`${method}:${params.type || ''}`);
+      if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseReleased') {
+        trustedRetryClicks += 1;
+      }
+      return {};
+    };
+    let progressChecks = 0;
+    const outcome = await attemptNudge(
+      'task-generation-error-native-retry',
+      async () => cdp,
+      async () => ++progressChecks >= 2,
+      async () => false,
+    );
+    assert.equal(outcome.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(outcome.failure_reason, 'generation_error');
+    assert.equal(outcome.sent, false, 'generation-error Retry recovery must not claim a continuation send');
+    assert.equal(trustedRetryClicks, 1, 'generic generation error must click the unique native Retry exactly once');
+    assert.equal(
+      cdp.calls.some(call => String(call).includes('insertText') || String(call).includes('continuity-composer-draft')),
+      false,
+      'successful generic Retry must recover without writing a continue draft',
+    );
+  }
+
+  {
+    const cdp = fakeCdp({
+      pageText: 'Parou de pensar',
       generating: true,
       composerUsable: true,
       sendSucceeds: true,
@@ -1477,10 +1736,12 @@ async function run() {
       async () => false,
       async () => true,
     );
-    assert.notEqual(
-      outcome.result_status,
-      'STALLED_NOT_CONFIRMED',
-      'an explicit recoverable failure must outrank a stale Stop control / IN_PROGRESS bookkeeping signal',
+    assert.equal(outcome.result_status, 'STALLED_NOT_CONFIRMED');
+    assert.equal(outcome.sent, false, 'an error banner cannot authorize sending into an active stream');
+    assert.equal(
+      cdp.calls.some(call => call.includes('stale-complete-stop-clear')),
+      false,
+      'an error banner cannot authorize Stop without canonical COMPLETE',
     );
   }
 
@@ -1955,6 +2216,41 @@ async function run() {
     false,
     'COMPLETE state recovered by passive reattach must not send a continuation',
   );
+
+  {
+    let unavailableProbeExpression = '';
+    await conversationUnavailablePresent({
+      evaluate: async expression => {
+        unavailableProbeExpression = String(expression);
+        return false;
+      },
+    });
+    assert.doesNotThrow(
+      () => new Function(`return ${unavailableProbeExpression}`),
+      'the browser-side unavailable-conversation probe must be valid JavaScript',
+    );
+  }
+
+  {
+    const unavailableCdp = fakeCdp({
+      composerUsable: true,
+      pageText: 'Could not load this ChatGPT conversation. Try again',
+      sendSucceeds: true,
+    });
+    assert.equal(await conversationUnavailablePresent(unavailableCdp), true);
+    const unavailable = await attemptNudge(
+      'task-bound-conversation-unavailable',
+      async () => unavailableCdp,
+      async () => false,
+    );
+    assert.equal(unavailable.result_status, 'STALLED_NOT_CONFIRMED', unavailable.detail);
+    assert.match(unavailable.detail, /unavailable|canonical/i);
+    assert.equal(
+      unavailableCdp.calls.some(call => call.includes('b.click()') || call.includes('Input.insertText')),
+      false,
+      'unavailable bound conversation must never consume a send attempt',
+    );
+  }
 
   const noComposer = await attemptNudge(
     'task-1',
@@ -2513,6 +2809,58 @@ async function run() {
     assert.equal(result.sidebar_fallback, true);
   }
 
+  // HTTP 200 with no valid candidates is not proof of account history being
+  // empty. The same safe, synchronized sidebar fallback must remain available.
+  {
+    let currentPath = '/';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/local-latest-20261008';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/local-latest-20261008';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 200);
+    assert.equal(result.sidebar_fallback, true);
+    assert.equal(result.candidate_count, 0);
+    assert.equal(currentPath, '/c/local-latest-20261008');
+  }
+
+  // A 200-empty response does not authorize tab takeover without independent
+  // proof that the tab is a safe neutral or unique discovery context.
+  {
+    let currentPath = '/c/unproven-20261008';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/other-conversation';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/other-conversation';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 200);
+    assert.equal(currentPath, '/c/unproven-20261008');
+  }
+
   // Live post-deploy state can contain exactly one conversation tab and no
   // neutral home tab. That tab is safe to use as temporary discovery context,
   // but only because connectReinforcementChatgptTab proved it is unique.
@@ -3036,7 +3384,13 @@ async function run() {
     fs.writeFileSync(path.join(checkpointDir, 'done.json'), JSON.stringify({status: 'CONCLUIDO'}));
     assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false);
     fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING'}));
-    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true);
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'unbound global tasks must not activate the Fred reinforcement browser');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', conversation_id: 'legacyFredConversation1'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'legacy Fred tasks remain eligible only when bound to a conversation');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'fred', conversation_id: 'fredConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), true, 'explicit Fred browser tasks remain eligible');
+    fs.writeFileSync(path.join(checkpointDir, 'running.json'), JSON.stringify({status: 'RUNNING', browser_session: 'atendimento', conversation_id: 'atendimentoConversation123'}));
+    assert.equal(hasActiveContinuityCheckpoint(checkpointDir), false, 'Atendimento tasks must never activate the Fred reinforcement browser');
   }
 
   {
@@ -3128,6 +3482,40 @@ async function run() {
       error => error === stop,
     );
     assert.equal(calls.length, 1, 'additional checks must suppress repeated reinforcement attempts during cooldown');
+  }
+
+  // A failed direct reinforcement recovery must not hammer the same browser
+  // every ~30 seconds. The checkpoint-driven dispatcher remains enabled and
+  // owns durable retries while reinforcement observes a bounded cooldown.
+  {
+    const calls = [];
+    let waits = 0;
+    let nowMs = 0;
+    const stop = new Error('stop-after-recovery-retry-cooldown');
+    await assert.rejects(
+      () => reinforcementLoop(
+        async () => {
+          calls.push('check');
+          return {
+            action: 'send_failed',
+            sent: false,
+            progress_confirmed: false,
+            failure_reason: 'stopped_thinking',
+            cross_device_discovery: false,
+          };
+        },
+        () => nowMs,
+        async () => {
+          waits += 1;
+          nowMs += 30_000;
+          if (waits >= 2) throw stop;
+        },
+        async () => true,
+        async () => true,
+      ),
+      error => error === stop,
+    );
+    assert.equal(calls.length, 1, 'failed reinforcement recovery must enter cooldown instead of retrying every poll');
   }
 
   // A 429 must back off only the account-scoped API, not the local sidebar
@@ -3320,6 +3708,52 @@ async function run() {
     await running;
   }
 
+  // Disabling the aggressive Fred reinforcement monitor must not disable
+  // the liveness heartbeat consumed by the controller.
+  {
+    const events = [];
+    let release;
+    const blocked = new Promise(resolve => { release = resolve; });
+    const running = mainLoop(
+      async () => { events.push('bridge'); await blocked; },
+      async () => { events.push('reinforcement'); await blocked; },
+      false,
+      async () => { events.push('authorization'); await blocked; },
+      true,
+      async () => { events.push('monitor-heartbeat'); await blocked; },
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(events.sort(), ['authorization', 'bridge', 'monitor-heartbeat']);
+    release();
+    await running;
+  }
+
+  // A neutral heartbeat for an intentionally disabled reinforcement monitor
+  // must clear stale reinforcement failure state instead of latching it forever.
+  {
+    const payload = reinforcementHealthPayload(
+      {
+        action: 'monitor_disabled',
+        sent: false,
+        progress_confirmed: false,
+      },
+      '2026-10-05T02:00:00.000Z',
+      {
+        degraded: true,
+        action: 'send_failed',
+        last_cycle_action: 'recovery_retry_cooldown',
+        sent: false,
+        progress_confirmed: false,
+        detail: 'old failure',
+        failure_reason: 'silent_stall',
+      },
+    );
+    assert.equal(payload.degraded, false);
+    assert.equal(payload.action, 'monitor_disabled');
+    assert.equal(payload.last_cycle_action, 'monitor_disabled');
+    assert.equal(payload.failure_reason, '');
+  }
+
   // Banner flashes then clears by the confirm re-check (client's own retry
   // succeeded) -> must NOT send a message.
   {
@@ -3458,6 +3892,65 @@ async function run() {
     assert.equal(payload.failure_reason, 'request_timeout');
   }
 
+  await (await import('./chatgpt-thinking-failed-test.mjs')).runThinkingFailedTests({ errorBannerPresent, recoverableFailureReason, sendContinueMessage });
+  await (await import('./chatgpt-unavailable-surface-test.mjs')).runUnavailableSurfaceTests({ conversationUnavailablePresent });
+  (await import('./chatgpt-recovery-detail-code-test.mjs')).runRecoveryDetailTests({ outcomeStatusDetailCode });
+
+  {
+    assert.equal(mutationAuthorizationAllows({ authorized: true }), true);
+    assert.equal(mutationAuthorizationAllows({ authorized: false, reason: 'foreground_active' }), false);
+    let mutated = 0;
+    const rejected = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: false, reason: 'foreground_active' }),
+    );
+    assert.equal(rejected.authorized, false);
+    assert.equal(rejected.reason, 'foreground_active');
+    assert.equal(mutated, 0, 'rejected mutation authorization must never execute callback');
+    const allowed = await guardedRecoveryMutation(
+      'task-gate-test',
+      'continuation_send',
+      'conversation_12345678',
+      async () => { mutated += 1; return 'sent'; },
+      async () => ({ authorized: true, reason: 'authorized' }),
+    );
+    assert.equal(allowed.authorized, true);
+    assert.equal(allowed.value, 'sent');
+    assert.equal(mutated, 1);
+  }
+  {
+    const falseGreen = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: false,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'Thinking tool activity sidebar HTTP 200 Retry click',
+    }, 'diagnostic-only');
+    assert.notEqual(falseGreen.result_status, 'PROGRESS_CONFIRMED');
+    assert.notEqual(falseGreen.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(falseGreen.conversation_id, undefined);
+    const real = bridgeResultPayload('task-real-response', {
+      result_status: 'PROGRESS_CONFIRMED',
+      real_response_observed: true,
+      sent: false,
+      conversation_id: 'conversation_12345678',
+      detail: 'new assistant turn observed',
+    }, 'new assistant turn observed');
+    assert.equal(real.result_status, 'PROGRESS_CONFIRMED');
+    assert.equal(real.recovery_state, 'PROGRESS_CONFIRMED');
+    assert.equal(real.conversation_id, 'conversation_12345678');
+    assert.equal(recoveryStateForOutcome({ result_status: 'SENT_UNCONFIRMED', sent: true }), 'WAITING_FOR_REAL_RESPONSE');
+  }
+  await (await import('./chatgpt-cdp-lifecycle-test.mjs')).runCdpLifecycleTests(Cdp);
+  await (await import('./chatgpt-canonical-read-budget-test.mjs')).runCanonicalReadBudgetTests({
+    conversationTurnState, conversationStreamStatus, sendContinueMessage,
+  });
+  await (await import('./chatgpt-browser-session-routing-test.mjs')).runBrowserSessionRoutingTests({ Cdp, attemptNudge, hasActiveContinuityCheckpoint, anotherConversationActiveInSession }, testTaskStateDir);
+  await (await import('./chatgpt-stream-actuator-guard-test.mjs')).runStreamActuatorGuardTests({ attemptNudge, sendContinueMessage, reinforcementCheckOnce, clickRecoverableRetryButton }, testTaskStateDir);
+  await (await import('./chatgpt-canonical-read-backoff-test.mjs')).runCanonicalReadBackoffTests({ conversationTurnState });
   console.log('reinforcementCheckOnce branches: PASS');
 }
 

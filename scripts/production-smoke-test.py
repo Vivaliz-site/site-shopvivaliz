@@ -10,11 +10,19 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 import ssl
 import json
 
 TARGET_HOST = "shopvivaliz.com.br"
 BASE_URL = f"https://{TARGET_HOST}"
+
+def build_product_url(slug, sku):
+    slug = str(slug or "").strip()
+    sku = str(sku or "").strip()
+    if slug and slug != "null":
+        return f"{BASE_URL}/produto/{urllib.parse.quote(slug, safe='-._~')}"
+    return f"{BASE_URL}/produto.php?sku={urllib.parse.quote(sku, safe='-._~')}"
 
 def log_info(msg):
     # Safe printing to handle Windows terminal encoding limitations
@@ -137,10 +145,7 @@ def test_catalog_api():
             product = data['products'][0]
             slug = product.get('slug', '')
             sku = product.get('sku', '')
-            if slug and slug != 'null':
-                p_url = f"{BASE_URL}/produto/{slug}"
-            else:
-                p_url = f"{BASE_URL}/produto.php?sku={sku}"
+            p_url = build_product_url(slug, sku)
                 
             log_info(f"5b. Verificando produto real ({sku})...")
             p_req = urllib.request.Request(p_url, headers={'User-Agent': 'Mozilla/5.0'})
