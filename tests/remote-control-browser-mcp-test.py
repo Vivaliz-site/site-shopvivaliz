@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -700,6 +701,37 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("systemctl enable shopvivaliz-remote-control-browser-mcp.service", setup)
         self.assertIn("systemctl restart shopvivaliz-remote-control-browser-mcp.service", setup)
         self.assertNotIn("systemctl enable --now shopvivaliz-remote-control-browser-mcp.service", setup)
+
+    def test_installer_separates_transport_health_from_inactive_gui(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        start = "    python3 - <<'PY'\n"
+        end = "\nPY\n    rm -f /tmp/shopvivaliz-browser-mcp-health.json"
+        block = setup.split(start, 1)[1].split(end, 1)[0]
+        base_health = {
+            "endpoint": "shopvivaliz-remote-control-browser-mcp",
+            "dependencies": {"xdotool": True, "xclip": True, "scrot": True, "xwd": True},
+        }
+        for fields, expected in (
+            ({"ok": True, "gui_session_active": True}, "REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS"),
+            ({"ok": False, "gui_session_active": False, "reason": "gui_session_inactive"},
+             "REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive"),
+        ):
+            fixture = json.dumps({**base_health, **fields})
+            captured = io.StringIO()
+            with (
+                mock.patch("builtins.open", return_value=io.StringIO(fixture)),
+                contextlib.redirect_stdout(captured),
+            ):
+                exec(block, {})
+            self.assertIn(expected, captured.getvalue())
+            if not fields["ok"]:
+                self.assertNotIn("HEALTH=PASS", captured.getvalue())
+
+        with mock.patch("builtins.open", return_value=io.StringIO(json.dumps({
+            **base_health, "ok": False, "reason": "unknown_failure",
+        }))):
+            with self.assertRaises(AssertionError):
+                exec(block, {})
 
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
