@@ -182,7 +182,12 @@ class AccountAuthGateTests(unittest.TestCase):
         # An expired OpenAI login presents an anchor rather than a button.
         # Recovery must accept only one exact official login URL.
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
-        self.assertIn("if(action==='continue'&&u.hostname==='auth.openai.com'&&u.pathname==='/log-in'", script)
+        self.assertIn(
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&"
+            "['/log-in','/log-in/password','/email-verification'].includes(u.pathname)&&",
+            script,
+        )
+        self.assertNotIn("if(action==='continue'&&u.hostname==='auth.openai.com'", script)
         self.assertIn("document.body?.innerText?.includes('Your session has ended')", script)
         self.assertIn("const recoveryLinks=[...document.querySelectorAll('a')]", script)
         self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", script)
