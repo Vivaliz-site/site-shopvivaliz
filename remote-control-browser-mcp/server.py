@@ -962,7 +962,14 @@ try {
         "if(!e||e.tagName!=='INPUT'||e.disabled||e.readOnly)throw Error('auth_field_unavailable');" +
         "e.focus();e.select();return {ready:true};" +
         "}" +
-        "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
+        "if(action==='continue'&&u.hostname==='auth.openai.com'&&u.pathname==='/log-in'&&" +
+    "document.body?.innerText?.includes('Your session has ended')){" +
+    "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
+    "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(String(a.innerText||'').trim()));" +
+    "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+    "recoveryLinks[0].click();return {clicked:true};" +
+    "}" +
+    "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
         "const labels=action==='resend'?/^(?:resend(?: (?:email|e-mail|code))?|send a new (?:email|code)|reenviar(?: (?:e-?mail|c[oó]digo))?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
         "const matches=buttons.filter(b=>labels.test(String(b.innerText||b.value||'').trim()));" +
         "if(matches.length!==1)throw Error('auth_button_ambiguous_or_unavailable');" +
