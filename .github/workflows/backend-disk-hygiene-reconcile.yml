@@ -46,7 +46,6 @@ jobs:
           bash -n scripts/install-disk-hygiene.sh
           bash -n ops/host/shopvivaliz-workspace-housekeeper
           sh -n ops/host/shopvivaliz-disk-guard
-          systemd-analyze verify             deploy/systemd/shopvivaliz-disk-guard.service             deploy/systemd/shopvivaliz-disk-guard.timer             deploy/systemd/shopvivaliz-workspace-housekeeper.service             deploy/systemd/shopvivaliz-workspace-housekeeper.timer
 
       - name: Configure verified backend SSH
         env:
@@ -117,6 +116,13 @@ jobs:
           if [ "$needs_install" -eq 1 ]; then
             sudo -n bash "$stage/scripts/install-disk-hygiene.sh"
           fi
+
+          # The verified executables live on the backend, never on the web CI runner.
+          # Validate the staged unit files here after ensuring the binaries are installed.
+          systemd-analyze verify "$stage/deploy/systemd/shopvivaliz-disk-guard.service" \
+            "$stage/deploy/systemd/shopvivaliz-disk-guard.timer" \
+            "$stage/deploy/systemd/shopvivaliz-workspace-housekeeper.service" \
+            "$stage/deploy/systemd/shopvivaliz-workspace-housekeeper.timer"
 
           systemctl is-enabled --quiet shopvivaliz-disk-guard.timer
           systemctl is-active --quiet shopvivaliz-disk-guard.timer

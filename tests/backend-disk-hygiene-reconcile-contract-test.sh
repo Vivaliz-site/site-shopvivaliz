@@ -30,4 +30,22 @@ check_fixed 'systemctl start shopvivaliz-disk-guard.service' 'reconciliation run
 check_fixed 'MIN_FREE_BYTES: 6442450944' 'reconciliation enforces the 6 GiB free-space floor during verification'
 check_fixed 'DISK_HYGIENE_RECONCILE=PASS' 'reconciliation emits an explicit terminal proof'
 
+
+# This workflow runs on the web host, while the service's ExecStart
+# binary is installed only on the backend. Unit validation must run in
+# the backend installer, not against missing binaries on the web runner.
+if sed -n '/      - name: Validate disk hygiene policy/,/      - name: Configure verified backend SSH/p' "$WORKFLOW" | grep -Fq 'systemd-analyze verify'; then
+  printf 'FAIL: backend-only service executables must not be validated on the web runner\n'
+  fail=1
+else
+  printf 'PASS: backend-only service executables are not required on the web runner\n'
+fi
+check_fixed 'systemd-analyze verify "$stage/deploy/systemd/shopvivaliz-disk-guard.service"' 'backend reconciler validates staged service units on their actual host'
+if grep -Fq 'systemd-analyze verify' "$ROOT/scripts/install-disk-hygiene.sh"; then
+  printf 'PASS: canonical backend installer still verifies systemd units\n'
+else
+  printf 'FAIL: canonical backend installer must verify systemd units\n'
+  fail=1
+fi
+
 exit "$fail"
