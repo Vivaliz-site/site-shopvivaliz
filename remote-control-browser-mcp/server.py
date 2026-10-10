@@ -103,6 +103,34 @@ def gui_prefix() -> list[str]:
     return ["sudo", "-n", "-u", GUI_USER, "env", *env]
 
 
+def gui_session_active() -> bool:
+    """Fail closed if the canonical X11 user/display is not on the active seat."""
+    try:
+        active = subprocess.run(
+            ["loginctl", "show-seat", "seat0", "-p", "ActiveSession", "--value"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        )
+        session_id = active.stdout.strip()
+        if active.returncode != 0 or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", session_id):
+            return False
+        details = subprocess.run(
+            ["loginctl", "show-session", session_id, "-p", "Name", "-p", "Display", "-p", "Active"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        )
+        if details.returncode != 0:
+            return False
+        fields = dict(line.split("=", 1) for line in details.stdout.splitlines() if "=" in line)
+        return fields.get("Name") == GUI_USER and fields.get("Display") == DISPLAY and fields.get("Active") == "yes"
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def run_gui(argv: list[str], *, timeout: int = 15, input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
         gui_prefix() + argv,
@@ -430,8 +458,11 @@ def browser_health() -> dict[str, Any]:
         display_accessible = run_gui(["xdotool", "getactivewindow"], check=False).returncode == 0
     windows = browser_windows() if dependencies["xdotool"] and display_accessible else []
     browser_launchable = os.path.isfile(BROWSER_BINARY) and os.access(BROWSER_BINARY, os.X_OK)
+    session_active = gui_session_active()
     return {
-        "ok": all(dependencies.values()) and display_accessible and (bool(windows) or browser_launchable),
+        "ok": all(dependencies.values()) and display_accessible and session_active and (bool(windows) or browser_launchable),
+        "gui_session_active": session_active,
+        **({"reason": "gui_session_inactive"} if not session_active else {}),
         "host": BROWSER_HOST,
         "display": DISPLAY,
         "gui_user": GUI_USER,
@@ -525,6 +556,8 @@ def browser_tabs() -> dict[str, Any]:
 
 def browser_open(args: dict[str, Any]) -> dict[str, Any]:
     url = validate_url(args.get("url"))
+    if not gui_session_active():
+        raise RuntimeError("gui_session_inactive")
     windows = browser_windows()
     if windows:
         focus(windows[0])
