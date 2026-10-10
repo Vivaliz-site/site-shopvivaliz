@@ -152,7 +152,9 @@ class AccountAuthGateTests(unittest.TestCase):
         for item in (
             "back_to_methods", "open_login", "continue_google",
             "u.pathname!=='/log-in/password'",
+            "u.origin!=='https://auth.openai.com'",
             "u.pathname!=='/log-in-or-create-account'",
+            "u.pathname!=='/log-in'",
             "u.pathname==='/auth/login_with'",
             "u.pathname==='/log-in'",
             "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
@@ -161,6 +163,20 @@ class AccountAuthGateTests(unittest.TestCase):
             "if(choices.length!==1)",
         ):
             self.assertIn(item, source)
+
+    def test_log_in_link_is_allowed_only_on_two_exact_official_stages(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');",
+            source,
+        )
+        self.assertIn(
+            "safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a))",
+            source,
+        )
+        self.assertEqual("/log-in", m._auth_stage("https://auth.openai.com/log-in?state=SECRET"))
+        self.assertIsNone(m._auth_stage("https://auth.openai.com/oauth/consent"))
+        self.assertIsNone(m._auth_stage("https://example.com/log-in"))
 
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
@@ -246,39 +262,6 @@ class AccountAuthGateTests(unittest.TestCase):
                               input=m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT,
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
-
-    def test_fresh_login_tab_only_when_all_existing_official_tabs_are_stalled(self):
-        script = m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT
-        self.assertIn("const officialTabs = preflight.filter(", script)
-        self.assertIn("const canOpenAfterStall = flags =>", script)
-        self.assertIn("officialTabs.length > 8", script)
-        self.assertIn("if (!checked.every(Boolean)) throw new Error('auth_stage_already_open')", script)
-        self.assertIn("auth_stage_already_open", script)
-        self.assertIn("new Cdp(existingSocket", script)
-        self.assertIn("Runtime.evaluate", script)
-        self.assertIn("Target.createTarget", script)
-        self.assertIn("challenges.cloudflare.com", script)
-        self.assertIn("captcha", script)
-        self.assertNotIn("Target.closeTarget", script)
-        self.assertNotIn("Page.navigate", script)
-        self.assertNotIn("Page.reload", script)
-        expr = next(
-            (line.strip() for line in script.splitlines()
-             if line.strip().startswith("const canOpenAfterStall = flags =>")), None
-        )
-        self.assertIsNotNone(expr)
-        test_code = expr + """
-const good={ready:true,stageOk:true,liveControls:0,challenge:false,loginChoice:false,bodyLength:118};
-const variants=[
-    {...good,liveControls:1}, {...good,challenge:true},
-    {...good,loginChoice:true}, {...good,ready:false},
-    {...good,stageOk:false}, {...good,bodyLength:3000}
-];
-if(!canOpenAfterStall(good) || variants.some(canOpenAfterStall))process.exit(3);
-"""
-        proc = subprocess.run(["node","--input-type=module","-e",test_code],
-                              capture_output=True,text=True,check=False)
-        self.assertEqual(0,proc.returncode,proc.stderr)
 
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
