@@ -962,7 +962,7 @@ try {
         "if(!e||e.tagName!=='INPUT'||e.disabled||e.readOnly)throw Error('auth_field_unavailable');" +
         "e.focus();e.select();return {ready:true};" +
         "}" +
-        "if(action==='continue'&&u.hostname==='auth.openai.com'&&u.pathname==='/log-in'&&" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&['/log-in','/log-in/password','/email-verification'].includes(u.pathname)&&" +
         "document.body?.innerText?.includes('Your session has ended')){" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(String(a.innerText||'').trim()));" +
