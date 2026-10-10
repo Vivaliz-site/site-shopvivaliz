@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import inspect
 import json
 import os
 from pathlib import Path
@@ -193,6 +194,36 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", script)
         self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
         self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
+
+    def test_exact_mfa_challenge_is_listed_with_sanitized_stage(self):
+        challenge = "a" * 32
+        exact = "https://auth.openai.com/mfa-challenge/" + challenge + "?state=SENSITIVE"
+        self.assertEqual("/mfa-challenge", m._auth_stage(exact))
+        for invalid in (
+            "http://auth.openai.com/mfa-challenge/" + challenge,
+            "https://example.com/mfa-challenge/" + challenge,
+            "https://auth.openai.com/mfa-challenge/" + "a" * 31,
+            "https://auth.openai.com/mfa-challenge/" + challenge + "/consent",
+            "https://auth.openai.com/mfa-challenge/unknown",
+            "https://auth.openai.com/oauth/consent",
+        ):
+            self.assertIsNone(m._auth_stage(invalid))
+        pages = [{"type": "page", "id": "tab_mfa", "url": exact}]
+        with mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(pages).encode())):
+            result = m.browser_auth_tabs({"session": "dev"})
+        self.assertEqual(
+            [{"tab_id": "tab_mfa", "stage": "/mfa-challenge", "session": "dev"}],
+            result["tabs"],
+        )
+        self.assertNotIn(challenge, json.dumps(result))
+        self.assertNotIn("SENSITIVE", json.dumps(result))
+
+    def test_mfa_stage_guard_present_in_protected_action_and_new_tab_preflight(self):
+        for source in (m.ACCOUNT_AUTH_NODE_SCRIPT, m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT):
+            self.assertIn("mfa-challenge", source)
+            self.assertIn("[0-9a-f]{32}", source)
+        self.assertIn("input[autocomplete=one-time-code]", m.ACCOUNT_AUTH_NODE_SCRIPT)
+        self.assertIn("account_auth_code_invalid", inspect.getsource(m.browser_auth_action))
 
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
