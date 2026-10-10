@@ -162,6 +162,17 @@ class AccountAuthGateTests(unittest.TestCase):
         ):
             self.assertIn(item, source)
 
+    def test_expired_session_continue_only_uses_official_login_link(self):
+        # An expired OpenAI login presents an anchor rather than a button.
+        # This must be a narrow official-site recovery, never a generic link click.
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn("if(action==='continue'&&u.hostname==='auth.openai.com'&&u.pathname==='/log-in'", script)
+        self.assertIn("document.body?.innerText?.includes('Your session has ended')", script)
+        self.assertIn("const recoveryLinks=[...document.querySelectorAll('a')]", script)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", script)
+        self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
+        self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
+
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
             {"type": "page", "id": "tab_a", "url": "https://auth.openai.com/email-verification?state=SECRET"},
