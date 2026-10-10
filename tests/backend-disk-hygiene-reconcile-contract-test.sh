@@ -40,6 +40,7 @@ if sed -n '/      - name: Validate disk hygiene policy/,/      - name: Configure
 else
   printf 'PASS: backend-only service executables are not required on the web runner\n'
 fi
+check_fixed 'systemd-analyze verify "$stage/deploy/systemd/shopvivaliz-disk-guard.service"' 'backend reconciler validates staged service units on their actual host'
 if grep -Fq 'systemd-analyze verify' "$ROOT/scripts/install-disk-hygiene.sh"; then
   printf 'PASS: canonical backend installer still verifies systemd units\n'
 else
