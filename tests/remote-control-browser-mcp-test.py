@@ -604,9 +604,51 @@ class BrowserMcpTests(unittest.TestCase):
             self.assertEqual(["123"], m.browser_windows())
         run.assert_called_once_with(["xdotool", "search", "--onlyvisible", "--class", "shopvivaliz-general"], check=False)
 
+    def test_gui_session_probe_requires_matching_active_seat(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c1\\n"),
+            mock.Mock(returncode=0, stdout="Name=fredconsole\\nDisplay=:0\\nActive=yes\\n"),
+        ]) as run:
+            self.assertTrue(m.gui_session_active())
+        self.assertEqual(2, run.call_count)
+
+    def test_gui_session_probe_rejects_lightdm_as_active_session(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c2\\n"),
+            mock.Mock(returncode=0, stdout="Name=lightdm\\nDisplay=:1\\nActive=yes\\n"),
+        ]):
+            self.assertFalse(m.gui_session_active())
+
+    def test_browser_health_fails_closed_on_inactive_seat_even_when_xdotool_works(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="123\\n")),
+        ):
+            health = m.browser_health()
+        self.assertFalse(health["ok"], health)
+        self.assertFalse(health["gui_session_active"])
+        self.assertEqual("gui_session_inactive", health["reason"])
+
+    def test_browser_open_refuses_input_when_gui_session_is_inactive(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]) as windows,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "key"),
+            mock.patch.object(m, "type_text"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "gui_session_inactive"):
+                m.browser_open({"url": "https://example.com/"})
+        windows.assert_not_called()
+
     def test_browser_health_is_ready_when_general_browser_is_launchable_without_window(self):
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
             mock.patch.object(m.os.path, "isfile", return_value=True),
