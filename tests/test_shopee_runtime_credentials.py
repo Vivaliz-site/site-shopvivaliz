@@ -186,6 +186,35 @@ class ShopeeClientRetryTest(unittest.TestCase):
         client._decode = lambda response: response
         return module, client
 
+    def test_first_request_with_fresh_access_token_does_not_force_refresh(self):
+        module, client = self._client()
+        client.refresh_token = "refresh-token"
+        client.access_token = "access-token"
+        client.access_expires_at = 5000
+        client._last_refresh_attempt_monotonic = 0.0
+        with (
+            patch.object(module.time, "monotonic", return_value=100.0),
+            patch.object(module.time, "time", return_value=1000.0),
+            patch.object(client, "_refresh_access_token") as refresh,
+        ):
+            client._refresh_if_due()
+        refresh.assert_not_called()
+        self.assertEqual(client._last_refresh_attempt_monotonic, 100.0)
+
+    def test_first_request_still_refreshes_when_access_token_near_expiry(self):
+        module, client = self._client()
+        client.refresh_token = "refresh-token"
+        client.access_token = "access-token"
+        client.access_expires_at = 1500
+        client._last_refresh_attempt_monotonic = 0.0
+        with (
+            patch.object(module.time, "monotonic", return_value=100.0),
+            patch.object(module.time, "time", return_value=1000.0),
+            patch.object(client, "_refresh_access_token") as refresh,
+        ):
+            client._refresh_if_due()
+        refresh.assert_called_once_with(required=True)
+
     def test_transient_timeout_retries_up_to_four_attempts(self):
         module, client = self._client()
         calls = 0

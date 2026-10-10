@@ -1,5 +1,8 @@
 param()
 $ErrorActionPreference = 'Continue'
+# Node's automatic address selection intermittently fails to reach the provider on this host.
+# Restrict this DNS preference to the Remote Desktop Commander runner process tree.
+$env:NODE_OPTIONS = '--dns-result-order=ipv4first'
 $Repo = 'C:\site-shopvivaliz'
 $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'

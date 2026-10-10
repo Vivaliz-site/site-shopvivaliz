@@ -51,11 +51,10 @@ final class SvAmazonReturnsConfig
         $bridgeReady = $this->sellerCentralBridgeMode() !== 'unavailable';
         return [
             'sp_api' => $this->requirements(['AMAZON_LWA_CLIENT_ID','AMAZON_LWA_CLIENT_SECRET','AMAZON_LWA_REFRESH_TOKEN']),
-            'gmail' => $this->requirementsAny([
-                ['GMAIL_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_ID'],
-                ['GMAIL_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_CLIENT_SECRET'],
-                ['GMAIL_OAUTH_REFRESH_TOKEN','GOOGLE_OAUTH_REFRESH_TOKEN'],
-            ]),
+            // Completeness only; authorization and API scopes require a live probe.
+            'gmail' => $this->gmailOAuthCredentials() !== null
+                ? ['ready'=>true,'missing'=>[]]
+                : ['ready'=>false,'missing'=>['GMAIL_OAUTH_*|GOOGLE_OAUTH_* (complete family)']],
             'seller_central_bridge' => $bridgeReady
                 ? ['ready'=>true,'missing'=>[]]
                 : ['ready'=>false,'missing'=>['SELLER_CENTRAL_BROWSER_BRIDGE_URL|SELLER_CENTRAL_BRIDGE_TOKEN']],
@@ -89,6 +88,30 @@ final class SvAmazonReturnsConfig
         return '';
     }
 
+    /**
+     * Select one complete OAuth credential family; never mix client ID/secret
+     * and refresh token from different grants. A partially configured Gmail
+     * family must not shadow a complete, independent Google family.
+     *
+     * @return array{client_id:string,client_secret:string,refresh_token:string}|null
+     */
+    public function gmailOAuthCredentials(): ?array
+    {
+        foreach (['GMAIL_OAUTH', 'GOOGLE_OAUTH'] as $prefix) {
+            $clientId = $this->get($prefix . '_CLIENT_ID');
+            $clientSecret = $this->get($prefix . '_CLIENT_SECRET');
+            $refreshToken = $this->get($prefix . '_REFRESH_TOKEN');
+            if ($clientId !== '' && $clientSecret !== '' && $refreshToken !== '') {
+                return [
+                    'client_id'=>$clientId,
+                    'client_secret'=>$clientSecret,
+                    'refresh_token'=>$refreshToken,
+                ];
+            }
+        }
+        return null;
+    }
+
     private function bool(string $key, bool $default): bool
     {
         $raw = strtolower($this->get($key, $default ? '1' : '0'));
@@ -105,13 +128,4 @@ final class SvAmazonReturnsConfig
         return ['ready'=>$missing === [], 'missing'=>$missing];
     }
 
-    /** @param list<list<string>> $groups @return array{ready:bool,missing:list<string>} */
-    private function requirementsAny(array $groups): array
-    {
-        $missing = [];
-        foreach ($groups as $keys) {
-            if ($this->first(...$keys) === '') $missing[] = implode('|', $keys);
-        }
-        return ['ready'=>$missing === [], 'missing'=>$missing];
-    }
 }

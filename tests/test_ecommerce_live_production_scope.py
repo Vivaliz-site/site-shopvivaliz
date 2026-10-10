@@ -1,12 +1,26 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 WORKFLOW = Path('.github/workflows/ecommerce-excellence-audit.yml').read_text(encoding='utf-8')
 
-assert 'classify-production-impact:' in WORKFLOW, 'workflow must classify whether a push changes production'
-assert 'bash scripts/should-deploy-production.sh' in WORKFLOW, 'workflow must reuse the canonical production-impact classifier'
-assert "github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true'" in WORKFLOW, 'push live audit must run only for production-impacting commits'
-assert "github.event_name == 'schedule'" in WORKFLOW, 'scheduled live audit must remain enabled'
-assert "github.event_name == 'workflow_dispatch'" in WORKFLOW, 'manual live audit must remain enabled'
-assert 'EXPECTED_SHA: ${{ github.event_name == \'push\' && github.sha || \'\' }}' in WORKFLOW, 'only push runs may require exact current SHA evidence'
-assert "if [ -n \"$EXPECTED_SHA\" ]; then" in WORKFLOW, 'evidence validation must distinguish exact-SHA push from last-deployed schedule/manual audit'
-print('ecommerce-live-production-scope-contract: ok')
+
+def test_live_audit_uses_verified_deployment_gate():
+    assert 'production-audit-gate:' in WORKFLOW
+    assert 'uses: ./.github/workflows/production-deploy-event-gate.yml' in WORKFLOW
+    assert 'needs: production-audit-gate' in WORKFLOW
+    assert "if: needs.production-audit-gate.outputs.should_run == 'true'" in WORKFLOW
+    assert 'ref: ${{ needs.production-audit-gate.outputs.production_sha }}' in WORKFLOW
+    assert "expected_sha: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}" in WORKFLOW
+
+
+def test_manual_and_scheduled_audits_keep_the_production_gate():
+    assert "github.event_name == 'workflow_run'" in WORKFLOW
+    assert "github.event_name == 'schedule'" in WORKFLOW
+    assert "github.event_name == 'workflow_dispatch' && inputs.pr_replay != true" in WORKFLOW
+    assert "source_conclusion: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || '' }}" in WORKFLOW
+    assert 'await-production-evidence:' not in WORKFLOW
+
+
+if __name__ == '__main__':
+    test_live_audit_uses_verified_deployment_gate()
+    test_manual_and_scheduled_audits_keep_the_production_gate()
+    print('ecommerce-live-production-scope-contract: ok')

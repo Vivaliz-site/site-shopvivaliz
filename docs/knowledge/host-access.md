@@ -1,3 +1,16 @@
+<!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
+
+Em `Retome`, `Continue`, `Prossiga`, `Siga` ou qualquer trabalho remoto, **um erro em um unico canal jamais comprova inacessibilidade do host**. Antes de `BLOCKED_EXTERNAL` ou de solicitar ao usuario uma acao que o agente pode executar:
+1. Ler `docs/knowledge/host-access.md` no `main` atual e o runbook do repositorio; verificar destino, identidade, privilegios, capacidades expostas e autorizacoes efetivas. Nunca adivinhar que uma rota existe.
+2. **Avaliar todas as rotas remotas realmente provisionadas, permitidas e adequadas a acao**, com a prioridade do runbook: (a) ShopVivaliz Remote Control MCP/controlador e ferramentas de host/tarefa/desktop; (b) RDC e RDC 2 para os hosts e capacidades explicitamente autorizados; (c) SSH privado/VCN/Tailscale e tunel/reverse SSH documentado, usando credenciais protegidas existentes; (d) GUI remota por bridge `desktop_*` ou RustDesk self-hosted quando a tarefa exigir interface; (e) OCI Bastion, OCI Compute Run Command, console serial e GitHub Actions/control plane somente para bootstrap, recuperacao ou reparo, conforme suas regras. Usar outras rotas somente se estiverem documentadas e autorizadas.
+3. Para cada rota aplicavel, provar disponibilidade, autenticacao/autorizacao, conectividade, identidade do host e capacidade da operacao; diagnosticar e reparar falhas tecnicas que estejam ao alcance, testar novamente com tentativas limitadas e idempotentes e passar ao proximo caminho quando apropriado. Nao confundir canal de GUI com shell nem rotas de recovery com transporte normal de runtime.
+4. Registrar checkpoint nao secreto `remote_access_attempts` por host e tarefa: canal, objetivo, permissao, teste, resultado, causa, reparo, proximo fallback e evidencia com instante. Canal nao disponivel deve ser classificado `NOT_PROVISIONED` com evidencia, nao `TRIED`.
+5. **So declarar host inacessivel/bloqueio externo depois de examinar e esgotar todos os caminhos adequados, seguros, tecnicamente viaveis e autorizados**, justificando cada nao utilizacao. Enquanto houver rota executavel, manter `RUNNING` e continuar a tarefa. Pedir aprovacao apenas quando obrigatoria, indicando a permissao exata.
+
+Limites: nao contornar MFA, CAPTCHA, RBAC, protecoes de branch, limites administrativos ou aprovacoes; nao procurar/extrair secrets nem tentar senhas indiscriminadamente; nao habilitar SSH publico ou usar IP publico como fallback indevido. Browser de agente ShopVivaliz permanece na VM backend com perfil isolado; Windows e apenas host de tarefas/GUI autorizadas, nao fallback de navegador. Sem loops ilimitados nem alegacao de acesso nao testado.
+<!-- /REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+
 # Acesso a hosts — bootstrap obrigatório para agentes
 
 Este documento é a referência canônica de **como localizar e acessar os hosts ShopVivaliz** ao iniciar uma conversa, sessão de IDE ou agente novo.
@@ -96,6 +109,8 @@ O relay do site e provisionado por `scripts/setup-iphone-private-ssh-relay.sh` e
 3. **GitHub Actions/OCI Bastion** — bootstrap, recovery e reparo.
 4. **RustDesk** — GUI/validacao visual; navegador de agente permanece na backend.
 
+Para GUI de `Fred-Win`/`KOCEPSV`, prefira as ferramentas `desktop_*` do Remote Control quando disponíveis. No `Fred-Win`, a rota normal é o bridge interativo nativo por reverse SSH (`scripts/shopvivaliz-native-desktop-bridge.ps1`), que executa screenshot/mouse/teclado na sessão Windows logada sem senha RustDesk e sem depender de registro cloud de ferramenta legada de desktop remoto. No `KOCEPSV`, `desktop_*` continua operando o cliente RustDesk na sessão `fredconsole` da backend. O mapeamento de IDs RustDesk fica somente em `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`); nunca versionar nem imprimir esse conteúdo. Nenhuma dessas rotas transforma o Windows em host de navegador de agente.
+
 Antes de operar qualquer host, valide `hostname`, identidade e contexto do repositorio sem expor credenciais.
 
 ## Repositório principal
@@ -173,3 +188,10 @@ Ao validar os quatro hosts, exigir evidência real de:
 4. execução de tarefa durável via controller;
 5. recuperação de status/resultado sem usar GitHub como transporte de runtime.
 <!-- /REMOTE_CONTROL_MCP_HOST_ROUTES_V2 -->
+
+
+<!-- CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->
+## ChatGPT corporativo — referência de credencial
+
+A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. O segredo não é versionado neste repositório. Para autenticação, reutilizar primeiro o perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e as fontes seguras autorizadas. Não solicitar novamente a senha ao usuário sem evidência de que a credencial provisionada está ausente, revogada ou inválida.
+<!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->

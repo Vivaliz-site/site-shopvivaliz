@@ -25,20 +25,23 @@ from pathlib import Path
 from typing import Any, Sequence
 
 try:
+    from . import agent_task_state as continuity_state
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from .task_continuation_watchdog import read_requests
+    from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 except ImportError:
+    import agent_task_state as continuity_state
     from agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
-    from task_continuation_watchdog import read_requests
+    from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests
 
 ROOT = Path(__file__).resolve().parents[1]
 EXECUTIONS_FILE = "_resume-executions.jsonl"
+EXECUTION_RECORD_PREFIX = "_resume-execution-"
 LOCK_FILE = "_continuity-execution.lock"
 TERMINAL_STATES = frozenset({"CONCLUIDO", "BLOCKED_EXTERNAL"})
 DEFAULT_TIMEOUT_SECONDS = 900
 DEFAULT_MAX_REQUESTS = 1
 DEFAULT_RETRY_AFTER_SECONDS = 900
-DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS = 900
+DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS = 130
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 ALLOWED_REPOSITORIES = frozenset({
     "Vivaliz-site/site-shopvivaliz",
@@ -82,6 +85,48 @@ def _safe_repository(value: str) -> str:
     return repository
 
 
+def _durable_handoff_enabled() -> bool:
+    return os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip() == "1"
+
+
+def _claim_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any] | None:
+    if not _durable_handoff_enabled():
+        return state
+    task_id = str(state.get("task_id", "")).strip()
+    request_id = str(request.get("id", "")).strip()
+    if not task_id or not request_id:
+        raise ValueError("durable resume ownership requires task and request ids")
+    owner_id = f"resume:{request_id}"
+    previous_runtime = continuity_state.RUNTIME_DIR
+    try:
+        continuity_state.RUNTIME_DIR = Path(runtime_dir)
+        claimed = continuity_state.claim_recovery_ownership(
+            task_id, owner_id=owner_id,
+            allowed_actions=["checkpoint_mutation", "continuation_send", "browser_mutation"],
+            ttl_seconds=max(30, int(os.getenv("SHOPVIVALIZ_RESUME_OWNERSHIP_TTL_SECONDS", "900"))),
+        )
+    finally:
+        continuity_state.RUNTIME_DIR = previous_runtime
+    if str(claimed.get("recovery_state", "")).strip().upper() == "FOREGROUND_ACTIVE":
+        return None
+    return claimed
+
+
+def _release_resume_ownership(runtime_dir: Path, state: dict[str, Any], request: dict[str, Any], reason: str) -> None:
+    if not _durable_handoff_enabled():
+        return
+    task_id = str(state.get("task_id", "")).strip()
+    owner_id = f"resume:{str(request.get('id', '')).strip()}"
+    previous_runtime = continuity_state.RUNTIME_DIR
+    try:
+        continuity_state.RUNTIME_DIR = Path(runtime_dir)
+        continuity_state.release_recovery_ownership(task_id, owner_id=owner_id, reason=reason)
+    except continuity_state.TaskStateError:
+        pass
+    finally:
+        continuity_state.RUNTIME_DIR = previous_runtime
+
+
 def _state_path(runtime_dir: Path, task_id: str) -> Path:
     safe = _safe_task_id(task_id)
     return runtime_dir / f"{safe}.json"
@@ -93,6 +138,116 @@ def _load_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    data = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb", closefd=True) as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        dir_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _execution_record_path(runtime_dir: Path, fingerprint: str) -> Path:
+    digest = hashlib.sha256(str(fingerprint).encode("utf-8")).hexdigest()[:32]
+    return runtime_dir / f"{EXECUTION_RECORD_PREFIX}{digest}.json"
+
+
+def enqueue_execution(runtime_dir: Path, project_dir: Path, request: dict[str, Any], state: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
+    fingerprint = str(request.get("fingerprint", "")).strip()
+    if not fingerprint:
+        raise ValueError("execution fingerprint required")
+    record_path = _execution_record_path(runtime_dir, fingerprint)
+    existing = _load_json(record_path)
+    if str(existing.get("status", "")).strip() in {"queued", "running"}:
+        existing["_created"] = False
+        return existing
+    now = utc_now()
+    record = {
+        "schema_version": 1, "request_id": str(request.get("id", "")).strip(),
+        "task_id": str(state.get("task_id", "")).strip(),
+        "repository": str(state.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
+        "fingerprint": fingerprint, "checkpoint_before": str(state.get("updated_at", "")).strip(),
+        "project_dir": str(project_dir), "timeout_seconds": max(1, int(timeout_seconds)),
+        "status": "queued", "created_at": now, "updated_at": now,
+        "worker_pid": None, "worker_start_time": None, "result": None,
+        "executor_exit_code": None, "diagnostic": {},
+    }
+    _atomic_json(record_path, record)
+    record["_created"] = True
+    return record
+
+
+def reconcile_executions(runtime_dir: Path, project_dir: Path) -> dict[str, int]:
+    counts = {
+        "in_flight": 0,
+        "reconciled": 0,
+        "recovered": 0,
+        "progressed": 0,
+        "terminal": 0,
+        "no_progress": 0,
+        "failed": 0,
+    }
+    ledger_path = runtime_dir / EXECUTIONS_FILE
+    for path in runtime_dir.glob(f"{EXECUTION_RECORD_PREFIX}*.json"):
+        record = _load_json(path)
+        status = str(record.get("status", "")).strip()
+        if status in {"queued", "running"}:
+            counts["in_flight"] += 1
+            continue
+        if status != "completed":
+            continue
+
+        result = str(record.get("result", "")).strip()
+        diagnostic = record.get("diagnostic") if isinstance(record.get("diagnostic"), dict) else {}
+        evidence = record.get("evidence") if isinstance(record.get("evidence"), dict) else {
+            "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+            "checkpoint_after": str(record.get("checkpoint_after", "")).strip(),
+            "diagnostic": diagnostic,
+        }
+        row = {
+            "request_id": str(record.get("request_id", "")).strip(),
+            "task_id": str(record.get("task_id", "")).strip(),
+            "repository": str(record.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY,
+            "fingerprint": str(record.get("fingerprint", "")).strip(),
+            "result": result,
+            "executor_exit_code": record.get("executor_exit_code"),
+            "checkpoint_before": str(record.get("checkpoint_before", "")).strip(),
+            "checkpoint_after": str(record.get("checkpoint_after", "")).strip(),
+            "diagnostic": diagnostic,
+            "evidence": evidence,
+            "created_at": utc_now(),
+        }
+        _append_jsonl(ledger_path, row)
+        now = utc_now()
+        record["status"] = "reconciled"
+        record["evidence"] = evidence
+        record["reconciled_at"] = now
+        record["updated_at"] = now
+        _atomic_json(path, record)
+        counts["reconciled"] += 1
+        if result == "progress":
+            counts["progressed"] += 1
+        elif result == "terminal":
+            counts["terminal"] += 1
+        elif result == "no_progress":
+            counts["no_progress"] += 1
+        elif result not in {"superseded", ""}:
+            counts["failed"] += 1
+    return counts
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -159,21 +314,55 @@ def _recent_successful_chatgpt_nudge(
             return False
 
         worker_status = str(row.get("worker_status", "")).strip().upper()
-        if worker_status in {
-            "SENT",
-            "SENT_UNCONFIRMED",
-            "STALLED_NOT_CONFIRMED",
-            "CONVERSATION_NOT_FOUND",
-            "ERROR",
-        }:
-            # A bridge enqueue/click without observed assistant progress is
-            # not enough to block the detached recovery tier.
+        if worker_status in {"STALLED_NOT_CONFIRMED", "CONVERSATION_NOT_FOUND", "ERROR"}:
+            # Explicit browser failure can release the bounded fallback early.
             return False
 
-        # While the worker is still pending/claimed we preserve ChatGPT's
-        # bounded first chance. Once progress is explicitly confirmed, the
-        # same grace window continues to avoid parallel executors.
-        return worker_status in {"", "PENDING", "CLAIMED", "PROGRESS_CONFIRMED"}
+        # SENT/SENT_UNCONFIRMED means delivery was attempted, not that the
+        # conversation failed. Preserve its finite reply window to avoid a
+        # parallel worker mutating the same task before the response arrives.
+        return worker_status in {
+            "", "PENDING", "CLAIMED", "SENT", "SENT_UNCONFIRMED",
+            "PROGRESS_CONFIRMED",
+        }
+    return False
+
+
+def _failed_chatgpt_nudge_after(
+    runtime_dir: Path,
+    request: dict[str, Any],
+    previous_at: datetime,
+) -> bool:
+    """Return true when ChatGPT definitively failed after the last detached attempt."""
+    fingerprint = str(request.get("fingerprint", "")).strip()
+    task_id = str(request.get("task_id", "")).strip()
+    repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+    if not fingerprint or not task_id:
+        return False
+
+    failed_statuses = {
+        "SENT",
+        "SENT_UNCONFIRMED",
+        "STALLED_NOT_CONFIRMED",
+        "CONVERSATION_NOT_FOUND",
+        "ERROR",
+    }
+    for row in reversed(_read_jsonl(runtime_dir / CHATGPT_NUDGE_LEDGER_FILE)):
+        if str(row.get("fingerprint", "")).strip() != fingerprint:
+            continue
+        if str(row.get("task_id", "")).strip() != task_id:
+            continue
+        row_repository = str(row.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
+        if row_repository != repository:
+            continue
+        if str(row.get("worker_status", "")).strip().upper() not in failed_statuses:
+            continue
+        observed_at = _parse_utc(str(row.get("worker_status_observed_at", "")))
+        if observed_at is None:
+            observed_at = _parse_utc(str(row.get("dispatched_at", "")))
+        if observed_at is None:
+            continue
+        return observed_at > previous_at
     return False
 
 
@@ -274,6 +463,11 @@ def _restore_executor_owned_no_progress(
 def _request_matches_state(request: dict[str, Any], state: dict[str, Any]) -> bool:
     if str(state.get("status", "")).strip() != "RUNNING":
         return False
+    created_at = _parse_utc(str(state.get("created_at", "")))
+    if created_at is None:
+        return False
+    if (datetime.now(timezone.utc) - created_at).total_seconds() > DEFAULT_LOOKBACK_DAYS * 86400:
+        return False
     if str(request.get("task_id", "")).strip() != str(state.get("task_id", "")).strip():
         return False
     request_repository = str(request.get("repository", DEFAULT_REPOSITORY)).strip() or DEFAULT_REPOSITORY
@@ -371,6 +565,7 @@ def _prepare_workspace(task_id: str, repository: str) -> Path:
 
 _SANITIZED_OUTPUT_MARKERS = (
     "background_paid_fallback_forbidden",
+    "background_claude_fallback_authorized",
     "background_codex_fallback_authorized",
     "background_gemini_error",
     "background_gemini_exit_code",
@@ -478,6 +673,14 @@ def _execute(
         env["SHOPVIVALIZ_RESUME_SOURCE"] = "task-continuation-watchdog"
         env["SHOPVIVALIZ_RESUME_REQUEST_ID"] = str(request.get("id", ""))
         env["SHOPVIVALIZ_RESUME_FINGERPRINT"] = str(request.get("fingerprint", ""))
+        if _durable_handoff_enabled():
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_ID"] = str(state.get("conversation_id", ""))
+            env["SHOPVIVALIZ_RESUME_CHECKPOINT_VERSION"] = str(state.get("recovery_checkpoint_version", state.get("checkpoint_version", "")))
+            env["SHOPVIVALIZ_RESUME_OWNER_ID"] = str(state.get("recovery_owner_id", ""))
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_LEASE_ID"] = str(state.get("recovery_lease_id", ""))
+            env["SHOPVIVALIZ_RESUME_CONVERSATION_FENCING_TOKEN"] = str(state.get("recovery_fencing_token", ""))
+            env["SHOPVIVALIZ_RESUME_RUNTIME_LEASE_ID"] = str(state.get("runtime_lease_id", ""))
+            env["SHOPVIVALIZ_RESUME_RUNTIME_FENCING_TOKEN"] = str(state.get("runtime_fencing_token", ""))
 
         completed = subprocess.run(
             command,
@@ -545,8 +748,15 @@ def run_once(
         "terminal": 0,
         "no_progress": 0,
         "failed": 0,
+        "launched": 0,
+        "in_flight": 0,
+        "reconciled": 0,
+        "recovered": 0,
         "deferred_chatgpt": 0,
         "deferred_browser_probe": 0,
+        "deferred_unbound": 0,
+        "deferred_unbound_session": 0,
+        "deferred_ownership_busy": 0,
         "generated_at": utc_now(),
     }
 
@@ -557,6 +767,10 @@ def run_once(
             summary["locked"] = True
             return summary
 
+        reconciliation = reconcile_executions(runtime, project)
+        for key in ("in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed"):
+            summary[key] += int(reconciliation.get(key) or 0)
+
         ledger_rows = _read_jsonl(ledger_path)
         latest_by_fingerprint: dict[str, dict[str, Any]] = {}
         for row in ledger_rows:
@@ -566,7 +780,7 @@ def run_once(
 
         for request in read_requests(runtime):
             summary["scanned"] += 1
-            if summary["executed"] >= max(1, int(max_requests)):
+            if summary["executed"] + summary["launched"] >= max(1, int(max_requests)):
                 break
             if str(request.get("status", "")).strip() != "queued":
                 continue
@@ -589,7 +803,7 @@ def run_once(
                 cooldown = max(0, int(retry_after_seconds))
                 if previous_at is not None and cooldown > 0:
                     elapsed = (datetime.now(timezone.utc) - previous_at).total_seconds()
-                    if elapsed < cooldown:
+                    if elapsed < cooldown and not _failed_chatgpt_nudge_after(runtime, request, previous_at):
                         continue
 
             state = _load_json(_state_path(runtime, task_id))
@@ -600,16 +814,50 @@ def run_once(
                 summary["deferred_browser_probe"] += 1
                 continue
 
+            if _durable_handoff_enabled() and not str(state.get("conversation_id", "")).strip():
+                summary["deferred_unbound"] += 1
+                continue
+            if _durable_handoff_enabled() and str(state.get("browser_session", "")).strip() not in {"fred", "atendimento", "dev"}:
+                summary["deferred_unbound_session"] += 1
+                continue
+
+            try:
+                claimed_state = _claim_resume_ownership(runtime, state, request)
+            except continuity_state.TaskStateError as exc:
+                message = str(exc).strip().lower()
+                ownership_busy = (
+                    message == "conversation recovery ownership is busy"
+                    or message.startswith("cannot claim conversation recovery lease: conversation lease already held")
+                    or message.startswith("cannot claim runtime mutation lock: runtime lock already held")
+                )
+                if not ownership_busy:
+                    raise
+                summary["deferred_ownership_busy"] += 1
+                continue
+            if claimed_state is None:
+                summary["deferred_foreground"] = int(summary.get("deferred_foreground", 0)) + 1
+                continue
+            state = claimed_state
             summary["eligible"] += 1
+            if executor is None:
+                record = enqueue_execution(runtime, project, request, state, timeout_seconds)
+                if bool(record.pop("_created", False)):
+                    summary["launched"] += 1
+                    summary["in_flight"] += 1
+                continue
+
             summary["executed"] += 1
-            result, exit_code, after_state, diagnostic = _execute(
-                runtime_dir=runtime,
-                project_dir=project,
-                request=request,
-                state=state,
-                executor=executor,
-                timeout_seconds=timeout_seconds,
-            )
+            try:
+                result, exit_code, after_state, diagnostic = _execute(
+                    runtime_dir=runtime,
+                    project_dir=project,
+                    request=request,
+                    state=state,
+                    executor=executor,
+                    timeout_seconds=timeout_seconds,
+                )
+            finally:
+                _release_resume_ownership(runtime, state, request, "resume_attempt_finished")
 
             row = {
                 "request_id": str(request.get("id", "")).strip(),

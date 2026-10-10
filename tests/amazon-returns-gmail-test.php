@@ -122,4 +122,28 @@ gmSame('Amazon <donotreply@amazon.com>', $pulled['messages'][0]['from'], 'Gmail 
 gmAssert(!in_array('UNREAD', $pulled['messages'][0]['labels'] ?? [], true), 'Unread state is not required for source cursor semantics.');
 gmAssert(str_starts_with($calls[1][1], 'https://gmail.googleapis.com/gmail/v1/users/me/history?'), 'Incremental pull must use Gmail history API.');
 
+$mixedTransportCalled = false;
+$mismatchedClient = new SvAmazonGmailApiClient(
+    new SvAmazonReturnsConfig([
+        'GMAIL_OAUTH_ACCESS_TOKEN'=>'',
+        'GMAIL_OAUTH_CLIENT_ID'=>'',
+        'GMAIL_OAUTH_CLIENT_SECRET'=>'',
+        'GMAIL_OAUTH_REFRESH_TOKEN'=>'synthetic-gmail-refresh',
+        'GOOGLE_OAUTH_CLIENT_ID'=>'synthetic-google-id',
+        'GOOGLE_OAUTH_CLIENT_SECRET'=>'synthetic-google-secret',
+        'GOOGLE_OAUTH_REFRESH_TOKEN'=>'',
+    ]),
+    static function(string $method, string $url, array $headers, ?array $body = null) use (&$mixedTransportCalled): array {
+        $mixedTransportCalled = true;
+        return ['status'=>200,'json'=>[]];
+    }
+);
+try {
+    $mismatchedClient->pull(null);
+    throw new RuntimeException('Mixed OAuth credentials should not be accepted.');
+} catch (RuntimeException $e) {
+    gmSame('Gmail OAuth credentials are incomplete.', $e->getMessage(), 'Mixed families must fail closed before any HTTP request.');
+}
+gmSame(false, $mixedTransportCalled, 'Incoherent credentials must not reach Gmail API transport.');
+
 echo "amazon-returns-gmail-test: OK\n";

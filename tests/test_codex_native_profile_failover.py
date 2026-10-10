@@ -138,13 +138,8 @@ class NativeProfileCliContractTests(unittest.TestCase):
     def test_probe_contract_is_ephemeral_read_only_and_bounded(self):
         mod = load_module()
         self.assertEqual(mod.PROBE_TIMEOUT_SECONDS, 45)
-        self.assertEqual(mod.PROBE_ARGS[:3], ['--ask-for-approval', 'never', 'exec'])
-        self.assertIn('--ephemeral', mod.PROBE_ARGS)
-        self.assertIn('--skip-git-repo-check', mod.PROBE_ARGS)
-        self.assertIn('--ignore-user-config', mod.PROBE_ARGS)
-        self.assertIn('--ignore-rules', mod.PROBE_ARGS)
-        self.assertIn('read-only', mod.PROBE_ARGS)
-        self.assertIn('never', mod.PROBE_ARGS)
+        self.assertEqual(mod.PROBE_ARGS, ['login', 'status'])
+        self.assertNotIn('exec', mod.PROBE_ARGS, 'an authentication probe must not consume model quota')
 
     def test_actual_capacity_failure_prefers_other_profile_next_time(self):
         mod = load_module()
@@ -221,13 +216,13 @@ class NativeProfileMainTests(unittest.TestCase):
                 'name=$(basename "$CODEX_HOME")\n'
                 'printf "%s|%s\\n" "$name" "$*" >> "$CALL_LOG"\n'
                 'case "$*" in\n'
-                '  *PROFILE_OK*) if [ "$name" = fredmourao ]; then echo "usage limit reached" >&2; exit 1; else echo PROFILE_OK; exit 0; fi ;;\n'
+                '  "login status") if [ "$name" = fredmourao ]; then echo "not logged in" >&2; exit 1; else echo "Logged in"; exit 0; fi ;;\n'
                 '  *) echo "TASK:$name"; exit 0 ;;\n'
                 'esac\n',
                 '@echo off\r\n'
                 'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
                 '>>"%CALL_LOG%" echo %name%^|%*\r\n'
-                'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
+                'echo %* | findstr /C:"login status" >nul\r\n'
                 'if errorlevel 1 goto task\r\n'
                 'if "%name%"=="fredmourao" goto fredfail\r\n'
                 'echo PROFILE_OK\r\n'
@@ -268,13 +263,13 @@ class NativeProfileMainTests(unittest.TestCase):
                 'name=$(basename "$CODEX_HOME")\n'
                 'printf "%s|%s\\n" "$name" "$*" >> "$CALL_LOG"\n'
                 'case "$*" in\n'
-                '  *PROFILE_OK*) echo PROFILE_OK; exit 0 ;;\n'
+                '  "login status") echo "Logged in"; exit 0 ;;\n'
                 '  *) echo "usage limit reached" >&2; exit 1 ;;\n'
                 'esac\n',
                 '@echo off\r\n'
                 'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
                 '>>"%CALL_LOG%" echo %name%^|%*\r\n'
-                'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
+                'echo %* | findstr /C:"login status" >nul\r\n'
                 'if errorlevel 1 goto taskfail\r\n'
                 'echo PROFILE_OK\r\n'
                 'exit /b 0\r\n'

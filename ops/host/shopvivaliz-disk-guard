@@ -1,0 +1,190 @@
+#!/bin/sh
+set -eu
+LOG=/var/log/shopvivaliz-disk-guard.log
+STATE_DIR=/var/lib/shopvivaliz-ops
+STATE="$STATE_DIR/disk-status.env"
+RAPID_GROWTH_BPH="${RAPID_GROWTH_BPH:-2147483648}"
+WORKTREE_PRESSURE_COUNT="${WORKTREE_PRESSURE_COUNT:-20}"
+MIN_FREE_BYTES="${MIN_FREE_BYTES:-6442450944}"
+mkdir -p "$STATE_DIR"
+
+pct() {
+  df -P / | awk 'NR==2 {gsub("%","",$5); print $5}'
+}
+inode_pct() {
+  df -Pi / | awk 'NR==2 {gsub("%","",$5); print $5}'
+}
+used_bytes() {
+  df -PB1 / | awk 'NR==2 {print $3}'
+}
+available_bytes() {
+  df -PB1 / | awk 'NR==2 {print $4}'
+}
+worktree_count() {
+  if [ -d /home/ubuntu/worktrees ]; then
+    find /home/ubuntu/worktrees -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l
+  else
+    echo 0
+  fi
+}
+
+classify() {
+  value="$1"
+  if [ "$value" -ge 90 ]; then echo critical
+  elif [ "$value" -ge 80 ]; then echo warning
+  elif [ "$value" -ge 70 ]; then echo observe
+  else echo ok
+  fi
+}
+
+before=$(pct)
+inode_before=$(inode_pct)
+used_now=$(used_bytes)
+available_now=$(available_bytes)
+worktrees_now=$(worktree_count)
+sample_epoch=$(date +%s)
+growth_bytes_per_hour=0
+rapid_growth=0
+low_free=0
+if [ "$available_now" -lt "$MIN_FREE_BYTES" ]; then
+  low_free=1
+fi
+prev_epoch=""
+prev_used=""
+if [ -r "$STATE" ]; then
+  prev_epoch=$(awk -F= '$1 == "sample_epoch" {print $2; exit}' "$STATE" 2>/dev/null || true)
+  prev_used=$(awk -F= '$1 == "used_bytes" {print $2; exit}' "$STATE" 2>/dev/null || true)
+fi
+case "$prev_epoch:$prev_used" in
+  *[!0-9:]*|:|*:) ;;
+  *)
+    elapsed=$((sample_epoch - prev_epoch))
+    growth=$((used_now - prev_used))
+    if [ "$elapsed" -gt 0 ] && [ "$growth" -gt 0 ]; then
+      growth_bytes_per_hour=$((growth * 3600 / elapsed))
+      if [ "$growth_bytes_per_hour" -ge "$RAPID_GROWTH_BPH" ]; then
+        rapid_growth=1
+      fi
+    fi
+    ;;
+esac
+now=$(date -u +%FT%TZ)
+level=$(classify "$before")
+inode_level=$(classify "$inode_before")
+printf '%s root_before=%s%% level=%s inode_before=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s\n' "$now" "$before" "$level" "$inode_before" "$inode_level" "$used_now" "$available_now" "$MIN_FREE_BYTES" "$low_free" "$growth_bytes_per_hour" "$rapid_growth" >> "$LOG"
+
+# Close the feedback loop early: once root reaches 70%, run the guarded
+# workspace lifecycle cleanup. It only removes inactive, clean, delivered
+# worktrees and known regenerable temp/cache artifacts.
+if { [ "$before" -ge 70 ] || [ "$rapid_growth" -eq 1 ] || [ "$worktrees_now" -ge "$WORKTREE_PRESSURE_COUNT" ] || [ "$low_free" -eq 1 ]; } && [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
+  ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 ABANDONED_CLONE_TTL_HOURS=24 PRESSURE_RECLAIM_PUSHED=1 /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
+  before="$(pct)"
+  available_now="$(available_bytes)"
+  low_free=0
+  if [ "$available_now" -lt "$MIN_FREE_BYTES" ]; then
+    low_free=1
+  fi
+fi
+
+cleanup_regenerable_node_cache() {
+  home=/home/ubuntu
+  if command -v npm >/dev/null 2>&1 && [ -d "$home/.npm" ]; then
+    sudo -u ubuntu npm cache clean --force >/dev/null 2>&1 || true
+  fi
+  base="$home/.npm/_npx"
+  [ -d "$base" ] || return 0
+  for d in "$base"/*; do
+    [ -d "$d" ] || continue
+    find "$d" -maxdepth 0 -mtime +1 | grep -q . || continue
+    in_use=0
+    for c in /proc/[0-9]*/cmdline; do
+      [ -r "$c" ] || continue
+      if tr '\0' ' ' < "$c" 2>/dev/null | grep -Fq -- "$d"; then
+        in_use=1
+        break
+      fi
+    done
+    [ "$in_use" -eq 0 ] || continue
+    rm -rf --one-file-system "$d"
+  done
+}
+
+cleanup_unused_docker_images() {
+  command -v docker >/dev/null 2>&1 || return 0
+  [ "$(systemctl is-active docker 2>/dev/null || true)" = active ] || return 0
+  docker image prune -af >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true
+}
+
+# Safe, bounded cleanup only. Never truncate Docker json-file logs in place.
+# Start with regenerable agent caches in observe state so disk does not drift into warning.
+if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ] || [ "$low_free" -eq 1 ]; then
+  cleanup_regenerable_node_cache
+  cleanup_unused_docker_images
+fi
+if [ "$before" -ge 80 ]; then
+  journalctl --vacuum-size=512M >/dev/null 2>&1 || true
+  apt-get clean >/dev/null 2>&1 || true
+fi
+if [ "$before" -ge 90 ]; then
+  journalctl --vacuum-size=256M >/dev/null 2>&1 || true
+fi
+
+after=$(pct)
+inode_after=$(inode_pct)
+used_after=$(used_bytes)
+available_after=$(available_bytes)
+worktrees_after=$(worktree_count)
+low_free_after=0
+if [ "$available_after" -lt "$MIN_FREE_BYTES" ]; then
+  low_free_after=1
+fi
+level=$(classify "$after")
+inode_level=$(classify "$inode_after")
+docker_state=$(systemctl is-active docker 2>/dev/null || true)
+zram_state=$(systemctl is-active shopvivaliz-zram.service 2>/dev/null || true)
+load1=$(awk '{print $1}' /proc/loadavg)
+
+cat > "$STATE" <<EOF2
+timestamp=$(date -u +%FT%TZ)
+sample_epoch=$sample_epoch
+used_bytes=$used_after
+available_bytes=$available_after
+min_free_bytes=$MIN_FREE_BYTES
+low_free=$low_free_after
+growth_bytes_per_hour=$growth_bytes_per_hour
+rapid_growth=$rapid_growth
+worktree_count=$worktrees_after
+root_pct=$after
+level=$level
+inode_pct=$inode_after
+inode_level=$inode_level
+docker_active=$docker_state
+zram_active=$zram_state
+load1=$load1
+EOF2
+
+printf '%s root_after=%s%% level=%s inode_after=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$level" "$inode_after" "$inode_level" "$used_after" "$available_after" "$MIN_FREE_BYTES" "$low_free_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
+
+if [ "$rapid_growth" -eq 1 ]; then
+  logger -p daemon.warning -t shopvivaliz-disk-guard "root filesystem growing rapidly: ${growth_bytes_per_hour} bytes/hour (threshold ${RAPID_GROWTH_BPH})"
+fi
+if [ "$low_free_after" -eq 1 ]; then
+  logger -p daemon.crit -t shopvivaliz-disk-guard "root filesystem below free-space floor: available=${available_after} minimum=${MIN_FREE_BYTES}"
+fi
+if [ "$after" -ge 90 ]; then
+  logger -p daemon.crit -t shopvivaliz-disk-guard "root filesystem critical: $after%"
+elif [ "$after" -ge 80 ]; then
+  logger -p daemon.warning -t shopvivaliz-disk-guard "root filesystem warning: $after%"
+fi
+if [ "$inode_after" -ge 90 ]; then
+  logger -p daemon.crit -t shopvivaliz-disk-guard "root inode usage critical: $inode_after%"
+elif [ "$inode_after" -ge 80 ]; then
+  logger -p daemon.warning -t shopvivaliz-disk-guard "root inode usage warning: $inode_after%"
+fi
+if [ "$docker_state" != active ]; then
+  logger -p daemon.crit -t shopvivaliz-disk-guard "docker service state: $docker_state"
+fi
+if [ "$zram_state" != active ]; then
+  logger -p daemon.warning -t shopvivaliz-disk-guard "zram service state: $zram_state"
+fi
