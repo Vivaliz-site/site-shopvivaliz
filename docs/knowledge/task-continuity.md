@@ -340,6 +340,23 @@ registra PID, boot id e start ticks; se o processo proprietário morrer, o resta
 recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
 continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
+### Prioridade da conversa ChatGPT (130 segundos)
+
+O executor prioritario de uma tarefa vinculada e a **conversa ChatGPT de origem**;
+o dispatcher detached/worker e **fallback**, nunca um executor concorrente por
+padrao. Apos um nudge aceito pelo bridge, reservar ate **120 segundos + 10
+segundos de margem** (130 segundos desde `dispatched_at`) para resposta e
+progresso observaveis. `SENT` e `SENT_UNCONFIRMED` nao significam falha e
+mantem a preferencia ChatGPT dentro desse prazo; `PENDING` e `CLAIMED`
+tambem. Falhas explicitas (`STALLED_NOT_CONFIRMED`,
+`CONVERSATION_NOT_FOUND`, `ERROR`) podem liberar o fallback antes.
+
+Ao vencer a janela sem progresso, o dispatcher pode acionar o worker somente
+com checkpoint/conversa/sessao autenticos e com ownership/lease exclusivo;
+nenhuma execucao paralela, nenhum rebinding por titulo e nenhuma troca de conta
+implicita. `PROGRESS_CONFIRMED` exige resposta real na conversa. A liberacao
+do fallback nao constitui conclusao da tarefa.
+
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
@@ -751,3 +768,50 @@ sem criar estado órfão ou forjar progresso. Fallback detached nunca cria
 checkpoint, mesmo no modo legado. Somente o opt-out foreground explicitamente
 não durável (SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) conserva a compatibilidade
 legada; o deploy canônico não utiliza esse modo.
+
+
+## Fila autônoma versus conversa autenticada
+
+O produtor scripts/agent-operations-worker.py recebe também tarefas geradas
+por auto-task-generator.py e por filas independentes do ChatGPT. No modo
+durável, uma tarefa sem conversa comprovada não deve virar um checkpoint
+ChatGPT RUNNING: tarefas auto_generated permanecem duráveis na fila
+(continuity_binding_status=QUEUE_ONLY_AUTONOMOUS), e tarefas humanas sem
+conversation_id + browser_session recebem
+AWAIT_VERIFIED_BROWSER_ORIGIN, sem fabricar um chat. Um checkpoint legado
+já órfão não é avançado por ACK genérico (LEGACY_UNBOUND_CHECKPOINT).
+A criação com vínculo explícito segue permitida, com verificação do e-mail e
+da conversa pelo worker antes de qualquer ação externa. O modo não durável
+(SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) mantém compatibilidade legada.
+
+Estes marcadores são diagnóstico de roteamento da fila, não comprovam
+retomada nem devem ser interpretados como PROGRESS_CONFIRMED.
+
+
+<!-- ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->
+## Vinculo atomico de conversa e sessao (2026-10-09)
+
+O checkpoint de ChatGPT so pode ser retomado em uma conversa autenticada se
+`conversation_id` e `browser_session` (`dev` ou `atendimento`) forem ambos
+comprovados. O comando para vincular um checkpoint legado e:
+
+```bash
+python3 scripts/agent_task_state.py bind-route --task TASK_ID \
+  --conversation-id EXACT_CHATGPT_CONVERSATION_ID --browser-session dev
+```
+
+O `bind-route` e atomico, idempotente, nao muda `updated_at` nem o fingerprint
+de progresso, rejeita conflitos e aceita `--expected-checkpoint-version` para
+fencing. Na criacao de tarefas, prefira `start --conversation-id ...
+--browser-session ...`. Integracoes foreground podem usar as variaveis
+`SHOPVIVALIZ_TASK_ROUTE_TASK_ID`, `SHOPVIVALIZ_TASK_CONVERSATION_ID` e
+`SHOPVIVALIZ_TASK_BROWSER_SESSION` juntas: o identificador da tarefa precisa
+coincidir exatamente para evitar heranca acidental entre conversas.
+
+O controlador tenta reparar vinculos somente com recibos
+`PROGRESS_CONFIRMED` do worker que correspondam ao fingerprint atual e
+contenham ID de conversa e perfil autenticado. Recibos ambiguos, sem sessao,
+obsoletos ou baseados apenas em titulo, agente ou horario nunca geram vinculo.
+As tarefas sem prova continuam visiveis como degradadas; nao ha rota
+sintetica nem desligamento das travas de concorrencia.
+<!-- /ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->

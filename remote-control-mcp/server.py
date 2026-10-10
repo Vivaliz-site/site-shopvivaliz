@@ -28,6 +28,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -281,6 +283,24 @@ def _controller_origin_main_sha(*, refresh: bool = False) -> str:
     return sha
 
 
+def _controller_remote_main_sha() -> str:
+    """Read the real GitHub main head without changing the local tracking ref.
+
+    The cached origin/main ref may be stale when the deploy checkout has not
+    fetched recently. A failed probe must never certify the release as current.
+    """
+    try:
+        listing = _run_as_ubuntu(
+            ["env", "GIT_TERMINAL_PROMPT=0", "git", "-C", str(CONTROLLER_REPO),
+             "ls-remote", "--heads", "origin", "main"],
+            timeout=15,
+        )
+    except Exception:
+        return ""
+    match = re.fullmatch(r"([0-9a-f]{40})\s+refs/heads/main", listing.strip())
+    return match.group(1) if match else ""
+
+
 def _controller_active_sha() -> str:
     try:
         pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
@@ -329,7 +349,7 @@ def _read_controller_state() -> dict[str, Any]:
     allowed = {
         "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
         "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
-        "watchdog", "dispatcher", "chatgpt_nudge",
+        "watchdog", "dispatcher", "chatgpt_nudge", "route_recovery",
     }
     return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
 
@@ -404,6 +424,7 @@ def controller_status() -> dict[str, Any]:
         origin_main_sha = _controller_origin_main_sha(refresh=False)
     except Exception:
         origin_main_sha = ""
+    remote_main_sha = _controller_remote_main_sha()
     state = _read_controller_state()
     return {
         "ok": active and bool(active_sha),
@@ -412,7 +433,11 @@ def controller_status() -> dict[str, Any]:
         "service_active": active,
         "active_sha": active_sha,
         "origin_main_sha": origin_main_sha,
-        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "remote_main_sha": remote_main_sha,
+        "remote_head_verified": bool(remote_main_sha),
+        "matches_tracking_main": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        # Only the verified remote head can establish true freshness.
+        "up_to_date": bool(active_sha and remote_main_sha and active_sha == remote_main_sha),
         "state": state,
     }
 
@@ -1191,7 +1216,7 @@ def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload", "value"):
         # Unsalted digests of low-entropy secrets remain guessable metadata.
         # Preserve event identity and length, not a searchable secret digest.
         safe_args.pop(f"{secret_key}_sha256", None)
@@ -1886,8 +1911,150 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# Deliberately fixed localhost endpoint for the *existing*, isolated browser
+# MCP. No arbitrary host, port or URL is accepted from tool callers.
+ACCOUNT_AUTH_BROWSER_MCP_URL = "http://127.0.0.1:5581/mcp"
+ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
+ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+
+
+def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Expose the existing browser MCP login gate without weakening its lease.
+
+    Browser MCP re-checks the maintenance owner, fencing token, official page
+    origin and specific input/button. This layer independently rejects wrong
+    sessions and stale/non-maintenance leases before invoking the local peer.
+    """
+    if name not in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
+        raise ValueError("account_auth_tool_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
+        raise ValueError("account_auth_session_invalid")
+    if name == "browser_auth_tabs":
+        if set(args) != {"session"}:
+            raise ValueError("account_auth_scope_invalid")
+    elif name == "browser_auth_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    else:
+        allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
+        if set(args) - allowed_keys:
+            raise ValueError("account_auth_scope_invalid")
+        action = str(args.get("action") or "")
+        tab_id = str(args.get("tab_id") or "")
+        if action not in ACCOUNT_AUTH_ALLOWED_ACTIONS:
+            raise ValueError("account_auth_action_invalid")
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
+            raise ValueError("account_auth_tab_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+
+    if not AUTH_TOKEN:
+        raise RuntimeError("account_auth_browser_proxy_unavailable")
+    request = Request(
+        ACCOUNT_AUTH_BROWSER_MCP_URL,
+        data=json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer " + AUTH_TOKEN,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open"} else 8) as response:
+            payload = response.read(524289)
+    except (HTTPError, URLError, TimeoutError, OSError):
+        raise RuntimeError("account_auth_browser_proxy_unavailable") from None
+    if len(payload) > 524288:
+        raise RuntimeError("account_auth_browser_proxy_oversized")
+    try:
+        envelope = json.loads(payload)
+        result = envelope["result"]
+        output = result["structuredContent"]
+        if not isinstance(output, dict):
+            raise ValueError("invalid_result")
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("account_auth_browser_proxy_invalid_response") from None
+    if result.get("isError") or output.get("ok") is not True:
+        raise ValueError("account_auth_backend_denied")
+
+    # Return only allowlisted outcome fields. In particular, never echo
+    # the value, remote stdout/stderr, request body or Chromium DOM text.
+    if name == "browser_auth_tabs":
+        tabs = output.get("tabs", [])
+        if not isinstance(tabs, list):
+            raise RuntimeError("account_auth_browser_proxy_invalid_response")
+        clean = []
+        for tab in tabs[:128]:
+            if not isinstance(tab, dict) or tab.get("session") != session:
+                continue
+            tab_id = str(tab.get("tab_id") or "")
+            stage = str(tab.get("stage") or "")
+            if re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id) and (
+                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage == "/email-verification"
+            ):
+                clean.append({"tab_id": tab_id, "session": session, "stage": stage})
+        return {"ok": True, "session": session, "tabs": clean}
+
+    # The downstream action returns protected child stdout as a JSON
+    # status. Parse booleans only; never surface the raw child output.
+    if name == "browser_auth_open":
+        try:
+            child = json.loads(str(output.get("stdout") or ""))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if (not isinstance(child, dict)
+                or child.get("ok") is not True
+                or child.get("session") != session
+                or child.get("stage") != "/auth/login"
+                or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(child.get("tab_id") or ""))):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "stage": "/auth/login",
+                "tab_id": child["tab_id"]}
+    child = {}
+    try:
+        child = json.loads(str(output.get("stdout") or ""))
+    except (ValueError, TypeError):
+        pass
+    if not isinstance(child, dict):
+        child = {}
+    action = str(args["action"])
+    status_key = "typed" if action.startswith("fill_") else "clicked"
+    status = bool(child.get(status_key) or output.get(status_key))
+    if not status:
+        raise RuntimeError("account_auth_status_unconfirmed")
+    return {"ok": True, "session": session, "action": action, status_key: status}
+
+
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
+    "browser_auth_action": "browser_auth_action",
+    "browser_auth_open": "browser_auth_open",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -1981,6 +2148,8 @@ def execute_tool(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
+    if name in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
+        return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
     if name == "browser_open":
@@ -2237,6 +2406,20 @@ TOOLS = [
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
+    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
+        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+        "value": {"type": "string", "maxLength": 512},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, True),
     ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
@@ -2388,6 +2571,19 @@ def durable_health_summary() -> dict[str, Any]:
     return summary
 
 
+def _tool_call_ok(name: str, output: Any) -> bool:
+    """Distinguish a successful health observation from healthy service state.
+
+    continuity_status.ok is readiness, not an MCP execution outcome.  An
+    observed degraded state is still a successful read and must reach clients
+    as structuredContent with isError=false.  Other tools retain fail-closed
+    execution semantics.
+    """
+    if name == "continuity_status" and isinstance(output, dict):
+        return "controller" in output and "continuity_ready" in output
+    return not (isinstance(output, dict) and output.get("ok") is False)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ShopVivalizRemoteControlMCP/" + VERSION
 
@@ -2460,8 +2656,11 @@ class Handler(BaseHTTPRequestHandler):
                 host = args.get("host")
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
+                    ok = _tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary, output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {

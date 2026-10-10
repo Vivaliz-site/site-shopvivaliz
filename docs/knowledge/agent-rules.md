@@ -1,3 +1,16 @@
+<!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
+
+Em `Retome`, `Continue`, `Prossiga`, `Siga` ou qualquer trabalho remoto, **um erro em um unico canal jamais comprova inacessibilidade do host**. Antes de `BLOCKED_EXTERNAL` ou de solicitar ao usuario uma acao que o agente pode executar:
+1. Ler `docs/knowledge/host-access.md` no `main` atual e o runbook do repositorio; verificar destino, identidade, privilegios, capacidades expostas e autorizacoes efetivas. Nunca adivinhar que uma rota existe.
+2. **Avaliar todas as rotas remotas realmente provisionadas, permitidas e adequadas a acao**, com a prioridade do runbook: (a) ShopVivaliz Remote Control MCP/controlador e ferramentas de host/tarefa/desktop; (b) RDC e RDC 2 para os hosts e capacidades explicitamente autorizados; (c) SSH privado/VCN/Tailscale e tunel/reverse SSH documentado, usando credenciais protegidas existentes; (d) GUI remota por bridge `desktop_*` ou RustDesk self-hosted quando a tarefa exigir interface; (e) OCI Bastion, OCI Compute Run Command, console serial e GitHub Actions/control plane somente para bootstrap, recuperacao ou reparo, conforme suas regras. Usar outras rotas somente se estiverem documentadas e autorizadas.
+3. Para cada rota aplicavel, provar disponibilidade, autenticacao/autorizacao, conectividade, identidade do host e capacidade da operacao; diagnosticar e reparar falhas tecnicas que estejam ao alcance, testar novamente com tentativas limitadas e idempotentes e passar ao proximo caminho quando apropriado. Nao confundir canal de GUI com shell nem rotas de recovery com transporte normal de runtime.
+4. Registrar checkpoint nao secreto `remote_access_attempts` por host e tarefa: canal, objetivo, permissao, teste, resultado, causa, reparo, proximo fallback e evidencia com instante. Canal nao disponivel deve ser classificado `NOT_PROVISIONED` com evidencia, nao `TRIED`.
+5. **So declarar host inacessivel/bloqueio externo depois de examinar e esgotar todos os caminhos adequados, seguros, tecnicamente viaveis e autorizados**, justificando cada nao utilizacao. Enquanto houver rota executavel, manter `RUNNING` e continuar a tarefa. Pedir aprovacao apenas quando obrigatoria, indicando a permissao exata.
+
+Limites: nao contornar MFA, CAPTCHA, RBAC, protecoes de branch, limites administrativos ou aprovacoes; nao procurar/extrair secrets nem tentar senhas indiscriminadamente; nao habilitar SSH publico ou usar IP publico como fallback indevido. Browser de agente ShopVivaliz permanece na VM backend com perfil isolado; Windows e apenas host de tarefas/GUI autorizadas, nao fallback de navegador. Sem loops ilimitados nem alegacao de acesso nao testado.
+<!-- /REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 ## Auditoria externa também é corretiva
 - Auditoria externa/independente segue o mesmo ciclo de investigação, correção, prevenção e validação.
@@ -211,7 +224,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ## ChatGPT VM: autenticação local obrigatória
 
 - As contas ChatGPT operacionais são `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`. Fontes locais de MFA só podem ser declaradas provisionadas após validação real; referências antigas de `fredmourao` são legado de migração.
-- A fonte operacional é o OTPClient da sessão `fredrdp` em `DISPLAY=:99`; seeds, senhas e códigos nunca podem ser versionados ou impressos.
+- A fonte operacional é a instância OTPClient realmente ativa, identificada por UID e `DISPLAY` do processo e janela correspondente; `fredrdp`/`:99` era apenas o registro histórico. A sessão do OTPClient não precisa coincidir com o display do navegador ChatGPT. Seeds, senhas e códigos nunca podem ser versionados ou impressos.
 - O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
 - Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.
 - Se faltar capacidade segura de digitação em aplicação desktop, tratar como lacuna do Remote Control MCP a ser corrigida, mantendo a tarefa em andamento até existir rota segura.
@@ -227,3 +240,12 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ### Foreground durable handoff lease lifecycle
 
 When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `foreground_handoff`, the returned conversation lease is part of the user-turn lifecycle. The foreground agent MUST call `foreground_release` with the exact `task_id`, `lease_id`, and `fencing_token` immediately before returning its user-facing final response. If bounded foreground preparation genuinely approaches lease expiry, it MAY call `foreground_renew`; renewal MUST NOT be used to wait for CI, deploy, durable task completion, sleeps, or background polling. If the client stream disappears before release, the bounded TTL remains the crash/disconnect fallback and recovery may claim ownership only after that lease expires.
+
+<!-- CONTINUITY_AUTH_REMEDIATION_V2 -->
+## Gate de autenticacao e continuidade: correcao obrigatoria
+- Diagnostico, health check e auditoria de continuidade com bloqueio material exigem remediacao e revalidacao E2E, nao apenas status de servico.
+- Validar a identidade e a sessao antes de qualquer login. OTPClient e navegador podem pertencer a usuarios/displays diferentes; verificar em runtime, nao presumir pelo documento.
+- Segredos permanecem no contexto protegido de origem: proibido imprimir, ler em saida de ferramentas, transportar por argumentos de comando, copiar entre contas ou registrar em auditorias. A ausencia de ponte protegida e bloqueio de capacidade, nao autorizacao para exfiltrar valores.
+- Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
+- Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
+<!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->

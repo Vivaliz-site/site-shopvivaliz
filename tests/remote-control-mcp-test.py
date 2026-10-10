@@ -98,7 +98,7 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_controller_service_env_carries_single_durable_handoff_flag(self):
         setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
         self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", setup)
-        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}", setup)
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}", setup)
         browser=(ROOT/"deploy"/"systemd"/"shopvivaliz-remote-control-browser-mcp.service").read_text()
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", browser)
 
@@ -312,6 +312,76 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
 
+    def test_scoped_account_auth_tools_are_exposed_with_gate_metadata(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_auth_tabs", specs)
+        self.assertIn("browser_auth_action", specs)
+        self.assertTrue(specs["browser_auth_tabs"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_auth_action"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
+        props = specs["browser_auth_action"]["inputSchema"]
+        self.assertIn("runtime_lease_id", props["required"])
+        self.assertIn("runtime_fencing_token", props["required"])
+        self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
+        self.assertEqual(
+            {"fill_email", "fill_password", "fill_code", "continue", "resend",
+             "back_to_methods", "open_login", "continue_google", "continue_microsoft"},
+            set(props["properties"]["action"]["enum"]),
+        )
+
+    def test_account_auth_audit_never_records_secret_or_low_entropy_digest(self):
+        args = {
+            "session": "dev", "action": "fill_code",
+            "value": "SYNTHETIC_CODE", "value_sha256": "guessable-digest"
+        }
+        safe = m.sanitize_audit_args("browser_auth_action", args)
+        self.assertNotIn("value", safe)
+        self.assertNotIn("value_sha256", safe)
+        self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
+
+    def test_account_auth_mutation_denies_missing_maintenance_lease(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.execute_tool(
+                    "browser_auth_action",
+                    {"session": "dev", "tab_id": "synthetic-tab", "action": "continue"},
+                )
+
+    def test_account_auth_proxy_routes_only_to_protected_local_browser_mcp(self):
+        import io
+        args = {
+            "session": "dev", "tab_id": "synthetic-tab",
+            "action": "fill_code", "value": "SYNTHETIC_CODE",
+            "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 8,
+        }
+        lease = {
+            "owner_kind": "maintenance",
+            "owner_id": "shopvivaliz-account-auth:dev",
+            "allowed_actions": ["browser_auth_action"],
+        }
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {"ok": True, "session": "dev", "action": "fill_code", "typed": True},
+                "isError": False,
+            }
+        }
+        with (
+            mock.patch.object(m, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())) as run,
+        ):
+            outcome = m.execute_tool("browser_auth_action", args)
+        request = run.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual("http://127.0.0.1:5581/mcp", request.full_url)
+        self.assertEqual("Bearer synthetic-service-token", request.get_header("Authorization"))
+        self.assertEqual("browser_auth_action", payload["params"]["name"])
+        self.assertEqual("SYNTHETIC_CODE", payload["params"]["arguments"]["value"])
+        self.assertEqual({"ok": True, "session": "dev", "action": "fill_code", "typed": True}, outcome)
+        self.assertNotIn("SYNTHETIC_CODE", json.dumps(outcome))
+
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
@@ -387,6 +457,48 @@ class RemoteControlMcpTests(unittest.TestCase):
             if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
             else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
 
+    def test_controller_remote_main_probe_is_read_only_and_validates_head(self):
+        remote = "b" * 40
+        with mock.patch.object(m, "_run_as_ubuntu", return_value=f"{remote}\trefs/heads/main\n") as runner:
+            self.assertEqual(m._controller_remote_main_sha(), remote)
+        argv = runner.call_args.args[0]
+        self.assertIn("ls-remote", argv)
+        self.assertNotIn("fetch", argv)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", argv)
+
+    def test_controller_remote_main_probe_fails_closed_when_unavailable(self):
+        with mock.patch.object(m, "_run_as_ubuntu", side_effect=RuntimeError("remote-unavailable")):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+        with mock.patch.object(m, "_run_as_ubuntu", return_value="not-a-commit\trefs/heads/main"):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+
+    def test_controller_status_does_not_claim_freshness_from_stale_tracking_ref(self):
+        active = "a" * 40
+        current_main = "b" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=current_main), \
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["service_active"])
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertTrue(status["remote_head_verified"])
+        self.assertEqual(status["remote_main_sha"], current_main)
+        self.assertFalse(status["up_to_date"])
+
+    def test_controller_status_remote_unavailable_never_certifies_current(self):
+        active = "a" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=""), \
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertFalse(status["remote_head_verified"])
+        self.assertFalse(status["up_to_date"])
+
     def test_controller_promote_requires_full_expected_sha(self):
         with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
             m.execute_tool("controller_promote", {"expected_sha": "abc123"})
@@ -431,6 +543,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(status["session_recovery_enabled"])
         for forbidden in ("sessionId", "environmentId", "pid", "procStart"):
             self.assertNotIn(forbidden, status)
+
+    def test_controller_state_exposes_attested_route_recovery_counters(self):
+        state_file = Path(self.tmp.name) / "controller-route-state.json"
+        expected = {
+            "scanned": 9, "bound": 0, "ambiguous": 0,
+            "skipped_no_proof": 9, "skipped_stale": 0, "failed": 0,
+        }
+        state_file.write_text(json.dumps({
+            "route_recovery": expected,
+            "conversation_id": "must-not-escape",
+            "continuity_ready": False,
+        }), encoding="utf-8")
+        with mock.patch.object(m, "CONTROLLER_STATE_FILE", state_file):
+            result = m._read_controller_state()
+        self.assertEqual(expected, result["route_recovery"])
+        self.assertNotIn("conversation_id", result)
 
     def test_controller_state_strips_internal_identifiers(self):
         original = m.CONTROLLER_STATE_FILE
@@ -512,6 +640,24 @@ class RemoteControlMcpTests(unittest.TestCase):
         row = m.load_task(result["task_id"])
         self.assertIn("--claude-reconcile-run", row["command"])
         self.assertIn(sha, row["command"])
+
+    def test_degraded_continuity_is_successful_mcp_observation(self):
+        degraded = {
+            "ok": False,
+            "controller": {"service_active": True},
+            "continuity_ready": False,
+            "degraded": True,
+            "degraded_reasons": ["active_checkpoint_unbound"],
+        }
+        self.assertTrue(m._tool_call_ok("continuity_status", degraded))
+        self.assertFalse(degraded["ok"])
+        self.assertFalse(degraded["continuity_ready"])
+        self.assertFalse(m._tool_call_ok("controller_status", {"ok": False}))
+        self.assertFalse(m._tool_call_ok("continuity_status", {"ok": False, "error": "probe_failed"}))
+        self.assertTrue(m._tool_call_ok("continuity_status", {
+            "ok": False, "controller": {}, "continuity_ready": None,
+        }))
+        self.assertTrue(m._tool_call_ok("hosts_list", {"ok": True}))
 
     def test_continuity_status_is_fail_closed_until_ready(self):
         with mock.patch.object(m, "controller_status", return_value={

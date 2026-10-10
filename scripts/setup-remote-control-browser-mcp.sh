@@ -56,6 +56,10 @@ if [ "${#missing[@]}" -gt 0 ]; then
   apt-get install -y --no-install-recommends xdotool xclip scrot x11-apps
 fi
 
+# The corporate CDP browser units require a protected Xvfb :99 display.
+# Reinstall only systemd dependencies; do not restart authenticated profiles.
+bash scripts/setup-shopvivaliz-display-recovery.sh
+
 install -d -m 0755 "$INSTALL_DIR"
 install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
@@ -123,14 +127,20 @@ for _ in $(seq 1 20); do
     python3 - <<'PY'
 import json
 p=json.load(open('/tmp/shopvivaliz-browser-mcp-health.json', encoding='utf-8'))
-assert p.get('ok') is True
 assert p.get('endpoint') == 'shopvivaliz-remote-control-browser-mcp'
 deps=p.get('dependencies') or {}
 assert deps.get('xdotool') is True
 assert deps.get('xclip') is True
 assert deps.get('scrot') is True
 assert deps.get('xwd') is True
-print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+if p.get('ok') is True:
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+elif p.get('ok') is False and p.get('gui_session_active') is False and p.get('reason') == 'gui_session_inactive':
+    # The GUI is unavailable, but the MCP transport can still be updated safely.
+    # Do not mislabel this state PASS or block independently authenticated bridges.
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive')
+else:
+    raise AssertionError('browser_mcp_invalid_health')
 PY
     rm -f /tmp/shopvivaliz-browser-mcp-health.json
     REMOTE_CONTROL_BROWSER_MCP_READY=1
@@ -153,7 +163,11 @@ systemctl daemon-reload
 for session in atendimento dev; do
   unit="shopvivaliz-browser-${session}-mcp.service"
   if [ "$session" = atendimento ]; then port=5582; else port=5583; fi
-  systemctl enable --now "$unit"
+  # enable --now is a no-op for an already running unit. Both session MCPs
+  # must reload the newly installed server.py and service unit on every deploy.
+  # This restarts only the MCP bridge, never the authenticated Chromium profile.
+  systemctl enable "$unit"
+  systemctl restart "$unit"
   ready=0
   for _ in $(seq 1 20); do
     if curl -fsS "http://127.0.0.1:${port}/health" >"/tmp/${unit}.health.json"; then

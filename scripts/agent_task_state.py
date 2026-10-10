@@ -383,8 +383,16 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         or DEFAULT_REPOSITORY
     )
     checks = _normalize_completion_checks(completion_checks)
-    conversation = str(conversation_id).strip()
-    session = str(browser_session).strip()
+    # Environment routing must be scoped to this exact task. Inherited/stale
+    # foreground variables may never silently bind a different checkpoint.
+    if conversation_id or browser_session:
+        conversation = str(conversation_id).strip()
+        session = str(browser_session).strip()
+    else:
+        conversation = os.getenv("SHOPVIVALIZ_TASK_CONVERSATION_ID", "").strip()
+        session = os.getenv("SHOPVIVALIZ_TASK_BROWSER_SESSION", "").strip()
+        if (conversation or session) and os.getenv("SHOPVIVALIZ_TASK_ROUTE_TASK_ID", "").strip() != task:
+            raise TaskStateError("foreground route environment must match exact task_id")
     if bool(conversation) != bool(session):
         raise TaskStateError("bound task start requires both conversation_id and browser_session")
     if conversation:
@@ -659,6 +667,47 @@ def resume_task(task_id: str, *, next_action: str) -> dict[str, Any]:
     payload["next_action"] = action
     payload["blocker"] = None
     _history(payload, "resumed", next_action=action)
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
+def bind_route(
+    task_id: str, *, conversation_id: str, browser_session: str,
+    expected_checkpoint_version: int | None = None,
+) -> dict[str, Any]:
+    """Atomically bind an attested ChatGPT conversation and account profile.
+
+    A half-bound checkpoint cannot resume under durable fencing. Routing is
+    metadata, not progress: never change the watchdog fingerprint or guess a
+    conversation from agent names, timestamps, or browser titles.
+    """
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot change conversation route")
+    bound = _safe_conversation_id(conversation_id)
+    session = str(browser_session).strip()
+    if session not in {"dev", "atendimento"}:
+        raise TaskStateError("browser_session must be dev or atendimento")
+    current_conversation = str(payload.get("conversation_id", "")).strip()
+    current_session = str(payload.get("browser_session", "")).strip()
+    if current_conversation and current_conversation != bound:
+        raise TaskStateError("conversation route conflicts with existing conversation")
+    if current_session and current_session != session:
+        raise TaskStateError("conversation route conflicts with existing browser session")
+    if current_conversation == bound and current_session == session:
+        return payload
+    if expected_checkpoint_version is not None and _checkpoint_version(payload) != int(expected_checkpoint_version):
+        raise TaskStateError("conversation route checkpoint version is stale")
+    if payload.get("recovery_lease_id") or payload.get("runtime_lease_id"):
+        raise TaskStateError("cannot bind conversation route during recovery ownership")
+    payload["conversation_id"] = bound
+    payload["browser_session"] = session
+    _bump_checkpoint_version(payload)
+    payload.setdefault("history", []).append({
+        "at": utc_now(), "event": "conversation_route_bound",
+        "conversation_id": bound, "browser_session": session,
+    })
     _atomic_write(_path(task_id), payload)
     return payload
 
@@ -964,6 +1013,12 @@ def _parser() -> argparse.ArgumentParser:
     resume.add_argument("--task", required=True)
     resume.add_argument("--next-action", required=True)
 
+    route = sub.add_parser("bind-route")
+    route.add_argument("--task", required=True)
+    route.add_argument("--conversation-id", required=True)
+    route.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
+    route.add_argument("--expected-checkpoint-version", type=int)
+
     bind = sub.add_parser("bind-conversation")
     bind.add_argument("--task", required=True)
     bind.add_argument("--conversation-id", required=True)
@@ -1009,6 +1064,12 @@ def main() -> int:
             )
         elif args.command == "resume":
             payload = resume_task(args.task, next_action=args.next_action)
+        elif args.command == "bind-route":
+            payload = bind_route(
+                args.task, conversation_id=args.conversation_id,
+                browser_session=args.browser_session,
+                expected_checkpoint_version=args.expected_checkpoint_version,
+            )
         elif args.command == "bind-conversation":
             payload = bind_conversation(args.task, conversation_id=args.conversation_id)
         elif args.command == "bind-browser-session":
