@@ -899,7 +899,7 @@ for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
 const validStage = u => u.protocol === "https:" && (
-    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
+    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
     (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
@@ -932,7 +932,7 @@ try {
     }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
+        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
@@ -1010,7 +1010,7 @@ const preflight = await (await fetch(origin + "/json", {signal:AbortSignal.timeo
 if (!Array.isArray(preflight) || preflight.length > 512) throw new Error("auth_tabs_invalid");
 const stage = u => u.protocol === "https:" && (
     (u.hostname === "auth.openai.com" &&
-        (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
+        (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
     (u.hostname === "chatgpt.com" &&
         (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
@@ -1057,6 +1057,10 @@ def _auth_stage(url: str) -> str | None:
         parsed = urlsplit(url)
         if parsed.scheme != "https":
             return None
+        if parsed.hostname == "auth.openai.com" and re.fullmatch(
+            r"/mfa-challenge/[0-9a-fA-F]{32}", parsed.path
+        ):
+            return "/mfa-challenge"
         if parsed.hostname == "auth.openai.com" and (
             parsed.path == "/log-in-or-create-account"
             or re.match(r"^/(log-in|email-verification)(/|$)", parsed.path)
