@@ -641,6 +641,24 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("--claude-reconcile-run", row["command"])
         self.assertIn(sha, row["command"])
 
+    def test_degraded_continuity_is_successful_mcp_observation(self):
+        degraded = {
+            "ok": False,
+            "controller": {"service_active": True},
+            "continuity_ready": False,
+            "degraded": True,
+            "degraded_reasons": ["active_checkpoint_unbound"],
+        }
+        self.assertTrue(m._tool_call_ok("continuity_status", degraded))
+        self.assertFalse(degraded["ok"])
+        self.assertFalse(degraded["continuity_ready"])
+        self.assertFalse(m._tool_call_ok("controller_status", {"ok": False}))
+        self.assertFalse(m._tool_call_ok("continuity_status", {"ok": False, "error": "probe_failed"}))
+        self.assertTrue(m._tool_call_ok("continuity_status", {
+            "ok": False, "controller": {}, "continuity_ready": None,
+        }))
+        self.assertTrue(m._tool_call_ok("hosts_list", {"ok": True}))
+
     def test_continuity_status_is_fail_closed_until_ready(self):
         with mock.patch.object(m, "controller_status", return_value={
             "service_active": True,
