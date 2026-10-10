@@ -83,6 +83,45 @@ cujos logins foram realizados posteriormente. Nao utilizar o OTP do
 RustDesk como se fosse um codigo ChatGPT. Confirmar cada mecanismo MFA
 separadamente no fluxo oficial, sem ler ou imprimir segredos.
 
+## GNOME Authenticator — novo cadastro TOTP na VM (2026-10-10)
+
+O proprietario confirmou que novos registros TOTP foram cadastrados
+posteriormente ao OTPClient do RustDesk utilizando a **interface grafica
+GNOME Authenticator**, sem insercao manual da chave no terminal.
+
+Foi identificada a pasta de configuracao
+`/home/fredrdp/.config/Authenticator` no backend; a data de atualizacao
+observada foi 2026-10-10. Isso e evidencia de uso do aplicativo, **nao**
+comprova por si so que as entradas correspondem a uma conta especifica,
+que o cofre esta desbloqueado ou que a autenticacao ChatGPT funciona.
+
+Os autenticadores GNOME Authenticator e OTPClient sao fontes distintas:
+o OTPClient legado pertence ao fluxo RustDesk. **Nao gerar outro TOTP nem
+substituir/desativar um fator existente** apenas porque a ferramenta
+anterior nao encontrou o aplicativo.
+
+### Verificacao operacional obrigatoria
+
+1. Localizar a interface grafica GNOME Authenticator na sessao autorizada
+   da VM, descobrindo UID, display e aplicacao efetivos, sem presumir que
+   se trata do OTPClient.
+2. Verificar separadamente a existencia e a identidade das entradas
+   `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`,
+   sem expor sementes, QR codes, codigos ou senhas em logs, chat ou Git.
+3. Respeitar o armazenamento criptografado, eventuais protecoes do
+   GNOME Keyring e as permissoes de acesso. A presenca de uma pasta
+   nao autoriza descriptografar arquivos nem contornar desbloqueios.
+4. Autenticar cada conta exclusivamente no proprio perfil Chromium:
+   Dev CDP 9559; Atendimento CDP 9556. Preservar ambos os perfis
+   e os controles de concorrencia/lease.
+5. Confirmar o sucesso somente por prova independente da sessao
+   ChatGPT e do email exato autenticado na API oficial; nao inferir
+   sucesso da disponibilidade de um codigo TOTP.
+
+**Status em 2026-10-10:** existencia da configuracao GNOME Authenticator
+e declaracao do proprietario registradas; entradas individuais, acesso
+seguro ao fator e logins das duas contas ainda nao foram comprovados.
+
 ## Gmail no controlador autonomo: permissao e isolamento
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
