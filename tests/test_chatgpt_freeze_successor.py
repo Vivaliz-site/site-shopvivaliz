@@ -47,7 +47,7 @@ class ChatgptFreezeSuccessorTests(unittest.TestCase):
                 "--goal", "continue freeze investigation",
                 "--next-action", "continue until verified",
                 "--evidence", "fresh natural freeze",
-                "--agent", "gpt-5.6-sol",
+                "--agent", "gpt-6-luna",
             ]
             first = json.loads(subprocess.check_output(cmd, text=True))
             self.assertEqual(first["task_id"], "chatgpt-freeze-root-cause-20260928-g2")
@@ -101,7 +101,7 @@ class ChatgptFreezeSuccessorTests(unittest.TestCase):
                 "--goal", "continue freeze investigation",
                 "--next-action", "continue until verified",
                 "--evidence", "fresh natural freeze",
-                "--agent", "gpt-5.6-sol",
+                "--agent", "gpt-6-luna",
             ]
             first = json.loads(subprocess.check_output(cmd, text=True))
             checkpoint = runtime / f"{first['task_id']}.json"

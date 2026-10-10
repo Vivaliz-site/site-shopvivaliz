@@ -198,14 +198,14 @@ jobs:
           rc=0
           "$launcher" exec \
             --approve-for-me \
-            --model gpt-5.6-terra \
+            --model gpt-6-luna \
             --config 'model_reasoning_effort="medium"' \
             --config 'mcp_servers.codex_bridge.enabled=false' \
             - < "$PROMPT_FILE" >"$out" 2>&1 || rc=$?
 
           bytes="$(wc -c < "$out" | tr -d ' ')"
           digest="$(sha256sum "$out" | awk '{print $1}')"
-          echo "CODEX_MODEL=gpt-5.6-terra"
+          echo "CODEX_MODEL=gpt-6-luna"
           echo "CODEX_REASONING_EFFORT=medium"
           echo "CODEX_EXIT_CODE=$rc"
           echo "CODEX_OUTPUT_BYTES=$bytes"

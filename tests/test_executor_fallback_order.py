@@ -17,7 +17,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
         self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
-        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
+        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-6-luna}}"', script)
         self.assertIn("--sandbox danger-full-access", script)
         self.assertIn("--ask-for-approval never", script)
         self.assertNotIn("--approve-for-me", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])

@@ -8,7 +8,7 @@ from test_ai_engine import snap, valid_payload
 
 def test_default_model_is_terra_medium():
     p = CodexBridgeDecisionProvider()
-    assert p.model == 'gpt-5.6-terra'
+    assert p.model == 'gpt-6-luna'
     assert p.effort == 'medium'
 
 
@@ -20,7 +20,7 @@ def test_runner_defaults_match_terra_login_provider():
             for kw in node.keywords:
                 if kw.arg == 'default' and isinstance(kw.value, ast.Constant):
                     defaults[node.args[0].value] = kw.value.value
-    assert defaults['--decision-model'] == 'gpt-5.6-terra'
+    assert defaults['--decision-model'] == 'gpt-6-luna'
     assert defaults['--decision-effort'] == 'medium'
     assert defaults['--decision-url'] == 'http://127.0.0.1:17656/v1/respond'
 
@@ -28,18 +28,18 @@ def test_runner_defaults_match_terra_login_provider():
 @pytest.mark.parametrize('transport_name', [None, 'openai_api', 'api_key'])
 def test_model_name_alone_does_not_prove_login_transport(transport_name):
     m = snap()
-    response = {'ok': True, 'model': 'gpt-5.6-terra', 'text': json.dumps(valid_payload(m))}
+    response = {'ok': True, 'model': 'gpt-6-luna', 'text': json.dumps(valid_payload(m))}
     if transport_name is not None:
         response['transport'] = transport_name
-    p = CodexBridgeDecisionProvider(model='gpt-5.6-terra', transport=lambda *_: response)
+    p = CodexBridgeDecisionProvider(model='gpt-6-luna', transport=lambda *_: response)
     with pytest.raises(DecisionValidationError, match='transport_mismatch'):
         p.analyze(m, context={})
 
 
 def test_real_login_transport_contract_accepts_terra():
     m = snap()
-    response = {'ok': True, 'model': 'gpt-5.6-terra', 'transport': 'codex_chatgpt', 'text': json.dumps(valid_payload(m))}
-    p = CodexBridgeDecisionProvider(model='gpt-5.6-terra', transport=lambda *_: response)
+    response = {'ok': True, 'model': 'gpt-6-luna', 'transport': 'codex_chatgpt', 'text': json.dumps(valid_payload(m))}
+    p = CodexBridgeDecisionProvider(model='gpt-6-luna', transport=lambda *_: response)
     assert p.analyze(m, context={})['instrument'] == m.instrument
 
 @pytest.mark.parametrize('url', ['https://api.openai.com/v1/responses', 'http://example.com/v1/respond', 'http://user:password@localhost:17656/v1/respond', 'http://127.0.0.1:17656/v1/respond?key=test'])

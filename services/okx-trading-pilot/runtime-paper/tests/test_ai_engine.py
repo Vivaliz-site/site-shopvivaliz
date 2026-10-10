@@ -26,13 +26,13 @@ def test_codex_provider_uses_real_bridge_protocol_and_strict_prompt():
     m=snap(); captured={}
     def transport(url,payload,timeout):
         captured.update(payload)
-        return {"ok":True,"text":json.dumps(valid_payload(m)),"model":"gpt-5.6-terra","transport":"codex_chatgpt"}
+        return {"ok":True,"text":json.dumps(valid_payload(m)),"model":"gpt-6-luna","transport":"codex_chatgpt"}
     provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=transport)
     raw=provider.analyze(m,context={"paper_account":{"equity":"100"},"missing_sections":[]})
     assert raw["decision"]=="TRADE"
     assert set(captured)=={"model","effort","prompt","web_search","profile"}
     assert captured["profile"]=="dev"
-    assert captured["model"]=="gpt-5.6-terra" and captured["effort"]=="medium" and captured["web_search"] is False
+    assert captured["model"]=="gpt-6-luna" and captured["effort"]=="medium" and captured["web_search"] is False
     prompt=captured["prompt"]; compact=prompt.replace(" ","")
     for i,name in enumerate(REQUIRED_LAYER_NAMES,1):
         assert f'"id":{i}' in compact and name in prompt
@@ -43,8 +43,8 @@ def test_codex_provider_uses_real_bridge_protocol_and_strict_prompt():
 def test_provider_rejects_non_json_wrong_model_and_unavailable():
     m=snap()
     for response in [
-        {"ok":True,"text":"not-json","model":"gpt-5.6-terra","transport":"codex_chatgpt"},
-        {"ok":True,"text":json.dumps(valid_payload(m)),"model":"gpt-5.6-sol"},
+        {"ok":True,"text":"not-json","model":"gpt-6-luna","transport":"codex_chatgpt"},
+        {"ok":True,"text":json.dumps(valid_payload(m)),"model":"gpt-6-sol"},
         {"ok":False,"error":"codex_unavailable","attempts":["transport"]},
     ]:
         provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=lambda *a,response=response: response)
@@ -213,7 +213,7 @@ def test_codex_provider_owns_temporal_envelope_instead_of_model_output():
         return {
             "ok": True,
             "text": json.dumps(model_payload),
-            "model": "gpt-5.6-terra",
+            "model": "gpt-6-luna",
             "transport": "codex_chatgpt",
         }
 

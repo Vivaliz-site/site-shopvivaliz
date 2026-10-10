@@ -845,7 +845,7 @@ jobs:
             --goal 'Continue ChatGPT freeze root-cause investigation after the natural iOS transmission interruption at 2026-09-29T00:09:00Z' \
             --next-action 'Validate the post-freeze continuity runtime, reconcile current ChatGPT lifecycle endpoints, preserve automatic checkpoint resume, and continue until verified completion or a proved external blocker' \
             --evidence 'Natural iOS freeze at 2026-09-29T00:09:00Z showed Thinking plus interrupted transmission after g2 was already terminal' \
-            --agent gpt-5.6-sol)"
+            --agent gpt-6-luna)"
           python3 - "$result" <<'INNER'
           import json
           import re
