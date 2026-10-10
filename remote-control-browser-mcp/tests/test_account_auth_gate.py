@@ -152,7 +152,9 @@ class AccountAuthGateTests(unittest.TestCase):
         for item in (
             "back_to_methods", "open_login", "continue_google",
             "u.pathname!=='/log-in/password'",
+            "u.origin!=='https://auth.openai.com'",
             "u.pathname!=='/log-in-or-create-account'",
+            "u.pathname!=='/log-in'",
             "u.pathname==='/auth/login_with'",
             "u.pathname==='/log-in'",
             "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
@@ -161,6 +163,20 @@ class AccountAuthGateTests(unittest.TestCase):
             "if(choices.length!==1)",
         ):
             self.assertIn(item, source)
+
+    def test_log_in_link_is_allowed_only_on_two_exact_official_stages(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');",
+            source,
+        )
+        self.assertIn(
+            "safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a))",
+            source,
+        )
+        self.assertEqual("/log-in", m._auth_stage("https://auth.openai.com/log-in?state=SECRET"))
+        self.assertIsNone(m._auth_stage("https://auth.openai.com/oauth/consent"))
+        self.assertIsNone(m._auth_stage("https://example.com/log-in"))
 
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
