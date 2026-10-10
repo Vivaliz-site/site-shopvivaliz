@@ -944,7 +944,7 @@ try {
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://auth.openai.com','/log-in-or-create-account')&&/^edit$/i.test(label(a)));" +
         "}" +
         "if(action==='open_login'){" +
-        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in-or-create-account')throw Error('auth_stage_not_allowed');" +
+        "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a)));" +
         "}" +
         "if(action==='continue_google'||action==='continue_microsoft'){" +
@@ -1007,56 +1007,10 @@ const stage = u => u.protocol === "https:" && (
     (u.hostname === "chatgpt.com" &&
         (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
-const officialTabs = preflight.filter(t => {
+if (preflight.some(t => {
     if (t?.type !== "page") return false;
     try { return stage(new URL(t.url)); } catch { return false; }
-});
-// Do not reset an active sign-in or human-verification attempt. A single new
-// official tab is permitted only if every already open auth page has completed
-// loading but has no usable sign-in form, button, challenge or login link.
-const canOpenAfterStall = flags => flags?.ready === true && flags.stageOk === true && flags.liveControls === 0 && flags.challenge === false && flags.loginChoice === false && Number.isInteger(flags.bodyLength) && flags.bodyLength <= 400;
-if (officialTabs.length) {
-    // Never create a second replacement or proliferate tabs on repeated runs.
-    const alreadyRecovered = officialTabs.some(t => {
-        try { const u = new URL(t.url); return u.origin === "https://chatgpt.com" && u.pathname === "/auth/login"; }
-        catch { return true; }
-    });
-    if (officialTabs.length > 8 || alreadyRecovered)
-        throw new Error("auth_stage_already_open");
-    const inspectStalled = async tab => {
-        if (!tab.webSocketDebuggerUrl) return false;
-        let existingSocket, existingCdp;
-        try {
-            existingSocket = new WebSocket(tab.webSocketDebuggerUrl);
-            await Promise.race([
-                new Promise((resolve,reject) => {
-                    existingSocket.addEventListener("open",resolve,{once:true});
-                    existingSocket.addEventListener("error",reject,{once:true});
-                }),
-                new Promise((_,reject) => setTimeout(()=>reject(new Error("auth_probe_timeout")),2500))
-            ]);
-            existingCdp = new Cdp(existingSocket,{commandTimeoutMs:4000});
-            const expression = "(()=>{" +
-                "const u=new URL(location.href);" +
-                "const stageOk=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
-                "const liveControls=[...document.querySelectorAll('input:not([type=hidden]),button,[role=button],form')].filter(e=>!e.disabled).length;" +
-                "const challenge=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return ['challenges.cloudflare.com','hcaptcha.com','recaptcha.net'].some(d=>h===d||h.endsWith('.'+d))}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha');" +
-                "const loginChoice=[...document.querySelectorAll('a')].some(a=>/^(edit|log in|sign in|continue)$/i.test(String(a.innerText||'').trim())&&(()=>{try{const v=new URL(a.href);return v.origin==='https://auth.openai.com'||v.origin==='https://chatgpt.com'}catch{return false}})());" +
-                "return {ready:document.readyState==='complete',stageOk,liveControls,challenge,loginChoice,bodyLength:(document.body?.innerText||'').length};" +
-                "})()";
-            const result = await existingCdp.send("Runtime.evaluate",{expression,returnByValue:true});
-            if (result.exceptionDetails) return false;
-            return canOpenAfterStall(result.result?.value);
-        } catch {
-            return false; // Inconclusive browser state: fail closed.
-        } finally {
-            try { existingCdp?.close(); } catch {}
-            try { existingSocket?.close(); } catch {}
-        }
-    };
-    const checked = await Promise.all(officialTabs.map(inspectStalled));
-    if (!checked.every(Boolean)) throw new Error('auth_stage_already_open');
-}
+})) throw new Error("auth_stage_already_open");
 const version = await (await fetch(origin + "/json/version", {signal:AbortSignal.timeout(3000)})).json();
 const endpoint = new URL(String(version.webSocketDebuggerUrl || ""));
 if (endpoint.protocol !== "ws:" ||
