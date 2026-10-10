@@ -670,6 +670,7 @@ class BrowserMcpTests(unittest.TestCase):
             return FakeProcess()
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m, "BROWSER_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium", create=True),
             mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
