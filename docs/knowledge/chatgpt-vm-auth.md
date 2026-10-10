@@ -122,27 +122,6 @@ anterior nao encontrou o aplicativo.
 e declaracao do proprietario registradas; entradas individuais, acesso
 seguro ao fator e logins das duas contas ainda nao foram comprovados.
 
-## Recuperacao de tela oficial de login sem controles (2026-10-10)
-
-Foi observada na sessao Dev/CDP9559 a presenca de seis abas oficiais
-`auth.openai.com` com `document.readyState=complete`, mas **nenhum**
-campo, formulario ou botao de login. A sessao Atendimento/CDP9556
-continuava exibindo formulario de senha: nao trocar cookies ou perfil.
-
-O `browser_auth_open` protegido permite criar **uma unica nova aba**
-`https://chatgpt.com/auth/login` no mesmo perfil se (e somente se)
-**todas** as abas de login existentes apresentarem comprovadamente
-estado estagnado, sem campos, botoes, formularios, escolha de metodo ou
-desafio humano. A deteccao exige CDP ativo, pagina oficial, document
-com carregamento concluido e lease de manutencao com owner exato
-`shopvivaliz-account-auth:<sessao>` e fencing valido.
-
-Abas antigas **nao sao fechadas, limpas nem navegadas**. Aba recuperada
-presente, campos validos, CAPTCHA ou verificacao incompleta bloqueiam
-novas tentativas (fail closed). A restauracao da interface nao substitui
-senha, TOTP, autenticao multifator nem validacao do e-mail corporativo
-em `/api/auth/session`. Nao usar esta rota para limpar/chocar desafios.
-
 ## Gmail no controlador autonomo: permissao e isolamento
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
