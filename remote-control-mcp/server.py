@@ -2571,6 +2571,19 @@ def durable_health_summary() -> dict[str, Any]:
     return summary
 
 
+def _tool_call_ok(name: str, output: Any) -> bool:
+    """Distinguish a successful health observation from healthy service state.
+
+    continuity_status.ok is readiness, not an MCP execution outcome.  An
+    observed degraded state is still a successful read and must reach clients
+    as structuredContent with isError=false.  Other tools retain fail-closed
+    execution semantics.
+    """
+    if name == "continuity_status" and isinstance(output, dict):
+        return "controller" in output and "continuity_ready" in output
+    return not (isinstance(output, dict) and output.get("ok") is False)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ShopVivalizRemoteControlMCP/" + VERSION
 
@@ -2643,8 +2656,11 @@ class Handler(BaseHTTPRequestHandler):
                 host = args.get("host")
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
+                    ok = _tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary, output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {
