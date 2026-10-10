@@ -606,16 +606,16 @@ class BrowserMcpTests(unittest.TestCase):
 
     def test_gui_session_probe_requires_matching_active_seat(self):
         with mock.patch.object(m.subprocess, "run", side_effect=[
-            mock.Mock(returncode=0, stdout="c1\\n"),
-            mock.Mock(returncode=0, stdout="Name=fredconsole\\nDisplay=:0\\nActive=yes\\n"),
+            mock.Mock(returncode=0, stdout="c1\n"),
+            mock.Mock(returncode=0, stdout="Name=fredconsole\nDisplay=:0\nActive=yes\n"),
         ]) as run:
             self.assertTrue(m.gui_session_active())
         self.assertEqual(2, run.call_count)
 
     def test_gui_session_probe_rejects_lightdm_as_active_session(self):
         with mock.patch.object(m.subprocess, "run", side_effect=[
-            mock.Mock(returncode=0, stdout="c2\\n"),
-            mock.Mock(returncode=0, stdout="Name=lightdm\\nDisplay=:1\\nActive=yes\\n"),
+            mock.Mock(returncode=0, stdout="c2\n"),
+            mock.Mock(returncode=0, stdout="Name=lightdm\nDisplay=:1\nActive=yes\n"),
         ]):
             self.assertFalse(m.gui_session_active())
 
@@ -626,7 +626,7 @@ class BrowserMcpTests(unittest.TestCase):
             mock.patch.object(m.shutil, "which", return_value="/usr/bin/xdotool"),
             mock.patch.object(m.os.path, "isfile", return_value=True),
             mock.patch.object(m.os, "access", return_value=True),
-            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="123\\n")),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="123\n")),
         ):
             health = m.browser_health()
         self.assertFalse(health["ok"], health)
