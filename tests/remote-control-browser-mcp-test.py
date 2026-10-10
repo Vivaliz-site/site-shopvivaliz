@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -604,9 +605,51 @@ class BrowserMcpTests(unittest.TestCase):
             self.assertEqual(["123"], m.browser_windows())
         run.assert_called_once_with(["xdotool", "search", "--onlyvisible", "--class", "shopvivaliz-general"], check=False)
 
+    def test_gui_session_probe_requires_matching_active_seat(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c1\n"),
+            mock.Mock(returncode=0, stdout="Name=fredconsole\nDisplay=:0\nActive=yes\n"),
+        ]) as run:
+            self.assertTrue(m.gui_session_active())
+        self.assertEqual(2, run.call_count)
+
+    def test_gui_session_probe_rejects_lightdm_as_active_session(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c2\n"),
+            mock.Mock(returncode=0, stdout="Name=lightdm\nDisplay=:1\nActive=yes\n"),
+        ]):
+            self.assertFalse(m.gui_session_active())
+
+    def test_browser_health_fails_closed_on_inactive_seat_even_when_xdotool_works(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="123\n")),
+        ):
+            health = m.browser_health()
+        self.assertFalse(health["ok"], health)
+        self.assertFalse(health["gui_session_active"])
+        self.assertEqual("gui_session_inactive", health["reason"])
+
+    def test_browser_open_refuses_input_when_gui_session_is_inactive(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]) as windows,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "key"),
+            mock.patch.object(m, "type_text"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "gui_session_inactive"):
+                m.browser_open({"url": "https://example.com/"})
+        windows.assert_not_called()
+
     def test_browser_health_is_ready_when_general_browser_is_launchable_without_window(self):
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
             mock.patch.object(m.os.path, "isfile", return_value=True),
@@ -628,6 +671,7 @@ class BrowserMcpTests(unittest.TestCase):
             return FakeProcess()
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m, "BROWSER_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium", create=True),
             mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
@@ -657,6 +701,37 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("systemctl enable shopvivaliz-remote-control-browser-mcp.service", setup)
         self.assertIn("systemctl restart shopvivaliz-remote-control-browser-mcp.service", setup)
         self.assertNotIn("systemctl enable --now shopvivaliz-remote-control-browser-mcp.service", setup)
+
+    def test_installer_separates_transport_health_from_inactive_gui(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        start = "    python3 - <<'PY'\n"
+        end = "\nPY\n    rm -f /tmp/shopvivaliz-browser-mcp-health.json"
+        block = setup.split(start, 1)[1].split(end, 1)[0]
+        base_health = {
+            "endpoint": "shopvivaliz-remote-control-browser-mcp",
+            "dependencies": {"xdotool": True, "xclip": True, "scrot": True, "xwd": True},
+        }
+        for fields, expected in (
+            ({"ok": True, "gui_session_active": True}, "REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS"),
+            ({"ok": False, "gui_session_active": False, "reason": "gui_session_inactive"},
+             "REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive"),
+        ):
+            fixture = json.dumps({**base_health, **fields})
+            captured = io.StringIO()
+            with (
+                mock.patch("builtins.open", return_value=io.StringIO(fixture)),
+                contextlib.redirect_stdout(captured),
+            ):
+                exec(block, {})
+            self.assertIn(expected, captured.getvalue())
+            if not fields["ok"]:
+                self.assertNotIn("HEALTH=PASS", captured.getvalue())
+
+        with mock.patch("builtins.open", return_value=io.StringIO(json.dumps({
+            **base_health, "ok": False, "reason": "unknown_failure",
+        }))):
+            with self.assertRaises(AssertionError):
+                exec(block, {})
 
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")

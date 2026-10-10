@@ -127,14 +127,20 @@ for _ in $(seq 1 20); do
     python3 - <<'PY'
 import json
 p=json.load(open('/tmp/shopvivaliz-browser-mcp-health.json', encoding='utf-8'))
-assert p.get('ok') is True
 assert p.get('endpoint') == 'shopvivaliz-remote-control-browser-mcp'
 deps=p.get('dependencies') or {}
 assert deps.get('xdotool') is True
 assert deps.get('xclip') is True
 assert deps.get('scrot') is True
 assert deps.get('xwd') is True
-print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+if p.get('ok') is True:
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+elif p.get('ok') is False and p.get('gui_session_active') is False and p.get('reason') == 'gui_session_inactive':
+    # The GUI is unavailable, but the MCP transport can still be updated safely.
+    # Do not mislabel this state PASS or block independently authenticated bridges.
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive')
+else:
+    raise AssertionError('browser_mcp_invalid_health')
 PY
     rm -f /tmp/shopvivaliz-browser-mcp-health.json
     REMOTE_CONTROL_BROWSER_MCP_READY=1
