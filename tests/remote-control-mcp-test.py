@@ -539,11 +539,11 @@ class RemoteControlMcpTests(unittest.TestCase):
 
     def test_non_sha_controller_release_is_reported_but_never_certified(self):
         label = "free-provider-v2-9f259c96918e9d"
-        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\\n")), \\
-             mock.patch.object(m, "_controller_active_sha", return_value=""), \\
-             mock.patch.object(m, "_controller_active_release_id", return_value=label), \\
-             mock.patch.object(m, "_controller_origin_main_sha", return_value="a" * 40), \\
-             mock.patch.object(m, "_controller_remote_main_sha", return_value="a" * 40), \\
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=""), \
+             mock.patch.object(m, "_controller_active_release_id", return_value=label), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value="a" * 40), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value="a" * 40), \
              mock.patch.object(m, "_read_controller_state", return_value={"liveness_ok": True}):
             status = m.controller_status()
         self.assertTrue(status["service_active"])
@@ -556,11 +556,11 @@ class RemoteControlMcpTests(unittest.TestCase):
 
     def test_unversioned_release_identifier_extracted_without_secret_argv(self):
         cmdline = (
-            b"/usr/bin/python3\\0"
+            b"/usr/bin/python3\0"
             b"/opt/shopvivaliz-gemini-24x7-controller/releases/"
-            b"free-provider-v2-9f259c96918e9d/scripts/gemini_24x7_controller.py\\0"
+            b"free-provider-v2-9f259c96918e9d/scripts/gemini_24x7_controller.py\0"
         )
-        with mock.patch.object(m, "_run_local_checked", return_value="12345"), \\
+        with mock.patch.object(m, "_run_local_checked", return_value="12345"), \
              mock.patch.object(Path, "read_bytes", return_value=cmdline):
             self.assertEqual(
                 m._controller_active_release_id(),
