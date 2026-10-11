@@ -33,6 +33,7 @@ REQUIRED_RULES = frozenset({
 })
 ALLOWED_RULES = REQUIRED_RULES | frozenset({
     "docs/knowledge/browser-sessions.md",
+    "docs/knowledge/shopvivaliz-graphical-session-recovery.md",
     "docs/knowledge/project.md",
     "docs/knowledge/dev-agent-briefing.md",
     "docs/knowledge/chatgpt-authenticator-recovery-20261010.md",
