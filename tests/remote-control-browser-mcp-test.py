@@ -37,6 +37,54 @@ class BrowserMcpTests(unittest.TestCase):
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
 
+    def test_continuity_status_degraded_is_a_valid_mcp_read(self):
+        # The browser MCP exposes inherited controller tools and must not
+        # regress the base MCP's separation of call success from readiness.
+        cases = [
+            ("continuity_status", {
+                "ok": False, "controller": {"service_active": True},
+                "continuity_ready": False, "degraded": True,
+                "degraded_reasons": ["active_checkpoint_unbound"],
+            }, False, "observed_degraded"),
+            ("continuity_status", {
+                "ok": False, "error": "probe_failed",
+            }, True, "command_failed"),
+            ("controller_status", {
+                "ok": False, "error": "backend_unavailable",
+            }, True, "command_failed"),
+        ]
+        for name, output, expected_is_error, expected_audit_summary in cases:
+            with self.subTest(tool=name, output=output):
+                payload = json.dumps({
+                    "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                    "params": {"name": name, "arguments": {}},
+                }).encode("utf-8")
+                handler = object.__new__(m.BrowserHandler)
+                handler.path = "/mcp"
+                handler.client_address = ("127.0.0.1", 12345)
+                handler.headers = {
+                    "Authorization": "Bearer synthetic-test",
+                    "Content-Length": str(len(payload)),
+                }
+                handler.rfile = io.BytesIO(payload)
+                with (
+                    mock.patch.object(m.base, "is_authorized", return_value=True),
+                    mock.patch.object(m, "execute_tool", return_value=dict(output)),
+                    mock.patch.object(m, "audit", return_value="audit-test") as audit,
+                    mock.patch.object(m.BrowserHandler, "_client_disconnected", return_value=False),
+                    mock.patch.object(m.BrowserHandler, "_json", autospec=True) as reply,
+                ):
+                    handler.do_POST()
+                reply.assert_called_once()
+                self.assertEqual(reply.call_args.args[1], 200)
+                result = reply.call_args.args[2]["result"]
+                self.assertIs(result["isError"], expected_is_error)
+                self.assertEqual(result["structuredContent"]["ok"], output["ok"])
+                if name == "continuity_status" and "controller" in output:
+                    self.assertIs(result["structuredContent"]["continuity_ready"], False)
+                audit.assert_called_once()
+                self.assertEqual(audit.call_args.args[4], expected_audit_summary)
+
     def test_browser_open_routes_to_isolated_gui_browser(self):
         args = {"url": "https://claude.ai/login"}
         with (

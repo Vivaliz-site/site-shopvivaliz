@@ -1523,8 +1523,14 @@ class BrowserHandler(base.Handler):
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    # Health readiness is not the outcome of a successful MCP read.
+                    # Reuse the base contract so both endpoints classify a
+                    # diagnosed degraded state without reporting a tool failure.
+                    ok = base._tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     content = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
