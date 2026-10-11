@@ -122,6 +122,35 @@ anterior nao encontrou o aplicativo.
 e declaracao do proprietario registradas; entradas individuais, acesso
 seguro ao fator e logins das duas contas ainda nao foram comprovados.
 
+## Ponte TOTP GNOME → ChatGPT, com lease (PR #2877)
+
+A rota `browser_auth_action(action="fill_gnome_totp")`, **quando estiver
+realmente instalada no MCP**, preenche um TOTP de 6 digitos diretamente
+no campo da tela oficial `/mfa-challenge`, sem exigir que o agente ou usuario
+transcrevam codigos pelo chat. Nao pressupor que a branch ou PR ja tenha
+sido implantada; provar a revisao de cada MCP em runtime primeiro.
+
+Pre-condicoes: usuario `fredrdp` provisionado, colecao padrao GNOME
+Keyring desbloqueada, um unico registro por identidade no GNOME
+Authenticator, sessao Chromium separada, **lease de manutencao ao vivo**
+com `owner_id=shopvivaliz-account-auth:<sessao>` e escopo
+`browser_auth_action`. O `value` deve estar ausente.
+
+O servidor verifica o perfil e a pagina oficial **antes** de consultar
+a entrada correspondente no Secret Service, pelo schema do próprio GNOME
+Authenticator. Usa um filho local no UID do proprietário, canal stdout
+privado entre processos para o OTP atual e stdin protegido do worker
+existente. Nao grava seed ou OTP em argumentos com valores, logs,
+auditoria MCP, stdout de ferramenta ou Git. Rejeita codigo externo
+na acao nova, conta diferente, senha pendente ou aba que nao esteja
+na etapa MFA. O codigo e somente **preenchido**; a acao separada
+`continue` realiza o envio oficial, sob o mesmo lease.
+
+**Nao** confundir sucesso do preenchimento com login comprovado:
+validar a identidade por sessao autenticada separadamente. A chave TOTP
+compartilhada anteriormente em conversa deve ser rotacionada pelo processo
+oficial, apos estabilizar recuperacao e os mecanismos de backup.
+
 ## Gmail no controlador autonomo: permissao e isolamento
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
