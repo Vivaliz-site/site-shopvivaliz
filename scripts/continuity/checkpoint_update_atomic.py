@@ -29,6 +29,7 @@ REQUIRED_RULES = frozenset({
     "docs/knowledge/README.md",
     "docs/knowledge/agent-rules.md",
     "docs/knowledge/task-continuity.md",
+    "GEPETO-POLICY.md",
 })
 ALLOWED_RULES = REQUIRED_RULES | frozenset({
     "docs/knowledge/browser-sessions.md",
