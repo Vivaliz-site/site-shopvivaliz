@@ -104,6 +104,28 @@ class AtomicCheckpointTests(unittest.TestCase):
         with self.assertRaises(OSError):
             m.update_checkpoint(self.args, self.live)
 
+    def test_graphical_recovery_runbook_sha_is_allowed_without_relaxing_validation(self):
+        runbook = "docs/knowledge/shopvivaliz-graphical-session-recovery.md"
+        self.assertIn(runbook, m.ALLOWED_RULES)
+        updated = {
+            **self.args,
+            "rules_sha_by_path": {
+                **self.args["rules_sha_by_path"],
+                runbook: "c" * 40,
+            },
+        }
+        result = m.update_checkpoint(updated, self.live)
+        self.assertTrue(result["verified"])
+        saved = json.loads(self.checkpoint.read_text())
+        self.assertEqual(saved["rules_loaded"]["sha_by_path"][runbook], "c" * 40)
+        invalid = {
+            **updated,
+            "request_id": "invalid-extra-runbook-rule-test",
+            "rules_sha_by_path": {**updated["rules_sha_by_path"], "secrets/password.txt": "f" * 40},
+        }
+        with self.assertRaisesRegex(ValueError, "checkpoint_update_invalid_rules"):
+            m._validate(invalid)
+
     def test_rejects_unverified_or_secret_note(self):
         cases = [
             {**self.args, "next_action": "Bearer abcdefghijklmnopqrst"},
