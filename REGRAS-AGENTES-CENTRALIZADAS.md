@@ -1,19 +1,3 @@
-<!-- RESUME_EXECUTION_GATE_V1 -->
-## Regra executável universal — Retome / Continue / Prossiga / Siga
-
-Uma ordem `Retome`, `Continue`, `Prossiga` ou `Siga` é a autorização para **executar a próxima ação pendente**, não pedir confirmação, apresentar um plano como entrega ou encerrar por timeout/erro de ferramenta. Isso vale para ChatGPT, Claude, Gemini, Codex, Copilot e quaisquer agentes delegados.
-
-1. Recarregue `AGENTS.md` e as normas aplicáveis do `main` corrente, com prova de leitura `rules_loaded` (nomes, ref, SHA e instante). Não aceite texto lembrado, branch obsoleta ou mera menção de documentos como prova.
-2. Recupere o `task_id`, checkpoint, último resultado verificado e `next_action` de origem comprovada. Não invente `conversation_id`, ownership nem sessão autenticada; preserve trabalho alheio e locks de concorrência.
-3. Execute imediatamente a próxima ação autorizada. Investigue falhas, implemente correção proporcional, rode testes/regressão, PR/gates/merge/deploy quando cabível, valide o comportamento final no runtime e registre o avanço. Não transforme `Pensando`, ACK, PR aberto, merge, HTTP 200, UI visível ou healthcheck em sucesso operacional.
-4. Registre progresso durável em `scripts/agent_task_state.py` quando disponível. Estado `RUNNING` exige `next_action` concreto; execução destacada exige vínculo, permissões e fencing. Uma resposta intermediária não converte o checkpoint em terminal.
-5. **Proíba término falso:** `CONCLUIDO` somente após prova fresca dos critérios originais, `ready` e `complete`; `BLOCKED_EXTERNAL` somente após demonstrar impedimento externo real, pelo menos duas alternativas seguras distintas e condição exata de retomada. Execute `python3 scripts/agent_task_state.py terminal --task <task_id>` para validar terminalidade quando essa CLI estiver disponível.
-6. Se faltar permissão/MFA/aprovação obrigatória, não burle proteção: registre a dependência exata, mantenha checkpoint recuperável e continue ações independentes seguras. Nunca peça novamente autorização já dada para ações reversíveis em escopo.
-7. Se o usuário pedir para não postar até encontrar a solução, evite mensagens intermediárias dispensáveis. Atualizações de progresso estritamente necessárias não significam `CONCLUIDO`; nunca afirme execução em segundo plano sem mecanismo efetivo, nem garanta controle sobre outros runtimes sem instrumentação.
-8. Delegue apenas quando houver executor realmente disponível, transferindo `task_id`, regras, propriedade e critério de validação; a resposta de outro agente não substitui testes locais. Políticas de segurança, APIs e aprovações da plataforma permanecem vigentes.
-
-<!-- /RESUME_EXECUTION_GATE_V1 -->
-
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 ## Auditoria externa também é corretiva
 
