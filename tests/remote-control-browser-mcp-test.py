@@ -789,6 +789,77 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("set +e", setup)
 
 
+    def test_cached_mcp_fill_code_without_value_uses_private_gnome_at_exact_mfa(self):
+        # Older ChatGPT MCP clients expose fill_code but not fill_gnome_totp.
+        # Optional value is authorized only for verified MFA stage + exact lease.
+        for session in ("dev", "atendimento"):
+            with self.subTest(session=session):
+                args = {
+                    "session": session, "tab_id": "A123", "action": "fill_code",
+                    "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+                }
+                lease = {
+                    "owner_kind": "maintenance",
+                    "owner_id": "shopvivaliz-account-auth:" + session,
+                }
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs",
+                                      return_value={"tabs": [{"tab_id": "A123", "stage": "/mfa-challenge"}]}),
+                    mock.patch.object(m, "account_auth_local_totp", return_value="123456") as reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin",
+                                      return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+                ):
+                    result = m.browser_auth_action(args)
+                self.assertTrue(result["ok"])
+                reader.assert_called_once_with(session)
+                argv, code = executor.call_args.args[:2]
+                self.assertEqual("fill_code", argv[-1])
+                self.assertEqual("123456", code)
+                self.assertNotIn(code, repr(argv))
+                self.assertNotIn(code, repr(result))
+
+    def test_cached_mcp_empty_code_never_reads_secret_before_mfa(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_code",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        for tabs in ([], [{"tab_id": "A123", "stage": "/email-verification"}],
+                     [{"tab_id": "WRONG", "stage": "/mfa-challenge"}]):
+            with self.subTest(tabs=tabs):
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs", return_value={"tabs": tabs}),
+                    mock.patch.object(m, "account_auth_local_totp") as reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin") as executor,
+                ):
+                    with self.assertRaisesRegex(ValueError, "mfa_stage_required"):
+                        m.browser_auth_action(args)
+                reader.assert_not_called()
+                executor.assert_not_called()
+
+    def test_cached_mcp_explicit_email_code_never_uses_local_gnome(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_code",
+            "value": "ABCD1234",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+        ):
+            result = m.browser_auth_action(args)
+        self.assertTrue(result["ok"])
+        reader.assert_not_called()
+        self.assertEqual("ABCD1234", executor.call_args.args[1])
+
     def test_gnome_totp_helper_is_syntax_valid_and_private(self):
         compile(m.ACCOUNT_GNOME_TOTP_PYTHON, "<private-gnome-totp>", "exec")
         self.assertIn("Secret.password_lookup_sync", m.ACCOUNT_GNOME_TOTP_PYTHON)
