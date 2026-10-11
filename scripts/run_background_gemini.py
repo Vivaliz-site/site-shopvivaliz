@@ -21,6 +21,20 @@ DEFAULT_ENV_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/.env")
 DEFAULT_GEMINI_BIN = Path("/home/ubuntu/.local/bin/gemini")
 SUPPORTED_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GEMINI_API_KEY")
 DEFAULT_FALLBACK_MODELS = ("gemini-flash-lite-latest",)
+
+# Flash is eligible for Gemini free-tier usage; actual billing eligibility
+# depends on the Google project. Never silently select Pro/paid-only models.
+FREE_TIER_FLASH_MODELS = frozenset({
+    "gemini-flash-latest", "gemini-flash-lite-latest",
+    "gemini-2.5-flash", "gemini-2.5-flash-lite",
+    "gemini-3.5-flash", "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite", "gemini-3.6-flash",
+})
+
+
+def is_flash_free_tier_eligible(name: str) -> bool:
+    return str(name).strip() in FREE_TIER_FLASH_MODELS
+
 RETRYABLE_GEMINI_REASONS = frozenset({"quota_exhausted", "model_unavailable", "authentication_failed"})
 SECRET_KEYS_TO_REMOVE = (
     "OPENAI_API_KEY",
@@ -408,6 +422,12 @@ def main() -> int:
         if value.strip()
     )
     fallback_models = tuple(args.fallback_model or configured_fallbacks or DEFAULT_FALLBACK_MODELS)
+
+    if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        candidates = build_model_candidates(args.model, fallback_models)
+        if not all(is_flash_free_tier_eligible(item) for item in candidates):
+            print("background_gemini_error=non_flash_model_forbidden", file=sys.stderr)
+            return 78
     return run(
         model=args.model,
         prompt_file=Path(args.prompt_file).expanduser(),

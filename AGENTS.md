@@ -740,7 +740,7 @@ Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois SSH privado/Tailscale e somente para bootstrap/recovery GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Não consumir Codex para esse trabalho por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- Nenhum daemon/cron/watch pode consumir Codex automaticamente: a excecao historica de 2026-10-01 foi REVOGADA em 2026-10-11 por FREE_PROVIDER_FALLBACK_V2. Codex e Claude sao apenas ultimas opcoes interativas com aprovacao humana explicita.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->
@@ -785,3 +785,21 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 <!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
 **Obrigatorio para todos os agentes (ChatGPT, Claude, Gemini, Gepeto e executores delegados):** antes de diagnosticar GUI Ubuntu, RustDesk, perfis corporativos ou login na backend, ler `docs/knowledge/shopvivaliz-graphical-session-recovery.md` no `main`. A captura de Dev/Atendimento no seletor de contas da sessao XFCE `fredconsole/:0` nao comprova autenticacao individual dos perfis Chromium `fredrdp/:99` CDP 9559/9556. Distinguir o greeter LightDM `:1`, desktop `:0` e Xvfb `:99`; validar cada conta via `/api/auth/session` e email exato. Para greeter, examinar sessao `logind` preexistente antes de solicitar/redefinir senha. Preservar Keyring, perfis, cookies e MFA, sem bypass.
 <!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->

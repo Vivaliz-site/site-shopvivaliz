@@ -160,7 +160,7 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- **Historico revogado em 2026-10-11 pela FREE_PROVIDER_FALLBACK_V2.** Nenhum daemon/cron/watch pode consumir Codex automaticamente. Regra antiga (somente registro historico): o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 - No backend OCI atual, o fallback finito `codex-auto` usa `--sandbox danger-full-access --ask-for-approval never` porque o sandbox Linux da CLI depende de user namespaces indisponíveis nesse host. Isso **não** altera o critério de sucesso: a execução só é aceita quando o `task_state_signature` muda no mesmo fingerprint; resposta textual/exit 0 sem avanço continua `no_progress`.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
@@ -295,10 +295,8 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1`. `Gemini` é sempre a rota primária. Quando `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`, autorização explícita vigente desde 2026-10-01 permite um único fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso; lease, deduplicação e cooldown continuam obrigatórios. Claude/GPT permanecem proibidos como fallback silencioso de daemon/cron.
-- Em execução finita/interativa fora do background permanece a ordem
-  `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
-  login ChatGPT, sem `OPENAI_API_KEY`.
+- O dispatcher de background marca SHOPVIVALIZ_RESUME_BACKGROUND=1. Sua camada de IA e Gemini Flash elegivel ao nivel gratuito + Ollama local. Flags legadas de fallback Codex/Claude sao ignoradas mesmo quando 1. A excecao de 2026-10-01 foi revogada. ChatGPT normal vem primeiro no fallback de conversa, antes da etapa CLI.
+- Em CLI finita e interativa, modelos gratuitos sao o primeiro nivel; Claude e Codex somente como ultimas opcoes, depois de autorizacao humana explicita.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
@@ -569,7 +567,7 @@ O recovery automático usa **Gemini como primário**. O modelo padrão é o alia
 Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
 2026-09-27 um probe funcional sanitizado no A1 confirmou
 `gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
-`*-latest`. Claude/GPT continuam proibidos como fallback silencioso. O `codex-auto` só é permitido na exceção explícita e finita do controlador 24/7 (`SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`), sempre depois de Gemini falhar em produzir progresso.
+Os modelos Flash estao sujeitos a elegibilidade real do projeto Gemini. Ollama e o provedor local sem ferramentas privilegiadas. Claude e Codex sao sempre proibidos em background; a excecao antiga de codex-auto foi revogada.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.
@@ -835,3 +833,22 @@ obsoletos ou baseados apenas em titulo, agente ou horario nunca geram vinculo.
 As tarefas sem prova continuam visiveis como degradadas; nao ha rota
 sintetica nem desligamento das travas de concorrencia.
 <!-- /ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->
+
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->

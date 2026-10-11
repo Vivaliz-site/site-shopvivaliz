@@ -106,7 +106,7 @@ if not FALLBACK.is_file():
 else:
     fallback_text = FALLBACK.read_text(encoding="utf-8", errors="replace")
     for token in (
-        "ORDER=(gemini anthropic codex)",
+        "ORDER=(gemini ollama)",
         "SHOPVIVALIZ_TASK_ID",
         "SHOPVIVALIZ_RESUME_STAGE",
         "chatgpt_common",
@@ -118,7 +118,7 @@ else:
         "task_state_signature",
         "task_state_advanced",
         "SHOPVIVALIZ_RESUME_BACKGROUND",
-        "BACKGROUND_ORDER=(gemini)",
+        "BACKGROUND_ORDER=(gemini ollama)",
         "background_paid_fallback_forbidden=true",
     ):
         if token not in fallback_text:
