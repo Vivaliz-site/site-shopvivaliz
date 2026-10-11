@@ -113,3 +113,71 @@ considerada autenticada sem verificacao do e-mail exato em
 **Situacao deste checkpoint:** `AUTH_REQUIRED` para as duas contas.
 `CREDENTIAL_REPROMPT_GATE_V1` permanece obrigatorio. Nao declarar
 login concluido com base em metadados ou clique de botao.
+
+## Atualizacao — Plugin ShopVivaliz Remote Control 1.0.2 (2026-10-11)
+
+### Publicacao e auditoria na interface administrativa
+
+- Host de interface: `LAPTOP-NIG4IFUU`, Chrome autenticado na
+  administracao do workspace Vivaliz; uso exclusivo da interface
+  administrativa, **nao** como navegador fallback para login ChatGPT.
+- Antes da intervencao: plugin `ShopVivaliz Remote Control` versao
+  `1.0.1`; catalogo no painel com **64** ferramentas.
+- Na janela `Ferramentas`, `Atualizar` retornou o catalogo de
+  **66** ferramentas. Os nomes `browser_auth_tabs` e
+  `browser_auth_action` passaram a constar da lista com ambos os
+  controles de aprovacao `On`. O modo existente `Permitir todas as
+  ferramentas` e a politica `Ativar todas as novas ferramentas`
+  foram preservados, sem mudanca de permissao.
+- Um pacote ZIP de release foi montado a partir do arquivo original
+  baixado pelo proprio painel; contem os mesmos dois manifestos
+  `.app.json` e `.codex-plugin/plugin.json`. Somente o campo
+  `version` do manifesto passou de `1.0.1` a `1.0.2`;
+  identidade e binding `apps` foram preservados. Nenhum segredo foi
+  adicionado.
+- `Acoes do plugin > Enviar nova versao` aceitou o ZIP, e o painel
+  confirmou `Atualizacao de plugin bem-sucedida`. A versao mostrada
+  passou a `1.0.2`. Depois de recarregar toda a pagina, foram
+  reconfirmados `1.0.2`, **66** ferramentas, `Ativado`,
+  `Permissoes Permitir todas as ferramentas` e
+  `Ativar todas as novas ferramentas`.
+- Smoke test remoto `host_health` passou no backend
+  `always-free-arm-1787907847-26`. Os testes
+  `browser_auth_tabs(session=dev)` e
+  `browser_auth_tabs(session=atendimento)` retornaram apenas
+  abas oficiais em suas respectivas sessoes isoladas. Nenhuma
+  senha, cookie ou TOTP foi lido, transferido ou registrado.
+
+### Lacuna ainda nao comprovada como resolvida
+
+- O MCP privado verificado pelo comando oficial `tools/list` do
+  `shopvivaliz-claude-mcp-stdio` no backend expoe **67** ferramentas
+  e **10** valores permitidos em `browser_auth_action.action`,
+  incluindo `fill_gnome_totp` e `back_to_methods`.
+- O schema da ferramenta **ja carregado nesta conversa ChatGPT**
+  continuou com somente 5 acoes:
+  `fill_email`, `fill_password`, `fill_code`, `continue`,
+  `resend`, embora o painel administrativo esteja em 1.0.2 e
+  aprove `browser_auth_action`.
+- **Nao alegar paridade de inputSchema sem testar uma nova descoberta
+  autorizada do catalogo pelo proprio provedor ChatGPT.** Fazer
+  `tools/list`/inspecao suportada em sessao com definicoes novas,
+  comparar enum completo e confirmar que o cliente aceita as
+  acoes oficiais. Nao usar `admin_command_run`, comandos locais,
+  JavaScript injetado ou transporte alternativo para contornar a
+  validacao de schema ou a politica de MFA.
+- A atualizacao de versao e do catalogo do plugin esta
+  **CONCLUIDA e validada**; a autenticacao ChatGPT
+  **nao esta concluida**: Dev permanece na etapa
+  `/mfa-challenge` e Atendimento em `/log-in/password`.
+  Validar o e-mail da sessao oficial separadamente antes de declarar
+  cada conta autenticada.
+- Reutilizar `CREDENTIAL_REPROMPT_GATE_V1`. A senha do
+  Atendimento continua registrada no cofre do perfil Chromium, e
+  ausencia de autofill nao autoriza pedir novamente a senha nem
+  promover tentativa insegura.
+
+**Proximo checkpoint:** conferir schema fresco da acao
+`browser_auth_action` apos publicacao; continuar o fluxo protegido
+por conta, com lease apropriado e somente pelos metodos oficiais,
+preservando MFA, CAPTCHA, RBAC e controles administrativos.
