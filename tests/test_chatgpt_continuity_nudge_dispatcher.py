@@ -645,13 +645,18 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(confirmed["worker_status"], "PROGRESS_CONFIRMED")
         self.assertEqual(confirmed["conversation_id"], route)
         self.assertEqual(confirmed["browser_session"], "dev")
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
         self.assertEqual(
-            self.dispatcher._attested_browser_session(self.runtime, "task-1", route),
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, fingerprint),
             "dev",
         )
         self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, "stale-fingerprint"),
+            "",
+        )
+        self.assertEqual(
             self.dispatcher._attested_browser_session(self.runtime, "task-1",
-                                                       "6ac0f8b7-f2f0-83e9-95c5-54be614b9def"),
+                                                       "6ac0f8b7-f2f0-83e9-95c5-54be614b9def", fingerprint),
             "",
         )
 
