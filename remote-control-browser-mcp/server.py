@@ -1025,8 +1025,11 @@ try {
         "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "retryButtons[0].click();return {clicked:true};" +
         "}" +
-        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&['/log-in','/log-in/password','/email-verification'].includes(u.pathname)&&" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&" +
+        "(['/log-in','/log-in/password','/email-verification'].includes(u.pathname)||" +
+        "(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))))&&" +
         "document.body?.innerText?.includes('Your session has ended')){" +
+        "if(u.pathname.startsWith('/mfa-challenge/')&&document.querySelector('input[autocomplete=one-time-code],input[name=code]'))throw Error('auth_action_ambiguous_or_unavailable');" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(String(a.innerText||'').trim()));" +
         "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
