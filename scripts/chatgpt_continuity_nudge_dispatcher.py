@@ -174,7 +174,7 @@ def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
     return value if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value) else ""
 
 
-def _attested_browser_session(runtime_dir: Path, task_id: str, conversation_id: str) -> str:
+def _attested_browser_session(runtime_dir: Path, task_id: str, conversation_id: str, fingerprint: str) -> str:
     """Return a corporate profile only for this exact current task binding.
 
     A worker's confirmed conversation cannot attest the account profile by
@@ -192,6 +192,8 @@ def _attested_browser_session(runtime_dir: Path, task_id: str, conversation_id: 
     if not isinstance(payload, dict) or payload.get("status") != "RUNNING":
         return ""
     if str(payload.get("conversation_id", "")).strip() != conversation_id:
+        return ""
+    if checkpoint_fingerprint(payload) != fingerprint:
         return ""
     session = str(payload.get("browser_session", "")).strip()
     return session if session in {"dev", "atendimento"} else ""
@@ -515,7 +517,7 @@ def _run_once_locked(
                                 # current checkpoint conversation. Stale or
                                 # cross-account receipts fail closed.
                                 session = _attested_browser_session(
-                                    root, task_id, confirmed_conversation_id,
+                                    root, task_id, confirmed_conversation_id, fingerprint,
                                 )
                                 if session:
                                     observed["browser_session"] = session
