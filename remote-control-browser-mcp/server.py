@@ -1016,6 +1016,15 @@ try {
         "if(!e||e.tagName!=='INPUT'||e.disabled||e.readOnly)throw Error('auth_field_unavailable');" +
         "e.focus();e.select();return {ready:true};" +
         "}" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))&&" +
+        "document.body?.innerText?.includes('Oops, an error occurred!')&&" +
+        "document.querySelectorAll('input[autocomplete=one-time-code],input[name=code]').length===0){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha');" +
+        "if(unsafe||document.forms.length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
+        "}" +
         "if(action==='continue'&&u.origin==='https://auth.openai.com'&&['/log-in','/log-in/password','/email-verification'].includes(u.pathname)&&" +
         "document.body?.innerText?.includes('Your session has ended')){" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
