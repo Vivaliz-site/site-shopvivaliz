@@ -588,6 +588,41 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             self.assertIn(marker, text, str(path))
             self.assertIn("BLOCKED_EXTERNAL", text, str(path))
 
+    def test_resume_entrypoints_cannot_drop_execution_contract(self) -> None:
+        required = (
+            ROOT / "AGENTS.md",
+            ROOT / "CLAUDE.md",
+            ROOT / "GEMINI.md",
+            ROOT / ".github" / "copilot-instructions.md",
+            ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
+        )
+        for path in required:
+            contents = path.read_text(encoding="utf-8")
+            for token in (
+                "RESUME_EXECUTION_GATE_V1",
+                "Retome",
+                "rules_loaded",
+                "CONCLUIDO",
+                "BLOCKED_EXTERNAL",
+            ):
+                with self.subTest(path=path, token=token):
+                    self.assertIn(token, contents)
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("RESUME_EXECUTION_GATE_V1", validator)
+
+    def test_docs_preflight_covers_canonical_resume_rules(self) -> None:
+        from agent_docs_gate import REQUIRED_DOCS
+        for path in (
+            "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+            "docs/knowledge/host-access.md",
+            "docs/knowledge/README.md",
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/task-continuity.md",
+            "GEPETO-POLICY.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, REQUIRED_DOCS)
+
     def test_governance_executes_continuity_validator(self) -> None:
         governance = (ROOT / "scripts" / "repository-governance-validate.sh").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/validate-task-continuity-enforcement.py", governance)
