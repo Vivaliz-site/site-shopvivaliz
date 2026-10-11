@@ -2026,7 +2026,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             tab_id = str(tab.get("tab_id") or "")
             stage = str(tab.get("stage") or "")
             if re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id) and (
-                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage == "/email-verification"
+                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage in {"/email-verification", "/mfa-challenge", "/log-in-or-create-account"}
             ):
                 clean.append({"tab_id": tab_id, "session": session, "stage": stage})
         return {"ok": True, "session": session, "tabs": clean}
