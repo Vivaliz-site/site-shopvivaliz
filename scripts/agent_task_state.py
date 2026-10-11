@@ -57,6 +57,8 @@ NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
 PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+CANONICAL_CONTROLLER_RUNTIME_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+CHATGPT_AGENT_ID_RE = re.compile(r"(?:^|[^a-z0-9])(?:chatgpt|gpt[0-9]*|orquestrador)(?=$|[^a-z0-9])", re.I)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
@@ -65,6 +67,22 @@ STATE_LOCK_FILE = "_agent-task-state.lock"
 
 class TaskStateError(RuntimeError):
     pass
+
+
+def _require_verified_chatgpt_origin_on_create(agent_id: str) -> bool:
+    """Fail closed for new ChatGPT checkpoints on the canonical controller.
+
+    The durable dispatcher cannot recover an unbound ChatGPT conversation.
+    Keep legacy checkpoints and tests usable; only new corporate ChatGPT
+    starts in the live controller (or explicit strict-mode tests) are gated.
+    """
+    strict_test_mode = os.getenv("SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    canonical_runtime = RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
+    return bool(CHATGPT_AGENT_ID_RE.search(str(agent_id or ""))) and (
+        canonical_runtime or strict_test_mode
+    )
 
 RECOVERY_STATES = frozenset({
     'FOREGROUND_ACTIVE', 'FOREGROUND_RELEASED', 'LEASE_EXPIRED',
@@ -412,6 +430,12 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         raise TaskStateError(
             "task state already exists with different identity; use successor or explicit resume"
         )
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not conversation:
+        raise TaskStateError(
+            "new ChatGPT checkpoint requires an exact verified conversation_id and "
+            "corporate browser_session before creation; preserve work outside "
+            "the recovery queue until that provenance is available"
+        )
 
     now = utc_now()
     payload = {
@@ -499,6 +523,13 @@ def start_successor_task(
             if inherited_session not in {"dev", "atendimento", "fred"}:
                 raise TaskStateError("predecessor has invalid browser session binding")
             payload["browser_session"] = inherited_session
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not (
+        payload.get("conversation_id") and payload.get("browser_session") in {"dev", "atendimento"}
+    ):
+        raise TaskStateError(
+            "new ChatGPT successor requires a verified original conversation and "
+            "corporate browser session; an unbound predecessor cannot supply provenance"
+        )
     _atomic_write(path, payload)
     return payload
 
