@@ -324,7 +324,7 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("runtime_fencing_token", props["required"])
         self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
         self.assertEqual(
-            {"fill_email", "fill_password", "fill_code", "continue", "resend",
+            {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend",
              "back_to_methods", "open_login", "continue_google", "continue_microsoft"},
             set(props["properties"]["action"]["enum"]),
         )
