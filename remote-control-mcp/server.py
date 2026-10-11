@@ -91,6 +91,7 @@ import runtime_lock
 import conversation_lease
 import mutation_gate
 import foreground_handoff
+import checkpoint_update_atomic
 
 
 HOSTS = {
@@ -1212,6 +1213,15 @@ AUDIT_RESULT_METADATA_KEYS = (
 
 
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool == "checkpoint_update_atomic":
+        # Checkpoint notes and nested metadata must never appear in audit args.
+        return {
+            "request_id": str(args.get("request_id") or "")[:160],
+            "expected_last_checked_at": str(args.get("expected_last_checked_at") or "")[:60],
+            "rules_count": len(args.get("rules_sha_by_path") or {}),
+            "audit_id_count": len(args.get("audit_ids") or []),
+            "next_action_length": len(str(args.get("next_action") or "")),
+        }
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
@@ -2143,6 +2153,9 @@ def execute_tool(
         )
     if name == "continuity_status":
         return continuity_status()
+    if name == "checkpoint_update_atomic":
+        # No caller-controlled path, route, task status, or runtime shell command.
+        return checkpoint_update_atomic.update_checkpoint(args, continuity_status())
     if name == "continuity_e2e":
         return continuity_e2e(
             _validate_conversation_id(args.get("conversation_id")),
@@ -2404,6 +2417,7 @@ TOOLS = [
     ("controller_status", "Inspect the active 24x7 continuity controller release and sanitized runtime state on the canonical backend.", {}, True, False),
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
+    ("checkpoint_update_atomic", "Update only the non-secret Orquestrador recovery checkpoint metadata with a global state lock, idempotency, observed runtime counters, fsync and independent readback. Never binds chats, completes tasks or changes host settings.", {"request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$"}, "expected_last_checked_at": {"type": "string", "maxLength": 60}, "rules_sha_by_path": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "audit_ids": {"type": "array", "maxItems": 32, "items": {"type": "string"}}, "next_action": {"type": "string", "minLength": 10, "maxLength": 1800}}, False, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
@@ -2478,7 +2492,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": schema_props,
-                "required": [k for k in props if k not in optional],
+                "required": [k for k in props if k not in optional or (name == "checkpoint_update_atomic" and k == "request_id")],
                 "additionalProperties": False,
             },
             "annotations": {

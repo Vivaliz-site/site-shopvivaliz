@@ -45,16 +45,46 @@ def is_browser_only(paths: list[str]) -> bool:
     return True
 
 
+# A narrowly scoped backend-only MCP upgrade never touches production/Windows.
+BACKEND_CONTROLLER_FILES = frozenset({
+    "remote-control-mcp/server.py",
+    "remote-control-mcp/SPEC.md",
+    "scripts/continuity/checkpoint_update_atomic.py",
+    "tests/test_orquestrador_atomic_checkpoint.py",
+    "tests/remote-control-mcp-test.py",
+    "scripts/remote_mcp_bootstrap_scope.py",
+    "tests/test_remote_mcp_bootstrap_scope.py",
+    ".github/workflows/remote-control-mcp-bootstrap.yml",
+    "scripts/should-deploy-production.sh",
+    "scripts/setup-remote-control-access.sh",
+    "tests/should-deploy-production-test.sh",
+})
+
+
+def is_backend_controller_only(paths: list[str]) -> bool:
+    clean = [path.strip() for path in paths]
+    if not clean or len(clean) != len(set(clean)):
+        return False
+    if any(not name or name.startswith('/') or '\\' in name or '..' in name.split('/') for name in clean):
+        return False
+    # Require the actual restricted handler AND its implementation together.
+    mandatory = {'remote-control-mcp/server.py', 'scripts/continuity/checkpoint_update_atomic.py'}
+    return mandatory.issubset(clean) and set(clean).issubset(BACKEND_CONTROLLER_FILES)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
     paths = sys.stdin.read().splitlines()
     browser_only = is_browser_only(paths)
+    backend_controller_only = is_backend_controller_only(paths)
     if args.github_output:
         with args.github_output.open("a", encoding="utf-8") as output:
             output.write("browser_only=" + ("true" if browser_only else "false") + "\n")
-    print("REMOTE_CONTROL_BOOTSTRAP_SCOPE=" + ("BROWSER_ONLY" if browser_only else "FULL"))
+            output.write("backend_controller_only=" + ("true" if backend_controller_only else "false") + "\n")
+    scope = "BROWSER_ONLY" if browser_only else "BACKEND_CONTROLLER_ONLY" if backend_controller_only else "FULL"
+    print("REMOTE_CONTROL_BOOTSTRAP_SCOPE=" + scope)
     return 0
 
 
