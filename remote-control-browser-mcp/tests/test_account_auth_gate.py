@@ -184,8 +184,19 @@ class AccountAuthGateTests(unittest.TestCase):
         # Recovery must accept only one exact official login URL.
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         self.assertIn(
-            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&"
-            "['/log-in','/log-in/password','/email-verification'].includes(u.pathname)&&",
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&",
+            script,
+        )
+        self.assertIn(
+            "(['/log-in','/log-in/password','/email-verification'].includes(u.pathname||",
+            script,
+        )
+        self.assertIn(
+            "(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(",
+            script,
+        )
+        self.assertIn(
+            "if(u.pathname.startsWith('/mfa-challenge/')&&document.querySelector(",
             script,
         )
         self.assertNotIn("if(action==='continue'&&u.hostname==='auth.openai.com'", script)
