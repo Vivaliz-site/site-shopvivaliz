@@ -306,3 +306,22 @@ When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `for
 - Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
 - Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
 <!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->
+
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->

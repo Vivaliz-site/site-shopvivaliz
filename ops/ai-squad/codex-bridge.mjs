@@ -18,6 +18,12 @@ const MAX_BODY_BYTES = 262144;
 const DEFAULT_TIMEOUT_MS = 180000;
 const HEALTH_CACHE_MS = 60000;
 
+// A paid bridge must not silently consume a user's subscription quota.
+export function paidBridgeEnabled(env = process.env) {
+  return env.SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED === '1'
+    && env.SHOPVIVALIZ_PAID_BRIDGE_MODE === 'interactive';
+}
+
 export function sanitizeBridgeError(value) {
   return String(value ?? '')
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
@@ -384,6 +390,11 @@ async function runProfile(profileHome, request, deadlineMs) {
 let healthCache = { at: 0, value: null };
 
 async function bridgeHealth() {
+  if (!paidBridgeEnabled()) {
+    return { ok: false, endpoint: 'ai-squad-codex-bridge',
+      auth_mode: 'disabled', policy: 'manual_approval_required',
+      authenticated_profile_count: 0, available_profile_count: 0 };
+  }
   const now = Date.now();
   if (healthCache.value && now - healthCache.at < HEALTH_CACHE_MS) {
     return healthCache.value;
@@ -499,6 +510,9 @@ export function createServer() {
       }
       if (req.method !== 'POST' || req.url !== '/v1/respond') {
         return sendJson(res, 404, { ok: false, error: 'not_found' });
+      }
+      if (!paidBridgeEnabled()) {
+        return sendJson(res, 403, { ok: false, error: 'paid_provider_disabled' });
       }
       if (active >= 2) {
         return sendJson(res, 429, { ok: false, error: 'bridge_busy' });
