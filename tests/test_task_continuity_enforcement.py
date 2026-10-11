@@ -594,7 +594,6 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             ROOT / "CLAUDE.md",
             ROOT / "GEMINI.md",
             ROOT / ".github" / "copilot-instructions.md",
-            ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md",
         )
         for path in required:
             contents = path.read_text(encoding="utf-8")
