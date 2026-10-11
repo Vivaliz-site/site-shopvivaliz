@@ -318,6 +318,29 @@ def _controller_active_sha() -> str:
     return match.group(1) if match else ""
 
 
+def _controller_active_release_id() -> str:
+    """Report the active release basename without treating it as an attested Git SHA.
+
+    Human-readable build labels may be used by an external installer. They
+    provide useful diagnostics, but NEVER satisfy the 40-hex provenance gate.
+    """
+    try:
+        pid_text = _run_local_checked(
+            [SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"],
+            timeout=15,
+        )
+        pid = int(pid_text or "0")
+        if pid <= 0:
+            return ""
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(
+            "utf-8", errors="replace"
+        )
+    except (RuntimeError, ValueError, OSError):
+        return ""
+    match = re.search(r"/releases/([A-Za-z0-9._-]{7,160})/", cmdline)
+    return match.group(1) if match else ""
+
+
 RUNTIME_PRIVATE_KEYS = {
     "sessionid", "environmentid", "pid", "procstart", "token", "secret",
     "cookie", "authorization", "password",
@@ -421,6 +444,8 @@ def controller_status() -> dict[str, Any]:
     service_state = _run_local([SYSTEMCTL, "is-active", CONTROLLER_SERVICE], timeout=15)
     active = _decode_output(service_state.stdout).strip() == "active"
     active_sha = _controller_active_sha()
+    # Diagnostic only: a non-SHA release must NOT be considered verified.
+    active_release_id = active_sha or (_controller_active_release_id() if active else "")
     try:
         origin_main_sha = _controller_origin_main_sha(refresh=False)
     except Exception:
@@ -433,6 +458,8 @@ def controller_status() -> dict[str, Any]:
         "service": CONTROLLER_SERVICE,
         "service_active": active,
         "active_sha": active_sha,
+        "active_release_id": active_release_id,
+        "release_id_form": "sha40" if active_sha else ("non_sha_unverified" if active_release_id else "unknown"),
         "origin_main_sha": origin_main_sha,
         "remote_main_sha": remote_main_sha,
         "remote_head_verified": bool(remote_main_sha),
