@@ -107,4 +107,8 @@ if __name__ == "__main__":
     test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap()
     test_empty_or_untrusted_diff_fails_closed()
     test_workflow_keeps_full_bootstrap_and_browser_only_separate()
+    # Run the actual production classifier contract on every PR quality gate.
+    # This proves that the restricted MCP-only merge cannot launch a web deploy.
+    import subprocess
+    subprocess.run(["bash", str(ROOT / "tests" / "should-deploy-production-test.sh")], check=True, timeout=20)
     print("REMOTE_CONTROL_BOOTSTRAP_SCOPE_TEST=PASS")
