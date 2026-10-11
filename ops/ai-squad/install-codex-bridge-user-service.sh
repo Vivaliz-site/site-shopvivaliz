@@ -8,16 +8,27 @@ service_dir="$HOME/.config/systemd/user"
 unit="$service_dir/$service"
 runtime="$HOME/.local/share/shopvivaliz-squad-codex"
 workspace="$runtime/workspace"
-bridge="/home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/codex-bridge.mjs"
+bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/codex-bridge.mjs"
+bridge="$HOME/.local/share/shopvivaliz-ai-squad/codex-bridge.mjs"
 codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"
 business_home="/home/ubuntu/.codex-business"
 node_bin="$(command -v node)"
 
 test -n "$node_bin"
-test -f "$bridge"
+test -f "$bridge_source"
 test -x "$codex_real"
 mkdir -p "$service_dir" "$workspace"
 chmod 700 "$runtime" "$workspace"
+# Install the policy-gated bridge into a stable user-owned runtime location.
+# This avoids an old release symlink enabling paid inference during rollback.
+mkdir -p "$(dirname "$bridge")"
+chmod 700 "$(dirname "$bridge")"
+staged_bridge="$(mktemp "$(dirname "$bridge")/.codex-bridge.XXXXXX.mjs")"
+trap 'rm -f "$staged_bridge"' EXIT
+install -m 0644 "$bridge_source" "$staged_bridge"
+"$node_bin" --check "$staged_bridge"
+mv -f "$staged_bridge" "$bridge"
+trap - EXIT
 
 tmp="$(mktemp "$service_dir/.${service}.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
@@ -32,6 +43,8 @@ Type=simple
 WorkingDirectory=$workspace
 ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CODEX_BRIDGE_PORT=17656
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
 Environment=AI_SQUAD_CODEX_REAL=$codex_real
 Environment=AI_SQUAD_CODEX_BUSINESS_HOME=$business_home
 Environment=AI_SQUAD_CODEX_WORKDIR=$workspace
@@ -57,14 +70,12 @@ systemctl --user daemon-reload
 systemctl --user enable --now "$service"
 systemctl --user restart "$service"
 
-health_url="http://127.0.0.1:17656/health"
+checker="$(cd -- "$(dirname -- "$0")" && pwd -P)/bridge-health-policy.py"
+test -f "$checker"
 for _ in $(seq 1 30); do
-  if body="$(curl -fsS --max-time 5 "$health_url" 2>/dev/null)"; then
-    if printf '%s' "$body" | grep -q '"ok":true'; then
-      printf '%s\n' "AI_SQUAD_CODEX_BRIDGE_SERVICE=ACTIVE"
-      printf '%s\n' "AI_SQUAD_CODEX_BRIDGE_HEALTH=OK"
-      exit 0
-    fi
+  if python3 "$checker" codex; then
+    printf '%s\n' "AI_SQUAD_CODEX_BRIDGE_SERVICE=ACTIVE"
+    exit 0
   fi
   sleep 1
 done

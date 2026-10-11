@@ -219,26 +219,10 @@ reconcile_ai_squad_claude_bridge_unit() {
 }
 
 verify_ai_squad_bridges_health() {
-  local codex_health claude_health
-
-  if ! codex_health="$(curl -fsS --max-time 5 http://127.0.0.1:17656/health)"; then
-    return 1
-  fi
-  if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
-    || ! printf '%s' "$codex_health" | grep -q '"web_search_mode":"live"'; then
-    return 1
-  fi
-
-  if ! claude_health="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health)"; then
-    return 1
-  fi
-  if ! printf '%s' "$claude_health" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-    || ! printf '%s' "$claude_health" | grep -q '"ok":true' \
-    || ! printf '%s' "$claude_health" | grep -q '"authenticated":true'; then
-    return 1
-  fi
-
-  return 0
+  # Deliberately disabled paid bridges are healthy only when their inference
+  # endpoint rejects requests with HTTP 403. Do not trigger a rollback.
+  local checker="$(cd -- "$(dirname -- "$0")/../ops/ai-squad" && pwd -P)/bridge-health-policy.py"
+  python3 "$checker" codex && python3 "$checker" claude
 }
 
 ai_squad_runtime_changed_between_releases() {
