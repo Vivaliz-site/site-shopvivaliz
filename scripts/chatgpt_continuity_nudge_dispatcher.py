@@ -174,6 +174,29 @@ def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
     return value if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value) else ""
 
 
+def _attested_browser_session(runtime_dir: Path, task_id: str, conversation_id: str) -> str:
+    """Return a corporate profile only for this exact current task binding.
+
+    A worker's confirmed conversation cannot attest the account profile by
+    itself. Never derive a session from the task title, most-recent browser tab,
+    or an unrelated historical ledger receipt.
+    """
+    if not task_id or "/" in task_id or "\\" in task_id:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", str(conversation_id or "")):
+        return ""
+    try:
+        payload = json.loads((runtime_dir / f"{task_id}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, dict) or payload.get("status") != "RUNNING":
+        return ""
+    if str(payload.get("conversation_id", "")).strip() != conversation_id:
+        return ""
+    session = str(payload.get("browser_session", "")).strip()
+    return session if session in {"dev", "atendimento"} else ""
+
+
 def _checkpoint_updated_at(runtime_dir: Path, task_id: str) -> datetime | None:
     if not task_id or "/" in task_id or "\\" in task_id:
         return None
@@ -487,6 +510,17 @@ def _run_once_locked(
                                 and re.fullmatch(r"[A-Za-z0-9_-]{8,160}", confirmed_conversation_id)
                             ):
                                 observed["conversation_id"] = confirmed_conversation_id
+                                # Attest the browser profile only after a real
+                                # confirmed worker response for the exact
+                                # current checkpoint conversation. Stale or
+                                # cross-account receipts fail closed.
+                                session = _attested_browser_session(
+                                    root, task_id, confirmed_conversation_id,
+                                )
+                                if session:
+                                    observed["browser_session"] = session
+                                else:
+                                    observed.pop("browser_session", None)
                                 if (
                                     not _bound_conversation_id(root, task_id)
                                     and Path(root).resolve() == Path(RUNTIME_DIR).resolve()
