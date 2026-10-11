@@ -139,7 +139,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller-code-only remote-control-mcp/server.py scripts/continuity/checkpoint_update_atomic.py
       - name: Verify base and browser MCP source and local readiness
         shell: bash
         run: |

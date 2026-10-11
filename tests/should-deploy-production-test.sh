@@ -32,6 +32,7 @@ check false \
   tests/test_remote_mcp_bootstrap_scope.py \
   .github/workflows/remote-control-mcp-bootstrap.yml \
   scripts/should-deploy-production.sh \
+  scripts/setup-remote-control-access.sh \
   tests/should-deploy-production-test.sh
 check true remote-control-mcp/server.py
 check true scripts/continuity/checkpoint_update_atomic.py
