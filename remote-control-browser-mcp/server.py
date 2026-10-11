@@ -1229,7 +1229,11 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
         raise ValueError("account_auth_maintenance_owner_required")
     value = str(args.get("value") or "")
-    if action == "fill_gnome_totp":
+    # Backward-compatible contract: MCP clients with a cached action enum can
+    # request the same already-protected GNOME action via fill_code without a
+    # value. The current email-code path still requires its explicit value.
+    # Both spellings must pass the exact-account lease and official MFA gate.
+    if action == "fill_gnome_totp" or (action == "fill_code" and not value):
         if value:
             raise ValueError("account_auth_value_not_allowed")
         # Fail closed unless the *same account profile* is already at official MFA.
