@@ -195,3 +195,7 @@ Ao validar os quatro hosts, exigir evidência real de:
 
 A conta `atendimento@shopvivaliz.com.br` possui senha própria já configurada. O segredo não é versionado neste repositório. Para autenticação, reutilizar primeiro o perfil/navegador autenticado da VM `always-free-arm-1787907847-26` e as fontes seguras autorizadas. Não solicitar novamente a senha ao usuário sem evidência de que a credencial provisionada está ausente, revogada ou inválida.
 <!-- /CHATGPT_ATENDIMENTO_CREDENTIAL_REF_V1 -->
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**GUI RustDesk backend:** seguir `docs/knowledge/shopvivaliz-graphical-session-recovery.md`. Login LightDM `:1` nao prova perda de sessao Linux: examinar `loginctl` e o XFCE de `fredconsole/:0`; Chromium corporativo permanece separado em `fredrdp/:99`. Uma troca `loginctl activate c1` precisa ser validada por estabilidade e pela imagem real do RustDesk. Nao redefinir senha nem confundir GUI com sessao ChatGPT autenticada.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
