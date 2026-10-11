@@ -181,3 +181,74 @@ login concluido com base em metadados ou clique de botao.
 `browser_auth_action` apos publicacao; continuar o fluxo protegido
 por conta, com lease apropriado e somente pelos metodos oficiais,
 preservando MFA, CAPTCHA, RBAC e controles administrativos.
+
+## Registro operacional — catalogo MCP completo (68 ferramentas, 2026-10-11)
+
+- **Cadastro administrativo concluido** no Chrome autenticado do
+  `LAPTOP-NIG4IFUU`: plugin **ShopVivaliz Remote Control 1.0.2**,
+  aprovado e ativado, agora com **68 ferramentas**.
+  O refresh anterior retornava somente 66 porque o
+  `shopvivaliz-secure-mcp-tunnel.service` ainda era um processo de
+  2026-10-09; o servidor MCP ja havia sido atualizado em 2026-10-11.
+  A rotacao controlada do tunel terminou com
+  `CATALOG_TUNNEL_CUTOVER=PASS`, PID renovado, endpoints
+  `/healthz`/`/readyz` disponiveis, unico processo e ambos
+  MCPs ativos. **Nenhum Chromium foi reiniciado.**
+- Atualizar novamente a lista no painel confirmou **68 ferramentas**
+  sem alterar permissoes nem exigir novo envio do pacote 1.0.2.
+  Foram verificados como `On` os itens
+  `browser_auth_open`, `checkpoint_update_atomic`,
+  `browser_auth_tabs`, `browser_auth_action` e
+  `desktop.session.attach`. A listagem real do bridge Claude
+  tambem retornou **68** nomes. Nao registrar nomes de ferramentas
+  com pontos como ausencia apenas porque uma camada apresenta
+  aliases com underscores.
+- Acoes permitidas de `browser_auth_action.action` no backend:
+  `fill_email`, `fill_password`, `fill_code`,
+  `fill_gnome_totp`, `continue`, `resend`,
+  `back_to_methods`, `open_login`, `continue_google`,
+  `continue_microsoft`. O schema previamente carregado em
+  conversas antigas do ChatGPT pode ainda conter cinco valores;
+  **nao fingir paridade sem consultar um catalogo novo pela
+  interface suportada do proprio ChatGPT**. Nao usar comandos
+  diretos para contornar a validacao de ferramentas.
+- Uma falha adicional omitia `/mfa-challenge` no proxy
+  `browser_auth_tabs`, embora o Browser MCP ja a reconhecesse.
+  Corrigida no PR
+  `#2890` (commit `6dc8a1a9f6c104ffd4401a58f000bbcc90643da5`),
+  com teste que preserva somente os identificadores e etapas
+  oficiais sanitizadas, sem URLs, query strings, OTPs ou dados
+  de outras contas. **227 testes** direcionados/amplos passaram,
+  os quatro workflows da PR passaram, e o instalador canonico
+  `install-controller-code-only` retornou
+  `BACKEND_MCP_ONLY_RESTRICTED_INSTALL=PASS` em producao.
+  Servicos MCP e Chromium Dev/Atendimento permaneceram ativos.
+- Metadados nao secretos do GNOME Authenticator confirmaram
+  **uma referencia TOTP por conta** (Dev e Atendimento).
+  Isso **nao prova** que o cofre esteja desbloqueado,
+  que um codigo esteja valido ou que as contas estejam autenticadas.
+  Jamais registrar ou exportar seed, codigo, senha ou cookie.
+- Na retomada oficial, a conta Dev saiu de `/log-in` para
+  `/email-verification` apos preenchimento do e-mail esperado
+  e clique protegido em Continue, mediante lease exclusivo.
+  O passo seguinte de preenchimento automatico de um codigo
+  de verificacao do Gmail foi **bloqueado pelos controles de
+  seguranca do cliente**. O bloqueio foi respeitado, e o
+  lease foi liberado. **Nao** tentar transferir o codigo por
+  outro canal/execucao como alternativa. A verificacao devera
+  ocorrer na interface oficial por pessoa autorizada.
+- Atendimento continua na etapa `/log-in/password`.
+  A credencial salva no perfil foi identificada anteriormente
+  como `PRESENT` / `DENY_EXISTING_CREDENTIAL`;
+  nao solicitar novamente sua senha por simples ausencia de
+  autofill. As duas identidades permanecem **AUTH_REQUIRED**
+  ate verificacao exata de `user.email` em
+  `/api/auth/session`, em cada perfil isolado.
+
+**Prevencao:** para futuras mudancas no MCP, verificar
+`tools/list` (nomes e schemas) **versus** o catalogo aprovado
+pelo ChatGPT. Se divergirem, observar a idade do processo do
+tunel, reinicia-lo somente pelo procedimento autorizado com
+testes de readiness e refresh do catalogo no painel. Manter
+RBAC/MFA/aprovacoes e a recuperacao por rollback; nao confundir
+refresh da listagem com autenticacao das contas.
