@@ -741,5 +741,125 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertNotIn("set +e", setup)
 
 
+    def test_gnome_totp_helper_is_syntax_valid_and_private(self):
+        compile(m.ACCOUNT_GNOME_TOTP_PYTHON, "<private-gnome-totp>", "exec")
+        self.assertIn("Secret.password_lookup_sync", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertIn("WHERE lower(username)=?", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertIn("sys.stdout.write(code)", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertNotIn("print(seed)", m.ACCOUNT_GNOME_TOTP_PYTHON)
+
+    def test_local_totp_uses_only_private_pipe_and_fixed_owner(self):
+        child = mock.Mock(returncode=0, stdout=b"123456")
+        with mock.patch.object(m.subprocess, "run", return_value=child) as runner:
+            self.assertEqual("123456", m.account_auth_local_totp("dev"))
+        argv = runner.call_args.args[0]
+        kwargs = runner.call_args.kwargs
+        self.assertEqual(["runuser", "-u", "fredrdp"], argv[:3])
+        self.assertEqual("dev@shopvivaliz.com.br", argv[-1])
+        self.assertNotIn("123456", repr(argv))
+        self.assertEqual(m.subprocess.PIPE, kwargs["stdout"])
+        self.assertEqual(m.subprocess.DEVNULL, kwargs["stderr"])
+
+    def test_local_totp_never_exposes_failed_or_malformed_outputs(self):
+        for returned in (
+            mock.Mock(returncode=1, stdout=b""),
+            mock.Mock(returncode=0, stdout=b"notacode"),
+            mock.Mock(returncode=0, stdout=b"123456\n"),
+            mock.Mock(returncode=0, stdout=b"1234567"),
+        ):
+            with self.subTest(output_type=returned.returncode):
+                with mock.patch.object(m.subprocess, "run", return_value=returned):
+                    with self.assertRaisesRegex(ValueError, "account_auth_local_totp_"):
+                        m.account_auth_local_totp("dev")
+        with mock.patch.object(m.subprocess, "run") as runner:
+            with self.assertRaisesRegex(ValueError, "scope_invalid"):
+                m.account_auth_local_totp("personal")
+        runner.assert_not_called()
+
+    def test_gnome_totp_action_requires_matching_mfa_page_before_secret(self):
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        for tabs in (
+            [],
+            [{"tab_id": "A123", "stage": "/email-verification"}],
+            [{"tab_id": "B456", "stage": "/mfa-challenge"}],
+        ):
+            with self.subTest(tabs=tabs):
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs", return_value={"tabs": tabs}),
+                    mock.patch.object(m, "account_auth_local_totp") as secret_reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin") as executor,
+                ):
+                    with self.assertRaisesRegex(ValueError, "mfa_stage_required"):
+                        m.browser_auth_action(args)
+                secret_reader.assert_not_called()
+                executor.assert_not_called()
+
+    def test_gnome_totp_never_accepts_an_external_value(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "value": "123456", "runtime_lease_id": "lease-123",
+            "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+        ):
+            with self.assertRaisesRegex(ValueError, "value_not_allowed"):
+                m.browser_auth_action(args)
+        reader.assert_not_called()
+
+    def test_gnome_totp_fails_closed_for_wrong_lease_owner(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:atendimento"}),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.browser_auth_action(args)
+        reader.assert_not_called()
+
+    def test_gnome_totp_action_routes_private_code_to_existing_cdp_auth_gate(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}),
+            mock.patch.object(m, "browser_auth_tabs",
+                              return_value={"tabs": [{"tab_id": "A123", "stage": "/mfa-challenge"}]}),
+            mock.patch.object(m, "account_auth_local_totp", return_value="123456") as reader,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+        ):
+            result = m.browser_auth_action(args)
+        self.assertTrue(result["ok"])
+        reader.assert_called_once_with("dev")
+        argv, private_stdin = executor.call_args.args[:2]
+        self.assertNotIn("123456", repr(argv))
+        self.assertEqual("fill_code", argv[-1])
+        self.assertEqual("123456", private_stdin)
+        self.assertNotIn("123456", repr(result))
+        self.assertIn("fill_gnome_totp", m.ACCOUNT_AUTH_ACTIONS)
+        schema = next(s for s in m.tool_specs() if s["name"] == "browser_auth_action")
+        self.assertIn("fill_gnome_totp", schema["inputSchema"]["properties"]["action"]["enum"])
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

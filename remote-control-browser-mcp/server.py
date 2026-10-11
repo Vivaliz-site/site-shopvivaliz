@@ -886,7 +886,61 @@ ACCOUNT_AUTH_EMAILS = {
     "dev": "dev@shopvivaliz.com.br",
     "atendimento": "atendimento@shopvivaliz.com.br",
 }
-ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+
+ACCOUNT_GNOME_TOTP_PYTHON = r"""
+# This child is invoked ONLY from browser_auth_action with an account-matched
+# maintenance lease. Its stdout is a private pipe to the parent, never an MCP
+# response or audit. Secrets stay in the local user's Secret Service collection.
+import os
+import pwd
+import re
+import sqlite3
+import sys
+import time
+
+import gi
+import pyotp
+
+gi.require_version("Secret", "1")
+from gi.repository import Secret
+
+email = sys.argv[1] if len(sys.argv) == 2 else ""
+if email not in ("dev@shopvivaliz.com.br", "atendimento@shopvivaliz.com.br"):
+    sys.exit(2)
+if os.geteuid() != pwd.getpwnam("fredrdp").pw_uid:
+    sys.exit(2)
+db = "file:/home/fredrdp/.config/Authenticator/database-7.db?mode=ro"
+try:
+    with sqlite3.connect(db, uri=True, timeout=2) as con:
+        records = con.execute(
+            "SELECT token_id FROM accounts WHERE lower(username)=? LIMIT 2",
+            (email,),
+        ).fetchall()
+    if len(records) != 1:
+        raise ValueError("ambiguous_account")
+    token_id = records[0][0]
+    if not isinstance(token_id, str) or not re.fullmatch(r"[a-f0-9]{64}", token_id):
+        raise ValueError("invalid_reference")
+    schema = Secret.Schema.new(
+        "com.github.bilelmoussaoui.Authenticator",
+        Secret.SchemaFlags.NONE,
+        {"id": Secret.SchemaAttributeType.STRING, "name": Secret.SchemaAttributeType.STRING},
+    )
+    seed = Secret.password_lookup_sync(schema, {"id": token_id}, None)
+    if not isinstance(seed, str) or not seed:
+        raise ValueError("token_unavailable")
+    # Avoid a code about to expire. No seed or code is logged to stderr.
+    remaining = 30 - (time.time() % 30)
+    if remaining < 6:
+        time.sleep(remaining + 0.15)
+    code = pyotp.TOTP(seed).now()
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValueError("invalid_code")
+    sys.stdout.write(code)
+except Exception:
+    sys.exit(3)
+"""
 
 ACCOUNT_AUTH_NODE_SCRIPT = r"""
 const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
@@ -1123,6 +1177,36 @@ def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]
     return result
 
 
+def account_auth_local_totp(session: str) -> str:
+    """Return the account's current code via a PRIVATE child pipe (never log)."""
+    if session not in ACCOUNT_AUTH_EMAILS:
+        raise ValueError("account_auth_scope_invalid")
+    invocation = [
+        "runuser", "-u", "fredrdp", "--", "env",
+        "HOME=/home/fredrdp",
+        "XDG_RUNTIME_DIR=/run/user/1002",
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus",
+        "/usr/bin/python3", "-c", ACCOUNT_GNOME_TOTP_PYTHON,
+        ACCOUNT_AUTH_EMAILS[session],
+    ]
+    try:
+        child = subprocess.run(
+            invocation, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError("account_auth_local_totp_unavailable") from None
+    if child.returncode != 0:
+        raise ValueError("account_auth_local_totp_unavailable")
+    try:
+        code = child.stdout.decode("ascii")
+    except UnicodeError:
+        raise ValueError("account_auth_local_totp_invalid") from None
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValueError("account_auth_local_totp_invalid")
+    return code
+
+
 def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     session = str(args.get("session") or "")
     action = str(args.get("action") or "")
@@ -1145,7 +1229,15 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
         raise ValueError("account_auth_maintenance_owner_required")
     value = str(args.get("value") or "")
-    if action.startswith("fill_"):
+    if action == "fill_gnome_totp":
+        if value:
+            raise ValueError("account_auth_value_not_allowed")
+        # Fail closed unless the *same account profile* is already at official MFA.
+        tabs = browser_auth_tabs({"session": session})["tabs"]
+        if not any(t["tab_id"] == tab_id and t["stage"] == "/mfa-challenge" for t in tabs):
+            raise ValueError("account_auth_mfa_stage_required")
+        value = account_auth_local_totp(session)
+    elif action.startswith("fill_"):
         if not value or len(value) > 512 or "\x00" in value or "\n" in value:
             raise ValueError("account_auth_value_invalid")
         if action == "fill_email" and value.strip().lower() != ACCOUNT_AUTH_EMAILS[session]:
@@ -1156,7 +1248,8 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
         raise ValueError("account_auth_value_not_allowed")
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
-        ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id, action,
+        ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id,
+        "fill_code" if action == "fill_gnome_totp" else action,
     ]
     result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
@@ -1264,7 +1357,7 @@ BROWSER_TOOL_SPECS = [
             "properties": {
                 "session": {"type": "string", "enum": ["dev", "atendimento"]},
                 "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
-                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
                 "value": {"type": "string", "maxLength": 512},
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
