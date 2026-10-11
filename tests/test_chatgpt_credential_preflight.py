@@ -116,6 +116,9 @@ class CredentialPreflightTests(unittest.TestCase):
             body = (ROOT / path).read_text(encoding="utf-8")
             self.assertIn("CREDENTIAL_REPROMPT_GATE_V1", body, path)
             self.assertIn("chatgpt_credential_preflight.py", body, path)
+            self.assertIn("CREDENTIAL_REPROMPT_FAST_MCP_V1", body, path)
+            self.assertIn("timeout=5", body, path)
+            self.assertIn("durable=false", body, path)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,27 @@ acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
 `CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
 <!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
 
+<!-- CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+### Execucao rapida do preflight pelo Claude/MCP (evitar fila e timeout)
+
+Na VM backend, executar o preflight pelo **ShopVivaliz Remote Control**
+`admin_command_run` com os argumentos explicitos abaixo. O comando e
+somente leitura e retorna em chamada inline, sem `task_submit`, `Monitor`,
+`task_status` repetido ou `Bash` local:
+
+- `host="always-free-arm-1787907847-26"`
+- `command="python3 /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz/scripts/chatgpt_credential_preflight.py --session atendimento"`
+- `timeout=5`
+- `durable=false`
+
+Para Dev, trocar exclusivamente `--session atendimento` por `--session dev`.
+O timeout do adaptador pode transformar a solicitacao em tarefa duravel se
+esses parametros forem omitidos; **nao** fazer polling longo de credencial.
+Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
+`ABSENT`, e continua proibido pedir novamente a senha sem prova.
+<!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+
+
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 > **AUDITORIA EXTERNA:** também é corretiva. Se houver autorização de escrita, corrigir + testar + reauditar. Se o auditor for somente leitura/independente, o relatório não é estado terminal: encaminhar os achados a executor autorizado e manter a tarefa aberta até correção e revalidação independente ou bloqueio externo comprovado.
 <!-- /AUDIT_EXTERNAL_REMEDIATION_V1 -->
