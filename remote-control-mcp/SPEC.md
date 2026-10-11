@@ -185,3 +185,33 @@ O servidor base publica os contratos allowlisted `desktop_health`, `desktop_open
 No `Fred-Win`, o wrapper usa o reverse SSH canônico para invocar `scripts/shopvivaliz-native-desktop-bridge.ps1`. O dispatcher recebe a requisição JSON por stdin e executa um worker efêmero na sessão Windows interativa, permitindo screenshot, mouse e teclado sem transportar senha RustDesk e sem depender do registro cloud do Remote Desktop Commander. Texto digitado não entra em argv nem no audit.
 
 No `KOCEPSV`, a rota permanece RustDesk/X11. IDs de destino RustDesk são runtime-only e chegam ao serviço pelo arquivo protegido `/var/lib/shopvivaliz-remote-control/desktop.env` (`root:root`, `0600`) na variável `SHOPVIVALIZ_RUSTDESK_HOST_IDS`; não são versionados nem aceitos como argumento de ferramenta. `desktop_open`, `desktop_click` e `desktop_type` participam do lock de mutação runtime, mas não do gate de conversa ChatGPT.
+
+
+## Orquestrador checkpoint metadata update (2026-10-11)
+
+The base MCP exposes the restricted mutating tool `checkpoint_update_atomic`.
+It is scoped to the single existing non-secret recovery checkpoint:
+`_retome-orquestrador-continuity-gpt6-20261010.json` in the canonical
+`/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state` runtime directory.
+
+Required arguments: globally unique `request_id`, the previously read
+`expected_last_checked_at` (optimistic concurrency control), SHA-1 hashes
+for the canonical main-branch AGENTS/runbook paths (`rules_sha_by_path`),
+non-secret prior MCP `audit_ids`, and a bounded `next_action`. Controller,
+monitor, browser-auth and dispatcher observations come from the live MCP
+status, not caller assertions.
+
+The handler takes the same `_agent-task-state.lock` as the durable task
+state CLI and refuses stale writes, wrong task/schema or terminal status.
+It writes a temporary file in the same directory, flushes/fsyncs, preserves
+ownership/mode/ACL/xattrs, atomically replaces, fsyncs the directory,
+and performs an independent JSON/permission readback. It rejects duplicate
+request IDs with differing input; exact duplicates are not re-executed.
+Audit arguments include metadata counts and lengths, never note text.
+
+This tool cannot bind conversation IDs, claim task leases, change status
+away from RUNNING, read candidate routes, access credentials, or perform
+deploy/restart/financial operations. Runtime credentials and service config
+are unchanged. Install only after CI/governance/reviews pass; the canonical
+installer reloads only the MCP services and must be followed by a real
+tool invocation, checkpoint reread and service-health verification.
