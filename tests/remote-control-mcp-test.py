@@ -386,6 +386,40 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual({"ok": True, "session": "dev", "action": "fill_code", "typed": True}, outcome)
         self.assertNotIn("SYNTHETIC_CODE", json.dumps(outcome))
 
+    def test_account_auth_proxy_keeps_only_sanitized_official_mfa_tabs(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "dev",
+                    "tabs": [
+                        {"tab_id": "MFA123", "session": "dev", "stage": "/mfa-challenge",
+                         "url": "https://auth.openai.com/mfa-challenge/secret?state=SENSITIVE"},
+                        {"tab_id": "LOGIN123", "session": "dev", "stage": "/log-in/password"},
+                        {"tab_id": "OTHER123", "session": "atendimento", "stage": "/mfa-challenge"},
+                        {"tab_id": "CONSENT123", "session": "dev", "stage": "/oauth/consent"},
+                    ],
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(response).encode())),
+        ):
+            result = m.execute_tool("browser_auth_tabs", {"session": "dev"})
+        self.assertEqual(
+            [
+                {"tab_id": "MFA123", "session": "dev", "stage": "/mfa-challenge"},
+                {"tab_id": "LOGIN123", "session": "dev", "stage": "/log-in/password"},
+            ],
+            result["tabs"],
+        )
+        self.assertNotIn("SENSITIVE", json.dumps(result))
+        self.assertNotIn("https://", json.dumps(result))
+
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
         old_state = os.environ.get("SHOPVIVALIZ_AGENT_TASK_STATE_DIR")
