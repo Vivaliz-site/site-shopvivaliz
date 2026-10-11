@@ -332,7 +332,7 @@ def _controller_active_release_id() -> str:
         pid = int(pid_text or "0")
         if pid <= 0:
             return ""
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\\0", b" ").decode(
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(
             "utf-8", errors="replace"
         )
     except (RuntimeError, ValueError, OSError):
