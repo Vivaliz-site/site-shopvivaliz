@@ -52,6 +52,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       browser_only: ${{ steps.classify.outputs.browser_only }}
+      backend_controller_only: ${{ steps.classify.outputs.backend_controller_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,6 +67,7 @@ jobs:
           set -Eeuo pipefail
           if [ "$GITHUB_EVENT_NAME" != push ] || [[ ! "${BEFORE_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
             echo 'browser_only=false' >> "$GITHUB_OUTPUT"
+            echo 'backend_controller_only=false' >> "$GITHUB_OUTPUT"
             echo 'REMOTE_CONTROL_BOOTSTRAP_SCOPE=FULL reason=dispatch_or_unknown_diff'
           else
             git diff --no-renames --name-only "$BEFORE_SHA" "$GITHUB_SHA" | python3 scripts/remote_mcp_bootstrap_scope.py --github-output "$GITHUB_OUTPUT"
@@ -115,9 +117,44 @@ jobs:
               print(f'BROWSER_ONLY_MCP_RELOAD_{session.upper()}=PASS')
           PY
 
+  backend_controller_only:
+    needs: scope
+    if: needs.scope.outputs.backend_controller_only == 'true'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify narrow MCP scope and run checkpoint regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_remote_mcp_bootstrap_scope.py
+          python3 -m py_compile remote-control-mcp/server.py scripts/continuity/checkpoint_update_atomic.py tests/test_orquestrador_atomic_checkpoint.py
+          python3 tests/remote-control-mcp-test.py
+          bash -n scripts/setup-remote-control-access.sh
+      - name: Install only the backend MCP services
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity
+      - name: Verify base and browser MCP source and local readiness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmp remote-control-mcp/server.py /opt/shopvivaliz-remote-control/server.py
+          cmp scripts/continuity/checkpoint_update_atomic.py /opt/shopvivaliz-remote-control/scripts/continuity/checkpoint_update_atomic.py
+          systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
+          systemctl is-active --quiet shopvivaliz-remote-control-browser-mcp.service
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5581/health >/dev/null
+          echo BACKEND_MCP_ONLY_RESTRICTED_INSTALL=PASS
+
   bootstrap:
     needs: scope
-    if: needs.scope.outputs.browser_only != 'true'
+    if: needs.scope.outputs.browser_only != 'true' && needs.scope.outputs.backend_controller_only != 'true'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
