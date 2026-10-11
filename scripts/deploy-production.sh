@@ -874,6 +874,23 @@ if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_
   log ERROR "Extracao da release falhou"
   exit 1
 fi
+# git archive intentionally excludes docs/ via .gitattributes. The Claude
+# bridge installer requires exactly one versioned, non-secret bootstrap doc.
+# Materialize it into the NEW immutable release from the SAME commit, before
+# the release is made active. Do not copy docs/ wholesale or borrow stale docs
+# from the previous current symlink.
+bootstrap_rel="docs/knowledge/claude-vm-bootstrap.md"
+if ! install -d -m 0755 "$NEW_RELEASE_PATH/docs/knowledge" \
+  || ! git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel" > "$NEW_RELEASE_PATH/$bootstrap_rel" \
+  || [ ! -s "$NEW_RELEASE_PATH/$bootstrap_rel" ]; then
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar release incompleta apos doc bootstrap ausente"
+  fi
+  log ERROR "Bootstrap Claude versionado ausente ou invalido no release"
+  exit 1
+fi
+chmod 0644 "$NEW_RELEASE_PATH/$bootstrap_rel"
+log INFO "Bootstrap Claude selecionado do mesmo commit da release"
 printf '%s\n' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
 
 declare -a SYMLINKS=(
