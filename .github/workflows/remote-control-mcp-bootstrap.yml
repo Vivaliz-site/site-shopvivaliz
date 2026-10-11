@@ -177,6 +177,7 @@ jobs:
             'docs/knowledge/README.md',
             'docs/knowledge/agent-rules.md',
             'docs/knowledge/task-continuity.md',
+            'GEPETO-POLICY.md',
             'docs/knowledge/browser-sessions.md',
           ]
           shas={}
