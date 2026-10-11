@@ -230,3 +230,7 @@ effective permissions as Dev. Use its own provider grants, ChatGPT browser
 profile and authentication, never Dev's credentials or session. Follow
 [`chatgpt-access-parity.md`](chatgpt-access-parity.md) and prove an
 independently authorized RDC 2 connection and `who_am_i` result before declaring parity.
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**Obrigatorio na inicializacao/retomada:** leia `docs/knowledge/shopvivaliz-graphical-session-recovery.md` antes de interpretar a tela RustDesk ou a presenca de Dev/Atendimento no seletor da GUI como login autenticado nos perfis CDP. Preservar sessoes; a GUI `fredconsole/:0`, greeter `lightdm/:1` e os browsers `fredrdp/:99` sao contextos diferentes.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
