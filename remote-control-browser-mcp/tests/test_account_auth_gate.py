@@ -188,7 +188,7 @@ class AccountAuthGateTests(unittest.TestCase):
             script,
         )
         self.assertIn(
-            "(['/log-in','/log-in/password','/email-verification'].includes(u.pathname||",
+            "(['/log-in','/log-in/password','/email-verification'].includes(u.pathname)||",
             script,
         )
         self.assertIn(
