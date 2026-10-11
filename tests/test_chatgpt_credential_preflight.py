@@ -84,11 +84,11 @@ class CredentialPreflightTests(unittest.TestCase):
         original_connect = probe.sqlite3.connect
         seen = []
 
-        def busy_on_first(uri, **kwargs):
-            seen.append(uri)
-            if "mode=ro" in uri:
+        def busy_on_first(database, **kwargs):
+            seen.append(database)
+            if "mode=ro" in database:
                 raise sqlite3.OperationalError("database is locked")
-            return original_connect(uri, **kwargs)
+            return original_connect(database, **kwargs)
 
         with mock.patch.object(probe.sqlite3, "connect", side_effect=busy_on_first):
             result = self.inspect()
