@@ -306,3 +306,7 @@ When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `for
 - Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
 - Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
 <!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+Para diagnosticos de login/GUI na backend, obrigatorio ler `docs/knowledge/shopvivaliz-graphical-session-recovery.md` e diferenciar `fredconsole/:0` (XFCE/RustDesk), `lightdm/:1` (greeter) e `fredrdp/:99` (Chromium Dev/Atendimento). Se o proprietario mostrar Dev/Atendimento no seletor do ChatGPT, registrar o fato sem declarar autenticacao dos perfis CDP9559/9556: usar somente prova por sessao `/api/auth/session` com email exato. Nao pedir senha Ubuntu como senha ChatGPT, nem redefinir Keyring por tentativa. Incluir runbook nos handoffs de agentes.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
