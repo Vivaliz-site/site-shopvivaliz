@@ -68,6 +68,8 @@ def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
         "scripts/remote_mcp_bootstrap_scope.py",
         "tests/test_remote_mcp_bootstrap_scope.py",
         ".github/workflows/remote-control-mcp-bootstrap.yml",
+        "scripts/should-deploy-production.sh",
+        "tests/should-deploy-production-test.sh",
     ])
     assert not scope.is_backend_controller_only(["remote-control-mcp/server.py"])
     assert not scope.is_backend_controller_only(["scripts/continuity/checkpoint_update_atomic.py"])

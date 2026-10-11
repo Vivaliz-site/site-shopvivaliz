@@ -55,6 +55,8 @@ BACKEND_CONTROLLER_FILES = frozenset({
     "scripts/remote_mcp_bootstrap_scope.py",
     "tests/test_remote_mcp_bootstrap_scope.py",
     ".github/workflows/remote-control-mcp-bootstrap.yml",
+    "scripts/should-deploy-production.sh",
+    "tests/should-deploy-production-test.sh",
 })
 
 
