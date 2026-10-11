@@ -295,10 +295,8 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1`. `Gemini` é sempre a rota primária. Quando `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`, autorização explícita vigente desde 2026-10-01 permite um único fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso; lease, deduplicação e cooldown continuam obrigatórios. Claude/GPT permanecem proibidos como fallback silencioso de daemon/cron.
-- Em execução finita/interativa fora do background permanece a ordem
-  `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
-  login ChatGPT, sem `OPENAI_API_KEY`.
+- O dispatcher de background marca SHOPVIVALIZ_RESUME_BACKGROUND=1. Sua camada de IA e Gemini Flash elegivel ao nivel gratuito + Ollama local. Flags legadas de fallback Codex/Claude sao ignoradas mesmo quando 1. A excecao de 2026-10-01 foi revogada. ChatGPT normal vem primeiro no fallback de conversa, antes da etapa CLI.
+- Em CLI finita e interativa, modelos gratuitos sao o primeiro nivel; Claude e Codex somente como ultimas opcoes, depois de autorizacao humana explicita.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
@@ -569,7 +567,7 @@ O recovery automático usa **Gemini como primário**. O modelo padrão é o alia
 Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
 2026-09-27 um probe funcional sanitizado no A1 confirmou
 `gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
-`*-latest`. Claude/GPT continuam proibidos como fallback silencioso. O `codex-auto` só é permitido na exceção explícita e finita do controlador 24/7 (`SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`), sempre depois de Gemini falhar em produzir progresso.
+Os modelos Flash estao sujeitos a elegibilidade real do projeto Gemini. Ollama e o provedor local sem ferramentas privilegiadas. Claude e Codex sao sempre proibidos em background; a excecao antiga de codex-auto foi revogada.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.
