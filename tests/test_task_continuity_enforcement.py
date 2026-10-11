@@ -37,6 +37,59 @@ class AgentTaskStateTests(unittest.TestCase):
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
 
+    def test_new_chatgpt_checkpoint_fails_closed_without_verified_origin(self) -> None:
+        # An ordinary test runtime can simulate the controller's enforced gate.
+        legacy = state.start_task("legacy-unbound", "keep prior progress", "chatgpt")
+        self.assertNotIn("conversation_id", legacy)
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1",
+            "SHOPVIVALIZ_TASK_CONVERSATION_ID": "",
+            "SHOPVIVALIZ_TASK_BROWSER_SESSION": "",
+        }):
+            for agent in ("chatgpt", "gpt", "gpt6", "orquestrador"):
+                with self.subTest(agent=agent):
+                    task = "unbound-" + agent
+                    with self.assertRaisesRegex(state.TaskStateError, "exact verified conversation_id"):
+                        state.start_task(task, "retain the intended objective", agent)
+                    self.assertFalse((state.RUNTIME_DIR / (task + ".json")).exists())
+            self.assertEqual(state.start_task("legacy-unbound", "keep prior progress", "chatgpt"), legacy)
+            corporate = state.start_task(
+                "fresh-bound", "continue same verified conversation", "chatgpt",
+                conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                browser_session="dev",
+            )
+            self.assertEqual(corporate["browser_session"], "dev")
+            self.assertEqual(corporate["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
+            other_provider = state.start_task("claude-independent", "continue safe CLI work", "claude")
+            self.assertNotIn("conversation_id", other_provider)
+
+    def test_new_chatgpt_successor_needs_original_verified_route(self) -> None:
+        predecessor = {
+            "status": "CONCLUIDO",
+            "task_id": "completed-predecessor",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "completed_at": "2026-10-11T14:00:00Z",
+        }
+        with mock.patch.dict(state.os.environ, {"SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1"}):
+            with mock.patch.object(state, "_load", return_value=predecessor):
+                with self.assertRaisesRegex(state.TaskStateError, "verified original conversation"):
+                    state.start_successor_task(
+                        "unbound-successor", predecessor_task_id="completed-predecessor",
+                        goal="next safely resumed goal", agent_id="chatgpt",
+                    )
+            self.assertFalse((state.RUNTIME_DIR / "unbound-successor.json").exists())
+            with mock.patch.object(state, "_load", return_value={
+                **predecessor,
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                "browser_session": "atendimento",
+            }):
+                successor = state.start_successor_task(
+                    "bound-successor", predecessor_task_id="completed-predecessor",
+                    goal="next verified goal", agent_id="chatgpt",
+                )
+            self.assertEqual(successor["browser_session"], "atendimento")
+            self.assertEqual(successor["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
+
     def test_stale_background_cannot_complete_after_foreground_progress(self) -> None:
         state.start_task("race-proof", "verify deployment", "work")
         initial = state.load_task("race-proof")
