@@ -1,3 +1,38 @@
+
+<!-- CREDENTIAL_REPROMPT_GATE_V1 -->
+## Credencial ChatGPT ja provisionada: preflight obrigatorio antes de solicitar senha
+
+Para `atendimento@shopvivaliz.com.br` ou `dev@shopvivaliz.com.br`, o agente
+(GPT, Claude, Codex, Gemini, subagentes e controladores) deve, **antes de
+solicitar ao usuario senha, OTP ou novo provisionamento**, confirmar a sessao
+correta e executar na VM backend, via MCP autorizado, a verificacao somente
+de metadados:
+
+`python3 scripts/chatgpt_credential_preflight.py --session atendimento`
+(ou `--session dev` para o perfil Dev).
+
+- `saved_entry=PRESENT` / `DENY_EXISTING_CREDENTIAL`: a senha ja possui
+  referencia salva no perfil dedicado. **Nao solicitar senha novamente**;
+  primeiro reparar a integracao navegador/GNOME Keyring e tentar o
+  preenchimento **nativo e autorizado**, sem ler ou exportar o segredo.
+- `saved_entry=NOT_VERIFIED` / `DENY_ABSENCE_NOT_PROVEN`: perfil
+  inacessivel, banco ocupado, erro de probe ou ausencia nos locais consultados
+  **nao** prova que a credencial nao existe. Recuperar transporte/MCP,
+  consultar as demais fontes protegidas previstas no runbook e continuar.
+- O probe jamais concede permissao para pedir senha: nova intervencao humana
+  somente apos evidencia independente de credencial ausente/revogada/invalida,
+  ou desbloqueio/consentimento/MFA humano obrigatorio pelo fluxo oficial.
+- Um registro salvo **nao prova** que a senha e valida ou que o ChatGPT esta
+  autenticado. Validar cada sessao pelo email exato em `/api/auth/session`.
+- Nunca copiar senha do iPhone ou navegador para terminal, Git, chat, logs,
+  processo ou outro perfil. Nunca tentar descriptografar/mostrar a credencial.
+
+Evidencia obrigatoria do preflight: apenas status, sessao verificada, timestamp
+e acao permitida, **sem** qualquer valor secreto. Se a VM nao estiver
+acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
+`CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
+<!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
