@@ -35,7 +35,7 @@ class CredentialPreflightTests(unittest.TestCase):
             )
             db.execute(
                 "INSERT INTO logins VALUES (?, ?, ?, ?)",
-                (origin, "https://auth.openai.com/", account, b"FAKE_SECRET_FIXTURE")
+                (origin, ("https://auth.openai.com/" if origin.startswith("https://auth.openai.com/") else "https://unrelated.invalid/"), account, b"FAKE_SECRET_FIXTURE")
             )
 
     def inspect(self, session="atendimento"):
