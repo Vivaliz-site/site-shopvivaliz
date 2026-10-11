@@ -121,3 +121,7 @@ Falha de inicio do Xvfb e degradacao de transporte sao distintas de
 de login. Verificar CDP 9559 e `/api/auth/session` com o e-mail Dev real.
 A UI do OTPClient historicamente usa `fredconsole` em `DISPLAY=:0` e
 permanece isolada deste display.
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**Evidencia de 2026-10-11:** o proprietario mostrou no RustDesk uma sessao XFCE `fredconsole/:0` com Chromium ChatGPT e contas Dev/Atendimento no seletor. Esse Chromium nao deve ser confundido com os perfis corporativos dedicados `fredrdp/:99`, CDP 9559/9556. O seletor nao e comprovacao de identidade autenticada nas duas sessoes; verificar separadamente `/api/auth/session`. Consultar `docs/knowledge/shopvivaliz-graphical-session-recovery.md` antes de agir.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->

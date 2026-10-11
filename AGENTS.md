@@ -782,6 +782,9 @@ consegue alcançar o controlador canônico, falhe fechado para tarefas que depen
 retomada automática e use a rota operacional auditável que consiga registrar o estado.
 <!-- /CHECKPOINT_FIRST_V9 -->
 
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**Obrigatorio para todos os agentes (ChatGPT, Claude, Gemini, Gepeto e executores delegados):** antes de diagnosticar GUI Ubuntu, RustDesk, perfis corporativos ou login na backend, ler `docs/knowledge/shopvivaliz-graphical-session-recovery.md` no `main`. A captura de Dev/Atendimento no seletor de contas da sessao XFCE `fredconsole/:0` nao comprova autenticacao individual dos perfis Chromium `fredrdp/:99` CDP 9559/9556. Distinguir o greeter LightDM `:1`, desktop `:0` e Xvfb `:99`; validar cada conta via `/api/auth/session` e email exato. Para greeter, examinar sessao `logind` preexistente antes de solicitar/redefinir senha. Preservar Keyring, perfis, cookies e MFA, sem bypass.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
 
 <!-- FREE_PROVIDER_FALLBACK_V2 -->
 ## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
