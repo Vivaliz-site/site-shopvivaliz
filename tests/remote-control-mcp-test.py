@@ -15,6 +15,10 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+# The base MCP CI executes this suite directly; include the scoped checkpoint
+# regressions so passing CI proves its atomic writer rather than syntax only.
+from test_orquestrador_atomic_checkpoint import AtomicCheckpointTests
+
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "remote-control-mcp" / "server.py"
 
