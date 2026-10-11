@@ -195,6 +195,28 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
         self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
 
+    def test_terminal_mfa_continue_retries_only_unique_official_error_button(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        for requirement in (
+            "u.origin==='https://auth.openai.com'",
+            "u.pathname.startsWith('/mfa-challenge/')",
+            "document.body?.innerText?.includes('Oops, an error occurred!')",
+            "document.querySelectorAll('input[autocomplete=one-time-code],input[name=code]').length===0",
+            "challenges.cloudflare.com",
+            "const retryButtons=[...document.querySelectorAll('button')]",
+            "/^try again$/i.test(",
+            "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+            "retryButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(requirement, script)
+        for forbidden in ("Target.closeTarget", "Page.navigate", "Page.reload"):
+            self.assertNotIn(forbidden, script)
+        process = subprocess.run(
+            ["node", "--check", "--input-type=module"],
+            input=script, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(0, process.returncode, process.stderr)
+
     def test_exact_mfa_challenge_is_listed_with_sanitized_stage(self):
         challenge = "a" * 32
         exact = "https://auth.openai.com/mfa-challenge/" + challenge + "?state=SENSITIVE"
