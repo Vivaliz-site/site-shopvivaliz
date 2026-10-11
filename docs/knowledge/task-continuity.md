@@ -15,6 +15,26 @@ explicitamente antes de reivindicar lease. Health ativo nao equivale a
 
 <!-- /CONTINUITY_ATOMIC_ROUTING_V1 -->
 
+<!-- NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
+### Novos checkpoints ChatGPT no runtime canônico
+No backend canônico `/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state`,
+uma nova tarefa identificada como agente `chatgpt`, `gpt`, `gpt6` ou
+`orquestrador` **não pode ser criada** sem `conversation_id` exato e
+`browser_session` corporativo (`dev` ou `atendimento`). A API
+`start_task` falha antes de gravar o arquivo; ela não deve adivinhar rota,
+usar a conta pessoal legada, ou produzir outro `RUNNING` irrecuperável.
+A chamada deve manter seu objetivo na fila original sem perder dados e
+repetir a criação quando a origem for comprovada.
+
+A regra não altera checkpoints anteriores (inclusive chamadas idempotentes
+para um mesmo `task_id`) e não proíbe tarefas CLI de outros provedores sem
+conversa ChatGPT. Em testes isolados, o contrato pode ser exercitado com
+`SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS=1`; essa flag não desativa
+a regra no diretório canônico. Sucessores ChatGPT devem herdar ambas as
+identidades válidas do predecessor concluído; caso contrário falham antes
+de criar um novo checkpoint.
+<!-- /NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
+
 <!-- CONTINUITY_TASK_LOOKBACK_V1 -->
 ## Janela de análise do controlador
 
