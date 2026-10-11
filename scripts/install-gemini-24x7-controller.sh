@@ -52,8 +52,8 @@ trap - EXIT
 if [ -z "$release_id" ] && [ -f "$release_dir/.release-sha" ]; then
   release_id="$(tr -d '[:space:]' < "$release_dir/.release-sha")"
 fi
-if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]{7,160}$ ]]; then
-  echo "ERROR: immutable release id is required" >&2
+if ! [[ "$release_id" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ERROR: immutable release id must be a full 40-character lowercase commit SHA" >&2
   exit 64
 fi
 
