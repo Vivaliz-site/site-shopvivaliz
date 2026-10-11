@@ -130,8 +130,12 @@ install_controller_code_only() {
       else
         rm -f "$writer"
       fi
-      systemctl restart "$SERVICE" || true
-      systemctl restart "$BROWSER_SERVICE" || true
+      if ! systemctl restart "$SERVICE"; then
+        echo "BACKEND_MCP_ROLLBACK_BASE_RESTART_FAILED" >&2
+      fi
+      if ! systemctl restart "$BROWSER_SERVICE"; then
+        echo "BACKEND_MCP_ROLLBACK_BROWSER_RESTART_FAILED" >&2
+      fi
     fi
     rm -f "$backupdir/server.py" "$backupdir/checkpoint_update_atomic.py"
     rmdir "$backupdir"
