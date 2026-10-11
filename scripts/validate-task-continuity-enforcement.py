@@ -5,6 +5,13 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "TASK_CONTINUITY_ENFORCEMENT_V3"
+RESUME_EXECUTION_MARKER = "RESUME_EXECUTION_GATE_V1"
+RESUME_ENTRYPOINTS = (
+    ROOT / "AGENTS.md",
+    ROOT / "CLAUDE.md",
+    ROOT / "GEMINI.md",
+    ROOT / ".github" / "copilot-instructions.md",
+)
 CODEX_MARKER = "CODEX_LAST_RESORT_V1"
 RESUME_ORDER_MARKER = "CHATGPT_RESUME_ORDER_V5"
 RESUME_ORDER_POLICY = "chatgpt_common_then_work_then_cli"
@@ -75,6 +82,16 @@ for path in NORMATIVE:
     for token in REQUIRED_TOKENS:
         if token not in text:
             errors.append(f"{path.relative_to(ROOT)}: missing {token}")
+
+for path in RESUME_ENTRYPOINTS:
+    if not path.is_file():
+        errors.append(f"missing resume execution entrypoint: {path.relative_to(ROOT)}")
+        continue
+    resume_text = path.read_text(encoding="utf-8", errors="replace")
+    for token in (RESUME_EXECUTION_MARKER, "Retome", "rules_loaded",
+                  "CONCLUIDO", "BLOCKED_EXTERNAL"):
+        if token not in resume_text:
+            errors.append(f"{path.relative_to(ROOT)}: missing resume execution contract {token}")
 
 for path in CODEX_NORMATIVE:
     if not path.is_file():
