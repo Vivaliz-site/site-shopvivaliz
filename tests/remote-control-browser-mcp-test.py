@@ -980,5 +980,26 @@ class BrowserMcpTests(unittest.TestCase):
 
 
 
+    def test_expired_mfa_recovery_uses_only_exact_official_login_link(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
+        block = block.split("const buttons=[", 1)[0]
+        self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
+        self.assertIn("/^[0-9a-f]{32}$/i.test", block)
+        self.assertIn("Your session has ended", block)
+        self.assertIn("input[autocomplete=one-time-code],input[name=code]", block)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", block)
+        self.assertIn("recoveryLinks.length!==1", block)
+        self.assertIn("recoveryLinks[0].click()", block)
+
+    def test_expired_mfa_recovery_does_not_weaken_lease_or_stage_gates(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
+        self.assertIn("if(action==='continue'&&u.origin==='https://auth.openai.com'", script)
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
+
+
 if __name__ == "__main__":
     unittest.main()
