@@ -39,6 +39,19 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('--exclude=docs/***', text)
         self.assertNotIn('--exclude=docs \\n', text)
 
+    def test_local_deploy_materializes_only_versioned_claude_bootstrap(self) -> None:
+        text = (ROOT / "scripts/deploy-production.sh").read_text(encoding="utf-8")
+        self.assertIn('bootstrap_rel="docs/knowledge/claude-vm-bootstrap.md"', text)
+        self.assertIn('git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel"', text)
+        self.assertIn('"$NEW_RELEASE_PATH/$bootstrap_rel"', text)
+        self.assertIn('chmod 0644 "$NEW_RELEASE_PATH/$bootstrap_rel"', text)
+        self.assertLess(
+            text.index('git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel"'),
+            text.index('printf \'%s\\n\' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"'),
+        )
+        self.assertNotIn('cp -a "$REPO_DIR/docs"', text)
+        self.assertNotIn('cp -r "$REPO_DIR/docs"', text)
+
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('printf \'%s\\n\' "$sha" > "$release/.release-sha"', text)
