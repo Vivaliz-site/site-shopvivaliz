@@ -2088,7 +2088,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             tabs_checked = int(output.get("tabs_checked", 0))
         except (TypeError, ValueError):
             raise RuntimeError("account_auth_status_unconfirmed") from None
-        if not (0 <= http <= 599 and 0 <= tabs_seen <= 512 and 0 <= tabs_checked <= 8):
+        if not (0 <= http <= 599 and 0 <= tabs_seen <= 512 and 0 <= tabs_checked <= 16):
             raise RuntimeError("account_auth_status_unconfirmed")
         return {
             "ok": True, "session": session,
