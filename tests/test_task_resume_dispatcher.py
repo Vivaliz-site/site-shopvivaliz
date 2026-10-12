@@ -56,7 +56,7 @@ class DetachedTaskResumeTests(unittest.TestCase):
             "evidence": ["checkpoint before interrupted stream"],
             "verification": None,
             "blocker": None,
-            "created_at": "2026-09-26T19:59:00Z",
+            "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "updated_at": updated_at,
             "history": [],
         }
@@ -154,6 +154,32 @@ Path(os.environ["CAPTURE_PATH"]).write_text(Path(sys.argv[1]).read_text())
         self.assertEqual(result["launched"], 0)
         self.assertEqual(result["executed"], 0)
         self.assertEqual(result["deferred_unbound_session"], 1)
+
+    def test_durable_handoff_supports_dedicated_dev_browser_session(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        state["conversation_id"] = "dev_conversation_123456"
+        state["browser_session"] = "dev"
+        (self.runtime / "resume-e2e.json").write_text(json.dumps(state), encoding="utf-8")
+        self._request(state)
+        original_claim = dispatcher._claim_resume_ownership
+        dispatcher._claim_resume_ownership = lambda *_args, **_kwargs: state
+        previous = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "1"
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime, project_dir=self.project,
+                timeout_seconds=30, max_requests=1,
+            )
+        finally:
+            dispatcher._claim_resume_ownership = original_claim
+            if previous is None:
+                os.environ.pop("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", None)
+            else:
+                os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = previous
+        self.assertEqual(result["deferred_unbound_session"], 0)
+        self.assertEqual(result["launched"], 1)
+        self.assertEqual(result["in_flight"], 1)
 
     def test_durable_handoff_defers_busy_recovery_owner_instead_of_crashing(self) -> None:
         dispatcher = load_dispatcher()
@@ -499,7 +525,35 @@ state_path.write_text(json.dumps(state))
         self.assertEqual(result.get("deferred_chatgpt"), 1)
         self.assertFalse(self.capture.exists(), "detached executor must not run while ChatGPT gets first recovery window")
 
-    def test_recent_unconfirmed_chatgpt_send_releases_detached_fallback(self) -> None:
+    def test_chatgpt_has_120_seconds_plus_10_seconds_margin(self) -> None:
+        dispatcher = load_dispatcher()
+        self.assertEqual(dispatcher.DEFAULT_CHATGPT_NUDGE_GRACE_SECONDS, 130)
+        request = {
+            "fingerprint": "fingerprint-v1",
+            "task_id": "resume-e2e",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "preferred_executor": "chatgpt_common",
+        }
+        ledger = self.runtime / "_chatgpt-continuity-nudges.jsonl"
+        for elapsed, expected_deferred in ((120, True), (125, True), (150, False)):
+            with self.subTest(elapsed=elapsed):
+                dispatched = (
+                    datetime.now(timezone.utc) - timedelta(seconds=elapsed)
+                ).isoformat().replace("+00:00", "Z")
+                ledger.write_text(json.dumps({
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": dispatched,
+                    "bridge_ok": True,
+                    "worker_status": "SENT_UNCONFIRMED",
+                }) + "\n", encoding="utf-8")
+                self.assertEqual(
+                    dispatcher._recent_successful_chatgpt_nudge(self.runtime, request),
+                    expected_deferred,
+                )
+
+    def test_recent_unconfirmed_chatgpt_send_preserves_conversation_priority(self) -> None:
         dispatcher = load_dispatcher()
         state = self._state()
         self._request(state)
@@ -510,6 +564,45 @@ state_path.write_text(json.dumps(state))
                     "task_id": "resume-e2e",
                     "repository": "Vivaliz-site/site-shopvivaliz",
                     "dispatched_at": dispatcher.utc_now(),
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "SENT_UNCONFIRMED",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        old_capture = os.environ.get("CAPTURE_PATH")
+        os.environ["CAPTURE_PATH"] = str(self.capture)
+        try:
+            result = dispatcher.run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=self._executor(advance=True),
+                timeout_seconds=30,
+                max_requests=1,
+            )
+        finally:
+            if old_capture is None:
+                os.environ.pop("CAPTURE_PATH", None)
+            else:
+                os.environ["CAPTURE_PATH"] = old_capture
+
+        self.assertEqual(result["executed"], 0)
+        self.assertEqual(result["deferred_chatgpt"], 1)
+        self.assertFalse(self.capture.exists(), "fallback must wait for ChatGPT response window")
+
+    def test_expired_unconfirmed_chatgpt_send_allows_worker_fallback(self) -> None:
+        dispatcher = load_dispatcher()
+        state = self._state()
+        self._request(state)
+        (self.runtime / "_chatgpt-continuity-nudges.jsonl").write_text(
+            json.dumps(
+                {
+                    "fingerprint": "fingerprint-v1",
+                    "task_id": "resume-e2e",
+                    "repository": "Vivaliz-site/site-shopvivaliz",
+                    "dispatched_at": "2020-01-01T00:00:00Z",
                     "bridge_ok": True,
                     "http_status": 200,
                     "worker_status": "SENT_UNCONFIRMED",
@@ -562,7 +655,7 @@ state_path.write_text(json.dumps(state))
                 "worker_status_observed_at": failed_at,
                 "bridge_ok": True,
                 "http_status": 200,
-                "worker_status": "SENT_UNCONFIRMED",
+                "worker_status": "STALLED_NOT_CONFIRMED",
             }) + "\n",
             encoding="utf-8",
         )
@@ -727,7 +820,7 @@ state_path.write_text(json.dumps(state))
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)
-        self.assertIn("BACKGROUND_ORDER=(gemini)", failover)
+        self.assertIn("BACKGROUND_ORDER=(gemini ollama)", failover)
         self.assertIn('ORDER=("${BACKGROUND_ORDER[@]}")', failover)
         self.assertIn("background_paid_fallback_forbidden=true", failover)
 

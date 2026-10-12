@@ -44,3 +44,11 @@ A troca de assento só está pronta quando `dev@shopvivaliz.com.br`:
 - executar um teste inofensivo pelo Remote Control com evidência fresca.
 
 Até esses itens passarem, não remover `fredmourao` do workspace.
+
+## Account access parity
+
+Dev and Atendimento must have the same effective ShopVivaliz tool access,
+workspace role and application permissions, including separate authorized
+RDC 2 and ShopVivaliz MCP connections. Follow [`chatgpt-access-parity.md`](chatgpt-access-parity.md)
+for the verification and acceptance gates. Do not treat two provider links
+bound to the same Dev identity as independent Dev/Atendimento access.

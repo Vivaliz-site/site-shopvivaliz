@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import importlib.util
 import sys
 import tempfile
@@ -35,6 +36,59 @@ class AgentTaskStateTests(unittest.TestCase):
     def tearDown(self) -> None:
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
+
+    def test_new_chatgpt_checkpoint_fails_closed_without_verified_origin(self) -> None:
+        # An ordinary test runtime can simulate the controller's enforced gate.
+        legacy = state.start_task("legacy-unbound", "keep prior progress", "chatgpt")
+        self.assertNotIn("conversation_id", legacy)
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1",
+            "SHOPVIVALIZ_TASK_CONVERSATION_ID": "",
+            "SHOPVIVALIZ_TASK_BROWSER_SESSION": "",
+        }):
+            for agent in ("chatgpt", "gpt", "gpt6", "orquestrador"):
+                with self.subTest(agent=agent):
+                    task = "unbound-" + agent
+                    with self.assertRaisesRegex(state.TaskStateError, "exact verified conversation_id"):
+                        state.start_task(task, "retain the intended objective", agent)
+                    self.assertFalse((state.RUNTIME_DIR / (task + ".json")).exists())
+            self.assertEqual(state.start_task("legacy-unbound", "keep prior progress", "chatgpt"), legacy)
+            corporate = state.start_task(
+                "fresh-bound", "continue same verified conversation", "chatgpt",
+                conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                browser_session="dev",
+            )
+            self.assertEqual(corporate["browser_session"], "dev")
+            self.assertEqual(corporate["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
+            other_provider = state.start_task("claude-independent", "continue safe CLI work", "claude")
+            self.assertNotIn("conversation_id", other_provider)
+
+    def test_new_chatgpt_successor_needs_original_verified_route(self) -> None:
+        predecessor = {
+            "status": "CONCLUIDO",
+            "task_id": "completed-predecessor",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "completed_at": "2026-10-11T14:00:00Z",
+        }
+        with mock.patch.dict(state.os.environ, {"SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1"}):
+            with mock.patch.object(state, "_load", return_value=predecessor):
+                with self.assertRaisesRegex(state.TaskStateError, "verified original conversation"):
+                    state.start_successor_task(
+                        "unbound-successor", predecessor_task_id="completed-predecessor",
+                        goal="next safely resumed goal", agent_id="chatgpt",
+                    )
+            self.assertFalse((state.RUNTIME_DIR / "unbound-successor.json").exists())
+            with mock.patch.object(state, "_load", return_value={
+                **predecessor,
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                "browser_session": "atendimento",
+            }):
+                successor = state.start_successor_task(
+                    "bound-successor", predecessor_task_id="completed-predecessor",
+                    goal="next verified goal", agent_id="chatgpt",
+                )
+            self.assertEqual(successor["browser_session"], "atendimento")
+            self.assertEqual(successor["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
 
     def test_stale_background_cannot_complete_after_foreground_progress(self) -> None:
         state.start_task("race-proof", "verify deployment", "work")
@@ -479,6 +533,98 @@ class OperationsWorkerContinuityTests(unittest.TestCase):
         self.assertTrue(saved, "ownership must be persisted even before docs receipt")
 
 
+class OperationsWorkerOriginGuardTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.original_runtime = state.RUNTIME_DIR
+        state.RUNTIME_DIR = Path(self.temp.name)
+        self.worker = load_operations_worker()
+        self.env = mock.patch.dict(os.environ, {
+            "SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1",
+        }, clear=False)
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        state.RUNTIME_DIR = self.original_runtime
+        self.temp.cleanup()
+
+    def test_autonomous_queue_does_not_fabricate_chatgpt_checkpoint(self) -> None:
+        task = {"id": "autonomous-only", "title": "Review safe signals",
+                "auto_generated": True, "source": "real-project-signals"}
+        self.worker.persist_task_continuity("gpt", task, next_action="read source")
+        self.assertEqual(task["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS")
+        self.assertFalse((state.RUNTIME_DIR / "autonomous-only.json").exists())
+
+    def test_queue_persists_autonomous_route_status_without_chat_checkpoint(self) -> None:
+        queue = {"queue": [{"id": "auto-pending", "title": "Review safe signals",
+                            "status": "pending", "auto_generated": True}]}
+        saved = []
+        with (
+            mock.patch.object(self.worker, "load_queue", return_value=queue),
+            mock.patch.object(self.worker, "save_queue",
+                              side_effect=lambda value, **kw: saved.append(copy.deepcopy(value))),
+            mock.patch.object(self.worker, "choose_agent", return_value="gpt"),
+            mock.patch.object(self.worker, "docs_preflight",
+                              return_value=(False, "missing docs")),
+            mock.patch.object(self.worker, "push_step"),
+            mock.patch.object(self.worker, "set_focus"),
+        ):
+            assigned = self.worker.assign_pending_tasks({"agents": {}})
+        self.assertEqual(len(assigned), 1)
+        self.assertTrue(saved)
+        self.assertEqual(
+            saved[0]["queue"][0]["continuity_binding_status"], "QUEUE_ONLY_AUTONOMOUS",
+        )
+        self.assertFalse((state.RUNTIME_DIR / "auto-pending.json").exists())
+
+    def test_human_queue_without_verified_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "missing-origin", "title": "Continue customer issue"}
+        self.worker.persist_task_continuity("gpt", task, next_action="resume source")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "missing-origin.json").exists())
+
+    def test_partial_origin_is_not_checkpointed(self) -> None:
+        task = {"id": "partial-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check session")
+        self.assertEqual(task["continuity_binding_status"], "AWAIT_VERIFIED_BROWSER_ORIGIN")
+        self.assertFalse((state.RUNTIME_DIR / "partial-origin.json").exists())
+
+    def test_explicitly_bound_queue_checkpoint_advances(self) -> None:
+        task = {"id": "verified-origin", "title": "Continue issue",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev",
+                "continuity_binding_status": "AWAIT_VERIFIED_BROWSER_ORIGIN"}
+        self.worker.persist_task_continuity("gpt", task, next_action="check system",
+                                            evidence="origin route provided")
+        stored = state.load_task("verified-origin")
+        self.assertEqual(stored["conversation_id"], task["conversation_id"])
+        self.assertEqual(stored["browser_session"], "dev")
+        self.assertEqual(stored["next_action"], "check system")
+        self.assertNotIn("continuity_binding_status", task)
+
+    def test_legacy_orphan_is_not_rewritten_by_generic_worker(self) -> None:
+        state.start_task("legacy-orphan", "Original work", "gpt")
+        before = state.load_task("legacy-orphan")
+        task = {"id": "legacy-orphan", "title": "Original work",
+                "conversation_id": "12345678-1234-1234-1234-123456789abc",
+                "browser_session": "dev"}
+        self.worker.persist_task_continuity("gpt", task, next_action="generic ACK")
+        after = state.load_task("legacy-orphan")
+        self.assertEqual(task["continuity_binding_status"], "LEGACY_UNBOUND_CHECKPOINT")
+        self.assertEqual(after, before)
+
+    def test_non_durable_legacy_mode_keeps_original_queue_behavior(self) -> None:
+        os.environ["SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"] = "0"
+        task = {"id": "legacy-queue", "title": "Legacy standalone job",
+                "auto_generated": True}
+        self.worker.persist_task_continuity("gpt", task, next_action="legacy fallback")
+        stored = state.load_task("legacy-queue")
+        self.assertEqual(stored["status"], "RUNNING")
+        self.assertEqual(stored["next_action"], "legacy fallback")
+
+
 class TaskContinuityPolicyTests(unittest.TestCase):
     def test_normative_entrypoints_override_generic_pause_gates(self) -> None:
         marker = "TASK_CONTINUITY_ENFORCEMENT_V3"
@@ -494,6 +640,40 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn(marker, text, str(path))
             self.assertIn("BLOCKED_EXTERNAL", text, str(path))
+
+    def test_resume_entrypoints_cannot_drop_execution_contract(self) -> None:
+        required = (
+            ROOT / "AGENTS.md",
+            ROOT / "CLAUDE.md",
+            ROOT / "GEMINI.md",
+            ROOT / ".github" / "copilot-instructions.md",
+        )
+        for path in required:
+            contents = path.read_text(encoding="utf-8")
+            for token in (
+                "RESUME_EXECUTION_GATE_V1",
+                "Retome",
+                "rules_loaded",
+                "CONCLUIDO",
+                "BLOCKED_EXTERNAL",
+            ):
+                with self.subTest(path=path, token=token):
+                    self.assertIn(token, contents)
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("RESUME_EXECUTION_GATE_V1", validator)
+
+    def test_docs_preflight_covers_canonical_resume_rules(self) -> None:
+        from agent_docs_gate import REQUIRED_DOCS
+        for path in (
+            "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+            "docs/knowledge/host-access.md",
+            "docs/knowledge/README.md",
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/task-continuity.md",
+            "GEPETO-POLICY.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, REQUIRED_DOCS)
 
     def test_governance_executes_continuity_validator(self) -> None:
         governance = (ROOT / "scripts" / "repository-governance-validate.sh").read_text(encoding="utf-8")

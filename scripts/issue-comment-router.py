@@ -53,8 +53,11 @@ def classify(payload: dict[str, Any]) -> str:
             return "remote_access"
         if stripped.startswith("/mlrr "):
             return "mlrr"
-        if stripped.startswith("/codex-auto-continuity-v7-goal "):
-            return "codex_continuity_goal"
+        # The old Codex Goal could launch an unbounded paid tmux session.
+        # Retire this route, including comments containing @claude, so that
+        # the generic mention handler below cannot accidentally run paid AI.
+        if stripped.startswith("/codex-auto-continuity-v7-goal"):
+            return "none"
 
         first_line = body.splitlines()[0].strip() if body.splitlines() else ""
         if first_line == "/codex-auto-continuity-v7":

@@ -18,6 +18,8 @@ def main():
     assert report['mode']=='PAPER' and report['real_orders_enabled'] is False
     assert report.get('decision_provider')=='CODEX_20_LAYER'
     assert report.get('ai_20_layers_configured') is True
+    assert report.get('ai_20_layers_active') is True, 'ai_20_layers_not_active'
+    assert report.get('decision_model')=='gpt-5.6-terra', 'wrong_decision_model'
     assert report['run_id']==ledger['run_id'] and ledger['starting_equity']=='100'
     assert report['errors']==[] and not report['entries_blocked'], 'market_data_not_ready'
     assert all(report['markets'].get(x,0)>0 for x in ('SPOT','SWAP','FUTURES'))

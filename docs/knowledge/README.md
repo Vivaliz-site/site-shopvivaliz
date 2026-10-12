@@ -1,4 +1,5 @@
 # Knowledge Base do ShopVivaliz
+- [Monitor de provedores gratuitos](ai-free-provider-sentinel.md) — monitor somente leitura das duas VMs para uso de provedores pagos e desvios da política Gemini/Ollama.
 
 Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
@@ -13,6 +14,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
 - [`dev-agent-briefing.md`](dev-agent-briefing.md) — onboarding canônico do `@dev`: projetos, hosts, regras, pesquisa técnica na web e padrão de engenharia.
+- [`chatgpt-access-parity.md`](chatgpt-access-parity.md) — cross-account Dev/Atendimento parity contract for MCP tools, RDC 2 provider identity, permissions and independent OAuth; includes E2E acceptance gates.
 - [`browser-sessions.md`](browser-sessions.md) — vínculo obrigatório entre perfis Chromium, portas CDP e contas ChatGPT; proíbe logout/troca cruzada de conta.
 - [`atendimento-chatgpt-bootstrap.md`](atendimento-chatgpt-bootstrap.md) — bootstrap canônico e não secreto da conta corporativa `atendimento@shopvivaliz.com.br`, incluindo plugins mínimos e checklist E2E.
 - [`chatgpt-account-migration-curated.md`](chatgpt-account-migration-curated.md) — política de migração curada entre contas ChatGPT: o que preservar, o que descartar e como revalidar histórico antes de usá-lo.
@@ -67,3 +69,7 @@ Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime 
 10. <!-- DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 --> Ao confirmar defeito, **não pare no diagnóstico**: corrija o que estiver autorizado e ao alcance, aplique prevenção pertinente, teste e valide no runtime/E2E aplicável; enquanto houver ação segura executável, a tarefa permanece `RUNNING`. <!-- /DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1 -->
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
+
+- [Recuperacao grafica ShopVivaliz e isolamento de login](shopvivaliz-graphical-session-recovery.md) — runbook obrigatorio para agentes: RustDesk/LightDM/XFCE versus perfis corporativos Dev/Atendimento, validacao real e preservacao do Keyring.
+- [Verificacao do Gemini Free](gemini-free-tier-billing-guard.md) - gate para jobs persistentes.
+- [Vigia Windows sem IA paga](windows-recurring-ai-free-watch.md) - evita loops persistentes de Codex em checkpoints externos.

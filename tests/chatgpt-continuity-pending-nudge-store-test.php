@@ -42,6 +42,11 @@ cgnSame('SEND_FAILED_AFTER_REATTACH', $sanitizedError['detail_code'], 'Known bro
 cgnAssert(preg_match('/^[a-f0-9]{64}$/', (string)($sanitizedError['detail_sha256'] ?? '')) === 1, 'Error detail must retain only a SHA-256 correlation value.');
 cgnAssert(!isset($sanitizedError['detail']), 'Raw worker detail must never be returned from the durable queue.');
 
+cgnAssert($store->recordResult('task-1', 'ERROR', 'browser session account mismatch or bound conversation mismatch'), 'Bound-session identity failure must be recordable.');
+$identityMismatch = $store->status('task-1');
+cgnSame('BOUND_SESSION_IDENTITY_MISMATCH', $identityMismatch['detail_code'], 'Logged-out or wrong-account bound sessions must receive a stable safe diagnostic class.');
+cgnAssert(!isset($identityMismatch['detail']), 'Bound-session identity diagnostics must never expose raw worker detail.');
+
 cgnAssert($store->recordResult('task-1', 'PROGRESS_CONFIRMED', 'assistant output advanced'), 'Confirmed assistant progress must be a valid result.');
 cgnAssert(!$store->recordResult('task-does-not-exist', 'PROGRESS_CONFIRMED', null), 'Recording a result for an unknown task_id must fail.');
 

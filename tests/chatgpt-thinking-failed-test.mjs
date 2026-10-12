@@ -4,15 +4,22 @@ import vm from 'node:vm';
 // Execute the actual injected detector program. The small Range fixture gives
 // it the current status after the last message, never a canned detector result.
 // No real browser, account, credentials or network is used by this test.
-function surface({ history = 'Previous reply', tail = '', roles = true, alert = '' } = {}) {
+function surface({ history = 'Previous reply', completedTurn = '', tail = '', roles = true, alert = '' } = {}) {
   const message = { innerText: history, textContent: history };
+  const completed = completedTurn ? { innerText: completedTurn, textContent: completedTurn } : null;
+  const retryButton = completed ? { closest() { return completed; } } : null;
+  const visible = [history, completedTurn, tail].filter(Boolean).join('\n');
   const document = {
     body: {
-      innerText: history + '\n' + tail,
-      textContent: history + '\n' + tail,
+      innerText: visible,
+      textContent: visible,
       querySelectorAll(selector) {
         if (selector === '[data-message-author-role]') return roles ? [message] : [];
-        return alert ? [{ innerText: alert, textContent: alert }] : [];
+        if (selector === 'button[aria-label=\"Regenerate response\"]') return retryButton ? [retryButton] : [];
+        if (selector === '[role=\"alert\"],[aria-live],[data-testid*=\"error\" i]') {
+          return alert ? [{ innerText: alert, textContent: alert }] : [];
+        }
+        return [];
       },
     },
     createRange() {
@@ -40,6 +47,25 @@ export async function runThinkingFailedTests({ errorBannerPresent, recoverableFa
     }],
     ['English current failure without role metadata is recognized', async () => {
       assert.equal(await recoverableFailureReason(surface({ roles: false, tail: 'Thinking failed' })), 'generation_error');
+    }],
+    ['historical failure is ignored when the new UI omits role metadata but exposes a completed-turn boundary', async () => {
+      const cdp = surface({
+        roles: false,
+        history: 'Old turn said O pensamento falhou',
+        completedTurn: 'Latest completed assistant answer',
+        tail: 'Ready for another message',
+      });
+      assert.equal(await errorBannerPresent(cdp), false);
+      assert.equal(await recoverableFailureReason(cdp), '');
+    }],
+    ['current failure after the completed-turn boundary is still recognized without role metadata', async () => {
+      const cdp = surface({
+        roles: false,
+        history: 'Old safe history',
+        completedTurn: 'Latest completed assistant answer',
+        tail: 'Thinking failed',
+      });
+      assert.equal(await recoverableFailureReason(cdp), 'generation_error');
     }],
     ['historical Portuguese quotation is not a current failure', async () => {
       const cdp = surface({ history: 'The screenshot said O pensamento falhou', tail: 'Ready for another message' });

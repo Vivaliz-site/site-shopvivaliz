@@ -1,9 +1,69 @@
 
+<!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
+## Registro atomico de tarefa e conversa
+
+O CLI permite criar um checkpoint `RUNNING` ja vinculado a conversa:
+`agent_task_state.py start --task ID --goal OBJETIVO --conversation-id ID_EXATO --browser-session dev|atendimento`.
+Os dois campos devem ser apresentados juntos. Sem ambos, a criacao permanece
+legada/unbound e nao pode ser retomada pelo durable fencing de conversa.
+Quando a fila de operacoes possui uma identidade exata, o executor deve
+repassa-la ao `start_task` antes da primeira gravacao. Nao inferir IDs por
+titulo ou horario; nao migrar tarefas entre contas por conveniencia.
+Para checkpoints antigos sem identificador, vincular a conversa original
+explicitamente antes de reivindicar lease. Health ativo nao equivale a
+`PROGRESS_CONFIRMED` do assistente em conversa real.
+
+<!-- /CONTINUITY_ATOMIC_ROUTING_V1 -->
+
+<!-- NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
+### Novos checkpoints ChatGPT no runtime canônico
+No backend canônico `/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state`,
+uma nova tarefa identificada como agente `chatgpt`, `gpt`, `gpt6` ou
+`orquestrador` **não pode ser criada** sem `conversation_id` exato e
+`browser_session` corporativo (`dev` ou `atendimento`). A API
+`start_task` falha antes de gravar o arquivo; ela não deve adivinhar rota,
+usar a conta pessoal legada, ou produzir outro `RUNNING` irrecuperável.
+A chamada deve manter seu objetivo na fila original sem perder dados e
+repetir a criação quando a origem for comprovada.
+
+A regra não altera checkpoints anteriores (inclusive chamadas idempotentes
+para um mesmo `task_id`) e não proíbe tarefas CLI de outros provedores sem
+conversa ChatGPT. Em testes isolados, o contrato pode ser exercitado com
+`SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS=1`; essa flag não desativa
+a regra no diretório canônico. Sucessores ChatGPT devem herdar ambas as
+identidades válidas do predecessor concluído; caso contrário falham antes
+de criar um novo checkpoint.
+<!-- /NEW_CHATGPT_CHECKPOINT_PROVENANCE_GATE_V1 -->
+
 <!-- CONTINUITY_TASK_LOOKBACK_V1 -->
 ## Janela de análise do controlador
 
 O controlador de continuidade deve analisar somente tarefas cujo `created_at` esteja dentro dos **últimos 10 dias**. Tarefas criadas antes dessa janela, ou com timestamp de criação ausente/inválido, não entram no watchdog, no nudge do ChatGPT nem no dispatcher detached, mesmo que recebam uma atualização posterior. Isso limita reprocessamento de histórico antigo sem desabilitar a continuidade das tarefas recentes.
 <!-- /CONTINUITY_TASK_LOOKBACK_V1 -->
+
+## Limpeza de clones temporários ao concluir uma tarefa
+
+Clones Git temporários **pertencem à tarefa que os criou**, não ao host. Antes de criar um clone, registre um `task_id` no `scripts/agent_task_state.py start` e use preferencialmente:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py clone --task <id> --repo https://github.com/Vivaliz-site/<repo>.git
+```
+
+Se o clone já existe, registre-o imediatamente após criá-lo:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py register --task <id> --path /tmp/<clone>
+```
+
+O comando `python3 scripts/agent_task_state.py complete --task <id>` conclui a tarefa após suas verificações e **limpa os clones registrados** em seguida, fora do bloqueio global dos checkpoints. Uma limpeza interrompida é retomada pela rotina:
+
+```bash
+python3 scripts/agent_clone_lifecycle.py sweep
+```
+
+O serviço `shopvivaliz-agent-clone-cleanup.timer` executa essa rotina a cada 15 minutos, inclusive após reboot, **somente** para tarefas `CONCLUIDO`. `RUNNING`, `READY_TO_COMPLETE` e `BLOCKED_EXTERNAL` mantêm seus clones, permitindo retomar o trabalho.
+
+**Nunca remover** clones não registrados, worktrees com `git worktree lock`, processos/cwd ativos, arquivos sujos ou não rastreados, commits/branches sem remoto, worktrees vinculados a outros checkouts, ou diretórios fora das raízes temporárias permitidas. Uma recusa gera pendência observável para a próxima execução ou correção manual, sem `git reset --hard`, `git clean -fdx`, `git worktree remove --force` nem `rm -rf /tmp` genérico. Código, artefatos e evidências de tarefa que precisem persistir devem ser salvos no repositório/estado durável antes da conclusão.
 
 # Task Continuity Enforcement
 
@@ -100,7 +160,7 @@ Exit code diferente de zero significa que ainda há trabalho e a resposta deve s
 - Para operações de host, serviço, navegador e diagnóstico, preferir o control plane auditável já disponível (GitHub connector/Actions, SSH privado, browser na backend) em vez de consumir Codex.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- **Historico revogado em 2026-10-11 pela FREE_PROVIDER_FALLBACK_V2.** Nenhum daemon/cron/watch pode consumir Codex automaticamente. Regra antiga (somente registro historico): o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
 - No backend OCI atual, o fallback finito `codex-auto` usa `--sandbox danger-full-access --ask-for-approval never` porque o sandbox Linux da CLI depende de user namespaces indisponíveis nesse host. Isso **não** altera o critério de sucesso: a execução só é aceita quando o `task_state_signature` muda no mesmo fingerprint; resposta textual/exit 0 sem avanço continua `no_progress`.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
@@ -139,6 +199,22 @@ Regras obrigatórias:
 
 Objetivo: impedir falso-verde e garantir que uma falha do stream/conversa não
 abandone a tarefa nem gere uma tempestade de mensagens de retomada.
+
+
+### Progresso de uma rodada não encerra a tarefa
+
+`PROGRESS_CONFIRMED` certifica somente que a conversa vinculada produziu uma
+resposta real naquela rodada. Ele **não** é estado terminal da tarefa. Enquanto
+o checkpoint correspondente continuar `RUNNING`, o controlador deve voltar a
+acompanhar a mesma conversa depois do cooldown normal e produzir novo follow-up
+serializado. A repetição para imediatamente quando o checkpoint chega a
+`CONCLUIDO` ou `BLOCKED_EXTERNAL`, ou quando uma nova revisão do checkpoint
+substitui o fingerprint anterior.
+
+No modo de handoff durável, isso vale também para checkpoints frescos: o
+controlador não espera a conversa ficar "travada" para assumir que ainda existe
+trabalho. O estado durável da tarefa, e não uma única resposta do assistente, é
+a fonte de verdade para decidir se o objetivo terminou.
 
 ## Retomada automática de checkpoint
 
@@ -219,10 +295,8 @@ A camada V4 detecta checkpoint estagnado; a V6 garante que isso resulte em
   turno ChatGPT comum já foi tentado e interrompido, e ChatGPT Work não é
   invocável pelo processo hospedado no repositório. Isso é recuperação de crash,
   não alteração da preferência interativa normal.
-- O dispatcher de background marca `SHOPVIVALIZ_RESUME_BACKGROUND=1`. `Gemini` é sempre a rota primária. Quando `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`, autorização explícita vigente desde 2026-10-01 permite um único fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso; lease, deduplicação e cooldown continuam obrigatórios. Claude/GPT permanecem proibidos como fallback silencioso de daemon/cron.
-- Em execução finita/interativa fora do background permanece a ordem
-  `Gemini -> Claude -> Codex`; Codex continua sendo a última opção e usa
-  login ChatGPT, sem `OPENAI_API_KEY`.
+- O dispatcher de background marca SHOPVIVALIZ_RESUME_BACKGROUND=1. Sua camada de IA e Gemini Flash elegivel ao nivel gratuito + Ollama local. Flags legadas de fallback Codex/Claude sao ignoradas mesmo quando 1. A excecao de 2026-10-01 foi revogada. ChatGPT normal vem primeiro no fallback de conversa, antes da etapa CLI.
+- Em CLI finita e interativa, modelos gratuitos sao o primeiro nivel; Claude e Codex somente como ultimas opcoes, depois de autorizacao humana explicita.
 - Saída zero do executor **não** prova retomada. Só há sucesso se a máquina de
   estados durável mudar materialmente (status/next_action/evidência/verificação)
   ou chegar a `CONCLUIDO`/`BLOCKED_EXTERNAL`.
@@ -284,6 +358,23 @@ registra PID, boot id e start ticks; se o processo proprietário morrer, o resta
 recupera o lease imediatamente, sem aguardar o TTL. Leases legados sem identidade
 continuam fail-closed pelo TTL. A instalação só pode partir de uma release
 imutável já publicada; nunca editar `current/` ou a release ativa.
+### Prioridade da conversa ChatGPT (130 segundos)
+
+O executor prioritario de uma tarefa vinculada e a **conversa ChatGPT de origem**;
+o dispatcher detached/worker e **fallback**, nunca um executor concorrente por
+padrao. Apos um nudge aceito pelo bridge, reservar ate **120 segundos + 10
+segundos de margem** (130 segundos desde `dispatched_at`) para resposta e
+progresso observaveis. `SENT` e `SENT_UNCONFIRMED` nao significam falha e
+mantem a preferencia ChatGPT dentro desse prazo; `PENDING` e `CLAIMED`
+tambem. Falhas explicitas (`STALLED_NOT_CONFIRMED`,
+`CONVERSATION_NOT_FOUND`, `ERROR`) podem liberar o fallback antes.
+
+Ao vencer a janela sem progresso, o dispatcher pode acionar o worker somente
+com checkpoint/conversa/sessao autenticos e com ownership/lease exclusivo;
+nenhuma execucao paralela, nenhum rebinding por titulo e nenhuma troca de conta
+implicita. `PROGRESS_CONFIRMED` exige resposta real na conversa. A liberacao
+do fallback nao constitui conclusao da tarefa.
+
 <!-- /GEMINI_24X7_CONTROLLER_V1 -->
 
 <!-- DETACHED_TASK_RECOVERY_E2E_V7 -->
@@ -476,7 +567,7 @@ O recovery automático usa **Gemini como primário**. O modelo padrão é o alia
 Gemini distinta autorizada, rotacioná-las sem registrar o valor. Em
 2026-09-27 um probe funcional sanitizado no A1 confirmou
 `gemini-2.5-flash=model_unavailable` e confirmou sucesso real dos dois aliases
-`*-latest`. Claude/GPT continuam proibidos como fallback silencioso. O `codex-auto` só é permitido na exceção explícita e finita do controlador 24/7 (`SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`), sempre depois de Gemini falhar em produzir progresso.
+Os modelos Flash estao sujeitos a elegibilidade real do projeto Gemini. Ollama e o provedor local sem ferramentas privilegiadas. Claude e Codex sao sempre proibidos em background; a excecao antiga de codex-auto foi revogada.
 
 Falhas de policy, trust ou tool registration não são mascaradas por troca de
 modelo: continuam fail-closed e exigem correção da causa raiz.
@@ -683,3 +774,81 @@ Auditoria operacional registra somente metadados de ownership/execução necess�
 ### Foreground lease release contract
 
 A successful foreground handoff does not mean the foreground lease should remain live until TTL. Normal completion is explicit: the foreground caller releases the exact lease immediately before returning the user-facing response. Lease TTL is only the disconnect/crash fallback. A bounded renew is allowed only while foreground preparation is still active; it cannot be used to keep an interactive turn open while waiting on durable/background work. Recovery remains read-only while the foreground lease is live and can acquire mutation ownership only after explicit release or expiry.
+
+
+## Checkpoint-first obrigatório no fallback finito (NO_ORPHAN_FAILOVER_V1)
+
+Em produção, SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1: o executor de
+fallback não pode criar automaticamente um checkpoint RUNNING genérico ao
+falhar. O originador deve criar a tarefa antes de delegá-la, com identidade
+de conversa e sessão verificadas. Ausência de checkpoint retorna código 76
+sem criar estado órfão ou forjar progresso. Fallback detached nunca cria
+checkpoint, mesmo no modo legado. Somente o opt-out foreground explicitamente
+não durável (SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) conserva a compatibilidade
+legada; o deploy canônico não utiliza esse modo.
+
+
+## Fila autônoma versus conversa autenticada
+
+O produtor scripts/agent-operations-worker.py recebe também tarefas geradas
+por auto-task-generator.py e por filas independentes do ChatGPT. No modo
+durável, uma tarefa sem conversa comprovada não deve virar um checkpoint
+ChatGPT RUNNING: tarefas auto_generated permanecem duráveis na fila
+(continuity_binding_status=QUEUE_ONLY_AUTONOMOUS), e tarefas humanas sem
+conversation_id + browser_session recebem
+AWAIT_VERIFIED_BROWSER_ORIGIN, sem fabricar um chat. Um checkpoint legado
+já órfão não é avançado por ACK genérico (LEGACY_UNBOUND_CHECKPOINT).
+A criação com vínculo explícito segue permitida, com verificação do e-mail e
+da conversa pelo worker antes de qualquer ação externa. O modo não durável
+(SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=0) mantém compatibilidade legada.
+
+Estes marcadores são diagnóstico de roteamento da fila, não comprovam
+retomada nem devem ser interpretados como PROGRESS_CONFIRMED.
+
+
+<!-- ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->
+## Vinculo atomico de conversa e sessao (2026-10-09)
+
+O checkpoint de ChatGPT so pode ser retomado em uma conversa autenticada se
+`conversation_id` e `browser_session` (`dev` ou `atendimento`) forem ambos
+comprovados. O comando para vincular um checkpoint legado e:
+
+```bash
+python3 scripts/agent_task_state.py bind-route --task TASK_ID \
+  --conversation-id EXACT_CHATGPT_CONVERSATION_ID --browser-session dev
+```
+
+O `bind-route` e atomico, idempotente, nao muda `updated_at` nem o fingerprint
+de progresso, rejeita conflitos e aceita `--expected-checkpoint-version` para
+fencing. Na criacao de tarefas, prefira `start --conversation-id ...
+--browser-session ...`. Integracoes foreground podem usar as variaveis
+`SHOPVIVALIZ_TASK_ROUTE_TASK_ID`, `SHOPVIVALIZ_TASK_CONVERSATION_ID` e
+`SHOPVIVALIZ_TASK_BROWSER_SESSION` juntas: o identificador da tarefa precisa
+coincidir exatamente para evitar heranca acidental entre conversas.
+
+O controlador tenta reparar vinculos somente com recibos
+`PROGRESS_CONFIRMED` do worker que correspondam ao fingerprint atual e
+contenham ID de conversa e perfil autenticado. Recibos ambiguos, sem sessao,
+obsoletos ou baseados apenas em titulo, agente ou horario nunca geram vinculo.
+As tarefas sem prova continuam visiveis como degradadas; nao ha rota
+sintetica nem desligamento das travas de concorrencia.
+<!-- /ATTESTED_CONVERSATION_ROUTE_RECOVERY_V1 -->
+
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->

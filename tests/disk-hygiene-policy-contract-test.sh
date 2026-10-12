@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOUSE="$ROOT/ops/host/shopvivaliz-workspace-housekeeper"
 GUARD="$ROOT/ops/host/shopvivaliz-disk-guard"
 INSTALLER="$ROOT/scripts/install-disk-hygiene.sh"
+TIMER="$ROOT/deploy/systemd/shopvivaliz-disk-guard.timer"
 
 fail=0
 check_fixed() {
@@ -29,6 +30,7 @@ check_absent() {
 bash -n "$HOUSE"
 sh -n "$GUARD"
 bash -n "$INSTALLER"
+test -f "$TIMER"
 
 check_fixed '-ge 70' "$HOUSE" 'housekeeper has 70% pressure threshold'
 check_fixed 'FULL_TTL_HOURS="${FULL_TTL_HOURS:-24}"' "$HOUSE" 'housekeeper honors full TTL override'
@@ -55,7 +57,7 @@ check_fixed 'worktree_count()' "$GUARD" 'disk guard counts worktree directories'
 check_fixed 'FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1' "$GUARD" 'pressure cleanup removes clean delivered inactive worktrees immediately'
 check_fixed 'cleanup_unused_docker_images()' "$GUARD" 'disk guard defines safe unused-image cleanup'
 check_fixed 'docker image prune -af >/dev/null 2>&1 || true' "$GUARD" 'unused Docker images are reclaimable without a seven-day delay'
-check_fixed 'if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ]; then' "$GUARD" 'disk guard reclaims unused Docker images at observe pressure or rapid growth'
+check_fixed 'if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ] || [ "$low_free" -eq 1 ]; then' "$GUARD" 'disk guard reclaims unused Docker images at observe, rapid-growth, or low-free pressure'
 check_absent 'docker volume prune' "$GUARD" 'disk guard never prunes Docker volumes'
 check_absent 'docker system prune' "$GUARD" 'disk guard never performs broad Docker system prune'
 if [ "$(grep -c '^EOF2$' "$GUARD")" -eq 1 ]; then
@@ -67,8 +69,21 @@ else
   fail=1
 fi
 
+check_fixed 'MIN_FREE_BYTES="${MIN_FREE_BYTES:-6442450944}"' "$GUARD" 'disk guard reserves an 6 GiB free-space floor'
+check_fixed 'available_bytes()' "$GUARD" 'disk guard measures absolute free bytes'
+check_fixed 'low_free=1' "$GUARD" 'disk guard records absolute free-space pressure'
+check_fixed '[ "$low_free" -eq 1 ]' "$GUARD" 'absolute free-space pressure triggers cleanup'
+check_fixed 'PRESSURE_RECLAIM_PUSHED=1' "$GUARD" 'pressure cleanup may reclaim clean pushed inactive worktrees'
+check_fixed 'ABANDONED_CLONE_TTL_HOURS=24' "$GUARD" 'pressure cleanup shortens safe abandoned-clone TTL'
+check_fixed 'PRESSURE_RECLAIM_PUSHED="${PRESSURE_RECLAIM_PUSHED:-0}"' "$HOUSE" 'housekeeper defaults pushed-worktree reclamation off'
+check_fixed 'pushed_worktree()' "$HOUSE" 'housekeeper proves HEAD exists on a remote branch before pressure reclamation'
+check_fixed 'pushed_worktree_removed' "$HOUSE" 'pushed clean worktree reclamation is auditable'
+check_fixed 'OnUnitActiveSec=5min' "$TIMER" 'disk guard runs every five minutes'
+check_fixed 'RandomizedDelaySec=15' "$TIMER" 'disk guard jitter is bounded to fifteen seconds'
+
 check_fixed 'ABANDONED_CLONE_TTL_HOURS="${ABANDONED_CLONE_TTL_HOURS:-168}"' "$HOUSE" 'abandoned clones default to seven-day TTL'
 check_fixed 'canonical_clone()' "$HOUSE" 'canonical clones are explicitly protected'
+check_fixed '/home/ubuntu/shopvivaliz-deploy/releases/*' "$HOUSE" 'immutable deploy releases are protected from generic abandoned-clone reclamation'
 check_fixed 'clone_has_unpushed_commits()' "$HOUSE" 'clones with unpushed local commits are protected'
 check_fixed 'linked_worktrees' "$HOUSE" 'clones with linked worktrees are protected'
 check_fixed 'abandoned_clone_removed' "$HOUSE" 'abandoned clone removals are persisted in state and logs'

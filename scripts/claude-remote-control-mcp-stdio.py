@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Root-only, bounded stdio adapter for the loopback Remote Control MCP.
 
-Administrative commands longer than the inline budget use the existing durable
-queue. A lost response is indeterminate, not permission to replay a mutation.
+Administrative commands over the five-second foreground budget use the existing
+durable queue. A lost response is indeterminate, not permission to replay a
+mutation.
 """
 from __future__ import annotations
 
@@ -16,15 +17,30 @@ from pathlib import Path
 from typing import Any
 
 TOKEN_PATH = Path("/var/lib/shopvivaliz-remote-control/mcp-token")
+SERVICE_ENV_PATH = Path("/var/lib/shopvivaliz-remote-control/service.env")
 MCP_URLS = (
     "http://127.0.0.1:5581/mcp",
     "http://127.0.0.1:5580/mcp",
 )
 MAX_MESSAGE = 1_048_576
 HTTP_TIMEOUT = 30
-INLINE_BUDGET = 20
+FOREGROUND_BUDGET = 5
 DEFAULT_COMMAND_TIMEOUT = 30
-MAX_COMMAND_TIMEOUT = 900
+MAX_DURABLE_TIMEOUT_DEFAULT = 7200
+MAX_DURABLE_TIMEOUT_HARD = 86400
+
+
+def configured_max_durable_timeout() -> int:
+    value = MAX_DURABLE_TIMEOUT_DEFAULT
+    try:
+        for raw_line in SERVICE_ENV_PATH.read_text(encoding="utf-8").splitlines():
+            key, separator, raw_value = raw_line.partition("=")
+            if separator and key == "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT":
+                value = int(raw_value.strip())
+                break
+    except (OSError, UnicodeError, ValueError):
+        value = MAX_DURABLE_TIMEOUT_DEFAULT
+    return max(900, min(value, MAX_DURABLE_TIMEOUT_HARD))
 
 
 def error_response(request: Any, message: str, **data: Any) -> dict[str, Any]:
@@ -35,29 +51,34 @@ def error_response(request: Any, message: str, **data: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": rid, "error": error}
 
 
-def prepare_request(request: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+def prepare_request(request: dict[str, Any]) -> tuple[dict[str, Any], bool, bool]:
     """Choose execution mode before sending anything; preserve command limits."""
     if request.get("method") != "tools/call":
-        return request, False
+        return request, False, False
     params = request.get("params")
     if not isinstance(params, dict) or not isinstance(params.get("arguments", {}), dict):
         raise ValueError("invalid_tool_arguments")
     name = params.get("name")
+    if name == "task_wait":
+        task_id = params["arguments"].get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise ValueError("invalid_task_id")
+        return {**request, "params": {"name": "task_status", "arguments": {"task_id": task_id}}}, False, True
     if name not in {"admin_command_run", "task_submit"}:
-        return request, False
+        return request, False, False
     args = dict(params.get("arguments", {}))
     promoted = False
     if name == "admin_command_run":
         timeout = args.get("timeout", DEFAULT_COMMAND_TIMEOUT)
-        if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= MAX_COMMAND_TIMEOUT:
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= configured_max_durable_timeout():
             raise ValueError("invalid_timeout")
         durable = args.get("durable")
         if durable is not None and not isinstance(durable, bool):
             raise ValueError("invalid_durable")
-        if durable is False and timeout > INLINE_BUDGET:
-            raise ValueError("inline_budget_exceeded_use_task_submit")
-        if durable is not True and timeout <= INLINE_BUDGET:
-            return request, False
+        if durable is False and timeout > FOREGROUND_BUDGET:
+            raise ValueError("foreground_budget_exceeded_use_task_submit")
+        if durable is not True and timeout <= FOREGROUND_BUDGET:
+            return request, False, False
         args["timeout"] = timeout
         args.pop("durable", None)
         name = "task_submit"
@@ -66,7 +87,7 @@ def prepare_request(request: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         # One identity per submission, retained across a safe pre-connect fallback.
         # Never deduplicate intentional later runs by command text alone.
         args["request_id"] = "stdio-" + uuid.uuid4().hex
-    return {**request, "params": {**params, "name": name, "arguments": args}}, promoted
+    return {**request, "params": {**params, "name": name, "arguments": args}}, promoted, False
 
 
 def forward(raw: bytes) -> dict[str, Any] | None:
@@ -79,7 +100,7 @@ def forward(raw: bytes) -> dict[str, Any] | None:
     if not isinstance(request, dict):
         return error_response(None, "invalid_request")
     try:
-        prepared, promoted = prepare_request(request)
+        prepared, promoted, detached_wait = prepare_request(request)
     except ValueError as exc:
         return error_response(request, str(exc))
     params = prepared.get("params")
@@ -140,6 +161,23 @@ def forward(raw: bytes) -> dict[str, Any] | None:
                 return error_response(request, "controller_invalid_durable_response", retry_safe=False, request_id=request_id)
             output.update(execution_mode="durable", requested_tool="admin_command_run", request_id=request_id)
             result["result"]["content"] = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
+        if detached_wait and isinstance(result.get("result"), dict) and not result["result"].get("isError"):
+            output = result["result"].get("structuredContent")
+            if not isinstance(output, dict):
+                return error_response(request, "controller_invalid_task_status_response")
+            output["foreground_wait"] = {
+                "requested_tool": "task_wait",
+                "foreground_wait_detached": True,
+                "reason": "foreground_wait_forbidden",
+            }
+            result["result"]["content"] = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]
+        if request.get("method") == "tools/list" and isinstance(result.get("result"), dict):
+            tool_specs = result["result"].get("tools")
+            if isinstance(tool_specs, list):
+                result["result"]["tools"] = [
+                    tool for tool in tool_specs
+                    if not isinstance(tool, dict) or tool.get("name") != "task_wait"
+                ]
         return result
     return error_response(request, "controller_unavailable", retry_safe=True)
 

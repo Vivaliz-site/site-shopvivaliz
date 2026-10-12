@@ -1,0 +1,28 @@
+name: Oracle Reverse SSH Keepalive CI
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/ssh/05-shopvivaliz-reverse-ssh-keepalive.conf'
+      - 'scripts/install-oracle-reverse-ssh-keepalive.sh'
+      - 'tests/test_oracle_reverse_ssh_keepalive.py'
+      - '.github/workflows/oracle-reverse-ssh-keepalive-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/ssh/05-shopvivaliz-reverse-ssh-keepalive.conf'
+      - 'scripts/install-oracle-reverse-ssh-keepalive.sh'
+      - 'tests/test_oracle_reverse_ssh_keepalive.py'
+      - '.github/workflows/oracle-reverse-ssh-keepalive-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify SSH keepalive contract
+        run: python3 -m unittest discover -s tests -p 'test_oracle_reverse_ssh_keepalive.py' -v

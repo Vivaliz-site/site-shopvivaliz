@@ -18,10 +18,15 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/ssh-tunnel-service-managed.ps1'
+      - 'scripts/fredwin-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/test_controller_remote_recovery_gate.py'
+      - 'scripts/controller-recovery-with-lease.py'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/test_fredwin_mcp_persistence.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
       - 'tests/test_claude_mcp_stdio_transport.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
@@ -48,10 +53,15 @@ on:
       - 'scripts/setup-remote-control-windows.ps1'
       - 'scripts/windows-openssh-recovery.ps1'
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
+      - 'scripts/ssh-tunnel-service-managed.ps1'
+      - 'scripts/fredwin-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/test_controller_remote_recovery_gate.py'
+      - 'scripts/controller-recovery-with-lease.py'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/test_fredwin_mcp_persistence.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
       - 'tests/test_claude_mcp_stdio_transport.py'
       - 'tests/iphone-private-ssh-relay-contract-test.py'
@@ -74,12 +84,28 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py tests/test_secure_mcp_tunnel_stability.py
+          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py tests/test_secure_mcp_tunnel_stability.py tests/test_fredwin_mcp_persistence.py
+          python3 -m py_compile scripts/controller-recovery-with-lease.py tests/test_controller_remote_recovery_gate.py
+          python3 tests/test_controller_remote_recovery_gate.py
           python3 tests/remote-control-mcp-test.py
           python3 tests/iphone-private-ssh-relay-contract-test.py
           python3 tests/test_chatgpt_freeze_successor.py
           python3 tests/test_secure_mcp_tunnel_stability.py
+          python3 tests/test_fredwin_mcp_persistence.py
           python3 tests/test_claude_mcp_stdio_transport.py
+      - name: Fred-Win PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('scripts/ssh-tunnel-service-managed.ps1','scripts/fredwin-remote-bootstrap.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path).Path, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) {
+              foreach ($parseError in $parseErrors) { Write-Error ("${path}: " + $parseError.Message) }
+              exit 1
+            }
+          }
       - name: KOCEPSV reverse relay contract
         run: php tests/desktopkocepsv-private-relay-contract-test.php
       - name: Shell syntax

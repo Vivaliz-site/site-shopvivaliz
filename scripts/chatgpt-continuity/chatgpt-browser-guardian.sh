@@ -12,6 +12,29 @@ probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgp
 task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium .*--remote-debugging-port=9559'
 
+# Explicit continuity opt-in is separate from the existing MCP Dev adoption.
+# Auxiliary browser belongs to another service; do not restart or manage it.
+dev_aux_adoption="${SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP:-}"
+case "$dev_aux_adoption" in
+  '') ;;
+  9557)
+    # Reject untrusted endpoint overrides; no arbitrary local/remote CDP.
+    if [[ -n "${CHATGPT_BROWSER_CDP_URL:-}" &&
+          "${CHATGPT_BROWSER_CDP_URL}" != 'http://127.0.0.1:9557/json/version' ]] ||
+       [[ -n "${CHATGPT_BROWSER_CDP_BASE:-}" &&
+          "${CHATGPT_BROWSER_CDP_BASE}" != 'http://127.0.0.1:9557' ]]; then
+      echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+      exit 64
+    fi
+    cdp_url='http://127.0.0.1:9557/json/version'
+    cdp_base='http://127.0.0.1:9557'
+    ;;
+  *)
+    echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+    exit 64
+    ;;
+esac
+
 runtime_eval_ready() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
     timeout 8s node --input-type=module -e '
@@ -70,7 +93,7 @@ runtime_eval_ready() {
 
 browser_session_state() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
-    timeout 8s node --input-type=module -e '
+    timeout 15s node --input-type=module -e '
       // CONTINUITY_BROWSER_SESSION_STATE_PROBE
       const { Cdp, connectFirstUsableChatgptTab } = await import(
         "file://" + process.env.CHATGPT_CONTINUITY_WORKER_MODULE
@@ -88,7 +111,9 @@ browser_session_state() {
       let authTerminal = false;
       let residualAuthTerminal = false;
       let validOpenAiAuthFlow = false;
-      for (const page of authPages) {
+      // One stalled OAuth target must not monopolize the 15-second guardian probe.
+      // Inspect at most eight tabs simultaneously; each costs <= 2.7 seconds.
+      await Promise.allSettled(authPages.slice(0, 8).map(async page => {
         let authCdp;
         let pageHost = "";
         try {
@@ -99,7 +124,7 @@ browser_session_state() {
               ws.addEventListener("open", resolve, { once: true });
               ws.addEventListener("error", reject, { once: true });
             }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 2500)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("open timeout")), 1200)),
           ]);
           authCdp = new Cdp(ws);
           const authProbe = await Promise.race([
@@ -119,7 +144,7 @@ browser_session_state() {
                 && Boolean(document.querySelector("input[name=code]"));
               return { terminal, activeOpenAiVerification };
             })()`),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 2500)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("auth probe timeout")), 1500)),
           ]);
           if (authProbe?.activeOpenAiVerification === true) validOpenAiAuthFlow = true;
           if (authProbe?.terminal === true) {
@@ -134,7 +159,7 @@ browser_session_state() {
         } finally {
           try { authCdp?.close(); } catch {}
         }
-      }
+      }));
       authTerminal = (authTerminal || residualAuthTerminal) && !validOpenAiAuthFlow;
       const probeChatgptSessionState = async candidate => candidate.evaluate(`(async()=>{
         try {
@@ -143,25 +168,45 @@ browser_session_state() {
             cache: "no-store",
             signal: AbortSignal.timeout(2000),
           });
+          if (sessionResponse.status === 401 || sessionResponse.status === 403) return "LOGGED_OUT";
           if (sessionResponse.ok) {
             let session = null;
             try { session = await sessionResponse.json(); } catch {}
-            const hasIdentity = Boolean(session?.account || session?.user);
-            const hasAccessToken = Boolean(session?.accessToken || session?.access_token);
-            if (hasIdentity && hasAccessToken) return "AUTHENTICATED";
+            // A profile, account id, token, or composer is not proof of the
+            // *expected* account. Only the session email can grant readiness.
+            const actualEmail = String(session?.user?.email || "").trim().toLowerCase();
+            if (actualEmail) return actualEmail === "dev@shopvivaliz.com.br"
+              ? "AUTHENTICATED" : "IDENTITY_MISMATCH";
           }
         } catch {}
         const body = String(document.body?.innerText || "").toLowerCase();
         const path = String(location.pathname || "");
+        // On the logged-out root landing page, "Log in" and "Sign up" can
+        // be separated by unrelated marketing text. Only classify it from
+        // multiple independent signs (email input + login/signup + no composer).
+        // Mere missing session email remains UNKNOWN rather than logged out.
+        const hasActiveComposer = typeof document.querySelectorAll === "function"
+          && [...document.querySelectorAll("[contenteditable]")]
+            .some(element => element.getAttribute("contenteditable") === "true");
+        const rootLoggedOut = path === "/"
+          && Boolean(document.querySelector("input[type=email]"))
+          && !hasActiveComposer
+          && body.includes("log in")
+          && body.includes("sign up");
         const loggedOut = /^\\/auth\\/(?:login|logout)(?:\\/|$)/.test(path)
           || body.includes("log in or sign up")
-          || body.includes("log in to get answers");
+          || body.includes("log in to get answers")
+          || rootLoggedOut;
         if (loggedOut) return "LOGGED_OUT";
-        if (document.querySelector("[contenteditable=true]")) return "AUTHENTICATED";
         return "UNKNOWN";
       })()`);
 
-      const c = await connectFirstUsableChatgptTab(tabs, async page => {
+      // Inspect multiple independent tabs concurrently with a bounded global
+      // budget: serial probes exceeded the 15s guardian timeout on busy profiles.
+      const sessionProbeBudgetMs = 10500;
+      let identityMismatchSeen = false;
+      const c = await Promise.race([
+        connectFirstUsableChatgptTab(tabs, async page => {
         let ws;
         let candidate;
         try {
@@ -191,19 +236,25 @@ browser_session_state() {
             probeChatgptSessionState(candidate),
             new Promise((_, reject) => setTimeout(() => reject(new Error("session probe timeout")), 2500)),
           ]);
+          if (state === "IDENTITY_MISMATCH") identityMismatchSeen = true;
           return state === "AUTHENTICATED";
         } catch {
           return false;
         }
-      });
+      }, { maxParallel: 8 }),
+        new Promise(resolve => setTimeout(() => resolve(null), sessionProbeBudgetMs)),
+      ]);
       if (!c) {
-        console.log(authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN"));
+        console.log(identityMismatchSeen ? "IDENTITY_MISMATCH"
+          : (authTerminal ? "AUTH_TERMINAL" : (authFlow ? "AUTH_FLOW" : "UNKNOWN")));
         process.exit(0);
       }
       try {
         const state = await probeChatgptSessionState(c);
         if (state === "AUTHENTICATED") {
           console.log("AUTHENTICATED");
+        } else if (state === "IDENTITY_MISMATCH") {
+          console.log("IDENTITY_MISMATCH");
         } else if (authTerminal) {
           console.log("AUTH_TERMINAL");
         } else if (authFlow) {
@@ -214,13 +265,13 @@ browser_session_state() {
       } finally {
         c.close();
       }
-    ' 2>/dev/null || printf '%s\n' "UNREACHABLE"
+    ' 2>/dev/null || printf '%s\n' "UNKNOWN"
 }
 
 persist_browser_health() {
   local state="$1"
   case "$state" in
-    AUTHENTICATED|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
+    AUTHENTICATED|IDENTITY_MISMATCH|LOGGED_OUT|AUTH_FLOW|AUTH_TERMINAL|UNKNOWN|UNREACHABLE) ;;
     *) state="UNKNOWN" ;;
   esac
   python3 "$probe_cache_helper" record --health "$browser_health_file" \
@@ -261,6 +312,10 @@ validate_browser_session() {
     LOGGED_OUT)
       report_browser_state "DEGRADED_LOGGED_OUT" "$session_state"
       return 0
+      ;;
+    IDENTITY_MISMATCH)
+      report_browser_state "DEGRADED_IDENTITY_MISMATCH" "$session_state"
+      return 1
       ;;
     *)
       report_browser_state "DEGRADED_SESSION" "${session_state:-UNKNOWN}"
@@ -315,6 +370,35 @@ ensure_continuity_worker() {
 
 status=0
 
+# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.
+# The same-account identity is checked by browser_session_state() on each
+# observation. No health success is possible on a missing/foreign identity.
+if [[ "$dev_aux_adoption" == 9557 ]]; then
+  echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY'
+  if ! cdp_ready; then
+    report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
+    status=1
+  else
+    session_state="$(browser_session_state | tail -n 1)"
+    case "$session_state" in
+      AUTHENTICATED)
+        report_browser_state 'HEALTHY_DEV_AUX_READONLY' 'AUTHENTICATED'
+        if ! ensure_continuity_worker; then status=1; fi
+        ;;
+      IDENTITY_MISMATCH)
+        report_browser_state 'DEV_AUX_IDENTITY_MISMATCH' 'IDENTITY_MISMATCH'
+        status=1
+        ;;
+      *)
+        report_browser_state 'DEV_AUX_UNAVAILABLE' "${session_state:-UNKNOWN}"
+        status=1
+        ;;
+    esac
+  fi
+  exit "${status}"
+fi
+# End of readonly Dev auxiliary continuity adoption.
+
 # Keep the timer and transport liveness checks enabled. Reuse only a negative
 # session observation, for a bounded window, when browser/task context agrees.
 # No renderer evaluation or account request is made on this path.
@@ -323,6 +407,7 @@ if [[ "${CHATGPT_BROWSER_FORCE_SESSION_PROBE:-0}" != 1 ]] && \
     --base "$cdp_base" --tasks "$task_state_dir")"; then
   echo "CHATGPT_BROWSER_GUARDIAN=QUIESCENT_AUTH_CACHE"
   echo "CHATGPT_BROWSER_SESSION=$cached_state"
+  if [[ "$cached_state" == "IDENTITY_MISMATCH" ]]; then status=1; fi
 else
   mapfile -t canonical_pids < <(pgrep -u fredrdp -f "$browser_pattern" || true)
 

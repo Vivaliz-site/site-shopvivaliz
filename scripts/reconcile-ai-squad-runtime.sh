@@ -11,9 +11,8 @@ test -f "$codex_installer"
 test -f "$claude_installer"
 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$codex_installer"
 
-codex_health="$(curl -fsS --max-time 5 http://127.0.0.1:17656/health)"
-if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
-  || ! printf '%s' "$codex_health" | grep -q '"web_search_mode":"live"'; then
+bridge_checker="$release_path/ops/ai-squad/bridge-health-policy.py"
+if ! python3 "$bridge_checker" codex; then
   echo "AI_SQUAD_CODEX_RUNTIME_MODE_INVALID=true" >&2
   exit 1
 fi
@@ -27,10 +26,7 @@ if XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user cat
 fi
 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$claude_installer"
 
-claude_health="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health)"
-if ! printf '%s' "$claude_health" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-  || ! printf '%s' "$claude_health" | grep -q '"ok":true' \
-  || ! printf '%s' "$claude_health" | grep -q '"authenticated":true'; then
+if ! python3 "$bridge_checker" claude; then
   echo "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=FAILED" >&2
   exit 1
 fi

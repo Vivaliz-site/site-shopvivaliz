@@ -45,6 +45,38 @@ $googleOauth = new SvAmazonReturnsConfig([
 ]);
 rtSame(true, $googleOauth->readiness()['gmail']['ready'], 'Existing Google OAuth credentials are valid aliases for Gmail readiness.');
 rtSame('gid', $googleOauth->first('GMAIL_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_ID'), 'Alias resolution prefers first configured credential.');
+
+rtSame(
+ ['client_id'=>'gid','client_secret'=>'gsecret','refresh_token'=>'grefresh'],
+ $ready->gmailOAuthCredentials(),
+ 'A complete dedicated Gmail credential family must be selected atomically.'
+);
+$partialDedicatedGmail = new SvAmazonReturnsConfig([
+ 'GMAIL_OAUTH_CLIENT_ID'=>'', 'GMAIL_OAUTH_CLIENT_SECRET'=>'',
+ 'GMAIL_OAUTH_REFRESH_TOKEN'=>'stale-dedicated-refresh',
+ 'GOOGLE_OAUTH_CLIENT_ID'=>'shared-id',
+ 'GOOGLE_OAUTH_CLIENT_SECRET'=>'shared-secret',
+ 'GOOGLE_OAUTH_REFRESH_TOKEN'=>'shared-refresh',
+]);
+rtSame(
+ ['client_id'=>'shared-id','client_secret'=>'shared-secret','refresh_token'=>'shared-refresh'],
+ $partialDedicatedGmail->gmailOAuthCredentials(),
+ 'A partial dedicated Gmail family must not override an intact general Google family.'
+);
+$onlyMixedGmail = new SvAmazonReturnsConfig([
+ 'GMAIL_OAUTH_CLIENT_ID'=>'', 'GMAIL_OAUTH_CLIENT_SECRET'=>'',
+ 'GMAIL_OAUTH_REFRESH_TOKEN'=>'gmail-refresh',
+ 'GOOGLE_OAUTH_CLIENT_ID'=>'google-id',
+ 'GOOGLE_OAUTH_CLIENT_SECRET'=>'google-secret',
+ 'GOOGLE_OAUTH_REFRESH_TOKEN'=>'',
+]);
+rtSame(null, $onlyMixedGmail->gmailOAuthCredentials(), 'Pieces from different OAuth families cannot form one credential.');
+rtSame(false, $onlyMixedGmail->readiness()['gmail']['ready'], 'Mixed OAuth configuration must not report Gmail ready.');
+rtSame(null, (new SvAmazonReturnsConfig([
+ 'GMAIL_OAUTH_CLIENT_ID'=>'', 'GMAIL_OAUTH_CLIENT_SECRET'=>'', 'GMAIL_OAUTH_REFRESH_TOKEN'=>'',
+ 'GOOGLE_OAUTH_CLIENT_ID'=>'', 'GOOGLE_OAUTH_CLIENT_SECRET'=>'', 'GOOGLE_OAUTH_REFRESH_TOKEN'=>'',
+]))->gmailOAuthCredentials(), 'No credentials means no OAuth credential family.');
+
 rtSame(true, $ready->readiness()['seller_central_bridge']['ready'], 'Configured local browser bridge is ready.');
 
 $policies = SvAmazonReturnPolicySeeder::definitions();

@@ -1,7 +1,7 @@
 # ChatGPT Durable Handoff Architecture
 
 ## Status
-Design approved in chat on 2026-10-05 after repeated production freezes and a live `Transmissão interrompida` capture. Implementation has not started.
+Design approved in chat on 2026-10-05 after repeated production freezes and a live `Transmissão interrompida` capture. The ChatGPT-facing Remote Control stdio adapter now enforces the five-second foreground boundary: over-budget admin commands are promoted to durable submission, stale `task_wait` calls are detached to one non-blocking `task_status`, and adapter tool discovery hides `task_wait`. The raw backend retains `task_wait` for internal/non-ChatGPT consumers.
 
 ## Problem
 The current continuity architecture keeps an interactive ChatGPT turn coupled to long operational work: remote commands, durable task waits, CI, deploys, controller promotion, browser probes, and recovery actions may overlap while the user-facing response remains open.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -248,10 +249,34 @@ def persist_task_continuity(
     if not task_id or not action:
         return
     goal = str(task.get("title") or task.get("description") or task_id).strip()
+    conversation_id = str(task.get("conversation_id") or "").strip()
+    browser_session = str(task.get("browser_session") or "").strip()
+    durable = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "1").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
     try:
         current = load_task(task_id)
     except TaskStateError:
-        current = start_task(task_id, goal, agent_id)
+        if durable and task.get("auto_generated") is True:
+            # Autonomous queue work is durable in the queue, but has no
+            # ChatGPT conversation of origin. Never create an orphan.
+            task["continuity_binding_status"] = "QUEUE_ONLY_AUTONOMOUS"
+            return
+        if durable and not (conversation_id and browser_session):
+            task["continuity_binding_status"] = "AWAIT_VERIFIED_BROWSER_ORIGIN"
+            return
+        current = start_task(
+            task_id, goal, agent_id,
+            conversation_id=conversation_id,
+            browser_session=browser_session,
+        )
+    if durable and not (
+        str(current.get("conversation_id") or "").strip()
+        and str(current.get("browser_session") or "").strip()
+    ):
+        task["continuity_binding_status"] = "LEGACY_UNBOUND_CHECKPOINT"
+        return
+    task.pop("continuity_binding_status", None)
     if is_terminal(current):
         return
     record_progress(task_id, next_action=action, evidence=evidence)

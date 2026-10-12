@@ -1,3 +1,13 @@
+import { paidBridgeEnabled as paidBridgeEnabledForTest } from '../ops/ai-squad/codex-bridge.mjs';
+import assertPaid from 'node:assert/strict';
+assertPaid.equal(paidBridgeEnabledForTest({}), false);
+assertPaid.equal(paidBridgeEnabledForTest({
+  SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: '1'
+}), false);
+assertPaid.equal(paidBridgeEnabledForTest({
+  SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: '1',
+  SHOPVIVALIZ_PAID_BRIDGE_MODE: 'interactive'
+}), true);
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,6 +23,8 @@ import {
   resolveCodexWebSearchMode,
   isDirectInvocation,
   beginHeartbeat,
+  profileHomesForRequest,
+  accountReadParams,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -24,6 +36,28 @@ const valid = validateRequest({
 assert.equal(valid.model, 'gpt-5.6-sol');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
+
+const devScoped = validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'dev',
+});
+assert.equal(devScoped.profile, 'dev');
+assert.deepEqual(
+  profileHomesForRequest('dev', '/home/ubuntu/.codex-business'),
+  ['/home/ubuntu/.codex-business/dev'],
+);
+assert.throws(() => validateRequest({
+  model: 'gpt-5.6-terra',
+  effort: 'medium',
+  prompt: 'okx',
+  web_search: false,
+  profile: 'fredmourao',
+}), /invalid_profile/);
+
+assert.deepEqual(accountReadParams(), { refreshToken: false });
 
 assert.equal(resolveCodexWebSearchMode(true, undefined), 'live');
 assert.equal(resolveCodexWebSearchMode(true, 'cached'), 'cached');
@@ -79,6 +113,11 @@ fs.rmSync(invocationDir, { recursive: true, force: true });
 const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
 assert.match(
   bridgeSource,
+  /const profiles = profileHomesForRequest\(request\.profile\)/,
+  'request-scoped dev profile must control inference routing',
+);
+assert.match(
+  bridgeSource,
   /Promise\.allSettled\(profiles\.map/,
   'cold health probes must run profiles concurrently'
 );
@@ -112,11 +151,11 @@ assert.equal(heartbeatHeaders[0].status, 200);
 assert.equal(endedPayload, JSON.stringify({ ok: true }));
 assert.equal(clearedTimer, fakeTimer);
 const safe = sanitizeBridgeError(
-  'Authorization: Bearer sk-secret-token quota reached for user@example.com'
+  'Authorization: Bearer [REDACTED] quota reached for user@example.com'
 );
-assert(!safe.includes('sk-secret-token'));
+assert(!safe.includes('[REDACTED_PRIVATE_KEY]'));
 assert(!safe.includes('user@example.com'));
 
 console.log('AI_SQUAD_CODEX_BRIDGE_TEST=PASS');
 const bridgeSourceAuth = fs.readFileSync(new URL('../ops/ai-squad/codex-bridge.mjs', import.meta.url), 'utf8');
-assert.match(bridgeSourceAuth, /account\/read[\s\S]*refreshToken:\s*true/);
+assert.match(bridgeSourceAuth, /account\/read[\s\S]*accountReadParams\(\)/);

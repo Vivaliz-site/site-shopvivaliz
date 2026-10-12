@@ -28,6 +28,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -89,6 +91,7 @@ import runtime_lock
 import conversation_lease
 import mutation_gate
 import foreground_handoff
+import checkpoint_update_atomic
 
 
 HOSTS = {
@@ -152,6 +155,10 @@ REVERSE_SSH_RECOVERABLE_ERRORS = (
     "connection timed out during banner exchange",
     "connection closed by remote host",
     "connection reset by peer",
+    "kex_exchange_identification",
+)
+REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS = (
+    "connection timed out during banner exchange",
     "kex_exchange_identification",
 )
 REVERSE_SSH_RECONNECT_WAIT_SECONDS = max(
@@ -277,6 +284,24 @@ def _controller_origin_main_sha(*, refresh: bool = False) -> str:
     return sha
 
 
+def _controller_remote_main_sha() -> str:
+    """Read the real GitHub main head without changing the local tracking ref.
+
+    The cached origin/main ref may be stale when the deploy checkout has not
+    fetched recently. A failed probe must never certify the release as current.
+    """
+    try:
+        listing = _run_as_ubuntu(
+            ["env", "GIT_TERMINAL_PROMPT=0", "git", "-C", str(CONTROLLER_REPO),
+             "ls-remote", "--heads", "origin", "main"],
+            timeout=15,
+        )
+    except Exception:
+        return ""
+    match = re.fullmatch(r"([0-9a-f]{40})\s+refs/heads/main", listing.strip())
+    return match.group(1) if match else ""
+
+
 def _controller_active_sha() -> str:
     try:
         pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
@@ -290,6 +315,29 @@ def _controller_active_sha() -> str:
     except OSError:
         return ""
     match = re.search(r"/releases/([0-9a-f]{40})/", cmdline)
+    return match.group(1) if match else ""
+
+
+def _controller_active_release_id() -> str:
+    """Report the active release basename without treating it as an attested Git SHA.
+
+    Human-readable build labels may be used by an external installer. They
+    provide useful diagnostics, but NEVER satisfy the 40-hex provenance gate.
+    """
+    try:
+        pid_text = _run_local_checked(
+            [SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"],
+            timeout=15,
+        )
+        pid = int(pid_text or "0")
+        if pid <= 0:
+            return ""
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(
+            "utf-8", errors="replace"
+        )
+    except (RuntimeError, ValueError, OSError):
+        return ""
+    match = re.search(r"/releases/([A-Za-z0-9._-]{7,160})/", cmdline)
     return match.group(1) if match else ""
 
 
@@ -325,7 +373,7 @@ def _read_controller_state() -> dict[str, Any]:
     allowed = {
         "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
         "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
-        "watchdog", "dispatcher", "chatgpt_nudge",
+        "watchdog", "dispatcher", "chatgpt_nudge", "route_recovery",
     }
     return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
 
@@ -396,10 +444,13 @@ def controller_status() -> dict[str, Any]:
     service_state = _run_local([SYSTEMCTL, "is-active", CONTROLLER_SERVICE], timeout=15)
     active = _decode_output(service_state.stdout).strip() == "active"
     active_sha = _controller_active_sha()
+    # Diagnostic only: a non-SHA release must NOT be considered verified.
+    active_release_id = active_sha or (_controller_active_release_id() if active else "")
     try:
         origin_main_sha = _controller_origin_main_sha(refresh=False)
     except Exception:
         origin_main_sha = ""
+    remote_main_sha = _controller_remote_main_sha()
     state = _read_controller_state()
     return {
         "ok": active and bool(active_sha),
@@ -407,8 +458,14 @@ def controller_status() -> dict[str, Any]:
         "service": CONTROLLER_SERVICE,
         "service_active": active,
         "active_sha": active_sha,
+        "active_release_id": active_release_id,
+        "release_id_form": "sha40" if active_sha else ("non_sha_unverified" if active_release_id else "unknown"),
         "origin_main_sha": origin_main_sha,
-        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "remote_main_sha": remote_main_sha,
+        "remote_head_verified": bool(remote_main_sha),
+        "matches_tracking_main": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        # Only the verified remote head can establish true freshness.
+        "up_to_date": bool(active_sha and remote_main_sha and active_sha == remote_main_sha),
         "state": state,
     }
 
@@ -730,6 +787,11 @@ def init_db() -> None:
         ensure_column(db, "tasks", "result_dir", "TEXT")
         ensure_column(db, "tasks", "attempt", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(db, "tasks", "recovery_note", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_status", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_result", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(db, "tasks", "analysis_evidence_json", "TEXT NOT NULL DEFAULT '{}'")
+        ensure_column(db, "tasks", "analyzed_at", "TEXT")
+        ensure_column(db, "tasks", "analysis_intervention_required", "INTEGER NOT NULL DEFAULT 0")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_request_id ON tasks(request_id) WHERE request_id IS NOT NULL")
         db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_state_created ON tasks(state,created_at)")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_execution_unit ON tasks(execution_unit) WHERE execution_unit IS NOT NULL")
@@ -881,10 +943,112 @@ def finalize_task(task_id: str, state: str, exit_code: int | None, result_dir: P
 def mark_indeterminate(task_id: str, note: str) -> None:
     with db_conn() as db:
         db.execute(
-            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=? "
+            "UPDATE tasks SET state='indeterminate',finished_at=?,reconciled_at=?,recovery_note=?,"
+            "analysis_status='pending',analysis_result='',analysis_evidence_json='{}',"
+            "analyzed_at=NULL,analysis_intervention_required=0 "
             "WHERE id=? AND state NOT IN ('succeeded','failed','expired','cancelled','indeterminate')",
             (now(), now(), note, task_id),
         )
+
+
+INDETERMINATE_POSITIVE_RE = re.compile(r"(?i)(?<![a-z])(?:pass(?:ed)?|success(?:ful|fully)?|ok)(?![a-z])")
+INDETERMINATE_NEGATIVE_RE = re.compile(
+    r"(?i)(?<![a-z])(?:not\s+ok|bail\s+out!|fail(?:ed|ure)?|error|traceback)(?![a-z])"
+)
+
+
+def _indeterminate_marker_counts(value: str) -> tuple[int, int]:
+    negative = len(INDETERMINATE_NEGATIVE_RE.findall(value))
+    # Remove recognized failure phrases before looking for standalone positive
+    # tokens so TAP's "not ok" cannot be double-counted as success.
+    positive_source = INDETERMINATE_NEGATIVE_RE.sub(" ", value)
+    positive = len(INDETERMINATE_POSITIVE_RE.findall(positive_source))
+    return positive, negative
+
+
+def _indeterminate_log_evidence(task_id: str, result_dir: str | None) -> dict[str, Any]:
+    path = Path(result_dir) if result_dir else task_result_dir(task_id)
+    stdout = read_capped_text(path / "stdout.log")
+    stderr = read_capped_text(path / "stderr.log")
+    stdout_positive, stdout_negative = _indeterminate_marker_counts(stdout)
+    stderr_positive, stderr_negative = _indeterminate_marker_counts(stderr)
+    positive = stdout_positive + stderr_positive
+    negative = stdout_negative + stderr_negative
+    stdout_bytes = len(stdout.encode("utf-8"))
+    stderr_bytes = len(stderr.encode("utf-8"))
+    if positive and not negative:
+        classification = "positive_evidence"
+    elif negative and not positive:
+        classification = "negative_evidence"
+    elif positive and negative:
+        classification = "mixed_evidence"
+    elif stdout_bytes or stderr_bytes:
+        classification = "logs_without_terminal_markers"
+    else:
+        classification = "no_persisted_output"
+    return {
+        "classification": classification,
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+        "positive_markers": positive,
+        "negative_markers": negative,
+        "result_json_present": (path / "result.json").is_file(),
+    }
+
+
+def analyze_indeterminate_task(task_id: str) -> dict[str, Any]:
+    row = load_task(task_id)
+    if row["state"] != "indeterminate":
+        raise ValueError("task_not_indeterminate")
+    evidence = _indeterminate_log_evidence(task_id, row["result_dir"])
+    analyzed_at = now()
+    with db_conn() as db:
+        changed = db.execute(
+            "UPDATE tasks SET analysis_status='processed',analysis_result=?,analysis_evidence_json=?,"
+            "analyzed_at=?,analysis_intervention_required=0 "
+            "WHERE id=? AND state='indeterminate'",
+            (
+                evidence["classification"],
+                json.dumps(evidence, ensure_ascii=False, separators=(",", ":")),
+                analyzed_at,
+                task_id,
+            ),
+        ).rowcount
+    if not changed:
+        raise ValueError("task_not_indeterminate")
+    return {
+        "task_id": task_id,
+        "state": "indeterminate",
+        "analysis_status": "processed",
+        "analysis_result": evidence["classification"],
+        "analysis_intervention_required": 0,
+        "analyzed_at": analyzed_at,
+        "evidence": evidence,
+    }
+
+
+def process_indeterminate_tasks(limit: int = 200) -> dict[str, Any]:
+    bounded = max(1, min(int(limit), 200))
+    with db_conn() as db:
+        rows = db.execute(
+            "SELECT id FROM tasks WHERE state='indeterminate' "
+            "AND COALESCE(analysis_status,'') != 'processed' ORDER BY created_at LIMIT ?",
+            (bounded,),
+        ).fetchall()
+    classifications: dict[str, int] = {}
+    processed_ids: list[str] = []
+    for row in rows:
+        result = analyze_indeterminate_task(str(row["id"]))
+        classification = str(result["analysis_result"])
+        classifications[classification] = classifications.get(classification, 0) + 1
+        processed_ids.append(str(row["id"]))
+    return {
+        "processed": len(processed_ids),
+        "task_ids": processed_ids,
+        "classifications": classifications,
+        "analysis_only": True,
+        "external_intervention": False,
+    }
 
 
 def finalize_cancelled_without_result(task_id: str) -> None:
@@ -1023,17 +1187,48 @@ def run_task_entrypoint(task_id: str) -> int:
             finalize_cancelled_without_result(task_id)
             return 0
         deadline = time.monotonic() + int(row["timeout"])
-        while proc.poll() is None:
-            state = load_task(task_id)["state"]
-            if state == "cancel_requested":
-                terminate_process_group(proc)
-                return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
-            if time.monotonic() >= deadline:
-                terminate_process_group(proc)
-                return finalize_task(task_id, "expired", proc.poll(), result_dir)
-            update_heartbeat_and_progress(task_id, result_dir)
-            time.sleep(0.2)
-        return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
+        transport_retry_used = False
+        while True:
+            while proc.poll() is None:
+                state = load_task(task_id)["state"]
+                if state == "cancel_requested":
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "cancelled", proc.poll(), result_dir)
+                if time.monotonic() >= deadline:
+                    terminate_process_group(proc)
+                    return finalize_task(task_id, "expired", proc.poll(), result_dir)
+                update_heartbeat_and_progress(task_id, result_dir)
+                time.sleep(0.2)
+
+            if (
+                proc.returncode != 0
+                and not transport_retry_used
+                and is_safe_pre_execution_reverse_ssh_error(str(row["host"]), read_capped_text(stderr_path))
+                and time.monotonic() < deadline
+            ):
+                if load_task(task_id)["state"] == "cancel_requested":
+                    return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                if recover_reverse_ssh_transport(str(row["host"])) and time.monotonic() < deadline:
+                    if load_task(task_id)["state"] == "cancel_requested":
+                        return finalize_task(task_id, "cancelled", proc.returncode, result_dir)
+                    out.seek(0)
+                    out.truncate(0)
+                    err.seek(0)
+                    err.truncate(0)
+                    with db_conn() as db:
+                        db.execute(
+                            "UPDATE tasks SET heartbeat_at=?,progress='transport_retry',"
+                            "recovery_note='reverse_ssh_transport_recovered_retry' WHERE id=?",
+                            (now(), task_id),
+                        )
+                    proc = subprocess.Popen(
+                        remote_invocation(str(row["host"]), str(row["command"])),
+                        stdout=out, stderr=err, start_new_session=True,
+                    )
+                    transport_retry_used = True
+                    continue
+
+            return finalize_task(task_id, "succeeded" if proc.returncode == 0 else "failed", proc.returncode, result_dir)
 
 
 AUDIT_RESULT_METADATA_KEYS = (
@@ -1045,11 +1240,20 @@ AUDIT_RESULT_METADATA_KEYS = (
 
 
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool == "checkpoint_update_atomic":
+        # Checkpoint notes and nested metadata must never appear in audit args.
+        return {
+            "request_id": str(args.get("request_id") or "")[:160],
+            "expected_last_checked_at": str(args.get("expected_last_checked_at") or "")[:60],
+            "rules_count": len(args.get("rules_sha_by_path") or {}),
+            "audit_id_count": len(args.get("audit_ids") or []),
+            "next_action_length": len(str(args.get("next_action") or "")),
+        }
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload", "value"):
         # Unsalted digests of low-entropy secrets remain guessable metadata.
         # Preserve event identity and length, not a searchable secret digest.
         safe_args.pop(f"{secret_key}_sha256", None)
@@ -1115,6 +1319,14 @@ def is_recoverable_reverse_ssh_error(host: str, stderr: str) -> bool:
         return False
     lowered = str(stderr or "").lower()
     return any(marker in lowered for marker in REVERSE_SSH_RECOVERABLE_ERRORS)
+
+
+def is_safe_pre_execution_reverse_ssh_error(host: str, stderr: str) -> bool:
+    cfg = validate_host(host)
+    if cfg.get("transport") != "reverse_ssh":
+        return False
+    lowered = str(stderr or "").lower()
+    return any(marker in lowered for marker in REVERSE_SSH_SAFE_PRE_EXECUTION_ERRORS)
 
 
 def reverse_ssh_listener_pid(port: int) -> int | None:
@@ -1245,6 +1457,8 @@ def run_host_command(
     command: str,
     timeout: int = DEFAULT_TIMEOUT,
     cancel_check: Callable[[], bool] | None = None,
+    *,
+    recover_transport: bool = True,
 ) -> dict[str, Any]:
     timeout = validate_timeout(timeout)
     started = time.monotonic()
@@ -1300,9 +1514,14 @@ def run_host_command(
 
     try:
         result = run_once()
-        if (
+        recoverable_transport_error = (
             result["exit_code"] != 0
-            and is_recoverable_reverse_ssh_error(host, str(result.get("stderr") or ""))
+            and is_safe_pre_execution_reverse_ssh_error(host, str(result.get("stderr") or ""))
+        )
+        if recoverable_transport_error and not recover_transport:
+            result["transport_recovery_available"] = True
+        elif (
+            recoverable_transport_error
             and deadline - time.monotonic() > 1
             and recover_reverse_ssh_transport(host)
             and deadline - time.monotonic() > 1
@@ -1474,6 +1693,8 @@ def processes_command(platform: str) -> str:
 BROWSER_ALLOWED_HOSTS = {"chatgpt.com", "auth.openai.com", "openai.com", "accounts.google.com", "login.microsoftonline.com", "claude.ai"}
 BROWSER_WORKER_MODULE = "/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs"
 BROWSER_NODE_BIN = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_NODE_BIN", "/usr/local/bin/node")
+BROWSER_SESSION_NAME = os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME", "atendimento").strip() or "atendimento"
+BROWSER_CDP_URL = os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL", "http://127.0.0.1:9556").rstrip("/")
 
 
 def _safe_browser_token(value: str, label: str) -> str:
@@ -1484,27 +1705,23 @@ def _safe_browser_token(value: str, label: str) -> str:
 
 
 def browser_tabs_command() -> str:
+    session = json.dumps(BROWSER_SESSION_NAME)
+    endpoint = json.dumps(BROWSER_CDP_URL + "/json")
     return (
         "python3 - <<'PY'\n"
         "import json,urllib.request,urllib.parse\n"
-        "sources=[('atendimento','http://127.0.0.1:9556/json'),('dev','http://127.0.0.1:9559/json')]\n"
+        f"session={session}; endpoint={endpoint}\n"
         "out=[]\n"
-        "seen={}\n"
         "allowed={'chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai'}\n"
-        "for session,endpoint in sources:\n"
-        " try:\n"
-        "  with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
-        " except Exception:\n"
-        "  continue\n"
-        " for x in pages:\n"
-        "  if x.get('type')!='page': continue\n"
-        "  u=urllib.parse.urlparse(x.get('url',''))\n"
-        "  if u.hostname not in allowed: continue\n"
-        "  tab_id=x.get('id')\n"
-        "  if not tab_id: continue\n"
-        "  if tab_id in seen: raise SystemExit('tab_id_ambiguous')\n"
-        "  seen[tab_id]=session\n"
-        "  out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
+        "try:\n"
+        " with urllib.request.urlopen(endpoint,timeout=5) as r: pages=json.load(r)\n"
+        "except Exception: pages=[]\n"
+        "for x in pages:\n"
+        " if x.get('type')!='page': continue\n"
+        " u=urllib.parse.urlparse(x.get('url',''))\n"
+        " if u.hostname not in allowed: continue\n"
+        " tab_id=x.get('id')\n"
+        " if tab_id: out.append({'id':tab_id,'origin':u.scheme+'://'+u.netloc if u.netloc else '','session':session})\n"
         "print(json.dumps({'tabs':out},separators=(',',':')))\n"
         "PY"
     )
@@ -1520,7 +1737,7 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const id=Buffer.from(process.env.SHOPVIVALIZ_TAB_ID_B64,'base64').toString(); "
         "const expression=Buffer.from(process.env.SHOPVIVALIZ_EXPR_B64,'base64').toString(); "
-        "const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']]; "
+        f"const sources=[[{json.dumps(BROWSER_SESSION_NAME)},{json.dumps(BROWSER_CDP_URL + '/json')}]]; "
         "const matches=[]; "
         "for(const [session,endpoint] of sources){try{const tabs=await (await fetch(endpoint,{signal:AbortSignal.timeout(2500)})).json();for(const candidate of tabs){if(candidate?.id===id)matches.push({t:candidate,session});}}catch{}} "
         "if(matches.length===0) throw new Error('tab_not_found'); if(matches.length>1) throw new Error('tab_id_ambiguous'); "
@@ -1535,6 +1752,25 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "if(c.close)c.close(); console.log(JSON.stringify(r.result?.value ?? null));\n"
         "JS"
     )
+
+def browser_open_command(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
+        raise ValueError("browser_url_not_allowlisted")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("browser_url_query_not_allowed")
+    encoded = base64.b64encode(url.encode()).decode()
+    return (
+        f"export SHOPVIVALIZ_OPEN_URL_B64={encoded}; "
+        "python3 - <<'PY'\n"
+        "import base64,json,os,urllib.request,urllib.parse\n"
+        "url=base64.b64decode(os.environ['SHOPVIVALIZ_OPEN_URL_B64']).decode()\n"
+        f"req=urllib.request.Request({json.dumps(BROWSER_CDP_URL + '/json/new?')}+urllib.parse.quote(url,safe=':/'),method='PUT')\n"
+        "with urllib.request.urlopen(req,timeout=5) as r: x=json.load(r)\n"
+        f"print(json.dumps({{'opened':True,'id':x.get('id'),'origin':url.split('/',3)[0]+'//'+url.split('/',3)[2],'session':{json.dumps(BROWSER_SESSION_NAME)}}},separators=(',',':')))\n"
+        "PY"
+    )
+
 
 def browser_controls_expression() -> str:
     return r"""(()=>{const safeText=e=>{const v=(e.innerText||e.getAttribute('placeholder')||'').trim().slice(0,120);return /[A-Z0-9._%+-]+@[A-Z0-9.-]+.[A-Z]{2,}/i.test(v)?'[REDACTED_EMAIL]':v};return {origin:location.origin,path:location.pathname,readyState:document.readyState,controls:[...document.querySelectorAll('input,button,[role=button]')].slice(0,120).map((e,i)=>({i,tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',name:e.getAttribute('name')||'',id:e.id||'',role:e.getAttribute('role')||'',aria:e.getAttribute('aria-label')||'',text:safeText(e),disabled:!!e.disabled}))}})()"""
@@ -1567,7 +1803,7 @@ def browser_focused_navigate_command(url: str) -> str:
         "node --input-type=module <<'JS'\n"
         f"const mod='{BROWSER_WORKER_MODULE}'; const {{Cdp}}=await import('file://'+mod); "
         "const url=Buffer.from(process.env.SHOPVIVALIZ_NAV_URL_B64,'base64').toString(); "
-        "const tabs=await (await fetch('http://127.0.0.1:9556/json')).json(); "
+        f"const tabs=await (await fetch({json.dumps(BROWSER_CDP_URL + '/json')})).json(); "
         f"const allowed=new Set({allowed}); "
         "const focused=[]; "
         "for(const t of tabs){if(t?.type!=='page'||!t?.webSocketDebuggerUrl)continue; let u;try{u=new URL(String(t.url||''));}catch{continue;} if(!allowed.has(u.hostname))continue; "
@@ -1609,7 +1845,7 @@ const [id,selector,submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const sources=[['atendimento','http://127.0.0.1:9556/json'],['dev','http://127.0.0.1:9559/json']];
+const sources=[[process.env.SHOPVIVALIZ_BROWSER_SESSION_NAME||'atendimento',(process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json']];
 const matches=[];
 for(const [session,endpoint] of sources){
   try{
@@ -1649,7 +1885,7 @@ const [submitRaw]=process.argv.slice(1);
 let secret='';
 for await (const chunk of process.stdin) secret += chunk;
 if(secret.length>4096) throw new Error('browser_text_too_long');
-const tabs=await (await fetch('http://127.0.0.1:9556/json')).json();
+const tabs=await (await fetch((process.env.SHOPVIVALIZ_BROWSER_CDP_URL||'http://127.0.0.1:9556')+'/json')).json();
 const allowed=new Set(['chatgpt.com','auth.openai.com','openai.com','accounts.google.com','login.microsoftonline.com','claude.ai','127.0.0.1','localhost']);
 const candidates=[];
 for(const t of tabs){
@@ -1712,8 +1948,199 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# Deliberately fixed localhost endpoint for the *existing*, isolated browser
+# MCP. No arbitrary host, port or URL is accepted from tool callers.
+ACCOUNT_AUTH_BROWSER_MCP_URL = "http://127.0.0.1:5581/mcp"
+ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
+ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+
+
+def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Expose the existing browser MCP login gate without weakening its lease.
+
+    Browser MCP re-checks the maintenance owner, fencing token, official page
+    origin and specific input/button. This layer independently rejects wrong
+    sessions and stale/non-maintenance leases before invoking the local peer.
+    """
+    if name not in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
+        raise ValueError("account_auth_tool_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
+        raise ValueError("account_auth_session_invalid")
+    if name in {"browser_auth_tabs", "browser_auth_status"}:
+        if set(args) != {"session"}:
+            raise ValueError("account_auth_scope_invalid")
+    elif name == "browser_auth_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    elif name == "browser_profile_home_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_profile_home_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    else:
+        allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
+        if set(args) - allowed_keys:
+            raise ValueError("account_auth_scope_invalid")
+        action = str(args.get("action") or "")
+        tab_id = str(args.get("tab_id") or "")
+        if action not in ACCOUNT_AUTH_ALLOWED_ACTIONS:
+            raise ValueError("account_auth_action_invalid")
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
+            raise ValueError("account_auth_tab_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+
+    if not AUTH_TOKEN:
+        raise RuntimeError("account_auth_browser_proxy_unavailable")
+    request = Request(
+        ACCOUNT_AUTH_BROWSER_MCP_URL,
+        data=json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer " + AUTH_TOKEN,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open", "browser_profile_home_open"} else 25 if name == "browser_auth_status" else 8) as response:
+            payload = response.read(524289)
+    except (HTTPError, URLError, TimeoutError, OSError):
+        raise RuntimeError("account_auth_browser_proxy_unavailable") from None
+    if len(payload) > 524288:
+        raise RuntimeError("account_auth_browser_proxy_oversized")
+    try:
+        envelope = json.loads(payload)
+        result = envelope["result"]
+        output = result["structuredContent"]
+        if not isinstance(output, dict):
+            raise ValueError("invalid_result")
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("account_auth_browser_proxy_invalid_response") from None
+    if result.get("isError") or output.get("ok") is not True:
+        raise ValueError("account_auth_backend_denied")
+
+    # Return only allowlisted outcome fields. In particular, never echo
+    # the value, remote stdout/stderr, request body or Chromium DOM text.
+    if name == "browser_auth_tabs":
+        tabs = output.get("tabs", [])
+        if not isinstance(tabs, list):
+            raise RuntimeError("account_auth_browser_proxy_invalid_response")
+        clean = []
+        for tab in tabs[:128]:
+            if not isinstance(tab, dict) or tab.get("session") != session:
+                continue
+            tab_id = str(tab.get("tab_id") or "")
+            stage = str(tab.get("stage") or "")
+            if re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id) and (
+                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage in {"/email-verification", "/mfa-challenge", "/log-in-or-create-account"}
+            ):
+                clean.append({"tab_id": tab_id, "session": session, "stage": stage})
+        return {"ok": True, "session": session, "tabs": clean}
+
+    if name == "browser_auth_status":
+        state = str(output.get("state") or "")
+        present = output.get("user_present") is True
+        matched = output.get("identity_match") is True
+        if (output.get("session") != session
+                or state not in {"AUTHENTICATED", "NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"}
+                or matched != (state == "AUTHENTICATED")
+                or (matched and not present)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        try:
+            http = int(output.get("session_http", 0))
+            tabs_seen = int(output.get("tabs_seen", 0))
+            tabs_checked = int(output.get("tabs_checked", 0))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if not (0 <= http <= 599 and 0 <= tabs_seen <= 512 and 0 <= tabs_checked <= 16):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {
+            "ok": True, "session": session,
+            "cdp_accessible": output.get("cdp_accessible") is True,
+            "tabs_seen": tabs_seen, "tabs_checked": tabs_checked,
+            "session_http": http, "user_present": present,
+            "identity_match": matched, "state": state,
+        }
+    if name == "browser_profile_home_open":
+        tab_id = str(output.get("tab_id") or "")
+        if (output.get("session") != session
+                or output.get("identity_match") is not True
+                or not re.fullmatch(r"[A-F0-9]{32}", tab_id, re.I)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "tab_id": tab_id,
+                "reused": output.get("reused") is True, "identity_match": True}
+
+    # The downstream action returns protected child stdout as a JSON
+    # status. Parse booleans only; never surface the raw child output.
+    if name == "browser_auth_open":
+        try:
+            child = json.loads(str(output.get("stdout") or ""))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if (not isinstance(child, dict)
+                or child.get("ok") is not True
+                or child.get("session") != session
+                or child.get("stage") != "/auth/login"
+                or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(child.get("tab_id") or ""))):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "stage": "/auth/login",
+                "tab_id": child["tab_id"]}
+    child = {}
+    try:
+        child = json.loads(str(output.get("stdout") or ""))
+    except (ValueError, TypeError):
+        pass
+    if not isinstance(child, dict):
+        child = {}
+    action = str(args["action"])
+    status_key = "typed" if action.startswith("fill_") else "clicked"
+    status = bool(child.get(status_key) or output.get(status_key))
+    if not status:
+        raise RuntimeError("account_auth_status_unconfirmed")
+    return {"ok": True, "session": session, "action": action, status_key: status}
+
+
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
+    "browser_auth_action": "browser_auth_action",
+    "browser_auth_open": "browser_auth_open",
+    "browser_profile_home_open": "browser_profile_home_open",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -1802,13 +2229,25 @@ def execute_tool(
         )
     if name == "continuity_status":
         return continuity_status()
+    if name == "checkpoint_update_atomic":
+        # No caller-controlled path, route, task status, or runtime shell command.
+        return checkpoint_update_atomic.update_checkpoint(args, continuity_status())
     if name == "continuity_e2e":
         return continuity_e2e(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
+    if name in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
+        return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
+    if name == "browser_open":
+        return _browser_result(run_host_command(
+            CONTROLLER_BACKEND_HOST,
+            browser_open_command(str(args.get("url") or "")),
+            DEFAULT_TIMEOUT,
+            cancel_check,
+        ))
     if name == "browser_controls":
         return _browser_result(run_host_command(
             CONTROLLER_BACKEND_HOST,
@@ -1898,6 +2337,8 @@ def execute_tool(
                 (limit,),
             ).fetchall()
         return {"events": [dict(r) for r in rows]}
+    if name == "task_process_indeterminate":
+        return process_indeterminate_tasks(args.get("limit", 200))
     if name == "task_status":
         tid = str(args.get("task_id") or "")
         row = load_task(tid)
@@ -1997,9 +2438,9 @@ def execute_tool(
         return durable
     timeout = validate_timeout(args.get("timeout"))
     if name == "host_health":
-        result = run_host_command(str(host), health_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), health_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "processes_list":
-        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check)
+        result = run_host_command(str(host), processes_command(platform), timeout, cancel_check, recover_transport=False)
     elif name == "service_status":
         result = run_host_command(
             str(host),
@@ -2011,6 +2452,7 @@ def execute_tool(
             ),
             timeout,
             cancel_check,
+            recover_transport=False,
         )
     elif name == "service_action":
         action = str(args.get("action") or "")
@@ -2028,11 +2470,11 @@ def execute_tool(
             cancel_check,
         )
     elif name == "file_read":
-        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check)
+        result = run_host_command(str(host), file_read_command(platform, str(args.get("path") or ""), int(args.get("max_bytes", 65536))), timeout, cancel_check, recover_transport=False)
     elif name == "file_list":
-        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check)
+        result = run_host_command(str(host), file_list_command(platform, str(args.get("path") or "")), timeout, cancel_check, recover_transport=False)
     elif name == "logs_tail":
-        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check)
+        result = run_host_command(str(host), logs_tail_command(platform, str(args.get("path") or ""), int(args.get("lines", 100))), timeout, cancel_check, recover_transport=False)
     elif name == "admin_command_run":
         command = str(args.get("command") or "")
         if not command.strip():
@@ -2051,7 +2493,29 @@ TOOLS = [
     ("controller_status", "Inspect the active 24x7 continuity controller release and sanitized runtime state on the canonical backend.", {}, True, False),
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
+    ("checkpoint_update_atomic", "Update only the non-secret Orquestrador recovery checkpoint metadata with a global state lock, idempotency, observed runtime counters, fsync and independent readback. Never binds chats, completes tasks or changes host settings.", {"request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$"}, "expected_last_checked_at": {"type": "string", "maxLength": 60}, "rules_sha_by_path": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "audit_ids": {"type": "array", "maxItems": 32, "items": {"type": "string"}}, "next_action": {"type": "string", "minLength": 10, "maxLength": 1800}}, False, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
+    ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
+    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
+    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
+        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+        "value": {"type": "string", "maxLength": 512},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, True),
     ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
@@ -2061,11 +2525,11 @@ TOOLS = [
     ('foreground_handoff', 'Persist an exact conversation checkpoint, acquire a foreground lease, enqueue exactly one durable execution, and return without waiting.', {'task_id': {'type': 'string', 'maxLength': 200}, 'conversation_id': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]{8,160}$'}, 'checkpoint_version': {'type': 'integer', 'minimum': 1}, 'durable_command': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 64}, 'lease_ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}, 'durable_timeout': {'type': 'integer', 'minimum': 1, 'maximum': MAX_DURABLE_TIMEOUT}, 'request_id': {'type': 'string', 'maxLength': 200}}, False, False),
     ('foreground_renew', 'Renew the exact foreground conversation lease during bounded foreground preparation.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'ttl_seconds': {'type': 'integer', 'minimum': 5, 'maximum': 300}}, False, False),
     ('foreground_release', 'Release the exact foreground conversation lease before returning the user-facing response.', {'task_id': {'type': 'string', 'maxLength': 200}, 'lease_id': {'type': 'string', 'maxLength': 200}, 'fencing_token': {'type': 'integer', 'minimum': 1}, 'reason': {'type': 'string', 'maxLength': 120}}, False, False),
-    ("desktop_health", "Check the constrained backend RustDesk GUI path for a canonical Windows support host without exposing its RustDesk ID.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
-    ("desktop_open", "Open or focus the configured RustDesk session for a canonical Windows support host. The target ID comes only from protected runtime configuration.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
-    ("desktop_screenshot", "Capture only the constrained RustDesk remote-session window for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
-    ("desktop_click", "Click bounded coordinates relative to the active RustDesk remote-session window for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
-    ("desktop_type", "Type into the active constrained RustDesk remote-session window. Text is sent only over stdin and hashed in audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
+    ("desktop_health", "Check the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV uses the backend RustDesk path without exposing target IDs.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_open", "Prepare the constrained GUI path for a canonical Windows support host. Fred-Win uses the native interactive Windows bridge; KOCEPSV opens or focuses the protected RustDesk target.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, False, True),
+    ("desktop_screenshot", "Capture the constrained graphical surface for a canonical Windows support host: the interactive Windows desktop on Fred-Win or the resolved RustDesk window on KOCEPSV.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
+    ("desktop_click", "Click bounded coordinates on the constrained graphical surface for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
+    ("desktop_type", "Type into the active constrained graphical surface. Text is transported only through protected stdin/request files and is redacted from audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
@@ -2079,6 +2543,7 @@ TOOLS = [
     ("task_wait", "Wait briefly for a durable task while preserving it across client disconnects.", {"task_id": {"type": "string"}, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}, True, False),
     ("task_status", "Read persisted status/output for a durable task.", {"task_id": {"type": "string"}}, True, False),
     ("task_cancel", "Cancel a queued or running durable task.", {"task_id": {"type": "string"}}, False, True),
+    ("task_process_indeterminate", "Process pending indeterminate durable tasks by persisted-log analysis only. Never re-executes the original command, restarts transports/services, or changes the indeterminate terminal state.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, False, False),
     ("audit_recent", "Read recent redacted control-plane audit events.", {"limit": {"type": "integer", "minimum": 1, "maximum": 200}}, True, False),
 ]
 
@@ -2109,7 +2574,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": schema_props,
-                "required": [k for k in props if k not in optional],
+                "required": [k for k in props if k not in optional or (name == "checkpoint_update_atomic" and k == "request_id")],
                 "additionalProperties": False,
             },
             "annotations": {
@@ -2122,10 +2587,15 @@ def tool_specs() -> list[dict[str, Any]]:
 
 
 def task_worker() -> None:
+    next_analysis_at = 0.0
     while not STOP_EVENT.wait(0.2):
         tid = None
         try:
             reconcile_tasks()
+            current = time.monotonic()
+            if current >= next_analysis_at:
+                process_indeterminate_tasks(limit=50)
+                next_analysis_at = current + 1.0
             with db_conn() as db:
                 active_rows = db.execute(
                     "SELECT host,COUNT(*) AS count FROM tasks "
@@ -2174,11 +2644,18 @@ def durable_health_summary() -> dict[str, Any]:
         rows = db.execute(
             "SELECT state,COUNT(*) AS count FROM tasks WHERE state IN ('queued','starting','running','cancel_requested','indeterminate') GROUP BY state"
         ).fetchall()
+        analyzed = db.execute(
+            "SELECT COUNT(*) AS count FROM tasks WHERE state='indeterminate' AND analysis_status='processed'"
+        ).fetchone()
         heartbeat = db.execute(
             "SELECT heartbeat_at FROM tasks WHERE state IN ('starting','running','cancel_requested') AND heartbeat_at IS NOT NULL ORDER BY heartbeat_at LIMIT 1"
         ).fetchone()
     summary = {state: 0 for state in ("queued", "starting", "running", "cancel_requested", "indeterminate")}
     summary.update({str(row["state"]): int(row["count"]) for row in rows})
+    summary["indeterminate_processed"] = int(analyzed["count"]) if analyzed else 0
+    summary["indeterminate_pending_analysis"] = max(
+        0, summary["indeterminate"] - summary["indeterminate_processed"]
+    )
     age: float | None = None
     if heartbeat:
         try:
@@ -2186,8 +2663,21 @@ def durable_health_summary() -> dict[str, Any]:
         except ValueError:
             age = None
     summary["oldest_heartbeat_age_seconds"] = age
-    summary["degraded"] = age is not None and age > 10
+    summary["degraded"] = summary["indeterminate_pending_analysis"] > 0 or (age is not None and age > 10)
     return summary
+
+
+def _tool_call_ok(name: str, output: Any) -> bool:
+    """Distinguish a successful health observation from healthy service state.
+
+    continuity_status.ok is readiness, not an MCP execution outcome.  An
+    observed degraded state is still a successful read and must reach clients
+    as structuredContent with isError=false.  Other tools retain fail-closed
+    execution semantics.
+    """
+    if name == "continuity_status" and isinstance(output, dict):
+        return "controller" in output and "continuity_ready" in output
+    return not (isinstance(output, dict) and output.get("ok") is False)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -2262,8 +2752,11 @@ class Handler(BaseHTTPRequestHandler):
                 host = args.get("host")
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
+                    ok = _tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary, output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {
