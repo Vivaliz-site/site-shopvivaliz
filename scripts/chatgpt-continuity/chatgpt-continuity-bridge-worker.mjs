@@ -80,6 +80,15 @@ const BROWSER_SESSIONS = Object.freeze({
   // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
   fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
 });
+function boundDevCdpBase() {
+  // Separate, explicit opt-in. The MCP Dev 5583 adoption is NOT proof of
+  // permission to reroute the independent continuity worker. No cookies or
+  // credentials are copied from the authenticated Chrome.
+  const selected = String(process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP || '');
+  if (selected === '') return BROWSER_SESSIONS.dev.cdpBase;
+  if (selected === '9557') return 'http://127.0.0.1:9557';
+  throw new Error('invalid Dev continuity auxiliary adoption');
+}
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
 }
@@ -103,7 +112,9 @@ function taskBrowserSession(taskId, requestedConversationId = '') {
       || (requestedConversationId && requestedConversationId !== bound)) {
     throw new Error('browser session checkpoint conversation mismatch or terminal state');
   }
-  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+  return Object.freeze({ ...BROWSER_SESSIONS[name],
+    ...(name === 'dev' ? { cdpBase: boundDevCdpBase() } : {}),
+    conversationId: bound, name });
 }
 
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
