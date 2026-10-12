@@ -50,6 +50,130 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
             self.assertTrue(any(v.code == "scheduled_paid_ai" for v in violations))
 
 
+    def test_direct_claude_print_from_schedule_is_rejected(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "bad-claude.yml").write_text(textwrap.dedent("""
+                name: unpaid background guard
+                on:
+                  schedule:
+                    - cron: '*/10 * * * *'
+                jobs:
+                  run:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: claude -p "continue this task"
+                """))
+            self.assertIn(
+                "scheduled_paid_ai",
+                {v.code for v in guard.scan_repository(root)},
+            )
+
+    def test_direct_shell_script_wrapper_with_claude_print_is_rejected(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            workflows = root / ".github" / "workflows"
+            scripts.mkdir(parents=True)
+            workflows.mkdir(parents=True)
+            (scripts / "paid-worker.sh").write_text(
+                "#!/bin/sh\nclaude --print 'repeat again'\n"
+            )
+            (workflows / "paid.yml").write_text(textwrap.dedent("""
+                name: invisible paid shell
+                on:
+                  schedule:
+                    - cron: '0 * * * *'
+                jobs:
+                  run:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: ./scripts/paid-worker.sh
+                """))
+            violations = guard.scan_repository(root)
+            self.assertIn("scheduled_paid_ai", {v.code for v in violations})
+            self.assertTrue(any("paid-worker.sh" in v.message for v in violations))
+
+    def test_scheduled_python_list_claude_cli_is_rejected(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            workflows = root / ".github" / "workflows"
+            scripts.mkdir(parents=True)
+            workflows.mkdir(parents=True)
+            (scripts / "paid-worker.py").write_text(
+                "import subprocess\nsubprocess.run(['claude', '-p', 'again'])\n"
+            )
+            (workflows / "paid.yml").write_text(textwrap.dedent("""
+                name: hidden paid subprocess
+                on:
+                  schedule:
+                    - cron: '0 * * * *'
+                jobs:
+                  run:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: python3 scripts/paid-worker.py
+                """))
+            self.assertIn(
+                "scheduled_paid_ai", {v.code for v in guard.scan_repository(root)}
+            )
+
+    def test_oci_bootstrap_claude_diagnostic_is_non_generative(self):
+        import re
+        workflow = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text()
+        marker = "- name: Diagnose AI Squad Claude bridge through Remote Control MCP"
+        self.assertIn(marker, workflow)
+        block = workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+        self.assertNotRegex(block, r"/claude\s+-p\b")
+        self.assertIn("PAID_MODEL_DIAGNOSTIC_NO_GENERATION_V1", block)
+        self.assertIn("AI_SQUAD_CLAUDE_PROBE_SKIPPED=", block)
+        self.assertIn("AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=", block)
+
+    def test_human_only_workflow_dispatch_with_claude_cli_is_allowed(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "manual.yml").write_text(textwrap.dedent("""
+                name: explicit manual action
+                on:
+                  workflow_dispatch:
+                jobs:
+                  approved:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: claude -p "explicit manual job"
+                """))
+            self.assertEqual([], guard.scan_repository(root))
+
+    def test_scheduled_codex_remote_exec_is_also_rejected(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "codex.yml").write_text(textwrap.dedent("""
+                name: codex remote automatic
+                on:
+                  schedule:
+                    - cron: '0 * * * *'
+                jobs:
+                  paid:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - run: codex exec --remote --environment-id fixture
+                """))
+            self.assertIn(
+                "scheduled_paid_ai", {v.code for v in guard.scan_repository(root)}
+            )
+
     def test_scheduled_wrapper_calling_paid_script_is_rejected(self):
         guard = load_guard()
         with tempfile.TemporaryDirectory() as tmp:
