@@ -171,3 +171,46 @@ e JA autenticado, em vez de copiar cookies ou repetir MFA.
   /etc/systemd/system/shopvivaliz-browser-dev-mcp.service.d/,
   daemon-reload e restart somente de shopvivaliz-browser-dev-mcp.service.
   Nenhum browser Chrome, perfil, sessao do usuario ou token deve ser tocado.
+
+## Opt-in separado: continuidade Dev observando CDP9557 sem copiar sessão
+
+O uso de CDP9557 pelo **MCP Dev 5583** e independente de qualquer roteamento
+do worker e guardiao de continuidade. A configuracao canônica padrao do
+worker continua **CDP9559**. Para aproveitar a sessão Dev ja autenticada
+na continuidade, o proprietario autorizou exclusivamente um segundo
+opt-in versionado, acompanhado de prova de identidade atual e lease.
+
+- Script: `scripts/adopt-verified-dev-aux-continuity.sh`, com
+  `SHOPVIVALIZ_AUTHORIZE_DEV_CONTINUITY_ADOPTION=1` e o SHA40 **aprovado**
+  do commit main em `SHOPVIVALIZ_CONTINUITY_APPROVED_SHA`. Nao inferir
+  consentimento a partir do opt-in antigo do MCP ou de um perfil no disco.
+- O script requer manutencao exclusiva com `runtime_lock` do **Dev**,
+  CDP9557 oficialmente autenticado exatamente como
+  `dev@shopvivaliz.com.br`, Atendimento CDP9556 autenticado, e MCP Dev
+  5583 com todos os atributos de identidade em `true`. Instala apenas o
+  worker e o guardiao versionados e **dois drop-ins independentes**
+  `SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557`. Nao cria um segundo
+  consumidor, nao reinicia Chromium 9557/9559/9556, nao toca em perfis
+  ou cookies, nem muda o endpoint MCP Dev ja validado.
+- O worker escolhe CDP9557 **somente para checkpoints com
+  `browser_session=dev` e `conversation_id` ja vinculada**;
+  `atendimento` continua em CDP9556, `fred` legado continua 9555.
+  Um flag invalido falha fechado antes de consultar o browser.
+  Mesmo com flag, cada mutacao do worker conserva gate de lease
+  `task_id+conversation_id+fingerprint` e leitura da identidade exata
+  via `/api/auth/session` na propria conversa. Nao permite inferir
+  `conversation_id` de data, titulo, abas ou historico.
+- O guardiao no opt-in observa somente CDP9557 com identidade Dev exata,
+  registra `AUTHENTICATED` apenas quando comprovado e **nunca reinicia
+  nem assume o processo Chromium auxiliar**, inclusive se a conexao
+  cair ou a conta mudar. Os serviços originais 9559 e 9556 permanecem
+  instalados, isolados e gerenciados normalmente.
+- Rollback automatico em falha restaura drop-ins e fontes anteriores
+  do worker/guardiao, reiniciando apenas a continuidade e restaurando
+  o timer do guardiao. A validacao positiva prova exclusivamente
+  transporte/autenticacao, NAO `PROGRESS_CONFIRMED`. Os dez checkpoints
+  historicos sem prova individual permanecem `UNBOUND` ate comprovacao
+  legitima. Nao marcar `continuity_ready=true` por simples login.
+- Nunca executar o script novamente se os drop-ins ja estiverem
+  presentes: verificar o estado vivo e usar rollback com novo lease
+  autorizado somente se realmente necessario.
