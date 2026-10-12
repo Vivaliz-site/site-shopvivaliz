@@ -44,7 +44,6 @@ class IssueCommentRouterTest(unittest.TestCase):
             "/codex-remote-control-mcp-run": "codex_remote_control",
             "/secure-mcp-runtime-recover": "secure_mcp_runtime_recovery",
             "/codex-global-issue-comment-routing-v1": "codex_global_issue_comment_routing",
-            "/codex-auto-continuity-v7-goal prompt_comment=123": "codex_continuity_goal",
             "/codex-auto-continuity-v7\nlong prompt": "codex_continuity_launcher",
             "/amazon-support-chat-reply case_ids=22199842931": "amazon_support_breakglass",
         }
@@ -68,6 +67,38 @@ class IssueCommentRouterTest(unittest.TestCase):
                 current = payload(body)
                 self.assertEqual("none", router.classify(current))
                 self.assertEqual("", router.continuity_conversation_id(current))
+
+    def test_persistent_paid_codex_goal_is_retired_fail_closed(self):
+        # Legacy command must not reattach to an unbounded paid CLI session.
+        self.assertEqual("none", router.classify(payload(
+            "/codex-auto-continuity-v7-goal prompt_comment=123"
+        )))
+        self.assertEqual("none", router.classify(payload(
+            "/codex-auto-continuity-v7-goal prompt_comment=123 @claude"
+        )))
+        dispatcher = (WORKFLOWS / "issue-comment-dispatcher.yml").read_text()
+        self.assertNotIn("codex-continuity-goal:", dispatcher)
+        goal = (WORKFLOWS / "codex-auto-continuity-v7-goal.yml").read_text()
+        self.assertIn("if: ${{ false }}", goal)
+        # Explicit finite one-shot Codex commands remain separately gated.
+        self.assertEqual("codex_continuity_launcher", router.classify(payload(
+            "/codex-auto-continuity-v7\nlong prompt"
+        )))
+
+    def test_explicit_finite_codex_workflows_are_time_bounded(self):
+        # Last-resort paid CLI may run only under a finite, owner-requested job.
+        for name in (
+            "codex-auto-continuity-v7-launcher.yml",
+            "codex-global-issue-comment-routing.yml",
+            "codex-remote-control-mcp-one-shot.yml",
+        ):
+            with self.subTest(workflow=name):
+                text = (WORKFLOWS / name).read_text(encoding="utf-8")
+                timeouts = [line.strip() for line in text.splitlines() if line.startswith("    timeout-minutes: ")]
+                self.assertEqual(1, len(timeouts), "one bounded paid job is required")
+                self.assertLessEqual(int(timeouts[0].split(":", 1)[1].strip()), 30)
+                self.assertIn("  workflow_call:", text)
+                self.assertNotIn("  schedule:", text)
 
     def test_slash_route_wins_over_claude_mention(self):
         body = "/remote target=fred-win action=health reason=@claude test"
