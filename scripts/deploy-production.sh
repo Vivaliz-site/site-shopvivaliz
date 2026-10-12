@@ -451,6 +451,15 @@ remove_release_tree() {
     return 1
   fi
 
+  # Previous immutable releases may contain Python caches created by
+  # privileged workers. Reconcile ownership before the first deletion,
+  # preventing routine Permission denied warnings in successful deploys.
+  # The preflight itself validates that this is NOT the active release.
+  if ! ensure_release_tree_cleanup_safe "$release_path"; then
+    log ERROR "Preflight de limpeza recusou release inativa $(basename "$release_path")"
+    return 1
+  fi
+
   if rm -rf -- "$release_path"; then
     return 0
   fi
