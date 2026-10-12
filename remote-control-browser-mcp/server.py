@@ -1526,6 +1526,10 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             raise ValueError("account_auth_code_invalid")
     elif value:
         raise ValueError("account_auth_value_not_allowed")
+    # Snapshot the approved page stage BEFORE the official button redirects.
+    # Never start a watch from a read-only tab listing or from a TOTP submit.
+    should_watch = (action in {"continue", "resend"}
+                    and _official_email_watch_stage(session, tab_id))
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
         ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id,
@@ -1533,8 +1537,7 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     ]
     result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
-    if (result["ok"] and action in {"continue", "resend"}
-            and _official_email_watch_stage(session, tab_id)):
+    if result["ok"] and should_watch:
         result["email_watch"] = _start_bounded_login_email_watch(session)
     return result
 
