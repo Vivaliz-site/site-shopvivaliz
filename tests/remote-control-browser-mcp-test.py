@@ -985,6 +985,40 @@ class BrowserMcpTests(unittest.TestCase):
 
 
 
+    def test_passkey_try_another_way_is_scoped_to_official_back_to_methods(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = script.split("if(action==='back_to_methods'){", 1)[1]
+        block = block.split("if(action==='open_login'){", 1)[0]
+        self.assertIn("u.hostname!=='auth.openai.com'", block)
+        self.assertIn("u.pathname==='/log-in/password'", block)
+        self.assertIn("u.pathname==='/log-in/passkey'", block)
+        self.assertIn("safeLink(a,'https://auth.openai.com','/log-in-or-create-account')", block)
+        self.assertIn("challenges.cloudflare.com", block)
+        self.assertIn(".hcaptcha.com", block)
+        self.assertIn(".recaptcha.net", block)
+        self.assertIn("[name=cf-turnstile-response]", block)
+        self.assertIn("/^(?:try another way|tente de outra forma|tentar outro m[eé]todo)$/i", block)
+        self.assertIn("choices=[...document.querySelectorAll('button,a')]", block)
+        self.assertIn("}else throw Error('auth_stage_not_allowed');", block)
+        self.assertIn("choices.length!==1", script)
+        self.assertNotIn("window.location", block)
+        self.assertNotIn("document.cookie", block)
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', Path(m.__file__).read_text())
+        self.assertIn("back_to_methods", m.ACCOUNT_AUTH_ACTIONS)
+
+    def test_account_auth_node_script_is_valid_node_module(self):
+        import shutil
+        self.assertIsNotNone(shutil.which("node"), "Node.js is required for browser MCP")
+        result = m.subprocess.run(
+            ["node", "--input-type=module", "--check"],
+            input=m.ACCOUNT_AUTH_NODE_SCRIPT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=7,
+        )
+        self.assertEqual(0, result.returncode, result.stderr[:2000])
+
     def test_expired_mfa_recovery_uses_only_exact_official_login_link(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
