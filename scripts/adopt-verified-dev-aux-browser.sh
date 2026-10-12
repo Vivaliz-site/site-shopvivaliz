@@ -3,7 +3,7 @@
 # Never copies browser profile or restarts any Chromium process.
 set -Eeuo pipefail
 if [[ "$(id -u)" -ne 0 ]]; then echo 'DEV_AUX_ROOT_REQUIRED'; exit 2; fi
-if [[ "$(printenv SHOPVIVALIZ_AUTHORIZE_DEV_AUX_ADOPTION 2>/dev/null || true)" != "1" ]]; then
+if [[ "${SHOPVIVALIZ_AUTHORIZE_DEV_AUX_ADOPTION:-}" != "1" ]]; then
   echo 'DEV_AUX_EXPLICIT_OWNER_OPTIN_REQUIRED'; exit 3
 fi
 unit=shopvivaliz-browser-dev-mcp.service
@@ -29,12 +29,12 @@ cleanup() {
   if [[ "$rollback" == 1 && "$rc" -ne 0 ]]; then
     # Only roll back the MCP endpoint: never touch either Chrome service.
     if [[ -f "$dropin" ]]; then rm -f "$dropin"; fi
-    systemctl daemon-reload || true
-    systemctl restart shopvivaliz-browser-dev-mcp.service || true
+    if ! systemctl daemon-reload; then echo "DEV_AUX_ROLLBACK_RELOAD_FAILED" >&2; fi
+    if ! systemctl restart shopvivaliz-browser-dev-mcp.service; then echo "DEV_AUX_ROLLBACK_RESTART_FAILED" >&2; fi
     echo 'DEV_AUX_ADOPTION_ROLLBACK_APPLIED'
   fi
   if [[ "$lease_acquired" == 1 ]]; then
-    python3 - "$lease_file" <<'PY' || true
+    if ! python3 - "$lease_file" <<'PY'
 import importlib.util, json, sys
 from pathlib import Path
 lease = json.loads(Path(sys.argv[1]).read_text())
@@ -45,6 +45,7 @@ spec.loader.exec_module(module)
 module.base.runtime_lock.release_runtime_lock(
     lease['lease_id'], lease['fencing_token'], 'dev_aux_mcp_adoption_complete')
 PY
+    then echo "DEV_AUX_LEASE_RELEASE_FAILED" >&2; fi
   fi
   rm -f "$lease_file"
   exit "$rc"
