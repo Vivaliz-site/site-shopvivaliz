@@ -320,3 +320,36 @@ persistencia e entao liberar os checkpoints Dev do controlador.
 O guardiao deve continuar `AUTH_REQUIRED` ate essa evidencia; a
 sessao auxiliar 9557 nao deve ser declarada cobertura de 9559.
 
+## Preferencia confirmada pelo proprietario — 2026-10-12, email e metodo alternativo
+
+- Ambas as contas possuem senha, entrega de mensagens oficiais no Gmail
+  `fredmourao@gmail.com` e TOTP no GNOME Authenticator. O proprietario
+  autorizou **verificacao por email quando exigida pelo provedor**, alem de
+  senha + TOTP na etapa oficial de segundo fator. Nao presumir uma ordem
+  fixa dos desafios, nem substituir um fator pelo outro.
+- O proprietario autorizou tentar **`Try another way` / `Tentar outro
+  metodo`**, se for realmente exibido pela interface oficial da **mesma
+  conta Dev**. A tentativa anteriormente documentada apos a passkey
+  voltou a `/email-verification` sem apresentar senha/TOTP; portanto
+  **nao afirmar que esse metodo resolve o desafio**, nem repetir em loop.
+- O backend Dev **CDP9559** permanece como unica identidade de Dev valida
+  para o controlador. Dev autenticado no navegador auxiliar CDP9557
+  nao valida nem substitui o perfil 9559. Atendimento CDP9556 teve
+  `user.email` exato confirmado apos autofill de senha + GNOME TOTP;
+  preservar a sessao, nao refazer login.
+- A ferramenta que transferiria automaticamente o email OTP do Gmail
+  para a pagina Dev recebeu bloqueio de seguranca da plataforma.
+  **Respeitar integralmente esse bloqueio**: nao reenviar OTP por
+  CDP, shell, outra extensao, outro MCP, clipboard ou bridge.
+  Se uma forma aprovada nao disponibilizar a etapa de entrada,
+  a pessoa autorizada digita o codigo **na propria janela oficial**
+  `/email-verification`. Nenhuma senha, seed ou OTP deve ser
+  exibida no chat, GitHub ou log.
+- Apos o desafio oficial, continuar somente os passos que a OpenAI
+  apresentar; validar `/api/auth/session.user.email` exatamente
+  `dev@shopvivaliz.com.br` no CDP9559, sem confundir a existencia
+  de cinco abas antigas de login com uma sessao autenticada.
+- Esta revisao corrige instrucoes anteriores que proibiam o codigo
+  por email mesmo com permissao explicita do proprietario. Nao concede
+  por si so OAuth Gmail ao backend nem autoriza contornar os controles
+  de login da OpenAI ou das ferramentas.
