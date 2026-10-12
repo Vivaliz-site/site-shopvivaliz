@@ -62,7 +62,7 @@ spec.loader.exec_module(base)
 
 VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
-ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}
+ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}
 
 BROWSER_TOOLS = {
     "browser_health",
@@ -1172,6 +1172,213 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "session": session, "tabs": tabs}
 
 
+
+# Read-only identity verification is executed *inside* the two isolated
+# corporate Chromium profiles. The secret-bearing /api/auth/session response
+# never leaves the page: only booleans/status are sent through CDP and MCP.
+# A home-tab open uses the same probe and additionally requires an exact
+# account-scoped maintenance lease before touching the browser.
+CORPORATE_PROFILE_NODE_SCRIPT = r"""
+const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
+const [session, mode] = process.argv.slice(1);
+const profiles = {
+  dev: {port:9559, email:"dev@shopvivaliz.com.br"},
+  atendimento: {port:9556, email:"atendimento@shopvivaliz.com.br"},
+};
+if (!Object.prototype.hasOwnProperty.call(profiles,session) ||
+    !["status","home"].includes(mode)) throw new Error("corporate_profile_scope_invalid");
+const {port,email} = profiles[session];
+const origin = "http://127.0.0.1:" + port;
+const observed = {
+  ok:true, session, cdp_accessible:false, tabs_seen:0, tabs_checked:0,
+  session_http:0, user_present:false, identity_match:false, state:"UNKNOWN"
+};
+function validPage(t){
+  if (t?.type !== "page" || !/^[A-F0-9]{32}$/i.test(String(t.id||""))) return false;
+  try {
+    const u=new URL(String(t.url||""));
+    const w=new URL(String(t.webSocketDebuggerUrl||""));
+    return u.origin==="https://chatgpt.com" && w.protocol==="ws:" &&
+      ["localhost","127.0.0.1"].includes(w.hostname) &&
+      Number(w.port)===port && w.pathname.startsWith("/devtools/page/");
+  }catch{return false;}
+}
+async function connect(url){
+  const ws=new WebSocket(url);
+  try{
+    await Promise.race([
+      new Promise((resolve,reject)=>{
+        ws.addEventListener("open",resolve,{once:true});
+        ws.addEventListener("error",reject,{once:true});
+      }),
+      new Promise((_,reject)=>setTimeout(()=>reject(Error("corporate_socket_timeout")),2400))
+    ]);
+    return ws;
+  }catch(e){try{ws.close()}catch{}throw e;}
+}
+async function identity(tab){
+  let ws;
+  try{
+    ws=await connect(tab.webSocketDebuggerUrl);
+    const c=new Cdp(ws,{commandTimeoutMs:3000});
+    const expr="(async()=>{try{" +
+      "if(location.origin!=='https://chatgpt.com')return {http:0,present:false,match:false};" +
+      "const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(1800)});" +
+      "if(!r.ok)return {http:r.status,present:false,match:false};" +
+      "const d=await r.json();const e=String(d?.user?.email||'').trim().toLowerCase();" +
+      "return {http:r.status,present:Boolean(e),match:e===" + JSON.stringify(email) + "};" +
+      "}catch{return {http:0,present:false,match:false}}})()";
+    const v=await c.evaluate(expr);
+    return {http:Number(v?.http)||0,present:v?.present===true,match:v?.match===true};
+  }catch{return {http:0,present:false,match:false};}
+  finally{try{ws?.close()}catch{}}
+}
+try{
+  const response=await fetch(origin+"/json/list",{signal:AbortSignal.timeout(2600)});
+  if(!response.ok)throw Error("corporate_cdp_unavailable");
+  observed.cdp_accessible=true;
+  const all=await response.json();
+  if(!Array.isArray(all)||all.length>512)throw Error("corporate_tabs_invalid");
+  const eligible=all.filter(validPage);
+  observed.tabs_seen=eligible.length;
+  const prioritized=[...eligible].sort((a,b)=>{
+    const rank=t=>{try{return new URL(t.url).pathname==="/" ? 0 : 1;}catch{return 2;}};
+    return rank(a)-rank(b);
+  });
+  // A bounded batch avoids CDP tab storms; no navigation, focus or reload.
+  // At most sixteen tabs, in small batches. The profile may contain many
+  // restored tabs and the first tab may not be the authenticated Home.
+  const checks=[];
+  for(let offset=0;offset<Math.min(16,prioritized.length);offset+=4){
+    const batch=await Promise.all(prioritized.slice(offset,offset+4).map(identity));
+    checks.push(...batch);
+    if(batch.some(v=>v.match||v.present))break;
+  }
+  observed.tabs_checked=checks.filter(v=>v.http>0).length;
+  const mismatch=checks.some(v=>v.present&&!v.match);
+  const matched=checks.some(v=>v.match);
+  observed.session_http=checks.some(v=>v.http===200)?200:(checks.find(v=>v.http>0)?.http||0);
+  observed.user_present=checks.some(v=>v.present);
+  observed.identity_match=matched&&!mismatch;
+  observed.state=mismatch?"IDENTITY_MISMATCH":observed.identity_match?"AUTHENTICATED":
+    observed.session_http===200?"NOT_AUTHENTICATED":"UNKNOWN";
+  if(mode==="home"){
+    if(observed.state!=="AUTHENTICATED")throw Error("corporate_identity_unverified");
+    const existing=eligible.find(t=>{
+      try{const u=new URL(t.url);return u.pathname==="/"&&!u.search&&!u.hash;}
+      catch{return false;}
+    });
+    if(existing){
+      observed.tab_id=existing.id;
+      observed.reused=true;
+    }else{
+      // No source URL, cookie, profile, session storage, or conversation ID is
+      // accepted from the caller. Open only the official neutral home page.
+      const version=await (await fetch(origin+"/json/version",{signal:AbortSignal.timeout(2600)})).json();
+      const endpoint=new URL(String(version.webSocketDebuggerUrl||""));
+      if(endpoint.protocol!=="ws:"||
+          !["localhost","127.0.0.1"].includes(endpoint.hostname)||
+          Number(endpoint.port)!==port||
+          !endpoint.pathname.startsWith("/devtools/browser/"))
+        throw Error("corporate_browser_socket_invalid");
+      const ws=await connect(endpoint.href);
+      try{
+        const browser=new Cdp(ws,{commandTimeoutMs:4000});
+        const created=await browser.send("Target.createTarget",{
+          url:"https://chatgpt.com/",background:true,newWindow:false
+        });
+        if(!/^[A-F0-9]{32}$/i.test(String(created?.targetId||"")))
+          throw Error("corporate_home_tab_invalid");
+        observed.tab_id=created.targetId;
+        observed.reused=false;
+      }finally{try{ws.close()}catch{}}
+    }
+  }
+  console.log(JSON.stringify(observed));
+}catch{
+  if(mode==="status")console.log(JSON.stringify(observed));
+  else {console.error("corporate_profile_operation_denied");process.exitCode=1;}
+}
+"""
+
+def _corporate_profile_probe(session: str, mode: str, cancel_check=None) -> dict[str, Any]:
+    if session not in ACCOUNT_AUTH_PORTS or mode not in {"status", "home"}:
+        raise ValueError("account_profile_scope_invalid")
+    invocation = [
+        base.BROWSER_NODE_BIN, "--input-type=module", "-e",
+        CORPORATE_PROFILE_NODE_SCRIPT, session, mode,
+    ]
+    result = base.run_local_command_with_stdin(
+        invocation, "", base.DEFAULT_TIMEOUT, cancel_check
+    )
+    if result.get("exit_code") != 0:
+        raise ValueError("account_profile_probe_failed")
+    try:
+        data = json.loads(str(result.get("stdout") or ""))
+    except (TypeError, ValueError):
+        raise ValueError("account_profile_probe_invalid") from None
+    if not isinstance(data, dict) or data.get("ok") is not True or data.get("session") != session:
+        raise ValueError("account_profile_probe_invalid")
+    state = str(data.get("state") or "")
+    match = data.get("identity_match") is True
+    present = data.get("user_present") is True
+    if (state not in {"AUTHENTICATED", "NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"}
+            or (state == "AUTHENTICATED") != match
+            or (match and not present)):
+        raise ValueError("account_profile_probe_invalid")
+    status = {
+        "ok": True,
+        "session": session,
+        "cdp_accessible": data.get("cdp_accessible") is True,
+        "tabs_seen": min(max(0, int(data.get("tabs_seen", 0))), 512),
+        "tabs_checked": min(max(0, int(data.get("tabs_checked", 0))), 16),
+        "session_http": min(max(0, int(data.get("session_http", 0))), 599),
+        "user_present": present,
+        "identity_match": match,
+        "state": state,
+    }
+    if mode == "home":
+        tab_id = str(data.get("tab_id") or "")
+        if not match or not re.fullmatch(r"[A-F0-9]{32}", tab_id, re.I):
+            raise ValueError("account_profile_home_unconfirmed")
+        status = {
+            "ok": True, "session": session, "tab_id": tab_id,
+            "reused": data.get("reused") is True,
+            "identity_match": True,
+        }
+    return status
+
+
+def browser_auth_status(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if set(args) != {"session"}:
+        raise ValueError("account_profile_scope_invalid")
+    return _corporate_profile_probe(str(args["session"]), "status", cancel_check)
+
+
+def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+        raise ValueError("account_profile_scope_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_profile_scope_invalid")
+    if not base._durable_handoff_enabled():
+        raise ValueError("account_auth_lease_mode_required")
+    lease_id = str(args.get("runtime_lease_id") or "")
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("account_auth_runtime_lock_required")
+    try:
+        lease = base.runtime_lock.assert_runtime_lock(
+            lease_id, int(token), "browser_profile_home_open"
+        )
+    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
+        raise ValueError("account_auth_runtime_lock_invalid") from None
+    if (lease.get("owner_kind") != "maintenance"
+            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
+        raise ValueError("account_auth_maintenance_owner_required")
+    return _corporate_profile_probe(session, "home", cancel_check)
+
+
 def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     """Open only a new official sign-in tab under a real account maintenance lease."""
     session = str(args.get("session") or "")
@@ -1283,6 +1490,10 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     if name == "browser_auth_tabs":
         return browser_auth_tabs(args)
+    if name == "browser_auth_status":
+        return browser_auth_status(args, cancel_check=cancel_check)
+    if name == "browser_profile_home_open":
+        return browser_profile_home_open(args, cancel_check=cancel_check)
     if name == "browser_auth_open":
         return browser_auth_open(args, cancel_check=cancel_check)
     if name == "browser_auth_action":
@@ -1352,6 +1563,27 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "browser_auth_status",
+        "description": "Read exact ChatGPT user.email identity in the isolated Dev or Atendimento CDP profile, returning sanitized status/booleans only; never cookies or tokens.",
+        "inputSchema": {"type": "object", "properties": {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, "required": ["session"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_profile_home_open",
+        "description": "Reuse or open one neutral chatgpt.com home tab ONLY in the exact authenticated corporate profile under its own maintenance lease. Never copies session data or a conversation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session": {"type": "string", "enum": ["dev", "atendimento"]},
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            },
+            "required": ["session", "runtime_lease_id", "runtime_fencing_token"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
     {
         "name": "browser_auth_open",
         "description": "Open a new fixed official ChatGPT sign-in tab only in the requested isolated corporate profile using a valid account-specific maintenance runtime lease. Never touches an existing conversation or secrets.",

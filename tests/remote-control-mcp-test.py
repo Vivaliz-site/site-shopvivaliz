@@ -333,6 +333,88 @@ class RemoteControlMcpTests(unittest.TestCase):
             set(props["properties"]["action"]["enum"]),
         )
 
+    def test_corporate_identity_tools_are_exposed_in_canonical_mcp(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_auth_status", specs)
+        self.assertIn("browser_profile_home_open", specs)
+        self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
+        self.assertEqual(
+            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
+        )
+        self.assertEqual(
+            ["dev", "atendimento"],
+            specs["browser_auth_status"]["inputSchema"]["properties"]["session"]["enum"],
+        )
+
+    def test_corporate_identity_status_proxy_drops_untrusted_raw_values(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "atendimento",
+                    "state": "AUTHENTICATED", "identity_match": True,
+                    "user_present": True, "session_http": 200,
+                    "cdp_accessible": True, "tabs_seen": 12, "tabs_checked": 5,
+                    "token": "SENSITIVE_SYNTHETIC", "email": "sensitive@example.invalid",
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(
+                m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+            ),
+        ):
+            result = m.execute_tool("browser_auth_status", {"session": "atendimento"})
+        self.assertTrue(result["identity_match"])
+        self.assertEqual("AUTHENTICATED", result["state"])
+        self.assertNotIn("SENSITIVE_SYNTHETIC", json.dumps(result))
+        self.assertNotIn("sensitive@example.invalid", json.dumps(result))
+        self.assertNotIn("token", result)
+        self.assertNotIn("email", result)
+
+    def test_corporate_identity_status_proxy_denies_forged_authenticated_state(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "dev",
+                    "state": "AUTHENTICATED", "identity_match": False,
+                    "user_present": False, "session_http": 200,
+                    "tabs_seen": 2, "tabs_checked": 1,
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(
+                m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "account_auth_status_unconfirmed"):
+                m.execute_tool("browser_auth_status", {"session": "dev"})
+
+    def test_corporate_profile_home_rejects_wrong_account_lease_without_proxy(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 9,
+        }
+        wrong = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        with (
+            mock.patch.object(m, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock", return_value=wrong),
+            mock.patch.object(m, "urlopen") as transport,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.execute_tool("browser_profile_home_open", args)
+            transport.assert_not_called()
+
     def test_account_auth_audit_never_records_secret_or_low_entropy_digest(self):
         args = {
             "session": "dev", "action": "fill_code",

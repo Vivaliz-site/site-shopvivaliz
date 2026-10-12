@@ -9,6 +9,14 @@ Esta é a fonte canônica para o vínculo entre perfis de navegador da VM backen
 | `/home/fredrdp/.config/shopvivaliz-atendimento-chromium` | `9556` | `atendimento@shopvivaliz.com.br` |
 | `/home/fredrdp/.config/shopvivaliz-dev-chromium` | `9559` | `dev@shopvivaliz.com.br` |
 
+## Roteamento de e-mail e identidade de navegador
+
+Ambos os enderecos corporativos Dev e Atendimento tem e-mails entregues
+na caixa Gmail `fredmourao` (confirmacao do proprietario em 2026-10-11).
+Isso **nao** muda o vinculo de identidade dos navegadores, nao constitui
+autenticacao ChatGPT e nao concede acesso OAuth Gmail ao MCP.
+E vedado transportar cookies ou qualquer segredo entre os perfis.
+
 ## Regras obrigatórias
 
 - Nunca fazer logout de uma conta para entrar com a outra.
