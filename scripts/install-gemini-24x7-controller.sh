@@ -76,7 +76,7 @@ if [ ! -d "$target_dir" ]; then
   trap cleanup EXIT
   sudo install -d -o root -g root -m 0755 "$stage_dir/scripts"
   sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"
-  for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py run_background_ollama.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py; do
+  for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py attest-gemini-free-tier.py run_background_ollama.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py; do
     sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"
   done
   for source in "$release_dir"/scripts/continuity/*.py; do

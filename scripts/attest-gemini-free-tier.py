@@ -22,7 +22,7 @@ def main() -> int:
     group.add_argument("--confirm-free-tier",action="store_true")
     parser.add_argument("--project-id")
     parser.add_argument("--key-source",choices=guard.SUPPORTED_KEYS)
-    parser.add_argument("--env-file",type=Path,default=guard.DEFAULT_ENV_FILE)
+    parser.add_argument("--env-file",type=Path,default=Path(os.getenv("GEMINI_ENV_FILE",str(guard.DEFAULT_ENV_FILE))))
     parser.add_argument("--proof-file",type=Path,default=guard.DEFAULT_TIER_ATTESTATION)
     args=parser.parse_args()
     if not args.env_file.is_file():
