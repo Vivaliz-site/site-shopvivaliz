@@ -251,8 +251,13 @@ class BrowserMcpTests(unittest.TestCase):
 
     def test_browser_source_does_not_automate_debug_ports_or_profile_cookies(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
+        # The explicitly isolated and read-only corporate identity probe
+        # is permitted to inspect its own CDP endpoint. General browser
+        # navigation, focus, and cookie APIs remain disconnected from it.
+        general_source = src.replace(m.CORPORATE_PROFILE_NODE_SCRIPT.lower(), "")
         for token in ("remote-debugging-port", "devtoolsactiveport", "/json/list", "cookies sqlite"):
-            self.assertNotIn(token, src)
+            self.assertNotIn(token, general_source)
+        self.assertIn("/json/list", m.CORPORATE_PROFILE_NODE_SCRIPT)
         # CDP /json/version is allowed exclusively for bounded dedicated
         # transport health, never for general GUI browsing or cookie access.
         self.assertEqual(src.count('endpoint + "/json/version"'), 1)
@@ -1103,8 +1108,13 @@ class BrowserMcpTests(unittest.TestCase):
                 m.browser_profile_home_open(args)
             probe.assert_not_called()
         with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
-            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+            with self.assertRaisesRegex(ValueError, "account_profile_scope_invalid"):
                 m.browser_profile_home_open({"session": "atendimento"})
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.browser_profile_home_open({
+                    "session": "atendimento", "runtime_lease_id": "",
+                    "runtime_fencing_token": 7,
+                })
 
     def test_corporate_home_requires_exact_session_and_identity_result(self):
         args = {
