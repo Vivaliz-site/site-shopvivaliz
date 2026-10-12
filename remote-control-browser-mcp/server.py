@@ -482,12 +482,42 @@ DEDICATED_BROWSER_BRIDGES = {
 }
 
 
+def _dev_aux_opt_in() -> bool:
+    """An explicit temporary Dev-only MCP adoption, never a profile copy.
+
+    The original canonical Dev CDP9559 and Atendimento CDP9556 remain intact.
+    No change takes effect without ALL exact environment bindings.
+    """
+    return (
+        os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT") == "5583"
+        and os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME") == "dev"
+        and os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL") == "http://127.0.0.1:9557"
+        and os.environ.get("SHOPVIVALIZ_DEV_ADOPTED_CDP") == "9557"
+    )
+
+
+def _require_dev_aux_authenticated() -> None:
+    """Fail closed on any identity change in the already-running auxiliary Chrome."""
+    try:
+        status = _corporate_profile_probe("dev_aux", "status")
+        if status.get("state") == "AUTHENTICATED" and status.get("identity_match") is True:
+            return
+    except (ValueError, OSError, TimeoutError, RuntimeError):
+        pass
+    raise ValueError("dev_aux_identity_unverified")
+
+
 def browser_service_health() -> dict[str, Any]:
     service_port = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "").strip()
     binding = DEDICATED_BROWSER_BRIDGES.get(service_port)
     if binding is None:
         return browser_health()
 
+    # Do not silently remap Dev. Only the Dev MCP adapter with the explicitly
+    # bound CDP9557 opt-in may reuse a legitimately authenticated same-account
+    # auxiliary profile. The physical Chrome process and cookies stay untouched.
+    if _dev_aux_opt_in():
+        binding = ("dev", "http://127.0.0.1:9557")
     session, endpoint = binding
     result: dict[str, Any] = {
         "ok": False,
@@ -520,7 +550,17 @@ def browser_service_health() -> dict[str, Any]:
     except (OSError, ValueError, TypeError):
         result["reason"] = "cdp_unavailable"
         return result
-    result.update({"ok": True, "cdp_reachable": True})
+    if _dev_aux_opt_in():
+        try:
+            _require_dev_aux_authenticated()
+        except ValueError:
+            result["reason"] = "dev_aux_identity_unverified"
+            return result
+        result.update({"ok": True, "cdp_reachable": True,
+                       "account_authenticated": True,
+                       "account_identity_verified": True})
+    else:
+        result.update({"ok": True, "cdp_reachable": True})
     return result
 
 
@@ -1201,6 +1241,8 @@ const [session, mode] = process.argv.slice(1);
 const profiles = {
   dev: {port:9559, email:"dev@shopvivaliz.com.br"},
   atendimento: {port:9556, email:"atendimento@shopvivaliz.com.br"},
+  // Readonly identity probe only, guarded by the exact Dev-only adapter opt-in.
+  dev_aux: {port:9557, email:"dev@shopvivaliz.com.br"},
 };
 if (!Object.prototype.hasOwnProperty.call(profiles,session) ||
     !["status","home"].includes(mode)) throw new Error("corporate_profile_scope_invalid");
@@ -1319,7 +1361,10 @@ try{
 """
 
 def _corporate_profile_probe(session: str, mode: str, cancel_check=None) -> dict[str, Any]:
-    if session not in ACCOUNT_AUTH_PORTS or mode not in {"status", "home"}:
+    if session == "dev_aux":
+        if mode != "status" or not _dev_aux_opt_in():
+            raise ValueError("account_profile_scope_invalid")
+    elif session not in ACCOUNT_AUTH_PORTS or mode not in {"status", "home"}:
         raise ValueError("account_profile_scope_invalid")
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
@@ -1569,6 +1614,14 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if _dev_aux_opt_in():
+        if name in ATTENDIMENTO_TOOL_MAP:
+            # A Dev process must never advertise Atendimento aliases that
+            # would actually operate the Dev profile.
+            raise ValueError("dev_aux_cross_session_tool_denied")
+        if name in {"browser.dom.inspect", "browser.click"}:
+            # These aliases dispatch before the ordinary base tool gate.
+            _require_dev_aux_authenticated()
     if name == "browser_auth_tabs":
         return browser_auth_tabs(args)
     if name == "browser_auth_status":
@@ -1626,6 +1679,10 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     if name == "browser_type" and "tab_id" not in args and "selector" not in args:
         return browser_type(args)
 
+    # Re-check exact Dev identity on EVERY tool call routed through the
+    # opted-in auxiliary port. Base conversation/lease mutation gates still run.
+    if _dev_aux_opt_in():
+        _require_dev_aux_authenticated()
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
 
