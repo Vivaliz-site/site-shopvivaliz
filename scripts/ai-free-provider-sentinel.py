@@ -123,6 +123,42 @@ def free_router_present(is_site: bool) -> bool:
         return False
 
 
+def gemini_free_billing_guard_present(script_dir: Path) -> bool:
+    """Verify the active Gemini runner and its calling router fail closed.
+
+    Static verification only: never call an inference endpoint, read API keys,
+    execute Gemini CLI, or falsely alert on an intentionally unverified key.
+    """
+    try:
+        runner = (script_dir / "run_background_gemini.py").read_text()
+        router = (script_dir / "autonomous-provider-failover.sh").read_text()
+    except OSError:
+        return False
+    required_runner = (
+        "FREE_TIER_BILLING_GUARD_V1",
+        "free_tier_approved_credentials(",
+        "background_gemini_error=free_tier_not_verified",
+        "SHOPVIVALIZ_RESUME_BACKGROUND",
+    )
+    return (
+        all(token in runner for token in required_runner)
+        and 'env SHOPVIVALIZ_RESUME_BACKGROUND=1' in router
+    )
+
+
+def runtime_gemini_guard_present(is_site: bool) -> bool:
+    if is_site:
+        script_dir = Path("/home/ubuntu/shopvivaliz-deploy/current/scripts")
+        if not Path("/home/ubuntu/shopvivaliz-deploy/current/.release-sha").is_file():
+            return False
+    else:
+        entry = read_runtime_entry()
+        if entry is None:
+            return False
+        script_dir = entry.parent
+    return gemini_free_billing_guard_present(script_dir)
+
+
 def proc_potential_paid(remote_daemon_pid: int, proc_root: Path = Path("/proc")) -> list[str]:
     findings: list[str] = []
     try:
@@ -290,6 +326,8 @@ def policy_anomalies(host: str) -> list[str]:
             issues.append("PAID_FALLBACK_ENV_DRIFT")
     if not free_router_present(is_site):
         issues.append("FREE_ROUTER_MISSING")
+    if not runtime_gemini_guard_present(is_site):
+        issues.append("GEMINI_FREE_BILLING_GUARD_DRIFT")
     for role in PORTS:
         if not bridge_disabled(role):
             issues.append(f"PAID_BRIDGE_POLICY_DRIFT_{role.upper()}")
