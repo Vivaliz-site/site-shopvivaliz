@@ -79,7 +79,18 @@ class IssueCommentRouterTest(unittest.TestCase):
         dispatcher = (WORKFLOWS / "issue-comment-dispatcher.yml").read_text()
         self.assertNotIn("codex-continuity-goal:", dispatcher)
         goal = (WORKFLOWS / "codex-auto-continuity-v7-goal.yml").read_text()
-        self.assertIn("if: ${{ false }}", goal)
+        # A callable legacy workflow must be an inert success marker rather
+        # than a paid detached Codex launcher guarded by an actionlint-invalid
+        # constant "false" expression. Code is retained in Git history only.
+        self.assertIn("  workflow_call:", goal)
+        self.assertIn("Persistent Codex Goal is retired", goal)
+        self.assertIn("FREE_PROVIDER_FALLBACK_V2", goal)
+        self.assertNotIn("if: ${{ false }}", goal)
+        self.assertNotIn("codex-auto", goal)
+        self.assertNotIn("tmux", goal)
+        self.assertNotIn("GH_TOKEN", goal)
+        self.assertNotIn("self-hosted", goal)
+        self.assertNotIn("  schedule:", goal)
         # Explicit finite one-shot Codex commands remain separately gated.
         self.assertEqual("codex_continuity_launcher", router.classify(payload(
             "/codex-auto-continuity-v7\nlong prompt"
