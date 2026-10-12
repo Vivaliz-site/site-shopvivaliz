@@ -217,11 +217,26 @@ tanto a `dev@shopvivaliz.com.br` quanto a
 proibido autenticar Dev ou Atendimento no perfil pessoal ou migrar
 cookies, grants e armazenamento. O encaminhamento deve ser tratado como
 origem de notificacoes somente, nunca como prova de login, validade de senha
-ou permissao OAuth no controlador. **Preferencia atual de login: senha
-existente + GNOME TOTP somente no desafio MFA oficial**, sem exigir codigo
-de e-mail, passkey ou SSO como alternativa silenciosa. O provedor pode
-exigir etapa adicional; nesse caso manter status pendente, sem contornar
-controles ou consumir mensagens sem autorizacao independente.
+ou permissao OAuth no controlador. **Preferencia atualizada pelo proprietario
+em 2026-10-12:** manter a senha existente e o TOTP GNOME no desafio MFA
+oficial, mas **tambem esta autorizado** usar o codigo adicional de
+verificacao enviado pela OpenAI ao Gmail `fredmourao@gmail.com` quando
+a pagina oficial apresentar `/email-verification`, identificando
+destinatario e tentativa corretos. O proprietario autorizou ainda
+selecionar `Try another way` / `Tentar outro metodo` quando presente,
+observando apenas os metodos realmente oferecidos e preservando a
+identidade corporativa, as etapas MFA e o isolamento dos perfis.
+Nao presumir que a alternativa sempre exista: a ultima tentativa
+documentada de `Try another way` no Dev voltou a `/email-verification`.
+O acesso do conector Gmail neste chat **nao concede** escopo Gmail
+ao controlador backend, nem autoriza migrar dados do perfil pessoal.
+A transferencia automatizada do OTP do Gmail para o navegador Dev foi
+bloqueada pelos controles da plataforma: **nao contornar** esse veto por
+scripts, CDP, shell, clipboard, conectores ou outra ponte. Se o desafio
+nao puder ser cumprido por uma ferramenta explicitamente autorizada,
+somente a pessoa autorizada digita o codigo na propria interface oficial.
+Nao pedir senha, OTP, seed ou QR no chat e nao marcar login concluido
+sem comprovar `/api/auth/session.user.email` no perfil corporativo certo.
 
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
