@@ -67,3 +67,25 @@ habilitado nas duas VMs. Não editar releases imutáveis diretamente.
 Referências oficiais:
 - https://ai.google.dev/gemini-api/docs/billing/
 - https://ai.google.dev/gemini-api/docs/pricing
+
+
+## Timeout seguro e continuidade Ollama
+
+O executor run_background_gemini.py não pode aguardar o CLI indefinidamente.
+GEMINI_BOUNDED_RUN_V1 executa cada tentativa Gemini em grupo de processos
+isolado, com entrada-padrão fechada e 60 segundos por tentativa por
+padrão. GEMINI_BACKGROUND_TIMEOUT_SECONDS pode alterar o teto dentro do
+intervalo de 15 a 90 segundos. Em expiração, encerra apenas esse grupo
+privado de processos (TERM e, se necessário, KILL), descarta saída parcial,
+registra request_timeout e retorna o código 124 para o roteador.
+
+Uma tentativa travada não dispara novas tentativas com modelos Gemini;
+o roteador continua para Ollama local, sem Codex ou Claude automáticos.
+A operação não desliga o serviço Gemini, não altera sessões humanas e
+não pode sobrescrever um atestado Free inválido ou ausente.
+
+Validação: python3 -m unittest -q tests.test_gemini_cli_timeout
+usa apenas executáveis fictícios sem rede para testar tempo máximo,
+limpeza do grupo e recusa de nova tentativa. O teste de ponta a ponta
+deve usar um repositório Git temporário isolado com um CLI fictício que
+dorme, seguido da conclusão consultiva pelo Ollama local.
