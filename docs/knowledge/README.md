@@ -72,3 +72,4 @@ A documentação não substitui evidência do código, logs, banco, workflow ou 
 
 - [Recuperacao grafica ShopVivaliz e isolamento de login](shopvivaliz-graphical-session-recovery.md) — runbook obrigatorio para agentes: RustDesk/LightDM/XFCE versus perfis corporativos Dev/Atendimento, validacao real e preservacao do Keyring.
 - [Verificacao do Gemini Free](gemini-free-tier-billing-guard.md) - gate para jobs persistentes.
+- [Vigia Windows sem IA paga](windows-recurring-ai-free-watch.md) - evita loops persistentes de Codex em checkpoints externos.
