@@ -210,6 +210,20 @@ oficial, apos estabilizar recuperacao e os mecanismos de backup.
 
 ## Gmail no controlador autonomo: permissao e isolamento
 
+**Roteamento declarado pelo proprietario (2026-10-11):** mensagens enviadas
+tanto a `dev@shopvivaliz.com.br` quanto a
+`atendimento@shopvivaliz.com.br` chegam na caixa Gmail de
+`fredmourao`. A caixa destinataria nao e um perfil de login substituto:
+proibido autenticar Dev ou Atendimento no perfil pessoal ou migrar
+cookies, grants e armazenamento. O encaminhamento deve ser tratado como
+origem de notificacoes somente, nunca como prova de login, validade de senha
+ou permissao OAuth no controlador. **Preferencia atual de login: senha
+existente + GNOME TOTP somente no desafio MFA oficial**, sem exigir codigo
+de e-mail, passkey ou SSO como alternativa silenciosa. O provedor pode
+exigir etapa adicional; nesse caso manter status pendente, sem contornar
+controles ou consumir mensagens sem autorizacao independente.
+
+
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
 na caixa Gmail conectada ao ChatGPT **nao** demonstra que o backend tenha
 autorizacao OAuth independente para ler essa caixa. Para operar sem conversa
