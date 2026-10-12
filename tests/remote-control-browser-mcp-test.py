@@ -209,6 +209,42 @@ class BrowserMcpTests(unittest.TestCase):
             self.assertEqual({"ok": True}, m.execute_tool("browser_tabs", {}))
             base.assert_called_once_with("browser_tabs", {}, cancel_check=None)
 
+    def test_adopted_dev_dom_aliases_require_exact_identity(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state":"IDENTITY_MISMATCH","identity_match":False}),
+            mock.patch.object(m, "browser_dom_inspect") as inspect,
+            mock.patch.object(m, "browser_click_index") as click,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser.dom.inspect", {"tab_id":"example"})
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser.click", {"tab_id":"example","index":0})
+            inspect.assert_not_called()
+            click.assert_not_called()
+
+    def test_adopted_dev_rejects_atendimento_named_aliases(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_cross_session_tool_denied"):
+                m.execute_tool("browser_atendimento_tabs", {})
+            base.assert_not_called()
+
     def test_dedicated_bridge_health_uses_only_its_cdp_and_no_gui(self):
         for port, session, cdp in (
             ("5582", "atendimento", "9556"),
