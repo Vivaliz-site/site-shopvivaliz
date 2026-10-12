@@ -1036,6 +1036,13 @@ try {
         "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "recoveryLinks[0].click();return {clicked:true};" +
         "}" +
+        "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(unsafe||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
+        "}" +
         "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
         "const labels=action==='resend'?/^(?:resend(?: (?:email|e-mail|code))?|send a new (?:email|code)|reenviar(?: (?:e-?mail|c[oó]digo))?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
         "const matches=buttons.filter(b=>labels.test(String(b.innerText||b.value||'').trim()));" +

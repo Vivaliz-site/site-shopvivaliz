@@ -1016,6 +1016,24 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
         self.assertIn("account_auth_mfa_stage_required", Path(m.__file__).read_text())
 
+    def test_chatgpt_login_with_retry_does_not_bypass_security_checks(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"
+        self.assertIn(key, script)
+        block = script.split(key, 1)[1].split("const buttons=[", 1)[0]
+        for required in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^try again$/i",
+            "retryButtons.length!==1",
+        ):
+            self.assertIn(required, block)
+        self.assertIn("retryButtons[0].click();return {clicked:true}", block)
+
     def test_expired_mfa_recovery_does_not_weaken_lease_or_stage_gates(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
