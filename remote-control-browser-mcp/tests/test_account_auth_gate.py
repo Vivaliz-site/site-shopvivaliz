@@ -232,6 +232,35 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
         self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
 
+    def test_expired_email_challenge_retries_only_exact_safe_first_party_button(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = source.split(
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1
+        )[1].split(
+            "if(action==='continue'&&u.origin==='https://chatgpt.com'", 1
+        )[0]
+        for required in (
+            "u.pathname==='/email-verification'",
+            "(document.title||'').includes('Session ended')",
+            "if(recoveryLinks.length===0&&u.pathname==='/email-verification')",
+            "h==='challenges.cloudflare.com'",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "const retryButtons=[...document.querySelectorAll('button')]",
+            "/^try again$/i.test",
+            "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+            "retryButtons[0].click();return {clicked:true};",
+            "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+        ):
+            self.assertIn(required, block)
+        self.assertLess(
+            block.index("if(recoveryLinks.length===0&&u.pathname==='/email-verification')"),
+            block.index("if(recoveryLinks.length!==1)throw Error("),
+        )
+
     def test_official_chatgpt_login_with_retry_requires_empty_unprotected_page(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         target = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"
