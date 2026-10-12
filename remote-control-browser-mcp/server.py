@@ -994,8 +994,14 @@ try {
         "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "if(action==='back_to_methods'){" +
-        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
+        "if(u.hostname!=='auth.openai.com')throw Error('auth_stage_not_allowed');" +
+        "if(u.pathname==='/log-in/password'){" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://auth.openai.com','/log-in-or-create-account')&&/^edit$/i.test(label(a)));" +
+        "}else if(u.pathname==='/log-in/passkey'){" +
+        "const challenge=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(challenge)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "choices=[...document.querySelectorAll('button,a')].filter(e=>!e.disabled&&/^(?:try another way|tente de outra forma|tentar outro m[eé]todo)$/i.test(label(e)));" +
+        "}else throw Error('auth_stage_not_allowed');" +
         "}" +
         "if(action==='open_login'){" +
         "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');" +
