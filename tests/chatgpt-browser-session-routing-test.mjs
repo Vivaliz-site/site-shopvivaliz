@@ -50,6 +50,62 @@ export async function runBrowserSessionRoutingTests(api, directory) {
     ['dev checkpoint reaches CDP9559', async () => {
       assert.equal((await capture({ browser_session: 'dev' })).urls[0], 'http://127.0.0.1:9559/json/version');
     }],
+    ['only an exact Dev auxiliary opt-in routes a bound Dev checkpoint to CDP9557', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      try {
+        process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+        const dev = await capture({ browser_session: 'dev' });
+        assert.equal(dev.urls[0], 'http://127.0.0.1:9557/json/version');
+        const atendimento = await capture({ browser_session: 'atendimento' });
+        assert.equal(atendimento.urls[0], 'http://127.0.0.1:9556/json/version');
+        assert.ok(atendimento.urls.every(url => !url.includes(':9557/')));
+        const noProof = await capture({ browser_session: 'dev', conversation_id: undefined }, '');
+        assert.equal(noProof.urls.length, 0, 'unbound legacy checkpoints must never request CDP');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['Dev auxiliary opt-in rejects arbitrary CDP values before reaching a browser', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      try {
+        for (const forbidden of ['9556', '9558', 'http://127.0.0.1:9557', 'true']) {
+          process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = forbidden;
+          const result = await capture({ browser_session: 'dev' });
+          assert.equal(result.urls.length, 0, 'invalid flag ' + forbidden);
+          assert.equal(result.outcome.sent, false);
+        }
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['Dev auxiliary session still requires exact Dev account before UI mutation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const evaluated = [];
+        const fake = { close() {}, async evaluate(source) {
+          evaluated.push(source);
+          if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, {
+            location: { pathname: '/c/' + conversation },
+            AbortSignal,
+            fetch: async () => ({ ok: true, json: async () => ({
+              user: { email: 'atendimento@shopvivaliz.com.br' },
+            }) }),
+          });
+          throw Error('wrong Dev identity must block all UI work');
+        } };
+        const result = await api.attemptNudge(id, async () => fake, undefined, undefined, conversation);
+        assert.equal(result.sent, false);
+        assert.match(result.detail, /browser session account mismatch/);
+        assert.equal(evaluated.length, 1);
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
     ['pre-cutover fred checkpoint remains compatible on CDP9555', async () => {
       assert.equal((await capture({ browser_session: 'fred' })).urls[0], 'http://127.0.0.1:9555/json/version');
     }],
