@@ -1020,5 +1020,114 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
 
+    def test_corporate_auth_status_schema_is_read_only_and_home_is_lease_gated(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for name in ("browser_auth_status", "browser_profile_home_open"):
+            self.assertIn(name, specs)
+            self.assertEqual(
+                ["dev", "atendimento"],
+                specs[name]["inputSchema"]["properties"]["session"]["enum"],
+            )
+        self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
+        self.assertEqual(
+            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
+        )
+        self.assertIn("fetch('/api/auth/session'", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("document.cookie", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("localStorage", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("sessionStorage", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertIn('url:"https://chatgpt.com/"', m.CORPORATE_PROFILE_NODE_SCRIPT)
+
+    def test_corporate_auth_probe_strips_injected_secret_fields(self):
+        synthetic = {
+            "ok": True, "session": "atendimento", "state": "AUTHENTICATED",
+            "cdp_accessible": True, "tabs_seen": 12, "tabs_checked": 4,
+            "session_http": 200, "user_present": True, "identity_match": True,
+            "user_email": "sensitive@example.invalid", "accessToken": "SENSITIVE_EXAMPLE",
+            "cookies": ["SENSITIVE_EXAMPLE"],
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ) as runner:
+            result = m.browser_auth_status({"session": "atendimento"})
+        self.assertEqual("AUTHENTICATED", result["state"])
+        self.assertTrue(result["identity_match"])
+        self.assertNotIn("SENSITIVE_EXAMPLE", json.dumps(result))
+        self.assertNotIn("sensitive@example.invalid", json.dumps(result))
+        self.assertNotIn("accessToken", result)
+        self.assertEqual("status", runner.call_args.args[0][-1])
+        self.assertEqual("", runner.call_args.args[1])
+
+    def test_corporate_auth_probe_rejects_inconsistent_identity(self):
+        synthetic = {
+            "ok": True, "session": "dev", "state": "AUTHENTICATED",
+            "session_http": 200, "user_present": False, "identity_match": False,
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ):
+            with self.assertRaisesRegex(ValueError, "account_profile_probe_invalid"):
+                m.browser_auth_status({"session": "dev"})
+
+    def test_corporate_auth_probe_mismatch_stays_denied(self):
+        synthetic = {
+            "ok": True, "session": "dev", "state": "IDENTITY_MISMATCH",
+            "session_http": 200, "user_present": True, "identity_match": False,
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ):
+            status = m.browser_auth_status({"session": "dev"})
+        self.assertEqual("IDENTITY_MISMATCH", status["state"])
+        self.assertFalse(status["identity_match"])
+
+    def test_corporate_home_does_not_run_without_correct_maintenance_lease(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 7,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(
+                m.base.runtime_lock, "assert_runtime_lock",
+                return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"},
+            ),
+            mock.patch.object(m, "_corporate_profile_probe") as probe,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.browser_profile_home_open(args)
+            probe.assert_not_called()
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.browser_profile_home_open({"session": "atendimento"})
+
+    def test_corporate_home_requires_exact_session_and_identity_result(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 7,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:atendimento"}
+        output = {
+            "ok": True, "session": "atendimento", "state": "NOT_AUTHENTICATED",
+            "user_present": False, "identity_match": False,
+            "tab_id": "A" * 32,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(
+                m.base, "run_local_command_with_stdin",
+                return_value={"exit_code": 0, "stdout": json.dumps(output)},
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "home_unconfirmed"):
+                m.browser_profile_home_open(args)
+
+
 if __name__ == "__main__":
     unittest.main()
