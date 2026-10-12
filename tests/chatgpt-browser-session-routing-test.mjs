@@ -50,6 +50,138 @@ export async function runBrowserSessionRoutingTests(api, directory) {
     ['dev checkpoint reaches CDP9559', async () => {
       assert.equal((await capture({ browser_session: 'dev' })).urls[0], 'http://127.0.0.1:9559/json/version');
     }],
+    ['only an exact Dev auxiliary opt-in routes a bound Dev checkpoint to CDP9557', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      try {
+        process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+        const dev = await capture({ browser_session: 'dev' });
+        assert.equal(dev.urls[0], 'http://127.0.0.1:9557/json/version');
+        const atendimento = await capture({ browser_session: 'atendimento' });
+        assert.equal(atendimento.urls[0], 'http://127.0.0.1:9556/json/version');
+        assert.ok(atendimento.urls.every(url => !url.includes(':9557/')));
+        const noProof = await capture({ browser_session: 'dev', conversation_id: undefined }, '');
+        assert.equal(noProof.urls.length, 0, 'unbound legacy checkpoints must never request CDP');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['Dev auxiliary opt-in rejects arbitrary CDP values before reaching a browser', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      try {
+        for (const forbidden of ['9556', '9558', 'http://127.0.0.1:9557', 'true']) {
+          process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = forbidden;
+          const result = await capture({ browser_session: 'dev' });
+          assert.equal(result.urls.length, 0, 'invalid flag ' + forbidden);
+          assert.equal(result.outcome.sent, false);
+        }
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['Dev auxiliary session still requires exact Dev account before UI mutation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const evaluated = [];
+        const fake = { close() {}, async evaluate(source) {
+          evaluated.push(source);
+          if (source.includes('continuity-browser-account-match')) return vm.runInNewContext(source, {
+            location: { pathname: '/c/' + conversation },
+            AbortSignal,
+            fetch: async () => ({ ok: true, json: async () => ({
+              user: { email: 'atendimento@shopvivaliz.com.br' },
+            }) }),
+          });
+          throw Error('wrong Dev identity must block all UI work');
+        } };
+        const result = await api.attemptNudge(id, async () => fake, undefined, undefined, conversation);
+        assert.equal(result.sent, false);
+        assert.match(result.detail, /browser session account mismatch/);
+        assert.equal(evaluated.length, 1);
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['Dev auxiliary must verify its identity before any neutral-tab selection or navigation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const { connectBoundConversationWithReentry } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+        const neutral = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://neutral-fixture' };
+        const events = [];
+        const probe = {
+          close() {},
+          async evaluate() {
+            events.push('identity_probe');
+            return false; // A different account or missing user.email.
+          },
+        };
+        const outcome = await api.attemptNudge(
+          id,
+          async () => connectBoundConversationWithReentry([neutral], conversation, {
+            connector: async () => probe,
+            selectReentry: async () => { events.push('select_reentry'); return neutral; },
+            navigate: async () => { events.push('navigate'); return true; },
+          }),
+          undefined, undefined, conversation,
+        );
+        assert.equal(outcome.sent, false);
+        assert.ok(events.includes('identity_probe'), 'fail-closed account probe must run');
+        assert.equal(events.includes('select_reentry'), false, 'must not choose/create a target before checking Dev identity');
+        assert.equal(events.includes('navigate'), false, 'must not navigate to a private Dev conversation in a wrong account');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['verified Dev auxiliary may reenter only its exact bound conversation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const { connectBoundConversationWithReentry } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+        const neutral = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://verified-dev-home' };
+        const calls = [];
+        const tab = {
+          close() {},
+          async evaluate(source) {
+            if (source.includes('continuity-dev-aux-prenavigation-identity')) {
+              calls.push('identity_verified');
+              return true;
+            }
+            if (source.includes('continuity-browser-account-match')) {
+              calls.push('existing_conversation_recheck');
+              return false;
+            }
+            throw Error('no other evaluation allowed');
+          },
+        };
+        const outcome = await api.attemptNudge(id,
+          async () => connectBoundConversationWithReentry([neutral], conversation, {
+            connector: async () => tab,
+            selectReentry: async () => { calls.push('select'); return neutral; },
+            navigate: async (_, actualId) => {
+              calls.push('navigate');
+              assert.equal(actualId, conversation);
+              return true;
+            },
+          }),
+          undefined, undefined, conversation,
+        );
+        assert.equal(outcome.sent, false, 'identity alone is not continuation proof');
+        assert.deepEqual(calls, [
+          'identity_verified', 'select', 'navigate', 'existing_conversation_recheck',
+        ], 'the exact identity must be checked before reentry and rechecked before any UI mutation');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
     ['pre-cutover fred checkpoint remains compatible on CDP9555', async () => {
       assert.equal((await capture({ browser_session: 'fred' })).urls[0], 'http://127.0.0.1:9555/json/version');
     }],

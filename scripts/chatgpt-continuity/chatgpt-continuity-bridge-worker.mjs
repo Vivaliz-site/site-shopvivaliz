@@ -80,6 +80,15 @@ const BROWSER_SESSIONS = Object.freeze({
   // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
   fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
 });
+function boundDevCdpBase() {
+  // Separate, explicit opt-in. The MCP Dev 5583 adoption is NOT proof of
+  // permission to reroute the independent continuity worker. No cookies or
+  // credentials are copied from the authenticated Chrome.
+  const selected = String(process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP || '');
+  if (selected === '') return BROWSER_SESSIONS.dev.cdpBase;
+  if (selected === '9557') return 'http://127.0.0.1:9557';
+  throw new Error('invalid Dev continuity auxiliary adoption');
+}
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
 }
@@ -103,7 +112,9 @@ function taskBrowserSession(taskId, requestedConversationId = '') {
       || (requestedConversationId && requestedConversationId !== bound)) {
     throw new Error('browser session checkpoint conversation mismatch or terminal state');
   }
-  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+  return Object.freeze({ ...BROWSER_SESSIONS[name],
+    ...(name === 'dev' ? { cdpBase: boundDevCdpBase() } : {}),
+    conversationId: bound, name });
 }
 
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
@@ -804,6 +815,61 @@ async function connectBoundConversationWithReentry(
     boundTabs.length > 1 ? preferred : null,
   );
   if (existing) return existing;
+
+  // The existing Dev auxiliary Chrome may remain alive while the provider's
+  // account identity changes. Never navigate to a private bound conversation
+  // based only on a cached guardian health check. Before selecting or creating
+  // a neutral reentry target, verify the *current* official ChatGPT identity in
+  // an already-open, same-origin tab. No session JSON or credential leaves CDP.
+  const currentSession = BROWSER_SESSION_CONTEXT.getStore();
+  if (currentSession?.name === 'dev'
+      && currentSession.cdpBase === 'http://127.0.0.1:9557') {
+    const candidates = (Array.isArray(tabs) ? tabs : [])
+      .filter(tab => chatgptTabRank(tab) === 1 || chatgptTabRank(tab) === 0)
+      .slice(0, 4);
+    let identityVerified = false;
+    for (const tab of candidates) {
+      let probe;
+      let timeout;
+      try {
+        probe = await connector(tab);
+        if (!probe) continue;
+        const verdict = await Promise.race([
+          probe.evaluate(`(async()=>{
+            /* continuity-dev-aux-prenavigation-identity */
+            if(location.hostname !== 'chatgpt.com') return false;
+            try {
+              const r=await fetch('/api/auth/session',{
+                credentials:'same-origin', cache:'no-store',
+                signal:AbortSignal.timeout(2000)
+              });
+              if(!r.ok) return false;
+              const d=await r.json();
+              return String(d?.user?.email||'').trim().toLowerCase()
+                === 'dev@shopvivaliz.com.br';
+            }catch{return false}
+          })()`),
+          new Promise(resolve => { timeout = setTimeout(() => resolve(false), 2600); }),
+        ]);
+        if (verdict === true) {
+          identityVerified = true;
+          break;
+        }
+        // A mismatch or missing user.email is a hard deny; other open tabs
+        // in the same Chromium profile must not override this decision.
+        if (verdict === false) break;
+      } catch {
+        // A dead renderer cannot attest identity. Try another existing tab,
+        // but never create a new tab or navigate on an unverified profile.
+      } finally {
+        if (timeout) clearTimeout(timeout);
+        try { probe?.close(); } catch {}
+      }
+    }
+    if (!identityVerified) {
+      throw new Error('Dev auxiliary identity unverified before conversation reentry');
+    }
+  }
 
   // A target can remain listed by /json while its renderer no longer answers
   // Runtime.evaluate. Re-enter the exact immutable conversation id through a

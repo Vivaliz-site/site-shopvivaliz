@@ -12,6 +12,29 @@ probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgp
 task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium .*--remote-debugging-port=9559'
 
+# Explicit continuity opt-in is separate from the existing MCP Dev adoption.
+# Auxiliary browser belongs to another service; do not restart or manage it.
+dev_aux_adoption="${SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP:-}"
+case "$dev_aux_adoption" in
+  '') ;;
+  9557)
+    # Reject untrusted endpoint overrides; no arbitrary local/remote CDP.
+    if [[ -n "${CHATGPT_BROWSER_CDP_URL:-}" &&
+          "${CHATGPT_BROWSER_CDP_URL}" != 'http://127.0.0.1:9557/json/version' ]] ||
+       [[ -n "${CHATGPT_BROWSER_CDP_BASE:-}" &&
+          "${CHATGPT_BROWSER_CDP_BASE}" != 'http://127.0.0.1:9557' ]]; then
+      echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+      exit 64
+    fi
+    cdp_url='http://127.0.0.1:9557/json/version'
+    cdp_base='http://127.0.0.1:9557'
+    ;;
+  *)
+    echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+    exit 64
+    ;;
+esac
+
 runtime_eval_ready() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
     timeout 8s node --input-type=module -e '
@@ -346,6 +369,35 @@ ensure_continuity_worker() {
 }
 
 status=0
+
+# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.
+# The same-account identity is checked by browser_session_state() on each
+# observation. No health success is possible on a missing/foreign identity.
+if [[ "$dev_aux_adoption" == 9557 ]]; then
+  echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY'
+  if ! cdp_ready; then
+    report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
+    status=1
+  else
+    session_state="$(browser_session_state | tail -n 1)"
+    case "$session_state" in
+      AUTHENTICATED)
+        report_browser_state 'HEALTHY_DEV_AUX_READONLY' 'AUTHENTICATED'
+        if ! ensure_continuity_worker; then status=1; fi
+        ;;
+      IDENTITY_MISMATCH)
+        report_browser_state 'DEV_AUX_IDENTITY_MISMATCH' 'IDENTITY_MISMATCH'
+        status=1
+        ;;
+      *)
+        report_browser_state 'DEV_AUX_UNAVAILABLE' "${session_state:-UNKNOWN}"
+        status=1
+        ;;
+    esac
+  fi
+  exit "${status}"
+fi
+# End of readonly Dev auxiliary continuity adoption.
 
 # Keep the timer and transport liveness checks enabled. Reuse only a negative
 # session observation, for a bounded window, when browser/task context agrees.
