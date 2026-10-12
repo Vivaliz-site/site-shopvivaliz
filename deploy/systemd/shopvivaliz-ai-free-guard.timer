@@ -1,0 +1,13 @@
+[Unit]
+Description=ShopVivaliz paid provider drift check
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=shopvivaliz-ai-free-guard.service
+
+[Install]
+WantedBy=timers.target

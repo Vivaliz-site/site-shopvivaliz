@@ -1,0 +1,21 @@
+[Unit]
+Description=ShopVivaliz read-only AI provider policy monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/shopvivaliz/ai-free-provider-sentinel.py
+StateDirectory=shopvivaliz-ai-free-guard
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=90
+Nice=15
+CPUQuota=30%
+MemoryMax=256M
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
