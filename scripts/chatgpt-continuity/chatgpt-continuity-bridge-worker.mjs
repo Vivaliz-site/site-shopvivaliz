@@ -816,6 +816,61 @@ async function connectBoundConversationWithReentry(
   );
   if (existing) return existing;
 
+  // The existing Dev auxiliary Chrome may remain alive while the provider's
+  // account identity changes. Never navigate to a private bound conversation
+  // based only on a cached guardian health check. Before selecting or creating
+  // a neutral reentry target, verify the *current* official ChatGPT identity in
+  // an already-open, same-origin tab. No session JSON or credential leaves CDP.
+  const currentSession = BROWSER_SESSION_CONTEXT.getStore();
+  if (currentSession?.name === 'dev'
+      && currentSession.cdpBase === 'http://127.0.0.1:9557') {
+    const candidates = (Array.isArray(tabs) ? tabs : [])
+      .filter(tab => chatgptTabRank(tab) === 1 || chatgptTabRank(tab) === 0)
+      .slice(0, 4);
+    let identityVerified = false;
+    for (const tab of candidates) {
+      let probe;
+      let timeout;
+      try {
+        probe = await connector(tab);
+        if (!probe) continue;
+        const verdict = await Promise.race([
+          probe.evaluate(`(async()=>{
+            /* continuity-dev-aux-prenavigation-identity */
+            if(location.hostname !== 'chatgpt.com') return false;
+            try {
+              const r=await fetch('/api/auth/session',{
+                credentials:'same-origin', cache:'no-store',
+                signal:AbortSignal.timeout(2000)
+              });
+              if(!r.ok) return false;
+              const d=await r.json();
+              return String(d?.user?.email||'').trim().toLowerCase()
+                === 'dev@shopvivaliz.com.br';
+            }catch{return false}
+          })()`),
+          new Promise(resolve => { timeout = setTimeout(() => resolve(false), 2600); }),
+        ]);
+        if (verdict === true) {
+          identityVerified = true;
+          break;
+        }
+        // A mismatch or missing user.email is a hard deny; other open tabs
+        // in the same Chromium profile must not override this decision.
+        if (verdict === false) break;
+      } catch {
+        // A dead renderer cannot attest identity. Try another existing tab,
+        // but never create a new tab or navigate on an unverified profile.
+      } finally {
+        if (timeout) clearTimeout(timeout);
+        try { probe?.close(); } catch {}
+      }
+    }
+    if (!identityVerified) {
+      throw new Error('Dev auxiliary identity unverified before conversation reentry');
+    }
+  }
+
   // A target can remain listed by /json while its renderer no longer answers
   // Runtime.evaluate. Re-enter the exact immutable conversation id through a
   // neutral authenticated Home target instead of declaring the conversation
