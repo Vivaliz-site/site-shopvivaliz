@@ -69,6 +69,19 @@ Referências oficiais:
 - https://ai.google.dev/gemini-api/docs/pricing
 
 
+## Default gratuito comprovado em producao (2026-10-12)
+
+O roteador de jobs persistentes prioriza gemini-3.1-flash-lite por padrao:
+o projeto gen-lang-client-0341449504 foi conferido em Google AI Studio
+como nivel Free, sua chave em producao foi atestada por hash, e tanto
+generateContent via API (HTTP 200, 9 tokens) quanto a CLI protegida
+retornaram sucesso com este modelo. Outros aliases Flash mostraram
+excesso de cotas ou travamentos e nao devem voltar a ser o padrao
+sem nova verificacao. O fallback Gemini padrao e o proprio modelo
+3.1 Flash Lite, removido por deduplicacao: uma falha ou timeout leva
+imediatamente ao Ollama local. Modelos do nivel pago continuam proibidos
+para jobs persistentes. Faturamento nao e habilitado automaticamente.
+
 ## Timeout seguro e continuidade Ollama
 
 O executor run_background_gemini.py não pode aguardar o CLI indefinidamente.
