@@ -88,6 +88,35 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             self.assertEqual(calls[0]["token"], "file-token-1234567890")
             self.assertNotIn("file-token-1234567890", json.dumps(result))
 
+    def test_dev_aux_continuity_adopter_requires_owner_consent_and_atomic_rollback(self) -> None:
+        script = ROOT / "scripts" / "adopt-verified-dev-aux-continuity.sh"
+        self.assertTrue(script.is_file(), "approved continuity adoption script required")
+        text = script.read_text(encoding="utf-8")
+        for required in (
+            "SHOPVIVALIZ_AUTHORIZE_DEV_CONTINUITY_ADOPTION",
+            "runtime_lock.acquire_runtime_lock",
+            "runtime_lock.release_runtime_lock",
+            "_corporate_profile_probe('dev_aux', 'status')",
+            "account_identity_verified",
+            "SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557",
+            "shopvivaliz-chatgpt-continuity.service",
+            "shopvivaliz-chatgpt-browser-guardian.service",
+            "rollback",
+            "trap",
+            "DEV_AUX_CONTINUITY_ADOPTED_E2E=true",
+        ):
+            self.assertIn(required, text)
+        for forbidden in (
+            "systemctl restart shopvivaliz-dev-browser.service",
+            "systemctl restart shopvivaliz-atendimento-mcp-browser.service",
+            "systemctl restart shopvivaliz-atendimento-browser.service",
+            "cp -r /home/fredrdp/.config",
+            "rsync /home/fredrdp/.config",
+            "sqlite3",
+        ):
+            self.assertNotIn(forbidden, text)
+        self.assertIn("PROGRESS_CONFIRMED", text, "adopter must not infer historical task completion")
+
     def test_backend_installer_wires_single_durable_handoff_flag_default_on(self) -> None:
         body = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text(encoding="utf-8")
         self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}"', body)
