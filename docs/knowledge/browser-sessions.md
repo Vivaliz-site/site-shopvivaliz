@@ -24,7 +24,7 @@ E vedado transportar cookies ou qualquer segredo entre os perfis.
 - Nunca reutilizar cookies, storage, perfil ou porta CDP de uma conta para a outra.
 - Para tarefa destinada a `atendimento@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-atendimento-chromium` / porta `9556`.
 - Não criar novos bindings para a conta pessoal antiga. `fred`/CDP 9555 existe apenas para concluir checkpoints explicitamente vinculados antes da migração.
-- Para tarefa destinada a `dev@shopvivaliz.com.br`, usar exclusivamente `shopvivaliz-dev-chromium` / porta `9559`; nunca reutilizar os perfis pessoal ou Atendimento.
+- Para tarefa destinada a dev@shopvivaliz.com.br, o navegador CANONICO de continuidade continua shopvivaliz-dev-chromium / CDP 9559. Apenas o MCP Dev dedicado porta 5583 pode usar a excecao de transporte autenticado CDP9557 documentada abaixo, quando aprovada explicitamente pelo proprietario e verificada a identidade Dev exata por chamada real. Isso nao autentica o 9559, nao altera o guardian e nao copia cookies, contas ou perfis.
 - Se a sessão correta estiver indisponível, reparar ou reabrir o perfil correspondente; não usar a outra sessão como atalho.
 - Preservar login e cookies existentes. Reinício de navegador só é permitido preservando o mesmo `user-data-dir`.
 - Antes de qualquer autenticação, validar qual perfil/porta está sendo controlado.
@@ -133,3 +133,41 @@ permanece isolada deste display.
 <!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
 **Evidencia de 2026-10-11:** o proprietario mostrou no RustDesk uma sessao XFCE `fredconsole/:0` com Chromium ChatGPT e contas Dev/Atendimento no seletor. Esse Chromium nao deve ser confundido com os perfis corporativos dedicados `fredrdp/:99`, CDP 9559/9556. O seletor nao e comprovacao de identidade autenticada nas duas sessoes; verificar separadamente `/api/auth/session`. Consultar `docs/knowledge/shopvivaliz-graphical-session-recovery.md` antes de agir.
 <!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+
+## Excecao de roteamento Dev MCP para Chromium auxiliar autenticado - 2026-10-12
+
+O proprietario autorizou aproveitar o navegador fisicamente existente
+e JA autenticado, em vez de copiar cookies ou repetir MFA.
+
+- Chromium auxiliar independente: fredrdp, DISPLAY=:0, porta CDP9557,
+  servico shopvivaliz-atendimento-mcp-browser.service, diretorio exclusivo
+  /home/fredrdp/.config/shopvivaliz-atendimento-mcp-chromium. Apesar do
+  nome historico do servico, a API oficial /api/auth/session retornou
+  EXACTAMENTE dev@shopvivaliz.com.br (audit f15a9d6e-e3f7-47ab-9fa0-e3eb4f65d845).
+- Atendimento continua EXCLUSIVAMENTE no perfil dedicado CDP9556, sem
+  qualquer mudanca. Dev canônico CDP9559 permanece sem autenticacao.
+- A excecao atua apenas no transporte do MCP Dev na porta5583.
+  O processo Chromium 9557 e seus cookies permanecem no mesmo diretorio,
+  sem copia, exportacao ou reinicio. O navegador 9559 e os componentes
+  guardian/continuity de checkpoint nao sao remapeados.
+- Habilitar somente pela rotina versionada
+  scripts/adopt-verified-dev-aux-browser.sh, com a autorizacao explicita
+  SHOPVIVALIZ_AUTHORIZE_DEV_AUX_ADOPTION=1. O script obtém lease exclusivo
+  de manutencao, valida a identidade real de Dev no 9557 e Atendimento no
+  9556, e altera apenas a configuracao do MCP Dev:
+  SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557
+  SHOPVIVALIZ_DEV_ADOPTED_CDP=9557
+- O adapter exige simultaneamente MCP port5583, session=dev, port=9557
+  e opt-in explicito. Toda operacao na aba verifica novamente
+  /api/auth/session.user.email exato; ao perder autenticacao ou mudar de
+  conta o MCP falha fechado. Mantem as validacoes normais de lease,
+  fencing, conversa/checkpoint e mutacoes.
+- Validacao E2E somente se GET localhost:5583/health retorna
+  session=dev, account_authenticated=true,
+  account_identity_verified=true e cdp_reachable=true.
+  Nao confundir com PROGRESS_CONFIRMED ou readiness do controlador.
+- Rollback sob lease: remover apenas o drop-in
+  90-verified-dev-aux.conf em
+  /etc/systemd/system/shopvivaliz-browser-dev-mcp.service.d/,
+  daemon-reload e restart somente de shopvivaliz-browser-dev-mcp.service.
+  Nenhum browser Chrome, perfil, sessao do usuario ou token deve ser tocado.
