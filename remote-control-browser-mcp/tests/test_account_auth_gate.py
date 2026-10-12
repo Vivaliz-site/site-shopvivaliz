@@ -188,7 +188,7 @@ class AccountAuthGateTests(unittest.TestCase):
             script,
         )
         self.assertIn(
-            "(['/log-in','/log-in/password','/email-verification'].includes(u.pathname)||",
+            "(['/log-in','/log-in/password','/log-in/passkey','/email-verification'].includes(u.pathname)||",
             script,
         )
         self.assertIn(
@@ -200,7 +200,9 @@ class AccountAuthGateTests(unittest.TestCase):
             script,
         )
         self.assertNotIn("if(action==='continue'&&u.hostname==='auth.openai.com'", script)
-        self.assertIn("document.body?.innerText?.includes('Your session has ended')", script)
+        self.assertIn("(document.body?.innerText||'').includes('Your session has ended')", script)
+        self.assertIn("(document.title||'').includes('Session ended')", script)
+        self.assertIn("/^(?:log in|try again)$/i", script)
         self.assertIn("const recoveryLinks=[...document.querySelectorAll('a')]", script)
         self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", script)
         self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
