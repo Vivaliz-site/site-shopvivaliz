@@ -994,8 +994,12 @@ try {
         "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "if(action==='back_to_methods'){" +
-        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
+        "if(u.hostname!=='auth.openai.com'||!['/log-in/password','/log-in/passkey'].includes(u.pathname))throw Error('auth_stage_not_allowed');" +
+        "if(u.pathname==='/log-in/password'){" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://auth.openai.com','/log-in-or-create-account')&&/^edit$/i.test(label(a)));" +
+        "}else{" +
+        "choices=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try another way$/i.test(label(b)));" +
+        "}" +
         "}" +
         "if(action==='open_login'){" +
         "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');" +

@@ -152,7 +152,7 @@ class AccountAuthGateTests(unittest.TestCase):
         source = m.ACCOUNT_AUTH_NODE_SCRIPT
         for item in (
             "back_to_methods", "open_login", "continue_google",
-            "u.pathname!=='/log-in/password'",
+            "!['/log-in/password','/log-in/passkey'].includes(u.pathname)",
             "u.origin!=='https://auth.openai.com'",
             "u.pathname!=='/log-in-or-create-account'",
             "u.pathname!=='/log-in'",
@@ -164,6 +164,30 @@ class AccountAuthGateTests(unittest.TestCase):
             "if(choices.length!==1)",
         ):
             self.assertIn(item, source)
+
+    def test_passkey_alternate_method_is_official_and_precisely_scoped(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(u.hostname!=='auth.openai.com'||!['/log-in/password','/log-in/passkey'].includes(u.pathname))",
+            script,
+        )
+        self.assertIn(
+            "if(u.pathname==='/log-in/password')",
+            script,
+        )
+        self.assertIn(
+            "choices=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try another way$/i.test(label(b)))",
+            script,
+        )
+        self.assertIn("if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
+        # Never allow this account-scoped action on OAuth consent or another origin.
+        for url in (
+            "https://auth.openai.com/oauth/consent",
+            "https://accounts.google.com/log-in/passkey",
+            "https://example.com/log-in/passkey",
+            "http://auth.openai.com/log-in/passkey",
+        ):
+            self.assertIsNone(m._auth_stage(url))
 
     def test_log_in_link_is_allowed_only_on_two_exact_official_stages(self):
         source = m.ACCOUNT_AUTH_NODE_SCRIPT
