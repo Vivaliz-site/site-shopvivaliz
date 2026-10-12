@@ -8,6 +8,16 @@ set -Eeuo pipefail
 approved="${SHOPVIVALIZ_CONTINUITY_APPROVED_SHA:-}"
 [[ "$approved" =~ ^[0-9a-f]{40}$ ]] || { echo DEV_AUX_APPROVED_SHA_REQUIRED; exit 4; }
 
+# The Dev auxiliary identity probe is deliberately disabled outside the
+# explicitly bound Dev MCP (port 5583, account Dev, CDP9557). The installer
+# runs as root, not inside that service, so provide the same exact protected
+# scope only to this short-lived installer process. No persistent config,
+# cookies, tokens, profiles or MFA values are imported or copied.
+export SHOPVIVALIZ_REMOTE_MCP_PORT=5583
+export SHOPVIVALIZ_BROWSER_SESSION_NAME=dev
+export SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557
+export SHOPVIVALIZ_DEV_ADOPTED_CDP=9557
+
 repo=/home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz
 worker=/home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs
 guardian=/usr/local/libexec/shopvivaliz-chatgpt-browser-guardian.sh

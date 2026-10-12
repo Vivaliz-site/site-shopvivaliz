@@ -97,6 +97,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             "runtime_lock.acquire_runtime_lock",
             "runtime_lock.release_runtime_lock",
             "_corporate_profile_probe('dev_aux', 'status')",
+            # The protected identity probe must be invoked in the same exact
+            # Dev-only MCP scope where dev_aux is authorized (CDP9557).
+            "export SHOPVIVALIZ_REMOTE_MCP_PORT=5583",
+            "export SHOPVIVALIZ_BROWSER_SESSION_NAME=dev",
+            "export SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557",
+            "export SHOPVIVALIZ_DEV_ADOPTED_CDP=9557",
             "account_identity_verified",
             "SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557",
             "shopvivaliz-chatgpt-continuity.service",
