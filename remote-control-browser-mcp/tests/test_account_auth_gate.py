@@ -412,6 +412,22 @@ class AccountAuthGateTests(unittest.TestCase):
             self.assertEqual(600,result["email_watch"]["duration_seconds"])
             begin.assert_called_once_with("dev")
 
+    def test_auth_tab_read_can_expose_bounded_watch_status_without_message_id(self):
+        pages = [{"type":"page","id":"example-tab",
+                  "url":"https://auth.openai.com/email-verification"}]
+        with (
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(pages).encode())),
+            mock.patch.object(m, "_read_bounded_login_email_watch_status",
+                              return_value={"status":"matched","session":"dev",
+                                            "received_at":12345678}) as observe,
+        ):
+            state = m.browser_auth_tabs({"session":"dev"})
+        self.assertEqual("matched",state["email_watch"]["status"])
+        self.assertNotIn("message_id",state["email_watch"])
+        self.assertEqual("dev",state["session"])
+        observe.assert_called_once_with("dev")
+
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
                               text=True,capture_output=True,check=False)
