@@ -106,6 +106,21 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertIn('session_observed_at', data)
         return data
 
+    def test_dev_aux_guardian_optin_is_readonly_and_fail_closed(self):
+        body = GUARDIAN.read_text(encoding='utf-8')
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP', body)
+        self.assertIn('http://127.0.0.1:9557/json/version', body)
+        self.assertIn('CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY', body)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', body)
+        self.assertIn('DEV_AUX_UNAVAILABLE', body)
+        self.assertIn('DEV_AUX_IDENTITY_MISMATCH', body)
+        start = body.index('# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.')
+        end = body.index('# End of readonly Dev auxiliary continuity adoption.', start)
+        read_only_path = body[start:end]
+        self.assertNotIn('systemctl restart', read_only_path)
+        self.assertNotIn('kill -', read_only_path)
+        self.assertNotIn('systemctl start "$browser_unit"', read_only_path)
+
     def test_terminal_auth_repeat_skips_expensive_probes(self):
         first = self.run_guardian()
         self.assertEqual(first.returncode, 0, first.stderr)
