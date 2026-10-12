@@ -23,6 +23,14 @@ PAID_EXECUTION_PATTERNS = (
     re.compile(r"\banthropic\.Anthropic\s*\(", re.IGNORECASE),
 )
 
+# A workflow may not require paid provider fallback in a persistent daemon,
+# even when it never invokes a model directly (for example via grep / env check).
+PAID_BACKGROUND_FALLBACK_PATTERN = re.compile(
+    r"SHOPVIVALIZ_BACKGROUND_(?:CODEX|CLAUDE)_FALLBACK\s*=\s*(?:1|true|yes|on)\b",
+    re.IGNORECASE,
+)
+
+
 BROAD_EVENT_PATTERNS = (
     re.compile(r"(?m)^\s{2}(?:issue_comment|issues|pull_request_review|pull_request_review_comment|pull_request|pull_request_target|push):\s*"),
 )
@@ -92,6 +100,13 @@ def scan_repository(root: Path) -> list[Violation]:
         if path.name.endswith(".disabled"):
             continue
         text = path.read_text(encoding="utf-8-sig", errors="replace")
+        if PAID_BACKGROUND_FALLBACK_PATTERN.search(text):
+            violations.append(
+                Violation(
+                    path, "paid_background_fallback_enabled",
+                    "workflow must not require or enable paid AI background fallback",
+                )
+            )
         paid_targets = _referenced_paid_scripts(root, text)
         if not _uses_paid_ai(text) and not paid_targets:
             continue
