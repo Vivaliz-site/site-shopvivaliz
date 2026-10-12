@@ -2038,7 +2038,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         method="POST",
     )
     try:
-        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open", "browser_profile_home_open"} else 8) as response:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open", "browser_profile_home_open"} else 25 if name == "browser_auth_status" else 8) as response:
             payload = response.read(524289)
     except (HTTPError, URLError, TimeoutError, OSError):
         raise RuntimeError("account_auth_browser_proxy_unavailable") from None
