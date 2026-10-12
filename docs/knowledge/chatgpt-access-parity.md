@@ -129,6 +129,38 @@ Both dedicated corporate Chrome services use the protected persistent
 to the user's GNOME Keyring but **does not unlock the collection**.
 The profile, cookies, Chrome user-data-dir and CDP port remain isolated.
 
+## Corporate identity and neutral home tab MCP tools
+
+The base **ShopVivaliz Remote Control** and its browser peer now define two
+additional operations. **Deployed server code is not an approved ChatGPT plugin
+catalog**: check the installed app tool-name/inputSchema list separately from
+the MCP server's `tools/list` before claiming the new actions are exposed.
+
+- `browser_auth_status(session)`: read-only; queries
+  `https://chatgpt.com/api/auth/session` inside the selected isolated browser,
+  compares `user.email` to its dedicated corporate account, and returns only
+  redacted booleans, state, HTTP status and bounded counts. Neither credentials
+  nor email from the API response are returned. HTTP 200 alone proves nothing.
+  `UNKNOWN`, `NOT_AUTHENTICATED` and `IDENTITY_MISMATCH` fail closed.
+- `browser_profile_home_open(session, runtime_lease_id, runtime_fencing_token)`:
+  reuses a neutral ChatGPT home tab or creates a new background tab only after
+  an exact match, in the selected corporate CDP profile. Requires durable
+  handoff and a valid maintenance runtime lease owned by
+  `shopvivaliz-account-auth:<session>` with action
+  `browser_profile_home_open`, checked at the proxy and browser peer.
+  It cannot accept custom URLs, navigate an existing conversation, clone
+  sessions, transfer cookies or authentication, or bypass MFA/consent.
+
+The neutral-tab action does not copy a logged-in profile into an unauthenticated
+one. Dev remains CDP9559, Atendimento CDP9556; XFCE `fredconsole/:0` and the
+LightDM greeter are independent of corporate `fredrdp/:99` profiles.
+
+Both corporate email addresses deliver to the Gmail `fredmourao` mailbox,
+per the owner (2026-10-11). This is email routing only, not a shared OAuth
+grant or ChatGPT authentication. Preferred login: existing password + GNOME
+TOTP on the official MFA challenge, without automatically falling back to
+email code, passkey or SSO.
+
 ## Parity requirements
 
 1. Both accounts have the same approved ShopVivaliz workspace membership,

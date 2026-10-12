@@ -1962,12 +1962,12 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     origin and specific input/button. This layer independently rejects wrong
     sessions and stale/non-maintenance leases before invoking the local peer.
     """
-    if name not in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
+    if name not in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
         raise ValueError("account_auth_tool_invalid")
     session = str(args.get("session") or "")
     if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
         raise ValueError("account_auth_session_invalid")
-    if name == "browser_auth_tabs":
+    if name in {"browser_auth_tabs", "browser_auth_status"}:
         if set(args) != {"session"}:
             raise ValueError("account_auth_scope_invalid")
     elif name == "browser_auth_open":
@@ -1981,6 +1981,21 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("account_auth_runtime_lock_required")
         try:
             lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    elif name == "browser_profile_home_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_profile_home_open")
         except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
             raise ValueError("account_auth_runtime_lock_invalid") from None
         if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
@@ -2023,7 +2038,7 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         method="POST",
     )
     try:
-        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open"} else 8) as response:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open", "browser_profile_home_open"} else 25 if name == "browser_auth_status" else 8) as response:
             payload = response.read(524289)
     except (HTTPError, URLError, TimeoutError, OSError):
         raise RuntimeError("account_auth_browser_proxy_unavailable") from None
@@ -2057,6 +2072,39 @@ def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             ):
                 clean.append({"tab_id": tab_id, "session": session, "stage": stage})
         return {"ok": True, "session": session, "tabs": clean}
+
+    if name == "browser_auth_status":
+        state = str(output.get("state") or "")
+        present = output.get("user_present") is True
+        matched = output.get("identity_match") is True
+        if (output.get("session") != session
+                or state not in {"AUTHENTICATED", "NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"}
+                or matched != (state == "AUTHENTICATED")
+                or (matched and not present)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        try:
+            http = int(output.get("session_http", 0))
+            tabs_seen = int(output.get("tabs_seen", 0))
+            tabs_checked = int(output.get("tabs_checked", 0))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if not (0 <= http <= 599 and 0 <= tabs_seen <= 512 and 0 <= tabs_checked <= 16):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {
+            "ok": True, "session": session,
+            "cdp_accessible": output.get("cdp_accessible") is True,
+            "tabs_seen": tabs_seen, "tabs_checked": tabs_checked,
+            "session_http": http, "user_present": present,
+            "identity_match": matched, "state": state,
+        }
+    if name == "browser_profile_home_open":
+        tab_id = str(output.get("tab_id") or "")
+        if (output.get("session") != session
+                or output.get("identity_match") is not True
+                or not re.fullmatch(r"[A-F0-9]{32}", tab_id, re.I)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "tab_id": tab_id,
+                "reused": output.get("reused") is True, "identity_match": True}
 
     # The downstream action returns protected child stdout as a JSON
     # status. Parse booleans only; never surface the raw child output.
@@ -2092,6 +2140,7 @@ MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
     "browser_auth_action": "browser_auth_action",
     "browser_auth_open": "browser_auth_open",
+    "browser_profile_home_open": "browser_profile_home_open",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -2188,7 +2237,7 @@ def execute_tool(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
-    if name in {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}:
+    if name in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
         return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
@@ -2448,6 +2497,12 @@ TOOLS = [
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
     ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
     ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
         "session": {"type": "string", "enum": ["dev", "atendimento"]},
         "runtime_lease_id": {"type": "string", "maxLength": 200},
