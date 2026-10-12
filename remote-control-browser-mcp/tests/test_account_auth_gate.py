@@ -152,7 +152,12 @@ class AccountAuthGateTests(unittest.TestCase):
         source = m.ACCOUNT_AUTH_NODE_SCRIPT
         for item in (
             "back_to_methods", "open_login", "continue_google",
-            "u.pathname!=='/log-in/password'",
+            "u.hostname!=='auth.openai.com'",
+            "u.pathname==='/log-in/password'",
+            "u.pathname==='/log-in/passkey'",
+            "/^(?:try another way|tente de outra forma|tentar outro m[eé]todo)$/i",
+            "challenges.cloudflare.com",
+            "else throw Error('auth_stage_not_allowed')",
             "u.origin!=='https://auth.openai.com'",
             "u.pathname!=='/log-in-or-create-account'",
             "u.pathname!=='/log-in'",
