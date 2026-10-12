@@ -3,9 +3,9 @@
 # restart Chromium, forge conversation bindings, or declare PROGRESS_CONFIRMED.
 set -Eeuo pipefail
 [[ "$(id -u)" == 0 ]] || { echo DEV_AUX_ROOT_REQUIRED; exit 2; }
-[[ "\${SHOPVIVALIZ_AUTHORIZE_DEV_CONTINUITY_ADOPTION:-}" == 1 ]] || {
+[[ "${SHOPVIVALIZ_AUTHORIZE_DEV_CONTINUITY_ADOPTION:-}" == 1 ]] || {
   echo DEV_AUX_OWNER_OPTIN_REQUIRED; exit 3; }
-approved="\${SHOPVIVALIZ_CONTINUITY_APPROVED_SHA:-}"
+approved="${SHOPVIVALIZ_CONTINUITY_APPROVED_SHA:-}"
 [[ "$approved" =~ ^[0-9a-f]{40}$ ]] || { echo DEV_AUX_APPROVED_SHA_REQUIRED; exit 4; }
 
 repo=/home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz
@@ -175,7 +175,7 @@ i=0
 for s in shopvivaliz-dev-browser.service shopvivaliz-atendimento-browser.service \
   shopvivaliz-atendimento-mcp-browser.service; do
   systemctl is-active --quiet "$s" || { echo DEV_AUX_BROWSER_SERVICE_LOST; exit 13; }
-  [[ "$(systemctl show -p MainPID --value "$s")" == "\${processes[i]}" ]] || {
+  [[ "$(systemctl show -p MainPID --value "$s")" == "${processes[i]}" ]] || {
     echo DEV_AUX_CHROME_PID_CHANGED; exit 14; }
   i=$((i + 1))
 done
