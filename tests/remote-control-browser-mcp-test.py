@@ -992,6 +992,25 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("recoveryLinks.length!==1", block)
         self.assertIn("recoveryLinks[0].click()", block)
 
+    def test_expired_password_and_passkey_official_try_again_recovery(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
+        block = block.split("const buttons=[", 1)[0]
+        # Provider renders "Session ended" on password stage and offers an
+        # anchor "Try again", not always "Your session has ended"/"Log in".
+        self.assertIn("document.title||''", block)
+        self.assertIn("('Session ended')", block)
+        self.assertIn("('Your session has ended')", block)
+        self.assertIn("'/log-in/passkey'", block)
+        self.assertIn("/^(?:log in|try again)$/i", block)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", block)
+        self.assertIn("recoveryLinks.length!==1", block)
+        self.assertIn("recoveryLinks[0].click()", block)
+        # No bypass of live MFA inputs or account-scoped auth gate.
+        self.assertIn("input[autocomplete=one-time-code],input[name=code]", block)
+        self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
+        self.assertIn("account_auth_mfa_stage_required", Path(m.__file__).read_text())
+
     def test_expired_mfa_recovery_does_not_weaken_lease_or_stage_gates(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
