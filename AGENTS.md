@@ -60,6 +60,34 @@ Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
 <!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
 
 
+<!-- CHATGPT_LOGIN_GMAIL_WATCH_10_MINUTES_V1 -->
+## Login corporativo: monitorar Gmail por ate 10 minutos por tentativa
+
+Quando o agente SOLICITAR ou iniciar realmente um login para
+dev@shopvivaliz.com.br ou atendimento@shopvivaliz.com.br, monitorar o
+Gmail fredmourao@gmail.com por ate **600 segundos**, iniciando com a
+acao oficial sob lease, checando mensagem nova da OpenAI para a conta
+exata e terminando ao identificar a mensagem ou expirar o prazo.
+Na VM, remote-control-browser-mcp/login_email_watch.py realiza
+verificacao **somente de metadados** a cada **15 segundos**, com
+identidade exata, prazo fixo, deduplicacao por conta, resultado privado
+e leitura sanitizada por browser_auth_tabs. Nenhum codigo e lido,
+transmitido ou usado automaticamente para entrar no ChatGPT.
+A janela exige **OAuth Gmail readonly independente do backend**;
+se ele nao existir, retornar oauth_not_provisioned e NAO fingir que
+a monitoria de 10 minutos foi iniciada. No chat com Gmail conectado,
+o agente pode consultar os metadados durante a tentativa interativa,
+mas NAO prometer acompanhamento depois de encerrar a resposta.
+A automacao ChatGPT horaria NAO substitui o acompanhamento curto.
+O codigo de e-mail, senha e GNOME TOTP sao etapas separadas;
+a pessoa autorizada preenche na tela oficial quando o cliente bloquear
+a transferencia automatica, jamais via CDP/shell/clipboard/ponte
+alternativa. Preservar browser_session, lease/fencing, controles MFA,
+sem pedir novamente secrets. Detalhes no runbook
+docs/knowledge/chatgpt-vm-auth.md.
+<!-- /CHATGPT_LOGIN_GMAIL_WATCH_10_MINUTES_V1 -->
+
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
