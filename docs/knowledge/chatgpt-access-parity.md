@@ -83,7 +83,7 @@ The browser MCP instead provides two narrowly scoped operations:
   and `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1`. Normal browser mutation
   gates and in-progress conversations are unchanged.
 
-As an idempotent preflight, the action **brings only the already verified
+`back_to_methods` is also permitted on the exact official `https://auth.openai.com/log-in/passkey` stage: it clicks **only one** enabled provider-rendered `Try another way` button (or its matching Portuguese label), after refusing CAPTCHA/Turnstile/hCaptcha/reCAPTCHA. On `/log-in/password`, the existing action continues to click only the first-party `Edit` link. It must never synthesize a verification method, replace the required email challenge, change accounts, or act on an arbitrary page; the same account-specific maintenance lease/fencing gate applies. The owner-approved password + GNOME TOTP preference does not override any additional provider-required step.\n\nAs an idempotent preflight, the action **brings only the already verified
 official login tab to the foreground** using CDP `Page.bringToFront` before
 evaluating controls. This wakes background/frozen authentication pages without
 reloading or navigating, and uses a bounded CDP timeout. A failed activation
