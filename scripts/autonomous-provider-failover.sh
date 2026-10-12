@@ -181,6 +181,7 @@ for provider in "${ORDER[@]}"; do
     gemini)
       if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
         try_provider gemini \
+          env SHOPVIVALIZ_RESUME_BACKGROUND=1 \
           python3 "$SCRIPT_DIR/run_background_gemini.py" \
             --model "$GEMINI_MODEL" \
             --prompt-file "$PROMPT_FILE" && exit 0
