@@ -29,6 +29,53 @@ class Response:
 
 
 class Tests(unittest.TestCase):
+    def test_gemini_billing_guard_requires_wrapper_and_router(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            wrapper = root / "run_background_gemini.py"
+            router = root / "autonomous-provider-failover.sh"
+            wrapper.write_text(
+                "FREE_TIER_BILLING_GUARD_V1\\n"
+                "free_tier_approved_credentials(\\n"
+                "background_gemini_error=free_tier_not_verified\\n"
+                "SHOPVIVALIZ_RESUME_BACKGROUND\\n"
+            )
+            router.write_text("env SHOPVIVALIZ_RESUME_BACKGROUND=1\\n")
+            self.assertTrue(s.gemini_free_billing_guard_present(root))
+            router.write_text("python3 run_background_gemini.py\\n")
+            self.assertFalse(s.gemini_free_billing_guard_present(root))
+            router.write_text("env SHOPVIVALIZ_RESUME_BACKGROUND=1\\n")
+            wrapper.write_text("FREE_TIER_BILLING_GUARD_V1\\n")
+            self.assertFalse(s.gemini_free_billing_guard_present(root))
+
+    def test_gemini_billing_guard_missing_files_fail_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertFalse(s.gemini_free_billing_guard_present(Path(d)))
+
+    def test_gemini_billing_drift_reported_but_no_model_invoked(self):
+        with (patch.object(s, "active", return_value=True),
+              patch.object(s, "service_pid", return_value=100),
+              patch.object(s, "selected_environment",
+                           return_value={x: "0" for x in (*s.FLAGS, s.INTERACTIVE_FLAG)}),
+              patch.object(s, "free_router_present", return_value=True),
+              patch.object(s, "runtime_gemini_guard_present", return_value=False),
+              patch.object(s, "bridge_disabled", return_value=True)):
+            self.assertIn(
+                "GEMINI_FREE_BILLING_GUARD_DRIFT",
+                s.policy_anomalies("shopvivaliz-free-a1"),
+            )
+        with (patch.object(s, "active", return_value=True),
+              patch.object(s, "service_pid", return_value=100),
+              patch.object(s, "selected_environment",
+                           return_value={x: "0" for x in (*s.FLAGS, s.INTERACTIVE_FLAG)}),
+              patch.object(s, "free_router_present", return_value=True),
+              patch.object(s, "runtime_gemini_guard_present", return_value=True),
+              patch.object(s, "bridge_disabled", return_value=True)):
+            self.assertNotIn(
+                "GEMINI_FREE_BILLING_GUARD_DRIFT",
+                s.policy_anomalies("shopvivaliz-free-a1"),
+            )
+
     def test_health_rejects_enabled_and_wrong_endpoint(self):
         valid={"endpoint":"ai-squad-codex-bridge","ok":False,
                "auth_mode":"disabled","policy":"manual_approval_required"}

@@ -16,6 +16,11 @@ Verifica, sem gerar texto com modelos:
 
 - serviços essenciais, flags de fallback pagas fixadas em 0 e
   integridade do roteador Gemini/Ollama;
+- verificar a protecao FREE_TIER_BILLING_GUARD_V1 do executor Gemini
+  e o marcador explicito do modo background no roteador; sinalizar
+  GEMINI_FREE_BILLING_GUARD_DRIFT se um deploy remover a protecao.
+  Uma chave Free ainda nao verificada nao gera alerta: fallback Ollama
+  e o comportamento intencional, sem uso faturavel de Gemini;
 - GET /health dos bridges Codex/Claude, que devem anunciar política
   manual_approval_required e modo disabled;
 - processos Codex e Claude novos, excluindo somente o processo principal
