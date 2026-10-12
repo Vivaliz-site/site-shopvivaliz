@@ -28,7 +28,24 @@ preservando o checkpoint. Não habilitar billing automaticamente.
    --project-id PROJECT_ID e --key-source GEMINI_API_KEY ou GOOGLE_API_KEY,
    conforme a chave verificada. Ele lê a chave apenas localmente
    e persiste seu SHA-256. Nunca passar o valor no terminal, log ou Git.
-5. Verificar sem tráfego com scripts/attest-gemini-free-tier.py --status.
+5. Verificar sem tráfego com `scripts/attest-gemini-free-tier.py --status`.
+
+**Fontes de credenciais distintas:**
+- **Backend/controlador:** o instalador empacota o helper no diretório de scripts
+  da release imutável `/opt/shopvivaliz-gemini-24x7-controller/releases/<SHA>/scripts/`.
+  Execute o helper protegido com
+  `--env-file /home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env --status`
+  (ou defina `GEMINI_ENV_FILE` apontando para essa mesma referência).
+- **Site/produção web:** o helper no checkout de deploy utiliza por padrão
+  `/home/ubuntu/shopvivaliz-deploy/shared/.env`.
+
+A variável `GEMINI_ENV_FILE` é reconhecida tanto pelo executor quanto pelo
+helper de prova; a opção explícita `--env-file` tem prioridade. O helper
+somente lê a credencial *localmente*, divulga unicamente status e quantidade
+aprovada e não chama modelos. A ausência de prova deve continuar resultando
+em `UNVERIFIED`; não inventar atestado por nome Flash, presença de chave,
+ausência de fatura ou silêncio do monitor.
+
 
 O registro privado fica em
 /home/ubuntu/shopvivaliz-deploy/shared/ai-free-policy/gemini-free-tier.json
