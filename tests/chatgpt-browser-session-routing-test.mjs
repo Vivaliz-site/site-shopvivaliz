@@ -106,6 +106,82 @@ export async function runBrowserSessionRoutingTests(api, directory) {
         else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
       }
     }],
+    ['Dev auxiliary must verify its identity before any neutral-tab selection or navigation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const { connectBoundConversationWithReentry } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+        const neutral = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://neutral-fixture' };
+        const events = [];
+        const probe = {
+          close() {},
+          async evaluate() {
+            events.push('identity_probe');
+            return false; // A different account or missing user.email.
+          },
+        };
+        const outcome = await api.attemptNudge(
+          id,
+          async () => connectBoundConversationWithReentry([neutral], conversation, {
+            connector: async () => probe,
+            selectReentry: async () => { events.push('select_reentry'); return neutral; },
+            navigate: async () => { events.push('navigate'); return true; },
+          }),
+          undefined, undefined, conversation,
+        );
+        assert.equal(outcome.sent, false);
+        assert.ok(events.includes('identity_probe'), 'fail-closed account probe must run');
+        assert.equal(events.includes('select_reentry'), false, 'must not choose/create a target before checking Dev identity');
+        assert.equal(events.includes('navigate'), false, 'must not navigate to a private Dev conversation in a wrong account');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
+    ['verified Dev auxiliary may reenter only its exact bound conversation', async () => {
+      const previous = process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+      process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = '9557';
+      try {
+        write({ browser_session: 'dev' });
+        const { connectBoundConversationWithReentry } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+        const neutral = { type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://verified-dev-home' };
+        const calls = [];
+        const tab = {
+          close() {},
+          async evaluate(source) {
+            if (source.includes('continuity-dev-aux-prenavigation-identity')) {
+              calls.push('identity_verified');
+              return true;
+            }
+            if (source.includes('continuity-browser-account-match')) {
+              calls.push('existing_conversation_recheck');
+              return false;
+            }
+            throw Error('no other evaluation allowed');
+          },
+        };
+        const outcome = await api.attemptNudge(id,
+          async () => connectBoundConversationWithReentry([neutral], conversation, {
+            connector: async () => tab,
+            selectReentry: async () => { calls.push('select'); return neutral; },
+            navigate: async (_, actualId) => {
+              calls.push('navigate');
+              assert.equal(actualId, conversation);
+              return true;
+            },
+          }),
+          undefined, undefined, conversation,
+        );
+        assert.equal(outcome.sent, false, 'identity alone is not continuation proof');
+        assert.deepEqual(calls, [
+          'identity_verified', 'select', 'navigate', 'existing_conversation_recheck',
+        ], 'the exact identity must be checked before reentry and rechecked before any UI mutation');
+      } finally {
+        if (previous === undefined) delete process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP;
+        else process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP = previous;
+      }
+    }],
     ['pre-cutover fred checkpoint remains compatible on CDP9555', async () => {
       assert.equal((await capture({ browser_session: 'fred' })).urls[0], 'http://127.0.0.1:9555/json/version');
     }],
