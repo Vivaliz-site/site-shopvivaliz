@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -54,5 +56,21 @@ class GuardTest(unittest.TestCase):
     result=mod.run(model="gemini-flash-latest",prompt_file=prompt,env_file=f,gemini_bin="/nonexistent/cli",tier_attestation_file=Path(td)/"missing")
    self.assertEqual(result,78)
    called.assert_not_called()
+ def test_attestation_status_honors_runtime_gemini_env_file(self):
+  # The backend stores its Gemini key separately from the site's shared .env.
+  # An environment override must work without calling or validating a model.
+  with tempfile.TemporaryDirectory() as td:
+   env_file=Path(td)/"gemini.env"
+   env_file.write_text("GEMINI_API_KEY=fixture-no-real-key\\n".replace("\\n","\n"),encoding="utf-8")
+   output=subprocess.run(
+    [sys.executable,"-B",str(ROOT/"scripts/attest-gemini-free-tier.py"),
+     "--status","--proof-file",str(Path(td)/"missing-proof.json")],
+    env={**os.environ,"GEMINI_ENV_FILE":str(env_file)},
+    capture_output=True,text=True,timeout=10,check=False,
+   )
+   self.assertEqual(output.returncode,0,output.stderr)
+   self.assertIn("GEMINI_TIER_STATUS=UNVERIFIED",output.stdout)
+   self.assertIn("GEMINI_APPROVED_KEY_COUNT=0",output.stdout)
+
 if __name__=="__main__":
  unittest.main()
