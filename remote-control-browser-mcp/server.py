@@ -1077,6 +1077,16 @@ try {
         "if(u.pathname.startsWith('/mfa-challenge/')&&document.querySelector('input[autocomplete=one-time-code],input[name=code]'))throw Error('auth_action_ambiguous_or_unavailable');" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^(?:log in|try again)$/i.test(String(a.innerText||'').trim()));" +
+        // An expired first-party email challenge can show exactly one
+        // 'Try again' BUTTON rather than the /auth/login_with anchor.
+        // Retry only if the expired page has no form or CAPTCHA.
+        "if(recoveryLinks.length===0&&u.pathname==='/email-verification'){" +
+        "const blocked=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(blocked||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
+        "}" +
         "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "recoveryLinks[0].click();return {clicked:true};" +
         "}" +
