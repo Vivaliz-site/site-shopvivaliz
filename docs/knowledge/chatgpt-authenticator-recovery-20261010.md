@@ -252,3 +252,71 @@ tunel, reinicia-lo somente pelo procedimento autorizado com
 testes de readiness e refresh do catalogo no painel. Manter
 RBAC/MFA/aprovacoes e a recuperacao por rollback; nao confundir
 refresh da listagem com autenticacao das contas.
+
+## Checkpoint da retomada — Atendimento autenticado e Dev dedicado aguardando e-mail (2026-10-11)
+
+**Fonte da verdade mais recente:** sessao autenticada somente quando
+`https://chatgpt.com/api/auth/session` retorna
+`user.email` correspondente ao navegador consultado. Este checkpoint
+atualiza os estados historicos anteriores, sem alterar os vínculos
+fixos do `browser-sessions.md`.
+
+| Sessao Chromium da VM | Identidade validada | Estado |
+|---|---|---|
+| Atendimento dedicado, `fredrdp/:99`, CDP `9556` | `atendimento@shopvivaliz.com.br` | **AUTHENTICATED**, prova E2E |
+| Auxiliar `shopvivaliz-atendimento-mcp-chromium`, CDP `9557` | `dev@shopvivaliz.com.br` | **AUTHENTICATED**, mas **nao e** a sessao Dev canonica para agentes |
+| Dev dedicado `shopvivaliz-dev-chromium`, CDP `9559` | Nao comprovada (campo `user.email` ausente) | **AUTH_REQUIRED**, aguardando etapa `/email-verification` |
+
+### Resultado da recuperacao do Atendimento
+
+- A senha existente foi selecionada e preenchida pelo gerenciador nativo
+  do Chromium **sem leitura/transferencia de valor**.
+- A acao protegida `browser_auth_action(fill_gnome_totp)`, com lease
+  de manutencao exclusivo, completou o desafio MFA pela via oficial.
+- A escolha inicial do workspace Vivaliz retornou
+  `/auth/error?error=OAuthCallback`; nova tentativa pela escolha
+  pessoal **da mesma conta** completou o login. A organizacao da conta
+  nao foi modificada.
+- O perfil **9556** retornou o e-mail esperado na API oficial, e o
+  login permaneceu disponivel em leituras subsequentes. Nao executar
+  novamente login/logout, troca de perfil ou limpeza de cookies.
+
+### Dev dedicado: metodos oficiais examinados e bloqueio restante
+
+- O Chrome auxiliar 9557 retornou identidade Dev correta, mas sua
+  sessao **nao pode ser copiada nem redirecionada como fallback**
+  para o 9559 sob o contrato atual de isolamento.
+- Preflight da senha no perfil Dev 9559: `saved_entry=NOT_VERIFIED`,
+  `DENY_ABSENCE_NOT_PROVEN`, `may_request_password=false`,
+  `password_or_token_accessed=false`. **Nao** concluir que a senha
+  e inexistente e **nao** solicitá-la novamente.
+- O 9559 estava em `/log-in/passkey` expirado. O retorno pelo link
+  oficial `Log in` permitiu recomecar a autenticacao. Apos informar
+  somente o e-mail Dev e clicar `Continue` pela acao MCP autorizada,
+  o provedor exigiu `/email-verification`, **sem apresentar tela
+  de senha**.
+- A alternativa oficial `Continue with passkey` foi inspecionada.
+  A escolha `Try another way`, apos cancelar a janela de passkey
+  com Escape, retornou ao proprio `/email-verification`, sem revelar
+  rota de senha+TOTP nesse fluxo. Nao insistir em passkey/links
+  expirados ou em TOTP numa etapa que ainda exige e-mail.
+- O Gmail corporativo conectado recebeu nova mensagem de
+  verificacao para Dev; **apenas data/remetente/metadados** foram
+  analisados aqui, sem expor o codigo. O checkpoint anterior ja
+  registrou bloqueio de seguranca do cliente para a transferencia
+  automatizada desse OTP. **Nao contornar** a restricao por comandos,
+  clipboard, scripts, URLs ou transporte alternativo.
+- O lease de manutencao foi liberado/expirou; nao houve alteracao
+  de password store, cookies, profile dir, binding, permissao, MFA
+  ou servico durante a exploracao de metodos.
+
+**Dependencia restante:** concluir **na interface oficial do perfil
+Dev dedicado 9559** a verificacao exigida pelo provedor, mediante
+pessoa autorizada se o fluxo protegido nao for aceito pela
+plataforma. Nao copiar o codigo para chat nem GitHub. Depois,
+prosseguir apenas pelas etapas oficiais que a OpenAI apresentar,
+validar `user.email=dev@shopvivaliz.com.br` em CDP9559, comprovar
+persistencia e entao liberar os checkpoints Dev do controlador.
+O guardiao deve continuar `AUTH_REQUIRED` ate essa evidencia; a
+sessao auxiliar 9557 nao deve ser declarada cobertura de 9559.
+
