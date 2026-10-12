@@ -31,7 +31,7 @@ DEFAULT_TIER_ATTESTATION = Path(
 )
 MAX_FREE_TIER_ATTESTATION_AGE_DAYS = 30
 SUPPORTED_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GEMINI_API_KEY")
-DEFAULT_FALLBACK_MODELS = ("gemini-flash-lite-latest",)
+DEFAULT_FALLBACK_MODELS = ("gemini-3.1-flash-lite",)
 DEFAULT_GEMINI_ATTEMPT_TIMEOUT_SECONDS = 60
 
 # Flash is eligible for Gemini free-tier usage; actual billing eligibility
