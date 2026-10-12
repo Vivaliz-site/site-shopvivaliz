@@ -208,6 +208,27 @@ class AccountAuthGateTests(unittest.TestCase):
         self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
         self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
 
+    def test_official_chatgpt_login_with_retry_requires_empty_unprotected_page(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        target = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"
+        self.assertIn(target, script)
+        block = script.split(target, 1)[1].split("const buttons=[", 1)[0]
+        for guard in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^try again$/i",
+            "retryButtons.length!==1",
+            "retryButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(guard, block)
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
+
     def test_terminal_mfa_continue_retries_only_unique_official_error_button(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         for requirement in (
