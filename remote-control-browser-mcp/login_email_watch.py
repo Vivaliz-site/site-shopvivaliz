@@ -128,14 +128,16 @@ def watch_window(
     if session not in ACCOUNTS:
         raise ValueError("account_scope_invalid")
     deadline = monotonic() + WATCH_SECONDS
+    successful_polls = 0
     while monotonic() < deadline:
         try:
             messages = fetch(session, start_epoch)
+            successful_polls += 1
         except Exception:
-            result = {"status": "gmail_read_failed", "session": session}
-            if report is not None:
-                report(result)
-            return result
+            # Transient network errors do not abandon the requested 10m watch.
+            messages = []
+        if monotonic() >= deadline:
+            break  # Never accept a result after the official watch window.
         for data in messages:
             found = match_metadata(data, session, start_epoch)
             if found:
@@ -147,7 +149,8 @@ def watch_window(
         remaining = deadline - monotonic()
         if remaining > 0:
             sleep(min(POLL_SECONDS, remaining))
-    result = {"status": "timeout", "session": session}
+    result = {"status": "timeout" if successful_polls else "gmail_read_failed",
+              "session": session}
     if report is not None:
         report(result)
     return result
