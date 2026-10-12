@@ -149,10 +149,10 @@ done
 ! systemctl is-active --quiet "$guard_unit" || {
   echo DEV_AUX_CONCURRENT_GUARDIAN; exit 11; }
 rollback=1
-replace_file "$stage/worker.new.mjs" "$worker" 0700 ubuntu
 worker_written=1
-replace_file "$stage/guardian.new.sh" "$guardian" 0755 root
+replace_file "$stage/worker.new.mjs" "$worker" 0700 ubuntu
 guardian_written=1
+replace_file "$stage/guardian.new.sh" "$guardian" 0755 root
 install -d -m 0755 -o ubuntu -g ubuntu "$(dirname "$user_dropin")"
 install -d -m 0755 -o root -g root "$(dirname "$guard_dropin")"
 printf '[Service]\nEnvironment=SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP=9557\n' > "$stage/unit.conf"
@@ -179,6 +179,10 @@ for s in shopvivaliz-dev-browser.service shopvivaliz-atendimento-browser.service
     echo DEV_AUX_CHROME_PID_CHANGED; exit 14; }
   i=$((i + 1))
 done
+systemctl start "$guard_timer"
+systemctl is-active --quiet "$guard_timer" || {
+  echo DEV_AUX_GUARDIAN_TIMER_NOT_RESTORED; exit 15; }
+timer_stopped=0
 echo DEV_AUX_CONTINUITY_TRANSPORT_VERIFIED=true
 echo EXISTING_CHROMIUM_PROCESSES_PRESERVED=true
 rollback=0
