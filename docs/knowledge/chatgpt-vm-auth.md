@@ -262,3 +262,68 @@ autorizacao Gmail estiver ausente, apenas a etapa dependente de email fica
 em espera de autenticacao; tarefas independentes continuam via worker
 normal sob leases exclusivos e invariantes de conta/conversa. Nenhum
 codigo temporario deve aparecer em logs, comandos, PRs ou auditorias.
+
+## Janela temporaria de acompanhamento Gmail no login — 600 segundos
+
+**Ordem expressa do proprietario (2026-10-12):** toda solicitacao
+**efetiva** de login corporativo deve iniciar um acompanhamento do Gmail
+durante **ate 10 minutos**, exclusivamente para a conta que esta
+autenticando, e terminar assim que uma mensagem nova valida for
+identificada ou o prazo de 600 segundos expirar. Acompanhamento continuo
+neste intervalo **nao** equivale a criar automacao ChatGPT a cada
+15 segundos: a automacao ChatGPT aceita no maximo uma execucao por hora.
+
+O Backend Browser MCP possui o worker deterministico
+remote-control-browser-mcp/login_email_watch.py:
+
+- Dispara **somente** apos acao autenticadora oficial bem-sucedida
+  (browser_auth_open ou browser_auth_action com continue/resend
+  na aba oficial), sob maintenance lease/fencing da mesma conta.
+  browser_auth_tabs e probes somente leitura nao criam watchers.
+- Consulta **apenas metadados** da API Gmail a cada 15 segundos,
+  com limite de 600 segundos por ciclo; compara ID, timestamp posterior
+  ao inicio, remetente oficial, assunto de codigo do ChatGPT e
+  destinatario exato dev@shopvivaliz.com.br ou
+  atendimento@shopvivaliz.com.br. Mensagens antigas ou da outra conta
+  nao encerram a janela.
+- Guarda somente status, session, timestamps e identificador nao
+  secreto da mensagem em estado privado 0600 na VM, sob
+  /var/lib/shopvivaliz-remote-control/email-login-watch/.
+  browser_auth_tabs pode expor apenas status/horarios sem identificador.
+  Nenhum valor do OTP, snippet, corpo, password, token, seed ou cookie
+  e requisitado, exibido ou transferido para o navegador.
+- Sem OAuth Gmail **proprio e autorizado do backend**, responde
+  oauth_not_provisioned e **nao** inicia processo nem alega monitoramento.
+  O conector Gmail do ChatGPT nao autoriza automaticamente esse backend.
+  A prova de readiness exige conta Gmail exata e API real.
+- Autorizacao independente para ativar a VM: realizar consentimento
+  Google OAuth legitimo com escopo Gmail readonly e armazenar com acesso
+  exclusivo root em
+  /var/lib/shopvivaliz-remote-control/gmail-login-readonly-oauth.json
+  (0600, sem symlink), usando apenas as chaves mailbox (igual
+  fredmourao@gmail.com), scope (https://www.googleapis.com/auth/gmail.readonly),
+  client_id, client_secret e refresh_token. **Nunca escrever
+  valores reais em comando, Git, logs, chat ou documentacao** e nao
+  reaproveitar concessao de Google Ads/Amazon Returns sem prova do
+  escopo e da identidade. Sem tal consentimento, permanece desativado.
+- Nao promete notificacao push imediata ao ChatGPT/iPhone: o evento
+  metadata-only e verificavel no monitor da VM e nas leituras aprovadas
+  do Browser MCP. Alertas instantaneos exigem um canal de notificacao
+  adicional legitimamente integrado. O Gmail no telefone pode oferecer
+  notificacoes proprias.
+
+No login assistido em conversa, enquanto o backend nao tiver OAuth
+independente, o agente **deve consultar o Gmail ja conectado ao ChatGPT
+durante a tentativa ativa por ate 10 minutos**, filtrando remetente,
+destinatario e mensagens posteriores ao pedido. Essa alternativa opera
+somente durante a execucao interativa do agente; **nao** afirmar que
+continua monitorando apos encerrar a resposta nem usar automacao horaria
+como substituto do ciclo curto.
+
+Ao detectar mensagem nova: informar prontamente que a verificacao
+chegou e permitir que a pessoa autorizada digite o codigo diretamente
+na pagina oficial. Continua **proibida** a transferencia automatizada
+Gmail para navegador Dev recusada pelos controles da OpenAI. Nao pedir OTP
+no chat, contornar por CDP/shell/clipboard/outro conector ou considerar
+esse evento prova de autenticacao. Somente user.email exato no perfil
+corporativo correto confirma o login.
