@@ -1016,6 +1016,31 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
         self.assertIn("account_auth_mfa_stage_required", Path(m.__file__).read_text())
 
+    def test_oauth_callback_error_retry_requires_exact_first_party_go_back(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn('u.pathname === "/auth/error"', script)
+        self.assertIn("u.pathname==='/auth/error'", script)
+        key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/error'){"
+        self.assertIn(key, script)
+        block = script.split(key, 1)[1].split(
+            "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){",
+            1,
+        )[0]
+        for guard in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^go back$/i",
+            "backButtons.length!==1",
+            "backButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(guard, block)
+        self.assertNotIn("window.location", block)
+        self.assertNotIn("document.cookie", block)
+
     def test_chatgpt_login_with_retry_does_not_bypass_security_checks(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"

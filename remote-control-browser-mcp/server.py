@@ -954,7 +954,7 @@ if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
 const validStage = u => u.protocol === "https:" && (
     (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
-    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
+    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || u.pathname === "/auth/error" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
     signal: AbortSignal.timeout(2500)
@@ -986,7 +986,7 @@ try {
     }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
+        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||u.pathname==='/auth/error'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
@@ -1035,6 +1035,15 @@ try {
         "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^(?:log in|try again)$/i.test(String(a.innerText||'').trim()));" +
         "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
         "recoveryLinks[0].click();return {clicked:true};" +
+        "}" +
+        // Retry only the first-party OAuth error's exact Go back control.
+        // Never enter CAPTCHA, forms, foreign origins or arbitrary pages.
+        "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/error'){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(unsafe||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const backButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^go back$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(backButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "backButtons[0].click();return {clicked:true};" +
         "}" +
         "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){" +
         "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
