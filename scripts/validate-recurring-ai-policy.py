@@ -17,6 +17,16 @@ class Violation:
 PAID_EXECUTION_PATTERNS = (
     re.compile(r"anthropics/claude-code-action@", re.IGNORECASE),
     re.compile(r"\bcodex\s+exec\b", re.IGNORECASE),
+    # Historical runaway loops repeatedly invoked the Claude CLI from
+    # one-shot worktrees. Check direct paid CLI entrypoints, not only API SDKs.
+    re.compile(
+        r"\bclaude(?:\.exe)?\s+(?:-p\b|--print\b|--model\b|--resume\b|--continue\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"['\"]claude(?:\.exe)?['\"]\s*,\s*['\"](?:-p|--print|--model)['\"]",
+        re.IGNORECASE,
+    ),
     re.compile(r"api\.openai\.com", re.IGNORECASE),
     re.compile(r"api\.anthropic\.com", re.IGNORECASE),
     re.compile(r"\bopenai\.OpenAI\s*\(", re.IGNORECASE),
@@ -45,6 +55,13 @@ SCRIPT_REFERENCE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Catch workflows invoking ./scripts/worker.sh directly without a bash/sh
+# interpreter. Nested scripts receive the same paid-AI recursion scan.
+DIRECT_SCRIPT_REFERENCE_PATTERN = re.compile(
+    r"(?m)^[ \t]*(?:-[ \t]*run:[ \t]*|run:[ \t]*|-[ \t]*)?(?:\./)?(scripts/[A-Za-z0-9_./-]+\.(?:py|php|sh|js|mjs|cjs))(?=$|[\s'\";])",
+    re.IGNORECASE,
+)
+
 
 def _uses_paid_ai(text: str) -> bool:
     return any(pattern.search(text) for pattern in PAID_EXECUTION_PATTERNS)
@@ -52,6 +69,7 @@ def _uses_paid_ai(text: str) -> bool:
 
 def _referenced_paid_scripts(root: Path, text: str, max_depth: int = 4) -> tuple[Path, ...]:
     queue: list[tuple[str, int]] = [(match.group(1), 0) for match in SCRIPT_REFERENCE_PATTERN.finditer(text)]
+    queue.extend((match.group(1), 0) for match in DIRECT_SCRIPT_REFERENCE_PATTERN.finditer(text))
     seen: set[Path] = set()
     paid: list[Path] = []
 
@@ -72,6 +90,7 @@ def _referenced_paid_scripts(root: Path, text: str, max_depth: int = 4) -> tuple
             paid.append(candidate)
         if depth < max_depth:
             queue.extend((match.group(1), depth + 1) for match in SCRIPT_REFERENCE_PATTERN.finditer(body))
+            queue.extend((match.group(1), depth + 1) for match in DIRECT_SCRIPT_REFERENCE_PATTERN.finditer(body))
 
     return tuple(paid)
 
