@@ -374,6 +374,8 @@ class AccountAuthGateTests(unittest.TestCase):
             mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
                               return_value=allowed_lease("dev")),
             mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake),
+            mock.patch.object(m, "browser_auth_tabs",
+                              return_value={"tabs":[{"tab_id":"example-tab","stage":"/email-verification"}]}),
             mock.patch.object(m, "_start_bounded_login_email_watch",
                               return_value={"status":"oauth_not_provisioned"}) as begin,
         ):
