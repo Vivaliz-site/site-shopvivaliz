@@ -1610,6 +1610,14 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if _dev_aux_opt_in():
+        if name in ATTENDIMENTO_TOOL_MAP:
+            # A Dev process must never advertise Atendimento aliases that
+            # would actually operate the Dev profile.
+            raise ValueError("dev_aux_cross_session_tool_denied")
+        if name in {"browser.dom.inspect", "browser.click"}:
+            # These aliases dispatch before the ordinary base tool gate.
+            _require_dev_aux_authenticated()
     if name == "browser_auth_tabs":
         return browser_auth_tabs(args)
     if name == "browser_auth_status":
