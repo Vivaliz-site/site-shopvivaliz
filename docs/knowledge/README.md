@@ -1,4 +1,5 @@
 # Knowledge Base do ShopVivaliz
+- [Monitor de provedores gratuitos](ai-free-provider-sentinel.md) — monitor somente leitura das duas VMs para uso de provedores pagos e desvios da política Gemini/Ollama.
 
 Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
