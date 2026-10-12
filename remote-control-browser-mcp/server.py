@@ -1022,10 +1022,10 @@ try {
         "if(retryButtons.length>0){" +
         "const unsafe=Boolean(document.querySelector('form,iframe,[data-sitekey],.h-captcha,.g-recaptcha'));" +
         "if(retryButtons.length!==1||enabledButtons.length!==1||unsafe)throw Error('auth_action_ambiguous_or_unavailable');" +
-            "retryButtons[0].click();return {clicked:true};" +
+        "retryButtons[0].click();return {clicked:true};" +
         "}" +
         "}" +
-    "if(action==='continue'&&u.origin==='https://auth.openai.com'&&u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))&&" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))&&" +
         "document.body?.innerText?.includes('Oops, an error occurred!')&&" +
         "document.querySelectorAll('input[autocomplete=one-time-code],input[name=code]').length===0){" +
         "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha');" +
