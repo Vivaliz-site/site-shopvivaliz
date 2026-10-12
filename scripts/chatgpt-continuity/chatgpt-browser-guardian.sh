@@ -395,7 +395,7 @@ if [[ "$dev_aux_adoption" == 9557 ]]; then
         ;;
     esac
   fi
-  exit "$status"
+  exit "${status}"
 fi
 # End of readonly Dev auxiliary continuity adoption.
 
