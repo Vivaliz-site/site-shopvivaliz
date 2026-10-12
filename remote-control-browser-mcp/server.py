@@ -1239,7 +1239,14 @@ try{
     return rank(a)-rank(b);
   });
   // A bounded batch avoids CDP tab storms; no navigation, focus or reload.
-  const checks=await Promise.all(prioritized.slice(0,8).map(identity));
+  // At most sixteen tabs, in small batches. The profile may contain many
+  // restored tabs and the first tab may not be the authenticated Home.
+  const checks=[];
+  for(let offset=0;offset<Math.min(16,prioritized.length);offset+=4){
+    const batch=await Promise.all(prioritized.slice(offset,offset+4).map(identity));
+    checks.push(...batch);
+    if(batch.some(v=>v.match||v.present))break;
+  }
   observed.tabs_checked=checks.filter(v=>v.http>0).length;
   const mismatch=checks.some(v=>v.present&&!v.match);
   const matched=checks.some(v=>v.match);
@@ -1317,7 +1324,7 @@ def _corporate_profile_probe(session: str, mode: str, cancel_check=None) -> dict
         "session": session,
         "cdp_accessible": data.get("cdp_accessible") is True,
         "tabs_seen": min(max(0, int(data.get("tabs_seen", 0))), 512),
-        "tabs_checked": min(max(0, int(data.get("tabs_checked", 0))), 8),
+        "tabs_checked": min(max(0, int(data.get("tabs_checked", 0))), 16),
         "session_http": min(max(0, int(data.get("session_http", 0))), 599),
         "user_present": present,
         "identity_match": match,
