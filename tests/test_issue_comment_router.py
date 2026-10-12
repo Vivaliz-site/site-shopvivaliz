@@ -85,6 +85,21 @@ class IssueCommentRouterTest(unittest.TestCase):
             "/codex-auto-continuity-v7\nlong prompt"
         )))
 
+    def test_explicit_finite_codex_workflows_are_time_bounded(self):
+        # Last-resort paid CLI may run only under a finite, owner-requested job.
+        for name in (
+            "codex-auto-continuity-v7-launcher.yml",
+            "codex-global-issue-comment-routing.yml",
+            "codex-remote-control-mcp-one-shot.yml",
+        ):
+            with self.subTest(workflow=name):
+                text = (WORKFLOWS / name).read_text(encoding="utf-8")
+                match = re.search(r"(?m)^    timeout-minutes: (\\d+)$", text)
+                self.assertIsNotNone(match, "Codex job must have an explicit timeout")
+                self.assertLessEqual(int(match.group(1)), 30)
+                self.assertIn("  workflow_call:", text)
+                self.assertNotIn("  schedule:", text)
+
     def test_slash_route_wins_over_claude_mention(self):
         body = "/remote target=fred-win action=health reason=@claude test"
         self.assertEqual("remote_access", router.classify(payload(body)))
