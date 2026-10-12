@@ -9,10 +9,9 @@ permissions:
 
 jobs:
   activate-goal:
-    if: >-
-      github.event.issue.number == 1586 &&
-      github.event.comment.user.login == 'fredmourao-ai' &&
-      startsWith(github.event.comment.body, '/codex-auto-continuity-v7-goal ')
+    # Retired: unbounded detached Codex sessions violate FREE_PROVIDER_FALLBACK_V2.
+    # Preserve historical implementation in git, but never execute this job.
+    if: ${{ false }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
 
