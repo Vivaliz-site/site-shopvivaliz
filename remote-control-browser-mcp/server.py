@@ -1178,7 +1178,11 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
         stage = _auth_stage(str(item.get("url") or ""))
         if stage is not None and re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(item.get("id") or "")):
             tabs.append({"tab_id": item["id"], "stage": stage, "session": session})
-    return {"ok": True, "session": session, "tabs": tabs}
+    result = {"ok": True, "session": session, "tabs": tabs}
+    watch_state = _read_bounded_login_email_watch_status(session)
+    if watch_state is not None:
+        result["email_watch"] = watch_state
+    return result
 
 
 
@@ -1388,6 +1392,62 @@ def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[s
     return _corporate_profile_probe(session, "home", cancel_check)
 
 
+def _start_bounded_login_email_watch(session: str) -> dict[str, Any]:
+    """Start a 10-minute metadata-only watch after an authorized login event.
+
+    A dedicated Gmail readonly OAuth grant is mandatory. Never fetch email
+    bodies/codes, impersonate the ChatGPT Gmail connector or bypass MFA.
+    """
+    watcher = Path(__file__).resolve().with_name("login_email_watch.py")
+    if not watcher.is_file():
+        return {"status": "watcher_not_installed"}
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_login_email_watch", watcher
+        )
+        if spec is None or spec.loader is None:
+            return {"status": "watcher_unavailable"}
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.launch_watch(session)
+    except Exception:
+        return {"status": "watcher_unavailable"}
+
+
+def _read_bounded_login_email_watch_status(session: str) -> dict | None:
+    """Return only sanitised local status, not Gmail message ID or OTP."""
+    watcher = Path(__file__).resolve().with_name("login_email_watch.py")
+    if not watcher.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_login_email_watch_status", watcher
+        )
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.read_public_status(session)
+    except Exception:
+        return None
+
+
+def _official_email_watch_stage(session: str, tab_id: str) -> bool:
+    """Only a verified login-stage tab may start a new account-specific watch."""
+    eligible = {
+        "/auth/login", "/auth/login_with", "/log-in",
+        "/log-in-or-create-account", "/log-in/password", "/email-verification",
+    }
+    try:
+        tabs = browser_auth_tabs({"session": session})["tabs"]
+    except (ValueError, OSError, KeyError, TimeoutError):
+        return False
+    return any(
+        tab.get("tab_id") == tab_id and tab.get("stage") in eligible
+        for tab in tabs
+    )
+
+
 def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
     """Open only a new official sign-in tab under a real account maintenance lease."""
     session = str(args.get("session") or "")
@@ -1410,6 +1470,8 @@ def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]
                   ACCOUNT_AUTH_OPEN_NODE_SCRIPT, session]
     result = base.run_local_command_with_stdin(invocation, "", base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
+    if result["ok"]:
+        result["email_watch"] = _start_bounded_login_email_watch(session)
     return result
 
 
@@ -1486,6 +1548,10 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             raise ValueError("account_auth_code_invalid")
     elif value:
         raise ValueError("account_auth_value_not_allowed")
+    # Snapshot the approved page stage BEFORE the official button redirects.
+    # Never start a watch from a read-only tab listing or from a TOTP submit.
+    should_watch = (action in {"continue", "resend"}
+                    and _official_email_watch_stage(session, tab_id))
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
         ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id,
@@ -1493,6 +1559,8 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
     ]
     result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
+    if result["ok"] and should_watch:
+        result["email_watch"] = _start_bounded_login_email_watch(session)
     return result
 
 
