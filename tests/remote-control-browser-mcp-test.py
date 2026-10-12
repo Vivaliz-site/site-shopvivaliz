@@ -161,7 +161,8 @@ class BrowserMcpTests(unittest.TestCase):
             "webSocketDebuggerUrl": "ws://127.0.0.1:9557/devtools/browser/id"
         }).encode()
         for state in ("NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"):
-            with self.subTest(state=state), (
+            with (
+                self.subTest(state=state),
                 mock.patch.dict(m.os.environ, env),
                 mock.patch.object(m, "urlopen", return_value=io.BytesIO(metadata)),
                 mock.patch.object(m, "_corporate_profile_probe",
