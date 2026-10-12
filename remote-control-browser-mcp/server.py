@@ -1178,7 +1178,11 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
         stage = _auth_stage(str(item.get("url") or ""))
         if stage is not None and re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(item.get("id") or "")):
             tabs.append({"tab_id": item["id"], "stage": stage, "session": session})
-    return {"ok": True, "session": session, "tabs": tabs}
+    result = {"ok": True, "session": session, "tabs": tabs}
+    watch_state = _read_bounded_login_email_watch_status(session)
+    if watch_state is not None:
+        result["email_watch"] = watch_state
+    return result
 
 
 
@@ -1408,6 +1412,24 @@ def _start_bounded_login_email_watch(session: str) -> dict[str, Any]:
         return module.launch_watch(session)
     except Exception:
         return {"status": "watcher_unavailable"}
+
+
+def _read_bounded_login_email_watch_status(session: str) -> dict | None:
+    """Return only sanitised local status, not Gmail message ID or OTP."""
+    watcher = Path(__file__).resolve().with_name("login_email_watch.py")
+    if not watcher.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_login_email_watch_status", watcher
+        )
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.read_public_status(session)
+    except Exception:
+        return None
 
 
 def _official_email_watch_stage(session: str, tab_id: str) -> bool:
