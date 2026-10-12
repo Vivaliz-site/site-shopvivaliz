@@ -71,3 +71,4 @@ Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
 
 - [Recuperacao grafica ShopVivaliz e isolamento de login](shopvivaliz-graphical-session-recovery.md) — runbook obrigatorio para agentes: RustDesk/LightDM/XFCE versus perfis corporativos Dev/Atendimento, validacao real e preservacao do Keyring.
+- [Verificacao do Gemini Free](gemini-free-tier-billing-guard.md) - gate para jobs persistentes.
