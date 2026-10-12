@@ -78,8 +78,12 @@ class IssueCommentRouterTest(unittest.TestCase):
         )))
         dispatcher = (WORKFLOWS / "issue-comment-dispatcher.yml").read_text()
         self.assertNotIn("codex-continuity-goal:", dispatcher)
-        goal = (WORKFLOWS / "codex-auto-continuity-v7-goal.yml").read_text()
-        self.assertIn("if: ${{ false }}", goal)
+        # The retired unbounded Codex Goal is preserved as documentation,
+        # never as an executable GitHub workflow.
+        archived = ROOT / "docs" / "retired-workflows" / "codex-auto-continuity-v7-goal.yml"
+        self.assertFalse((WORKFLOWS / "codex-auto-continuity-v7-goal.yml").exists())
+        self.assertTrue(archived.is_file(), "retired paid workflow must remain auditable")
+        self.assertIn("if: ${{ false }}", archived.read_text(encoding="utf-8"))
         # Explicit finite one-shot Codex commands remain separately gated.
         self.assertEqual("codex_continuity_launcher", router.classify(payload(
             "/codex-auto-continuity-v7\nlong prompt"
