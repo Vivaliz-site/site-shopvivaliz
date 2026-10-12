@@ -124,6 +124,90 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_health"]["annotations"]["destructiveHint"])
 
+    def test_adopted_dev_chrome_requires_explicit_isolated_aux_flag_and_exact_identity(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        metadata = json.dumps({
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9557/devtools/browser/id"
+        }).encode()
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen", return_value=io.BytesIO(metadata)) as fetch,
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "AUTHENTICATED",
+                                            "identity_match": True,
+                                            "user_present": True}) as identify,
+        ):
+            health = m.browser_service_health()
+        self.assertTrue(health["ok"])
+        self.assertTrue(health["account_authenticated"])
+        self.assertTrue(health["account_identity_verified"])
+        self.assertEqual("dev", health["session"])
+        identify.assert_called_once_with("dev_aux", "status")
+        self.assertEqual("http://127.0.0.1:9557/json/version", fetch.call_args.args[0])
+
+    def test_adopted_dev_chrome_fails_closed_for_wrong_identity_and_no_flag(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        metadata = json.dumps({
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9557/devtools/browser/id"
+        }).encode()
+        for state in ("NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"):
+            with self.subTest(state=state), (
+                mock.patch.dict(m.os.environ, env),
+                mock.patch.object(m, "urlopen", return_value=io.BytesIO(metadata)),
+                mock.patch.object(m, "_corporate_profile_probe",
+                                  return_value={"state": state, "identity_match": False}),
+            ):
+                result = m.browser_service_health()
+                self.assertFalse(result["ok"])
+                self.assertEqual("dev_aux_identity_unverified", result["reason"])
+        with (
+            mock.patch.dict(m.os.environ, {**env, "SHOPVIVALIZ_DEV_ADOPTED_CDP": ""}),
+            mock.patch.object(m, "urlopen") as fetch,
+        ):
+            result = m.browser_service_health()
+        self.assertFalse(result["ok"])
+        self.assertEqual("cdp_session_binding_mismatch", result["reason"])
+        fetch.assert_not_called()
+
+    def test_adopted_dev_browser_tools_are_identity_gated_before_execution(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "IDENTITY_MISMATCH",
+                                            "identity_match": False}) as identify,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser_tabs", {})
+            base.assert_not_called()
+            identify.assert_called_once_with("dev_aux", "status")
+
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "AUTHENTICATED",
+                                            "identity_match": True}),
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"ok": True}) as base,
+        ):
+            self.assertEqual({"ok": True}, m.execute_tool("browser_tabs", {}))
+            base.assert_called_once_with("browser_tabs", {}, cancel_check=None)
+
     def test_dedicated_bridge_health_uses_only_its_cdp_and_no_gui(self):
         for port, session, cdp in (
             ("5582", "atendimento", "9556"),
