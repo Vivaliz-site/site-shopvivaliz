@@ -55,7 +55,7 @@ jobs:
       - name: Python syntax
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py remote-control-browser-mcp/login_email_watch.py
       - name: Authenticated display persistence regression
         run: |
           set -Eeuo pipefail
@@ -70,6 +70,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 remote-control-browser-mcp/tests/test_account_auth_gate.py
+      - name: Ten-minute Gmail readonly metadata watch contract
+        run: |
+          set -Eeuo pipefail
+          python3 remote-control-browser-mcp/tests/test_login_email_watch.py
       - name: Prevent unnecessary ChatGPT credential reprompts
         run: |
           set -Eeuo pipefail
