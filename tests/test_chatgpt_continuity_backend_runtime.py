@@ -116,6 +116,9 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
         self.assertIn("PROGRESS_CONFIRMED", text, "adopter must not infer historical task completion")
+        result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
     def test_backend_installer_wires_single_durable_handoff_flag_default_on(self) -> None:
         body = (ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh").read_text(encoding="utf-8")
