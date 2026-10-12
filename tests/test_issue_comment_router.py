@@ -94,9 +94,9 @@ class IssueCommentRouterTest(unittest.TestCase):
         ):
             with self.subTest(workflow=name):
                 text = (WORKFLOWS / name).read_text(encoding="utf-8")
-                match = re.search(r"(?m)^    timeout-minutes: (\\d+)$", text)
-                self.assertIsNotNone(match, "Codex job must have an explicit timeout")
-                self.assertLessEqual(int(match.group(1)), 30)
+                timeouts = [line.strip() for line in text.splitlines() if line.startswith("    timeout-minutes: ")]
+                self.assertEqual(1, len(timeouts), "one bounded paid job is required")
+                self.assertLessEqual(int(timeouts[0].split(":", 1)[1].strip()), 30)
                 self.assertIn("  workflow_call:", text)
                 self.assertNotIn("  schedule:", text)
 
