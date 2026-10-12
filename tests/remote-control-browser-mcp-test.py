@@ -1025,6 +1025,16 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
 
 
+    def test_corporate_auth_script_passes_real_node_syntax_check(self):
+        import shutil
+        self.assertIsNotNone(shutil.which("node"), "Node.js is required for browser MCP")
+        result = m.subprocess.run(
+            ["node", "--input-type=module", "--check"],
+            input=m.CORPORATE_PROFILE_NODE_SCRIPT,
+            capture_output=True, text=True, check=False, timeout=6,
+        )
+        self.assertEqual(0, result.returncode, result.stderr[:3000])
+
     def test_corporate_auth_status_schema_is_read_only_and_home_is_lease_gated(self):
         specs = {item["name"]: item for item in m.tool_specs()}
         for name in ("browser_auth_status", "browser_profile_home_open"):
