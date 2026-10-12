@@ -102,6 +102,19 @@ class EmailLoginWatchTests(unittest.TestCase):
             p.write_text('{"mailbox":"fredmourao@gmail.com","scope":"https://www.googleapis.com/auth/gmail.send","client_id":"TEST","client_secret":"TEST","refresh_token":"TEST"}')
             self.assertEqual('readonly_scope_required',watch.credential_readiness(p)['status'])
 
+    def test_status_reports_only_nonsecret_fields_from_private_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory=Path(d)
+            watch._write_private_event({"status":"matched", "session":"dev", "message_id":"abc123",
+                                        "received_at":1020, "started_at":1000, "deadline_at":1600,
+                                        "otp":"NEVER_PERSIST","body":"NEVER_PERSIST"},directory=directory)
+            self.assertNotIn("NEVER_PERSIST",(directory/"dev.json").read_text())
+            status=watch.read_public_status("dev", directory=directory)
+            self.assertEqual("matched",status["status"])
+            self.assertNotIn("message_id",status)
+            self.assertNotIn("otp",status)
+            self.assertIsNone(watch.read_public_status("atendimento",directory=directory))
+
     def test_launch_fails_closed_without_credentials(self):
         with tempfile.TemporaryDirectory() as d:
             with mock.patch.object(watch,'OAUTH_FILE',Path(d)/'missing-oauth.json'):
