@@ -121,6 +121,25 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertNotIn('kill -', read_only_path)
         self.assertNotIn('systemctl start "$browser_unit"', read_only_path)
 
+    def test_dev_aux_refuses_cross_account_marker_before_any_browser_action(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9556'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertEqual(self.probes(), 0)
+        self.assertFalse(self.system_log.exists(), 'invalid route must not invoke systemctl')
+
+    def test_dev_aux_rejects_nonapproved_endpoint_override(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9557'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertFalse(self.system_log.exists(), 'CDP override mismatch must not restart browser')
+
     def test_terminal_auth_repeat_skips_expensive_probes(self):
         first = self.run_guardian()
         self.assertEqual(first.returncode, 0, first.stderr)
