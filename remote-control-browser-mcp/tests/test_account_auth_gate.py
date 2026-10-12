@@ -366,6 +366,50 @@ class AccountAuthGateTests(unittest.TestCase):
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
 
+    def test_login_email_watch_only_starts_after_authorized_official_login_action(self):
+        args = payload(action="continue", value="")
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake),
+            mock.patch.object(m, "_start_bounded_login_email_watch",
+                              return_value={"status":"oauth_not_provisioned"}) as begin,
+        ):
+            result = m.browser_auth_action(args)
+            self.assertTrue(result["ok"])
+            self.assertEqual("oauth_not_provisioned", result["email_watch"]["status"])
+            begin.assert_called_once_with("dev")
+            m.browser_auth_action(payload(action="fill_password", value="SYNTHETIC_ONLY"))
+            begin.assert_called_once_with("dev")
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code":1,"stdout":"","stderr":""}),
+            mock.patch.object(m, "_start_bounded_login_email_watch") as begin,
+        ):
+            self.assertFalse(m.browser_auth_action(args)["ok"])
+            begin.assert_not_called()
+
+    def test_login_email_watch_starts_after_explicit_account_scoped_tab_open(self):
+        args = {"session":"dev","runtime_lease_id":"example-lease","runtime_fencing_token":1}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code":0,"stdout":'{"ok":true}',"stderr":""}),
+            mock.patch.object(m, "_start_bounded_login_email_watch",
+                              return_value={"status":"started", "duration_seconds":600}) as begin,
+        ):
+            result = m.browser_auth_open(args)
+            self.assertTrue(result["ok"])
+            self.assertEqual(600,result["email_watch"]["duration_seconds"])
+            begin.assert_called_once_with("dev")
+
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
                               text=True,capture_output=True,check=False)
