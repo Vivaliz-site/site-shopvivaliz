@@ -77,12 +77,24 @@ healthy protected loopback 5583 endpoint; it changes **only the Dev MCP
 systemd drop-in** with automatic rollback. It must never copy/export
 cookies, passwords, OAuth credentials, QR/TOTP or restart Chromium.
 
-This does **not** log the canonical Dev CDP9559 in, nor alter
-the guardian/worker or identify historical conversation bindings.
-Atendimento remains authenticated only in its own CDP9556 profile.
-The continuity readiness/E2E check stays `RUNNING` until its own CDP9559
-and exact task+conversation binding conditions pass. See
-`docs/knowledge/browser-sessions.md` for the specific rollback process.
+The **MCP Dev adoption alone** does **not** log the canonical Dev
+CDP9559 in, nor modify the independent guardian/worker or identify
+historical conversation bindings. Atendimento remains isolated on CDP9556.
+A second, separately authorized **continuity-only** opt-in may now observe
+and use the existing authenticated Dev auxiliary CDP9557 without cookies
+or profile transfers. It is installed only by
+`scripts/adopt-verified-dev-aux-continuity.sh` under a real maintenance
+lease, SHA40 source attestation and live exact-email checks. The worker
+reroutes **only explicitly bound Dev conversation checkpoints**; the
+guardian is strictly read-only for the auxiliary Chromium and never
+restarts it. There is no implicit fallback when the auxiliary logs out.
+Without this second opt-in, the worker and guardian remain on CDP9559.
+
+Regardless of the selected authenticated Dev transport, continuity
+readiness/E2E stays `RUNNING` until the original
+`task_id+conversation_id+browser_session+fingerprint` proofs and a real
+`PROGRESS_CONFIRMED` receipt are present. See
+`docs/knowledge/browser-sessions.md` for separate rollback procedures.
 
 ## Official sign-in before a conversation exists
 
