@@ -258,6 +258,34 @@ def _write_private_event(event: dict, *, directory: Path = STATE_DIR) -> None:
             os.unlink(name)
 
 
+def read_public_status(session: str, *, directory: Path = STATE_DIR) -> dict | None:
+    """Sanitize private watcher state for the existing auth-tabs read API."""
+    if session not in ACCOUNTS:
+        return None
+    try:
+        fd = os.open(str(directory / (session + ".json")),
+                     os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or info.st_mode & 0o077 or info.st_size > 2048):
+            return None
+        data = json.loads(os.read(fd, 2049))
+        if not isinstance(data, dict) or data.get("session") != session:
+            return None
+        fields = ("status", "session", "started_at", "deadline_at", "received_at")
+        public = {k: data[k] for k in fields if k in data}
+        if public.get("status") == "watching" and int(time.time()) > int(public.get("deadline_at", 0)):
+            public["status"] = "expired"
+        return public
+    except (ValueError, TypeError, UnicodeError):
+        return None
+    finally:
+        os.close(fd)
+
+
 def launch_watch(session: str) -> dict[str, str | int]:
     """Opt-in only: no background process without the separate readonly grant."""
     if session not in ACCOUNTS:
