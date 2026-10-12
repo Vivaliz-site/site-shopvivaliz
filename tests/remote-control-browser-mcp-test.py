@@ -980,6 +980,24 @@ class BrowserMcpTests(unittest.TestCase):
 
 
 
+    def test_login_with_retry_is_exact_origin_and_fails_closed_for_challenges(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        scope = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with')"
+        self.assertEqual(1, script.count(scope))
+        block = script.split(scope, 1)[1].split(
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'", 1
+        )[0]
+        self.assertIn("retryButtons.length>0", block)
+        self.assertIn("/^try again$/i", block)
+        self.assertIn("enabledButtons.length!==1", block)
+        self.assertIn("retryButtons.length!==1", block)
+        self.assertIn("document.querySelector('form,iframe,[data-sitekey],.h-captcha,.g-recaptcha')", block)
+        self.assertIn("auth_action_ambiguous_or_unavailable", block)
+        self.assertIn("retryButtons[0].click();return {clicked:true};", block)
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
+
     def test_expired_mfa_recovery_uses_only_exact_official_login_link(self):
         script = m.ACCOUNT_AUTH_NODE_SCRIPT
         block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
