@@ -64,6 +64,28 @@ class EmailLoginWatchTests(unittest.TestCase):
         self.assertEqual(40,len(attempts))
         self.assertLessEqual(max(clock.sleeps),15)
 
+    def test_transient_gmail_failure_does_not_abandon_ten_minute_window(self):
+        clock=FakeClock(); attempts=[]
+        def fetch(session, since):
+            attempts.append(session)
+            if len(attempts)==1:
+                raise TimeoutError("temporary API outage")
+            return [message(timestamp=1040)]
+        state=watch.watch_window('dev',start_epoch=1000,fetch=fetch,
+                                monotonic=clock.monotonic,sleep=clock.sleep)
+        self.assertEqual('matched',state['status'])
+        self.assertEqual(['dev','dev'],attempts)
+        self.assertEqual([15],clock.sleeps)
+
+    def test_delayed_api_result_after_deadline_is_not_accepted(self):
+        clock=FakeClock()
+        def fetch(session, since):
+            clock.now=601
+            return [message(timestamp=1001)]
+        state=watch.watch_window('dev',start_epoch=1000,fetch=fetch,
+                                monotonic=clock.monotonic,sleep=clock.sleep)
+        self.assertEqual('timeout',state['status'])
+
     def test_only_metadata_endpoints_with_header_projection(self):
         class FakeHTTP:
             def __init__(self): self.urls=[]
