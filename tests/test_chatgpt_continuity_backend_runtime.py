@@ -103,7 +103,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             "shopvivaliz-chatgpt-browser-guardian.service",
             "rollback",
             "trap",
-            "DEV_AUX_CONTINUITY_ADOPTED_E2E=true",
+            "DEV_AUX_CONTINUITY_TRANSPORT_VERIFIED=true",
         ):
             self.assertIn(required, text)
         for forbidden in (
