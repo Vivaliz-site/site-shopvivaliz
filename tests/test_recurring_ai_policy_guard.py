@@ -162,6 +162,37 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
             violations = guard.scan_repository(root)
             self.assertTrue(any(v.code == "broad_paid_ai_event" for v in violations))
 
+    def test_background_codex_flag_in_workflow_is_rejected_even_without_cli_call(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "bad-recovery.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: recovery
+                    on:
+                      workflow_call:
+                    jobs:
+                      recover:
+                        runs-on: self-hosted
+                        steps:
+                          - run: grep -Fxq 'SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1' /etc/controller.env
+                    """
+                ),
+                encoding="utf-8",
+            )
+            violations = guard.scan_repository(root)
+            self.assertIn("paid_background_fallback_enabled", {v.code for v in violations})
+
+    def test_backend_direct_recovery_requires_free_only_background(self):
+        workflow = (ROOT / ".github" / "workflows" / "backend-continuity-direct-recovery.yml").read_text()
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", workflow)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=0", workflow)
+        self.assertNotIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1", workflow)
+        self.assertNotIn("CODEX_AUTO_APPROVE_FOR_ME_CAPABILITY=PASS", workflow)
+
     def test_free_local_recurring_ai_is_allowed(self):
         guard = load_guard()
         with tempfile.TemporaryDirectory() as tmp:
