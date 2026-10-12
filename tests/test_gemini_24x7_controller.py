@@ -874,6 +874,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_release_packages_free_tier_attestation_helper(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        source_loop = next(
+            line.strip() for line in installer.splitlines()
+            if line.strip().startswith("for source in agent_task_state.py")
+        )
+        self.assertIn("run_background_gemini.py", source_loop)
+        self.assertIn("attest-gemini-free-tier.py", source_loop)
+        self.assertIn(
+            'sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"',
+            installer,
+        )
+        self.assertTrue((ROOT / "scripts" / "attest-gemini-free-tier.py").is_file())
+
     def test_controller_immutable_release_bundles_continuity_dependencies(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"', installer)
