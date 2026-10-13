@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Static regression tests for the read-only corporate session guard."""
 import ast
+import re
+import shlex
 from pathlib import Path
 import unittest
 
@@ -44,6 +46,35 @@ class LoginIntegrityPolicyTests(unittest.TestCase):
         self.assertIn("ProtectHome=read-only", service)
         self.assertIn("ProtectSystem=strict", service)
         self.assertIn("ReadWritePaths=/var/lib/shopvivaliz-login-integrity", service)
+
+    def test_profile_preservation_guard_quotes_local_state_as_one_argument(self):
+        # The filename contains a space. Without quotes, systemd invokes
+        # /usr/bin/test with too many arguments (exit 2), causing a restart
+        # loop in all corporate Chromium units even if the profiles are intact.
+        lines = [
+            line.strip() for line in INSTALLER.read_text(encoding="utf8").splitlines()
+            if line.strip().startswith("printf '[Service]")
+            and "ExecStartPre=/usr/bin/test -s" in line
+        ]
+        self.assertEqual(len(lines), 1)
+        match = re.fullmatch(r"""printf '([^']+)' "\$profile" > "\$dropin" """.strip(), lines[0])
+        self.assertIsNotNone(match)
+        template = match.group(1)
+        for profile in (
+            "shopvivaliz-dev-chromium",
+            "shopvivaliz-atendimento-chromium",
+            "shopvivaliz-atendimento-mcp-chromium",
+        ):
+            rendered = template.replace("%s", profile).replace("\\n", "\n")
+            command = shlex.split(rendered.splitlines()[1])
+            self.assertEqual(
+                command,
+                [
+                    "ExecStartPre=/usr/bin/test",
+                    "-s",
+                    f"/home/fredrdp/.config/{profile}/Local State",
+                ],
+            )
 
     def test_installer_never_restarts_or_rebinds_browser(self):
         body = INSTALLER.read_text(encoding="utf8")
