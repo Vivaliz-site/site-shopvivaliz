@@ -16,6 +16,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`dev-agent-briefing.md`](dev-agent-briefing.md) — onboarding canônico do `@dev`: projetos, hosts, regras, pesquisa técnica na web e padrão de engenharia.
 - [`chatgpt-access-parity.md`](chatgpt-access-parity.md) — cross-account Dev/Atendimento parity contract for MCP tools, RDC 2 provider identity, permissions and independent OAuth; includes E2E acceptance gates.
 - [`browser-sessions.md`](browser-sessions.md) — vínculo obrigatório entre perfis Chromium, portas CDP e contas ChatGPT; proíbe logout/troca cruzada de conta.
+- [`shopvivaliz-login-integrity.md`](shopvivaliz-login-integrity.md) — verificacao read-only a cada 5 minutos das tres contas corporativas, protecao dos perfis e limites de expiracao.
 - [`atendimento-chatgpt-bootstrap.md`](atendimento-chatgpt-bootstrap.md) — bootstrap canônico e não secreto da conta corporativa `atendimento@shopvivaliz.com.br`, incluindo plugins mínimos e checklist E2E.
 - [`chatgpt-account-migration-curated.md`](chatgpt-account-migration-curated.md) — política de migração curada entre contas ChatGPT: o que preservar, o que descartar e como revalidar histórico antes de usá-lo.
 - [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
