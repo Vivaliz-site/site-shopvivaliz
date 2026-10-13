@@ -22,13 +22,15 @@ def socket_probe_function():
 
 class GuardianCgroupSocketHealthTests(unittest.TestCase):
     def run_fixture(self, *, members="2001\n2002", sockets="", grace=0, ss_fails=False, cat_fails=False):
+        cat_body = "return 1" if cat_fails else "printf '%s\\n' " + shlex.quote(members)
+        ss_body = "return 1" if ss_fails else "printf '%s\\n' " + shlex.quote(sockets)
         shell = f"""set -Eeuo pipefail
 SERVICE_CGROUP='/system.slice/shopvivaliz-desktop-commander.service'
 PROVIDER_SOCKET_GRACE_SECONDS={int(grace)}
 pgrep() {{ printf '1\\n'; }}
 stat() {{ printf '0\\n'; }}
-cat() {{ {'return 1' if cat_fails else "printf '%s\\n' " + shlex.quote(members)}; }}
-ss() {{ {'return 1' if ss_fails else "printf '%s\\n' " + shlex.quote(sockets)}; }}
+cat() {{ {cat_body}; }}
+ss() {{ {ss_body}; }}
 {socket_probe_function()}
 provider_socket_connected
 """
