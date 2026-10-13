@@ -106,5 +106,11 @@ class BackupStateV5Tests(unittest.TestCase):
             self.assertNotIn(unsafe, body)
 
 
+    def test_installer_accepts_empty_lock_inode(self):
+        body = (ROOT / "scripts/continuity/install_backup_v5.sh").read_text()
+        self.assertIn('test -f "$state_dir/_agent-task-state.lock"', body)
+        self.assertNotIn('"$source_timer" "$state_dir/_agent-task-state.lock"', body)
+
+
 if __name__ == "__main__":
     unittest.main()
