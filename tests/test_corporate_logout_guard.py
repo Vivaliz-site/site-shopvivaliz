@@ -23,7 +23,7 @@ def load_base():
     # Extract pure guard/command builders, not live backend service imports.
     # This keeps the suite deterministic and side-effect-free in CI.
     tree = ast.parse(BASE.read_text(encoding="utf8"))
-    assignments = {"_CORPORATE_AUTH_HOSTS", "_CORPORATE_LOGOUT_PATH", "_CORPORATE_LOGOUT_CLICK_JS"}
+    assignments = {"_CORPORATE_AUTH_HOSTS", "_CORPORATE_LOGOUT_PATH", "_CORPORATE_LOGOUT_CLICK_JS", "BROWSER_TYPE_NODE_SCRIPT", "BROWSER_FOCUSED_TYPE_NODE_SCRIPT"}
     functions = {
         "_safe_browser_token", "_browser_cdp_command",
         "_assert_no_corporate_logout_url", "browser_open_command",
