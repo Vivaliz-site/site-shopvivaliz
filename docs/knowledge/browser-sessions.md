@@ -214,3 +214,20 @@ opt-in versionado, acompanhado de prova de identidade atual e lease.
 - Nunca executar o script novamente se os drop-ins ja estiverem
   presentes: verificar o estado vivo e usar rollback com novo lease
   autorizado somente se realmente necessario.
+
+## Protecao dos logins corporativos (2026-10-13)
+
+A verificacao E2E apos a recuperacao de MFA confirmou Dev canonico CDP9559,
+Atendimento CDP9556 e Dev auxiliar CDP9557 autenticados em seus respectivos
+perfis. O monitor independente `shopvivaliz-login-integrity.timer` (5 minutos,
+inclusive depois do boot) compara as tres identidades e verifica metadados
+dos perfis, sem ler, armazenar, transferir ou alterar cookies.
+
+As tres unidades Chromium tem um `ExecStartPre` adicional, que recusa criar
+um perfil vazio quando faltar seu proprio arquivo `Local State`. A instalacao
+nao reinicia os navegadores e nao altera os opt-ins existentes do guardian,
+worker e MCP Dev. Eventos de expiracao/revogacao pelo provedor continuam
+possiveis e requerem o fluxo oficial de reautenticacao.
+
+Procedimentos, comandos de verificacao e rollback supervisionado:
+[Integridade dos logins ShopVivaliz](shopvivaliz-login-integrity.md).
