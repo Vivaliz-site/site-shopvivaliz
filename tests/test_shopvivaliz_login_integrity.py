@@ -54,5 +54,23 @@ class LoginIntegrityPolicyTests(unittest.TestCase):
         for forbidden in ("systemctl restart", "systemctl stop", "kill -", "--user-data-dir=", "cp -a /home/fredrdp"):
             self.assertNotIn(forbidden, body)
 
+
+    def test_installer_quotes_the_local_state_filename(self):
+        body = INSTALLER.read_text(encoding="utf8")
+        self.assertIn(
+            'ExecStartPre=/usr/bin/test -s "/home/fredrdp/.config/%s/Local State"',
+            body,
+            "systemd must pass the entire Chromium Local State filename as one argument",
+        )
+        self.assertNotIn(
+            "ExecStartPre=/usr/bin/test -s /home/fredrdp/.config/%s/Local State",
+            body,
+        )
+
+    def test_display_bootstrap_uses_installed_runuser_path(self):
+        body = (ROOT / "scripts/setup-shopvivaliz-display-recovery.sh").read_text(encoding="utf8")
+        self.assertIn("ExecStartPre=+/usr/sbin/runuser -u fredconsole", body)
+        self.assertNotIn("ExecStartPre=+/usr/bin/runuser", body)
+
 if __name__ == "__main__":
     unittest.main()
