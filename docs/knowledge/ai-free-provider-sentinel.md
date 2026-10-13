@@ -94,3 +94,31 @@ or local Ollama through an approved corrective workflow. The monitor is
 read-only by design and never silently deactivates approved user services.
 
 Run: python3 -m unittest -q tests.test_ai_free_provider_sentinel
+
+
+## Bounded runtime and persistent database snapshots (2026-10-13)
+
+AI_SENTINEL_BOUNDED_SCAN_V1 addresses the backend monitor that was timed
+out by systemd after 90 seconds in production. Profiling on the backend
+measured ~16.6s on repeated Codex SQLite aggregation, ~15.7s walking
+old Claude JSONL sessions and ~5.6s scanning recurring launchers.
+The former service CPU quota of 30% amplified these delays.
+
+The sentinel now caches Codex counters ONLY when the SQLite data and WAL
+file signatures (inode, size, nanosecond mtime/ctime) are unchanged.
+When either file changes it re-queries SQLite read-only and still detects
+counter increases. Failed reads are never cached as success.
+
+Claude history traversal has a 28-second monotonic budget. If the walk
+cannot finish, it emits CLAUDE_USAGE_SCAN_INCOMPLETE, sets ALERT instead
+of a false HEALTHY, and retains the previous scan watermark. The next
+complete scan covers the full outstanding window. No user prompts or
+session content are written to logs. The unit keeps a CPU ceiling
+(75%) and service timeout (90 seconds) without weakening provider
+authorization, billing gates, or MFA.
+
+Regression:
+python3 -m unittest -q tests.test_ai_free_provider_sentinel
+Validations after official rollout: at least two real systemd timer
+service completions with Result=success, fresh state, no stale alert,
+correct Codex/Claude snapshots, and both paid bridges still denying use.

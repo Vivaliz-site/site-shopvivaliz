@@ -220,6 +220,115 @@ class Tests(unittest.TestCase):
             self.assertEqual(s.compare_counters({},{"p":[100,2]}),[])
             con.close()
 
+    def test_codex_cache_skips_unchanged_sqlite_and_detects_updates(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            folder = root / "profile"
+            folder.mkdir()
+            db = folder / "state_5.sqlite"
+            con = sqlite3.connect(db)
+            con.execute("CREATE TABLE threads(tokens_used INTEGER)")
+            con.execute("INSERT INTO threads VALUES (5)")
+            con.commit()
+            with patch.object(s, "codex_counter", wraps=s.codex_counter) as read:
+                counters, errors, fingerprints = s.codex_snapshot_cached({}, root=root)
+                self.assertEqual(errors, [])
+                self.assertEqual(read.call_count, 1)
+                previous = {
+                    "codex_counters": counters,
+                    "codex_fingerprints": fingerprints,
+                }
+                same, errors, fingerprints2 = s.codex_snapshot_cached(previous, root=root)
+                self.assertEqual((same, errors, fingerprints2),
+                                 (counters, [], fingerprints))
+                self.assertEqual(read.call_count, 1, "unchanged DB must not be rescanned")
+                con.execute("UPDATE threads SET tokens_used=17")
+                con.commit()
+                # Nanosecond mtime/ctime ensures the data fingerprint changes.
+                st = db.stat()
+                import os
+                os.utime(db, ns=(st.st_atime_ns, st.st_mtime_ns + 1000000))
+                changed, errors, fingerprints3 = s.codex_snapshot_cached(previous, root=root)
+                self.assertEqual(errors, [])
+                self.assertEqual(read.call_count, 2)
+                self.assertNotEqual(fingerprints, fingerprints3)
+                self.assertEqual(next(iter(changed.values())), [17, 1])
+                self.assertEqual(
+                    s.compare_counters(previous, changed),
+                    ["CODEX_TOKEN_COUNTER_INCREASE"],
+                )
+            con.close()
+
+    def test_codex_cache_detects_wal_content_change(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            folder = root / "profile"
+            folder.mkdir()
+            db = folder / "state_5.sqlite"
+            con = sqlite3.connect(db)
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("CREATE TABLE threads(tokens_used INTEGER)")
+            con.execute("INSERT INTO threads VALUES (3)")
+            con.commit()
+            previous_counts, errors, previous_fps = s.codex_snapshot_cached({}, root=root)
+            self.assertEqual(errors, [])
+            con.execute("INSERT INTO threads VALUES (7)")
+            con.commit()
+            changed, errors, changed_fps = s.codex_snapshot_cached(
+                {"codex_counters": previous_counts, "codex_fingerprints": previous_fps},
+                root=root,
+            )
+            self.assertEqual(errors, [])
+            self.assertNotEqual(previous_fps, changed_fps)
+            self.assertEqual(next(iter(changed.values())), [10, 2])
+            con.close()
+
+    def test_claude_scan_budget_incomplete_never_claims_complete(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            project = root / "project"
+            project.mkdir()
+            (project / "session.jsonl").write_text('{"type":"other"}\n')
+            count, complete = s.recent_claude_usage_bounded(
+                100, 200, root=root, budget_seconds=0.0
+            )
+            self.assertEqual(count, 0)
+            self.assertFalse(complete)
+            count, complete = s.recent_claude_usage_bounded(
+                100, 200, root=root, budget_seconds=5.0
+            )
+            self.assertEqual((count, complete), (0, True))
+
+    def test_incomplete_claude_scan_retains_old_watermark_and_alerts(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            s.store_state(state / "state.json", {
+                "last_checked_epoch": 1000,
+                "codex_counters": {},
+                "notified_fingerprint": "",
+            })
+            with (patch.object(s, "policy_anomalies", side_effect=[[], []]),
+                  patch.object(s, "proc_potential_paid", return_value=[]),
+                  patch.object(s, "service_pid", return_value=0),
+                  patch.object(s, "codex_snapshot_cached", return_value=({}, [], {})),
+                  patch.object(s, "scheduled_paid_launchers", return_value=[]),
+                  patch.object(s, "recent_claude_usage_bounded",
+                               side_effect=[(0, False), (0, True)]) as scan,
+                  patch.object(s, "github_comment") as notify):
+                first, _ = s.run(state_dir=state, do_notify=False, now=1300)
+                self.assertIn("CLAUDE_USAGE_SCAN_INCOMPLETE", first)
+                incomplete = s.load_state(state / "state.json")
+                self.assertEqual(incomplete["last_status"], "ALERT")
+                self.assertEqual(incomplete["claude_scan_since_epoch"], 1000)
+                second, _ = s.run(state_dir=state, do_notify=False, now=1600)
+                self.assertEqual(second, [])
+                completed = s.load_state(state / "state.json")
+                self.assertEqual(completed["last_status"], "HEALTHY")
+                self.assertEqual(completed["claude_scan_since_epoch"], 1600)
+                self.assertEqual(scan.call_args_list[0].args, (1000.0, 1300))
+                self.assertEqual(scan.call_args_list[1].args, (1000.0, 1600))
+                notify.assert_not_called()
+
     def test_claude_usage_timestamp_not_file_mtime(self):
         import datetime
         def event(ts,model="claude-haiku-4-5",out=5):
@@ -255,8 +364,8 @@ class Tests(unittest.TestCase):
             with (patch.object(s,"policy_anomalies",return_value=[]),
                   patch.object(s,"proc_potential_paid",return_value=[]),
                   patch.object(s,"service_pid",return_value=0),
-                  patch.object(s,"codex_snapshot",return_value=({},[])),
-                  patch.object(s,"recent_claude_usage",return_value=0),
+                  patch.object(s,"codex_snapshot_cached",return_value=({},[],{})),
+                  patch.object(s,"recent_claude_usage_bounded",return_value=(0,True)),
                   patch.object(s,"scheduled_paid_launchers",return_value=[]),
                   patch.object(s,"github_comment") as notify):
                 issues,_=s.run(state_dir=Path(d),now=1000)
@@ -269,8 +378,8 @@ class Tests(unittest.TestCase):
                        ["FREE_ROUTER_MISSING"],[]]),
                   patch.object(s,"proc_potential_paid",return_value=[]),
                   patch.object(s,"service_pid",return_value=0),
-                  patch.object(s,"codex_snapshot",return_value=({},[])),
-                  patch.object(s,"recent_claude_usage",return_value=0),
+                  patch.object(s,"codex_snapshot_cached",return_value=({},[],{})),
+                  patch.object(s,"recent_claude_usage_bounded",return_value=(0,True)),
                   patch.object(s,"scheduled_paid_launchers",return_value=[]),
                   patch.object(s,"github_comment",return_value=True) as notify):
                 for now in (1000,1300,1600):
@@ -284,6 +393,9 @@ class Tests(unittest.TestCase):
         installer=(ROOT/"scripts/install-ai-free-provider-sentinel.sh").read_text()
         self.assertIn("OnUnitActiveSec=5min",timer)
         self.assertIn("StateDirectory=shopvivaliz-ai-free-guard",unit)
+        self.assertIn("CPUQuota=75%", unit)
+        self.assertIn("Nice=10", unit)
+        self.assertIn("TimeoutStartSec=90", unit)
         self.assertIn("systemctl enable --now shopvivaliz-ai-free-guard.timer",installer)
 
 
