@@ -311,12 +311,15 @@ def validate_journeys(data: dict, artifact_ids: set[str], failures: list[str]) -
                 artifact.get("id")
                 for artifact in (evidence_artifacts if isinstance(evidence_artifacts, list) else [])
                 if isinstance(artifact, dict)
+                and isinstance(artifact.get("id"), str)
                 and any(
                     marker in str(artifact.get("kind", "")).lower()
                     for marker in ("trace", "screenshot", "video", "browser", "visual")
                 )
             }
-            if not isinstance(refs, list) or not set(refs).intersection(visual_artifact_ids):
+            if not isinstance(refs, list) or not any(
+                isinstance(ref, str) and ref in visual_artifact_ids for ref in refs
+            ):
                 failures.append(f"{prefix}.evidence_refs must include UI trace/screenshot/video artifact")
             browser = journey.get("browser_e2e")
             if not isinstance(browser, dict):
