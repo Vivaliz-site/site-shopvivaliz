@@ -17,11 +17,29 @@ class Violation:
 PAID_EXECUTION_PATTERNS = (
     re.compile(r"anthropics/claude-code-action@", re.IGNORECASE),
     re.compile(r"\bcodex\s+exec\b", re.IGNORECASE),
+    # Historical runaway loops repeatedly invoked the Claude CLI from
+    # one-shot worktrees. Check direct paid CLI entrypoints, not only API SDKs.
+    re.compile(
+        r"\bclaude(?:\.exe)?\s+(?:-p\b|--print\b|--model\b|--resume\b|--continue\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"['\"]claude(?:\.exe)?['\"]\s*,\s*['\"](?:-p|--print|--model)['\"]",
+        re.IGNORECASE,
+    ),
     re.compile(r"api\.openai\.com", re.IGNORECASE),
     re.compile(r"api\.anthropic\.com", re.IGNORECASE),
     re.compile(r"\bopenai\.OpenAI\s*\(", re.IGNORECASE),
     re.compile(r"\banthropic\.Anthropic\s*\(", re.IGNORECASE),
 )
+
+# A workflow may not require paid provider fallback in a persistent daemon,
+# even when it never invokes a model directly (for example via grep / env check).
+PAID_BACKGROUND_FALLBACK_PATTERN = re.compile(
+    r"SHOPVIVALIZ_BACKGROUND_(?:CODEX|CLAUDE)_FALLBACK\s*=\s*(?:1|true|yes|on)\b",
+    re.IGNORECASE,
+)
+
 
 BROAD_EVENT_PATTERNS = (
     re.compile(r"(?m)^\s{2}(?:issue_comment|issues|pull_request_review|pull_request_review_comment|pull_request|pull_request_target|push):\s*"),
@@ -37,6 +55,13 @@ SCRIPT_REFERENCE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Catch workflows invoking ./scripts/worker.sh directly without a bash/sh
+# interpreter. Nested scripts receive the same paid-AI recursion scan.
+DIRECT_SCRIPT_REFERENCE_PATTERN = re.compile(
+    r"(?m)^[ \t]*(?:-[ \t]*run:[ \t]*|run:[ \t]*|-[ \t]*)?(?:\./)?(scripts/[A-Za-z0-9_./-]+\.(?:py|php|sh|js|mjs|cjs))(?=$|[\s'\";])",
+    re.IGNORECASE,
+)
+
 
 def _uses_paid_ai(text: str) -> bool:
     return any(pattern.search(text) for pattern in PAID_EXECUTION_PATTERNS)
@@ -44,6 +69,7 @@ def _uses_paid_ai(text: str) -> bool:
 
 def _referenced_paid_scripts(root: Path, text: str, max_depth: int = 4) -> tuple[Path, ...]:
     queue: list[tuple[str, int]] = [(match.group(1), 0) for match in SCRIPT_REFERENCE_PATTERN.finditer(text)]
+    queue.extend((match.group(1), 0) for match in DIRECT_SCRIPT_REFERENCE_PATTERN.finditer(text))
     seen: set[Path] = set()
     paid: list[Path] = []
 
@@ -64,6 +90,7 @@ def _referenced_paid_scripts(root: Path, text: str, max_depth: int = 4) -> tuple
             paid.append(candidate)
         if depth < max_depth:
             queue.extend((match.group(1), depth + 1) for match in SCRIPT_REFERENCE_PATTERN.finditer(body))
+            queue.extend((match.group(1), depth + 1) for match in DIRECT_SCRIPT_REFERENCE_PATTERN.finditer(body))
 
     return tuple(paid)
 
@@ -92,6 +119,13 @@ def scan_repository(root: Path) -> list[Violation]:
         if path.name.endswith(".disabled"):
             continue
         text = path.read_text(encoding="utf-8-sig", errors="replace")
+        if PAID_BACKGROUND_FALLBACK_PATTERN.search(text):
+            violations.append(
+                Violation(
+                    path, "paid_background_fallback_enabled",
+                    "workflow must not require or enable paid AI background fallback",
+                )
+            )
         paid_targets = _referenced_paid_scripts(root, text)
         if not _uses_paid_ai(text) and not paid_targets:
             continue

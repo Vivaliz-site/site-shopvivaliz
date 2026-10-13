@@ -106,6 +106,40 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertIn('session_observed_at', data)
         return data
 
+    def test_dev_aux_guardian_optin_is_readonly_and_fail_closed(self):
+        body = GUARDIAN.read_text(encoding='utf-8')
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP', body)
+        self.assertIn('http://127.0.0.1:9557/json/version', body)
+        self.assertIn('CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY', body)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', body)
+        self.assertIn('DEV_AUX_UNAVAILABLE', body)
+        self.assertIn('DEV_AUX_IDENTITY_MISMATCH', body)
+        start = body.index('# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.')
+        end = body.index('# End of readonly Dev auxiliary continuity adoption.', start)
+        read_only_path = body[start:end]
+        self.assertNotIn('systemctl restart', read_only_path)
+        self.assertNotIn('kill -', read_only_path)
+        self.assertNotIn('systemctl start "$browser_unit"', read_only_path)
+
+    def test_dev_aux_refuses_cross_account_marker_before_any_browser_action(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9556'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertEqual(self.probes(), 0)
+        self.assertFalse(self.system_log.exists(), 'invalid route must not invoke systemctl')
+
+    def test_dev_aux_rejects_nonapproved_endpoint_override(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9557'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertFalse(self.system_log.exists(), 'CDP override mismatch must not restart browser')
+
     def test_terminal_auth_repeat_skips_expensive_probes(self):
         first = self.run_guardian()
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -127,6 +161,20 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         first = self.run_guardian()
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assert_cache_skip()
+
+    def test_wrong_account_fails_closed_and_cached_mismatch_stays_failed(self):
+        self.session_file.write_text('IDENTITY_MISMATCH')
+        first = self.run_guardian()
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn('DEGRADED_IDENTITY_MISMATCH', first.stdout)
+        data = json.loads(self.health.read_text())
+        self.assertEqual(data['session_state'], 'IDENTITY_MISMATCH')
+        self.assertFalse(data['authenticated'])
+        before = self.probes()
+        second = self.run_guardian()
+        self.assertNotEqual(second.returncode, 0)
+        self.assertEqual(self.probes(), before)
+        self.assertIn('QUIESCENT_AUTH_CACHE', second.stdout)
 
     def test_changed_page_resumes_probe_and_can_observe_authentication(self):
         self.run_guardian()
@@ -231,7 +279,7 @@ exit 0
         self.transport_up = False
         result = self.run_guardian()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('restart shopvivaliz-chatgpt-browser.service', self.system_log.read_text())
+        self.assertIn('restart shopvivaliz-dev-browser.service', self.system_log.read_text())
 
     def test_corrupt_cache_forces_real_probe(self):
         self.run_guardian()

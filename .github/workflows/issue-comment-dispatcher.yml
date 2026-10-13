@@ -101,15 +101,6 @@ jobs:
     uses: ./.github/workflows/refresh-a1-delete-repo-scope-once.yml
     secrets: inherit
 
-  codex-continuity-goal:
-    needs: classify
-    if: needs.classify.outputs.route == 'codex_continuity_goal'
-    permissions:
-      contents: read
-      issues: write
-    uses: ./.github/workflows/codex-auto-continuity-v7-goal.yml
-    secrets: inherit
-
   remote-access:
     needs: classify
     if: needs.classify.outputs.route == 'remote_access'

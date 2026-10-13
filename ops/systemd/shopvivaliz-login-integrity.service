@@ -1,0 +1,17 @@
+[Unit]
+Description=ShopVivaliz corporate browser login integrity observer (read-only)
+After=network-online.target shopvivaliz-virtual-display.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/libexec/shopvivaliz-login-integrity.py
+TimeoutStartSec=90s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/shopvivaliz-login-integrity

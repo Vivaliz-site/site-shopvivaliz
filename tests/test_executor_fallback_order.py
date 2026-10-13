@@ -5,84 +5,49 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ExecutorFallbackOrderTests(unittest.TestCase):
-    def test_codex_is_last_provider_in_finite_failover(self) -> None:
-        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        self.assertIn("ORDER=(gemini anthropic codex)", script)
-        self.assertLess(script.index("\n    gemini)"), script.index("\n    anthropic)"))
-        self.assertLess(script.index("\n    anthropic)"), script.index("\n    codex)"))
+    def setUp(self) -> None:
+        self.script = (ROOT / "scripts/autonomous-provider-failover.sh").read_text()
 
-    def test_background_controller_can_fallback_to_codex_auto_after_gemini(self) -> None:
-        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        self.assertIn("BACKGROUND_ORDER=(gemini)", script)
-        self.assertIn("BACKGROUND_ORDER+=(codex_auto)", script)
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", script)
-        self.assertLess(script.index("\n    gemini)"), script.index("\n    codex_auto)"))
-        self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', script)
-        self.assertIn("--sandbox danger-full-access", script)
-        self.assertIn("--ask-for-approval never", script)
-        self.assertNotIn("--approve-for-me", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
-        self.assertNotIn("--sandbox workspace-write", script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0])
-        codex_auto_block = script.split("run_codex_auto()", 1)[1].split("PROMPT=", 1)[0]
-        self.assertLess(codex_auto_block.index("--ask-for-approval never"), codex_auto_block.index("exec -"))
+    def test_first_tier_is_gemini_flash_and_local_ollama(self) -> None:
+        self.assertIn("BACKGROUND_ORDER=(gemini ollama)", self.script)
+        self.assertIn("ORDER=(gemini ollama)", self.script)
+        self.assertIn("run_background_gemini.py", self.script)
+        self.assertIn("run_background_ollama.py", self.script)
+        self.assertLess(self.script.index("\n    gemini)"), self.script.index("\n    ollama)"))
 
-    def test_background_human_authorized_claude_precedes_codex_auto(self) -> None:
-        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK", script)
-        self.assertIn("BACKGROUND_ORDER+=(anthropic)", script)
-        self.assertIn("background_claude_fallback_authorized=true", script)
-        self.assertLess(script.index("BACKGROUND_ORDER+=(anthropic)"), script.index("BACKGROUND_ORDER+=(codex_auto)"))
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1", installer)
-        self.assertIn("CLAUDE_BIN=/home/ubuntu/.local/bin/claude", installer)
-        self.assertIn('CLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
-        self.assertIn('CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.50}"', script)
-        self.assertNotIn('"\\\\nCLAUDE_BIN=', script)
-        self.assertIn('CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"\nCLAUDE_BIN="${CLAUDE_BIN:-/home/ubuntu/.local/bin/claude}"', script)
-        self.assertIn("run_claude()", script)
-        self.assertIn("try_provider anthropic run_claude", script)
+    def test_background_paid_fallback_is_unconditionally_forbidden(self) -> None:
+        self.assertIn("background_paid_fallback_forbidden=true", self.script)
+        background = self.script.split('if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then', 2)[-1]
+        # The paid providers are never appended to the background order,
+        # even if the legacy environment variables are set to 1.
+        order_block = self.script.split("# FREE_PROVIDER_FALLBACK_V2:", 1)[1].split("for provider in", 1)[0]
+        self.assertNotIn("BACKGROUND_ORDER+=(anthropic)", order_block)
+        self.assertNotIn("BACKGROUND_ORDER+=(codex_auto)", order_block)
+        self.assertIn("background_paid_fallback_ignored=true", order_block)
 
-    def test_continuity_policy_marks_codex_as_last_resort(self) -> None:
-        marker = "CODEX_LAST_RESORT_V1"
-        for rel in (
-            "AGENTS.md",
-            "docs/knowledge/task-continuity.md",
-            "docs/knowledge/agent-rules.md",
-        ):
-            text = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertIn(marker, text, rel)
-            self.assertIn("Codex", text, rel)
+    def test_manual_paid_fallback_requires_explicit_opt_in(self) -> None:
+        self.assertIn('SHOPVIVALIZ_INTERACTIVE_PAID_FALLBACK:-0', self.script)
+        self.assertIn("ORDER+=(anthropic codex)", self.script)
+        self.assertLess(self.script.index("\n    anthropic)"), self.script.index("\n    codex)"))
+        self.assertLess(self.script.index("\n    ollama)"), self.script.index("\n    anthropic)"))
 
-    def test_codex_policy_does_not_require_hash_pinned_global_blobs(self) -> None:
-        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
-        codex_block = validator.split("CODEX_NORMATIVE = (", 1)[1].split(")\nREQUIRED_TOKENS", 1)[0]
-        self.assertNotIn("REGRAS-AGENTES-CENTRALIZADAS.md", codex_block)
-        self.assertNotIn("AGENTS.override.md", codex_block)
+    def test_installer_defaults_to_no_paid_background(self) -> None:
+        installer=(ROOT / "scripts/install-gemini-24x7-controller.sh").read_text()
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=0", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", installer)
+        self.assertIn("run_background_ollama.py", installer)
 
-    def test_codex_exhaustion_is_not_terminal_blocker(self) -> None:
-        policy = (ROOT / "docs" / "knowledge" / "task-continuity.md").read_text(encoding="utf-8")
-        self.assertIn("cota do Codex", policy)
-        self.assertIn("RUNNING", policy)
-        self.assertIn("BLOCKED_EXTERNAL", policy)
+    def test_chatgpt_common_gate_precedes_cli(self) -> None:
+        self.assertIn('SHOPVIVALIZ_RESUME_STAGE', self.script)
+        self.assertIn('!= "cli_last"', self.script)
+        self.assertIn("chatgpt_common -> chatgpt_work -> cli_last", self.script)
+        policy = (ROOT / "docs/knowledge/task-continuity.md").read_text()
+        self.assertIn("CODEX_LAST_RESORT_V1", policy)
 
-    def test_finite_failover_persists_running_checkpoint_when_all_executors_fail(self) -> None:
-        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        self.assertIn("SHOPVIVALIZ_TASK_ID", script)
-        self.assertIn("agent_task_state.py progress", script)
-        self.assertIn("exit 75", script)
-
-    def test_account_authenticated_alternatives_are_tried_before_codex(self) -> None:
-        script = (ROOT / "scripts" / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
-        self.assertIn("command -v gemini", script)
-        self.assertIn("command -v claude", script)
-        self.assertIn("env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini", script)
-        self.assertIn("unset ANTHROPIC_API_KEY", script)
-        self.assertIn('launcher="$CLAUDE_BIN"', script)
-
-    def test_continuity_validator_enforces_codex_last_resort(self) -> None:
-        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
-        self.assertIn("CODEX_LAST_RESORT_V1", validator)
-        self.assertIn("autonomous-provider-failover.sh", validator)
-
+    def test_continuity_policy_is_checked(self) -> None:
+        validator=(ROOT / "scripts/validate-task-continuity-enforcement.py").read_text()
+        self.assertIn('"ORDER=(gemini ollama)"', validator)
+        self.assertIn('"BACKGROUND_ORDER=(gemini ollama)"', validator)
 
 if __name__ == "__main__":
     unittest.main()

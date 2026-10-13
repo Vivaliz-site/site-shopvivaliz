@@ -12,7 +12,18 @@ on:
     branches: [main]
     paths:
       - 'remote-control-mcp/**'
+      - 'remote-control-browser-mcp/**'
       - 'scripts/setup-remote-control-access.sh'
+      - 'scripts/setup-remote-control-browser-mcp.sh'
+      - 'scripts/setup-shopvivaliz-display-recovery.sh'
+      - 'scripts/shopvivaliz-xvfb99-prepare.sh'
+      - 'ops/systemd/shopvivaliz-xvfb99.service'
+      - 'tests/test_shopvivaliz_display_recovery.py'
+      - 'scripts/remote_mcp_bootstrap_scope.py'
+      - 'tests/test_remote_mcp_bootstrap_scope.py'
+      - 'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service'
+      - 'deploy/systemd/shopvivaliz-browser-dev-mcp.service'
+      - 'scripts/shopvivaliz-native-desktop-bridge.ps1'
       - 'scripts/agent_task_state.py'
       - 'scripts/continuity/**'
       - 'scripts/setup-remote-control-windows.ps1'
@@ -21,14 +32,196 @@ on:
       - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-mcp-test.py'
+      - 'tests/remote-control-browser-mcp-test.py'
       - '.github/workflows/remote-control-mcp-bootstrap.yml'
 
 permissions:
   contents: read
 
+# Prevent competing full/bootstrap-only runs from restarting the same backend
+# bridge services simultaneously. Never cancel a deploy already in progress.
+concurrency:
+  group: shopvivaliz-remote-control-backend-bootstrap
+  cancel-in-progress: false
+
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      browser_only: ${{ steps.classify.outputs.browser_only }}
+      backend_controller_only: ${{ steps.classify.outputs.backend_controller_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed files (fail closed to full bootstrap)
+        id: classify
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$GITHUB_EVENT_NAME" != push ] || [[ ! "${BEFORE_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+            echo 'browser_only=false' >> "$GITHUB_OUTPUT"
+            echo 'backend_controller_only=false' >> "$GITHUB_OUTPUT"
+            echo 'REMOTE_CONTROL_BOOTSTRAP_SCOPE=FULL reason=dispatch_or_unknown_diff'
+          else
+            git diff --no-renames --name-only "$BEFORE_SHA" "$GITHUB_SHA" | python3 scripts/remote_mcp_bootstrap_scope.py --github-output "$GITHUB_OUTPUT"
+          fi
+
+  browser_only:
+    needs: scope
+    if: needs.scope.outputs.browser_only == 'true'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate browser-only MCP installer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_chatgpt_access_parity.py
+          python3 tests/test_remote_mcp_bootstrap_scope.py
+          bash -n scripts/setup-remote-control-browser-mcp.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
+          python3 tests/test_shopvivaliz_display_recovery.py
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+      - name: Install browser bridges (no production SSH or Windows bootstrap)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service
+      - name: Verify both dedicated bridges loaded the installed source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import datetime,json,os,subprocess,urllib.request
+          source_mtime=os.stat('/opt/shopvivaliz-remote-control-browser/server.py').st_mtime
+          for session,unit,port in [('atendimento','shopvivaliz-browser-atendimento-mcp.service',5582),('dev','shopvivaliz-browser-dev-mcp.service',5583)]:
+              state=subprocess.check_output(['systemctl','is-active',unit],text=True).strip()
+              assert state=='active',f'{unit} not active'
+              started=subprocess.check_output(['systemctl','show',unit,'-p','ExecMainStartTimestamp','--value'],text=True).strip()
+              start=datetime.datetime.strptime(started,'%a %Y-%m-%d %H:%M:%S %Z').replace(tzinfo=datetime.timezone.utc)
+              assert start.timestamp()>=source_mtime-1,f'{unit} running stale source'
+              with urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=5) as response:
+                  health=json.load(response)
+                  assert response.status==200 and health.get('ok') is True,f'{unit} health failed'
+              print(f'BROWSER_ONLY_MCP_RELOAD_{session.upper()}=PASS')
+          PY
+
+  backend_controller_only:
+    needs: scope
+    if: needs.scope.outputs.backend_controller_only == 'true'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify narrow MCP scope and run checkpoint regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_remote_mcp_bootstrap_scope.py
+          python3 -m py_compile remote-control-mcp/server.py scripts/continuity/checkpoint_update_atomic.py tests/test_orquestrador_atomic_checkpoint.py
+          python3 tests/remote-control-mcp-test.py
+          bash -n scripts/setup-remote-control-access.sh
+      - name: Install only the backend MCP services
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo -n bash scripts/setup-remote-control-access.sh install-controller-code-only remote-control-mcp/server.py scripts/continuity/checkpoint_update_atomic.py
+      - name: Verify base and browser MCP source and local readiness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmp remote-control-mcp/server.py /opt/shopvivaliz-remote-control/server.py
+          cmp scripts/continuity/checkpoint_update_atomic.py /opt/shopvivaliz-remote-control/scripts/continuity/checkpoint_update_atomic.py
+          systemctl is-active --quiet shopvivaliz-remote-control-mcp.service
+          systemctl is-active --quiet shopvivaliz-remote-control-browser-mcp.service
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5580/health >/dev/null
+          curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5581/health >/dev/null
+          echo BACKEND_MCP_ONLY_RESTRICTED_INSTALL=PASS
+      - name: Persist exact non-secret Orquestrador checkpoint through installed restricted MCP handler
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # This runs on the canonical backend only, after restricted MCP install
+          # and successful health checks. It never loads or exports credentials.
+          sudo -n env GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" /usr/bin/python3 - <<'PY'
+          import importlib.util, json, os, re, subprocess
+          from pathlib import Path
+          from stat import S_IMODE
+
+          checkpoint=Path('/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state/_retome-orquestrador-continuity-gpt6-20261010.json')
+          source=Path('/opt/shopvivaliz-remote-control/server.py')
+          spec=importlib.util.spec_from_file_location('shopvivaliz_checkpoint_mcp_deployed',source)
+          assert spec and spec.loader
+          mcp=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mcp)
+          assert any(s.get('name')=='checkpoint_update_atomic' for s in mcp.tool_specs()),'checkpoint_tool_not_registered'
+
+          rules=[
+            'AGENTS.md',
+            'docs/knowledge/atendimento-chatgpt-bootstrap.md',
+            'docs/knowledge/host-access.md',
+            'docs/knowledge/README.md',
+            'docs/knowledge/agent-rules.md',
+            'docs/knowledge/task-continuity.md',
+            'GEPETO-POLICY.md',
+            'docs/knowledge/browser-sessions.md',
+          ]
+          shas={}
+          for path in rules:
+            assert Path(path).is_file(),'missing_canonical_rule'
+            sha=subprocess.check_output(['git','hash-object',path],text=True).strip()
+            assert re.fullmatch(r'[0-9a-f]{40}',sha),'invalid_canonical_sha'
+            shas[path]=sha
+
+          current=json.loads(checkpoint.read_text(encoding='utf-8'))
+          assert current['status']=='RUNNING','checkpoint_terminal_or_mismatch'
+          assert current['task']=='retome_orquestrador_shopvivaliz_continuity','checkpoint_task_mismatch'
+          original_stat=checkpoint.stat()
+          audit=mcp.execute_tool('audit_recent',{'limit':30})
+          ids=[event.get('id') for event in audit.get('events',[]) if event.get('tool') in ('controller_status','continuity_status','file_read') and isinstance(event.get('id'),str)]
+          assert ids,'no_verified_audit_ids'
+          ident=f"mcp-checkpoint-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          args={
+            'request_id':ident,
+            'expected_last_checked_at':current['last_checked_at'],
+            'rules_sha_by_path':shas,
+            'audit_ids':ids[:20],
+            'next_action':'Preserve nine unbound legacy RUNNING tasks; no recovered conversation without specific E2E receipts. Validate Dev and Atendimento exact user.email using their separate official VM sessions; only bind after authorized original-chat task_id and fingerprint proof. Continue safe independent code and CI work. No web deploy, production configuration change, arbitrary chat, financial operation or secret extraction.',
+          }
+          result=mcp.execute_tool('checkpoint_update_atomic',args)
+          assert result.get('ok') and result.get('saved') and result.get('verified'),'checkpoint_update_not_verified'
+          after=json.loads(checkpoint.read_text(encoding='utf-8'))
+          assert after['last_checked_at']==result['last_checked_at'],'checkpoint_readback_timestamp_mismatch'
+          assert after['rules_loaded']['sha_by_path']==shas,'checkpoint_readback_rules_mismatch'
+          assert after['status']=='RUNNING','checkpoint_status_changed'
+          assert after['observed_state']['dispatcher_deferred_unbound']>=0,'checkpoint_observation_missing'
+          assert after['audit_ids'],'checkpoint_audit_ids_missing'
+          after_stat=checkpoint.stat()
+          assert (after_stat.st_uid,after_stat.st_gid,S_IMODE(after_stat.st_mode))==(original_stat.st_uid,original_stat.st_gid,S_IMODE(original_stat.st_mode)),'checkpoint_permissions_changed'
+          print('CHECKPOINT_UPDATE_ATOMIC=PASS')
+          print('CHECKPOINT_RULES_COUNT='+str(len(shas)))
+          print('CHECKPOINT_AUDIT_COUNT='+str(len(after['audit_ids'])))
+          print('CHECKPOINT_STATUS='+after['status'])
+          print('CHECKPOINT_CHECKED_AT='+after['last_checked_at'])
+          PY
+
   bootstrap:
+    needs: scope
+    if: needs.scope.outputs.browser_only != 'true' && needs.scope.outputs.backend_controller_only != 'true'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
     steps:
@@ -39,9 +232,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py tests/remote-control-mcp-test.py tests/remote-control-browser-mcp-test.py
           python3 tests/remote-control-mcp-test.py
+          python3 tests/remote-control-browser-mcp-test.py
           bash -n scripts/setup-remote-control-access.sh
+          bash -n scripts/setup-remote-control-browser-mcp.sh
+          bash -n scripts/setup-shopvivaliz-display-recovery.sh
+          python3 tests/test_shopvivaliz_display_recovery.py
 
       - name: Configure verified bootstrap SSH
         env:
@@ -62,6 +259,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           sudo -n bash scripts/setup-remote-control-access.sh install-controller remote-control-mcp/server.py deploy/systemd/shopvivaliz-remote-control-mcp.service scripts/agent_task_state.py scripts/continuity
+          sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service
           sudo -n cat /var/lib/shopvivaliz-remote-control/id_ed25519.pub > /tmp/shopvivaliz-remote-control.pub
           test -s /tmp/shopvivaliz-remote-control.pub
           chmod 600 /tmp/shopvivaliz-remote-control.pub
@@ -488,6 +686,44 @@ jobs:
             exit 1
           fi
           REMOTE
+
+      - name: Stage native Fred-Win desktop bridge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          KEY=/var/lib/shopvivaliz-remote-control/id_ed25519
+          HOSTS=/var/lib/shopvivaliz-remote-control/known_hosts
+          SOURCE=scripts/shopvivaliz-native-desktop-bridge.ps1
+          STAGE=shopvivaliz-native-desktop-bridge.ps1.stage
+          EXPECTED_SHA="$(sha256sum "$SOURCE" | awk '{print $1}')"
+
+          sudo -n scp -P 2222             -o BatchMode=yes             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOSTS"             -o ConnectTimeout=10             -i "$KEY"             "$SOURCE" "FRED@127.0.0.1:$STAGE"
+
+          POWERSHELL="$(cat <<'PS'
+          $ErrorActionPreference='Stop'
+          $src=Join-Path $env:USERPROFILE 'shopvivaliz-native-desktop-bridge.ps1.stage'
+          $dst='C:\site-shopvivaliz\scripts\shopvivaliz-native-desktop-bridge.ps1'
+          if (-not (Test-Path -LiteralPath $src)) { throw 'native_desktop_bridge_stage_missing' }
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile($src,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw 'native_desktop_bridge_parser_failed' }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+          Move-Item -LiteralPath $src -Destination $dst -Force
+          $sha=(Get-FileHash -Algorithm SHA256 -LiteralPath $dst).Hash.ToLowerInvariant()
+          Write-Output ('REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_SHA256=' + $sha)
+          Write-Output 'REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS'
+          PS
+          )"
+          ENCODED="$(printf '%s' "$POWERSHELL" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)"
+          OUTPUT="$(
+            sudo -n ssh -p 2222               -o BatchMode=yes               -o IdentitiesOnly=yes               -o StrictHostKeyChecking=yes               -o UserKnownHostsFile="$HOSTS"               -o ConnectTimeout=10               -i "$KEY"               FRED@127.0.0.1               powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "$ENCODED"
+          )"
+          printf '%s\n' "$OUTPUT"
+          printf '%s\n' "$OUTPUT" | grep -F 'REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS' >/dev/null
+          ACTUAL_SHA="$(printf '%s\n' "$OUTPUT" | sed -n 's/^REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_SHA256=//p' | tr -d '\r' | tail -1)"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          echo "REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE_HASH=PASS"
 
       - name: Four-host live MCP health validation
         if: github.event_name == 'workflow_dispatch' && inputs.run_e2e == true

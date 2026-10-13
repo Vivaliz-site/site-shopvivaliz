@@ -80,6 +80,23 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
+    def test_account_mismatch_degrades_controller_even_if_transport_is_live(self) -> None:
+        controller = load_controller()
+        health = self.runtime / "_chatgpt-browser-health.json"
+        health.write_text(json.dumps({
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "session_state": "IDENTITY_MISMATCH",
+            "authenticated": False,
+        }), encoding="utf-8")
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="account-mismatch-observer")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_identity_mismatch", result["degraded_reasons"])
+
     def test_controller_reports_single_writer_ownership_counters(self) -> None:
         controller = load_controller()
         with (
@@ -96,6 +113,109 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertTrue(result["durable_handoff_enabled"])
         self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
         self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
+
+    def test_old_running_task_is_visible_as_outside_recovery_window(self) -> None:
+        controller = load_controller()
+        old = (datetime.now(timezone.utc) - timedelta(days=45)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        for task_id, status in (("very-old-open", "RUNNING"), ("very-old-done", "CONCLUIDO")):
+            (self.runtime / f"{task_id}.json").write_text(
+                json.dumps({
+                    "task_id": task_id, "created_at": old, "updated_at": old,
+                    "status": status, "next_action": "preserve original intent",
+                }),
+                encoding="utf-8",
+            )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="old-running-task")
+        self.assertEqual(result["completion_sweep"]["active_outside_lookback"], 1)
+        self.assertEqual(result["completion_sweep"]["skipped_outside_lookback"], 2)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_outside_recovery_window", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
+    def test_malformed_timestamp_on_active_task_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / "malformed-active.json").write_text(
+            json.dumps({
+                "task_id": "malformed-active", "created_at": "not-a-time",
+                "updated_at": "not-a-time", "status": "READY_TO_COMPLETE",
+                "next_action": "verify before finishing",
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="malformed-running-task")
+        self.assertEqual(result["completion_sweep"]["active_invalid_timestamp"], 1)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_invalid_timestamp", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
+    def test_unbound_running_checkpoint_must_fail_readiness_closed(self) -> None:
+        controller = load_controller()
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        (self.runtime / "unbound-real-task.json").write_text(
+            json.dumps({
+                "task_id": "unbound-real-task", "status": "RUNNING",
+                "next_action": "finish task", "created_at": now, "updated_at": now,
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 1}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"scanned": 1, "skipped_unbound": 1}),
+            patch.object(controller.dispatcher, "run_once", return_value={"scanned": 1, "deferred_unbound": 1}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="unbound-real-task")
+        self.assertEqual(result["completion_sweep"]["unbound_active"], 1)
+        self.assertFalse(result["continuity_ready"])
+        self.assertFalse(result["ok"])
+        self.assertIn("active_checkpoint_unbound", result["degraded_reasons"])
+        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 1)
+        self.assertEqual(result["dispatcher"]["deferred_unbound"], 1)
+
+    def test_unbound_session_and_no_conversation_are_visible_in_health(self) -> None:
+        controller = load_controller()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 2}),
+            patch.object(controller.dispatcher, "run_once", return_value={"deferred_unbound": 2, "deferred_unbound_session": 1}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="unbound-counters")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_resume_unbound_conversation", result["degraded_reasons"])
+        self.assertIn("dispatcher_unbound_conversation", result["degraded_reasons"])
+        self.assertIn("dispatcher_unbound_session", result["degraded_reasons"])
+        self.assertEqual(result["chatgpt_nudge"]["skipped_unbound"], 2)
+        self.assertEqual(result["dispatcher"]["deferred_unbound_session"], 1)
+
+    def test_legacy_handoff_disabled_allows_unbound_fallback_without_false_red(self) -> None:
+        controller = load_controller()
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "0"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={"skipped_unbound": 1}),
+            patch.object(controller.dispatcher, "run_once", return_value={"launched": 1, "in_flight": 1}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="legacy-unbound-fallback")
+        self.assertFalse(result["durable_handoff_enabled"])
+        self.assertTrue(result["continuity_ready"])
+        self.assertEqual(result["degraded_reasons"], [])
+        self.assertEqual(result["dispatcher"]["in_flight"], 1)
+
+    def test_controller_can_retry_after_repeated_restart_failures(self) -> None:
+        unit = (ROOT / "deploy/systemd/shopvivaliz-gemini-24x7-controller.service").read_text(encoding="utf-8")
+        self.assertIn("StartLimitIntervalSec=0", unit)
+        self.assertIn("RestartSec=60", unit)
 
     def test_expired_durable_lease_is_recovered_and_recorded(self) -> None:
         controller = load_controller()
@@ -309,6 +429,31 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertNotIn("chatgpt_browser_monitor_stale", result["degraded_reasons"])
         self.assertNotIn("chatgpt_browser_stall_unresolved", result["degraded_reasons"])
         self.assertFalse(result["chatgpt_monitor"]["required"])
+
+    def test_required_reinforcement_monitor_disabled_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / controller.CHATGPT_MONITOR_STATE_FILE).write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                    "degraded": False,
+                    "action": "monitor_disabled",
+                    "sent": False,
+                    "progress_confirmed": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with (
+            patch.dict(os.environ, {"CHATGPT_CONTINUITY_MONITOR_REQUIRED": "1"}),
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="required-monitor-disabled")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_monitor_disabled", result["degraded_reasons"])
 
     def test_missing_reinforcement_monitor_fails_readiness_closed(self) -> None:
         controller = load_controller()
@@ -729,6 +874,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_release_packages_free_tier_attestation_helper(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        source_loop = next(
+            line.strip() for line in installer.splitlines()
+            if line.strip().startswith("for source in agent_task_state.py")
+        )
+        self.assertIn("run_background_gemini.py", source_loop)
+        self.assertIn("attest-gemini-free-tier.py", source_loop)
+        self.assertIn(
+            'sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"',
+            installer,
+        )
+        self.assertTrue((ROOT / "scripts" / "attest-gemini-free-tier.py").is_file())
+
     def test_controller_immutable_release_bundles_continuity_dependencies(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"', installer)
@@ -753,7 +912,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
 
     def test_controller_installer_consumes_same_durable_handoff_flag_and_preserves_state(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
-        self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}"', installer)
+        self.assertIn('durable_handoff="${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}"', installer)
         self.assertIn('case "$durable_handoff" in 0|1)', installer)
         self.assertIn('SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s', installer)
         self.assertIn('"$durable_handoff"', installer)
@@ -771,7 +930,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('releases_dir="$base_dir/releases"', installer)
         self.assertNotIn("current/", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081", installer)
-        self.assertIn("CHATGPT_CONTINUITY_MONITOR_REQUIRED=0", installer)
+        self.assertIn("CHATGPT_CONTINUITY_MONITOR_REQUIRED=1", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token", installer)
         self.assertIn("GEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env", installer)
         self.assertIn('gemini_cli_version="${SHOPVIVALIZ_GEMINI_CLI_VERSION:-0.62.0}"', installer)
@@ -780,7 +939,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("read_gemini_package_version()", installer)
         self.assertNotIn('"$gemini_cli_bin" --version', installer)
         self.assertIn('npm install -g "@google/gemini-cli@$gemini_cli_version" --prefix /home/ubuntu/.local', installer)
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", installer)
         self.assertIn("CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto", installer)
         self.assertIn('runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"', installer)
         self.assertIn('e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"', installer)
@@ -795,6 +954,97 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         index = next(i for i, line in enumerate(lines) if line.startswith("printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY="))
         self.assertTrue(lines[index].rstrip().endswith(chr(92)))
         self.assertEqual(lines[index + 1].strip(), '"$target_dir/scripts/gemini_24x7_controller.py" ' + chr(92))
+
+
+    def test_durable_handoff_controller_requests_proactive_convergence(self) -> None:
+        controller = load_controller()
+        calls = []
+
+        def fake_watchdog(**kwargs):
+            calls.append(kwargs)
+            return {"scanned": 1, "eligible": 0, "dispatched": 0, "mode": "proactive"}
+
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", side_effect=fake_watchdog),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="proactive-owner")
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0]["proactive"])
+        self.assertTrue(result["durable_handoff_enabled"])
+
+    def test_controller_terminalizes_ready_to_complete_checkpoint_each_cycle(self) -> None:
+        controller = load_controller()
+        from scripts import agent_task_state as task_state
+
+        previous_runtime = task_state.RUNTIME_DIR
+        task_state.RUNTIME_DIR = self.runtime
+        try:
+            task_state.start_task("ready-cycle", "finalizar tarefa verificada", "gpt")
+            task_state.mark_ready(
+                "ready-cycle",
+                evidence=["validacao fresca PASS"],
+                verification="objetivo original verificado",
+            )
+        finally:
+            task_state.RUNTIME_DIR = previous_runtime
+
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="terminalize-owner")
+
+        current = json.loads((self.runtime / "ready-cycle.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["status"], "CONCLUIDO")
+        self.assertEqual(result["completion_sweep"]["completed"], 1)
+
+
+    def test_controller_defers_ready_terminalization_while_foreground_lease_is_live(self) -> None:
+        controller = load_controller()
+        from scripts import agent_task_state as task_state
+
+        previous_runtime = task_state.RUNTIME_DIR
+        task_state.RUNTIME_DIR = self.runtime
+        try:
+            task_state.start_task("ready-foreground", "finalizar sem competir com foreground", "gpt")
+            task_state.bind_conversation(
+                "ready-foreground",
+                conversation_id="conversation_ready_foreground",
+            )
+            task_state.bind_browser_session(
+                "ready-foreground",
+                browser_session="atendimento",
+            )
+            task_state.acquire_foreground_lease_for_task(
+                "ready-foreground",
+                owner_id="interactive-turn",
+                ttl_seconds=300,
+            )
+            task_state.mark_ready(
+                "ready-foreground",
+                evidence=["validacao foreground PASS"],
+                verification="objetivo verificado pelo turno ativo",
+            )
+        finally:
+            task_state.RUNTIME_DIR = previous_runtime
+
+        with (
+            patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}, clear=False),
+            patch.object(controller.watchdog, "run_once", return_value={"scanned": 1, "eligible": 0, "dispatched": 0}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="terminalize-foreground-owner")
+
+        current = json.loads((self.runtime / "ready-foreground.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["status"], "READY_TO_COMPLETE")
+        self.assertEqual(result["completion_sweep"]["deferred_foreground"], 1)
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
 
 
 if __name__ == "__main__":

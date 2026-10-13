@@ -75,9 +75,20 @@ async function guardedRecoveryMutation(taskId, action, conversationId, mutate, a
 // browser without changing the concurrent legacy reinforcement context.
 const BROWSER_SESSION_CONTEXT = new AsyncLocalStorage();
 const BROWSER_SESSIONS = Object.freeze({
-  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com' }),
+  dev: Object.freeze({ cdpBase: 'http://127.0.0.1:9559', expectedEmail: 'dev@shopvivaliz.com.br' }),
   atendimento: Object.freeze({ cdpBase: 'http://127.0.0.1:9556', expectedEmail: 'atendimento@shopvivaliz.com.br' }),
+  // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
+  fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
 });
+function boundDevCdpBase() {
+  // Separate, explicit opt-in. The MCP Dev 5583 adoption is NOT proof of
+  // permission to reroute the independent continuity worker. No cookies or
+  // credentials are copied from the authenticated Chrome.
+  const selected = String(process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP || '');
+  if (selected === '') return BROWSER_SESSIONS.dev.cdpBase;
+  if (selected === '9557') return 'http://127.0.0.1:9557';
+  throw new Error('invalid Dev continuity auxiliary adoption');
+}
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
 }
@@ -101,7 +112,9 @@ function taskBrowserSession(taskId, requestedConversationId = '') {
       || (requestedConversationId && requestedConversationId !== bound)) {
     throw new Error('browser session checkpoint conversation mismatch or terminal state');
   }
-  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+  return Object.freeze({ ...BROWSER_SESSIONS[name],
+    ...(name === 'dev' ? { cdpBase: boundDevCdpBase() } : {}),
+    conversationId: bound, name });
 }
 
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
@@ -236,6 +249,7 @@ function outcomeDetailCode(detail) {
   if (normalized.includes('multiple open chatgpt conversation tabs found')) return 'AMBIGUOUS_CONVERSATION_TARGET';
   if (normalized.includes('cdp endpoint unreachable')) return 'CDP_ENDPOINT_UNREACHABLE';
   if (normalized.includes('no usable open chatgpt.com tab found')) return 'NO_USABLE_CHATGPT_TAB';
+  if (normalized.includes('browser session account mismatch or bound conversation mismatch')) return 'BOUND_SESSION_IDENTITY_MISMATCH';
   return 'UNCLASSIFIED_RUNTIME_ERROR';
 }
 
@@ -307,6 +321,46 @@ function readMonitorState(file) {
   }
 }
 
+const MONITOR_ORPHAN_TEMP_MIN_AGE_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_MAX_REMOVALS = 512;
+const monitorOrphanSweepDue = new Map();
+
+// A killed worker can leave its atomic-write .tmp.<pid> behind. These files
+// are not checkpoints or source-of-truth. Prune only old regular files from
+// this exact monitor basename after proving that the owning PID is gone.
+// Errors must never stop the durable monitor heartbeat.
+function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
+  const slash = file.lastIndexOf('/');
+  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  const prefix = file.slice(slash + 1) + '.tmp.';
+  let removed = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (removed >= MONITOR_ORPHAN_MAX_REMOVALS) break;
+      if (!entry.isFile() || !entry.name.startsWith(prefix)) continue;
+      const rawPid = entry.name.slice(prefix.length);
+      if (!/^[0-9]{1,10}$/.test(rawPid)) continue;
+      const pid = Number(rawPid);
+      if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2147483647 || pid === process.pid) continue;
+      try {
+        process.kill(pid, 0);
+        continue; // PID is alive, or was recycled: never touch its file.
+      } catch (error) {
+        if (error?.code !== 'ESRCH') continue; // EPERM and unknown errors fail closed.
+      }
+      const candidate = dir + '/' + entry.name;
+      try {
+        const st = fs.lstatSync(candidate);
+        if (!st.isFile() || nowMs - st.mtimeMs < MONITOR_ORPHAN_TEMP_MIN_AGE_MS) continue;
+        fs.unlinkSync(candidate);
+        removed += 1;
+      } catch {} // Race with another worker or removal; preserve the heartbeat.
+    }
+  } catch {}
+  return removed;
+}
+
 function persistMonitorStateFile(file, payload) {
   const slash = file.lastIndexOf('/');
   const dir = slash > 0 ? file.slice(0, slash) : '.';
@@ -324,6 +378,11 @@ function persistMonitorStateFile(file, payload) {
     const dirFd = fs.openSync(dir, 'r');
     try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
   } catch {}
+  const nowMs = Date.now();
+  if (nowMs >= (monitorOrphanSweepDue.get(file) || 0)) {
+    monitorOrphanSweepDue.set(file, nowMs + MONITOR_ORPHAN_SWEEP_INTERVAL_MS);
+    pruneStaleMonitorTempFiles(file, nowMs);
+  }
 }
 
 function persistReinforcementHealth(outcome) {
@@ -472,12 +531,56 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
-async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
+async function connectFirstUsableChatgptTab(tabs, connector, preferred = null, { maxParallel = 1 } = {}) {
   if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
   const ranked = tabs
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => Number.isFinite(row.rank))
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // The guardian may inspect many restored tabs. Probe small, bounded batches
+  // in parallel instead of serial 2.5s session fetches, while retaining the
+  // original deterministic first-preferred/fallback selection and closing all
+  // unselected CDP connections. All other callers remain strictly serial.
+  const parallel = Math.max(1, Math.min(8, Math.trunc(Number(maxParallel) || 1)));
+  if (parallel > 1 && typeof preferred === 'function') {
+    let fallback = null;
+    for (let index = 0; index < ranked.length; index += parallel) {
+      const batch = ranked.slice(index, index + parallel);
+      const checked = await Promise.all(batch.map(async ({ tab }) => {
+        let connected = null;
+        try {
+          connected = await connector(tab);
+          if (!connected) return { connected: null, accepted: false };
+          let accepted = false;
+          try { accepted = Boolean(await preferred(connected, tab)); } catch {}
+          return { connected, accepted };
+        } catch {
+          try { connected?.close(); } catch {}
+          return { connected: null, accepted: false };
+        }
+      }));
+      const winner = checked.find(result => result.accepted)?.connected || null;
+      if (winner) {
+        if (fallback && fallback !== winner) {
+          try { fallback.close(); } catch {}
+        }
+        for (const result of checked) {
+          if (result.connected && result.connected !== winner) {
+            try { result.connected.close(); } catch {}
+          }
+        }
+        return winner;
+      }
+      for (const result of checked) {
+        if (!result.connected) continue;
+        if (!fallback) fallback = result.connected;
+        else { try { result.connected.close(); } catch {} }
+      }
+    }
+    return fallback;
+  }
+
   let fallback = null;
   for (const { tab } of ranked) {
     try {
@@ -692,6 +795,98 @@ async function resolveAmbiguousConversationTabs(
   }
 }
 
+async function connectBoundConversationWithReentry(
+  tabs,
+  conversationId,
+  {
+    connector = connectCdpTarget,
+    selectReentry = selectBoundConversationReentryTab,
+    navigate = navigateNeutralTabToConversation,
+    preferred = boundConversationRecoveryReady,
+  } = {},
+) {
+  const id = safeConversationId(conversationId);
+  if (!id) throw new Error('invalid bound conversation id');
+
+  const boundTabs = selectBoundConversationTabs(tabs, id);
+  const existing = await connectFirstUsableChatgptTab(
+    boundTabs,
+    connector,
+    boundTabs.length > 1 ? preferred : null,
+  );
+  if (existing) return existing;
+
+  // The existing Dev auxiliary Chrome may remain alive while the provider's
+  // account identity changes. Never navigate to a private bound conversation
+  // based only on a cached guardian health check. Before selecting or creating
+  // a neutral reentry target, verify the *current* official ChatGPT identity in
+  // an already-open, same-origin tab. No session JSON or credential leaves CDP.
+  const currentSession = BROWSER_SESSION_CONTEXT.getStore();
+  if (currentSession?.name === 'dev'
+      && currentSession.cdpBase === 'http://127.0.0.1:9557') {
+    const candidates = (Array.isArray(tabs) ? tabs : [])
+      .filter(tab => chatgptTabRank(tab) === 1 || chatgptTabRank(tab) === 0)
+      .slice(0, 4);
+    let identityVerified = false;
+    for (const tab of candidates) {
+      let probe;
+      let timeout;
+      try {
+        probe = await connector(tab);
+        if (!probe) continue;
+        const verdict = await Promise.race([
+          probe.evaluate(`(async()=>{
+            /* continuity-dev-aux-prenavigation-identity */
+            if(location.hostname !== 'chatgpt.com') return false;
+            try {
+              const r=await fetch('/api/auth/session',{
+                credentials:'same-origin', cache:'no-store',
+                signal:AbortSignal.timeout(2000)
+              });
+              if(!r.ok) return false;
+              const d=await r.json();
+              return String(d?.user?.email||'').trim().toLowerCase()
+                === 'dev@shopvivaliz.com.br';
+            }catch{return false}
+          })()`),
+          new Promise(resolve => { timeout = setTimeout(() => resolve(false), 2600); }),
+        ]);
+        if (verdict === true) {
+          identityVerified = true;
+          break;
+        }
+        // A mismatch or missing user.email is a hard deny; other open tabs
+        // in the same Chromium profile must not override this decision.
+        if (verdict === false) break;
+      } catch {
+        // A dead renderer cannot attest identity. Try another existing tab,
+        // but never create a new tab or navigate on an unverified profile.
+      } finally {
+        if (timeout) clearTimeout(timeout);
+        try { probe?.close(); } catch {}
+      }
+    }
+    if (!identityVerified) {
+      throw new Error('Dev auxiliary identity unverified before conversation reentry');
+    }
+  }
+
+  // A target can remain listed by /json while its renderer no longer answers
+  // Runtime.evaluate. Re-enter the exact immutable conversation id through a
+  // neutral authenticated Home target instead of declaring the conversation
+  // unavailable or selecting another conversation.
+  const reentryTab = await selectReentry(tabs);
+  if (!reentryTab) {
+    throw new Error('bound conversation is not available in the attached browser');
+  }
+  const navigated = await navigate(reentryTab, id, connector);
+  if (!navigated) throw new Error('bound conversation could not be opened');
+
+  const reentered = await connector(reentryTab);
+  if (!reentered) throw new Error('bound conversation reentry target is not usable');
+  return reentered;
+}
+
 class Cdp {
   constructor(ws, { commandTimeoutMs = 15_000 } = {}) {
     this.ws = ws;
@@ -743,25 +938,7 @@ class Cdp {
     const boundConversationId = safeConversationId(targetConversationId);
     const checkpointTargetMs = Number(targetUpdatedAtMs || 0);
     if (boundConversationId) {
-      candidateTabs = selectBoundConversationTabs(tabs, boundConversationId);
-      if (candidateTabs.length === 0) {
-        // Never guess among multiple neutral tabs and never repurpose another
-        // real conversation. A single neutral home tab is safe to reuse; when
-        // there are zero or multiple neutral homes, create one isolated target
-        // exclusively for exact bound-conversation reentry.
-        const neutralHomeTab = await selectBoundConversationReentryTab(tabs);
-        if (!neutralHomeTab) {
-          throw new Error('bound conversation is not available in the attached browser');
-        }
-        const navigated = await navigateNeutralTabToConversation(
-          neutralHomeTab,
-          boundConversationId,
-          connectCdpTarget,
-        );
-        if (!navigated) throw new Error('bound conversation could not be opened');
-        candidateTabs = [neutralHomeTab];
-      }
-      if (candidateTabs.length > 1) preferredCandidate = boundConversationRecoveryReady;
+      return await connectBoundConversationWithReentry(tabs, boundConversationId);
     } else if (allowLatestDisambiguation && checkpointTargetMs > 0) {
       // Checkpoint-driven recovery must bind to the intended conversation
       // even when the persistent browser currently has only a neutral home
@@ -2223,7 +2400,10 @@ async function alignLatestForReinforcement(
     ? Math.max(0, Math.round((Number(nowMs) - Number(latest.update_time) * 1000) / 1000))
     : null;
   if (!latest) {
-    if (httpStatus === 429) {
+    // A 200 response without valid conversations is no stronger evidence
+    // than a rate limit. Recover only from a locally synchronized, provably
+    // unique sidebar context; never select an ambiguous active tab.
+    if (httpStatus === 429 || httpStatus === 200) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
       if (
         sidebar.action === 'navigated_sidebar_fallback'
@@ -2291,9 +2471,30 @@ async function currentConversationSurfaceContains(cdp, markers, probeToken) {
         }
       }
     }else{
-      // Some loading/virtualized ChatGPT surfaces do not expose role markers.
-      // Keep only the tail so historical failures near the top cannot retrigger.
-      scope=String(body.innerText||body.textContent||'').slice(-16000);
+      // The current ChatGPT UI can omit data-message-author-role entirely.
+      // Never scan a large history tail in that case: quoted/historical failure
+      // text in an old turn would retrigger recovery forever. Anchor at the
+      // latest completed assistant turn (identified by its Regenerate action)
+      // and inspect only content rendered after that turn. Live alerts are
+      // appended below regardless, so current failures remain observable.
+      const retryButtons=[...body.querySelectorAll('button[aria-label="Regenerate response"]')];
+      const lastRetry=retryButtons[retryButtons.length-1]||null;
+      const completedTurn=lastRetry?.closest('.group.flex.flex-col')||null;
+      if(completedTurn){
+        // Use rendered text, not Range.toString(): React hydration scripts can
+        // contain serialized historical turns and would reintroduce the same
+        // false-positive through invisible script content.
+        const visibleBody=String(body.innerText||'');
+        const completedText=String(completedTurn.innerText||'').trim();
+        const boundary=completedText ? visibleBody.lastIndexOf(completedText) : -1;
+        scope=boundary>=0
+          ? visibleBody.slice(boundary+completedText.length)
+          : visibleBody.slice(-1200);
+      }else{
+        // Fail closed when no reliable turn boundary exists. Keep a very small
+        // tail for transient current-page status text; live alerts are added below.
+        scope=String(body.innerText||body.textContent||'').slice(-1200);
+      }
     }
 
     // Error/status UI often lives in a portal outside the turn subtree.
@@ -2449,21 +2650,28 @@ async function recoverableRetryButtonTarget(cdp) {
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return null;
-    const candidates=[];
+    const retryCandidates=[];
+    const regenerateCandidates=[];
     for(const button of surface.querySelectorAll('button')){
       if(button.disabled||button.getAttribute('aria-disabled')==='true') continue;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      if(!accepted.has(label)) continue;
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) continue;
       const rect=button.getBoundingClientRect();
       if(!(rect.width>0&&rect.height>0)) continue;
       const style=getComputedStyle(button);
       if(style.visibility==='hidden'||style.display==='none'||Number(style.opacity||1)===0) continue;
-      candidates.push({x:rect.left+rect.width/2,y:rect.top+rect.height/2});
+      const target={x:rect.left+rect.width/2,y:rect.top+rect.height/2,top:rect.top};
+      if(retryLabels.has(label)) retryCandidates.push(target);
+      else regenerateCandidates.push(target);
     }
-    return candidates.length===1 ? candidates[0] : null;
+    if(retryCandidates.length===1) return retryCandidates[0];
+    if(retryCandidates.length>1||regenerateCandidates.length===0) return null;
+    regenerateCandidates.sort((a,b)=>b.top-a.top);
+    return regenerateCandidates[0];
   })()`);
 }
 
@@ -2520,16 +2728,24 @@ async function clickRecoverableRetryButton(cdp, expectedFingerprint = '', { allo
     const normalize=value=>String(value||'')
       .normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
       .replace(/\\s+/g,' ').trim().toLowerCase();
-    const accepted=new Set(['retry','repetir','tentar novamente']);
+    const retryLabels=new Set(['retry','repetir','tentar novamente']);
+    const regenerateLabels=new Set(['regenerate response','regenerate','gerar novamente','regenerar resposta']);
     const surface=document.querySelector('main');
     if(!surface) return false;
-    const candidates=[...surface.querySelectorAll('button')].filter(button=>{
-      if(button.disabled||button.getAttribute('aria-disabled')==='true') return false;
+    const rows=[...surface.querySelectorAll('button')].map(button=>{
+      if(button.disabled||button.getAttribute('aria-disabled')==='true') return null;
       const label=normalize(button.getAttribute('aria-label')||button.innerText||button.textContent||'');
-      return accepted.has(label);
-    });
-    if(candidates.length!==1) return false;
-    candidates[0].click();
+      if(!retryLabels.has(label)&&!regenerateLabels.has(label)) return null;
+      const rect=button.getBoundingClientRect();
+      if(!(rect.width>0&&rect.height>0)) return null;
+      return {button,label,top:rect.top};
+    }).filter(Boolean);
+    const retries=rows.filter(row=>retryLabels.has(row.label));
+    if(retries.length===1){retries[0].button.click();return true;}
+    if(retries.length>1) return false;
+    const regenerates=rows.filter(row=>regenerateLabels.has(row.label)).sort((a,b)=>b.top-a.top);
+    if(!regenerates.length) return false;
+    regenerates[0].button.click();
     return true;
   })()`));
 }
@@ -4015,6 +4231,7 @@ export {
   safeConversationId,
   selectBoundConversationTabs,
   selectBoundConversationReentryTab,
+  connectBoundConversationWithReentry,
   connectFirstUsableChatgptTab,
   connectReinforcementChatgptTab,
   resolveAmbiguousConversationTabs,
@@ -4037,10 +4254,12 @@ export {
   errorBannerPresent,
   recoverableFailureReason,
   conversationUnavailablePresent,
+  recoverableRetryButtonTarget,
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,

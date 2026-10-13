@@ -37,19 +37,20 @@ Ao iniciar trabalho, usar esta ordem:
 
 Se um chat histórico divergir de evidência viva ou da documentação canônica atual, o chat histórico perde precedência.
 
-## Bootstrap mínimo da conta nova
+## Bootstrap mínimo da conta `dev`
 
-A conta nova deve ler nesta ordem:
+A conta `dev@shopvivaliz.com.br` deve ler nesta ordem:
 
-1. `docs/knowledge/atendimento-chatgpt-bootstrap.md`;
+1. `docs/knowledge/dev-chatgpt-bootstrap.md`;
 2. `docs/knowledge/host-access.md`;
 3. `docs/knowledge/README.md`;
 4. `docs/knowledge/agent-rules.md`;
 5. `docs/knowledge/project.md`;
 6. `docs/knowledge/browser-sessions.md`;
 7. `docs/knowledge/chatgpt-account-migration-curated.md`;
-8. `docs/knowledge/dev-agent-briefing.md` quando houver engenharia;
-9. documentação específica do projeto ou rotina afetada.
+8. `docs/knowledge/dev-agent-briefing.md`;
+9. `docs/knowledge/dev-context-transfer-20261005.md`;
+10. documentação específica do projeto ou rotina afetada.
 
 ## Conhecimento durável que deve ser preservado
 
@@ -85,7 +86,8 @@ Produção usa `/home/ubuntu/shopvivaliz-deploy/` com releases imutáveis. Nunca
 
 A fonte final é `browser-sessions.md`.
 
-- `shopvivaliz-chromium` / CDP 9555 — conta pessoal.
+- `shopvivaliz-dev-chromium` / CDP 9559 — conta corporativa Dev.
+- `shopvivaliz-chromium` / CDP 9555 — legado temporário apenas para checkpoints pré-migração já vinculados; não usar para novas tarefas.
 - `shopvivaliz-atendimento-chromium` / CDP 9556 — conta corporativa Atendimento.
 - Nunca fazer logout para trocar contas.
 - Nunca reutilizar perfil, cookies, storage ou porta CDP entre contas.
@@ -201,7 +203,7 @@ O pacote lógico da conta nova deve ser entendido como:
 
 ```text
 bootstrap/
-  atendimento-chatgpt-bootstrap.md
+  dev-chatgpt-bootstrap.md
   chatgpt-account-migration-curated.md
 knowledge/
   host-access.md
@@ -258,13 +260,15 @@ Toda tarefa migrada deve ser revalidada antes de execução. Não usar uma taref
 Use Vivaliz-site/site-shopvivaliz (main) como fonte primária da ShopVivaliz.
 
 Leia primeiro:
-1. docs/knowledge/atendimento-chatgpt-bootstrap.md
+1. docs/knowledge/dev-chatgpt-bootstrap.md
 2. docs/knowledge/host-access.md
 3. docs/knowledge/README.md
 4. docs/knowledge/agent-rules.md
 5. docs/knowledge/project.md
 6. docs/knowledge/browser-sessions.md
 7. docs/knowledge/chatgpt-account-migration-curated.md
+8. docs/knowledge/dev-agent-briefing.md
+9. docs/knowledge/dev-context-transfer-20261005.md
 
 O histórico importado é curado e serve apenas como contexto auxiliar. Não trate status históricos como atuais sem revalidar. Nunca exponha secrets. Quando houver divergência, priorize evidência viva, código atual e documentação canônica. Continue tarefas até validação real ou bloqueio externo comprovado.
 ```

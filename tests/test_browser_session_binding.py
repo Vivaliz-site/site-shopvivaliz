@@ -19,6 +19,39 @@ class BrowserSessionBindingTests(unittest.TestCase):
         binder = getattr(state, 'bind_browser_session', None)
         self.assertTrue(callable(binder), 'durable account binding is required before browser routing')
         return binder(task, browser_session=session)
+    def test_atomic_start_creates_consistent_conversation_binding(self):
+        created = state.start_task(
+            'atomic-dev-fixture', 'resume this exact Dev conversation',
+            conversation_id='dev-unique-conversation-123', browser_session='dev',
+        )
+        self.assertEqual(created['conversation_id'], 'dev-unique-conversation-123')
+        self.assertEqual(created['browser_session'], 'dev')
+        self.assertEqual(created['history'][0]['event'], 'started')
+        self.assertEqual(created, state.load_task('atomic-dev-fixture'))
+        self.assertEqual(created, state.start_task(
+            'atomic-dev-fixture', 'resume this exact Dev conversation',
+            conversation_id='dev-unique-conversation-123', browser_session='dev',
+        ))
+
+    def test_atomic_start_rejects_partial_or_cross_account_binding(self):
+        with self.assertRaises(state.TaskStateError):
+            state.start_task('partial-binding', 'fixture', conversation_id='valid-conversation-123')
+        self.assertFalse((state.RUNTIME_DIR / 'partial-binding.json').exists())
+        with self.assertRaises(state.TaskStateError):
+            state.start_task('wrong-account', 'fixture', conversation_id='valid-conversation-123', browser_session='fred')
+        self.assertFalse((state.RUNTIME_DIR / 'wrong-account.json').exists())
+        with self.assertRaises(state.TaskStateError):
+            state.start_task('corporate-fixture', 'Recover the explicitly bound corporate conversation', conversation_id='other-valid-conversation', browser_session='dev')
+
+    def test_cli_supports_atomic_creation(self):
+        parser = state._parser()
+        args = parser.parse_args([
+            'start', '--task', 'new-dev', '--goal', 'resume exact conversation',
+            '--conversation-id', 'conversation-12345678', '--browser-session', 'dev',
+        ])
+        self.assertEqual(args.conversation_id, 'conversation-12345678')
+        self.assertEqual(args.browser_session, 'dev')
+
     def test_binding_is_persistent_without_manufacturing_progress(self):
         before = state.load_task('corporate-fixture')
         self.bind('atendimento')
@@ -26,6 +59,21 @@ class BrowserSessionBindingTests(unittest.TestCase):
         self.assertEqual(after['browser_session'], 'atendimento')
         self.assertEqual(after['updated_at'], before['updated_at'])
         self.assertEqual(after['history'][-1]['event'], 'browser_session_bound')
+    def test_cli_accepts_dev_and_atendimento_and_rejects_new_fred_binding(self):
+        parser = state._parser()
+        for session in ('dev', 'atendimento'):
+            args = parser.parse_args(['bind-browser-session', '--task', 'corporate-fixture', '--browser-session', session])
+            self.assertEqual(args.browser_session, session)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(['bind-browser-session', '--task', 'corporate-fixture', '--browser-session', 'fred'])
+
+    def test_dev_binding_is_persistent_and_idempotent(self):
+        before = state.load_task('corporate-fixture')
+        first = self.bind('dev')
+        self.assertEqual(first['browser_session'], 'dev')
+        self.assertEqual(first['updated_at'], before['updated_at'])
+        self.assertEqual(first, self.bind('dev'))
+
     def test_binding_is_idempotent(self):
         first = self.bind('atendimento')
         self.assertEqual(first, self.bind('atendimento'))

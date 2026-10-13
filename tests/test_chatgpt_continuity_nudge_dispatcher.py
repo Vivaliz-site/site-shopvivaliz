@@ -334,9 +334,44 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(len(status_calls), 1)
 
+    def test_confirmed_progress_is_followed_again_until_checkpoint_becomes_terminal(self) -> None:
+        self._stale_checkpoint_and_request()
+        kwargs = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.dispatcher.run_once(**kwargs)
+        observed = self.dispatcher.run_once(
+            **kwargs,
+            query_status=lambda **unused: {
+                "ok": True,
+                "http_status": 200,
+                "body": {"status": "OK", "nudge": {
+                    "status": "PROGRESS_CONFIRMED",
+                    "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                }},
+            },
+        )
+        self.assertEqual(observed["dispatched"], 0)
+        self.assertEqual(len(self.calls), 1)
+
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows[-1]["worker_status_observed_at"] = "2020-01-01T00:00:00Z"
+        rows[-1]["dispatched_at"] = "2020-01-01T00:00:00Z"
+        ledger.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+        followup = self.dispatcher.run_once(**kwargs)
+        self.assertEqual(state.load_task("task-1")["status"], "RUNNING")
+        self.assertEqual(followup["dispatched"], 1)
+        self.assertEqual(followup.get("progress_followup_attempted"), 1)
+        self.assertEqual(len(self.calls), 2)
+
     def test_live_foreground_lease_blocks_enqueue_when_durable_handoff_enabled(self) -> None:
         self._stale_checkpoint_and_request(task_id="foreground-blocked")
-        state.bind_browser_session("foreground-blocked", browser_session="fred")
+        state.bind_browser_session("foreground-blocked", browser_session="dev")
         state.acquire_foreground_lease_for_task("foreground-blocked", owner_id="turn-live", ttl_seconds=60)
         with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
             result = self.dispatcher.run_once(
@@ -348,6 +383,57 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(result["dispatched"], 0)
         self.assertEqual(result["skipped_foreground_active"], 1)
         self.assertEqual(self.calls, [])
+
+    def test_terminal_worker_result_releases_recovery_ownership_for_next_conversation(self) -> None:
+        self._stale_checkpoint_and_request(task_id="first-conversation")
+        state.bind_browser_session("first-conversation", browser_session="dev")
+
+        kwargs = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            first = self.dispatcher.run_once(**kwargs)
+            self.assertEqual(first["dispatched"], 1)
+
+            observed = self.dispatcher.run_once(
+                **kwargs,
+                query_status=lambda **unused: {
+                    "ok": True,
+                    "http_status": 200,
+                    "body": {"status": "OK", "nudge": {"status": "STALLED_NOT_CONFIRMED"}},
+                },
+            )
+            self.assertEqual(observed["dispatched"], 0)
+
+            first_state = state.load_task("first-conversation")
+            self.assertTrue(
+                first_state.get("recovery_released_at"),
+                "terminal worker observation must release durable recovery ownership immediately",
+            )
+
+            state.start_task("second-conversation", "goal", "gpt")
+            state.bind_conversation(
+                "second-conversation",
+                conversation_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            )
+            state.bind_browser_session("second-conversation", browser_session="dev")
+            state.record_progress("second-conversation", next_action="keep going")
+            second_path = self.runtime / "second-conversation.json"
+            second_payload = json.loads(second_path.read_text(encoding="utf-8"))
+            second_payload["updated_at"] = (
+                datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            second_path.write_text(json.dumps(second_payload), encoding="utf-8")
+            watchdog.run_once(stale_seconds=1, runtime_dir=self.runtime)
+
+            next_result = self.dispatcher.run_once(**kwargs)
+
+        self.assertEqual(next_result["dispatched"], 1)
+        self.assertEqual(next_result["skipped_ownership_busy"], 0)
+        self.assertEqual(self.calls[-1]["task_id"], "second-conversation")
 
     def test_worker_status_maps_to_explicit_recovery_states(self) -> None:
         f = self.dispatcher.recovery_state_for_worker_status
@@ -425,6 +511,41 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(rows[-1]["send_attempt_count"], 0)
 
+    def test_bound_session_identity_mismatch_is_not_hot_retried(self) -> None:
+        self._stale_checkpoint_and_request()
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        ledger.write_text(
+            json.dumps(
+                {
+                    "fingerprint": fingerprint,
+                    "task_id": "task-1",
+                    "repository": state.DEFAULT_REPOSITORY,
+                    "dispatched_at": "2020-01-01T00:00:00Z",
+                    "bridge_ok": True,
+                    "http_status": 200,
+                    "worker_status": "ERROR",
+                    "detail_code": "BOUND_SESSION_IDENTITY_MISMATCH",
+                    "attempt_count": 99,
+                    "send_attempt_count": 0,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.dispatcher.run_once(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(result.get("skipped_session_unavailable"), 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(self.calls, [])
+
     def test_error_does_not_consume_real_send_budget(self) -> None:
         self._stale_checkpoint_and_request()
         fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
@@ -494,6 +615,77 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(stopped["dispatched"], 0)
         self.assertEqual(stopped["skipped_attempt_limit"], 1)
         self.assertEqual(len(self.calls), 1)
+
+    def test_progress_receipt_attests_only_exact_current_browser_profile(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.bind_browser_session("task-1", browser_session="dev")
+        route = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        options = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        first = self.dispatcher.run_once(**options)
+        self.assertEqual(first["dispatched"], 1)
+        ledger_path = self.runtime / self.dispatcher.LEDGER_FILE
+        before_rows = [json.loads(v) for v in ledger_path.read_text().splitlines() if v]
+        self.assertNotIn("browser_session", before_rows[-1],
+                         "enqueue is not a real authenticated worker receipt")
+
+        options["query_status"] = lambda **unused: {
+            "ok": True, "http_status": 200,
+            "body": {"status": "OK", "nudge": {
+                "status": "PROGRESS_CONFIRMED", "conversation_id": route,
+            }},
+        }
+        self.dispatcher.run_once(**options)
+        rows = [json.loads(v) for v in ledger_path.read_text().splitlines() if v]
+        confirmed = rows[-1]
+        self.assertEqual(confirmed["worker_status"], "PROGRESS_CONFIRMED")
+        self.assertEqual(confirmed["conversation_id"], route)
+        self.assertEqual(confirmed["browser_session"], "dev")
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, fingerprint),
+            "dev",
+        )
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, "stale-fingerprint"),
+            "",
+        )
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1",
+                                                       "6ac0f8b7-f2f0-83e9-95c5-54be614b9def", fingerprint),
+            "",
+        )
+
+    def test_mismatched_worker_conversation_is_never_attested_as_bound_profile(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.bind_browser_session("task-1", browser_session="atendimento")
+        options = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.dispatcher.run_once(**options)
+        options["query_status"] = lambda **unused: {
+            "ok": True, "http_status": 200,
+            "body": {"status": "OK", "nudge": {
+                "status": "PROGRESS_CONFIRMED",
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9def",
+            }},
+        }
+        self.dispatcher.run_once(**options)
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(v) for v in ledger.read_text().splitlines() if v]
+        self.assertEqual(rows[-1]["worker_status"], "PROGRESS_CONFIRMED")
+        self.assertNotIn("browser_session", rows[-1])
+        self.assertEqual(
+            state.load_task("task-1")["conversation_id"],
+            "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+        )
 
     def test_active_claim_is_repolled_until_worker_reaches_terminal_result(self) -> None:
         self._stale_checkpoint_and_request()

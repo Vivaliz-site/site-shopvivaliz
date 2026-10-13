@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -105,6 +106,24 @@ path.write_text(json.dumps(state))
         self.assertEqual(record["checkpoint_after"], "2026-10-05T08:10:00Z")
         self.assertEqual(record["evidence"]["checkpoint_before"], state["updated_at"])
         self.assertEqual(record["evidence"]["checkpoint_after"], "2026-10-05T08:10:00Z")
+
+    def test_worker_releases_resume_ownership_after_execution(self) -> None:
+        worker = load_worker()
+        self._seed()
+        noop = self.root / "noop.py"
+        noop.write_text("pass\n", encoding="utf-8")
+
+        with mock.patch.object(dispatcher, "_release_resume_ownership") as release:
+            result = worker.worker_run_once(
+                runtime_dir=self.runtime,
+                project_dir=self.project,
+                executor=[sys.executable, str(noop)],
+            )
+
+        self.assertEqual(result["claimed"], 1)
+        self.assertEqual(result["no_progress"], 1)
+        release.assert_called_once()
+        self.assertEqual(release.call_args.args[3], "resume_worker_finished")
 
     def test_second_worker_cannot_claim_live_execution(self) -> None:
         worker = load_worker()

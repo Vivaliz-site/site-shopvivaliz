@@ -35,13 +35,13 @@ from typing import Any
 try:
     from .agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from .task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 except ImportError:  # direct CLI execution from repository root
     from agent_task_state import (
         RUNTIME_DIR, TaskStateError, bind_conversation, claim_recovery_ownership,
-        load_task, record_recovery_state,
+        load_task, record_recovery_state, release_recovery_ownership,
     )
     from task_continuation_watchdog import DEFAULT_LOOKBACK_DAYS, read_requests, _fingerprint as checkpoint_fingerprint
 
@@ -53,6 +53,14 @@ DEFAULT_TOKEN_FILE = Path("/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/b
 LEGACY_TOKEN_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token")
 DEFAULT_BRIDGE_RETRY_SECONDS = 300
 DEFAULT_MAX_WEB_ATTEMPTS = 2
+WORKER_ATTEMPT_TERMINAL_STATUSES = frozenset({
+    "PROGRESS_CONFIRMED",
+    "SENT",
+    "SENT_UNCONFIRMED",
+    "STALLED_NOT_CONFIRMED",
+    "CONVERSATION_NOT_FOUND",
+    "ERROR",
+})
 
 
 def _durable_handoff_enabled() -> bool:
@@ -164,6 +172,31 @@ def _bound_conversation_id(runtime_dir: Path, task_id: str) -> str:
         return ""
     value = str(payload.get("conversation_id", "")).strip() if isinstance(payload, dict) else ""
     return value if re.fullmatch(r"[A-Za-z0-9_-]{8,160}", value) else ""
+
+
+def _attested_browser_session(runtime_dir: Path, task_id: str, conversation_id: str, fingerprint: str) -> str:
+    """Return a corporate profile only for this exact current task binding.
+
+    A worker's confirmed conversation cannot attest the account profile by
+    itself. Never derive a session from the task title, most-recent browser tab,
+    or an unrelated historical ledger receipt.
+    """
+    if not task_id or "/" in task_id or "\\" in task_id:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,160}", str(conversation_id or "")):
+        return ""
+    try:
+        payload = json.loads((runtime_dir / f"{task_id}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, dict) or payload.get("status") != "RUNNING":
+        return ""
+    if str(payload.get("conversation_id", "")).strip() != conversation_id:
+        return ""
+    if checkpoint_fingerprint(payload) != fingerprint:
+        return ""
+    session = str(payload.get("browser_session", "")).strip()
+    return session if session in {"dev", "atendimento"} else ""
 
 
 def _checkpoint_updated_at(runtime_dir: Path, task_id: str) -> datetime | None:
@@ -394,6 +427,8 @@ def _run_once_locked(
     skipped_conversation_coalesced = 0
     skipped_unbound = 0
     retry_attempted = 0
+    progress_followup_attempted = 0
+    skipped_session_unavailable = 0
     skipped_attempt_limit = 0
     skipped_foreground_active = 0
     skipped_ownership_busy = 0
@@ -438,13 +473,17 @@ def _run_once_locked(
         if previous:
             attempted_at = _parse_time(previous.get("dispatched_at"))
             worker_status = str(previous.get("worker_status", "")).strip().upper()
+            detail_code = str(previous.get("detail_code", "")).strip().upper()
 
             # Empty/PENDING/CLAIMED are observations of an active attempt,
             # not terminal outcomes. Re-poll them every dispatcher cycle so a
             # later worker result cannot be cached as "in flight" forever.
             if (
                 previous.get("bridge_ok") is True
-                and worker_status in {"", "PENDING", "CLAIMED"}
+                and (
+                    worker_status in {"", "PENDING", "CLAIMED"}
+                    or (worker_status == "ERROR" and not detail_code)
+                )
                 and resolved_token
             ):
                 status_result = query_status(
@@ -458,9 +497,14 @@ def _run_once_locked(
                     nudge = status_body.get("nudge") if isinstance(status_body.get("nudge"), dict) else {}
                     observed_status = str(nudge.get("status", "")).strip().upper()
                     if observed_status:
-                        if observed_status != worker_status:
+                        observed_detail_code = str(nudge.get("detail_code", "")).strip().upper()
+                        if observed_status != worker_status or (
+                            observed_detail_code and observed_detail_code != detail_code
+                        ):
                             observed = dict(previous)
                             observed["worker_status"] = observed_status
+                            if observed_detail_code:
+                                observed["detail_code"] = observed_detail_code
                             observed["worker_status_observed_at"] = utc_now()
                             confirmed_conversation_id = str(nudge.get("conversation_id", "")).strip()
                             if (
@@ -468,6 +512,17 @@ def _run_once_locked(
                                 and re.fullmatch(r"[A-Za-z0-9_-]{8,160}", confirmed_conversation_id)
                             ):
                                 observed["conversation_id"] = confirmed_conversation_id
+                                # Attest the browser profile only after a real
+                                # confirmed worker response for the exact
+                                # current checkpoint conversation. Stale or
+                                # cross-account receipts fail closed.
+                                session = _attested_browser_session(
+                                    root, task_id, confirmed_conversation_id, fingerprint,
+                                )
+                                if session:
+                                    observed["browser_session"] = session
+                                else:
+                                    observed.pop("browser_session", None)
                                 if (
                                     not _bound_conversation_id(root, task_id)
                                     and Path(root).resolve() == Path(RUNTIME_DIR).resolve()
@@ -511,10 +566,46 @@ def _run_once_locked(
                                     # Ownership/version changed while observing the bridge result;
                                     # the stale worker outcome must not mutate current task state.
                                     pass
+                                if observed_status in WORKER_ATTEMPT_TERMINAL_STATUSES:
+                                    try:
+                                        release_recovery_ownership(
+                                            task_id,
+                                            owner_id=f"dispatcher:{fingerprint}",
+                                            reason=f"worker_{observed_status.lower()}",
+                                        )
+                                    except TaskStateError:
+                                        # A newer owner/checkpoint may already have taken over.
+                                        # Never release ownership that no longer belongs to this
+                                        # exact dispatcher fingerprint.
+                                        pass
                         worker_status = observed_status
+                        detail_code = observed_detail_code or detail_code
+
+            if worker_status == "ERROR" and detail_code == "BOUND_SESSION_IDENTITY_MISMATCH":
+                # This is a missing prerequisite, not a transient generation
+                # failure. Re-enqueueing the immutable checkpoint cannot
+                # authenticate the bound browser profile and only creates a
+                # retry storm. Keep the failure visible until the session or
+                # checkpoint changes.
+                skipped_session_unavailable += 1
+                continue
 
             if worker_status == "PROGRESS_CONFIRMED":
-                continue
+                # A real assistant response proves only that this continuation
+                # round advanced. The task contract remains authoritative: if
+                # the same checkpoint is still RUNNING after the normal retry
+                # cooldown, follow the same conversation again until the task
+                # itself reaches CONCLUIDO or BLOCKED_EXTERNAL.
+                confirmed_at = _parse_time(
+                    previous.get("worker_status_observed_at")
+                    or previous.get("dispatched_at")
+                )
+                if (
+                    confirmed_at is None
+                    or (current - confirmed_at).total_seconds() < retry_seconds
+                ):
+                    continue
+                progress_followup_attempted += 1
 
             # An active queue claim is already being handled by the browser
             # worker. Re-enqueueing would only duplicate the same continuation.
@@ -642,6 +733,8 @@ def _run_once_locked(
         "skipped_conversation_coalesced": skipped_conversation_coalesced,
         "skipped_unbound": skipped_unbound,
         "retry_attempted": retry_attempted,
+        "progress_followup_attempted": progress_followup_attempted,
+        "skipped_session_unavailable": skipped_session_unavailable,
         "skipped_attempt_limit": skipped_attempt_limit,
         "skipped_foreground_active": skipped_foreground_active,
         "skipped_ownership_busy": skipped_ownership_busy,
@@ -671,6 +764,8 @@ def run_once(
                 "skipped_conversation_coalesced": 0,
                 "skipped_unbound": 0,
                 "retry_attempted": 0,
+                "progress_followup_attempted": 0,
+                "skipped_session_unavailable": 0,
                 "skipped_attempt_limit": 0,
                 "locked": True,
                 "generated_at": utc_now(),

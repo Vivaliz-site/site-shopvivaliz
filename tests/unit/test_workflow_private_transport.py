@@ -42,6 +42,23 @@ def reviewed_bootstrap_push(path: Path, text: str) -> bool:
     if path.name == 'remote-control-mcp-bootstrap.yml':
         allowed.update({
             'remote-control-mcp/**',
+            # Explicitly reviewed backend/browser recovery sources in the
+            # current canonical bootstrap, not arbitrary application paths.
+            'remote-control-browser-mcp/**',
+            'scripts/setup-remote-control-browser-mcp.sh',
+            'scripts/setup-shopvivaliz-display-recovery.sh',
+            'scripts/shopvivaliz-xvfb99-prepare.sh',
+            'ops/systemd/shopvivaliz-xvfb99.service',
+            'tests/test_shopvivaliz_display_recovery.py',
+            'scripts/remote_mcp_bootstrap_scope.py',
+            'tests/test_remote_mcp_bootstrap_scope.py',
+            'deploy/systemd/shopvivaliz-browser-atendimento-mcp.service',
+            'deploy/systemd/shopvivaliz-browser-dev-mcp.service',
+            'scripts/shopvivaliz-native-desktop-bridge.ps1',
+            'scripts/agent_task_state.py',
+            'scripts/continuity/**',
+            'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service',
+            'tests/remote-control-browser-mcp-test.py',
             'scripts/setup-remote-control-access.sh',
             'scripts/agent_task_state.py',
             'scripts/continuity/**',

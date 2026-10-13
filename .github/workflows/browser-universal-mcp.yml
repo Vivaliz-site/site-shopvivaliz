@@ -1,0 +1,49 @@
+name: Universal browser MCP tests
+
+on:
+  pull_request:
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - '.github/workflows/browser-universal-mcp.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'remote-control-browser-mcp/**'
+      - '.github/workflows/browser-universal-mcp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  universal-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: remote-control-browser-mcp/universal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: remote-control-browser-mcp/universal/package-lock.json
+      - name: Install isolated runtime
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium and system dependencies
+        run: npx playwright-core install --with-deps chromium
+      - name: Expose installed Chromium path
+        run: echo "SHOPVIVALIZ_BROWSER_UNIVERSAL_BINARY=$(node -e 'process.stdout.write(require("playwright-core").chromium.executablePath())')" >> "$GITHUB_ENV"
+      - name: Syntax and browser regression tests
+        run: |
+          node --check live-browser.mjs
+          node --check live-worker.mjs
+          node --check mcp-server.mjs
+          npm test
+      - name: Python MCP adapter syntax
+        run: python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("../server.py").read_text())'
+      - name: Validate installer downgrade guard
+        run: |
+          bash -n ../../scripts/setup-remote-control-browser-mcp.sh
+          bash ../../tests/browser-universal-installer-test.sh

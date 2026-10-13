@@ -57,6 +57,8 @@ NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
 PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+CANONICAL_CONTROLLER_RUNTIME_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+CHATGPT_AGENT_ID_RE = re.compile(r"(?:^|[^a-z0-9])(?:chatgpt|gpt[0-9]*|orquestrador)(?=$|[^a-z0-9])", re.I)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
@@ -65,6 +67,22 @@ STATE_LOCK_FILE = "_agent-task-state.lock"
 
 class TaskStateError(RuntimeError):
     pass
+
+
+def _require_verified_chatgpt_origin_on_create(agent_id: str) -> bool:
+    """Fail closed for new ChatGPT checkpoints on the canonical controller.
+
+    The durable dispatcher cannot recover an unbound ChatGPT conversation.
+    Keep legacy checkpoints and tests usable; only new corporate ChatGPT
+    starts in the live controller (or explicit strict-mode tests) are gated.
+    """
+    strict_test_mode = os.getenv("SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    canonical_runtime = RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
+    return bool(CHATGPT_AGENT_ID_RE.search(str(agent_id or ""))) and (
+        canonical_runtime or strict_test_mode
+    )
 
 RECOVERY_STATES = frozenset({
     'FOREGROUND_ACTIVE', 'FOREGROUND_RELEASED', 'LEASE_EXPIRED',
@@ -344,7 +362,7 @@ def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
         file_probe = len(argv) == 3 and argv[0] == "/usr/bin/test" and argv[1] in {"-f", "-s", "-d"}
         hash_probe = len(argv) == 3 and argv[:2] == ["/usr/bin/sha256sum", "--check"]
         service_probe = len(argv) == 4 and argv[:3] == ["/usr/bin/systemctl", "is-active", "--quiet"] and argv[3] in {
-            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-chatgpt-browser.service",
+            "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-dev-browser.service", "shopvivaliz-chatgpt-browser.service",
         }
         if not (file_probe or hash_probe or service_probe):
             raise TaskStateError("completion check must use a bounded read-only file/hash/service probe")
@@ -371,7 +389,7 @@ def _run_completion_checks(payload: dict[str, Any]) -> None:
 
 
 @_serialized_transition
-def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = ()) -> dict[str, Any]:
+def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = "", *, completion_checks: Iterable[Any] = (), conversation_id: str = "", browser_session: str = "") -> dict[str, Any]:
     task = _safe_id(task_id, "task_id")
     goal_text = str(goal).strip()
     if not goal_text:
@@ -383,6 +401,22 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         or DEFAULT_REPOSITORY
     )
     checks = _normalize_completion_checks(completion_checks)
+    # Environment routing must be scoped to this exact task. Inherited/stale
+    # foreground variables may never silently bind a different checkpoint.
+    if conversation_id or browser_session:
+        conversation = str(conversation_id).strip()
+        session = str(browser_session).strip()
+    else:
+        conversation = os.getenv("SHOPVIVALIZ_TASK_CONVERSATION_ID", "").strip()
+        session = os.getenv("SHOPVIVALIZ_TASK_BROWSER_SESSION", "").strip()
+        if (conversation or session) and os.getenv("SHOPVIVALIZ_TASK_ROUTE_TASK_ID", "").strip() != task:
+            raise TaskStateError("foreground route environment must match exact task_id")
+    if bool(conversation) != bool(session):
+        raise TaskStateError("bound task start requires both conversation_id and browser_session")
+    if conversation:
+        conversation = _safe_conversation_id(conversation)
+        if session not in {"dev", "atendimento"}:
+            raise TaskStateError("new tasks must bind to dev or atendimento browser session")
     path = _path(task)
     if path.is_file():
         existing = _load(task)
@@ -390,10 +424,17 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
             str(existing.get("goal", "")).strip() == goal_text
             and str(existing.get("repository", "")).strip() == repository_name
             and (not checks or existing.get("completion_checks", []) == checks)
+            and (not conversation or (existing.get("conversation_id") == conversation and existing.get("browser_session") == session))
         ):
             return existing
         raise TaskStateError(
             "task state already exists with different identity; use successor or explicit resume"
+        )
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not conversation:
+        raise TaskStateError(
+            "new ChatGPT checkpoint requires an exact verified conversation_id and "
+            "corporate browser_session before creation; preserve work outside "
+            "the recovery queue until that provenance is available"
         )
 
     now = utc_now()
@@ -416,6 +457,9 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
     if checks:
         payload["schema_version"] = PROOF_SCHEMA_VERSION
         payload["completion_checks"] = checks
+    if conversation:
+        payload["conversation_id"] = conversation
+        payload["browser_session"] = session
     _atomic_write(path, payload)
     return payload
 
@@ -476,9 +520,16 @@ def start_successor_task(
         payload["conversation_id"] = _safe_conversation_id(inherited_conversation_id)
         inherited_session = predecessor.get("browser_session")
         if inherited_session is not None:
-            if inherited_session not in {"fred", "atendimento"}:
+            if inherited_session not in {"dev", "atendimento", "fred"}:
                 raise TaskStateError("predecessor has invalid browser session binding")
             payload["browser_session"] = inherited_session
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not (
+        payload.get("conversation_id") and payload.get("browser_session") in {"dev", "atendimento"}
+    ):
+        raise TaskStateError(
+            "new ChatGPT successor requires a verified original conversation and "
+            "corporate browser session; an unbound predecessor cannot supply provenance"
+        )
     _atomic_write(path, payload)
     return payload
 
@@ -543,7 +594,7 @@ def mark_ready(
 
 
 @_serialized_transition
-def complete_task(task_id: str) -> dict[str, Any]:
+def _complete_task_transition(task_id: str) -> dict[str, Any]:
     payload = _load(task_id)
     if payload.get("status") != "READY_TO_COMPLETE":
         raise TaskStateError("completion rejected: task must pass READY_TO_COMPLETE first")
@@ -568,6 +619,28 @@ def complete_task(task_id: str) -> dict[str, Any]:
     _history(payload, "completed")
     _atomic_write(_path(task_id), payload)
     return payload
+
+
+
+def complete_task(task_id: str) -> dict[str, Any]:
+    """Commit terminal state first, then release owned clones outside state lock.
+
+    If cleanup is interrupted, the separate clone registry remains intact and
+    the periodic sweeper retries only this task's registered workspaces.
+    """
+    payload = _complete_task_transition(task_id)
+    try:
+        from agent_clone_lifecycle import cleanup_task
+        payload["clone_cleanup"] = cleanup_task(task_id, state_dir=RUNTIME_DIR)
+    except (OSError, ValueError, ImportError) as exc:
+        payload["clone_cleanup"] = {
+            "ok": False,
+            "removed": 0,
+            "error": type(exc).__name__,
+            "recovery": "agent_clone_lifecycle sweep",
+        }
+    return payload
+
 
 
 @_serialized_transition
@@ -630,6 +703,47 @@ def resume_task(task_id: str, *, next_action: str) -> dict[str, Any]:
 
 
 @_serialized_transition
+def bind_route(
+    task_id: str, *, conversation_id: str, browser_session: str,
+    expected_checkpoint_version: int | None = None,
+) -> dict[str, Any]:
+    """Atomically bind an attested ChatGPT conversation and account profile.
+
+    A half-bound checkpoint cannot resume under durable fencing. Routing is
+    metadata, not progress: never change the watchdog fingerprint or guess a
+    conversation from agent names, timestamps, or browser titles.
+    """
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot change conversation route")
+    bound = _safe_conversation_id(conversation_id)
+    session = str(browser_session).strip()
+    if session not in {"dev", "atendimento"}:
+        raise TaskStateError("browser_session must be dev or atendimento")
+    current_conversation = str(payload.get("conversation_id", "")).strip()
+    current_session = str(payload.get("browser_session", "")).strip()
+    if current_conversation and current_conversation != bound:
+        raise TaskStateError("conversation route conflicts with existing conversation")
+    if current_session and current_session != session:
+        raise TaskStateError("conversation route conflicts with existing browser session")
+    if current_conversation == bound and current_session == session:
+        return payload
+    if expected_checkpoint_version is not None and _checkpoint_version(payload) != int(expected_checkpoint_version):
+        raise TaskStateError("conversation route checkpoint version is stale")
+    if payload.get("recovery_lease_id") or payload.get("runtime_lease_id"):
+        raise TaskStateError("cannot bind conversation route during recovery ownership")
+    payload["conversation_id"] = bound
+    payload["browser_session"] = session
+    _bump_checkpoint_version(payload)
+    payload.setdefault("history", []).append({
+        "at": utc_now(), "event": "conversation_route_bound",
+        "conversation_id": bound, "browser_session": session,
+    })
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+@_serialized_transition
 def bind_conversation(task_id: str, *, conversation_id: str) -> dict[str, Any]:
     payload = _load(task_id)
     if is_terminal(payload):
@@ -661,8 +775,8 @@ def bind_browser_session(task_id: str, *, browser_session: str) -> dict[str, Any
         raise TaskStateError("terminal task cannot bind browser session")
     _require_current_resume(payload)
     session = str(browser_session).strip()
-    if session not in {"fred", "atendimento"}:
-        raise TaskStateError("browser_session must be fred or atendimento")
+    if session not in {"dev", "atendimento"}:
+        raise TaskStateError("browser_session must be dev or atendimento")
     _safe_conversation_id(payload.get("conversation_id", ""))
     existing = payload.get("browser_session")
     if existing is not None and existing != session:
@@ -780,7 +894,7 @@ def claim_recovery_ownership(task_id: str, *, owner_id: str, allowed_actions: It
     if is_terminal(payload): raise TaskStateError('terminal task cannot claim recovery ownership')
     conversation_id = _safe_conversation_id(payload.get('conversation_id', ''))
     session = str(payload.get('browser_session', '')).strip()
-    if session not in {'fred', 'atendimento'}: raise TaskStateError('recovery requires bound browser session')
+    if session not in {'dev', 'atendimento', 'fred'}: raise TaskStateError('recovery requires bound browser session')
     version = _checkpoint_version(payload)
     actions = sorted({str(v).strip() for v in allowed_actions if str(v).strip()})
     if not actions: raise TaskStateError('recovery requires allowed actions')
@@ -896,6 +1010,8 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--agent", default="")
     start.add_argument("--repository", default=os.getenv("SHOPVIVALIZ_TASK_REPOSITORY", ""))
     start.add_argument("--completion-check", action="append", default=[], help="Pinned JSON argv check, rerun at ready and complete; never include secrets")
+    start.add_argument("--conversation-id", default="", help="Exact ChatGPT conversation id; requires --browser-session")
+    start.add_argument("--browser-session", default="", choices=["dev", "atendimento"], help="Dedicated account session; requires --conversation-id")
 
     successor = sub.add_parser("successor")
     successor.add_argument("--task", required=True)
@@ -928,13 +1044,19 @@ def _parser() -> argparse.ArgumentParser:
     resume.add_argument("--task", required=True)
     resume.add_argument("--next-action", required=True)
 
+    route = sub.add_parser("bind-route")
+    route.add_argument("--task", required=True)
+    route.add_argument("--conversation-id", required=True)
+    route.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
+    route.add_argument("--expected-checkpoint-version", type=int)
+
     bind = sub.add_parser("bind-conversation")
     bind.add_argument("--task", required=True)
     bind.add_argument("--conversation-id", required=True)
 
     browser = sub.add_parser("bind-browser-session")
     browser.add_argument("--task", required=True)
-    browser.add_argument("--browser-session", required=True, choices=["fred", "atendimento"])
+    browser.add_argument("--browser-session", required=True, choices=["dev", "atendimento"])
 
     show = sub.add_parser("show")
     show.add_argument("--task", required=True)
@@ -948,7 +1070,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         if args.command == "start":
-            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check)
+            payload = start_task(args.task, args.goal, args.agent, args.repository, completion_checks=args.completion_check, conversation_id=args.conversation_id, browser_session=args.browser_session)
         elif args.command == "successor":
             payload = start_successor_task(
                 args.task,
@@ -973,6 +1095,12 @@ def main() -> int:
             )
         elif args.command == "resume":
             payload = resume_task(args.task, next_action=args.next_action)
+        elif args.command == "bind-route":
+            payload = bind_route(
+                args.task, conversation_id=args.conversation_id,
+                browser_session=args.browser_session,
+                expected_checkpoint_version=args.expected_checkpoint_version,
+            )
         elif args.command == "bind-conversation":
             payload = bind_conversation(args.task, conversation_id=args.conversation_id)
         elif args.command == "bind-browser-session":

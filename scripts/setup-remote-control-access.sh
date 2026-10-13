@@ -6,7 +6,8 @@ SERVER_SOURCE="${2:-}"
 UNIT_SOURCE="${3:-}"
 AGENT_TASK_STATE_SOURCE="${4:-}"
 CONTINUITY_SOURCE_DIR="${5:-}"
-SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}
+# Runtime mutations must require leases/fencing unless an operator explicitly opts out.
+SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}
 HOST="$(hostname)"
 BACKEND_HOST="always-free-arm-1787907847-26"
 SITE_HOST="shopvivaliz-free-a1"
@@ -57,6 +58,7 @@ install_controller() {
     printf 'SHOPVIVALIZ_REMOTE_MCP_TOKEN='
     cat "$token_file"
     printf 'SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\n' "$SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF"
+    printf 'SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=%s\n' "${SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT:-7200}"
     printf 'SHOPVIVALIZ_CONTINUITY_LIB_DIR=%s\n' "$INSTALL_DIR/scripts/continuity"
     printf 'SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\n'
   } > "$env_file"
@@ -90,6 +92,88 @@ install_controller() {
   echo "REMOTE_CONTROL_CONTROLLER_INSTALL=PASS"
   echo "REMOTE_CONTROL_PUBLIC_KEY_FILE=$STATE_DIR/id_ed25519.pub"
 }
+
+
+# Narrow maintenance: only the two installed MCP Python files, no service env,
+# token/key generation, SSH setup, unit rewrite or unrelated host changes.
+install_controller_code_only() {
+  require_root
+  [ "$HOST" = "$BACKEND_HOST" ] || die controller_host_mismatch 21
+  [ -f "$SERVER_SOURCE" ] || die server_source_required 22
+  [ -f "$UNIT_SOURCE" ] || die checkpoint_writer_source_required 23
+  [ -f "$INSTALL_DIR/server.py" ] || die existing_controller_required 24
+  [ -d "$INSTALL_DIR/scripts/continuity" ] || die existing_continuity_runtime_required 25
+  systemctl is-active --quiet "$SERVICE" || die controller_not_active 26
+  systemctl is-active --quiet "$BROWSER_SERVICE" || die browser_mcp_not_active 27
+  python3 -m py_compile "$SERVER_SOURCE" "$UNIT_SOURCE"
+
+  local lockfile="$STATE_DIR/.checkpoint-mcp-install.lock"
+  exec 9>"$lockfile"
+  chmod 0600 "$lockfile"
+  flock -n 9 || die concurrent_mcp_installer 28
+
+  local writer="$INSTALL_DIR/scripts/continuity/checkpoint_update_atomic.py"
+  local backupdir writer_preexisting=0 success=0
+  backupdir="$(mktemp -d "$STATE_DIR/.checkpoint-mcp-backup.XXXXXXXX")"
+  chmod 0700 "$backupdir"
+  cp -p "$INSTALL_DIR/server.py" "$backupdir/server.py"
+  if [ -e "$writer" ]; then
+    writer_preexisting=1
+    cp -p "$writer" "$backupdir/checkpoint_update_atomic.py"
+  fi
+  cleanup_and_rollback() {
+    if [ "$success" -ne 1 ]; then
+      echo "BACKEND_MCP_ONLY_INSTALL=ROLLBACK" >&2
+      cp -p "$backupdir/server.py" "$INSTALL_DIR/server.py"
+      if [ "$writer_preexisting" -eq 1 ]; then
+        cp -p "$backupdir/checkpoint_update_atomic.py" "$writer"
+      else
+        rm -f "$writer"
+      fi
+      if ! systemctl restart "$SERVICE"; then
+        echo "BACKEND_MCP_ROLLBACK_BASE_RESTART_FAILED" >&2
+      fi
+      if ! systemctl restart "$BROWSER_SERVICE"; then
+        echo "BACKEND_MCP_ROLLBACK_BROWSER_RESTART_FAILED" >&2
+      fi
+    fi
+    rm -f "$backupdir/server.py" "$backupdir/checkpoint_update_atomic.py"
+    rmdir "$backupdir"
+  }
+  trap cleanup_and_rollback EXIT
+
+  install -m 0644 -o root -g root "$UNIT_SOURCE" "$writer"
+  install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  cmp "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  cmp "$UNIT_SOURCE" "$writer"
+  systemctl restart "$SERVICE"
+  local ready=0
+  for _ in $(seq 1 20); do
+    if systemctl is-active --quiet "$SERVICE" && \
+       curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:5580/health >/dev/null; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$ready" -eq 1 ] || die controller_code_reload_failed 29
+  systemctl restart "$BROWSER_SERVICE"
+  ready=0
+  for _ in $(seq 1 20); do
+    if systemctl is-active --quiet "$BROWSER_SERVICE" && \
+       curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:5581/health >/dev/null; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  [ "$ready" -eq 1 ] || die browser_code_reload_failed 30
+  success=1
+  trap - EXIT
+  cleanup_and_rollback
+  echo "BACKEND_MCP_ONLY_RESTRICTED_INSTALL=PASS"
+}
+
 
 install_target() {
   require_root
@@ -154,6 +238,7 @@ status() {
 
 case "$ACTION" in
   install-controller) install_controller ;;
+  install-controller-code-only) install_controller_code_only ;;
   install-target) install_target ;;
   status) status ;;
   *) die unsupported_action 64 ;;

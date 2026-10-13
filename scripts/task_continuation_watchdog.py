@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Emit deduplicated resume requests for stale non-terminal task checkpoints.
+"""Emit deduplicated resume requests for non-terminal task checkpoints.
 
-This watchdog is intentionally deterministic. It never invokes an AI provider,
-shell command, browser, network client, or paid executor. It only converts a
-stale durable checkpoint into a persistent resume request that another finite
-executor can consume.
+Standalone/default mode remains stale-only. The 24x7 controller may enable
+proactive mode under durable handoff so every fresh RUNNING checkpoint already
+has a recovery request waiting behind the single-writer lease. This watchdog is
+intentionally deterministic: it never invokes an AI provider, shell command,
+browser, network client, or paid executor.
 """
 from __future__ import annotations
 
@@ -99,11 +100,13 @@ def _run_once_locked(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     runtime_dir: Path | None = None,
     now: datetime | None = None,
+    proactive: bool = False,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     cutoff = max(1, int(stale_seconds))
     lookback = max(1, int(lookback_days))
+    mode = "proactive" if proactive else "stale"
     lookback_cutoff = current - timedelta(days=lookback)
     queue_maintenance = resume_queue.compact_queue(root)
 
@@ -145,7 +148,7 @@ def _run_once_locked(
             continue
 
         age_seconds = (current - updated).total_seconds()
-        if age_seconds < cutoff:
+        if not proactive and age_seconds < cutoff:
             continue
 
         eligible += 1
@@ -188,6 +191,7 @@ def _run_once_locked(
         "runtime_dir": str(root),
         "stale_seconds": cutoff,
         "lookback_days": lookback,
+        "mode": mode,
         "scanned": scanned,
         "eligible": eligible,
         "dispatched": dispatched,
@@ -209,10 +213,12 @@ def run_once(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     runtime_dir: Path | None = None,
     now: datetime | None = None,
+    proactive: bool = False,
 ) -> dict[str, Any]:
     root = Path(runtime_dir or RUNTIME_DIR)
     cutoff = max(1, int(stale_seconds))
     lookback = max(1, int(lookback_days))
+    mode = "proactive" if proactive else "stale"
     with _watchdog_lock(root) as acquired:
         if not acquired:
             return {
@@ -220,6 +226,7 @@ def run_once(
                 "runtime_dir": str(root),
                 "stale_seconds": cutoff,
                 "lookback_days": lookback,
+                "mode": mode,
                 "scanned": 0,
                 "eligible": 0,
                 "dispatched": 0,
@@ -231,6 +238,7 @@ def run_once(
             lookback_days=lookback,
             runtime_dir=root,
             now=now,
+            proactive=proactive,
         )
 
 
@@ -239,6 +247,7 @@ def main() -> int:
     parser.add_argument("--stale-seconds", type=int, default=DEFAULT_STALE_SECONDS)
     parser.add_argument("--lookback-days", type=int, default=DEFAULT_LOOKBACK_DAYS)
     parser.add_argument("--runtime-dir", default="")
+    parser.add_argument("--proactive", action="store_true")
     args = parser.parse_args()
 
     runtime_dir = Path(args.runtime_dir).expanduser() if args.runtime_dir else None
@@ -246,6 +255,7 @@ def main() -> int:
         stale_seconds=args.stale_seconds,
         lookback_days=args.lookback_days,
         runtime_dir=runtime_dir,
+        proactive=args.proactive,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

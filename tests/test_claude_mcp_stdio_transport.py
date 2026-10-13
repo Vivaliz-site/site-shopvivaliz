@@ -43,7 +43,18 @@ class StdioTransportTests(unittest.TestCase):
     def reply(self, request, timeout):
         payload = json.loads(request.data)
         self.calls.append((request.full_url, payload, timeout))
-        output = {"task_id": "test-durable-task", "state": "queued"} if payload["params"]["name"] == "task_submit" else {"exit_code": 0, "stdout": "test"}
+        name = payload["params"].get("name")
+        if name == "task_submit":
+            output = {"task_id": "test-durable-task", "state": "queued"}
+        elif name == "task_status":
+            output = {"task_id": payload["params"]["arguments"]["task_id"], "state": "running"}
+        elif payload["method"] == "tools/list":
+            return Response(json.dumps({"jsonrpc": "2.0", "id": payload["id"], "result": {"tools": [
+                {"name": "task_wait"}, {"name": "foreground_handoff"},
+                {"name": "foreground_renew"}, {"name": "foreground_release"},
+            ]}}).encode())
+        else:
+            output = {"exit_code": 0, "stdout": "test"}
         return Response(json.dumps({"jsonrpc": "2.0", "id": payload["id"], "result": {"structuredContent": output, "content": [{"type": "text", "text": json.dumps(output)}], "isError": False}}).encode())
 
     def forward(self, payload):
@@ -51,10 +62,10 @@ class StdioTransportTests(unittest.TestCase):
 
     def test_long_admin_is_submitted_before_execution_and_returns_task_receipt(self):
         with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
-            result = self.forward(self.request(timeout=120))
+            result = self.forward(self.request(timeout=6))
         sent = self.calls[0][1]
         self.assertEqual(sent["params"]["name"], "task_submit")
-        self.assertEqual(sent["params"]["arguments"]["timeout"], 120)
+        self.assertEqual(sent["params"]["arguments"]["timeout"], 6)
         self.assertEqual(sent["params"]["arguments"]["command"], "printf test")
         self.assertTrue(sent["params"]["arguments"]["request_id"])
         out = result["result"]["structuredContent"]
@@ -65,7 +76,7 @@ class StdioTransportTests(unittest.TestCase):
         self.assertEqual(result["id"], "transport-test-7")
 
     def test_short_admin_remains_inline_and_unchanged(self):
-        payload = self.request(timeout=10)
+        payload = self.request(timeout=5)
         with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
             result = self.forward(payload)
         self.assertEqual(self.calls[0][1], payload)
@@ -87,9 +98,32 @@ class StdioTransportTests(unittest.TestCase):
 
     def test_explicit_inline_long_request_is_rejected_without_side_effects(self):
         with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
-            result = self.forward(self.request(timeout=120, durable=False))
+            result = self.forward(self.request(timeout=6, durable=False))
         self.assertEqual(self.calls, [])
-        self.assertEqual(result["error"]["message"], "inline_budget_exceeded_use_task_submit")
+        self.assertEqual(result["error"]["message"], "foreground_budget_exceeded_use_task_submit")
+
+    def test_task_wait_is_detached_to_one_non_blocking_status_request(self):
+        payload = self.request(name="task_wait", task_id="task-foreground-9", timeout=7200)
+        with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
+            result = self.forward(payload)
+        self.assertEqual(len(self.calls), 1)
+        sent = self.calls[0][1]
+        self.assertEqual(sent["id"], payload["id"])
+        self.assertEqual(sent["params"], {"name": "task_status", "arguments": {"task_id": "task-foreground-9"}})
+        output = result["result"]["structuredContent"]
+        self.assertEqual(output["task_id"], "task-foreground-9")
+        self.assertEqual(output["foreground_wait"]["requested_tool"], "task_wait")
+        self.assertTrue(output["foreground_wait"]["foreground_wait_detached"])
+        self.assertEqual(output["foreground_wait"]["reason"], "foreground_wait_forbidden")
+
+    def test_tools_list_hides_task_wait_and_keeps_foreground_lease_tools(self):
+        payload = {"jsonrpc": "2.0", "id": "tool-list-4", "method": "tools/list", "params": {}}
+        with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
+            result = self.forward(payload)
+        self.assertEqual(self.calls[0][1], payload)
+        names = {tool["name"] for tool in result["result"]["tools"]}
+        self.assertNotIn("task_wait", names)
+        self.assertTrue({"foreground_handoff", "foreground_renew", "foreground_release"} <= names)
 
     def test_timeout_is_indeterminate_and_never_replayed_to_fallback(self):
         calls = []
@@ -126,7 +160,7 @@ class StdioTransportTests(unittest.TestCase):
                 raise urllib.error.URLError(ConnectionRefusedError(errno.ECONNREFUSED, "refused"))
             return self.reply(request, timeout)
         with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=transport):
-            result = self.forward(self.request(timeout=10))
+            result = self.forward(self.request(timeout=5))
         self.assertEqual(calls, list(adapter.MCP_URLS))
         self.assertEqual(result["result"]["structuredContent"]["exit_code"], 0)
 
@@ -190,8 +224,40 @@ class StdioTransportTests(unittest.TestCase):
         self.assertEqual(result["error"]["message"], "controller_token_unavailable")
         self.assertEqual(self.calls, [])
 
+    def test_durable_timeout_uses_protected_runtime_limit(self):
+        self.token_path.parent.mkdir(parents=True, exist_ok=True)
+        service_env = Path(self.temp.name) / "service.env"
+        service_env.write_text(
+            "SHOPVIVALIZ_REMOTE_MCP_TOKEN=not-a-real-credential\n"
+            "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=7200\n",
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env, create=True),
+            mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
+        ):
+            result = self.forward(self.request(timeout=7200, durable=True))
+        self.assertNotIn("error", result)
+        sent = self.calls[0][1]
+        self.assertEqual(sent["params"]["name"], "task_submit")
+        self.assertEqual(sent["params"]["arguments"]["timeout"], 7200)
+
+    def test_durable_timeout_above_protected_runtime_limit_is_rejected(self):
+        service_env = Path(self.temp.name) / "service.env"
+        service_env.write_text(
+            "SHOPVIVALIZ_REMOTE_MCP_MAX_DURABLE_TIMEOUT=7200\n",
+            encoding="utf-8",
+        )
+        with (
+            mock.patch.object(adapter, "SERVICE_ENV_PATH", service_env, create=True),
+            mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply),
+        ):
+            result = self.forward(self.request(timeout=7201, durable=True))
+        self.assertEqual(self.calls, [])
+        self.assertEqual(result["error"]["message"], "invalid_timeout")
+
     def test_invalid_request_or_timeout_never_reaches_controller(self):
-        for payload in ([], self.request(timeout=0), self.request(timeout=901), self.request(timeout=True)):
+        for payload in ([], self.request(timeout=0), self.request(timeout=86401), self.request(timeout=True)):
             with self.subTest(payload=payload), mock.patch.object(adapter.urllib.request, "urlopen", side_effect=self.reply):
                 result = self.forward(payload)
                 self.assertIn("error", result)

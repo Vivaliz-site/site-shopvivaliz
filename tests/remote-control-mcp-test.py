@@ -15,6 +15,10 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+# The base MCP CI executes this suite directly; include the scoped checkpoint
+# regressions so passing CI proves its atomic writer rather than syntax only.
+from test_orquestrador_atomic_checkpoint import AtomicCheckpointTests
+
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "remote-control-mcp" / "server.py"
 
@@ -98,7 +102,7 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_controller_service_env_carries_single_durable_handoff_flag(self):
         setup=(ROOT/"scripts"/"setup-remote-control-access.sh").read_text()
         self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", setup)
-        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-0}", setup)
+        self.assertIn("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=${SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF:-1}", setup)
         browser=(ROOT/"deploy"/"systemd"/"shopvivaliz-remote-control-browser-mcp.service").read_text()
         self.assertIn("EnvironmentFile=/var/lib/shopvivaliz-remote-control/service.env", browser)
 
@@ -127,6 +131,31 @@ class RemoteControlMcpTests(unittest.TestCase):
     def test_browser_allows_microsoft_oauth_host(self):
         self.assertIn("login.microsoftonline.com", m.BROWSER_ALLOWED_HOSTS)
 
+    def test_browser_session_sources_can_be_pinned_per_mcp(self):
+        old_name = m.BROWSER_SESSION_NAME
+        old_url = m.BROWSER_CDP_URL
+        try:
+            m.BROWSER_SESSION_NAME = "dev"
+            m.BROWSER_CDP_URL = "http://127.0.0.1:9559"
+            self.assertIn('session="dev"; endpoint="http://127.0.0.1:9559/json"', m.browser_tabs_command())
+            self.assertNotIn("9556/json", m.browser_tabs_command())
+            self.assertIn("127.0.0.1:9559/json/new?", m.browser_open_command("https://claude.ai/login"))
+        finally:
+            m.BROWSER_SESSION_NAME = old_name
+            m.BROWSER_CDP_URL = old_url
+
+    def test_browser_open_targets_canonical_atendimento_cdp_session(self):
+        command = m.browser_open_command("https://claude.ai/login")
+        self.assertIn("http://127.0.0.1:9556/json/new?", command)
+        self.assertNotIn("9559", command)
+        self.assertIn("SHOPVIVALIZ_OPEN_URL_B64", command)
+        self.assertIn("'session':\"atendimento\"", command)
+
+    def test_browser_open_is_exposed_by_canonical_base_mcp(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_open", specs)
+        self.assertEqual(["url"], specs["browser_open"]["inputSchema"]["required"])
+
     def test_mcp_tool_names_are_unique(self):
         names = [item["name"] for item in m.tool_specs()]
         self.assertEqual(len(names), len(set(names)))
@@ -136,6 +165,42 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertFalse(specs["admin_command_run"]["annotations"]["readOnlyHint"])
         self.assertTrue(specs["admin_command_run"]["annotations"]["destructiveHint"])
         self.assertTrue(specs["host_health"]["annotations"]["readOnlyHint"])
+
+    def test_durable_admin_commands_support_long_application_installs(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertEqual(
+            specs["task_submit"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        self.assertEqual(
+            specs["admin_command_run"]["inputSchema"]["properties"]["timeout"]["maximum"],
+            m.MAX_DURABLE_TIMEOUT,
+        )
+        task = m.execute_tool(
+            "admin_command_run",
+            {
+                "host": "always-free-arm-1787907847-26",
+                "command": "printf install-capability-check",
+                "timeout": 3600,
+                "durable": True,
+                "request_id": "long-install-capability",
+            },
+        )
+        self.assertTrue(task["durable"])
+        row = m.load_task(task["task_id"])
+        self.assertEqual(int(row["timeout"]), 3600)
+
+    def test_long_inline_admin_command_requires_durable_mode(self):
+        with self.assertRaisesRegex(ValueError, "timeout_out_of_range"):
+            m.execute_tool(
+                "admin_command_run",
+                {
+                    "host": "always-free-arm-1787907847-26",
+                    "command": "printf inline-too-long",
+                    "timeout": 3600,
+                    "durable": False,
+                },
+            )
 
     def test_admin_command_rejects_browser_mcp_continuity_session_coupling(self):
         command = (
@@ -196,6 +261,246 @@ class RemoteControlMcpTests(unittest.TestCase):
             specs["browser_click_control"]["inputSchema"]["required"],
             ["tab_id", "index"],
         )
+
+    def test_desktop_tools_have_safe_annotations_and_bounded_schemas(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for name in ("desktop_health", "desktop_screenshot"):
+            self.assertTrue(specs[name]["annotations"]["readOnlyHint"])
+            self.assertFalse(specs[name]["annotations"]["destructiveHint"])
+        for name in ("desktop_open", "desktop_click", "desktop_type"):
+            self.assertFalse(specs[name]["annotations"]["readOnlyHint"])
+            self.assertTrue(specs[name]["annotations"]["destructiveHint"])
+        for name in ("desktop_health", "desktop_open", "desktop_screenshot", "desktop_click", "desktop_type"):
+            host = specs[name]["inputSchema"]["properties"]["host"]
+            self.assertEqual(set(host["enum"]), {"Fred-Win", "KOCEPSV"})
+            for forbidden in ("rustdesk_id", "display", "window", "selector", "command"):
+                self.assertNotIn(forbidden, specs[name]["inputSchema"]["properties"])
+        self.assertEqual(specs["desktop_health"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_open"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_screenshot"]["inputSchema"]["required"], ["host"])
+        self.assertEqual(specs["desktop_click"]["inputSchema"]["required"], ["host", "x", "y"])
+        self.assertEqual(specs["desktop_type"]["inputSchema"]["required"], ["host", "text"])
+
+    def test_desktop_host_validation_rejects_non_support_hosts(self):
+        self.assertEqual(m.validate_desktop_host("KOCEPSV")["platform"], "windows")
+        self.assertEqual(m.validate_desktop_host("Fred-Win")["platform"], "windows")
+        for host in ("always-free-arm-1787907847-26", "shopvivaliz-free-a1", "unknown"):
+            with self.subTest(host=host):
+                with self.assertRaisesRegex(ValueError, "unsupported_desktop_host"):
+                    m.validate_desktop_host(host)
+
+    def test_rustdesk_host_id_requires_runtime_mapping_and_valid_id(self):
+        old = os.environ.pop("SHOPVIVALIZ_RUSTDESK_HOST_IDS", None)
+        try:
+            with self.assertRaisesRegex(ValueError, "rustdesk_host_id_unavailable"):
+                m.rustdesk_host_id("KOCEPSV")
+            os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = json.dumps({"KOCEPSV": "123456789"})
+            self.assertEqual(m.rustdesk_host_id("KOCEPSV"), "123456789")
+            with self.assertRaisesRegex(ValueError, "rustdesk_host_id_unavailable"):
+                m.rustdesk_host_id("Fred-Win")
+            os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = json.dumps({"KOCEPSV": "bad id"})
+            with self.assertRaisesRegex(ValueError, "invalid_rustdesk_host_id"):
+                m.rustdesk_host_id("KOCEPSV")
+        finally:
+            if old is None:
+                os.environ.pop("SHOPVIVALIZ_RUSTDESK_HOST_IDS", None)
+            else:
+                os.environ["SHOPVIVALIZ_RUSTDESK_HOST_IDS"] = old
+
+    def test_audit_redacts_desktop_type_text(self):
+        safe = m.sanitize_audit_args(
+            "desktop_type",
+            {"host": "KOCEPSV", "text": "sample-sensitive-input", "press_enter": True},
+        )
+        self.assertNotIn("text", safe)
+        self.assertNotIn("text_sha256", safe)
+        self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
+
+    def test_scoped_account_auth_tools_are_exposed_with_gate_metadata(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_auth_tabs", specs)
+        self.assertIn("browser_auth_action", specs)
+        self.assertTrue(specs["browser_auth_tabs"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_auth_action"]["annotations"]["readOnlyHint"])
+        self.assertTrue(specs["browser_auth_action"]["annotations"]["destructiveHint"])
+        props = specs["browser_auth_action"]["inputSchema"]
+        self.assertIn("runtime_lease_id", props["required"])
+        self.assertIn("runtime_fencing_token", props["required"])
+        self.assertEqual(["dev", "atendimento"], props["properties"]["session"]["enum"])
+        self.assertEqual(
+            {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend",
+             "back_to_methods", "open_login", "continue_google", "continue_microsoft"},
+            set(props["properties"]["action"]["enum"]),
+        )
+
+    def test_corporate_identity_tools_are_exposed_in_canonical_mcp(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("browser_auth_status", specs)
+        self.assertIn("browser_profile_home_open", specs)
+        self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
+        self.assertEqual(
+            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
+        )
+        self.assertEqual(
+            ["dev", "atendimento"],
+            specs["browser_auth_status"]["inputSchema"]["properties"]["session"]["enum"],
+        )
+
+    def test_corporate_identity_status_proxy_drops_untrusted_raw_values(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "atendimento",
+                    "state": "AUTHENTICATED", "identity_match": True,
+                    "user_present": True, "session_http": 200,
+                    "cdp_accessible": True, "tabs_seen": 12, "tabs_checked": 5,
+                    "token": "SENSITIVE_SYNTHETIC", "email": "sensitive@example.invalid",
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(
+                m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+            ),
+        ):
+            result = m.execute_tool("browser_auth_status", {"session": "atendimento"})
+        self.assertTrue(result["identity_match"])
+        self.assertEqual("AUTHENTICATED", result["state"])
+        self.assertNotIn("SENSITIVE_SYNTHETIC", json.dumps(result))
+        self.assertNotIn("sensitive@example.invalid", json.dumps(result))
+        self.assertNotIn("token", result)
+        self.assertNotIn("email", result)
+
+    def test_corporate_identity_status_proxy_denies_forged_authenticated_state(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "dev",
+                    "state": "AUTHENTICATED", "identity_match": False,
+                    "user_present": False, "session_http": 200,
+                    "tabs_seen": 2, "tabs_checked": 1,
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(
+                m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "account_auth_status_unconfirmed"):
+                m.execute_tool("browser_auth_status", {"session": "dev"})
+
+    def test_corporate_profile_home_rejects_wrong_account_lease_without_proxy(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 9,
+        }
+        wrong = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        with (
+            mock.patch.object(m, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock", return_value=wrong),
+            mock.patch.object(m, "urlopen") as transport,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.execute_tool("browser_profile_home_open", args)
+            transport.assert_not_called()
+
+    def test_account_auth_audit_never_records_secret_or_low_entropy_digest(self):
+        args = {
+            "session": "dev", "action": "fill_code",
+            "value": "SYNTHETIC_CODE", "value_sha256": "guessable-digest"
+        }
+        safe = m.sanitize_audit_args("browser_auth_action", args)
+        self.assertNotIn("value", safe)
+        self.assertNotIn("value_sha256", safe)
+        self.assertEqual(len("SYNTHETIC_CODE"), safe["value_length"])
+
+    def test_account_auth_mutation_denies_missing_maintenance_lease(self):
+        with mock.patch.dict(os.environ, {"SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF": "1"}):
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.execute_tool(
+                    "browser_auth_action",
+                    {"session": "dev", "tab_id": "synthetic-tab", "action": "continue"},
+                )
+
+    def test_account_auth_proxy_routes_only_to_protected_local_browser_mcp(self):
+        import io
+        args = {
+            "session": "dev", "tab_id": "synthetic-tab",
+            "action": "fill_code", "value": "SYNTHETIC_CODE",
+            "runtime_lease_id": "synthetic-lease", "runtime_fencing_token": 8,
+        }
+        lease = {
+            "owner_kind": "maintenance",
+            "owner_id": "shopvivaliz-account-auth:dev",
+            "allowed_actions": ["browser_auth_action"],
+        }
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {"ok": True, "session": "dev", "action": "fill_code", "typed": True},
+                "isError": False,
+            }
+        }
+        with (
+            mock.patch.object(m, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(response).encode())) as run,
+        ):
+            outcome = m.execute_tool("browser_auth_action", args)
+        request = run.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual("http://127.0.0.1:5581/mcp", request.full_url)
+        self.assertEqual("Bearer synthetic-service-token", request.get_header("Authorization"))
+        self.assertEqual("browser_auth_action", payload["params"]["name"])
+        self.assertEqual("SYNTHETIC_CODE", payload["params"]["arguments"]["value"])
+        self.assertEqual({"ok": True, "session": "dev", "action": "fill_code", "typed": True}, outcome)
+        self.assertNotIn("SYNTHETIC_CODE", json.dumps(outcome))
+
+    def test_account_auth_proxy_keeps_only_sanitized_official_mfa_tabs(self):
+        import io
+        response = {
+            "jsonrpc": "2.0", "id": 1,
+            "result": {
+                "structuredContent": {
+                    "ok": True, "session": "dev",
+                    "tabs": [
+                        {"tab_id": "MFA123", "session": "dev", "stage": "/mfa-challenge",
+                         "url": "https://auth.openai.com/mfa-challenge/secret?state=SENSITIVE"},
+                        {"tab_id": "LOGIN123", "session": "dev", "stage": "/log-in/password"},
+                        {"tab_id": "OTHER123", "session": "atendimento", "stage": "/mfa-challenge"},
+                        {"tab_id": "CONSENT123", "session": "dev", "stage": "/oauth/consent"},
+                    ],
+                },
+                "isError": False,
+            },
+        }
+        with (
+            mock.patch.object(m, "AUTH_TOKEN", "synthetic-service-token"),
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(response).encode())),
+        ):
+            result = m.execute_tool("browser_auth_tabs", {"session": "dev"})
+        self.assertEqual(
+            [
+                {"tab_id": "MFA123", "session": "dev", "stage": "/mfa-challenge"},
+                {"tab_id": "LOGIN123", "session": "dev", "stage": "/log-in/password"},
+            ],
+            result["tabs"],
+        )
+        self.assertNotIn("SENSITIVE", json.dumps(result))
+        self.assertNotIn("https://", json.dumps(result))
 
     def test_mutating_browser_tool_requires_runtime_lock_when_handoff_enabled(self):
         old = os.environ.get("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF")
@@ -272,6 +577,78 @@ class RemoteControlMcpTests(unittest.TestCase):
             if old_state is None: os.environ.pop("SHOPVIVALIZ_AGENT_TASK_STATE_DIR", None)
             else: os.environ["SHOPVIVALIZ_AGENT_TASK_STATE_DIR"] = old_state
 
+    def test_controller_remote_main_probe_is_read_only_and_validates_head(self):
+        remote = "b" * 40
+        with mock.patch.object(m, "_run_as_ubuntu", return_value=f"{remote}\trefs/heads/main\n") as runner:
+            self.assertEqual(m._controller_remote_main_sha(), remote)
+        argv = runner.call_args.args[0]
+        self.assertIn("ls-remote", argv)
+        self.assertNotIn("fetch", argv)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", argv)
+
+    def test_controller_remote_main_probe_fails_closed_when_unavailable(self):
+        with mock.patch.object(m, "_run_as_ubuntu", side_effect=RuntimeError("remote-unavailable")):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+        with mock.patch.object(m, "_run_as_ubuntu", return_value="not-a-commit\trefs/heads/main"):
+            self.assertEqual(m._controller_remote_main_sha(), "")
+
+    def test_controller_status_does_not_claim_freshness_from_stale_tracking_ref(self):
+        active = "a" * 40
+        current_main = "b" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=current_main), \
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["service_active"])
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertTrue(status["remote_head_verified"])
+        self.assertEqual(status["remote_main_sha"], current_main)
+        self.assertFalse(status["up_to_date"])
+
+    def test_controller_status_remote_unavailable_never_certifies_current(self):
+        active = "a" * 40
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=active), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value=active), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value=""), \
+             mock.patch.object(m, "_read_controller_state", return_value={}):
+            status = m.controller_status()
+        self.assertTrue(status["matches_tracking_main"])
+        self.assertFalse(status["remote_head_verified"])
+        self.assertFalse(status["up_to_date"])
+
+    def test_non_sha_controller_release_is_reported_but_never_certified(self):
+        label = "free-provider-v2-9f259c96918e9d"
+        with mock.patch.object(m, "_run_local", return_value=mock.Mock(stdout=b"active\n")), \
+             mock.patch.object(m, "_controller_active_sha", return_value=""), \
+             mock.patch.object(m, "_controller_active_release_id", return_value=label), \
+             mock.patch.object(m, "_controller_origin_main_sha", return_value="a" * 40), \
+             mock.patch.object(m, "_controller_remote_main_sha", return_value="a" * 40), \
+             mock.patch.object(m, "_read_controller_state", return_value={"liveness_ok": True}):
+            status = m.controller_status()
+        self.assertTrue(status["service_active"])
+        self.assertEqual(status["active_release_id"], label)
+        self.assertEqual(status["release_id_form"], "non_sha_unverified")
+        self.assertEqual(status["active_sha"], "")
+        self.assertFalse(status["ok"])
+        self.assertFalse(status["up_to_date"])
+        self.assertFalse(status["matches_tracking_main"])
+
+    def test_unversioned_release_identifier_extracted_without_secret_argv(self):
+        cmdline = (
+            b"/usr/bin/python3\0"
+            b"/opt/shopvivaliz-gemini-24x7-controller/releases/"
+            b"free-provider-v2-9f259c96918e9d/scripts/gemini_24x7_controller.py\0"
+        )
+        with mock.patch.object(m, "_run_local_checked", return_value="12345"), \
+             mock.patch.object(Path, "read_bytes", return_value=cmdline):
+            self.assertEqual(
+                m._controller_active_release_id(),
+                "free-provider-v2-9f259c96918e9d",
+            )
+
     def test_controller_promote_requires_full_expected_sha(self):
         with self.assertRaisesRegex(ValueError, "invalid_expected_sha"):
             m.execute_tool("controller_promote", {"expected_sha": "abc123"})
@@ -316,6 +693,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertTrue(status["session_recovery_enabled"])
         for forbidden in ("sessionId", "environmentId", "pid", "procStart"):
             self.assertNotIn(forbidden, status)
+
+    def test_controller_state_exposes_attested_route_recovery_counters(self):
+        state_file = Path(self.tmp.name) / "controller-route-state.json"
+        expected = {
+            "scanned": 9, "bound": 0, "ambiguous": 0,
+            "skipped_no_proof": 9, "skipped_stale": 0, "failed": 0,
+        }
+        state_file.write_text(json.dumps({
+            "route_recovery": expected,
+            "conversation_id": "must-not-escape",
+            "continuity_ready": False,
+        }), encoding="utf-8")
+        with mock.patch.object(m, "CONTROLLER_STATE_FILE", state_file):
+            result = m._read_controller_state()
+        self.assertEqual(expected, result["route_recovery"])
+        self.assertNotIn("conversation_id", result)
 
     def test_controller_state_strips_internal_identifiers(self):
         original = m.CONTROLLER_STATE_FILE
@@ -398,6 +791,24 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("--claude-reconcile-run", row["command"])
         self.assertIn(sha, row["command"])
 
+    def test_degraded_continuity_is_successful_mcp_observation(self):
+        degraded = {
+            "ok": False,
+            "controller": {"service_active": True},
+            "continuity_ready": False,
+            "degraded": True,
+            "degraded_reasons": ["active_checkpoint_unbound"],
+        }
+        self.assertTrue(m._tool_call_ok("continuity_status", degraded))
+        self.assertFalse(degraded["ok"])
+        self.assertFalse(degraded["continuity_ready"])
+        self.assertFalse(m._tool_call_ok("controller_status", {"ok": False}))
+        self.assertFalse(m._tool_call_ok("continuity_status", {"ok": False, "error": "probe_failed"}))
+        self.assertTrue(m._tool_call_ok("continuity_status", {
+            "ok": False, "controller": {}, "continuity_ready": None,
+        }))
+        self.assertTrue(m._tool_call_ok("hosts_list", {"ok": True}))
+
     def test_continuity_status_is_fail_closed_until_ready(self):
         with mock.patch.object(m, "controller_status", return_value={
             "service_active": True,
@@ -421,9 +832,13 @@ class RemoteControlMcpTests(unittest.TestCase):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:
+            # Self-hosted runners can be heavily loaded while multiple audit
+            # workflows start at once. This is a privacy assertion, not a
+            # latency assertion, so allow scheduling delay without turning a
+            # healthy metadata-only `ps` invocation into a false negative.
             result = subprocess.run(
                 ["ps", "-p", str(child.pid), "-o", fields],
-                capture_output=True, text=True, timeout=8, check=True,
+                capture_output=True, text=True, timeout=30, check=True,
             )
             self.assertIn(str(child.pid), result.stdout)
             self.assertTrue(sentinel not in result.stdout,
@@ -477,7 +892,7 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"tab_id": "ABC123", "selector": "#code", "text": "sample-sensitive-input", "submit": True},
         )
         self.assertNotIn("text", safe)
-        self.assertRegex(safe["text_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("text_sha256", safe)
         self.assertEqual(safe["text_length"], len("sample-sensitive-input"))
         nav = m.sanitize_audit_args(
             "browser_navigate",
@@ -545,6 +960,22 @@ class RemoteControlMcpTests(unittest.TestCase):
         required = specs["browser_navigate"]["inputSchema"]["required"]
         self.assertIn("url", required)
         self.assertNotIn("tab_id", required)
+
+    def test_browser_tab_specific_commands_are_pinned_to_one_session(self):
+        tabs = m.browser_tabs_command()
+        self.assertIn("127.0.0.1:9556/json", tabs)
+        self.assertNotIn("127.0.0.1:9559/json", tabs)
+        self.assertNotIn("127.0.0.1:9555/json", tabs)
+        command = m._browser_cdp_command("ABC123", "(()=>true)()")
+        self.assertIn("127.0.0.1:9556/json", command)
+        self.assertNotIn("127.0.0.1:9559/json", command)
+
+    def test_browser_explicit_type_is_pinned_by_session_environment(self):
+        script = m.BROWSER_TYPE_NODE_SCRIPT
+        self.assertIn("SHOPVIVALIZ_BROWSER_CDP_URL", script)
+        self.assertIn("SHOPVIVALIZ_BROWSER_SESSION_NAME", script)
+        self.assertNotIn("127.0.0.1:9559/json", script)
+        self.assertNotIn("127.0.0.1:9555/json", script)
 
     def test_browser_cdp_opens_websocket_before_constructing_cdp(self):
         command = m._browser_cdp_command("ABC123", "(()=>true)()")
@@ -982,6 +1413,149 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertEqual(desk[desk.index("-p") + 1], "2223")
 
 
+    def test_reverse_ssh_transport_errors_are_narrowly_classified(self):
+        self.assertTrue(m.is_recoverable_reverse_ssh_error(
+            "Fred-Win",
+            "Connection timed out during banner exchange\r\nConnection to 127.0.0.1 port 2222 timed out",
+        ))
+        self.assertTrue(m.is_recoverable_reverse_ssh_error(
+            "KOCEPSV",
+            "kex_exchange_identification: read: Connection reset by peer",
+        ))
+        self.assertFalse(m.is_recoverable_reverse_ssh_error(
+            "Fred-Win",
+            "Permission denied (publickey).",
+        ))
+        self.assertFalse(m.is_recoverable_reverse_ssh_error(
+            "shopvivaliz-free-a1",
+            "Connection timed out during banner exchange",
+        ))
+
+    def test_reverse_ssh_listener_pid_accepts_only_sshd_listener(self):
+        sample = mock.Mock(
+            returncode=0,
+            stdout='LISTEN 0 128 127.0.0.1:2222 0.0.0.0:* users:(("sshd",pid=4321,fd=8))\n',
+        )
+        with (
+            mock.patch.object(m.subprocess, "run", return_value=sample),
+            mock.patch.object(m.Path, "read_text", return_value="sshd\n"),
+        ):
+            self.assertEqual(4321, m.reverse_ssh_listener_pid(2222))
+
+        with (
+            mock.patch.object(m.subprocess, "run", return_value=sample),
+            mock.patch.object(m.Path, "read_text", return_value="python\n"),
+        ):
+            self.assertIsNone(m.reverse_ssh_listener_pid(2222))
+
+    def test_recover_reverse_ssh_transport_recycles_listener_until_new_pid(self):
+        pids = iter([4321, 4321, 9876])
+        with (
+            mock.patch.object(m, "reverse_ssh_listener_pid", side_effect=lambda port: next(pids)),
+            mock.patch.object(m.os, "kill") as kill,
+            mock.patch.object(m.time, "sleep"),
+            mock.patch.object(m.time, "monotonic", side_effect=[10.0, 10.1, 10.2]),
+        ):
+            self.assertTrue(m.recover_reverse_ssh_transport("Fred-Win"))
+        kill.assert_called_once_with(4321, m.signal.SIGTERM)
+
+    def test_safe_reverse_ssh_retry_rejects_ambiguous_connection_reset(self):
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection timed out during banner exchange",
+        ))
+        self.assertTrue(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "kex_exchange_identification: read: Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection reset by peer",
+        ))
+        self.assertFalse(m.is_safe_pre_execution_reverse_ssh_error(
+            "KOCEPSV",
+            "Connection closed by remote host",
+        ))
+
+    def test_read_only_host_tools_disable_transport_recovery(self):
+        cases = [
+            ("host_health", {"host": "Fred-Win"}),
+            ("processes_list", {"host": "Fred-Win"}),
+            ("service_status", {"host": "Fred-Win", "service": "RustDesk"}),
+            ("file_read", {"host": "Fred-Win", "path": r"C:\\Windows\\win.ini"}),
+            ("file_list", {"host": "Fred-Win", "path": r"C:\\Windows"}),
+            ("logs_tail", {"host": "Fred-Win", "path": r"C:\\Windows\\WindowsUpdate.log"}),
+        ]
+        for name, args in cases:
+            with self.subTest(tool=name), mock.patch.object(
+                m,
+                "run_host_command",
+                return_value={"host": "Fred-Win", "exit_code": 0, "stdout": "", "stderr": "", "duration_ms": 1},
+            ) as run:
+                result = m.execute_tool(name, args)
+                self.assertTrue(result["ok"])
+                self.assertFalse(run.call_args.kwargs.get("recover_transport", True))
+
+    def test_run_host_command_can_probe_without_mutating_reverse_ssh_transport(self):
+        class FakeProc:
+            returncode = 255
+            pid = 1001
+
+            def communicate(self, timeout=None):
+                return b"", b"Connection timed out during banner exchange"
+
+            def poll(self):
+                return self.returncode
+
+        self.assertIn("recover_transport", m.run_host_command.__code__.co_varnames)
+        with (
+            mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", return_value=FakeProc()),
+            mock.patch.object(m, "_cleanup_isolated_scope"),
+            mock.patch.object(m, "recover_reverse_ssh_transport") as recover,
+        ):
+            result = m.run_host_command(
+                "Fred-Win",
+                "Get-Date",
+                timeout=10,
+                recover_transport=False,
+            )
+        self.assertEqual(255, result["exit_code"])
+        self.assertTrue(result["transport_recovery_available"])
+        recover.assert_not_called()
+
+    def test_run_host_command_retries_once_after_reverse_ssh_recovery(self):
+        class FakeProc:
+            def __init__(self, rc, stdout, stderr):
+                self.returncode = rc
+                self._stdout = stdout
+                self._stderr = stderr
+                self.pid = 1000 + rc
+
+            def communicate(self, timeout=None):
+                return self._stdout, self._stderr
+
+            def poll(self):
+                return self.returncode
+
+        first = FakeProc(255, b"", b"Connection timed out during banner exchange")
+        second = FakeProc(0, b"ok", b"")
+        with (
+            mock.patch.object(m, "isolated_invocation", return_value=["ssh"]),
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=[first, second]) as popen,
+            mock.patch.object(m, "_cleanup_isolated_scope"),
+            mock.patch.object(m, "recover_reverse_ssh_transport", return_value=True) as recover,
+        ):
+            result = m.run_host_command("Fred-Win", "Get-Date", timeout=10)
+        self.assertEqual(0, result["exit_code"])
+        self.assertEqual("ok", result["stdout"])
+        self.assertTrue(result["transport_recovered"])
+        self.assertEqual(2, popen.call_count)
+        recover.assert_called_once_with("Fred-Win")
+
+
 class BranchCoherenceTests(unittest.TestCase):
     def test_single_canonical_remote_control_runtime(self):
         for rel in (
@@ -1048,6 +1622,40 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn("test \"$(grep -cv '^#' \"$tmp\")\" -ge 3", text)
         self.assertIn('sudo -n install -m 600 -o root -g root "$tmp" /var/lib/shopvivaliz-remote-control/known_hosts', text)
         self.assertIn("REMOTE_CONTROL_FOUR_HOST_E2E=PASS", text)
+
+    def test_bootstrap_tracks_validates_and_installs_browser_mcp_from_same_checkout(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        for path in (
+            "remote-control-browser-mcp/**",
+            "scripts/setup-remote-control-browser-mcp.sh",
+            "deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            "scripts/shopvivaliz-native-desktop-bridge.ps1",
+            "tests/remote-control-browser-mcp-test.py",
+        ):
+            self.assertIn(path, text)
+        self.assertIn(
+            "python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py",
+            text,
+        )
+        self.assertIn("python3 tests/remote-control-browser-mcp-test.py", text)
+        self.assertIn("bash -n scripts/setup-remote-control-browser-mcp.sh", text)
+        self.assertIn(
+            "sudo -n bash scripts/setup-remote-control-browser-mcp.sh remote-control-browser-mcp/server.py deploy/systemd/shopvivaliz-remote-control-browser-mcp.service",
+            text,
+        )
+
+    def test_bootstrap_stages_native_fred_desktop_bridge_from_canonical_checkout(self):
+        text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
+        self.assertIn("- name: Stage native Fred-Win desktop bridge", text)
+        start = text.index("- name: Stage native Fred-Win desktop bridge")
+        block = text[start:]
+        self.assertIn("scripts/shopvivaliz-native-desktop-bridge.ps1", block)
+        self.assertIn("/var/lib/shopvivaliz-remote-control/id_ed25519", block)
+        self.assertIn("127.0.0.1", block)
+        self.assertIn("2222", block)
+        self.assertIn("Parser]::ParseFile", block)
+        self.assertIn("REMOTE_CONTROL_FRED_NATIVE_DESKTOP_BRIDGE=PASS", block)
+        self.assertNotIn("git show origin/main:scripts/shopvivaliz-native-desktop-bridge.ps1", block)
 
     def test_bootstrap_runs_on_controller_backend(self):
         text = (ROOT / ".github" / "workflows" / "remote-control-mcp-bootstrap.yml").read_text(encoding="utf-8")
@@ -1798,7 +2406,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "scripts/chatgpt-continuity/chatgpt-browser-guardian.sh",
-            "ops/systemd/shopvivaliz-chatgpt-browser.service",
+            "ops/systemd/shopvivaliz-dev-browser.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.service",
             "ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer",
         )
@@ -2345,6 +2953,119 @@ class DurableExecutorV2Tests(unittest.TestCase):
             )
         return unit
 
+    def test_durable_health_is_degraded_when_indeterminate_tasks_need_review(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+        summary = m.durable_health_summary()
+        self.assertEqual(summary["indeterminate"], 1)
+        self.assertTrue(summary["degraded"])
+
+    def test_api_processes_indeterminate_by_analysis_without_reexecution(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        with (
+            mock.patch.object(m, "run_task_entrypoint") as runner,
+            mock.patch.object(m.subprocess, "Popen") as spawn,
+            mock.patch.object(m, "recover_reverse_ssh_transport") as recover,
+        ):
+            processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+
+        self.assertEqual(processed["processed"], 1)
+        self.assertEqual(processed["classifications"]["positive_evidence"], 1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "indeterminate")
+        self.assertEqual(status["analysis_status"], "processed")
+        self.assertEqual(status["analysis_result"], "positive_evidence")
+        self.assertEqual(status["analysis_intervention_required"], 0)
+        self.assertIsNotNone(status["analyzed_at"])
+        runner.assert_not_called()
+        spawn.assert_not_called()
+        recover.assert_not_called()
+
+    def test_durable_health_separates_processed_indeterminate_from_pending_review(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        before = m.durable_health_summary()
+        self.assertEqual(before["indeterminate"], 1)
+        self.assertEqual(before["indeterminate_pending_analysis"], 1)
+        self.assertEqual(before["indeterminate_processed"], 0)
+        self.assertTrue(before["degraded"])
+
+        processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+        self.assertEqual(processed["processed"], 1)
+
+        after = m.durable_health_summary()
+        self.assertEqual(after["indeterminate"], 1)
+        self.assertEqual(after["indeterminate_pending_analysis"], 0)
+        self.assertEqual(after["indeterminate_processed"], 1)
+        self.assertFalse(after["degraded"])
+
+    def test_worker_processes_newly_indeterminate_tasks_analytically(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("CHECK PASS\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            worker = threading.Thread(target=m.task_worker, daemon=True)
+            worker.start()
+            deadline = time.monotonic() + 1.5
+            status = m.execute_tool("task_status", {"task_id": task_id})
+            while time.monotonic() < deadline and status.get("analysis_status") != "processed":
+                time.sleep(0.03)
+                status = m.execute_tool("task_status", {"task_id": task_id})
+            m.STOP_EVENT.set()
+            worker.join(timeout=1)
+
+        self.assertEqual(status["state"], "indeterminate")
+        self.assertEqual(status["analysis_status"], "processed")
+        self.assertEqual(status["analysis_result"], "positive_evidence")
+
+    def test_indeterminate_analysis_treats_tap_not_ok_as_negative_evidence(self):
+        task_id = self.submit()["task_id"]
+        self.claim(task_id, state="running", started=True)
+        result_dir = m.ensure_task_result_dir(task_id)
+        (result_dir / "stdout.log").write_text("not ok 1 - checkout\n", encoding="utf-8")
+        (result_dir / "stderr.log").write_text("", encoding="utf-8")
+        with mock.patch.object(m, "systemd_unit_state", return_value="inactive"):
+            self.assertEqual(m.reconcile_task(m.load_task(task_id)), "indeterminate")
+
+        processed = m.execute_tool("task_process_indeterminate", {"limit": 10})
+
+        self.assertEqual(processed["processed"], 1)
+        self.assertEqual(processed["classifications"]["negative_evidence"], 1)
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["analysis_result"], "negative_evidence")
+        evidence = json.loads(status["analysis_evidence_json"])
+        self.assertEqual(evidence["negative_markers"], 1)
+        self.assertEqual(evidence["positive_markers"], 0)
+
+    def test_task_process_indeterminate_is_an_api_tool_with_no_external_intervention_contract(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        self.assertIn("task_process_indeterminate", specs)
+        spec = specs["task_process_indeterminate"]
+        self.assertFalse(spec["annotations"]["readOnlyHint"])
+        self.assertFalse(spec["annotations"]["destructiveHint"])
+        self.assertEqual(
+            "integer",
+            spec["inputSchema"]["properties"]["limit"]["type"],
+        )
+
     def test_init_db_does_not_requeue_running_task(self):
         task_id = self.submit()["task_id"]
         with m.db_conn() as db:
@@ -2518,6 +3239,44 @@ class DurableExecutorV2Tests(unittest.TestCase):
         self.assertEqual(status["state"], "succeeded")
         self.assertIn("runner-output", status["stdout"])
         self.assertTrue((m.task_result_dir(task_id) / "result.json").is_file())
+
+    def test_runner_retries_once_after_reverse_ssh_recovery(self):
+        task_id = m.execute_tool("task_submit", {
+            "host": "KOCEPSV",
+            "command": "Write-Output durable-recovered",
+            "timeout": 30,
+        })["task_id"]
+        self.claim(task_id)
+        attempts = {"count": 0}
+
+        class FakeProc:
+            def __init__(self, rc):
+                self.returncode = rc
+                self.pid = 4000 + attempts["count"]
+
+            def poll(self):
+                return self.returncode
+
+        def fake_popen(_argv, stdout=None, stderr=None, **_kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                stderr.write(b"Connection timed out during banner exchange\n")
+                return FakeProc(255)
+            stdout.write(b"durable-recovered\n")
+            return FakeProc(0)
+
+        with (
+            mock.patch.object(m, "remote_invocation", return_value=["ssh"]),
+            mock.patch.object(m.subprocess, "Popen", side_effect=fake_popen) as popen,
+            mock.patch.object(m, "recover_reverse_ssh_transport", return_value=True) as recover,
+        ):
+            self.assertEqual(m.run_task_entrypoint(task_id), 0)
+
+        status = m.execute_tool("task_status", {"task_id": task_id})
+        self.assertEqual(status["state"], "succeeded")
+        self.assertIn("durable-recovered", status["stdout"])
+        self.assertEqual(popen.call_count, 2)
+        recover.assert_called_once_with("KOCEPSV")
 
     def test_runner_cancel_requested_never_marks_execution_started_or_spawns(self):
         task_id = self.submit(command="printf must-not-run") ["task_id"]

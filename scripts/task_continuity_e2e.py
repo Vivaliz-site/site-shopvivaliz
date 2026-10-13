@@ -92,6 +92,7 @@ def create_synthetic_task(
     repository: str,
     agent_task_state_script: Path,
     conversation_id: str,
+    browser_session: str = "atendimento",
     runner: Any = subprocess.run,
 ) -> None:
     env = _child_env(runtime_dir)
@@ -108,20 +109,10 @@ def create_synthetic_task(
             "chatgpt-common",
             "--repository",
             repository,
-        ],
-        check=True,
-        env=env,
-        timeout=30,
-    )
-    runner(
-        [
-            sys.executable,
-            str(agent_task_state_script),
-            "bind-conversation",
-            "--task",
-            task_id,
             "--conversation-id",
             conversation_id,
+            "--browser-session",
+            browser_session,
         ],
         check=True,
         env=env,
@@ -339,6 +330,7 @@ def main() -> int:
     parser.add_argument("--task-id", default="")
     parser.add_argument("--repository", default=DEFAULT_REPOSITORY)
     parser.add_argument("--conversation-id", required=True)
+    parser.add_argument("--browser-session", choices=["dev", "atendimento"], default="atendimento")
     parser.add_argument(
         "--report-path",
         default="",
@@ -358,6 +350,7 @@ def main() -> int:
         repository=repository,
         agent_task_state_script=agent_task_state_script,
         conversation_id=args.conversation_id.strip(),
+        browser_session=args.browser_session,
     )
 
     observation = poll_for_terminal_evidence(

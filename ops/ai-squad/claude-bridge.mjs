@@ -25,6 +25,12 @@ let authState = { checked_at: 0, authenticated: false };
 let authProbePromise = null;
 let claudeWorkQueue = Promise.resolve();
 
+// A paid bridge must not silently consume a user's subscription quota.
+export function paidBridgeEnabled(env = process.env) {
+  return env.SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED === '1'
+    && env.SHOPVIVALIZ_PAID_BRIDGE_MODE === 'interactive';
+}
+
 export function serializeClaudeWork(work) {
   const queued = claudeWorkQueue.catch(() => {}).then(work);
   claudeWorkQueue = queued.catch(() => {});
@@ -429,6 +435,11 @@ function beginHeartbeat(res) {
 
 async function handle(req, res) {
   if (req.method === 'GET' && req.url === '/health') {
+    if (!paidBridgeEnabled()) {
+      sendJson(res, 200, { ok: false, endpoint: 'ai-squad-claude-bridge',
+        auth_mode: 'disabled', policy: 'manual_approval_required' });
+      return;
+    }
     if (shouldReprobeAuth(authState)) scheduleAuthProbe().catch(() => {});
     const auth = claudeAuthSource();
     const bin = process.env.AI_SQUAD_CLAUDE_BIN || DEFAULT_CLAUDE_BIN;
@@ -449,6 +460,10 @@ async function handle(req, res) {
 
   if (req.method !== 'POST' || req.url !== '/v1/respond') {
     sendJson(res, 404, { ok: false, error_class: 'not_found' });
+    return;
+  }
+  if (!paidBridgeEnabled()) {
+    sendJson(res, 403, { ok: false, error_class: 'paid_provider_disabled' });
     return;
   }
 
@@ -496,7 +511,7 @@ async function main() {
   server.requestTimeout = 310000;
   server.headersTimeout = 10000;
   server.listen(port, host, () => {
-    scheduleAuthProbe().catch(() => {});
+    if (paidBridgeEnabled()) scheduleAuthProbe().catch(() => {});
   });
 }
 
