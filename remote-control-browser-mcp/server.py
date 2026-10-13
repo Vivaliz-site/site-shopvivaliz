@@ -596,6 +596,7 @@ def browser_tabs() -> dict[str, Any]:
 
 def browser_open(args: dict[str, Any]) -> dict[str, Any]:
     url = validate_url(args.get("url"))
+    base._assert_no_corporate_logout_url(url)
     if not gui_session_active():
         raise RuntimeError("gui_session_inactive")
     windows = browser_windows()
@@ -629,6 +630,7 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
 
 def browser_navigate(args: dict[str, Any]) -> dict[str, Any]:
     url = validate_url(args.get("url"))
+    base._assert_no_corporate_logout_url(url)
     window = active_browser_window()
     focus(window)
     key("ctrl+l")
@@ -675,6 +677,8 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     if not text:
         raise ValueError("browser_text_required")
     check_text(text)
+    if bool(args.get("press_enter", False)) and text.strip().lower().startswith(("https://", "http://")):
+        base._assert_no_corporate_logout_url(text)
     window = active_browser_window()
     focus(window)
     type_text(text)
