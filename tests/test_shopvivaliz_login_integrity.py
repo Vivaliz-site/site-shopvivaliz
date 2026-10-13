@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Static regression tests for the read-only corporate session guard."""
 import ast
+import io
+import json
 import re
+import runpy
 import shlex
 from pathlib import Path
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MONITOR = ROOT / "scripts/chatgpt-continuity/shopvivaliz-login-integrity.py"
@@ -89,6 +93,44 @@ class LoginIntegrityPolicyTests(unittest.TestCase):
         body = INSTALLER.read_text(encoding="utf8")
         self.assertIn('ExecStartPre=/usr/bin/test -s "/home/fredrdp/.config/%s/Local State"', body)
         self.assertNotIn('ExecStartPre=/usr/bin/test -s /home/fredrdp/.config/%s/Local State', body)
+
+class LoginIntegrityAuxProbeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Execute only function definitions; never run the production monitor.
+        cls.probe_fn = staticmethod(runpy.run_path(str(MONITOR), run_name="integrity_test")["probe"])
+
+    def test_transient_aux_timeout_retries_then_confirms_exact_identity(self):
+        healthy = {
+            "ok": True, "cdp_reachable": True,
+            "account_authenticated": True, "account_identity_verified": True,
+            "session": "dev",
+        }
+        response = io.BytesIO(json.dumps(healthy).encode("utf-8"))
+        with mock.patch("urllib.request.urlopen", side_effect=[TimeoutError("slow"), response]) as endpoint:
+            result = self.probe_fn(None, None)
+        self.assertEqual(result, {"state": "AUTHENTICATED", "verified": True})
+        self.assertEqual(endpoint.call_count, 2)
+        self.assertTrue(all(call.kwargs["timeout"] == 12 for call in endpoint.call_args_list))
+
+    def test_repeated_aux_timeout_is_fail_closed(self):
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("offline")) as endpoint:
+            result = self.probe_fn(None, None)
+        self.assertEqual(result, {"state": "PROBE_ERROR", "verified": False})
+        self.assertEqual(endpoint.call_count, 2)
+
+    def test_identity_failure_never_retries_or_authenticates(self):
+        mismatch = {
+            "ok": True, "cdp_reachable": True,
+            "account_authenticated": True, "account_identity_verified": False,
+            "session": "dev",
+        }
+        response = io.BytesIO(json.dumps(mismatch).encode("utf-8"))
+        with mock.patch("urllib.request.urlopen", return_value=response) as endpoint:
+            result = self.probe_fn(None, None)
+        self.assertEqual(result, {"state": "UNKNOWN", "verified": False})
+        endpoint.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
