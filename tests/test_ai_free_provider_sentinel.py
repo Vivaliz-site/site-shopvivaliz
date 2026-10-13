@@ -103,6 +103,107 @@ class Tests(unittest.TestCase):
             self.assertEqual(s.proc_potential_paid(10,root),
                              ["PAID_PROCESS_CLAUDE","PAID_PROCESS_CODEX"])
 
+    def _schedule_fixture(self, root, active):
+        return s.scheduled_paid_launchers(
+            systemd_dir=root/"systemd", user_timer_dir=root/"user-systemd",
+            cron_dir=root/"cron.d", cron_main=root/"crontab",
+            user_crontabs=(), periodic_dirs=(), active_timers=active,
+            allowed_script_roots=(root,),
+        )
+
+    def test_scheduled_claude_direct_cron_is_alerted(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"cron.d").mkdir()
+            (root/"cron.d"/"paid").write_text(
+                "*/5 * * * * ubuntu claude -p 'repeat this job'\n")
+            self.assertEqual(
+                self._schedule_fixture(root, set()),
+                ["PAID_RECURRING_CRON_LAUNCHER"],
+            )
+
+    def test_scheduled_nested_shell_paid_job_is_alerted(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"cron.d").mkdir();(root/"scripts").mkdir()
+            job=root/"scripts"/"continuity.sh"
+            job.write_text("#!/bin/sh\nclaude --print 'again'\n")
+            (root/"cron.d"/"every-hour").write_text(
+                f"0 * * * * ubuntu /bin/bash {job}\n"
+            )
+            self.assertEqual(
+                self._schedule_fixture(root, set()),
+                ["PAID_RECURRING_CRON_LAUNCHER"],
+            )
+
+    def test_active_systemd_codex_remote_timer_alerted(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"systemd").mkdir()
+            (root/"systemd"/"ai.timer").write_text(
+                "[Timer]\nOnCalendar=hourly\n")
+            (root/"systemd"/"ai.service").write_text(
+                "[Service]\nExecStart=/usr/bin/codex exec --remote --model paid\n")
+            self.assertEqual(
+                self._schedule_fixture(root, {"ai.timer"}),
+                ["PAID_RECURRING_SYSTEMD_LAUNCHER"],
+            )
+            self.assertEqual(self._schedule_fixture(root, set()), [])
+
+    def test_systemd_timer_unit_override_and_nested_python(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"systemd").mkdir();(root/"scripts").mkdir()
+            (root/"systemd"/"watch.timer").write_text(
+                "[Timer]\nOnCalendar=daily\nUnit=actual.service\n")
+            (root/"systemd"/"actual.service").write_text(
+                f"[Service]\nExecStart=/usr/bin/python3 {root}/scripts/job.py\n")
+            (root/"scripts"/"job.py").write_text(
+                "import subprocess\nsubprocess.run(['claude','-p','do work'])\n")
+            self.assertEqual(
+                self._schedule_fixture(root, {"watch.timer"}),
+                ["PAID_RECURRING_SYSTEMD_LAUNCHER"],
+            )
+
+    def test_readonly_sentinel_timer_exemption_is_exact_and_narrow(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d); (root/"systemd").mkdir()
+            (root/"systemd"/"shopvivaliz-ai-free-guard.timer").write_text(
+                "[Timer]\nOnUnitActiveSec=5min\n")
+            service=root/"systemd"/"shopvivaliz-ai-free-guard.service"
+            service.write_text(
+                "[Service]\nExecStart=/usr/bin/python3 "
+                "/usr/local/lib/shopvivaliz/ai-free-provider-sentinel.py\n"
+            )
+            self.assertEqual(
+                self._schedule_fixture(root, {"shopvivaliz-ai-free-guard.timer"}), []
+            )
+            service.write_text(service.read_text() +
+                "ExecStartPre=/usr/bin/claude -p unauthorized\n")
+            self.assertEqual(
+                self._schedule_fixture(root, {"shopvivaliz-ai-free-guard.timer"}),
+                ["PAID_RECURRING_SYSTEMD_LAUNCHER"],
+            )
+
+    def test_idle_claude_daemon_and_free_schedule_stay_healthy(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"systemd").mkdir();(root/"cron.d").mkdir()
+            (root/"systemd"/"local.timer").write_text(
+                "[Timer]\nOnCalendar=hourly\n")
+            (root/"systemd"/"local.service").write_text(
+                "[Service]\nExecStart=/usr/bin/ollama list\n")
+            (root/"systemd"/"remote-control.service").write_text(
+                "[Service]\nExecStart=/usr/bin/claude remote-control\n")
+            (root/"cron.d"/"health").write_text(
+                "*/10 * * * * ubuntu curl -fsS http://127.0.0.1:11434/api/tags\n")
+            self.assertEqual(self._schedule_fixture(root, {"local.timer"}), [])
+
+    def test_scan_never_reports_sensitive_script_contents(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/"cron.d").mkdir()
+            (root/"cron.d"/"private").write_text(
+                "# secret fixture must not appear in alert\n"
+                "*/5 * * * * ubuntu claude -p 'PRIVATE_FIXTURE_SECRET'\n")
+            issues=self._schedule_fixture(root,set())
+            self.assertIn("PAID_RECURRING_CRON_LAUNCHER", issues)
+            self.assertNotIn("PRIVATE_FIXTURE_SECRET", str(issues))
+
     def test_codex_db_counter_and_drift(self):
         with tempfile.TemporaryDirectory() as d:
             db=Path(d)/"state.sqlite"
@@ -156,6 +257,7 @@ class Tests(unittest.TestCase):
                   patch.object(s,"service_pid",return_value=0),
                   patch.object(s,"codex_snapshot",return_value=({},[])),
                   patch.object(s,"recent_claude_usage",return_value=0),
+                  patch.object(s,"scheduled_paid_launchers",return_value=[]),
                   patch.object(s,"github_comment") as notify):
                 issues,_=s.run(state_dir=Path(d),now=1000)
                 self.assertEqual(issues,[])
@@ -169,6 +271,7 @@ class Tests(unittest.TestCase):
                   patch.object(s,"service_pid",return_value=0),
                   patch.object(s,"codex_snapshot",return_value=({},[])),
                   patch.object(s,"recent_claude_usage",return_value=0),
+                  patch.object(s,"scheduled_paid_launchers",return_value=[]),
                   patch.object(s,"github_comment",return_value=True) as notify):
                 for now in (1000,1300,1600):
                     s.run(state_dir=Path(d),now=now)
