@@ -21,13 +21,13 @@ def socket_probe_function():
 
 
 class GuardianCgroupSocketHealthTests(unittest.TestCase):
-    def run_fixture(self, *, members="2001\n2002", sockets="", grace=0, ss_fails=False):
+    def run_fixture(self, *, members="2001\n2002", sockets="", grace=0, ss_fails=False, cat_fails=False):
         shell = f"""set -Eeuo pipefail
 SERVICE_CGROUP='/system.slice/shopvivaliz-desktop-commander.service'
 PROVIDER_SOCKET_GRACE_SECONDS={int(grace)}
 pgrep() {{ printf '1\\n'; }}
 stat() {{ printf '0\\n'; }}
-cat() {{ printf '%s\\n' {shlex.quote(members)}; }}
+cat() {{ {'return 1' if cat_fails else "printf '%s\\n' " + shlex.quote(members)}; }}
 ss() {{ {'return 1' if ss_fails else "printf '%s\\n' " + shlex.quote(sockets)}; }}
 {socket_probe_function()}
 provider_socket_connected
@@ -50,9 +50,13 @@ provider_socket_connected
         result = self.run_fixture(sockets='CLOSE-WAIT 0 0 127.0.0.1:5555 127.0.0.1:4444 users:(("node",pid=2002,fd=19))')
         self.assertNotEqual(result.returncode, 0)
 
-    def test_failed_socket_inspection_is_fail_closed(self):
+    def test_failed_socket_inspection_defers_restarts(self):
         result = self.run_fixture(ss_fails=True)
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 2, 'unavailable ss must not be interpreted as a proven disconnect')
+
+    def test_missing_cgroup_pid_list_defers_restarts(self):
+        result = self.run_fixture(cat_fails=True)
+        self.assertEqual(result.returncode, 2, 'missing cgroup must not trigger service restart')
 
     def test_pid_substring_is_not_accepted_as_member(self):
         result = self.run_fixture(members="200", sockets='ESTAB 0 0 127.0.0.1:5555 127.0.0.1:4444 users:(("node",pid=2002,fd=19))')
