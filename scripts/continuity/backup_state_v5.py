@@ -17,6 +17,10 @@ import time
 
 DEFAULT_STATE = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
 DEFAULT_BACKUPS = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-backups")
+# Volatile controller leases are execution locks, not restorable checkpoints.
+# They can disappear independently of _agent-task-state.lock; trying to
+# archive one creates a TOCTOU backup failure and could restore stale ownership.
+EPHEMERAL_ROOT_FILES = frozenset({"_gemini-24x7-controller-lease.json"})
 
 
 class BackupError(RuntimeError):
@@ -40,6 +44,11 @@ def _safe_members(root: Path) -> tuple[list[Path], int]:
             if path.is_symlink():
                 raise BackupError("symlink_in_checkpoint_tree")
         for name in sorted(filenames):
+            # Check the basename before stat/open: the controller releases
+            # this transient lease without taking the checkpoint state lock.
+            # Never back it up or block a durable checkpoint snapshot on it.
+            if base == root and name in EPHEMERAL_ROOT_FILES:
+                continue
             path = base / name
             if path.is_symlink() or not path.is_file():
                 raise BackupError("unsafe_checkpoint_member")
