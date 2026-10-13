@@ -23,7 +23,7 @@ hbbs_process_singleton() {
   local expected_pid actual_pids
   expected_pid="$(docker inspect -f '{{.State.Pid}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)" || return 1
   case "$expected_pid" in ''|*[!0-9]*|0) return 1 ;; esac
-  actual_pids="$(pgrep -x hbbs 2>/dev/null || true)"
+  actual_pids="$(pgrep -x hbbs 2>/dev/null)" || return 1
   [ "$actual_pids" = "$expected_pid" ]
 }
 
@@ -189,9 +189,12 @@ install_server() {
   assert_host
   [ "$HOST" = "$BACKEND_HOST" ] || die server_must_run_on_backend 40
   # Fail before applying a new Compose config if an existing server is split-brain.
-  if command -v docker >/dev/null 2>&1 &&
-     [ "$(docker inspect -f '{{.State.Running}}' shopvivaliz-rustdesk-hbbs 2>/dev/null || true)" = true ]; then
-    hbbs_process_singleton || die hbbs_duplicate_or_orphan_before_install 47
+  if command -v docker >/dev/null 2>&1; then
+    if docker_state="$(docker inspect -f '{{.State.Running}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)"; then
+      if [ "$docker_state" = true ]; then
+        hbbs_process_singleton || die hbbs_duplicate_or_orphan_before_install 47
+      fi
+    fi
   fi
   if ! command -v docker >/dev/null 2>&1; then
     apt-get update -qq
