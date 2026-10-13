@@ -63,7 +63,7 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 STATE_LOCK_FILE = "_agent-task-state.lock"
-EXTREME_AUDIT_GOAL_RE = re.compile(r"(?:auditoria\\s+(?:extrema|v5|absoluta)|extreme\\s+audit|audit\\s+v5|v5\\s+audit)", re.I)
+EXTREME_AUDIT_GOAL_RE = re.compile(r"(?:auditoria\s+(?:extrema|v5|absoluta)|extreme\s+audit|audit\s+v5|v5\s+audit)", re.I)
 
 
 class TaskStateError(RuntimeError):
