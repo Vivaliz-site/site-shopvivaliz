@@ -1,3 +1,9 @@
+<!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+## Gate da Auditoria Extrema V5: E2E UI real, prova em disco e continuidade
+
+Todo agente deve executar integralmente `docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md`: inventariar tela/controles/casos reais, percorrer cada jornada via UI grafica, capturar trace/midia real, corrigir via RED/GREEN/regressao, reauditar em sessao independente e validar UI novamente depois do deploy. O certifier deve ler hashes de arquivos fisicos e devolver `AUDIT_VERDICT=APTO` no mesmo SHA/release/ambiente antes de marcar tarefa `CONCLUIDO`. Nao aceitar afirmacoes/flags, screenshot isolado, API/CLI/SQL ou headless-only como prova. Manter checkpoint `RUNNING` com `next_action` e retomada controlada enquanto NAO_APTO; nao abandonar E2E por timeout, PR, merge, CI, falha de browser ou limite de turno. Respeitar ownership, seguranca e controles de custo. `BLOCKED_EXTERNAL` exige comprovacao real, nao e APTO.
+<!-- /AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## GATE INEGOCIAVEL: Auditoria Extrema V5 executada pela UI real
 
