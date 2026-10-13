@@ -13,6 +13,8 @@ for tool in Xvfb xauth mcookie xhost systemctl runuser; do
     exit 12
   }
 done
+runuser_bin="$(command -v runuser)"
+case "$runuser_bin" in /*) ;; *) echo "ERROR=runuser_binary_not_absolute" >&2; exit 12 ;; esac
 source_unit="ops/systemd/shopvivaliz-xvfb99.service"
 source_helper="scripts/shopvivaliz-xvfb99-prepare.sh"
 test -s "$source_unit" && test -s "$source_helper" || {
@@ -36,13 +38,13 @@ done
 # Apply only to the auxiliary profile, never to Dev or Atendimento cookies.
 # X11 permits this exact local OS principal; no Xauthority is copied.
 install -d -m 0755 /etc/systemd/system/shopvivaliz-atendimento-mcp-browser.service.d
-cat > /etc/systemd/system/shopvivaliz-atendimento-mcp-browser.service.d/96-x0-local-acl.conf <<'DROPIN'
+cat > /etc/systemd/system/shopvivaliz-atendimento-mcp-browser.service.d/96-x0-local-acl.conf <<DROPIN
 [Unit]
 After=display-manager.service
 Wants=display-manager.service
 
 [Service]
-ExecStartPre=+/usr/bin/runuser -u fredconsole -- /usr/bin/env DISPLAY=:0 XAUTHORITY=/home/fredconsole/.Xauthority /usr/bin/xhost +SI:localuser:fredrdp
+ExecStartPre=+${runuser_bin} -u fredconsole -- /usr/bin/env DISPLAY=:0 XAUTHORITY=/home/fredconsole/.Xauthority /usr/bin/xhost +SI:localuser:fredrdp
 DROPIN
 
 systemctl daemon-reload

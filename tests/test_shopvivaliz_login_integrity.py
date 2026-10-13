@@ -85,5 +85,10 @@ class LoginIntegrityPolicyTests(unittest.TestCase):
         for forbidden in ("systemctl restart", "systemctl stop", "kill -", "--user-data-dir=", "cp -a /home/fredrdp"):
             self.assertNotIn(forbidden, body)
 
+    def test_installer_quotes_local_state_path_for_systemd(self):
+        body = INSTALLER.read_text(encoding="utf8")
+        self.assertIn('ExecStartPre=/usr/bin/test -s "/home/fredrdp/.config/%s/Local State"', body)
+        self.assertNotIn('ExecStartPre=/usr/bin/test -s /home/fredrdp/.config/%s/Local State', body)
+
 if __name__ == "__main__":
     unittest.main()
