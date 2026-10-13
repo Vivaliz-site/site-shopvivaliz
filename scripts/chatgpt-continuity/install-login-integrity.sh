@@ -40,7 +40,7 @@ do
   IFS='|' read -r unit profile <<< "$pair"
   dropin="/etc/systemd/system/$unit.d/99-profile-preservation.conf"
   install -d -m 0755 "/etc/systemd/system/$unit.d"
-  printf '[Service]\nExecStartPre=/usr/bin/test -s /home/fredrdp/.config/%s/Local State\n' "$profile" > "$dropin"
+  printf '[Service]\nExecStartPre=/usr/bin/test -s "/home/fredrdp/.config/%s/Local State"\n' "$profile" > "$dropin"
   chmod 0644 "$dropin"
 done
 systemd-analyze verify /etc/systemd/system/shopvivaliz-login-integrity.service /etc/systemd/system/shopvivaliz-login-integrity.timer >/dev/null
