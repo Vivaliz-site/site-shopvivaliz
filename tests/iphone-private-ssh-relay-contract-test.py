@@ -19,6 +19,7 @@ class IphonePrivateSshRelayContractTest(unittest.TestCase):
             'RELAY_PORT="2224"',
             "tailscale ip -4",
             "ListenStream=$tailscale_ip:$RELAY_PORT",
+            "FreeBind=yes",
             "systemd-socket-proxyd $SITE_PRIVATE_IP:22",
             "IPHONE_SSH_RELAY_LISTENER_PRIVATE=true",
             "IPHONE_SSH_RELAY_HANDSHAKE=PASS",
