@@ -72,14 +72,44 @@ case "$prev_epoch:$prev_used" in
     fi
     ;;
 esac
-# Honor the previous guard run on initial rollout, avoiding a fresh heavy scan.
-last_heavy=0
-if [ -r "$HEAVY_STATE" ]; then
-  last_heavy="$(head -n 1 "$HEAVY_STATE")"
-elif [ -n "$prev_epoch" ]; then
-  last_heavy="$prev_epoch"
-fi
-case "$last_heavy" in ""|*[!0-9]*) last_heavy=0;; esac
+# HEAVY_CLEANUP_BOOTSTRAP_V2: persist the baseline ONCE. Reusing the
+# preceding five-minute sample on every run would reset the six-hour cooldown
+# forever whenever last-heavy-cleanup.epoch was absent.
+bootstrap_heavy_cleanup_epoch() {
+  state_file="$1"
+  previous_epoch="$2"
+  now_epoch="$3"
+  if [ ! -e "$state_file" ] && [ ! -L "$state_file" ]; then
+    case "$previous_epoch" in
+      ""|*[!0-9]*) previous_epoch="$now_epoch" ;;
+      *)
+        if [ "${#previous_epoch}" -gt "${#now_epoch}" ] || [ "$previous_epoch" -gt "$now_epoch" ]; then
+          previous_epoch="$now_epoch"
+        fi
+        ;;
+    esac
+    # POSIX noclobber provides an atomic create; a concurrent observer reads
+    # the existing timestamp. Do not overwrite an established cooldown.
+    (set -C; printf '%s\n' "$previous_epoch" > "$state_file") 2>/dev/null || true
+  fi
+  if [ ! -r "$state_file" ] || [ -L "$state_file" ]; then
+    printf '%s\n' "$now_epoch"
+    return
+  fi
+  recorded_epoch="$(head -n 1 "$state_file")"
+  case "$recorded_epoch" in
+    ""|*[!0-9]*) printf '%s\n' "$now_epoch" ;;
+    *)
+      # Invalid/future/corrupt marker must fail closed (skip heavy cleanup).
+      if [ "${#recorded_epoch}" -gt "${#now_epoch}" ] || [ "$recorded_epoch" -gt "$now_epoch" ]; then
+        printf '%s\n' "$now_epoch"
+      else
+        printf '%s\n' "$recorded_epoch"
+      fi
+      ;;
+  esac
+}
+last_heavy="$(bootstrap_heavy_cleanup_epoch "$HEAVY_STATE" "$prev_epoch" "$sample_epoch")"
 heavy_cleanup_due=0
 if [ "$sample_epoch" -ge "$last_heavy" ] &&
    [ "$((sample_epoch-last_heavy))" -ge "$HEAVY_CLEAN_COOLDOWN_SECONDS" ]; then

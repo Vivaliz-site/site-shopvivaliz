@@ -97,4 +97,57 @@ check_fixed 'clone_has_unpushed_commits()' "$HOUSE" 'clones with unpushed local 
 check_fixed 'linked_worktrees' "$HOUSE" 'clones with linked worktrees are protected'
 check_fixed 'abandoned_clone_removed' "$HOUSE" 'abandoned clone removals are persisted in state and logs'
 
+
+# HEAVY_CLEANUP_BOOTSTRAP_V2: behavioral regression. The old code used the
+# preceding five-minute sample on EVERY cycle when the marker was missing,
+# and therefore could never reach the six-hour threshold.
+source <(sed -n '/^bootstrap_heavy_cleanup_epoch() {/,/^}/p' "$GUARD")
+if ! declare -F bootstrap_heavy_cleanup_epoch >/dev/null; then
+  printf 'FAIL: cooldown bootstrap function missing\n'
+  fail=1
+else
+  cooldown_dir="$(mktemp -d)"
+  trap 'rm -rf "$cooldown_dir"' EXIT
+  marker="$cooldown_dir/heavy.epoch"
+  first="$(bootstrap_heavy_cleanup_epoch "$marker" 1000 1300)"
+  second="$(bootstrap_heavy_cleanup_epoch "$marker" 1599 1600)"
+  third="$(bootstrap_heavy_cleanup_epoch "$marker" 22599 22600)"
+  if [[ "$first" == 1000 && "$second" == 1000 && "$third" == 1000 && "$(cat "$marker")" == 1000 ]]; then
+    printf 'PASS: legacy baseline persisted once across repeated guard ticks\n'
+  else
+    printf 'FAIL: moving baseline would postpone heavy cleanup forever\n'
+    fail=1
+  fi
+  if (( 22600 - third >= 21600 )); then
+    printf 'PASS: six-hour heavy cleanup eventually becomes eligible\n'
+  else
+    printf 'FAIL: six-hour cleanup never eligible\n'
+    fail=1
+  fi
+  empty="$cooldown_dir/fresh.epoch"
+  no_previous="$(bootstrap_heavy_cleanup_epoch "$empty" "" 3000)"
+  if [[ "$no_previous" == 3000 && "$(cat "$empty")" == 3000 ]]; then
+    printf 'PASS: no previous marker conservatively starts the six-hour cooldown\n'
+  else
+    printf 'FAIL: fresh install could start an unbounded immediate cleanup\n'
+    fail=1
+  fi
+  invalid="$cooldown_dir/corrupt.epoch"
+  printf '%s\n' 'not-a-timestamp' > "$invalid"
+  if [[ "$(bootstrap_heavy_cleanup_epoch "$invalid" 3000 3500)" == 3500 ]]; then
+    printf 'PASS: corrupt marker fails closed\n'
+  else
+    printf 'FAIL: corrupt marker allowed heavy cleanup\n'
+    fail=1
+  fi
+  future="$cooldown_dir/future.epoch"
+  printf '%s\n' 999999 > "$future"
+  if [[ "$(bootstrap_heavy_cleanup_epoch "$future" 3000 3500)" == 3500 ]]; then
+    printf 'PASS: future marker fails closed\n'
+  else
+    printf 'FAIL: future marker allowed heavy cleanup\n'
+    fail=1
+  fi
+fi
+
 exit "$fail"
