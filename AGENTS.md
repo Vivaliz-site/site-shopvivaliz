@@ -1,3 +1,8 @@
+<!-- AUDIT_V5_TERMINAL_PROOF_V1 -->
+## Gate terminal operacional: Auditoria Extrema V5 nao conclui sem E2E real
+O controlador scripts/agent_task_state.py exige certify-audit com artefatos de UI verdadeiros em disco e reexecuta o certifier absoluto para READY_TO_COMPLETE e CONCLUIDO. Arquivo presente, narrativa, CI, PR ou merge nao bastam. Sem AUDIT_VERDICT=APTO no mesmo SHA/release/ambiente/escopo, manter RUNNING com next_action e continuidade autorizada, ate E2E integral ou BLOCKED_EXTERNAL real e comprovado, nunca falso sucesso. Seguir docs/knowledge/task-continuity.md; respeitar secrets, MFA, leases/fencing, custos e controles de autorizacao.
+<!-- /AUDIT_V5_TERMINAL_PROOF_V1 -->
+
 <!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
 ## Gate da Auditoria Extrema V5: E2E UI real, prova em disco e continuidade
 

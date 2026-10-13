@@ -1,3 +1,8 @@
+<!-- AUDIT_V5_TERMINAL_PROOF_V1 -->
+## Auditoria Extrema: bloqueio terminal ate APTO certificado
+V5 exige scripts/agent_task_state.py certify-audit com manifesto e evidencias reais em disco. READY_TO_COMPLETE e CONCLUIDO revalidam o certifier contra o SHA/release/escopo atual. Sem APTO, preservar RUNNING, next_action e executar correcoes e reauditoria visual. API, texto de agente, PR ou merge nao certificam. Seguir docs/knowledge/task-continuity.md; BLOCKED_EXTERNAL documentado nao equivale a APTO.
+<!-- /AUDIT_V5_TERMINAL_PROOF_V1 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
 

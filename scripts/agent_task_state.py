@@ -30,6 +30,7 @@ if str(CONTINUITY_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(CONTINUITY_LIB_DIR))
 import conversation_lease
 import runtime_lock
+import audit_task_apto_guard
 
 
 def resolve_runtime_dir(root: Path, configured: str = "") -> Path:
@@ -444,6 +445,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "agent_id": str(agent_id).strip(),
         "repository": repository_name,
         "goal": goal_text,
+        "audit_extreme_required": audit_task_apto_guard.is_extreme_audit({"goal": goal_text}),
         "status": "RUNNING",
         "next_action": "determine and execute the next safe action required by the original goal",
         "evidence": [],
@@ -498,6 +500,7 @@ def start_successor_task(
         "agent_id": str(agent_id).strip(),
         "repository": repository_name,
         "goal": goal_text,
+        "audit_extreme_required": audit_task_apto_guard.is_extreme_audit({"goal": goal_text}),
         "status": "RUNNING",
         "next_action": "determine and execute the next safe action required by the successor goal",
         "evidence": [],
@@ -564,6 +567,43 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
     return payload
 
 
+def _require_audit_apto(payload: dict[str, Any]) -> None:
+    """A report, PR or file-exists probe is never terminal proof for V5."""
+    if not audit_task_apto_guard.is_extreme_audit(payload):
+        return
+    try:
+        audit_task_apto_guard.verify(payload, payload.get("audit_certification"), ROOT)
+    except audit_task_apto_guard.AuditProofError as exc:
+        raise TaskStateError(str(exc)) from exc
+
+
+@_serialized_transition
+def certify_audit_e2e(
+    task_id: str, *, manifest_path: str, evidence_root: str,
+    project_requirements: str,
+) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload) or not audit_task_apto_guard.is_extreme_audit(payload):
+        raise TaskStateError("certify-audit requires a RUNNING V5 audit task")
+    _require_current_resume(payload)
+    try:
+        proof = audit_task_apto_guard.certify(
+            payload, manifest_path, evidence_root, project_requirements, ROOT,
+        )
+    except audit_task_apto_guard.AuditProofError as exc:
+        raise TaskStateError(str(exc)) from exc
+    payload["audit_certification"] = proof
+    _bump_checkpoint_version(payload)
+    _history(
+        payload, "audit_e2e_certified",
+        release=proof["identity"]["release"],
+        scope=proof["identity"]["certified_scope"],
+        manifest_sha256=proof["manifest_sha256"],
+    )
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 @_serialized_transition
 def mark_ready(
     task_id: str,
@@ -583,6 +623,7 @@ def mark_ready(
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     _require_background_terminal_checks(payload)
+    _require_audit_apto(payload)
     _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
@@ -605,6 +646,7 @@ def _complete_task_transition(task_id: str) -> dict[str, Any]:
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     try:
+        _require_audit_apto(payload)
         _run_completion_checks(payload)
     except TaskStateError:
         payload["status"] = "RUNNING"
@@ -1033,6 +1075,12 @@ def _parser() -> argparse.ArgumentParser:
     complete = sub.add_parser("complete")
     complete.add_argument("--task", required=True)
 
+    audit = sub.add_parser("certify-audit")
+    audit.add_argument("--task", required=True)
+    audit.add_argument("--manifest", required=True)
+    audit.add_argument("--evidence-root", required=True)
+    audit.add_argument("--project-requirements", required=True)
+
     block = sub.add_parser("block")
     block.add_argument("--task", required=True)
     block.add_argument("--description", required=True)
@@ -1085,6 +1133,12 @@ def main() -> int:
             payload = mark_ready(args.task, evidence=args.evidence, verification=args.verification)
         elif args.command == "complete":
             payload = complete_task(args.task)
+        elif args.command == "certify-audit":
+            payload = certify_audit_e2e(
+                args.task, manifest_path=args.manifest,
+                evidence_root=args.evidence_root,
+                project_requirements=args.project_requirements,
+            )
         elif args.command == "block":
             payload = block_task(
                 args.task,
