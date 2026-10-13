@@ -50,4 +50,14 @@ done
 # Both deployment gates must remain in place.
 grep -Fq 'hbbs_duplicate_or_orphan_before_install 47' "$TARGET"
 grep -Fq 'hbbs_duplicate_or_orphan_after_install 47' "$TARGET"
+
+# Regression: INPUT jumps into this chain before its generic loopback ACCEPT.
+# Never block 127.0.0.1, and retain the final reject for untrusted networks.
+loop_line="$(grep -nF 'iptables -A "$CHAIN" -i lo -j ACCEPT' "$TARGET" | head -1 | cut -d: -f1)"
+vcn_line="$(grep -nF 'iptables -A "$CHAIN" -s 10.0.0.0/8 -j ACCEPT' "$TARGET" | head -1 | cut -d: -f1)"
+tail_line="$(grep -nF 'iptables -A "$CHAIN" -s 100.64.0.0/10 -j ACCEPT' "$TARGET" | head -1 | cut -d: -f1)"
+deny_line="$(grep -nF 'iptables -A "$CHAIN" -j REJECT' "$TARGET" | head -1 | cut -d: -f1)"
+[ "$loop_line" -lt "$vcn_line" ]
+[ "$vcn_line" -lt "$tail_line" ]
+[ "$tail_line" -lt "$deny_line" ]
 echo 'RUSTDESK_HBBS_SINGLETON_CONTRACT=PASS'
