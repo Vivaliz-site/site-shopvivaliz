@@ -13,9 +13,10 @@ source_timer="$repo_root/ops/systemd/shopvivaliz-continuity-state-backup.timer"
 state_dir=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
 backup_dir=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-backups
 
-for item in "$source_script" "$source_service" "$source_timer" "$state_dir/_agent-task-state.lock"; do
+for item in "$source_script" "$source_service" "$source_timer"; do
   test -s "$item" || { echo "ERROR=missing_backup_prerequisite" >&2; exit 74; }
 done
+test -f "$state_dir/_agent-task-state.lock" && test ! -L "$state_dir/_agent-task-state.lock" || { echo "ERROR=checkpoint_lock_missing" >&2; exit 74; }
 test -d "$backup_dir" && test ! -L "$backup_dir" || { echo "ERROR=private_backup_directory_missing" >&2; exit 74; }
 test "$(stat -c '%a' "$backup_dir")" = 700 || { echo "ERROR=backup_directory_not_private" >&2; exit 74; }
 python3 -c 'import ast,sys;ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$source_script"
