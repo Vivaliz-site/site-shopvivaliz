@@ -108,9 +108,9 @@ if [ "$heavy_cleanup_needed" -eq 1 ]; then
     heavy_cleanup_ran=1
     heavy_cleanup_status=started
     if [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
-      timeout -k 5s "${HOUSEKEEPER_TIMEOUT_SECONDS}s" env \\
-        ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 \\
-        ABANDONED_CLONE_TTL_HOURS=24 PRESSURE_RECLAIM_PUSHED=1 \\
+      timeout -k 5s "${HOUSEKEEPER_TIMEOUT_SECONDS}s" env \
+        ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 \
+        ABANDONED_CLONE_TTL_HOURS=24 PRESSURE_RECLAIM_PUSHED=1 \
         /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
       before="$(pct)"
       available_now="$(available_bytes)"
