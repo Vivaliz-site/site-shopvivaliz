@@ -47,11 +47,21 @@ rollback() {
     echo 'ROLLBACK_MCP_ONLY=START' >&2
     install -m 0755 "$dir/base.before.py" "$dest_base"
     install -m 0755 "$dir/browser.before.py" "$dest_browser"
+    local rollback_failed=0
     for unit in shopvivaliz-browser-atendimento-mcp.service \
        shopvivaliz-browser-dev-mcp.service shopvivaliz-remote-control-browser-mcp.service \
        shopvivaliz-remote-control-mcp.service; do
-      systemctl restart "$unit" || true
+      if systemctl restart "$unit"; then
+        echo "ROLLBACK_MCP_SERVICE_RESTORED:$unit" >&2
+      else
+        rollback_failed=1
+        echo "ROLLBACK_MCP_SERVICE_RESTART_FAILED:$unit" >&2
+      fi
     done
+    if [[ $rollback_failed -ne 0 ]]; then
+      echo "ROLLBACK_INCOMPLETE_BACKUPS_PRESERVED:$dir" >&2
+      return 80
+    fi
     echo 'ROLLBACK_MCP_ONLY=COMPLETE' >&2
   fi
   rm -rf -- "$dir"
