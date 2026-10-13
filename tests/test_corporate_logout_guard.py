@@ -115,6 +115,21 @@ class CorporateLogoutSafetyTests(unittest.TestCase):
         self.assertIn("base._assert_no_corporate_logout_url(url)", gui)
         self.assertIn("base._assert_no_corporate_logout_url(text)", gui)
 
+    def test_installer_restarts_mcp_only_and_preserves_chrome(self):
+        installer = (ROOT / "scripts/chatgpt-continuity/install-corporate-logout-guard.sh").read_text(encoding="utf8")
+        self.assertIn("shopvivaliz-remote-control-mcp.service", installer)
+        self.assertIn("shopvivaliz-browser-dev-mcp.service", installer)
+        self.assertIn("shopvivaliz-browser-atendimento-mcp.service", installer)
+        self.assertIn("pid_dev=", installer)
+        self.assertIn("pid_att=", installer)
+        self.assertIn("pid_aux=", installer)
+        self.assertIn("ROLLBACK_MCP_ONLY", installer)
+        self.assertIn("MCP_LOGOUT_GUARD_INSTALLED", installer)
+        for phrase in ("systemctl restart shopvivaliz-dev-browser.service",
+                       "systemctl restart shopvivaliz-atendimento-browser.service",
+                       "systemctl restart shopvivaliz-atendimento-mcp-browser.service"):
+            self.assertNotIn(phrase, installer)
+
     @unittest.skipUnless(shutil.which("node"), "Node is needed for synthetic JS policy test")
     def test_click_guard_rejects_signout_but_not_send(self):
         guard = self.base._CORPORATE_LOGOUT_CLICK_JS
