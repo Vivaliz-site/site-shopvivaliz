@@ -17,6 +17,18 @@ EXPECTED={
  "atendimento_9556":("atendimento","shopvivaliz-atendimento-chromium","shopvivaliz-atendimento-browser.service"),
  "dev_aux_9557":(None,"shopvivaliz-atendimento-mcp-chromium","shopvivaliz-atendimento-mcp-browser.service"),
 }
+def aux_health():
+ # The dedicated Dev endpoint can take several seconds under backend load.
+ # Retry one transient I/O or malformed-response failure without accepting
+ # a missing, mismatched or unauthenticated identity as success.
+ for attempt in range(2):
+  try:
+   with urllib.request.urlopen("http://127.0.0.1:5583/health",timeout=12) as response:
+    return json.load(response)
+  except (OSError,TimeoutError,ValueError):
+   if attempt==1:
+    raise
+
 def probe(mod,session):
  try:
   if session:
@@ -24,7 +36,7 @@ def probe(mod,session):
    state=d.get("state","UNKNOWN")
    verified=state=="AUTHENTICATED" and d.get("identity_match") is True and d.get("cdp_accessible") is True
   else:
-   with urllib.request.urlopen("http://127.0.0.1:5583/health",timeout=6) as response:d=json.load(response)
+   d=aux_health()
    verified=all(d.get(k) is True for k in ("ok","cdp_reachable","account_authenticated","account_identity_verified")) and d.get("session")=="dev"
    state="AUTHENTICATED" if verified else "UNKNOWN"
   return {"state":state if state in ("AUTHENTICATED","NOT_AUTHENTICATED","IDENTITY_MISMATCH","UNKNOWN") else "UNKNOWN","verified":verified}
