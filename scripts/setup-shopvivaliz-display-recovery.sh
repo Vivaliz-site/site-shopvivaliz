@@ -42,7 +42,7 @@ After=display-manager.service
 Wants=display-manager.service
 
 [Service]
-ExecStartPre=+/usr/bin/runuser -u fredconsole -- /usr/bin/env DISPLAY=:0 XAUTHORITY=/home/fredconsole/.Xauthority /usr/bin/xhost +SI:localuser:fredrdp
+ExecStartPre=+/usr/sbin/runuser -u fredconsole -- /usr/bin/env DISPLAY=:0 XAUTHORITY=/home/fredconsole/.Xauthority /usr/bin/xhost +SI:localuser:fredrdp
 DROPIN
 
 systemctl daemon-reload
