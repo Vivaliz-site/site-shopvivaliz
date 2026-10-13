@@ -66,6 +66,23 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertNotIn(".resume-private.txt", names)
         self.assertNotIn("checkpoint.tmp.1", names)
 
+    def test_volatile_controller_lease_is_not_archived(self):
+        # The controller creates/deletes this lease outside the checkpoint
+        # writer's lock; including it caused a real scheduled backup failure.
+        volatile = self.state / "_gemini-24x7-controller-lease.json"
+        volatile.write_text(json.dumps({"owner_kind": "test", "expires_at": 0}))
+        retained = self.state / "_durable-metadata.json"
+        retained.write_text(json.dumps({"source": "checkpoint"}))
+
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.archives()), 1)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            archived = set(tf.getnames())
+        self.assertIn("v5-test.json", archived)
+        self.assertIn("_durable-metadata.json", archived)
+        self.assertNotIn("_gemini-24x7-controller-lease.json", archived)
+
     def test_invalid_task_json_blocks_publication(self):
         (self.state / "damaged.json").write_text("{broken")
         result = self.run_backup()
