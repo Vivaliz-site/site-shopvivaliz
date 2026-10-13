@@ -1,3 +1,17 @@
+<!-- AUDIT_V5_TERMINAL_PROOF_V1 -->
+## Auditoria Extrema V5: proibido finalizar sem certificacao E2E real
+
+Uma tarefa cujo objetivo descreva Auditoria Extrema, Auditoria V5 ou Extreme Audit tem audit_extreme_required=true no checkpoint. Nao basta relatorio, arquivo presente, screenshot isolado, healthcheck, revisao de API, teste unitario, PR, merge, CI verde ou relato de subagente. A transicao RUNNING -> READY_TO_COMPLETE -> CONCLUIDO exige AUDIT_VERDICT=APTO pelo certifier canonico com evidencias reais e independentes por jornada/caso, reauditoria apos correcao e E2E pos-deploy no mesmo SHA/release/ambiente/escopo.
+
+O executor deve exercitar integralmente a UI pelo navegador/desktop oficial autorizado, criar manifest.json, provas e o arquivo AUDIT_PROJECT_REQUIREMENTS.json correspondente. Depois executar:
+
+    python3 scripts/agent_task_state.py certify-audit --task ID --manifest /caminho/manifest.json --evidence-root /caminho/evidencias --project-requirements /caminho/AUDIT_PROJECT_REQUIREMENTS.json
+
+O comando verifica os bytes e reexecuta o certifier real. Os comandos ready e complete revalidam tudo. Prova ausente, alterada, desatualizada ou incompleta bloqueia a conclusao; na etapa de complete a tarefa retorna a RUNNING com proxima acao. A conclusao depende tambem da verificacao terminal --task ID. BLOCKED_EXTERNAL comprovado nao equivale a APTO e requer checkpoint de retomada.
+
+Enquanto NAO_APTO e houver acao segura: investigar, corrigir, prevenir, executar RED/GREEN e regressao, reauditar pela UI, provar persistencia e recertificar. Se um turno ou ferramenta interromper a execucao, registrar checkpoint duravel e retomar pelo watchdog controlado e canal autorizado, preservando leases/fencing. Nunca inventar conversation_id nem marcar continuidade habilitada sem vinculo real. Proibidos loops pagos autonomos sem limite, segundo escritor, bypass de MFA e operacoes irreversiveis nao autorizadas.
+<!-- /AUDIT_V5_TERMINAL_PROOF_V1 -->
+
 
 <!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
 ## Registro atomico de tarefa e conversa
