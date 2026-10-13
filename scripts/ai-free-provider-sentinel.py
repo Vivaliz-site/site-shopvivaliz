@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import sqlite3
@@ -32,6 +33,29 @@ FLAGS = (
 INTERACTIVE_FLAG = "SHOPVIVALIZ_INTERACTIVE_PAID_FALLBACK"
 MAX_FILE_TAIL = 512 * 1024
 REMINDER_SECONDS = 24 * 3600
+
+SCHEDULE_SCAN_MAX_BYTES = 128 * 1024
+SCHEDULED_PAID_COMMAND = re.compile(
+    r"\bclaude(?:\.exe)?\s+(?:-p\b|--print\b|--model\b|--resume\b|--continue\b)"
+    r"|\bcodex(?:\.exe)?\s+(?:exec\b|resume\b|cloud\b)"
+    r"|['\"](?:claude|codex)['\"]\s*,\s*['\"](?:-p|--print|exec)['\"]"
+    r"|\bapi\.(?:anthropic|openai)\.com\b",
+    re.IGNORECASE,
+)
+SCHEDULED_SCRIPT_PATH = re.compile(
+    r"(?<![A-Za-z0-9_])((?:/|\./)[A-Za-z0-9_./-]+\.(?:sh|py|js|mjs|cjs|php))"
+    r"(?=$|[^A-Za-z0-9_.-])",
+    re.IGNORECASE,
+)
+DEFAULT_SCHEDULE_SCRIPT_ROOTS = (
+    Path("/home/ubuntu"),
+    Path("/opt"),
+    Path("/usr/local"),
+    Path("/etc"),
+    Path("/root"),
+)
+
+
 
 
 def systemctl(*args: str) -> str:
@@ -187,6 +211,157 @@ def proc_potential_paid(remote_daemon_pid: int, proc_root: Path = Path("/proc"))
         except (OSError, ValueError):
             continue
     return sorted(set(findings))
+
+
+def _scheduled_text(path: Path) -> str:
+    """Bounded, read-only inspection; never return file content to telemetry."""
+    try:
+        if not path.is_file() or path.stat().st_size > SCHEDULE_SCAN_MAX_BYTES:
+            return ""
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _scheduled_command_uses_paid_provider(
+    source: str, *, base: Path, allowed_roots: tuple[Path, ...],
+    visited: set[Path] | None = None, depth: int = 3,
+) -> bool:
+    """PAID_SCHEDULE_SCAN_V1: inspect launch paths, never execute scripts.
+
+    A scheduled direct Claude/Codex CLI call is a risk even if no long-lived
+    paid process is visible at the monitor's five-minute sampling interval.
+    Only static sanitized issue codes are returned to telemetry.
+    """
+    seen = set() if visited is None else visited
+    for line in source.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if SCHEDULED_PAID_COMMAND.search(line):
+            return True
+        if depth <= 0:
+            continue
+        for match in SCHEDULED_SCRIPT_PATH.finditer(line):
+            value = Path(match.group(1))
+            try:
+                candidate = (value if value.is_absolute() else base / value).resolve()
+                if candidate in seen or not any(
+                    candidate.is_relative_to(root.resolve()) for root in allowed_roots
+                ):
+                    continue
+                seen.add(candidate)
+            except (OSError, RuntimeError):
+                continue
+            nested = _scheduled_text(candidate)
+            if nested and _scheduled_command_uses_paid_provider(
+                nested, base=candidate.parent, allowed_roots=allowed_roots,
+                visited=seen, depth=depth-1,
+            ):
+                return True
+    return False
+
+
+def active_system_timers() -> set[str] | None:
+    try:
+        response = subprocess.run(
+            ["/usr/bin/systemctl", "list-timers", "--no-pager", "--no-legend", "--plain"],
+            capture_output=True, text=True, timeout=8, check=False,
+        )
+        if response.returncode:
+            return None
+        return set(re.findall(r"\b[A-Za-z0-9_.@-]+\.timer\b", response.stdout))
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def scheduled_paid_launchers(
+    *,
+    systemd_dir: Path = Path("/etc/systemd/system"),
+    user_timer_dir: Path = Path("/home/ubuntu/.config/systemd/user"),
+    cron_dir: Path = Path("/etc/cron.d"),
+    cron_main: Path = Path("/etc/crontab"),
+    user_crontabs: tuple[Path, ...] = (
+        Path("/var/spool/cron/crontabs/root"),
+        Path("/var/spool/cron/crontabs/ubuntu"),
+    ),
+    periodic_dirs: tuple[Path, ...] = (
+        Path("/etc/cron.hourly"), Path("/etc/cron.daily"),
+        Path("/etc/cron.weekly"), Path("/etc/cron.monthly"),
+    ),
+    active_timers: set[str] | None = None,
+    allowed_script_roots: tuple[Path, ...] = DEFAULT_SCHEDULE_SCRIPT_ROOTS,
+) -> list[str]:
+    """Read-only recurring launch audit; no prompts, secrets or model calls.
+
+    System systemd timers are counted only if currently active. User timers
+    with a unit file are potential future activations and are flagged even
+    before startup. Existing unscheduled Claude Remote Control daemons do
+    not trigger a false alert.
+    """
+    issues: list[str] = []
+    if active_timers is None:
+        active_timers = active_system_timers()
+        if active_timers is None:
+            issues.append("SCHEDULE_TIMER_INVENTORY_UNAVAILABLE")
+            active_timers = set()
+    for name in sorted(active_timers):
+        if not re.fullmatch(r"[A-Za-z0-9_.@-]+\.timer", name):
+            continue
+        timer_file = systemd_dir / name
+        timer = _scheduled_text(timer_file)
+        if not timer:
+            continue  # vendor timers outside the local custom unit directory
+        override = re.search(r"(?m)^\s*Unit\s*=\s*([A-Za-z0-9_.@-]+\.service)\s*$", timer)
+        service_name = override.group(1) if override else name[:-6] + ".service"
+        service = systemd_dir / service_name
+        source = _scheduled_text(service)
+        dropins = service.with_name(service.name + ".d")
+        if dropins.is_dir():
+            source += "\n" + "\n".join(
+                _scheduled_text(p) for p in sorted(dropins.glob("*.conf"))
+            )
+        # The canonical read-only monitor itself contains paid CLI patterns
+        # as REGEX DATA. Exempt only its exact fixed process invocation.
+        # Any additional ExecStartPre/Condition/Start override is inspected.
+        exec_lines = [
+            line.strip() for line in source.splitlines()
+            if line.strip().startswith("Exec")
+        ]
+        if (
+            service_name == "shopvivaliz-ai-free-guard.service"
+            and exec_lines == [
+                "ExecStart=/usr/bin/python3 "
+                "/usr/local/lib/shopvivaliz/ai-free-provider-sentinel.py"
+            ]
+        ):
+            continue
+        working = re.search(r"(?m)^\s*WorkingDirectory\s*=\s*(/[^\s]+)\s*$", source)
+        base = Path(working.group(1)) if working else Path("/")
+        if _scheduled_command_uses_paid_provider(
+            source, base=base, allowed_roots=allowed_script_roots
+        ):
+            issues.append("PAID_RECURRING_SYSTEMD_LAUNCHER")
+    if user_timer_dir.is_dir():
+        for timer_file in sorted(user_timer_dir.glob("*.timer")):
+            source = _scheduled_text(user_timer_dir / (timer_file.stem + ".service"))
+            if _scheduled_command_uses_paid_provider(
+                source, base=Path("/home/ubuntu"), allowed_roots=allowed_script_roots
+            ):
+                issues.append("PAID_RECURRING_USER_TIMER_LAUNCHER")
+    cron_files = [cron_main, *user_crontabs]
+    if cron_dir.is_dir():
+        cron_files.extend(p for p in sorted(cron_dir.iterdir()) if p.is_file())
+    for folder in periodic_dirs:
+        if folder.is_dir():
+            cron_files.extend(p for p in sorted(folder.iterdir()) if p.is_file())
+    for source_file in cron_files:
+        source = _scheduled_text(source_file)
+        if source and _scheduled_command_uses_paid_provider(
+            source, base=Path("/"), allowed_roots=allowed_script_roots
+        ):
+            issues.append("PAID_RECURRING_CRON_LAUNCHER")
+    return sorted(set(issues))
 
 
 def codex_counter(db_file: Path) -> tuple[int, int]:
@@ -406,6 +581,7 @@ def run(*, state_dir: Path, do_notify: bool = True, now: int | None = None) -> t
     issues = policy_anomalies(host)
     daemon = service_pid("shopvivaliz-claude-remote-control.service") if host == "always-free-arm-1787907847-26" else 0
     issues += proc_potential_paid(daemon)
+    issues += scheduled_paid_launchers()
     counters, counter_errors = codex_snapshot()
     issues += counter_errors
     issues += compare_counters(previous, counters)
