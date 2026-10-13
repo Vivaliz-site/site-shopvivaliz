@@ -394,6 +394,56 @@ def codex_snapshot() -> tuple[dict[str, list[int]], list[str]]:
     return results, sorted(set(anomalies))
 
 
+# AI_SENTINEL_BOUNDED_SCAN_V1: reuse verified Codex counters only when all
+# SQLite DATA files are unchanged. SQLite WAL writes invalidate the cache.
+# Never cache permission errors or unreadable counters as healthy snapshots.
+def codex_data_fingerprint(db_file: Path) -> str:
+    stats = []
+    for candidate in (db_file, db_file.with_name(db_file.name + "-wal")):
+        try:
+            info = candidate.stat()
+            stats.append([info.st_ino, info.st_mtime_ns, info.st_ctime_ns, info.st_size])
+        except FileNotFoundError:
+            stats.append(None)
+    return hashlib.sha256(json.dumps(stats, separators=(",", ":")).encode()).hexdigest()
+
+
+def codex_snapshot_cached(previous: dict, *,
+                          root: Path = Path("/home/ubuntu/.codex-business")
+                          ) -> tuple[dict[str, list[int]], list[str], dict[str, str]]:
+    results: dict[str, list[int]] = {}
+    fingerprints: dict[str, str] = {}
+    issues: list[str] = []
+    old_counters = previous.get("codex_counters", {})
+    old_fingerprints = previous.get("codex_fingerprints", {})
+    if not isinstance(old_counters, dict):
+        old_counters = {}
+    if not isinstance(old_fingerprints, dict):
+        old_fingerprints = {}
+    try:
+        paths = sorted(root.glob("*/state_5.sqlite"))
+    except OSError:
+        return results, ["CODEX_STORE_UNAVAILABLE"], fingerprints
+    for path in paths:
+        identifier = hashlib.sha256(str(path).encode()).hexdigest()[:10]
+        try:
+            fingerprint = codex_data_fingerprint(path)
+            prior = old_counters.get(identifier)
+            if (
+                old_fingerprints.get(identifier) == fingerprint
+                and isinstance(prior, list)
+                and len(prior) == 2
+                and all(isinstance(x, int) and x >= 0 for x in prior)
+            ):
+                results[identifier] = prior[:]
+            else:
+                results[identifier] = list(codex_counter(path))
+            fingerprints[identifier] = fingerprint
+        except (OSError, sqlite3.DatabaseError, ValueError):
+            issues.append("CODEX_COUNTER_UNREADABLE")
+    return results, sorted(set(issues)), fingerprints
+
+
 def assistant_usage_after(path: Path, epoch: float, now: float) -> int:
     """Count only newly timestamped assistant/model usage events.
 
@@ -438,17 +488,29 @@ def assistant_usage_after(path: Path, epoch: float, now: float) -> int:
     return count
 
 
-def recent_claude_usage(since: float, now: float) -> int:
+def recent_claude_usage_bounded(
+    since: float, now: float, *,
+    root: Path = Path("/home/ubuntu/.claude/projects"),
+    budget_seconds: float = 28.0,
+) -> tuple[int, bool]:
+    """Bound historical JSONL traversal without silently claiming HEALTHY.
+
+    If the scan cannot finish, run() emits an explicit anomaly and retains
+    the previous Claude watermark, so the next successful scan can recover.
+    No generative API calls, contents logged or sessions modified.
+    """
     if since <= 0:
-        return 0  # baseline; never infer fresh usage from old files
-    root = Path("/home/ubuntu/.claude/projects")
+        return 0, True  # initial baseline, not evidence of new inference
     if not root.is_dir():
-        return 0
+        return 0, True
+    deadline = time.monotonic() + max(0.0, budget_seconds)
     count = 0
-    # Scan metadata only until finding recently written JSONL; no prompts
-    # are read except the bounded JSONL tail whose content is never emitted.
     for dirpath, _dirs, files in os.walk(root):
+        if time.monotonic() >= deadline:
+            return count, False
         for filename in files:
+            if time.monotonic() >= deadline:
+                return count, False
             if not filename.endswith(".jsonl"):
                 continue
             path = Path(dirpath) / filename
@@ -458,7 +520,7 @@ def recent_claude_usage(since: float, now: float) -> int:
             except OSError:
                 continue
             count += assistant_usage_after(path, since, now)
-    return count
+    return count, True
 
 
 def compare_counters(prior: dict, current: dict[str, list[int]]) -> list[str]:
@@ -582,11 +644,19 @@ def run(*, state_dir: Path, do_notify: bool = True, now: int | None = None) -> t
     daemon = service_pid("shopvivaliz-claude-remote-control.service") if host == "always-free-arm-1787907847-26" else 0
     issues += proc_potential_paid(daemon)
     issues += scheduled_paid_launchers()
-    counters, counter_errors = codex_snapshot()
+    counters, counter_errors, fingerprints = codex_snapshot_cached(previous)
     issues += counter_errors
     issues += compare_counters(previous, counters)
-    if recent_claude_usage(float(previous.get("last_checked_epoch", 0)), started):
+    claude_watermark = float(previous.get(
+        "claude_scan_since_epoch", previous.get("last_checked_epoch", 0)
+    ))
+    claude_events, claude_complete = recent_claude_usage_bounded(
+        claude_watermark, started
+    )
+    if claude_events:
         issues.append("CLAUDE_ASSISTANT_TOKEN_USAGE_NEW")
+    if not claude_complete:
+        issues.append("CLAUDE_USAGE_SCAN_INCOMPLETE")
     issues = sorted(set(issues))
     notification, fp = evaluate_notification(previous, issues, started)
     notified = False
@@ -598,6 +668,8 @@ def run(*, state_dir: Path, do_notify: bool = True, now: int | None = None) -> t
         "last_status": "ALERT" if issues else "HEALTHY",
         "last_issue_codes": issues,
         "codex_counters": counters,
+        "codex_fingerprints": fingerprints,
+        "claude_scan_since_epoch": started if claude_complete else claude_watermark,
         # Failed notification retries next execution. Do not overwrite
         # the previously acknowledged fingerprint on network failure.
         "notified_fingerprint": (
