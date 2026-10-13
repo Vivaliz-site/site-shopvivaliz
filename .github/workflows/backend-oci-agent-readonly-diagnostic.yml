@@ -92,7 +92,7 @@ jobs:
               raise SystemExit("OCI_BACKEND_STATE=NOT_RUNNING")
 
           # Pure reads, no sudo, log inspection, secret files, cleanup, restart or reboot.
-          command = r'''set +e
+          command = r'''set -Eeuo pipefail
           printf 'BACKEND_HOST=%s\n' "$(hostname)"
           printf 'BACKEND_UPTIME_SECONDS=%s\n' "$(cut -d. -f1 </proc/uptime | awk '{print $1}')"
           printf 'BACKEND_ROOT_USED_PCT=%s\n' "$(df -P / | awk 'NR==2 {print $5}')"
@@ -101,7 +101,7 @@ jobs:
           printf 'BACKEND_MEMORY_AVAILABLE_KB=%s\n' "$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
           for unit in ssh.service shopvivaliz-remote-control-mcp.service shopvivaliz-gemini-24x7-controller.service shopvivaliz-task-resume-worker.service ollama.service; do
             service_name="$(printf '%s' "$unit" | tr '.-' '__')"
-            status="$(systemctl is-active "$unit" 2>/dev/null)"
+            if status="$(systemctl is-active "$unit" 2>/dev/null)"; then :; else status="${status:-unknown}"; fi
             case "$status" in active|inactive|failed|activating|deactivating) ;; *) status=unknown ;; esac
             printf 'BACKEND_UNIT_%s=%s\n' "$service_name" "$status"
           done
@@ -160,7 +160,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
+          set -Eeuo pipefail
           if test -f "${OCI_KEY_FILE:-}"; then shred -u "$OCI_KEY_FILE"; fi
           if test -f "${OCI_CONFIG_FILE:-}"; then shred -u "$OCI_CONFIG_FILE"; fi
           echo OCI_DIAGNOSTIC_CREDENTIALS_CLEANED=1
