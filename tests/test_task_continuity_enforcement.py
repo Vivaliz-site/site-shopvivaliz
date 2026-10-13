@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import importlib.util
 import sys
@@ -159,6 +160,74 @@ class AgentTaskStateTests(unittest.TestCase):
             state.record_progress("owned-proof-checked", next_action="verify next")
             state.mark_ready("owned-proof-checked", evidence=["observed PASS"], verification="fresh")
             self.assertEqual(state.complete_task("owned-proof-checked")["status"], "CONCLUIDO")
+
+    def test_extreme_audit_requires_actual_pinned_apto_certifier(self) -> None:
+        state.start_task("audit-v5-no-proof", "Auditoria extrema V5 pela UI real", "worker")
+        with self.assertRaisesRegex(state.TaskStateError, "requires exactly one pinned real-UI APTO certifier"):
+            state.mark_ready("audit-v5-no-proof", evidence=["claimed green"], verification="claimed E2E")
+        self.assertEqual(state.load_task("audit-v5-no-proof")["status"], "RUNNING")
+
+    def test_extreme_audit_file_probes_cannot_substitute_for_certification(self) -> None:
+        file = Path(self.temp.name) / "existence-only"
+        file.touch()
+        state.start_task("audit-v5-file", "Extreme Audit V5 e2e", "worker",
+                         completion_checks=[["/usr/bin/test", "-f", str(file)]])
+        with self.assertRaisesRegex(state.TaskStateError, "requires exactly one pinned"):
+            state.mark_ready("audit-v5-file", evidence=["test file exists"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-file")["status"], "RUNNING")
+
+    def _audit_proof_fixture(self, name: str, repository: str = "Vivaliz-site/site-shopvivaliz") -> tuple[Path, Path, Path]:
+        evidence = Path(self.temp.name) / (name + "-evidence")
+        evidence.mkdir()
+        manifest = evidence / "manifest.json"
+        manifest.write_text(json.dumps({"identity": {"repository": repository}}), encoding="utf-8")
+        requirements = evidence / "requirements.json"
+        requirements.write_text("{}", encoding="utf-8")
+        return manifest, evidence, requirements
+
+    def test_extreme_audit_pinning_requires_same_repository_and_apto_stdout(self) -> None:
+        state.start_task("audit-v5-untrusted", "Auditoria Extrema V5", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("untrusted", repository="other-owner/other-repo")
+        state.pin_audit_certifier("audit-v5-untrusted", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with self.assertRaisesRegex(state.TaskStateError, "repository mismatches"):
+            state.mark_ready("audit-v5-untrusted", evidence=["claim"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-untrusted")["status"], "RUNNING")
+        manifest.write_text(json.dumps({"identity": {"repository": "Vivaliz-site/site-shopvivaliz"}}), encoding="utf-8")
+        with mock.patch.object(state.subprocess, "run", return_value=mock.Mock(returncode=0, stdout="NOT_CERTIFIED")):
+            with self.assertRaisesRegex(state.TaskStateError, "did not produce AUDIT_VERDICT=APTO"):
+                state.mark_ready("audit-v5-untrusted", evidence=["claim"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-untrusted")["status"], "RUNNING")
+
+    def test_extreme_audit_real_certifier_is_rerun_at_ready_and_complete(self) -> None:
+        state.start_task("audit-v5-verified", "Auditoria extrema V5 integral", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("verified")
+        state.pin_audit_certifier("audit-v5-verified", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout="AUDIT_VERDICT=APTO\n")) as run:
+            state.mark_ready("audit-v5-verified", evidence=["synthetic fixture, not live proof"],
+                             verification="unit-test of the certifier boundary")
+            state.complete_task("audit-v5-verified")
+        self.assertGreaterEqual(run.call_count, 2)
+        self.assertEqual(state.load_task("audit-v5-verified")["status"], "CONCLUIDO")
+
+    def test_extreme_audit_ready_reverts_to_running_on_certifier_failure_at_complete(self) -> None:
+        state.start_task("audit-v5-stale", "Auditoria extrema v5 real", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("stale")
+        state.pin_audit_certifier("audit-v5-stale", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout="AUDIT_VERDICT=APTO\n")):
+            state.mark_ready("audit-v5-stale", evidence=["fixture"], verification="ready")
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=1, stdout="AUDIT_VERDICT=NAO_APTO\n")):
+            with self.assertRaisesRegex(state.TaskStateError, "failed with exit"):
+                state.complete_task("audit-v5-stale")
+        checkpoint = state.load_task("audit-v5-stale")
+        self.assertEqual(checkpoint["status"], "RUNNING")
+        self.assertTrue(checkpoint["next_action"])
+
 
     def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
         with mock.patch.object(
