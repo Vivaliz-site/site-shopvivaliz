@@ -111,14 +111,14 @@ else
   marker="$cooldown_dir/heavy.epoch"
   first="$(bootstrap_heavy_cleanup_epoch "$marker" 1000 1300)"
   second="$(bootstrap_heavy_cleanup_epoch "$marker" 1599 1600)"
-  third="$(bootstrap_heavy_cleanup_epoch "$marker" 21999 22000)"
+  third="$(bootstrap_heavy_cleanup_epoch "$marker" 22599 22600)"
   if [[ "$first" == 1000 && "$second" == 1000 && "$third" == 1000 && "$(cat "$marker")" == 1000 ]]; then
     printf 'PASS: legacy baseline persisted once across repeated guard ticks\n'
   else
     printf 'FAIL: moving baseline would postpone heavy cleanup forever\n'
     fail=1
   fi
-  if (( 22000 - third >= 21600 )); then
+  if (( 22600 - third >= 21600 )); then
     printf 'PASS: six-hour heavy cleanup eventually becomes eligible\n'
   else
     printf 'FAIL: six-hour cleanup never eligible\n'
