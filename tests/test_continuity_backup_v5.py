@@ -97,5 +97,14 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertIn("OnCalendar=", timer)
 
 
+    def test_installer_runs_one_real_backup_and_schedules_timer(self):
+        body = (ROOT / "scripts/continuity/install_backup_v5.sh").read_text()
+        self.assertIn("systemctl start shopvivaliz-continuity-state-backup.service", body)
+        self.assertIn("systemctl enable --now shopvivaliz-continuity-state-backup.timer", body)
+        self.assertIn("sha256sum -c", body)
+        for unsafe in ("systemctl restart", "systemctl stop", "docker prune", "rm -rf"):
+            self.assertNotIn(unsafe, body)
+
+
 if __name__ == "__main__":
     unittest.main()
