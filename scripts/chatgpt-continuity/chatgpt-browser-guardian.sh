@@ -324,11 +324,14 @@ validate_browser_session() {
   esac
 }
 
-cdp_ready() {
+cdp_http_ready() {
   curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if isinstance(d.get("webSocketDebuggerUrl"), str) and d["webSocketDebuggerUrl"].startswith(("ws://","wss://")) else 1)' \
-    >/dev/null 2>&1 \
-    && runtime_eval_ready
+    >/dev/null 2>&1
+}
+
+cdp_ready() {
+  cdp_http_ready && runtime_eval_ready
 }
 
 wait_for_cdp() {
@@ -376,7 +379,13 @@ status=0
 if [[ "$dev_aux_adoption" == 9557 ]]; then
   echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY'
   if ! cdp_ready; then
-    report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
+    # CDP HTTP transport can be healthy while a renderer or identity probe times
+    # out. Fail closed without incorrectly declaring browser transport absent.
+    if cdp_http_ready; then
+      report_browser_state 'DEV_AUX_CDP_RESPONSIVE_UNVERIFIED' 'UNKNOWN'
+    else
+      report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
+    fi
     status=1
   else
     session_state="$(browser_session_state | tail -n 1)"
