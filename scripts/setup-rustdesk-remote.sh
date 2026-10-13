@@ -151,6 +151,8 @@ set -Eeuo pipefail
 CHAIN=SHOPVIVALIZ_RUSTDESK
 if ! iptables -N "$CHAIN" 2>/dev/null; then iptables -F "$CHAIN"; fi
 iptables -F "$CHAIN"
+# Preserve local checks and clients; the INPUT loopback ACCEPT is below this chain.
+iptables -A "$CHAIN" -i lo -j ACCEPT
 iptables -A "$CHAIN" -s 10.0.0.0/8 -j ACCEPT
 iptables -A "$CHAIN" -s 100.64.0.0/10 -j ACCEPT
 iptables -A "$CHAIN" -j REJECT
