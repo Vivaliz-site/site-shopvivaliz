@@ -1,3 +1,9 @@
+<!-- EXTREME_AUDIT_DURABLE_TERMINAL_GUARD_V1 -->
+## Gate terminal obrigatorio para Auditoria Extrema V5
+
+Toda auditoria extrema/V5/completa inicia checkpoint duravel e permanece RUNNING enquanto nao existir evidencia E2E real certificada. Antes de `ready`/`complete`, e obrigatorio `agent_task_state.py audit-certify --task ... --manifest ... --evidence-root ... --project-requirements ...` com prova da UI grafica, reauditoria independente e pos-deploy no mesmo release; certifier NAO_APTO nunca encerra. O controlador rejeita finalizacao sem recibo vinculado a tarefa e evidencias nao alteradas. Consultar `docs/knowledge/task-continuity.md` e `docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md`; preservar autorizacoes, ownership, MFA, custos e estabilidade.
+<!-- /EXTREME_AUDIT_DURABLE_TERMINAL_GUARD_V1 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
 

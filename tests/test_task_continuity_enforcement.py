@@ -728,5 +728,102 @@ class TaskContinuityPolicyTests(unittest.TestCase):
 
 
 
+
+class ExtremeAuditTerminalGateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.original_runtime = state.RUNTIME_DIR
+        state.RUNTIME_DIR = Path(self.temp.name)
+
+    def tearDown(self):
+        state.RUNTIME_DIR = self.original_runtime
+        self.temp.cleanup()
+
+    def _task(self):
+        return state.start_task(
+            "extreme-fixture", "Auditoria extrema V5 E2E integral pela UI",
+            agent_id="unit-fixture", repository="Vivaliz-site/site-shopvivaliz",
+        )
+
+    def _attach_verified_fixture(self):
+        # Exercise the trusted controller's storage/consumption contract here;
+        # other tests cover that the official certifier rejects fake bundles.
+        import hashlib
+        bundle = state.RUNTIME_DIR / "evidence"
+        bundle.mkdir(exist_ok=True)
+        artifact = bundle / "browser-trace.zip"
+        artifact.write_bytes(b"already independently verified by certifier in production")
+        manifest = state.RUNTIME_DIR / "manifest.json"
+        manifest.write_text('{"schema":"AUDIT_CERTIFICATION_MANIFEST_V1"}', encoding="utf-8")
+        requirements = state.RUNTIME_DIR / "requirements.json"
+        requirements.write_text('{"schema":"AUDIT_PROJECT_REQUIREMENTS_V1"}', encoding="utf-8")
+        initial = state.load_task("extreme-fixture")
+        proof = {
+            "verdict": "APTO", "task_id": initial["task_id"],
+            "repository": initial["repository"], "issued_at": state.utc_now(),
+            "manifest_path": str(manifest),
+            "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+            "requirements_path": str(requirements),
+            "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
+            "evidence_root": str(bundle),
+            "release": "test-release",
+            "artifacts": [{
+                "path": artifact.name, "size": artifact.stat().st_size,
+                "mtime_ns": artifact.stat().st_mtime_ns,
+            }],
+        }
+        return state._store_extreme_audit_proof("extreme-fixture", initial["checkpoint_version"], proof), artifact
+
+    def test_unaudited_ui_task_cannot_be_marked_ready(self):
+        task = self._task()
+        self.assertTrue(task["audit_gate_required"])
+        with self.assertRaisesRegex(state.TaskStateError, "verified real UI/E2E"):
+            state.mark_ready("extreme-fixture", evidence=["green tests"], verification="claims passed")
+        self.assertEqual(state.load_task("extreme-fixture")["status"], "RUNNING")
+
+    def test_verified_controller_receipt_allows_readiness(self):
+        self._task()
+        self._attach_verified_fixture()
+        ready = state.mark_ready(
+            "extreme-fixture", evidence=["verified certifier output"],
+            verification="real published E2E, independent review and same SHA",
+        )
+        self.assertEqual(ready["status"], "READY_TO_COMPLETE")
+        self.assertEqual(state.complete_task("extreme-fixture")["status"], "CONCLUIDO")
+
+    def test_changed_evidence_invalidates_audit_proof(self):
+        self._task()
+        _, artifact = self._attach_verified_fixture()
+        artifact.write_bytes(b"changed after verification")
+        with self.assertRaisesRegex(state.TaskStateError, "no longer matches receipt"):
+            state.mark_ready("extreme-fixture", evidence=["claim"], verification="claim")
+        self.assertEqual(state.load_task("extreme-fixture")["status"], "RUNNING")
+
+    def test_new_progress_revokes_previous_apto_proof(self):
+        self._task()
+        self._attach_verified_fixture()
+        state.record_progress("extreme-fixture", next_action="another UI case remains to validate")
+        self.assertNotIn("audit_apto_proof", state.load_task("extreme-fixture"))
+        with self.assertRaisesRegex(state.TaskStateError, "verified real UI/E2E"):
+            state.mark_ready("extreme-fixture", evidence=["stale"], verification="stale")
+
+    def test_proof_from_another_task_is_rejected(self):
+        self._task()
+        self._attach_verified_fixture()
+        with state._state_lock():
+            payload = state._load("extreme-fixture")
+            payload["audit_apto_proof"]["task_id"] = "other-task"
+            state._atomic_write(state._path("extreme-fixture"), payload)
+        with self.assertRaisesRegex(state.TaskStateError, "not bound"):
+            state.mark_ready("extreme-fixture", evidence=["stale"], verification="stale")
+
+    def test_regular_task_not_affected(self):
+        task = state.start_task("ordinary-fixture", "read a log", agent_id="unit-fixture")
+        self.assertFalse(task.get("audit_gate_required"))
+        ready = state.mark_ready("ordinary-fixture", evidence=["read log"], verification="completed original request")
+        self.assertEqual(ready["status"], "READY_TO_COMPLETE")
+
+
+
 if __name__ == "__main__":
     unittest.main()

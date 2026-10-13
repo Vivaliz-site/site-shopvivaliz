@@ -1,3 +1,19 @@
+<!-- EXTREME_AUDIT_DURABLE_TERMINAL_GUARD_V1 -->
+## Gate terminal da Auditoria Extrema V5: E2E real antes de CONCLUIDO
+
+Tarefa com objetivo "Auditoria Extrema", "Auditoria completa", "Auditoria V5", "Extreme Audit" ou E2E equivalente e marcada automaticamente como `audit_gate_required=true` no controlador. Um agente/subagente nao pode desabilitar essa classificacao nem marcar `READY_TO_COMPLETE` por simples texto.
+
+Fluxo oficial na VM/controlador autorizado:
+
+1. Registrar um checkpoint com `python3 scripts/agent_task_state.py start --task TASK --goal "Auditoria extrema V5 E2E real" --agent chatgpt --conversation-id ID_EXATO --browser-session dev|atendimento` (fornecer os dois parametros juntos; nao inferir conversa).
+2. Executar auditoria E2E real pela UI; registrar `progress --task TASK --next-action "acao concreta"` depois de cada rodada, preservando `RUNNING`.
+3. Preparar manifesto e evidencias originais em diretorio duravel e versao correta, entao rodar `python3 scripts/agent_task_state.py audit-certify --task TASK --manifest /ABS/manifest.json --evidence-root /ABS/evidence --project-requirements /ABS/AUDIT_PROJECT_REQUIREMENTS.json`. A chamada executa o certifier real do host, exige arquivos/hashes/operacoes graficas e salva recibo vinculando task/repo/release, timestamp e metadados imutaveis da evidencia.
+4. Somente apos `audit-certify` retornar APTO, chamar `ready` e `complete`. O controlador rejeita conclusao por evidencia ausente, prova de outra tarefa, recibo expirado (>6h), manifesto/requirements alterados ou arquivos de evidencia modificados. `progress` invalida recibo antigo e exige nova verificacao.
+5. Provar `terminal --task TASK` antes de declarar concluido. Enquanto nao APTO, deixar `RUNNING` com `next_action`; o watchdog e controlador de retomada sao os meios autorizados de continuidade, com ownership/fencing e IA de background gratuita. Nao simular retomada se controlador estiver indisponivel. Um bloqueio externo comprovado continua sem status APTO.
+
+Proibido loop infinito de IA paga, falsificar traces, usar mock/API no lugar de UI, burlar MFA ou controles destrutivos. O gate nao concede permissoes de producao adicionais.
+<!-- /EXTREME_AUDIT_DURABLE_TERMINAL_GUARD_V1 -->
+
 
 <!-- CONTINUITY_ATOMIC_ROUTING_V1 -->
 ## Registro atomico de tarefa e conversa

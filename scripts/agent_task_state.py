@@ -20,8 +20,9 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import unicodedata
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -444,6 +445,7 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
         "agent_id": str(agent_id).strip(),
         "repository": repository_name,
         "goal": goal_text,
+        "audit_gate_required": _extreme_audit_goal(goal_text),
         "status": "RUNNING",
         "next_action": "determine and execute the next safe action required by the original goal",
         "evidence": [],
@@ -556,12 +558,160 @@ def record_progress(task_id: str, *, next_action: str, evidence: str | None = No
 
     payload["status"] = "RUNNING"
     payload["next_action"] = action
+    payload.pop("audit_apto_proof", None)
     _bump_checkpoint_version(payload)
     if evidence:
         payload.setdefault("evidence", []).append(str(evidence).strip())
     _history(payload, "progress", next_action=action, evidence=evidence)
     _atomic_write(_path(task_id), payload)
     return payload
+
+
+
+# An extreme audit is never allowed to complete on the strength of text-only
+# evidence. This gate is task-scoped and does not change ordinary tasks.
+def _extreme_audit_goal(goal: str) -> bool:
+    normalized = unicodedata.normalize("NFKD", str(goal)).encode("ascii", "ignore").decode().lower()
+    return bool(re.search(
+        r"(?:auditoria\s+(?:extrema|completa|e2e|v5)|audit(?:oria)?[^a-z0-9]{0,10}(?:extreme|v5|e2e)|extreme\s+audit)",
+        normalized,
+    ))
+
+
+def _audit_task_required(payload: dict[str, Any]) -> bool:
+    return payload.get("audit_gate_required") is True or _extreme_audit_goal(payload.get("goal", ""))
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _audit_proof_current(payload: dict[str, Any]) -> None:
+    if not _audit_task_required(payload):
+        return
+    proof = payload.get("audit_apto_proof")
+    if not isinstance(proof, dict) or proof.get("verdict") != "APTO":
+        raise TaskStateError("EXTREME_AUDIT_V5: verified real UI/E2E certification required before READY/CONCLUIDO")
+    if proof.get("task_id") != payload.get("task_id") or proof.get("repository") != payload.get("repository"):
+        raise TaskStateError("EXTREME_AUDIT_V5: certification is not bound to this task/repository")
+    observed = proof.get("issued_at")
+    try:
+        stamp = datetime.fromisoformat(observed.replace("Z", "+00:00"))
+        age = datetime.now(timezone.utc) - stamp
+    except (TypeError, ValueError, AttributeError):
+        raise TaskStateError("EXTREME_AUDIT_V5: audit proof timestamp invalid") from None
+    if age < timedelta(seconds=-90) or age > timedelta(hours=6):
+        raise TaskStateError("EXTREME_AUDIT_V5: audit proof expired; rerun UI certification")
+    try:
+        manifest_path = Path(proof["manifest_path"])
+        requirements_path = Path(proof["requirements_path"])
+        if manifest_path.is_symlink() or requirements_path.is_symlink():
+            raise ValueError("symlink")
+        if _sha256_file(manifest_path) != proof["manifest_sha256"]:
+            raise ValueError("manifest changed")
+        if _sha256_file(requirements_path) != proof["requirements_sha256"]:
+            raise ValueError("requirements changed")
+        root = Path(proof["evidence_root"])
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError("evidence root changed")
+        rows = proof["artifacts"]
+        if not isinstance(rows, list) or not rows:
+            raise ValueError("evidence artifacts missing")
+        for row in rows:
+            raw = Path(row["path"])
+            if raw.is_absolute() or ".." in raw.parts:
+                raise ValueError("unsafe evidence path")
+            location = root / raw
+            if location.is_symlink() or not location.is_file():
+                raise ValueError("evidence missing/symlink")
+            stat = location.stat()
+            if stat.st_size != row["size"] or stat.st_mtime_ns != row["mtime_ns"]:
+                raise ValueError("evidence modified after APTO")
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise TaskStateError("EXTREME_AUDIT_V5: verified evidence no longer matches receipt; recertify") from exc
+
+
+@_serialized_transition
+def _store_extreme_audit_proof(task_id: str, expected_checkpoint_version: int, proof: dict[str, Any]) -> dict[str, Any]:
+    payload = _load(task_id)
+    if not _audit_task_required(payload):
+        raise TaskStateError("audit proof cannot be attached to a non-audit task")
+    if is_terminal(payload) or payload.get("status") != "RUNNING":
+        raise TaskStateError("audit proof requires a RUNNING, non-terminal task")
+    if _checkpoint_version(payload) != expected_checkpoint_version:
+        raise TaskStateError("audit proof is stale: checkpoint changed while certifying")
+    _require_current_resume(payload)
+    payload["audit_apto_proof"] = proof
+    _history(payload, "audit_real_e2e_certified", audit_sha256=proof["manifest_sha256"], release=proof["release"])
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
+def certify_extreme_audit_task(task_id: str, manifest: str, evidence_root: str, project_requirements: str) -> dict[str, Any]:
+    """Bounded read-only real evidence verification outside the global state lock."""
+    payload = _load(task_id)
+    if is_terminal(payload) or not _audit_task_required(payload):
+        raise TaskStateError("audit-certify requires an active Extreme Audit V5 checkpoint")
+    checkpoint_version = _checkpoint_version(payload)
+    try:
+        manifest_path = Path(manifest).expanduser().resolve(strict=True)
+        root = Path(evidence_root).expanduser().resolve(strict=True)
+        requirements_path = Path(project_requirements).expanduser().resolve(strict=True)
+        if not manifest_path.is_file() or not root.is_dir() or not requirements_path.is_file():
+            raise ValueError("audit manifest/root/requirements missing")
+        details = json.loads(manifest_path.read_text(encoding="utf-8"))
+        identity = details.get("identity", {})
+        if identity.get("repository") != payload.get("repository"):
+            raise ValueError("certification repository does not match checkpoint")
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise TaskStateError("audit-certify requires readable real artifacts and the exact task repository") from exc
+
+    with tempfile.TemporaryDirectory(prefix="shopvivaliz-audit-verify-") as directory:
+        report_path = Path(directory) / "report.json"
+        try:
+            run = subprocess.run([
+                sys.executable, str(ROOT / "scripts" / "certify-audit-manifest.py"),
+                str(manifest_path), "--evidence-root", str(root),
+                "--project-requirements", str(requirements_path),
+                "--json-output", str(report_path),
+            ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=120, check=False)
+            report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.is_file() else {}
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+            raise TaskStateError("EXTREME_AUDIT_V5: certifier unavailable; maintain RUNNING and fix the failure") from None
+    if run.returncode != 0 or report.get("verdict") != "APTO" or report.get("failures"):
+        raise TaskStateError("EXTREME_AUDIT_V5: NAO_APTO; fix all blockers and rerun real UI E2E")
+
+    try:
+        rows = []
+        for item in details["evidence"]["artifacts"]:
+            rel = Path(item["path"])
+            if rel.is_absolute() or ".." in rel.parts:
+                raise ValueError("unsafe evidence path")
+            stat = (root / rel).stat()
+            rows.append({"path": str(rel), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})
+        proof = {
+            "verdict": "APTO",
+            "task_id": payload["task_id"],
+            "repository": payload["repository"],
+            "issued_at": utc_now(),
+            "commit_sha": identity["commit_sha"],
+            "release": identity["release"],
+            "environment": identity["environment"],
+            "manifest_path": str(manifest_path),
+            "manifest_sha256": _sha256_file(manifest_path),
+            "requirements_path": str(requirements_path),
+            "requirements_sha256": _sha256_file(requirements_path),
+            "evidence_root": str(root),
+            "artifacts": rows,
+        }
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        raise TaskStateError("EXTREME_AUDIT_V5: evidence changed while creating APTO receipt") from exc
+    return _store_extreme_audit_proof(task_id, checkpoint_version, proof)
 
 
 @_serialized_transition
@@ -583,6 +733,7 @@ def mark_ready(
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     _require_background_terminal_checks(payload)
+    _audit_proof_current(payload)
     _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
@@ -604,6 +755,7 @@ def _complete_task_transition(task_id: str) -> dict[str, Any]:
         raise TaskStateError("completion rejected: verification evidence is missing")
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
+    _audit_proof_current(payload)
     try:
         _run_completion_checks(payload)
     except TaskStateError:
@@ -1004,6 +1156,12 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Durable nonstop task-continuity state")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    audit = sub.add_parser("audit-certify")
+    audit.add_argument("--task", required=True)
+    audit.add_argument("--manifest", required=True)
+    audit.add_argument("--evidence-root", required=True)
+    audit.add_argument("--project-requirements", required=True)
+
     start = sub.add_parser("start")
     start.add_argument("--task", required=True)
     start.add_argument("--goal", required=True)
@@ -1079,6 +1237,8 @@ def main() -> int:
                 agent_id=args.agent,
                 repository=args.repository,
             )
+        elif args.command == "audit-certify":
+            payload = certify_extreme_audit_task(args.task, args.manifest, args.evidence_root, args.project_requirements)
         elif args.command == "progress":
             payload = record_progress(args.task, next_action=args.next_action, evidence=args.evidence)
         elif args.command == "ready":
