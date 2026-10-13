@@ -1601,6 +1601,29 @@ def health_command(platform: str) -> str:
     return "printf 'hostname='; hostname; printf 'user='; id -un; printf 'uid='; id -u; uptime -p || true"
 
 
+def _linux_service_status_tail(prefix: str, service: str) -> str:
+    """Treat a completed healthy oneshot as a successful status read.
+
+    Ordinary inactive/failed units and never-executed oneshots fail closed.
+    No service state is changed by the status probe.
+    """
+    return (
+        f"state=$({prefix}is-active {service} 2>/dev/null); state_rc=$?; "
+        'printf "%s\\n" "$state"; '
+        'if [ "$state_rc" -eq 0 ]; then exit 0; fi; '
+        'if [ "$state" = inactive ]; then '
+        f"unit_type=$({prefix}show -p Type --value {service} 2>/dev/null); "
+        f"unit_result=$({prefix}show -p Result --value {service} 2>/dev/null); "
+        f"main_exit=$({prefix}show -p ExecMainStatus --value {service} 2>/dev/null); "
+        f"last_exit_at=$({prefix}show -p ExecMainExitTimestampMonotonic --value {service} 2>/dev/null); "
+        'if [ "$unit_type" = oneshot ] && [ "$unit_result" = success ] '
+        '&& [ "$main_exit" = 0 ] && [ -n "$last_exit_at" ] '
+        '&& [ "$last_exit_at" != 0 ]; then '
+        'printf "%s\\n" "oneshot_last_result=success"; exit 0; fi; fi; '
+        'exit "$state_rc"; '
+    )
+
+
 def service_command(
     platform: str,
     service: str,
@@ -1620,24 +1643,25 @@ def service_command(
     if service_user_owner:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
             raise ValueError("invalid_service_user_owner")
-        if action == "status":
-            user_operation = (
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user --no-pager --full status {service}; "
-            )
-        else:
-            user_operation = (
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user {action} {service}; "
-            )
+        user_prefix = (
+            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            "systemctl --user "
+        )
+        user_operation = (
+            f"{user_prefix}--no-pager --full status {service}; "
+            if action == "status"
+            else f"{user_prefix}{action} {service}; "
+        )
+        user_tail = (
+            _linux_service_status_tail(user_prefix, service)
+            if action == "status"
+            else f"{user_prefix}is-active {service}; exit $?; "
+        )
         user_probe = (
             f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
-            f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-            f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f"load=$({user_prefix}show -p LoadState --value {service} 2>/dev/null || true); "
             f'if [ "$load" = loaded ]; then '
-            f"{user_operation}"
-            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-            f"systemctl --user is-active {service}; exit $?; fi; "
+            f"{user_operation}{user_tail}fi; "
         )
 
     system_operation = (
@@ -1645,11 +1669,15 @@ def service_command(
         if action == "status"
         else f"systemctl {action} {service}; "
     )
+    system_tail = (
+        _linux_service_status_tail("systemctl ", service)
+        if action == "status"
+        else f"systemctl is-active {service}; exit $?; "
+    )
     return (
         f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
         f'if [ "$load" = loaded ]; then '
-        f"{system_operation}"
-        f"systemctl is-active {service}; exit $?; fi; "
+        f"{system_operation}{system_tail}fi; "
         f"{user_probe}"
         f"printf '%s\n' 'service_not_found' >&2; exit 4"
     )

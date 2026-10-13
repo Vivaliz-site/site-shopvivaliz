@@ -73,3 +73,24 @@ demonstraram por que o validador nao deve depender apenas de nomes de
 SDKs. Numeros de cost-state do CLI sao estimativas locais, nao faturas.
 O monitor de cinco minutos identifica novos eventos e contadores pagos,
 sem publicar prompts, credenciais ou conteudo dos arquivos.
+
+
+## Recurring job launcher audit
+
+PAID_SCHEDULE_SCAN_V1 inspects active custom systemd timers, user timer
+definitions, /etc/crontab, /etc/cron.d, Ubuntu/root crontabs and periodic
+cron entrypoints every five minutes. It checks direct claude -p, --print,
+resume/model invocations, codex exec/resume/cloud, direct provider HTTP
+domains and bounded local script wrappers through depth three. The
+read-only audit does not execute any program, inspect credentials, emit
+commands/prompts/paths or terminate human Claude Remote Control sessions.
+
+Static alert codes are PAID_RECURRING_SYSTEMD_LAUNCHER,
+PAID_RECURRING_USER_TIMER_LAUNCHER, PAID_RECURRING_CRON_LAUNCHER and
+SCHEDULE_TIMER_INVENTORY_UNAVAILABLE. The first three indicate a risky
+scheduled command definition, not proof of paid billing. Inspect and
+replace any unauthorized recurring paid command with verified Gemini Free
+or local Ollama through an approved corrective workflow. The monitor is
+read-only by design and never silently deactivates approved user services.
+
+Run: python3 -m unittest -q tests.test_ai_free_provider_sentinel

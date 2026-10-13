@@ -1063,6 +1063,58 @@ class RemoteControlMcpTests(unittest.TestCase):
         self.assertIn("exit 4", command)
         self.assertNotIn("status shopvivaliz-chatgpt-continuity.service || true", command)
 
+    def test_linux_service_status_distinguishes_completed_oneshot_from_failures(self):
+        command = m.service_command("linux", "shopvivaliz-login-integrity.service", "status")
+        stub = """
+systemctl() {
+    if [ "$1" = show ]; then
+        case "$3" in
+            LoadState) printf '%s\\n' loaded ;;
+            Type) printf '%s\\n' "$SV_TEST_UNIT_TYPE" ;;
+            Result) printf '%s\\n' "$SV_TEST_UNIT_RESULT" ;;
+            ExecMainStatus) printf '%s\\n' "$SV_TEST_MAIN_EXIT" ;;
+            ExecMainExitTimestampMonotonic) printf '%s\\n' "$SV_TEST_EXIT_AT" ;;
+            *) return 99 ;;
+        esac
+        return 0
+    fi
+    if [ "$1" = --no-pager ]; then
+        printf '%s\\n' 'inactive (dead)'
+        return 3
+    fi
+    if [ "$1" = is-active ]; then
+        printf '%s\\n' "$SV_TEST_STATE"
+        if [ "$SV_TEST_STATE" = active ]; then return 0; fi
+        return 3
+    fi
+    return 99
+}
+"""
+        cases = (
+            ("healthy_oneshot", "oneshot", "success", "0", "123456", "inactive", 0, True),
+            ("never_ran", "oneshot", "success", "0", "0", "inactive", 3, False),
+            ("failed_oneshot", "oneshot", "exit-code", "1", "123456", "inactive", 3, False),
+            ("inactive_daemon", "simple", "success", "0", "123456", "inactive", 3, False),
+            ("active_daemon", "simple", "success", "0", "123456", "active", 0, False),
+        )
+        for label, kind, result, main_exit, finished, state, expected, completed_oneshot in cases:
+            with self.subTest(label=label):
+                env = dict(os.environ)
+                env.update(
+                    SV_TEST_UNIT_TYPE=kind, SV_TEST_UNIT_RESULT=result,
+                    SV_TEST_MAIN_EXIT=main_exit, SV_TEST_EXIT_AT=finished,
+                    SV_TEST_STATE=state,
+                )
+                probe = subprocess.run(
+                    ["bash", "-c", stub + "\n" + command],
+                    env=env, text=True, capture_output=True, check=False,
+                )
+                self.assertEqual(probe.returncode, expected, probe.stderr)
+                self.assertEqual(
+                    "oneshot_last_result=success" in probe.stdout,
+                    completed_oneshot,
+                )
+
     def test_backend_config_declares_canonical_user_service_owner(self):
         self.assertEqual(m.HOSTS["always-free-arm-1787907847-26"]["service_user_owner"], "ubuntu")
 
