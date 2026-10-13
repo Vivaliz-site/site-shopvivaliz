@@ -1,3 +1,9 @@
+<!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
+
+Auditorias extremas, completas, V5 ou de aptidao de qualquer sistema com interface exigem **execucao do proprio agente na UI real publicada**, percorrendo as jornadas e casos aplicaveis de ponta a ponta. Logs, API, SQL, codigo, mocks, simples HTTP 200, screenshot isolado ou execucao somente headless nao substituem interacao visual. Para cada fluxo: entrar na tela real, navegar, acionar controles, observar erros, gravar provas de antes/depois, recarregar/revisitar, confirmar persistencia e reconciliar efeitos. Investigar, corrigir, prevenir e reauditar pela UI apos cada correcao aplicavel. Sem evidencias reais: `NAO_VALIDADO_UI` e nunca `APTO`/`CONCLUIDO`. Proibido esconder UI existente em `browser.required=false` ou `journey.ui=false`; a ausencia real de UI requer inventario negativo documentado e evidencias. Usar hosts, perfis e leases autorizados, sem bypass de MFA ou acoes irreversiveis sem permissao exata. Ver `AGENTS.md`, `AUDIT_POLICY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
+<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
 <!-- MANDATORY_AGENT_RULES_READ_GATE_V1 -->
 ## Leitura comprovada antes de executar "Retome"
 
