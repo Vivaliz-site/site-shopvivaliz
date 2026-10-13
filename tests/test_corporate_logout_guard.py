@@ -3,14 +3,16 @@
 No real session is logged out; generated CDP commands are inspected and the
 pre-click policy is exercised in a synthetic Node environment.
 """
+import ast
 import base64
-import importlib.util
 import json
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import types
 import unittest
+from urllib.parse import urlsplit, unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "remote-control-mcp/server.py"
@@ -18,10 +20,34 @@ BROWSER = ROOT / "remote-control-browser-mcp/server.py"
 
 
 def load_base():
-    spec = importlib.util.spec_from_file_location("svv_logout_guard_base", BASE)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # Extract pure guard/command builders, not live backend service imports.
+    # This keeps the suite deterministic and side-effect-free in CI.
+    tree = ast.parse(BASE.read_text(encoding="utf8"))
+    assignments = {"_CORPORATE_AUTH_HOSTS", "_CORPORATE_LOGOUT_PATH", "_CORPORATE_LOGOUT_CLICK_JS"}
+    functions = {
+        "_safe_browser_token", "_browser_cdp_command",
+        "_assert_no_corporate_logout_url", "browser_open_command",
+        "browser_navigate_command", "browser_focused_navigate_command",
+        "browser_click_command", "browser_click_control_command",
+    }
+    selected = []
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id in assignments for t in targets):
+                selected.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in functions:
+            selected.append(node)
+    namespace = {
+        "re": re, "urlsplit": urlsplit, "unquote": unquote,
+        "json": json, "base64": base64,
+        "BROWSER_ALLOWED_HOSTS": {"chatgpt.com", "auth.openai.com", "openai.com"},
+        "BROWSER_SESSION_NAME": "atendimento",
+        "BROWSER_CDP_URL": "http://127.0.0.1:9556",
+        "BROWSER_WORKER_MODULE": "/fake/readonly.mjs",
+    }
+    exec(compile(ast.Module(body=selected, type_ignores=[]), str(BASE), "exec"), namespace)
+    return types.SimpleNamespace(**namespace)
 
 
 class CorporateLogoutSafetyTests(unittest.TestCase):
