@@ -1,3 +1,9 @@
+<!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+## GATE EXECUTAVEL — UI, evidencia real e continuidade da Auditoria Extrema V5
+
+Antes de declarar APTO, executar `scripts/certify-audit-manifest.py` com `--evidence-root` e atender a `docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md`. A auditoria exige arquivos reais com hash recalculado, inventario de UI, log de passos/clicks e midia capturada, cada caso real stateful, RED/GREEN/regressao/reauditoria, reviewer em sessao independente e UI pos-deploy. E proibido autoatribuir APTO com flags, mock, screenshot isolado, API, CLI, SQL ou headless-only. Enquanto nao obtiver AUDIT_VERDICT=APTO da mesma release, preservar `RUNNING` no controlador de continuidade e `next_action` concreta, sem abandonar em relatorio, PR, merge, limite de turno ou falha recuperavel. Delegacao nao isenta o controlador. Antes de `CONCLUIDO`, validar E2E real e o gate `agent_task_state.py terminal`. Respeitar leases/fencing, MFA, aprovacao de destruicao/cobranca e proibir loops autonomos de IA paga. Bloqueio externo comprovado nao equivale a APTO.
+<!-- /AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## GATE INEGOCIAVEL: Auditoria Extrema V5 executada pela UI real
 
