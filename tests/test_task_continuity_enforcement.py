@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import importlib.util
 import sys
@@ -36,6 +37,80 @@ class AgentTaskStateTests(unittest.TestCase):
     def tearDown(self) -> None:
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
+
+    def test_v5_audit_cannot_ready_without_real_e2e_certifier(self) -> None:
+        task = state.start_task("extreme-no-e2e", "Auditoria Extrema V5 da loja", "work")
+        self.assertTrue(task["audit_extreme_required"])
+        with self.assertRaisesRegex(state.TaskStateError, "no verified E2E"):
+            state.mark_ready("extreme-no-e2e", evidence=["claimed PASS"], verification="claimed done")
+        self.assertEqual("RUNNING", state.load_task("extreme-no-e2e")["status"])
+
+    def test_v5_audit_file_existence_probe_is_not_e2e(self) -> None:
+        marker = Path(self.temp.name) / "exists"
+        marker.write_text("present", encoding="utf-8")
+        state.start_task(
+            "extreme-weak-probe", "Auditoria Extrema E2E do site", "work",
+            completion_checks=[["/usr/bin/test", "-f", str(marker)]],
+        )
+        with self.assertRaisesRegex(state.TaskStateError, "no verified E2E"):
+            state.mark_ready(
+                "extreme-weak-probe", evidence=["file exists"],
+                verification="must not trust file presence as E2E",
+            )
+        self.assertEqual("RUNNING", state.load_task("extreme-weak-probe")["status"])
+
+    def test_v5_requires_repeat_certification_after_manifest_tampering(self) -> None:
+        task_id = "extreme-recheck"
+        state.start_task(task_id, "Auditoria Extrema V5 funcional", "work")
+        root = Path(self.temp.name)
+        manifest = root / "audit-manifest.json"
+        manifest.write_text(json.dumps({"identity": {
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "commit_sha": "a" * 40,
+            "release": "production-r1",
+            "environment": "production",
+            "certified_scope": "critical UI journeys",
+        }}), encoding="utf-8")
+        requirements = root / "requirements.json"
+        requirements.write_text("{}", encoding="utf-8")
+        verified = mock.Mock(returncode=0, stdout="AUDIT_VERDICT=APTO\n")
+        with mock.patch.object(state.audit_task_apto_guard.subprocess, "run", return_value=verified):
+            pinned = state.certify_audit_e2e(
+                task_id, manifest_path=str(manifest), evidence_root=str(root),
+                project_requirements=str(requirements),
+            )
+            self.assertEqual("production-r1", pinned["audit_certification"]["identity"]["release"])
+            state.mark_ready(task_id, evidence=["verified E2E bundle"], verification="exact real release")
+            manifest.write_text(manifest.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(state.TaskStateError, "stale"):
+                state.complete_task(task_id)
+        current = state.load_task(task_id)
+        self.assertEqual("RUNNING", current["status"])
+        self.assertTrue(current["next_action"])
+
+    def test_v5_failed_certifier_cannot_pin_audit_proof(self) -> None:
+        task_id = "extreme-cert-failed"
+        state.start_task(task_id, "Auditoria Extrema V5 da plataforma", "work")
+        root = Path(self.temp.name)
+        manifest = root / "missing-e2e.json"
+        manifest.write_text(json.dumps({"identity": {
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "commit_sha": "a" * 40,
+            "release": "r1", "environment": "production",
+            "certified_scope": "all material journeys",
+        }}), encoding="utf-8")
+        requirements = root / "requirements.json"
+        requirements.write_text("{}", encoding="utf-8")
+        rejected = mock.Mock(returncode=1, stdout="AUDIT_VERDICT=NAO_APTO\n")
+        with mock.patch.object(state.audit_task_apto_guard.subprocess, "run", return_value=rejected):
+            with self.assertRaisesRegex(state.TaskStateError, "did not return APTO"):
+                state.certify_audit_e2e(
+                    task_id, manifest_path=str(manifest), evidence_root=str(root),
+                    project_requirements=str(requirements),
+                )
+        current = state.load_task(task_id)
+        self.assertEqual("RUNNING", current["status"])
+        self.assertNotIn("audit_certification", current)
 
     def test_new_chatgpt_checkpoint_fails_closed_without_verified_origin(self) -> None:
         # An ordinary test runtime can simulate the controller's enforced gate.
