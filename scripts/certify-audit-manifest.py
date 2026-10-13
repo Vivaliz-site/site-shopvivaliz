@@ -516,7 +516,7 @@ def certify(
     # UI is a runtime fact, not an optional flag the auditor may disable.
     if type(discovered_controls) is int and discovered_controls > 0 and not ui_journeys:
         failures.append("UI controls discovered but no UI journey is marked ui=true")
-    if browser_required not in (True, False):
+    if type(browser_required) is not bool:
         failures.append("browser.required must be boolean")
     elif browser_required:
         add_bool_failures(data, BROWSER_REQUIRED_TRUE, failures)
