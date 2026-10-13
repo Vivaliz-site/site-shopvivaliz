@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Add 2 GiB of compressed swap without touching the active zram0 device.
-# Intentionally no stop/swapoff operation: RAM must remain available to the OS.
+# Never disable an active swap device: the runtime only enables headroom.
 DEVICE=/dev/zram1
 SIZE_BYTES=2147483648
 PRIORITY=80
