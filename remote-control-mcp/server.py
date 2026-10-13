@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -1753,7 +1753,81 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "JS"
     )
 
+
+# Corporate ChatGPT session-preservation policy. This protects tool-driven
+# navigation and DOM clicks; it does not override a provider-side logout,
+# session expiry, or an account owner's direct manual logout.
+_CORPORATE_AUTH_HOSTS = frozenset({"chatgpt.com", "auth.openai.com", "openai.com"})
+_CORPORATE_LOGOUT_PATH = re.compile(
+    r"(?:^|/)(?:log[-_]?out|sign[-_]?out)(?:/|$)", re.I,
+)
+
+
+def _assert_no_corporate_logout_url(url: str) -> None:
+    """Reject explicit sign-out routes before any Chromium side effect."""
+    value = str(url or "").strip()
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        raise ValueError("browser_logout_guard_invalid_url") from None
+    if str(parsed.hostname or "").lower() not in _CORPORATE_AUTH_HOSTS:
+        return
+    # Bounded unquoting also rejects encoded/obfuscated path variants.
+    path = parsed.path
+    for _ in range(4):
+        if _CORPORATE_LOGOUT_PATH.search(path):
+            raise ValueError("corporate_logout_guard_denied")
+        decoded = unquote(path)
+        if decoded == path:
+            break
+        path = decoded
+    if _CORPORATE_LOGOUT_PATH.search(path):
+        raise ValueError("corporate_logout_guard_denied")
+
+
+# Evaluated only in the allowlisted corporate browser tab, immediately
+# before .click() on a resolved DOM control. Read-only until a safe click.
+_CORPORATE_LOGOUT_CLICK_JS = r"""
+const denyCorporateLogout = element => {
+  const host = String(location.hostname || "").toLowerCase();
+  if (!["chatgpt.com","auth.openai.com","openai.com"].includes(host)) return false;
+  const root = element?.closest?.("a,button,[role=button],[role=menuitem],input[type=submit],summary") || element;
+  if (!root) return false;
+  const form = root.closest?.("form") || root.form || null;
+  const href = String(root.getAttribute?.("href") || root.closest?.("a[href]")?.getAttribute("href") || form?.getAttribute?.("action") || "");
+  if (href) {
+    try {
+      let path = new URL(href, location.href).pathname;
+      for (let i = 0; i < 4; i++) {
+        if (/(?:^|\/)(?:log[-_]?out|sign[-_]?out)(?:\/|$)/i.test(path)) return true;
+        const next = decodeURIComponent(path);
+        if (next === path) break;
+        path = next;
+      }
+      if (/(?:^|\/)(?:log[-_]?out|sign[-_]?out)(?:\/|$)/i.test(path)) return true;
+    } catch { return true; }
+  }
+  const texts = [
+    root.getAttribute?.("aria-label"), root.getAttribute?.("title"),
+    root.getAttribute?.("data-testid"), root.getAttribute?.("data-action"),
+    root.innerText, root.textContent, element?.getAttribute?.("aria-label"),
+    element?.textContent
+  ].filter(Boolean);
+  const normalize = value => String(value).normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim().toLowerCase();
+  for (const item of texts) {
+    const label = normalize(item);
+    if (/^(?:log[ -]?out|sign[ -]?out|sair|encerrar sessao|terminar sessao|cerrar sesion|deconnexion)(?:\s|$)/i.test(label)) return true;
+    if (/(?:^|[-_])(?:logout|log-out|signout|sign-out)(?:[-_]|$)/i.test(label)) return true;
+  }
+  return false;
+};
+if (denyCorporateLogout(e)) throw new Error("corporate_logout_guard_denied");
+""".strip()
+
+
 def browser_open_command(url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1781,6 +1855,7 @@ def browser_controls_command(tab_id: str) -> str:
 
 
 def browser_navigate_command(tab_id: str, url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1791,6 +1866,7 @@ def browser_navigate_command(tab_id: str, url: str) -> str:
 
 
 def browser_focused_navigate_command(url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1817,7 +1893,7 @@ def browser_focused_navigate_command(url: str) -> str:
 
 def browser_click_command(tab_id: str, selector: str) -> str:
     selector = _safe_browser_token(selector, "selector")
-    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
+    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');{_CORPORATE_LOGOUT_CLICK_JS}e.click();return {{clicked:true}}}})()"
     return _browser_cdp_command(tab_id, expression)
 
 
@@ -1833,6 +1909,7 @@ def browser_click_control_command(tab_id: str, index: int) -> str:
         "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
         f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
         "if(typeof e.focus==='function')e.focus({preventScroll:true});"
+        f"{_CORPORATE_LOGOUT_CLICK_JS}"
         f"e.click();if(typeof e.focus==='function')e.focus({{preventScroll:true}});return {{clicked:true,index:{idx}}}}})()"
     )
     return _browser_cdp_command(tab_id, expression)
@@ -1864,7 +1941,7 @@ await Promise.race([
   new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
 ]);
 const c=new Cdp(ws);
-const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
+const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\/)(?:log[-_]?out|sign[-_]?out)(?:\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
 const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
 if(r.exceptionDetails) throw new Error('browser_runtime_exception');
 if(c.close)c.close();
@@ -1925,7 +2002,7 @@ await Promise.race([
   new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
 ]);
 const c=new Cdp(ws);
-const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
+const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\/)(?:log[-_]?out|sign[-_]?out)(?:\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
 const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
 if(r.exceptionDetails) throw new Error('browser_runtime_exception');
 if(c.close)c.close();
