@@ -90,21 +90,21 @@ bootstrap_heavy_cleanup_epoch() {
     esac
     # POSIX noclobber provides an atomic create; a concurrent observer reads
     # the existing timestamp. Do not overwrite an established cooldown.
-    (set -C; printf '%s\\n' "$previous_epoch" > "$state_file") 2>/dev/null || true
+    (set -C; printf '%s\n' "$previous_epoch" > "$state_file") 2>/dev/null || true
   fi
   if [ ! -r "$state_file" ] || [ -L "$state_file" ]; then
-    printf '%s\\n' "$now_epoch"
+    printf '%s\n' "$now_epoch"
     return
   fi
   recorded_epoch="$(head -n 1 "$state_file")"
   case "$recorded_epoch" in
-    ""|*[!0-9]*) printf '%s\\n' "$now_epoch" ;;
+    ""|*[!0-9]*) printf '%s\n' "$now_epoch" ;;
     *)
       # Invalid/future/corrupt marker must fail closed (skip heavy cleanup).
       if [ "${#recorded_epoch}" -gt "${#now_epoch}" ] || [ "$recorded_epoch" -gt "$now_epoch" ]; then
-        printf '%s\\n' "$now_epoch"
+        printf '%s\n' "$now_epoch"
       else
-        printf '%s\\n' "$recorded_epoch"
+        printf '%s\n' "$recorded_epoch"
       fi
       ;;
   esac
