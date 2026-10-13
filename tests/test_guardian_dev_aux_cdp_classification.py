@@ -31,13 +31,13 @@ class DevAuxGuardianClassificationTests(unittest.TestCase):
         for key in ("CHATGPT_BROWSER_CDP_URL", "CHATGPT_BROWSER_CDP_BASE",
                     "CHATGPT_BROWSER_PROBE_CACHE_HELPER"):
             self.env.pop(key, None)
-        self.fake("curl", "printf '%s\\n' '{\\"webSocketDebuggerUrl\\":\\"ws://127.0.0.1/test\\"}'")
+        self.fake("curl", """printf '%s' '{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}'""")
         self.fake("node", "exit 1")
-        self.fake("systemctl", 'printf "%s\\n" "$*" >> "' + str(self.system_log) + '"')
+        self.fake("systemctl", 'printf forbidden >> "' + str(self.system_log) + '"')
 
     def fake(self, name: str, script: str):
         p = self.bin / name
-        p.write_text("#!/usr/bin/env bash\\nset -eu\\n" + script + "\\n", encoding="utf-8")
+        p.write_text("#!/usr/bin/env bash\nset -eu\n" + script + "\n", encoding="utf-8")
         p.chmod(0o755)
 
     def run_guardian(self):
