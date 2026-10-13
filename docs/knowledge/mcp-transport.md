@@ -7,10 +7,12 @@ The adapter prefers the browser MCP on loopback port 5581; the base MCP on
 5580 is a fallback only when the connection is positively refused before the
 request is accepted. Neither endpoint is exposed publicly by this change.
 
-- `admin_command_run` with a timeout at most 20 seconds remains inline.
-- Longer administrative calls, calls with no timeout (the original default is
-  30 seconds), and explicit `durable=true` calls are submitted to the existing
-  durable task queue before execution. The original command, host and timeout
+- `admin_command_run` with a timeout at most 5 seconds remains inline.
+  This is a bounded synchronous transport budget, not a command-execution
+  quota, token allowance, or 20-second waiting window.
+- Administrative calls with timeout above 5 seconds, calls with no timeout
+  (the default command timeout is 30 seconds), and explicit `durable=true`
+  calls are submitted to the existing durable task queue before execution. The original command, host and timeout
   are preserved; the response is a queued receipt, not completed work.
 - A promoted response contains `task_id`, `execution_mode=durable`,
   `requested_tool=admin_command_run`, and its idempotency `request_id`.
@@ -37,7 +39,7 @@ Fault-injection tests are not evidence of authenticated ChatGPT recovery.
 
 Deployment must verify the installed adapter hash, reload the canonical tunnel
 so its stdio child loads the new code, then submit one bounded command lasting
-longer than the old 30-second limit through the actual connector. Verify exactly
+longer than the five-second synchronous budget through the actual connector. Verify exactly
 one durable result and no duplicate execution. Keep all output free of secrets.
 
 The platform's additional-check banner is a separate symptom. Transport
