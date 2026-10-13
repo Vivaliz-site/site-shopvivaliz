@@ -6,6 +6,10 @@ STATE="$STATE_DIR/disk-status.env"
 RAPID_GROWTH_BPH="${RAPID_GROWTH_BPH:-2147483648}"
 WORKTREE_PRESSURE_COUNT="${WORKTREE_PRESSURE_COUNT:-20}"
 MIN_FREE_BYTES="${MIN_FREE_BYTES:-6442450944}"
+# Status checks stay every five minutes, but expensive cleanup is rate-limited.
+HEAVY_CLEAN_COOLDOWN_SECONDS="${HEAVY_CLEAN_COOLDOWN_SECONDS:-21600}"
+HOUSEKEEPER_TIMEOUT_SECONDS="${HOUSEKEEPER_TIMEOUT_SECONDS:-60}"
+HEAVY_STATE="$STATE_DIR/last-heavy-cleanup.epoch"
 mkdir -p "$STATE_DIR"
 
 pct() {
@@ -68,28 +72,58 @@ case "$prev_epoch:$prev_used" in
     fi
     ;;
 esac
+# Honor the previous guard run on initial rollout, avoiding a fresh heavy scan.
+last_heavy=0
+if [ -r "$HEAVY_STATE" ]; then
+  last_heavy="$(head -n 1 "$HEAVY_STATE")"
+elif [ -n "$prev_epoch" ]; then
+  last_heavy="$prev_epoch"
+fi
+case "$last_heavy" in ""|*[!0-9]*) last_heavy=0;; esac
+heavy_cleanup_due=0
+if [ "$sample_epoch" -ge "$last_heavy" ] &&
+   [ "$((sample_epoch-last_heavy))" -ge "$HEAVY_CLEAN_COOLDOWN_SECONDS" ]; then
+  heavy_cleanup_due=1
+fi
 now=$(date -u +%FT%TZ)
 level=$(classify "$before")
 inode_level=$(classify "$inode_before")
 printf '%s root_before=%s%% level=%s inode_before=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s\n' "$now" "$before" "$level" "$inode_before" "$inode_level" "$used_now" "$available_now" "$MIN_FREE_BYTES" "$low_free" "$growth_bytes_per_hour" "$rapid_growth" >> "$LOG"
 
-# Close the feedback loop early: once root reaches 70%, run the guarded
-# workspace lifecycle cleanup. It only removes inactive, clean, delivered
-# worktrees and known regenerable temp/cache artifacts.
-if { [ "$before" -ge 70 ] || [ "$rapid_growth" -eq 1 ] || [ "$worktrees_now" -ge "$WORKTREE_PRESSURE_COUNT" ] || [ "$low_free" -eq 1 ]; } && [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
-  ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 ABANDONED_CLONE_TTL_HOURS=24 PRESSURE_RECLAIM_PUSHED=1 /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
-  before="$(pct)"
-  available_now="$(available_bytes)"
-  low_free=0
-  if [ "$available_now" -lt "$MIN_FREE_BYTES" ]; then
-    low_free=1
+# Under pressure, metadata checks must not start overlapping hour-long
+# git/Docker scans. Preserve the 5-minute disk alert cadence, but run
+# expensive reclaim at most once per cooldown with a bounded child process.
+heavy_cleanup_needed=0
+if [ "$before" -ge 70 ] || [ "$rapid_growth" -eq 1 ] ||
+   [ "$worktrees_now" -ge "$WORKTREE_PRESSURE_COUNT" ] || [ "$low_free" -eq 1 ]; then
+  heavy_cleanup_needed=1
+fi
+heavy_cleanup_ran=0
+heavy_cleanup_status=not_required
+if [ "$heavy_cleanup_needed" -eq 1 ]; then
+  heavy_cleanup_status=cooldown
+  if [ "$heavy_cleanup_due" -eq 1 ]; then
+    # Stamp BEFORE expensive work to prevent 5-minute retry storms on timeout.
+    printf '%s\n' "$sample_epoch" > "$HEAVY_STATE"
+    heavy_cleanup_ran=1
+    heavy_cleanup_status=started
+    if [ -x /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
+      timeout -k 5s "${HOUSEKEEPER_TIMEOUT_SECONDS}s" env \\
+        ORPHAN_WORKTREE_TTL_HOURS=0 FULL_TTL_HOURS=0 CACHE_TTL_HOURS=1 \\
+        ABANDONED_CLONE_TTL_HOURS=24 PRESSURE_RECLAIM_PUSHED=1 \\
+        /usr/local/sbin/shopvivaliz-workspace-housekeeper >/dev/null 2>&1 || true
+      before="$(pct)"
+      available_now="$(available_bytes)"
+      low_free=0
+      if [ "$available_now" -lt "$MIN_FREE_BYTES" ]; then low_free=1; fi
+    fi
   fi
 fi
 
 cleanup_regenerable_node_cache() {
   home=/home/ubuntu
   if command -v npm >/dev/null 2>&1 && [ -d "$home/.npm" ]; then
-    sudo -u ubuntu npm cache clean --force >/dev/null 2>&1 || true
+    timeout -k 5s 20s sudo -u ubuntu npm cache clean --force >/dev/null 2>&1 || true
   fi
   base="$home/.npm/_npx"
   [ -d "$base" ] || return 0
@@ -112,13 +146,13 @@ cleanup_regenerable_node_cache() {
 cleanup_unused_docker_images() {
   command -v docker >/dev/null 2>&1 || return 0
   [ "$(systemctl is-active docker 2>/dev/null || true)" = active ] || return 0
-  docker image prune -af >/dev/null 2>&1 || true
-  docker builder prune -af >/dev/null 2>&1 || true
+  timeout -k 5s 25s docker image prune -af >/dev/null 2>&1 || true
+  timeout -k 5s 25s docker builder prune -af >/dev/null 2>&1 || true
 }
 
 # Safe, bounded cleanup only. Never truncate Docker json-file logs in place.
 # Start with regenerable agent caches in observe state so disk does not drift into warning.
-if [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ] || [ "$low_free" -eq 1 ]; then
+if [ "$heavy_cleanup_ran" -eq 1 ] && { [ "$before" -ge 75 ] || [ "$rapid_growth" -eq 1 ] || [ "$low_free" -eq 1 ]; }; then
   cleanup_regenerable_node_cache
   cleanup_unused_docker_images
 fi
@@ -156,6 +190,7 @@ growth_bytes_per_hour=$growth_bytes_per_hour
 rapid_growth=$rapid_growth
 worktree_count=$worktrees_after
 root_pct=$after
+heavy_cleanup=$heavy_cleanup_status
 level=$level
 inode_pct=$inode_after
 inode_level=$inode_level
@@ -164,7 +199,7 @@ zram_active=$zram_state
 load1=$load1
 EOF2
 
-printf '%s root_after=%s%% level=%s inode_after=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$level" "$inode_after" "$inode_level" "$used_after" "$available_after" "$MIN_FREE_BYTES" "$low_free_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
+printf '%s root_after=%s%% heavy_cleanup=%s level=%s inode_after=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$heavy_cleanup_status" "$level" "$inode_after" "$inode_level" "$used_after" "$available_after" "$MIN_FREE_BYTES" "$low_free_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
 
 if [ "$rapid_growth" -eq 1 ]; then
   logger -p daemon.warning -t shopvivaliz-disk-guard "root filesystem growing rapidly: ${growth_bytes_per_hour} bytes/hour (threshold ${RAPID_GROWTH_BPH})"
