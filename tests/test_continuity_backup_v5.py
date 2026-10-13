@@ -129,5 +129,27 @@ class BackupStateV5Tests(unittest.TestCase):
         self.assertNotIn('"$source_timer" "$state_dir/_agent-task-state.lock"', body)
 
 
+    def test_canonical_remote_repair_is_allowlisted_and_backend_only(self):
+        workflow = (ROOT / ".github/workflows/shopvivaliz-remote-access.yml").read_text()
+        repair = (ROOT / "scripts/continuity/remote_repair_v5.sh").read_text()
+        self.assertIn('"continuity_backup_v5_repair"', workflow)
+        self.assertIn("continuity_backup_v5_repair)", workflow)
+        self.assertIn('if action == "continuity_backup_v5_repair" and target != "always-free-arm-1787907847-26"', workflow)
+        self.assertIn('remote_repair_v5.sh', workflow)
+        self.assertIn("BACKUP_V5_REPAIR=SOURCE_MISMATCH", repair)
+        self.assertIn("BACKUP_V5_REPAIR=BLOCKED_INSUFFICIENT_SPACE", repair)
+        self.assertIn("BACKUP_V5_INSTALLED_SOURCE_MATCH=PASS", repair)
+        self.assertIn("BACKUP_V5_ONESHOT_AND_TIMER=PASS", repair)
+        self.assertIn('shopvivaliz-continuity-state-backup.timer', repair)
+        self.assertIn('sudo -n bash "$staging_dir/scripts/continuity/install_backup_v5.sh"', repair)
+        self.assertIn('test "$(hostname)" = "always-free-arm-1787907847-26"', repair)
+        self.assertNotIn("systemctl restart", repair)
+        self.assertNotIn("systemctl stop", repair)
+        self.assertNotIn("docker prune", repair)
+        result = subprocess.run(["bash", "-n", str(ROOT / "scripts/continuity/remote_repair_v5.sh")],
+                                text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
