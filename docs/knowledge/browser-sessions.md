@@ -231,3 +231,29 @@ possiveis e requerem o fluxo oficial de reautenticacao.
 
 Procedimentos, comandos de verificacao e rollback supervisionado:
 [Integridade dos logins ShopVivaliz](shopvivaliz-login-integrity.md).
+
+## Bloqueio de logout automatizado (2026-10-13)
+
+Os navegadores corporativos Dev canonical CDP9559, Atendimento CDP9556
+e Dev auxiliar CDP9557 devem **preservar as sessoes autenticadas**.
+O Remote Control MCP recusa, antes de qualquer navegacao/click, rotas
+explicitas de `logout`/`signout` da OpenAI/ChatGPT (inclusive URLs
+codificadas); recusa clicks automatizados nos controles rotulados
+`Sign out`, `Log out`, `Sair` e equivalentes; e bloqueia form
+submissions de logout. O Browser MCP grafico recusa navegacao para URL
+de logout. A regra eh preventiva, independente de checkpoint de conversa,
+sem copiar cookie, token, senha, TOTP, seed ou reiniciar Chromium.
+
+**Limites**: esta protecao vale para ferramentas de automacao
+controladas pelo MCP; nao desativa a opcao de saida voluntaria na UI
+oficial e nao pode impedir expiracao, revogacao ou logout forçado pela
+OpenAI. Desktop remoto/GUI humano e ferramentas administrativas
+deliberadas nao sao interceptados por esse bloqueio. Credenciais
+revogadas requerem o fluxo de autenticacao oficial; monitoramento
+a cada 5 minutos continua em `shopvivaliz-login-integrity.timer`.
+
+Testes sem logout real:
+`python3 tests/test_corporate_logout_guard.py -v`.
+Mudanca do guard no MCP exige reinicio **somente dos servicos MCP**,
+com comparacao dos PIDs 9559/9556/9557 antes e depois. Jamais
+reiniciar Chrome para aplicar a regra.

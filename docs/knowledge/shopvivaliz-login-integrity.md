@@ -74,3 +74,18 @@ Nao parar, reiniciar, apagar ou transportar os perfis para "corrigir" alertas.
 As protecoes de inicializacao sao independentes da timer; removelas exige
 uma mudanca revisada. Nao tocar nos opt-ins `90-verified-dev-aux.conf` do
 worker, guardian e MCP sem o procedimento especifico de rollback.
+
+## Bloqueio preventivo de logout por automacao
+
+Desde 2026-10-13, o Remote Control MCP impede navegacao automatizada
+para URLs de logout do ChatGPT/OpenAI e clicks nos controles explicitos
+`Log out`, `Sign out`, `Sair` e equivalentes via CSS/indice CDP.
+Formularios de logout acionados por `browser_type` tambem falham
+fechados. As ferramentas graficas bloqueiam navegacao para URLs de
+logout, mas a GUI direta do proprietario continua sob seu controle.
+O MCP pode ser atualizado sem reiniciar os tres Chromiums: veja
+`scripts/chatgpt-continuity/install-corporate-logout-guard.sh`.
+
+O bloqueio nao impede logout humano voluntario nem expiracao/revogacao
+pelo provedor. A verificacao periodica `shopvivaliz-login-integrity.timer`
+continua necessaria e independente desse bloqueio.
