@@ -39,6 +39,20 @@ alerta no journal, mas **nao** reinicia os navegadores nem executa login.
 A unit systemd oneshot aparecer `inactive (dead)` apos uma execucao bem
 sucedida e **normal**. A timer deve permanecer `active (waiting)`.
 
+### Health Dev auxiliar sob latencia de backend
+
+O observador somente leitura consulta a identidade Dev auxiliar pelo
+`http://127.0.0.1:5583/health`. Em carga, a resposta pode exceder o
+antigo prazo de seis segundos, embora o CDP9557 e a identidade continuem
+validos. Uma falha transitória de I/O ou JSON agora admite **uma unica
+repeticao** (duas tentativas no maximo, timeout de 12 segundos cada).
+O retorno continua exigindo `ok`, `cdp_reachable`,
+`account_authenticated`, `account_identity_verified` e
+`session=dev` verdadeiros. Resposta valida com identidade ausente ou
+divergente **nao e repetida nem aceita**. Duas falhas permanecem
+`PROBE_ERROR`, alimentando WATCH/DEGRADED normalmente. Nao reiniciar
+navegadores nem copiar sessoes ao observar apenas `PROBE_ERROR`.
+
 ## Inspecao (somente leitura)
 
 ```bash
