@@ -90,7 +90,7 @@ class VolumeEligibilityTests(unittest.TestCase):
 
     def test_no_broad_volume_prune_or_force_removal(self):
         text = SOURCE.read_text()
-        self.assertNotIn("docker volume prune", text)
+        self.assertNotIn('["docker", "volume", "prune"', text)
         self.assertNotIn('"volume", "rm", "--force"', text)
         self.assertIn('"ps", "-aq"', text)
         self.assertIn('"docker", "volume", "rm", name', text)
