@@ -194,6 +194,38 @@ if [ "$before" -ge 90 ]; then
   journalctl --vacuum-size=256M >/dev/null 2>&1 || true
 fi
 
+
+# Cold anonymous Docker volumes are not covered by docker image prune.
+# Keep the expensive 6-hour housekeeper cooldown; run this bounded,
+# separately throttled recovery only under genuine root disk pressure.
+ANON_RECLAIM_COOLDOWN_SECONDS=3600
+ANON_RECLAIM_STATE="$STATE_DIR/last-anonymous-volume-reclaim.epoch"
+anon_reclaim_status=not_required
+if [ "$before" -ge 90 ] || [ "$low_free" -eq 1 ]; then
+  anon_reclaim_status=cooldown
+  anon_last=0
+  if [ -r "$ANON_RECLAIM_STATE" ] && [ ! -L "$ANON_RECLAIM_STATE" ]; then
+    anon_last="$(head -n 1 "$ANON_RECLAIM_STATE")"
+  fi
+  case "$anon_last" in
+    ''|*[!0-9]*) anon_last="$sample_epoch" ;;
+  esac
+  if [ "$sample_epoch" -ge "$anon_last" ] &&
+     [ "$((sample_epoch-anon_last))" -ge "$ANON_RECLAIM_COOLDOWN_SECONDS" ]; then
+    if [ -x /usr/local/sbin/shopvivaliz-safe-anonymous-volume-reclaim.py ]; then
+      # Stamp before work: protect Docker and disk I/O from retry storms.
+      printf '%s\n' "$sample_epoch" > "$ANON_RECLAIM_STATE"
+      if timeout -k 5s 65s /usr/local/sbin/shopvivaliz-safe-anonymous-volume-reclaim.py --apply --min-age-hours 24 >/dev/null 2>&1; then
+        anon_reclaim_status=success
+      else
+        anon_reclaim_status=failed
+      fi
+    else
+      anon_reclaim_status=missing_helper
+    fi
+  fi
+fi
+
 after=$(pct)
 inode_after=$(inode_pct)
 used_after=$(used_bytes)
@@ -221,6 +253,7 @@ rapid_growth=$rapid_growth
 worktree_count=$worktrees_after
 root_pct=$after
 heavy_cleanup=$heavy_cleanup_status
+anonymous_volume_reclaim=$anon_reclaim_status
 level=$level
 inode_pct=$inode_after
 inode_level=$inode_level
@@ -229,7 +262,7 @@ zram_active=$zram_state
 load1=$load1
 EOF2
 
-printf '%s root_after=%s%% heavy_cleanup=%s level=%s inode_after=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$heavy_cleanup_status" "$level" "$inode_after" "$inode_level" "$used_after" "$available_after" "$MIN_FREE_BYTES" "$low_free_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
+printf '%s root_after=%s%% heavy_cleanup=%s anonymous_volume_reclaim=%s level=%s inode_after=%s%% inode_level=%s used_bytes=%s available_bytes=%s min_free_bytes=%s low_free=%s growth_bytes_per_hour=%s rapid_growth=%s docker=%s zram=%s load1=%s\n' "$(date -u +%FT%TZ)" "$after" "$heavy_cleanup_status" "$anon_reclaim_status" "$level" "$inode_after" "$inode_level" "$used_after" "$available_after" "$MIN_FREE_BYTES" "$low_free_after" "$growth_bytes_per_hour" "$rapid_growth" "$docker_state" "$zram_state" "$load1" >> "$LOG"
 
 if [ "$rapid_growth" -eq 1 ]; then
   logger -p daemon.warning -t shopvivaliz-disk-guard "root filesystem growing rapidly: ${growth_bytes_per_hour} bytes/hour (threshold ${RAPID_GROWTH_BPH})"
