@@ -201,7 +201,7 @@ fi
 ANON_RECLAIM_COOLDOWN_SECONDS=3600
 ANON_RECLAIM_STATE="$STATE_DIR/last-anonymous-volume-reclaim.epoch"
 anon_reclaim_status=not_required
-if [ "$before" -ge 90 ] || [ "$low_free" -eq 1 ]; then
+if [ "$heavy_cleanup_ran" -eq 0 ] && { [ "$before" -ge 90 ] || [ "$low_free" -eq 1 ]; }; then
   anon_reclaim_status=cooldown
   anon_last=0
   if [ -r "$ANON_RECLAIM_STATE" ] && [ ! -L "$ANON_RECLAIM_STATE" ]; then
