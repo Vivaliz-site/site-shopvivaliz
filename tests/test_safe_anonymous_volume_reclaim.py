@@ -25,7 +25,10 @@ class VolumeEligibilityTests(unittest.TestCase):
         self.now = dt.datetime(2026, 10, 14, tzinfo=dt.timezone.utc)
         self.meta = {
             "Name": self.name,
-            "Labels": {"com.docker.volume.anonymous": "true"},
+            "Labels": {
+                "com.docker.volume.anonymous": "true",
+                "com.shopvivaliz.reclaim.regenerable": "true",
+            },
             "Driver": "local",
             "CreatedAt": "2026-10-12T00:00:00+00:00",
             "Mountpoint": str(self.path),
@@ -38,6 +41,14 @@ class VolumeEligibilityTests(unittest.TestCase):
 
     def test_old_unreferenced_anonymous_local_volume_is_candidate(self):
         self.assertEqual(self.reason(), "eligible")
+
+    def test_preserves_ordinary_anonymous_volume_without_disposable_provenance(self):
+        self.meta["Labels"].pop("com.shopvivaliz.reclaim.regenerable")
+        self.assertEqual(self.reason(), "disposable_provenance_missing")
+
+    def test_preserves_incorrect_or_untrusted_disposable_provenance(self):
+        self.meta["Labels"]["com.shopvivaliz.reclaim.regenerable"] = "unknown"
+        self.assertEqual(self.reason(), "disposable_provenance_missing")
 
     def test_preserves_named_volumes_even_when_unreferenced(self):
         self.meta["Name"] = "mei_mg_email_pgdata"
@@ -69,20 +80,10 @@ class VolumeEligibilityTests(unittest.TestCase):
     def test_preserves_any_pg15_cluster(self):
         self.assertEqual(reclaim.content_reason(4_000_000, "15", 500), "database_preserved")
 
-    def test_pg16_test_cluster_requires_72_hours(self):
-        self.assertEqual(
-            reclaim.content_reason(49_000_000, "16", 30),
-            "test_postgres_quarantine",
-        )
-
-    def test_small_old_pg16_anonymous_test_cluster_can_be_reclaimed(self):
-        self.assertEqual(reclaim.content_reason(49_000_000, "16", 90), "eligible")
-
-    def test_large_pg16_cluster_is_preserved(self):
-        self.assertEqual(
-            reclaim.content_reason(90_000_000, "16", 100),
-            "database_oversized",
-        )
+    def test_preserves_pg16_even_if_old_small_and_anonymous(self):
+        self.assertEqual(reclaim.content_reason(49_000_000, "16", 30), "database_preserved")
+        self.assertEqual(reclaim.content_reason(49_000_000, "16", 90), "database_preserved")
+        self.assertEqual(reclaim.content_reason(90_000_000, "16", 100), "database_preserved")
 
     def test_oversized_or_unknown_data_is_preserved(self):
         self.assertEqual(reclaim.content_reason(301_000_000, None, 100), "oversized")
@@ -95,6 +96,8 @@ class VolumeEligibilityTests(unittest.TestCase):
         self.assertIn('"ps", "-aq"', text)
         self.assertIn('"docker", "volume", "rm", name', text)
         self.assertIn('"--apply", action="store_true"', text)
+        self.assertIn('DISPOSABLE_PROVENANCE_LABEL', text)
+        self.assertIn('disposable_provenance_missing', text)
 
 
 if __name__ == "__main__":
