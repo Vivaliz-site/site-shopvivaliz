@@ -14,7 +14,7 @@ jobs:
       github.event.comment.user.login == 'fredmourao-ai' &&
       startsWith(github.event.comment.body, '/codex-auto-continuity-v7')
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 360
+    timeout-minutes: 30
 
     steps:
       - name: Extract prompt without logging its body

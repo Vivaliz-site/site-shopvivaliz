@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+# Add 2 GiB of compressed swap without touching the active zram0 device.
+# Never disable an active swap device: the runtime only enables headroom.
+DEVICE=/dev/zram1
+SIZE_BYTES=2147483648
+PRIORITY=80
+
+if grep -Eq '^/dev/zram1[[:space:]]' /proc/swaps; then
+  echo 'ZRAM_EXTRA=already_active'
+  exit 0
+fi
+if [[ ! -b "$DEVICE" ]]; then
+  [[ -r /sys/class/zram-control/hot_add ]] || { echo 'zram hot-add unavailable' >&2; exit 21; }
+  created="$(cat /sys/class/zram-control/hot_add)"
+  if [[ "$created" != 1 ]]; then
+    echo "Unexpected zram index: $created (not overwriting another device)" >&2
+    exit 22
+  fi
+fi
+current="$(cat /sys/block/zram1/disksize)"
+if [[ "$current" != 0 ]]; then
+  # A configured but inactive device may belong to another owner.
+  echo "zram1 already configured but not active: refusing to overwrite ($current)" >&2
+  exit 23
+fi
+echo lz4 > /sys/block/zram1/comp_algorithm
+printf '%s\n' "$SIZE_BYTES" > /sys/block/zram1/disksize
+mkswap "$DEVICE" >/dev/null
+swapon -p "$PRIORITY" "$DEVICE"
+grep -Eq '^/dev/zram1[[:space:]]' /proc/swaps
+echo 'ZRAM_EXTRA=activated'

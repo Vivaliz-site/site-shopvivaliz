@@ -27,7 +27,9 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 VERSION = "1.1.0"
 PROTOCOL_VERSION = "2025-06-18"
@@ -89,6 +91,7 @@ import runtime_lock
 import conversation_lease
 import mutation_gate
 import foreground_handoff
+import checkpoint_update_atomic
 
 
 HOSTS = {
@@ -281,6 +284,24 @@ def _controller_origin_main_sha(*, refresh: bool = False) -> str:
     return sha
 
 
+def _controller_remote_main_sha() -> str:
+    """Read the real GitHub main head without changing the local tracking ref.
+
+    The cached origin/main ref may be stale when the deploy checkout has not
+    fetched recently. A failed probe must never certify the release as current.
+    """
+    try:
+        listing = _run_as_ubuntu(
+            ["env", "GIT_TERMINAL_PROMPT=0", "git", "-C", str(CONTROLLER_REPO),
+             "ls-remote", "--heads", "origin", "main"],
+            timeout=15,
+        )
+    except Exception:
+        return ""
+    match = re.fullmatch(r"([0-9a-f]{40})\s+refs/heads/main", listing.strip())
+    return match.group(1) if match else ""
+
+
 def _controller_active_sha() -> str:
     try:
         pid_text = _run_local_checked([SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"], timeout=15)
@@ -294,6 +315,29 @@ def _controller_active_sha() -> str:
     except OSError:
         return ""
     match = re.search(r"/releases/([0-9a-f]{40})/", cmdline)
+    return match.group(1) if match else ""
+
+
+def _controller_active_release_id() -> str:
+    """Report the active release basename without treating it as an attested Git SHA.
+
+    Human-readable build labels may be used by an external installer. They
+    provide useful diagnostics, but NEVER satisfy the 40-hex provenance gate.
+    """
+    try:
+        pid_text = _run_local_checked(
+            [SYSTEMCTL, "show", CONTROLLER_SERVICE, "-p", "MainPID", "--value"],
+            timeout=15,
+        )
+        pid = int(pid_text or "0")
+        if pid <= 0:
+            return ""
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(
+            "utf-8", errors="replace"
+        )
+    except (RuntimeError, ValueError, OSError):
+        return ""
+    match = re.search(r"/releases/([A-Za-z0-9._-]{7,160})/", cmdline)
     return match.group(1) if match else ""
 
 
@@ -329,7 +373,7 @@ def _read_controller_state() -> dict[str, Any]:
     allowed = {
         "ok", "liveness_ok", "continuity_ready", "degraded", "degraded_reasons",
         "generated_at", "chatgpt_browser", "chatgpt_monitor", "claude_remote_control",
-        "watchdog", "dispatcher", "chatgpt_nudge",
+        "watchdog", "dispatcher", "chatgpt_nudge", "route_recovery",
     }
     return {key: _sanitize_runtime_value(payload.get(key)) for key in allowed if key in payload}
 
@@ -400,10 +444,13 @@ def controller_status() -> dict[str, Any]:
     service_state = _run_local([SYSTEMCTL, "is-active", CONTROLLER_SERVICE], timeout=15)
     active = _decode_output(service_state.stdout).strip() == "active"
     active_sha = _controller_active_sha()
+    # Diagnostic only: a non-SHA release must NOT be considered verified.
+    active_release_id = active_sha or (_controller_active_release_id() if active else "")
     try:
         origin_main_sha = _controller_origin_main_sha(refresh=False)
     except Exception:
         origin_main_sha = ""
+    remote_main_sha = _controller_remote_main_sha()
     state = _read_controller_state()
     return {
         "ok": active and bool(active_sha),
@@ -411,8 +458,14 @@ def controller_status() -> dict[str, Any]:
         "service": CONTROLLER_SERVICE,
         "service_active": active,
         "active_sha": active_sha,
+        "active_release_id": active_release_id,
+        "release_id_form": "sha40" if active_sha else ("non_sha_unverified" if active_release_id else "unknown"),
         "origin_main_sha": origin_main_sha,
-        "up_to_date": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        "remote_main_sha": remote_main_sha,
+        "remote_head_verified": bool(remote_main_sha),
+        "matches_tracking_main": bool(active_sha and origin_main_sha and active_sha == origin_main_sha),
+        # Only the verified remote head can establish true freshness.
+        "up_to_date": bool(active_sha and remote_main_sha and active_sha == remote_main_sha),
         "state": state,
     }
 
@@ -1187,11 +1240,20 @@ AUDIT_RESULT_METADATA_KEYS = (
 
 
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool == "checkpoint_update_atomic":
+        # Checkpoint notes and nested metadata must never appear in audit args.
+        return {
+            "request_id": str(args.get("request_id") or "")[:160],
+            "expected_last_checked_at": str(args.get("expected_last_checked_at") or "")[:60],
+            "rules_count": len(args.get("rules_sha_by_path") or {}),
+            "audit_id_count": len(args.get("audit_ids") or []),
+            "next_action_length": len(str(args.get("next_action") or "")),
+        }
     safe_args = dict(args)
     if "command" in safe_args:
         command = str(safe_args.pop("command"))
         safe_args["command_sha256"] = hashlib.sha256(command.encode()).hexdigest()
-    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload"):
+    for secret_key in ("text", "otp", "secret", "code", "password", "prompt", "message", "body", "payload", "value"):
         # Unsalted digests of low-entropy secrets remain guessable metadata.
         # Preserve event identity and length, not a searchable secret digest.
         safe_args.pop(f"{secret_key}_sha256", None)
@@ -1539,6 +1601,29 @@ def health_command(platform: str) -> str:
     return "printf 'hostname='; hostname; printf 'user='; id -un; printf 'uid='; id -u; uptime -p || true"
 
 
+def _linux_service_status_tail(prefix: str, service: str) -> str:
+    """Treat a completed healthy oneshot as a successful status read.
+
+    Ordinary inactive/failed units and never-executed oneshots fail closed.
+    No service state is changed by the status probe.
+    """
+    return (
+        f"state=$({prefix}is-active {service} 2>/dev/null); state_rc=$?; "
+        'printf "%s\\n" "$state"; '
+        'if [ "$state_rc" -eq 0 ]; then exit 0; fi; '
+        'if [ "$state" = inactive ]; then '
+        f"unit_type=$({prefix}show -p Type --value {service} 2>/dev/null); "
+        f"unit_result=$({prefix}show -p Result --value {service} 2>/dev/null); "
+        f"main_exit=$({prefix}show -p ExecMainStatus --value {service} 2>/dev/null); "
+        f"last_exit_at=$({prefix}show -p ExecMainExitTimestampMonotonic --value {service} 2>/dev/null); "
+        'if [ "$unit_type" = oneshot ] && [ "$unit_result" = success ] '
+        '&& [ "$main_exit" = 0 ] && [ -n "$last_exit_at" ] '
+        '&& [ "$last_exit_at" != 0 ]; then '
+        'printf "%s\\n" "oneshot_last_result=success"; exit 0; fi; fi; '
+        'exit "$state_rc"; '
+    )
+
+
 def service_command(
     platform: str,
     service: str,
@@ -1558,24 +1643,25 @@ def service_command(
     if service_user_owner:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", service_user_owner):
             raise ValueError("invalid_service_user_owner")
-        if action == "status":
-            user_operation = (
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user --no-pager --full status {service}; "
-            )
-        else:
-            user_operation = (
-                f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-                f"systemctl --user {action} {service}; "
-            )
+        user_prefix = (
+            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
+            "systemctl --user "
+        )
+        user_operation = (
+            f"{user_prefix}--no-pager --full status {service}; "
+            if action == "status"
+            else f"{user_prefix}{action} {service}; "
+        )
+        user_tail = (
+            _linux_service_status_tail(user_prefix, service)
+            if action == "status"
+            else f"{user_prefix}is-active {service}; exit $?; "
+        )
         user_probe = (
             f"uid=$(id -u {service_user_owner} 2>/dev/null) || exit 4; "
-            f"load=$(runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-            f"systemctl --user show -p LoadState --value {service} 2>/dev/null || true); "
+            f"load=$({user_prefix}show -p LoadState --value {service} 2>/dev/null || true); "
             f'if [ "$load" = loaded ]; then '
-            f"{user_operation}"
-            f"runuser -u {service_user_owner} -- env XDG_RUNTIME_DIR=/run/user/$uid "
-            f"systemctl --user is-active {service}; exit $?; fi; "
+            f"{user_operation}{user_tail}fi; "
         )
 
     system_operation = (
@@ -1583,11 +1669,15 @@ def service_command(
         if action == "status"
         else f"systemctl {action} {service}; "
     )
+    system_tail = (
+        _linux_service_status_tail("systemctl ", service)
+        if action == "status"
+        else f"systemctl is-active {service}; exit $?; "
+    )
     return (
         f"load=$(systemctl show -p LoadState --value {service} 2>/dev/null || true); "
         f'if [ "$load" = loaded ]; then '
-        f"{system_operation}"
-        f"systemctl is-active {service}; exit $?; fi; "
+        f"{system_operation}{system_tail}fi; "
         f"{user_probe}"
         f"printf '%s\n' 'service_not_found' >&2; exit 4"
     )
@@ -1691,7 +1781,81 @@ def _browser_cdp_command(tab_id: str, expression: str) -> str:
         "JS"
     )
 
+
+# Corporate ChatGPT session-preservation policy. This protects tool-driven
+# navigation and DOM clicks; it does not override a provider-side logout,
+# session expiry, or an account owner's direct manual logout.
+_CORPORATE_AUTH_HOSTS = frozenset({"chatgpt.com", "auth.openai.com", "openai.com"})
+_CORPORATE_LOGOUT_PATH = re.compile(
+    r"(?:^|/)(?:log[-_]?out|sign[-_]?out)(?:/|$)", re.I,
+)
+
+
+def _assert_no_corporate_logout_url(url: str) -> None:
+    """Reject explicit sign-out routes before any Chromium side effect."""
+    value = str(url or "").strip()
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        raise ValueError("browser_logout_guard_invalid_url") from None
+    if str(parsed.hostname or "").lower() not in _CORPORATE_AUTH_HOSTS:
+        return
+    # Bounded unquoting also rejects encoded/obfuscated path variants.
+    path = parsed.path
+    for _ in range(4):
+        if _CORPORATE_LOGOUT_PATH.search(path):
+            raise ValueError("corporate_logout_guard_denied")
+        decoded = unquote(path)
+        if decoded == path:
+            break
+        path = decoded
+    if _CORPORATE_LOGOUT_PATH.search(path):
+        raise ValueError("corporate_logout_guard_denied")
+
+
+# Evaluated only in the allowlisted corporate browser tab, immediately
+# before .click() on a resolved DOM control. Read-only until a safe click.
+_CORPORATE_LOGOUT_CLICK_JS = r"""
+const denyCorporateLogout = element => {
+  const host = String(location.hostname || "").toLowerCase();
+  if (!["chatgpt.com","auth.openai.com","openai.com"].includes(host)) return false;
+  const root = element?.closest?.("a,button,[role=button],[role=menuitem],input[type=submit],summary") || element;
+  if (!root) return false;
+  const form = root.closest?.("form") || root.form || null;
+  const href = String(root.getAttribute?.("href") || root.closest?.("a[href]")?.getAttribute("href") || form?.getAttribute?.("action") || "");
+  if (href) {
+    try {
+      let path = new URL(href, location.href).pathname;
+      for (let i = 0; i < 4; i++) {
+        if (/(?:^|\/)(?:log[-_]?out|sign[-_]?out)(?:\/|$)/i.test(path)) return true;
+        const next = decodeURIComponent(path);
+        if (next === path) break;
+        path = next;
+      }
+      if (/(?:^|\/)(?:log[-_]?out|sign[-_]?out)(?:\/|$)/i.test(path)) return true;
+    } catch { return true; }
+  }
+  const texts = [
+    root.getAttribute?.("aria-label"), root.getAttribute?.("title"),
+    root.getAttribute?.("data-testid"), root.getAttribute?.("data-action"),
+    root.innerText, root.textContent, element?.getAttribute?.("aria-label"),
+    element?.textContent
+  ].filter(Boolean);
+  const normalize = value => String(value).normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim().toLowerCase();
+  for (const item of texts) {
+    const label = normalize(item);
+    if (/^(?:log[ -]?out|sign[ -]?out|sair|encerrar sessao|terminar sessao|cerrar sesion|deconnexion)(?:\s|$)/i.test(label)) return true;
+    if (/(?:^|[-_])(?:logout|log-out|signout|sign-out)(?:[-_]|$)/i.test(label)) return true;
+  }
+  return false;
+};
+if (denyCorporateLogout(e)) throw new Error("corporate_logout_guard_denied");
+""".strip()
+
+
 def browser_open_command(url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1719,6 +1883,7 @@ def browser_controls_command(tab_id: str) -> str:
 
 
 def browser_navigate_command(tab_id: str, url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1729,6 +1894,7 @@ def browser_navigate_command(tab_id: str, url: str) -> str:
 
 
 def browser_focused_navigate_command(url: str) -> str:
+    _assert_no_corporate_logout_url(url)
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in BROWSER_ALLOWED_HOSTS:
         raise ValueError("browser_url_not_allowlisted")
@@ -1755,7 +1921,7 @@ def browser_focused_navigate_command(url: str) -> str:
 
 def browser_click_command(tab_id: str, selector: str) -> str:
     selector = _safe_browser_token(selector, "selector")
-    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');e.click();return {{clicked:true}}}})()"
+    expression = f"(()=>{{const e=document.querySelector({json.dumps(selector)});if(!e)throw new Error('selector_not_found');{_CORPORATE_LOGOUT_CLICK_JS}e.click();return {{clicked:true}}}})()"
     return _browser_cdp_command(tab_id, expression)
 
 
@@ -1771,6 +1937,7 @@ def browser_click_control_command(tab_id: str, index: int) -> str:
         "(()=>{const controls=[...document.querySelectorAll('input,button,[role=button]')].slice(0,120);"
         f"const e=controls[{idx}];if(!e)throw new Error('control_index_not_found');"
         "if(typeof e.focus==='function')e.focus({preventScroll:true});"
+        f"{_CORPORATE_LOGOUT_CLICK_JS}"
         f"e.click();if(typeof e.focus==='function')e.focus({{preventScroll:true}});return {{clicked:true,index:{idx}}}}})()"
     )
     return _browser_cdp_command(tab_id, expression)
@@ -1802,7 +1969,7 @@ await Promise.race([
   new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
 ]);
 const c=new Cdp(ws);
-const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
+const expression="(()=>{const e=document.querySelector("+JSON.stringify(selector)+");if(!e)throw new Error('selector_not_found');e.focus();const v="+JSON.stringify(secret)+";const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\/)(?:log[-_]?out|sign[-_]?out)(?:\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted}})()";
 const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
 if(r.exceptionDetails) throw new Error('browser_runtime_exception');
 if(c.close)c.close();
@@ -1863,7 +2030,7 @@ await Promise.race([
   new Promise((_,reject)=>setTimeout(()=>reject(new Error('websocket_open_timeout')),2500))
 ]);
 const c=new Cdp(ws);
-const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
+const expression="(()=>{const e=document.activeElement;if(!e)throw new Error('focused_editable_not_found');const editable=(e.matches?.('input,textarea'))||e.isContentEditable;if(!editable)throw new Error('focused_editable_not_found');const v="+JSON.stringify(secret)+";if(e.isContentEditable){e.textContent=v;}else{const p=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(p&&p.set)p.set.call(e,v);else e.value=v;}e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));const submitted="+String(submitRaw==='1')+";if(submitted&&e.form){const u=new URL(e.form.action,location.href);if(['chatgpt.com','auth.openai.com','openai.com'].includes(location.hostname.toLowerCase())&&/(?:^|\\/)(?:log[-_]?out|sign[-_]?out)(?:\\/|$)/i.test(u.pathname))throw new Error('corporate_logout_guard_denied');}if(submitted)e.form?.requestSubmit?.();return {typed:true,submitted,mode:'focused'}})()";
 const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
 if(r.exceptionDetails) throw new Error('browser_runtime_exception');
 if(c.close)c.close();
@@ -1886,8 +2053,199 @@ def _browser_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# Deliberately fixed localhost endpoint for the *existing*, isolated browser
+# MCP. No arbitrary host, port or URL is accepted from tool callers.
+ACCOUNT_AUTH_BROWSER_MCP_URL = "http://127.0.0.1:5581/mcp"
+ACCOUNT_AUTH_ALLOWED_SESSIONS = {"dev", "atendimento"}
+ACCOUNT_AUTH_ALLOWED_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+
+
+def proxy_account_auth_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Expose the existing browser MCP login gate without weakening its lease.
+
+    Browser MCP re-checks the maintenance owner, fencing token, official page
+    origin and specific input/button. This layer independently rejects wrong
+    sessions and stale/non-maintenance leases before invoking the local peer.
+    """
+    if name not in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
+        raise ValueError("account_auth_tool_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_ALLOWED_SESSIONS:
+        raise ValueError("account_auth_session_invalid")
+    if name in {"browser_auth_tabs", "browser_auth_status"}:
+        if set(args) != {"session"}:
+            raise ValueError("account_auth_scope_invalid")
+    elif name == "browser_auth_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    elif name == "browser_profile_home_open":
+        if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+            raise ValueError("account_auth_scope_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_profile_home_open")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+    else:
+        allowed_keys = {"session", "tab_id", "action", "value", "runtime_lease_id", "runtime_fencing_token"}
+        if set(args) - allowed_keys:
+            raise ValueError("account_auth_scope_invalid")
+        action = str(args.get("action") or "")
+        tab_id = str(args.get("tab_id") or "")
+        if action not in ACCOUNT_AUTH_ALLOWED_ACTIONS:
+            raise ValueError("account_auth_action_invalid")
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id):
+            raise ValueError("account_auth_tab_invalid")
+        if not _durable_handoff_enabled():
+            raise ValueError("account_auth_lease_mode_required")
+        lease_id = str(args.get("runtime_lease_id") or "").strip()
+        token = args.get("runtime_fencing_token")
+        if not lease_id or token is None:
+            raise ValueError("account_auth_runtime_lock_required")
+        try:
+            lease = runtime_lock.assert_runtime_lock(lease_id, int(token), "browser_auth_action")
+        except (TypeError, ValueError, runtime_lock.RuntimeLockConflict):
+            raise ValueError("account_auth_runtime_lock_invalid") from None
+        if lease.get("owner_kind") != "maintenance" or lease.get("owner_id") != "shopvivaliz-account-auth:" + session:
+            raise ValueError("account_auth_maintenance_owner_required")
+
+    if not AUTH_TOKEN:
+        raise RuntimeError("account_auth_browser_proxy_unavailable")
+    request = Request(
+        ACCOUNT_AUTH_BROWSER_MCP_URL,
+        data=json.dumps({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer " + AUTH_TOKEN,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=35 if name in {"browser_auth_action", "browser_auth_open", "browser_profile_home_open"} else 25 if name == "browser_auth_status" else 8) as response:
+            payload = response.read(524289)
+    except (HTTPError, URLError, TimeoutError, OSError):
+        raise RuntimeError("account_auth_browser_proxy_unavailable") from None
+    if len(payload) > 524288:
+        raise RuntimeError("account_auth_browser_proxy_oversized")
+    try:
+        envelope = json.loads(payload)
+        result = envelope["result"]
+        output = result["structuredContent"]
+        if not isinstance(output, dict):
+            raise ValueError("invalid_result")
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("account_auth_browser_proxy_invalid_response") from None
+    if result.get("isError") or output.get("ok") is not True:
+        raise ValueError("account_auth_backend_denied")
+
+    # Return only allowlisted outcome fields. In particular, never echo
+    # the value, remote stdout/stderr, request body or Chromium DOM text.
+    if name == "browser_auth_tabs":
+        tabs = output.get("tabs", [])
+        if not isinstance(tabs, list):
+            raise RuntimeError("account_auth_browser_proxy_invalid_response")
+        clean = []
+        for tab in tabs[:128]:
+            if not isinstance(tab, dict) or tab.get("session") != session:
+                continue
+            tab_id = str(tab.get("tab_id") or "")
+            stage = str(tab.get("stage") or "")
+            if re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", tab_id) and (
+                stage.startswith("/log-in") or stage.startswith("/auth/login") or stage in {"/email-verification", "/mfa-challenge", "/log-in-or-create-account"}
+            ):
+                clean.append({"tab_id": tab_id, "session": session, "stage": stage})
+        return {"ok": True, "session": session, "tabs": clean}
+
+    if name == "browser_auth_status":
+        state = str(output.get("state") or "")
+        present = output.get("user_present") is True
+        matched = output.get("identity_match") is True
+        if (output.get("session") != session
+                or state not in {"AUTHENTICATED", "NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"}
+                or matched != (state == "AUTHENTICATED")
+                or (matched and not present)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        try:
+            http = int(output.get("session_http", 0))
+            tabs_seen = int(output.get("tabs_seen", 0))
+            tabs_checked = int(output.get("tabs_checked", 0))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if not (0 <= http <= 599 and 0 <= tabs_seen <= 512 and 0 <= tabs_checked <= 16):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {
+            "ok": True, "session": session,
+            "cdp_accessible": output.get("cdp_accessible") is True,
+            "tabs_seen": tabs_seen, "tabs_checked": tabs_checked,
+            "session_http": http, "user_present": present,
+            "identity_match": matched, "state": state,
+        }
+    if name == "browser_profile_home_open":
+        tab_id = str(output.get("tab_id") or "")
+        if (output.get("session") != session
+                or output.get("identity_match") is not True
+                or not re.fullmatch(r"[A-F0-9]{32}", tab_id, re.I)):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "tab_id": tab_id,
+                "reused": output.get("reused") is True, "identity_match": True}
+
+    # The downstream action returns protected child stdout as a JSON
+    # status. Parse booleans only; never surface the raw child output.
+    if name == "browser_auth_open":
+        try:
+            child = json.loads(str(output.get("stdout") or ""))
+        except (TypeError, ValueError):
+            raise RuntimeError("account_auth_status_unconfirmed") from None
+        if (not isinstance(child, dict)
+                or child.get("ok") is not True
+                or child.get("session") != session
+                or child.get("stage") != "/auth/login"
+                or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(child.get("tab_id") or ""))):
+            raise RuntimeError("account_auth_status_unconfirmed")
+        return {"ok": True, "session": session, "stage": "/auth/login",
+                "tab_id": child["tab_id"]}
+    child = {}
+    try:
+        child = json.loads(str(output.get("stdout") or ""))
+    except (ValueError, TypeError):
+        pass
+    if not isinstance(child, dict):
+        child = {}
+    action = str(args["action"])
+    status_key = "typed" if action.startswith("fill_") else "clicked"
+    status = bool(child.get(status_key) or output.get(status_key))
+    if not status:
+        raise RuntimeError("account_auth_status_unconfirmed")
+    return {"ok": True, "session": session, "action": action, status_key: status}
+
+
 MUTATING_RUNTIME_ACTIONS = {
     "controller_promote": "controller_promote",
+    "browser_auth_action": "browser_auth_action",
+    "browser_auth_open": "browser_auth_open",
+    "browser_profile_home_open": "browser_profile_home_open",
     "browser_navigate": "browser_navigate",
     "browser_click": "browser_click",
     "browser_click_control": "browser_click_control",
@@ -1976,11 +2334,16 @@ def execute_tool(
         )
     if name == "continuity_status":
         return continuity_status()
+    if name == "checkpoint_update_atomic":
+        # No caller-controlled path, route, task status, or runtime shell command.
+        return checkpoint_update_atomic.update_checkpoint(args, continuity_status())
     if name == "continuity_e2e":
         return continuity_e2e(
             _validate_conversation_id(args.get("conversation_id")),
             timeout_seconds=int(args.get("timeout_seconds", 240)),
         )
+    if name in {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}:
+        return proxy_account_auth_tool(name, args)
     if name == "browser_tabs":
         return _browser_result(run_host_command(CONTROLLER_BACKEND_HOST, browser_tabs_command(), DEFAULT_TIMEOUT, cancel_check))
     if name == "browser_open":
@@ -2235,8 +2598,29 @@ TOOLS = [
     ("controller_status", "Inspect the active 24x7 continuity controller release and sanitized runtime state on the canonical backend.", {}, True, False),
     ("controller_promote", "Promote exactly the expected origin/main SHA to the canonical 24x7 controller using a clean detached worktree and canonical installer.", {"expected_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "timeout": {"type": "integer", "minimum": 30, "maximum": MAX_TIMEOUT}}, False, True),
     ("continuity_status", "Read aggregated sanitized ChatGPT, Claude Remote Control and dispatcher continuity health from the canonical backend.", {}, True, False),
+    ("checkpoint_update_atomic", "Update only the non-secret Orquestrador recovery checkpoint metadata with a global state lock, idempotency, observed runtime counters, fsync and independent readback. Never binds chats, completes tasks or changes host settings.", {"request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{7,159}$"}, "expected_last_checked_at": {"type": "string", "maxLength": 60}, "rules_sha_by_path": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}, "audit_ids": {"type": "array", "maxItems": 32, "items": {"type": "string"}}, "next_action": {"type": "string", "minLength": 10, "maxLength": 1800}}, False, False),
     ("continuity_e2e", "Run the canonical detached continuity E2E probe for an explicitly bound ChatGPT conversation.", {"conversation_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,160}$"}, "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 600}}, False, True),
     ("browser_open", "Open an allowlisted HTTPS URL in a new tab of the canonical atendimento Chrome session.", {"url": {"type": "string", "maxLength": 2048}}, False, True),
+    ("browser_auth_tabs", "List official Dev or Atendimento login tabs through the isolated browser MCP; no titles, values, secrets or full URLs.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_auth_status", "Read exact ChatGPT user.email identity from the dedicated Dev/Atendimento profile via /api/auth/session; return only sanitized booleans, status and counts, never cookies or tokens.", {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, True, False),
+    ("browser_profile_home_open", "Reuse or open the neutral ChatGPT home tab in an already authenticated corporate profile with an account-specific maintenance lease. Never copies cookies, conversations, storage or credentials.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
+    ("browser_auth_open", "Open only a new official ChatGPT sign-in tab in the isolated Dev or Atendimento browser under a valid, owner-matched maintenance runtime lease; never navigates or mutates existing conversations.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, False),
+    ("browser_auth_action", "Perform an approved, account-scoped official ChatGPT login step through the protected browser MCP. Requires a live, account-matched maintenance runtime lease. OTP/password entered only via the peer's protected stdin; never bypass MFA, OAuth consent or CAPTCHA.", {
+        "session": {"type": "string", "enum": ["dev", "atendimento"]},
+        "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
+        "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+        "value": {"type": "string", "maxLength": 512},
+        "runtime_lease_id": {"type": "string", "maxLength": 200},
+        "runtime_fencing_token": {"type": "integer", "minimum": 1},
+    }, False, True),
     ("browser_tabs", "List allowlisted tabs in the canonical backend Chrome session without exposing titles or full URLs.", {}, True, False),
     ("browser_controls", "Inspect sanitized controls on an allowlisted canonical backend browser tab; input values are never returned.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}}, True, False),
     ("browser_navigate", "Navigate an allowlisted canonical backend browser tab to an allowlisted HTTPS URL without query or fragment.", {"tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"}, "url": {"type": "string", "maxLength": 2048}}, False, True),
@@ -2295,7 +2679,7 @@ def tool_specs() -> list[dict[str, Any]]:
             "description": desc,
             "inputSchema": {
                 "type": "object", "properties": schema_props,
-                "required": [k for k in props if k not in optional],
+                "required": [k for k in props if k not in optional or (name == "checkpoint_update_atomic" and k == "request_id")],
                 "additionalProperties": False,
             },
             "annotations": {
@@ -2388,6 +2772,19 @@ def durable_health_summary() -> dict[str, Any]:
     return summary
 
 
+def _tool_call_ok(name: str, output: Any) -> bool:
+    """Distinguish a successful health observation from healthy service state.
+
+    continuity_status.ok is readiness, not an MCP execution outcome.  An
+    observed degraded state is still a successful read and must reach clients
+    as structuredContent with isError=false.  Other tools retain fail-closed
+    execution semantics.
+    """
+    if name == "continuity_status" and isinstance(output, dict):
+        return "controller" in output and "continuity_ready" in output
+    return not (isinstance(output, dict) and output.get("ok") is False)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "ShopVivalizRemoteControlMCP/" + VERSION
 
@@ -2460,8 +2857,11 @@ class Handler(BaseHTTPRequestHandler):
                 host = args.get("host")
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed", output=output if isinstance(output, dict) else None)
+                    ok = _tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary, output=output if isinstance(output, dict) else None)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     result = {

@@ -1,0 +1,17 @@
+[Unit]
+Description=ShopVivaliz completed-agent-clone cleanup
+Documentation=https://github.com/Vivaliz-site/site-shopvivaliz/blob/main/docs/knowledge/task-continuity.md
+After=local-fs.target
+ConditionPathExists=/usr/local/lib/shopvivaliz/agent_clone_lifecycle.py
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=SHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+ExecStart=/usr/bin/python3 /usr/local/lib/shopvivaliz/agent_clone_lifecycle.py --state-dir /home/ubuntu/shopvivaliz-deploy/shared/agent-task-state sweep
+TimeoutStartSec=240
+Nice=15
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=false
