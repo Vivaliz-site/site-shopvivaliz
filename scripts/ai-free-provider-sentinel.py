@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 from pathlib import Path
 import socket
 import sqlite3
@@ -33,6 +34,7 @@ FLAGS = (
 INTERACTIVE_FLAG = "SHOPVIVALIZ_INTERACTIVE_PAID_FALLBACK"
 MAX_FILE_TAIL = 512 * 1024
 REMINDER_SECONDS = 24 * 3600
+DEFAULT_WALL_BUDGET_SECONDS = 55
 
 SCHEDULE_SCAN_MAX_BYTES = 128 * 1024
 SCHEDULED_PAID_COMMAND = re.compile(
@@ -691,12 +693,85 @@ def run(*, state_dir: Path, do_notify: bool = True, now: int | None = None) -> t
     return issues, summary
 
 
+class SentinelRunDeadline(TimeoutError):
+    """Internal read-only monitoring deadline (never a model request)."""
+
+
+def run_guarded(
+    *, state_dir: Path, do_notify: bool = True,
+    budget_seconds: float = DEFAULT_WALL_BUDGET_SECONDS,
+) -> tuple[list[str], str]:
+    """SENTINEL_WALL_BUDGET_V1: fail closed if a probe stalls under I/O pressure.
+
+    Persist CHECKING first: a SIGTERM from systemd must not leave an old
+    HEALTHY marker that appears fresh. Never advance model-usage watermarks or
+    counter baselines on incomplete scans. Always emit an explicit alert state
+    on cooperative wall-deadline exhaustion.
+    """
+    filename = state_dir / "state.json"
+    previous = load_state(filename)
+    started = int(time.time())
+    checking = dict(previous)
+    checking["last_status"] = "CHECKING"
+    checking["check_started_epoch"] = started
+    checking["last_issue_codes"] = sorted(set(
+        previous.get("last_issue_codes", []) + ["SENTINEL_CHECK_IN_PROGRESS"]
+    ))
+    store_state(filename, checking)
+
+    def _expired(_signal: int, _frame: object) -> None:
+        raise SentinelRunDeadline("monitor wall budget exceeded")
+
+    old_handler = signal.getsignal(signal.SIGALRM)
+    old_timer = signal.getitimer(signal.ITIMER_REAL)
+    signal.signal(signal.SIGALRM, _expired)
+    signal.setitimer(signal.ITIMER_REAL, max(0.01, budget_seconds))
+    try:
+        try:
+            return run(state_dir=state_dir, do_notify=do_notify)
+        except SentinelRunDeadline:
+            current = load_state(filename)
+            issues = sorted(set([
+                *current.get("last_issue_codes", []),
+                "SENTINEL_RUN_TIME_BUDGET_EXCEEDED",
+            ]) - {"SENTINEL_CHECK_IN_PROGRESS"})
+            current.update({
+                "last_status": "ALERT",
+                "last_issue_codes": issues,
+                "last_failed_epoch": int(time.time()),
+            })
+            # Retain previous last_checked_epoch, previous Codex counters
+            # and Claude watermark. An incomplete scan is never healthy.
+            store_state(filename, current)
+            summary = (
+                "AI_FREE_PROVIDER_SENTINEL status=ALERT "
+                "findings=SENTINEL_RUN_TIME_BUDGET_EXCEEDED"
+            )
+            print(summary, flush=True)
+            # The deadline has already fired. Give issue notification its own
+            # bounded 20-second attempt, after durable alert is saved.
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            notice, fp = evaluate_notification(previous, issues, int(time.time()))
+            if notice and do_notify and github_comment(
+                alert_message(socket.gethostname(), notice, issues, int(time.time()))
+            ):
+                current["notified_fingerprint"] = fp
+                current["notified_epoch"] = int(time.time())
+                store_state(filename, current)
+            return issues, summary
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+        if old_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, *old_timer)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
     parser.add_argument("--no-github-comment", action="store_true")
     args = parser.parse_args()
-    run(state_dir=args.state_dir, do_notify=not args.no_github_comment)
+    run_guarded(state_dir=args.state_dir, do_notify=not args.no_github_comment)
     # Anomaly is not a service failure: keep the timer alive while alerts
     # and audit state continue updating. Service crashes still fail hard.
     return 0
