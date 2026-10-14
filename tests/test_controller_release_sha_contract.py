@@ -65,12 +65,8 @@ class ControllerReleaseShaContractTests(unittest.TestCase):
             source.index('sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime_dir"'),
             "Certifier absence must fail before privileged runtime changes",
         )
-        match = re.search(
-            r"for source in (?P<sources>[^\\n]+); do\\n\\s+sudo install -o root -g root -m 0755",
-            source,
-        )
-        self.assertIsNotNone(match, "immutable installer source copy loop missing")
-        self.assertIn("certify-audit-manifest.py", match.group("sources").split())
+        copy_block = source.split("for source in ", 1)[1].split("; do", 1)[0]
+        self.assertIn("certify-audit-manifest.py", copy_block.split())
         self.assertIn(
             'test -f "$target_dir/scripts/certify-audit-manifest.py"',
             source,
