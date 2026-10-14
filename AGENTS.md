@@ -851,3 +851,20 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 - Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
   ignora paid fallback=1 e bridges pagos negam acesso por padrao.
 <!-- /FREE_PROVIDER_FALLBACK_V2 -->
+
+<!-- BACKEND_IO_PRESSURE_ADMISSION_V1 -->
+## Gate obrigatorio contra saturacao de I/O da VM backend (todos os agentes)
+
+**Incidente real 2026-10-14, P1:** a VM `always-free-arm-1787907847-26` (2 vCPU/12 GiB) registrou PSI `/proc/pressure/io` `some.avg10=99.34%`, `full.avg10=55.49%`, carga 77 e interrupcoes de guardas/transportes. A auditoria do Remote Control MCP confirmou mais de vinte `task_submit` independentes em cinco minutos. Limitar somente a duas tarefas duraveis simultaneas **nao basta**, pois a fila ainda inicia novas tarefas seriadas durante saturacao. Nao tratar recuperacao pontual de um oneshot como estabilidade.
+
+**Antes de iniciar qualquer nova operacao pesada no backend, por qualquer canal** (MCP `task_submit`, `admin_command_run`, RDC, SSH, Claude/Code, CI, script ou shell): consulte **somente por leitura** `/proc/pressure/io` e `/proc/loadavg`, inspecione as tarefas ja ativas, confirme o dono/lease e evite repeticao de tarefas equivalentes. Incluem-se varreduras recursivas de Git/worktrees/disco, `du`/`find`, limpeza Docker, caches, `npm ci`, builds, instalacoes, E2E intensivo e suites de teste extensas.
+
+- Se `some.avg10 >= 30` **ou** `full.avg10 >= 10`, **NAO iniciar** a nova operacao pesada. Manter checkpoint `RUNNING`, preservar fila/dados/ownership e salvar `next_action` para reavaliacao, sem envio de tasks duplicadas.
+- Para retomar trabalho pesado, exigir **duas medidas temporariamente separadas**, ambas com `some.avg10 < 15` **e** `full.avg10 < 3`, sem regressao relevante; repetir a checagem imediatamente antes de criar/executar o job. Se PSI nao puder ser lido, nao considerar o host saudavel nem iniciar novo trabalho de alto impacto somente por falha de observabilidade.
+- **Nao interromper** autenticacao, login-integrity, sentinelas, monitores *read-only*, acessos de emergencia ou consultas leves. Operacoes somente leitura devem permanecer curtas e nao fazer `du`/`find` recursivo sob pressao.
+- **Nao contornar** esta regra usando outro transporte ou outro agente. Nao matar/cancelar jobs, reiniciar Chromium/containers/VM, limpar volumes ou worktrees sujos, fazer `swapoff` ou aumentar custo de OCI sem ownership, provas, backup e autorizacao apropriados.
+- Antes de atribuir toda carga ao runner GitHub Actions, verificar o cgroup efetivo: o runner da Solange ja foi observado com `IOWeight=20`, `CPUWeight=20` e `CPUQuota=25%`; havia tambem trabalho Docker, navegador, diagnosticos MCP e CI. Identificar responsaveis por janela, sem associar causalidade pela leitura isolada.
+- O gate acima e uma **regra operacional do agente**, nao um circuito de protecao implantado no servidor. A prevencao permanente exige controle de admissao centralizado em MCP/CI, com limites por host, lock, prioridades, PSI, histerese, observabilidade, provas RED/GREEN e regressao. Alteracao anterior de `remote-control-mcp/server.py` foi recusada pelos controles da plataforma: **nao tentar contornar essa recusa por shell, outro conector ou PR alternativo**.
+
+Referencia de acompanhamento: issue #2934. Enquanto houver PSI extremo recorrente, tarefas de continuidade sem vinculacao comprovada ou E2E real faltante, nao declarar `AUDIT_VERDICT=APTO`.
+<!-- /BACKEND_IO_PRESSURE_ADMISSION_V1 -->
