@@ -378,16 +378,14 @@ status=0
 # observation. No health success is possible on a missing/foreign identity.
 if [[ "$dev_aux_adoption" == 9557 ]]; then
   echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY'
-  if ! cdp_ready; then
-    # CDP HTTP transport can be healthy while a renderer or identity probe times
-    # out. Fail closed without incorrectly declaring browser transport absent.
-    if cdp_http_ready; then
-      report_browser_state 'DEV_AUX_CDP_RESPONSIVE_UNVERIFIED' 'UNKNOWN'
-    else
-      report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
-    fi
+  if ! cdp_http_ready; then
+    report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
     status=1
   else
+    # The exact-account session probe already exercises the renderer and CDP.
+    # Do not run a second generic renderer probe first: on a busy VM it can
+    # time out even when the verified Dev session remains authenticated.
+    # HTTP CDP alone never grants readiness; the identity branch below does.
     session_state="$(browser_session_state | tail -n 1)"
     case "$session_state" in
       AUTHENTICATED)
@@ -430,6 +428,13 @@ else
     sleep 5
     if cdp_ready; then
       validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
+    elif cdp_http_ready; then
+      # HTTP CDP availability is proof the managed browser still owns the
+      # listening port. An unresponsive tab renderer is not permission to
+      # restart Chrome and disrupt the authenticated corporate profile.
+      # Preserve the session and fail closed until a later probe succeeds.
+      report_browser_state "DEGRADED_RENDERER_UNVERIFIED" "UNKNOWN"
+      status=1
     else
       systemctl restart "$browser_unit"
       if wait_for_cdp; then

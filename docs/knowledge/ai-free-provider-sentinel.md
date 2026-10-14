@@ -122,3 +122,38 @@ python3 -m unittest -q tests.test_ai_free_provider_sentinel
 Validations after official rollout: at least two real systemd timer
 service completions with Result=success, fresh state, no stale alert,
 correct Codex/Claude snapshots, and both paid bridges still denying use.
+
+
+## Resiliencia contra travamento do monitor (2026-10-14)
+
+Auditoria real no backend constatou que, embora o timer estivesse ativo,
+o servico shopvivaliz-ai-free-guard.service expirou repetidas vezes com
+TimeoutStartSec=90 enquanto o host apresentava pressao extrema de swap
+(zram 6 GiB praticamente cheia), alta espera de I/O e carga elevada.
+O arquivo de estado permanecia marcado HEALTHY por mais de 90 minutos,
+sem inspecao efetivamente completa. A recuperacao espontanea posterior
+nao dispensa uma protecao contra repeticao desse falso estado saudavel.
+
+SENTINEL_WALL_BUDGET_V1 implementa fail-closed:
+
+- Antes da varredura, gravar atomicamente CHECKING e o inicio em
+  check_started_epoch, preservando last_checked_epoch anterior.
+- O monitor tem prazo de parede de 55 segundos, inferior ao limite
+  systemd de 90 segundos; esgotado o prazo, grava status ALERT com
+  SENTINEL_RUN_TIME_BUDGET_EXCEEDED e tenta notificar o issue de
+  infraestrutura por um canal sem inferencia, com timeout separado.
+- Nao avanca watermark Claude ou baselines de tokens Codex se
+  a verificacao nao estiver completa.
+- Se systemd encerrar a verificacao por timeout, SIGTERM ou falha
+  inesperada, CHECKING antigo permanece visivel ate a proxima
+  verificacao bem-sucedida; clientes nao podem confundi-lo com HEALTHY.
+- O monitor de leitura recebe Nice=0 e prioridade normal de I/O,
+  sem alterar prioridades do desktop do usuario, encerra apenas
+  sua propria auditoria e nunca mexe nas sessoes autenticadas.
+- Temporizador de cinco minutos e contratos de bloqueio de rotas pagas
+  permanecem inalterados. O uso de Claude/Codex nao e liberado.
+
+Validar com testes offline tests.test_ai_free_provider_sentinel_deadline
+(inclusive timeout real, morte inesperada e recuperacao), testes gerais
+e a UI real de status/monitoramento. Confirmar que o estado indica
+HEALTHY apenas apos uma rodada completa e que o timestamp e recente.
