@@ -5,6 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
+$GuardianTaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander Task Guardian'
+$GuardianScript = Join-Path $Repo 'scripts\desktopkocepsv-desktop-commander-task-guardian.ps1'
 $LegacyStartupName = 'desktop-commander-remote.vbs'
 $Package = '@wonderwhy-er/desktop-commander@0.2.51'
 $PinnedVersion = '0.2.51'
@@ -125,6 +127,7 @@ function Deploy-OperationalFiles {
         'desktopkocepsv-desktop-commander-supervisor.ps1',
         'desktopkocepsv-desktop-commander-runner.ps1',
         'desktopkocepsv-desktop-commander-status.ps1',
+        'desktopkocepsv-desktop-commander-task-guardian.ps1',
         'patch-desktop-commander-session-persistence.mjs'
     )
     foreach ($name in $files) {
@@ -435,6 +438,7 @@ function Install-Task {
     try {
         [void](Ensure-PinnedPackageRoot)
         $installedSupervisor = Deploy-OperationalFiles
+        $installedGuardian = Join-Path $InstallRoot 'desktopkocepsv-desktop-commander-task-guardian.ps1'
         $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $installedSupervisor + '" -Mode Ensure'
         $action = New-ScheduledTaskAction -Execute $WindowsPowerShell -Argument $arguments -WorkingDirectory $InstallRoot
@@ -443,6 +447,11 @@ function Install-Task {
         $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
         $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -WakeToRun -Hidden
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV Desktop Commander online without interactive logon.' -Force -ErrorAction Stop | Out-Null
+        $guardianArguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $installedGuardian + '"'
+        $guardianAction = New-ScheduledTaskAction -Execute $WindowsPowerShell -Argument $guardianArguments -WorkingDirectory $InstallRoot
+        $guardianStartup = New-ScheduledTaskTrigger -AtStartup
+        $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
+        Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $principal -Settings $settings -Description 'Restores the KOCEPSV Desktop Commander watchdog if disabled or missing.' -Force -ErrorAction Stop | Out-Null
         Enable-TaskSchedulerOperationalLog
         Stop-RemoteProcesses
         Start-Sleep -Seconds 3
@@ -451,6 +460,7 @@ function Install-Task {
     }
     finally { Exit-OwnerMutex $installMutex }
     Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    Start-ScheduledTask -TaskName $GuardianTaskName -ErrorAction Stop
     if (-not (Wait-AgentConvergence -TimeoutSeconds 75)) {
         if (Test-RecentCooldown) { Write-Output 'AUTH_REQUIRED=true'; exit 20 }
         throw 'installed task did not establish a monitored provider connection'
@@ -458,6 +468,7 @@ function Install-Task {
     Remove-LegacyStartup
     Write-Output 'TASK_INSTALLED=true'
     Write-Output 'TASK_ACTION_SECURE=true'
+    Write-Output 'GUARDIAN_TASK_INSTALLED=true'
     Write-Output ('LEGACY_RAW_CAPTURES_REMOVED=' + $removed)
 }
 
