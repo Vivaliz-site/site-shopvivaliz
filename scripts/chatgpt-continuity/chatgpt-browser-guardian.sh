@@ -430,6 +430,13 @@ else
     sleep 5
     if cdp_ready; then
       validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
+    elif cdp_http_ready; then
+      # HTTP CDP availability is proof the managed browser still owns the
+      # listening port. An unresponsive tab renderer is not permission to
+      # restart Chrome and disrupt the authenticated corporate profile.
+      # Preserve the session and fail closed until a later probe succeeds.
+      report_browser_state "DEGRADED_RENDERER_UNVERIFIED" "UNKNOWN"
+      status=1
     else
       systemctl restart "$browser_unit"
       if wait_for_cdp; then
