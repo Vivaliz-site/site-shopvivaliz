@@ -18,10 +18,11 @@ import subprocess
 import sys
 
 ANONYMOUS_LABEL = "com.docker.volume.anonymous"
+# Engine-assigned anonymous status never proves content is disposable.
+# This extra label must be set intentionally by the producing application.
+DISPOSABLE_PROVENANCE_LABEL = "com.shopvivaliz.reclaim.regenerable"
 ANON_NAME = re.compile(r"^[a-f0-9]{64}$")
 MAX_NON_DATABASE_BYTES = 300_000_000
-MAX_TEST_PG16_BYTES = 70_000_000
-MIN_TEST_PG16_AGE_HOURS = 72
 LOCK = "/run/lock/shopvivaliz-anonymous-volume-reclaim.lock"
 LOG = "/var/log/shopvivaliz-anonymous-volume-reclaim.log"
 
@@ -57,8 +58,13 @@ def metadata_reason(
     name = str(metadata.get("Name") or "")
     if not ANON_NAME.fullmatch(name):
         return "not_engine_anonymous"
-    if ANONYMOUS_LABEL not in (metadata.get("Labels") or {}):
+    labels = metadata.get("Labels") or {}
+    if ANONYMOUS_LABEL not in labels:
         return "not_engine_anonymous"
+    # Opt-in from the producer is required; tiny and orphaned is NOT evidence
+    # that a volume lacks business data, backups, or a nested database.
+    if labels.get(DISPOSABLE_PROVENANCE_LABEL) != "true":
+        return "disposable_provenance_missing"
     if metadata.get("Driver") != "local":
         return "nonlocal_driver"
     if name in referenced:
@@ -83,11 +89,10 @@ def content_reason(size: int, pg_version: str | None, age_hours: float) -> str:
         return "size_unknown"
     if pg_version is None:
         return "eligible" if size <= MAX_NON_DATABASE_BYTES else "oversized"
-    if pg_version != "16":
-        return "database_preserved"
-    if age_hours < MIN_TEST_PG16_AGE_HOURS:
-        return "test_postgres_quarantine"
-    return "eligible" if size <= MAX_TEST_PG16_BYTES else "database_oversized"
+    # A cluster's version/age/size is never proof it was just a test database.
+    # Preserve every PostgreSQL volume until a separate audited workflow
+    # verifies backup, owner, explicit disposition and exclusive ownership.
+    return "database_preserved"
 
 
 def referenced_volume_names() -> set[str]:
