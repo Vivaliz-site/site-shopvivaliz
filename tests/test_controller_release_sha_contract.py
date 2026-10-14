@@ -55,5 +55,25 @@ class ControllerReleaseShaContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, accepted)
 
 
+    def test_immutable_release_carries_v5_ui_evidence_certifier(self) -> None:
+        source = INSTALLER.read_text(encoding="utf-8")
+        certifier = ROOT / "scripts" / "certify-audit-manifest.py"
+        self.assertTrue(certifier.is_file(), "trusted V5 certifier source missing")
+        self.assertIn('test -f "$release_dir/scripts/certify-audit-manifest.py"', source)
+        self.assertLess(
+            source.index('test -f "$release_dir/scripts/certify-audit-manifest.py"'),
+            source.index('sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime_dir"'),
+            "Certifier absence must fail before privileged runtime changes",
+        )
+        copy_block = source.split("for source in ", 1)[1].split("; do", 1)[0]
+        self.assertIn("certify-audit-manifest.py", copy_block.split())
+        self.assertIn(
+            'test -f "$target_dir/scripts/certify-audit-manifest.py"',
+            source,
+            "Never activate an immutable release without its pinned certifier",
+        )
+        self.assertIn('python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py" "$release_dir/scripts/certify-audit-manifest.py"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
