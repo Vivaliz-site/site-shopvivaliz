@@ -394,7 +394,9 @@ class Tests(unittest.TestCase):
         self.assertIn("OnUnitActiveSec=5min",timer)
         self.assertIn("StateDirectory=shopvivaliz-ai-free-guard",unit)
         self.assertIn("CPUQuota=75%", unit)
-        self.assertIn("Nice=10", unit)
+        self.assertIn("Nice=0", unit)
+        self.assertIn("IOSchedulingClass=best-effort", unit)
+        self.assertIn("IOSchedulingPriority=4", unit)
         self.assertIn("TimeoutStartSec=90", unit)
         self.assertIn("systemctl enable --now shopvivaliz-ai-free-guard.timer",installer)
 
