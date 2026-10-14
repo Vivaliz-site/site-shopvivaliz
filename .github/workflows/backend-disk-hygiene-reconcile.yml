@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'ops/host/shopvivaliz-disk-guard'
+      - 'ops/host/shopvivaliz-safe-anonymous-volume-reclaim.py'
       - 'ops/host/shopvivaliz-workspace-housekeeper'
       - 'scripts/install-disk-hygiene.sh'
       - 'deploy/systemd/shopvivaliz-disk-guard.service'
@@ -46,6 +47,7 @@ jobs:
           bash -n scripts/install-disk-hygiene.sh
           bash -n ops/host/shopvivaliz-workspace-housekeeper
           sh -n ops/host/shopvivaliz-disk-guard
+          python3 -m unittest discover -s tests -p 'test_safe_anonymous_volume_reclaim.py' -v
 
       - name: Configure verified backend SSH
         env:
@@ -71,21 +73,23 @@ jobs:
           archive="$RUNNER_TEMP/backend-disk-hygiene-${GITHUB_RUN_ID}.tgz"
           remote_archive="/tmp/backend-disk-hygiene-${GITHUB_RUN_ID}.tgz"
           remote_stage="/tmp/backend-disk-hygiene-${GITHUB_RUN_ID}"
-          tar -czf "$archive"             scripts/install-disk-hygiene.sh             ops/host/shopvivaliz-disk-guard             ops/host/shopvivaliz-workspace-housekeeper             deploy/systemd/shopvivaliz-disk-guard.service             deploy/systemd/shopvivaliz-disk-guard.timer             deploy/systemd/shopvivaliz-workspace-housekeeper.service             deploy/systemd/shopvivaliz-workspace-housekeeper.timer
+          tar -czf "$archive"             scripts/install-disk-hygiene.sh             ops/host/shopvivaliz-disk-guard             ops/host/shopvivaliz-safe-anonymous-volume-reclaim.py             ops/host/shopvivaliz-workspace-housekeeper             deploy/systemd/shopvivaliz-disk-guard.service             deploy/systemd/shopvivaliz-disk-guard.timer             deploy/systemd/shopvivaliz-workspace-housekeeper.service             deploy/systemd/shopvivaliz-workspace-housekeeper.timer
           "${SCP[@]}" "$archive" "ubuntu@10.0.1.38:$remote_archive"
 
           source_guard="$(sha256sum ops/host/shopvivaliz-disk-guard | awk '{print $1}')"
+          source_anon="$(sha256sum ops/host/shopvivaliz-safe-anonymous-volume-reclaim.py | awk '{print $1}')"
           source_house="$(sha256sum ops/host/shopvivaliz-workspace-housekeeper | awk '{print $1}')"
           source_timer="$(sha256sum deploy/systemd/shopvivaliz-disk-guard.timer | awk '{print $1}')"
 
-          "${SSH[@]}" bash -s -- "$remote_archive" "$remote_stage" "$source_guard" "$source_house" "$source_timer" "$MIN_FREE_BYTES" <<'REMOTE'
+          "${SSH[@]}" bash -s -- "$remote_archive" "$remote_stage" "$source_guard" "$source_house" "$source_timer" "$source_anon" "$MIN_FREE_BYTES" <<'REMOTE'
           set -Eeuo pipefail
           archive="$1"
           stage="$2"
           source_guard="$3"
           source_house="$4"
           source_timer="$5"
-          MIN_FREE_BYTES="$6"
+          source_anon="$6"
+          MIN_FREE_BYTES="$7"
           cleanup() { rm -rf -- "$stage" "$archive"; }
           trap cleanup EXIT
           rm -rf -- "$stage"
@@ -93,10 +97,14 @@ jobs:
           tar -xzf "$archive" -C "$stage"
 
           runtime_guard=""
+          runtime_anon=""
           runtime_house=""
           runtime_timer=""
           if [ -r /usr/local/sbin/shopvivaliz-disk-guard ]; then
             runtime_guard="$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard | awk '{print $1}')"
+          fi
+          if [ -r /usr/local/sbin/shopvivaliz-safe-anonymous-volume-reclaim.py ]; then
+            runtime_anon="$(sha256sum /usr/local/sbin/shopvivaliz-safe-anonymous-volume-reclaim.py | awk '{print $1}')"
           fi
           if [ -r /usr/local/sbin/shopvivaliz-workspace-housekeeper ]; then
             runtime_house="$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper | awk '{print $1}')"
@@ -106,6 +114,7 @@ jobs:
           fi
           needs_install=0
           [ "$runtime_guard" = "$source_guard" ] || needs_install=1
+          [ "$runtime_anon" = "$source_anon" ] || needs_install=1
           [ "$runtime_house" = "$source_house" ] || needs_install=1
           [ "$runtime_timer" = "$source_timer" ] || needs_install=1
           systemctl is-enabled --quiet shopvivaliz-disk-guard.timer || needs_install=1
@@ -129,6 +138,7 @@ jobs:
           systemctl is-enabled --quiet shopvivaliz-workspace-housekeeper.timer
           systemctl is-active --quiet shopvivaliz-workspace-housekeeper.timer
           test "$(sha256sum /usr/local/sbin/shopvivaliz-disk-guard | awk '{print $1}')" = "$source_guard"
+          test "$(sha256sum /usr/local/sbin/shopvivaliz-safe-anonymous-volume-reclaim.py | awk '{print $1}')" = "$source_anon"
           test "$(sha256sum /usr/local/sbin/shopvivaliz-workspace-housekeeper | awk '{print $1}')" = "$source_house"
           test "$(sha256sum /etc/systemd/system/shopvivaliz-disk-guard.timer | awk '{print $1}')" = "$source_timer"
 
