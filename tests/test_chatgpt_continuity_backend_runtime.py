@@ -502,7 +502,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertIn('return "UNKNOWN";', probe)
 
 
-    def test_chatgpt_browser_guardian_recovers_hung_managed_browser(self) -> None:
+    def test_chatgpt_browser_guardian_preserves_managed_browser_after_transient_cdp_recovery(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -551,14 +551,15 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
                 check=False,
             )
 
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual(result.returncode, 0, result.stderr)
             self.assertTrue(health_file.exists())
             calls = systemctl_log.read_text(encoding="utf-8")
             self.assertIn("is-active --quiet shopvivaliz-dev-browser.service", calls)
-            self.assertIn("restart shopvivaliz-dev-browser.service", calls)
-            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+            self.assertNotIn("restart shopvivaliz-dev-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=DEGRADED_RENDERER_UNVERIFIED", result.stdout)
+            self.assertEqual(json.loads(health_file.read_text())["session_state"], "UNKNOWN")
 
-    def test_chatgpt_browser_guardian_restarts_active_managed_browser_despite_profile_command_drift(self) -> None:
+    def test_chatgpt_browser_guardian_preserves_managed_browser_despite_profile_command_drift(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -605,11 +606,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual(result.returncode, 0, result.stderr)
             self.assertIn("is-active --quiet shopvivaliz-dev-browser.service", calls)
-            self.assertIn("restart shopvivaliz-dev-browser.service", calls)
+            self.assertNotIn("restart shopvivaliz-dev-browser.service", calls)
             self.assertNotIn("\nstart shopvivaliz-dev-browser.service\n", "\n" + calls)
-            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=DEGRADED_RENDERER_UNVERIFIED", result.stdout)
+            self.assertEqual(json.loads(health_file.read_text())["session_state"], "UNKNOWN")
 
     def test_chatgpt_browser_guardian_takes_over_single_hung_unmanaged_browser(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
@@ -731,7 +733,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             probe,
         )
 
-    def test_chatgpt_browser_guardian_restarts_managed_browser_when_runtime_evaluate_fails(self) -> None:
+    def test_chatgpt_browser_guardian_preserves_managed_browser_when_runtime_evaluate_fails(self) -> None:
         guardian = ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-browser-guardian.sh"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -776,11 +778,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             calls = systemctl_log.read_text(encoding="utf-8") if systemctl_log.exists() else ""
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual(result.returncode, 0, result.stderr)
             self.assertTrue(health_file.exists())
             self.assertIn("is-active --quiet shopvivaliz-dev-browser.service", calls)
-            self.assertIn("restart shopvivaliz-dev-browser.service", calls)
-            self.assertIn("CHATGPT_BROWSER_GUARDIAN=RECOVERED_MANAGED_RESTART", result.stdout)
+            self.assertNotIn("restart shopvivaliz-dev-browser.service", calls)
+            self.assertIn("CHATGPT_BROWSER_GUARDIAN=DEGRADED_RENDERER_UNVERIFIED", result.stdout)
+            self.assertEqual(json.loads(health_file.read_text())["session_state"], "UNKNOWN")
 
     def test_persistent_x99_unit_uses_authenticated_unprivileged_xvfb(self) -> None:
         unit = (ROOT / "ops" / "systemd" / "shopvivaliz-virtual-display.service").read_text()

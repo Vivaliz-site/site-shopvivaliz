@@ -273,6 +273,19 @@ exit 0
         calls = self.system_log.read_text() if self.system_log.exists() else ''
         self.assertNotIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
 
+    def test_live_cdp_http_with_failed_renderer_preserves_dev_chrome(self):
+        # CDP transport is live, but the tab renderer cannot be evaluated.
+        # Restarting Chrome loses an authenticated working session.
+        self.executable('node', 'exit 1\n')
+        result = self.run_guardian()
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEGRADED_RENDERER_UNVERIFIED', result.stdout)
+        actions = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertNotIn('restart shopvivaliz-dev-browser.service', actions)
+        data = json.loads(self.health.read_text())
+        self.assertEqual(data['session_state'], 'UNKNOWN')
+        self.assertFalse(data['authenticated'])
+
     def test_failed_transport_is_not_hidden_by_negative_cache(self):
         self.run_guardian()
         self.assert_cache_skip()
