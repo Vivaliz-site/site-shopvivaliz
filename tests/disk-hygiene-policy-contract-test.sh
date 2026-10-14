@@ -67,6 +67,7 @@ UNIT="$ROOT/deploy/systemd/shopvivaliz-disk-guard.service"
 check_fixed 'TimeoutStartSec=180s' "$UNIT" 'systemd caps disk guard to three minutes'
 check_fixed 'IOWeight=20' "$UNIT" 'service I/O weight limits cleanup pressure'
 check_fixed 'CPUWeight=20' "$UNIT" 'service CPU weight limits cleanup pressure'
+check_fixed 'if [ "$heavy_cleanup_ran" -eq 0 ] && { [ "$before" -ge 90 ] || [ "$low_free" -eq 1 ]; }; then' "$GUARD" 'anonymous-volume cleaner avoids overlap with expensive 6-hour cycle'
 check_fixed 'ANON_RECLAIM_COOLDOWN_SECONDS=3600' "$GUARD" 'lightweight anonymous-volume cleanup has independent one-hour cooldown'
 check_fixed 'shopvivaliz-safe-anonymous-volume-reclaim.py --apply --min-age-hours 24' "$GUARD" 'disk guard activates bounded conservative anonymous-volume cleanup'
 check_fixed 'anonymous_volume_reclaim=$anon_reclaim_status' "$GUARD" 'reclaim outcome is persisted in disk status'
