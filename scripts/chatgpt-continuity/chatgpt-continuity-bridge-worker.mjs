@@ -80,6 +80,15 @@ const BROWSER_SESSIONS = Object.freeze({
   // Compatibility only for checkpoints bound before the 2026-10-05 account cutover.
   fred: Object.freeze({ cdpBase: 'http://127.0.0.1:9555', expectedEmail: 'fredmourao@gmail.com', legacy: true }),
 });
+function boundDevCdpBase() {
+  // Separate, explicit opt-in. The MCP Dev 5583 adoption is NOT proof of
+  // permission to reroute the independent continuity worker. No cookies or
+  // credentials are copied from the authenticated Chrome.
+  const selected = String(process.env.SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP || '');
+  if (selected === '') return BROWSER_SESSIONS.dev.cdpBase;
+  if (selected === '9557') return 'http://127.0.0.1:9557';
+  throw new Error('invalid Dev continuity auxiliary adoption');
+}
 function browserCdpBase() {
   return BROWSER_SESSION_CONTEXT.getStore()?.cdpBase || CDP_BASE;
 }
@@ -103,7 +112,9 @@ function taskBrowserSession(taskId, requestedConversationId = '') {
       || (requestedConversationId && requestedConversationId !== bound)) {
     throw new Error('browser session checkpoint conversation mismatch or terminal state');
   }
-  return Object.freeze({ ...BROWSER_SESSIONS[name], conversationId: bound, name });
+  return Object.freeze({ ...BROWSER_SESSIONS[name],
+    ...(name === 'dev' ? { cdpBase: boundDevCdpBase() } : {}),
+    conversationId: bound, name });
 }
 
 const POLL_MS = Math.max(5000, Number(process.env.CHATGPT_CONTINUITY_POLL_MS || 15000));
@@ -310,6 +321,46 @@ function readMonitorState(file) {
   }
 }
 
+const MONITOR_ORPHAN_TEMP_MIN_AGE_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const MONITOR_ORPHAN_MAX_REMOVALS = 512;
+const monitorOrphanSweepDue = new Map();
+
+// A killed worker can leave its atomic-write .tmp.<pid> behind. These files
+// are not checkpoints or source-of-truth. Prune only old regular files from
+// this exact monitor basename after proving that the owning PID is gone.
+// Errors must never stop the durable monitor heartbeat.
+function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
+  const slash = file.lastIndexOf('/');
+  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  const prefix = file.slice(slash + 1) + '.tmp.';
+  let removed = 0;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (removed >= MONITOR_ORPHAN_MAX_REMOVALS) break;
+      if (!entry.isFile() || !entry.name.startsWith(prefix)) continue;
+      const rawPid = entry.name.slice(prefix.length);
+      if (!/^[0-9]{1,10}$/.test(rawPid)) continue;
+      const pid = Number(rawPid);
+      if (!Number.isSafeInteger(pid) || pid < 2 || pid > 2147483647 || pid === process.pid) continue;
+      try {
+        process.kill(pid, 0);
+        continue; // PID is alive, or was recycled: never touch its file.
+      } catch (error) {
+        if (error?.code !== 'ESRCH') continue; // EPERM and unknown errors fail closed.
+      }
+      const candidate = dir + '/' + entry.name;
+      try {
+        const st = fs.lstatSync(candidate);
+        if (!st.isFile() || nowMs - st.mtimeMs < MONITOR_ORPHAN_TEMP_MIN_AGE_MS) continue;
+        fs.unlinkSync(candidate);
+        removed += 1;
+      } catch {} // Race with another worker or removal; preserve the heartbeat.
+    }
+  } catch {}
+  return removed;
+}
+
 function persistMonitorStateFile(file, payload) {
   const slash = file.lastIndexOf('/');
   const dir = slash > 0 ? file.slice(0, slash) : '.';
@@ -327,6 +378,11 @@ function persistMonitorStateFile(file, payload) {
     const dirFd = fs.openSync(dir, 'r');
     try { fs.fsyncSync(dirFd); } finally { fs.closeSync(dirFd); }
   } catch {}
+  const nowMs = Date.now();
+  if (nowMs >= (monitorOrphanSweepDue.get(file) || 0)) {
+    monitorOrphanSweepDue.set(file, nowMs + MONITOR_ORPHAN_SWEEP_INTERVAL_MS);
+    pruneStaleMonitorTempFiles(file, nowMs);
+  }
 }
 
 function persistReinforcementHealth(outcome) {
@@ -475,12 +531,56 @@ function selectChatgptTab(tabs) {
   return selectedRank === Number.POSITIVE_INFINITY ? null : selected;
 }
 
-async function connectFirstUsableChatgptTab(tabs, connector, preferred = null) {
+async function connectFirstUsableChatgptTab(tabs, connector, preferred = null, { maxParallel = 1 } = {}) {
   if (!Array.isArray(tabs) || typeof connector !== 'function') return null;
   const ranked = tabs
     .map((tab, index) => ({ tab, index, rank: chatgptTabRank(tab) }))
     .filter(row => Number.isFinite(row.rank))
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index));
+
+  // The guardian may inspect many restored tabs. Probe small, bounded batches
+  // in parallel instead of serial 2.5s session fetches, while retaining the
+  // original deterministic first-preferred/fallback selection and closing all
+  // unselected CDP connections. All other callers remain strictly serial.
+  const parallel = Math.max(1, Math.min(8, Math.trunc(Number(maxParallel) || 1)));
+  if (parallel > 1 && typeof preferred === 'function') {
+    let fallback = null;
+    for (let index = 0; index < ranked.length; index += parallel) {
+      const batch = ranked.slice(index, index + parallel);
+      const checked = await Promise.all(batch.map(async ({ tab }) => {
+        let connected = null;
+        try {
+          connected = await connector(tab);
+          if (!connected) return { connected: null, accepted: false };
+          let accepted = false;
+          try { accepted = Boolean(await preferred(connected, tab)); } catch {}
+          return { connected, accepted };
+        } catch {
+          try { connected?.close(); } catch {}
+          return { connected: null, accepted: false };
+        }
+      }));
+      const winner = checked.find(result => result.accepted)?.connected || null;
+      if (winner) {
+        if (fallback && fallback !== winner) {
+          try { fallback.close(); } catch {}
+        }
+        for (const result of checked) {
+          if (result.connected && result.connected !== winner) {
+            try { result.connected.close(); } catch {}
+          }
+        }
+        return winner;
+      }
+      for (const result of checked) {
+        if (!result.connected) continue;
+        if (!fallback) fallback = result.connected;
+        else { try { result.connected.close(); } catch {} }
+      }
+    }
+    return fallback;
+  }
+
   let fallback = null;
   for (const { tab } of ranked) {
     try {
@@ -715,6 +815,61 @@ async function connectBoundConversationWithReentry(
     boundTabs.length > 1 ? preferred : null,
   );
   if (existing) return existing;
+
+  // The existing Dev auxiliary Chrome may remain alive while the provider's
+  // account identity changes. Never navigate to a private bound conversation
+  // based only on a cached guardian health check. Before selecting or creating
+  // a neutral reentry target, verify the *current* official ChatGPT identity in
+  // an already-open, same-origin tab. No session JSON or credential leaves CDP.
+  const currentSession = BROWSER_SESSION_CONTEXT.getStore();
+  if (currentSession?.name === 'dev'
+      && currentSession.cdpBase === 'http://127.0.0.1:9557') {
+    const candidates = (Array.isArray(tabs) ? tabs : [])
+      .filter(tab => chatgptTabRank(tab) === 1 || chatgptTabRank(tab) === 0)
+      .slice(0, 4);
+    let identityVerified = false;
+    for (const tab of candidates) {
+      let probe;
+      let timeout;
+      try {
+        probe = await connector(tab);
+        if (!probe) continue;
+        const verdict = await Promise.race([
+          probe.evaluate(`(async()=>{
+            /* continuity-dev-aux-prenavigation-identity */
+            if(location.hostname !== 'chatgpt.com') return false;
+            try {
+              const r=await fetch('/api/auth/session',{
+                credentials:'same-origin', cache:'no-store',
+                signal:AbortSignal.timeout(2000)
+              });
+              if(!r.ok) return false;
+              const d=await r.json();
+              return String(d?.user?.email||'').trim().toLowerCase()
+                === 'dev@shopvivaliz.com.br';
+            }catch{return false}
+          })()`),
+          new Promise(resolve => { timeout = setTimeout(() => resolve(false), 2600); }),
+        ]);
+        if (verdict === true) {
+          identityVerified = true;
+          break;
+        }
+        // A mismatch or missing user.email is a hard deny; other open tabs
+        // in the same Chromium profile must not override this decision.
+        if (verdict === false) break;
+      } catch {
+        // A dead renderer cannot attest identity. Try another existing tab,
+        // but never create a new tab or navigate on an unverified profile.
+      } finally {
+        if (timeout) clearTimeout(timeout);
+        try { probe?.close(); } catch {}
+      }
+    }
+    if (!identityVerified) {
+      throw new Error('Dev auxiliary identity unverified before conversation reentry');
+    }
+  }
 
   // A target can remain listed by /json while its renderer no longer answers
   // Runtime.evaluate. Re-enter the exact immutable conversation id through a
@@ -2245,7 +2400,10 @@ async function alignLatestForReinforcement(
     ? Math.max(0, Math.round((Number(nowMs) - Number(latest.update_time) * 1000) / 1000))
     : null;
   if (!latest) {
-    if (httpStatus === 429) {
+    // A 200 response without valid conversations is no stronger evidence
+    // than a rate limit. Recover only from a locally synchronized, provably
+    // unique sidebar context; never select an ambiguous active tab.
+    if (httpStatus === 429 || httpStatus === 200) {
       const sidebar = await alignToSidebarLatestConversation(cdp);
       if (
         sidebar.action === 'navigated_sidebar_fallback'
@@ -4101,6 +4259,7 @@ export {
   outcomeStatusDetailCode,
   reinforcementHealthPayload,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   transmissionErrorPresent,
   latestConversationProbe,
   normalizeLatestConversationMeta,

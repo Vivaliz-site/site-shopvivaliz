@@ -1,0 +1,21 @@
+[Unit]
+Description=ShopVivaliz private, atomic backup of durable agent continuity checkpoints
+After=local-fs.target
+Documentation=https://github.com/Vivaliz-site/site-shopvivaliz/blob/main/docs/knowledge/task-continuity.md
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/libexec/shopvivaliz-continuity-state-backup.py
+TimeoutStartSec=180
+MemoryMax=256M
+NoNewPrivileges=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadOnlyPaths=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-backups
+PrivateTmp=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX

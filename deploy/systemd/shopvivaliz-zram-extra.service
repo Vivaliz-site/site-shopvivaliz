@@ -1,0 +1,14 @@
+[Unit]
+Description=ShopVivaliz additional 2 GiB zram swap (non-disruptive)
+Requires=shopvivaliz-zram.service
+After=shopvivaliz-zram.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/shopvivaliz-zram-extra
+TimeoutStartSec=30s
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

@@ -54,9 +54,16 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
 
     def test_default_fallback_models_reject_discontinued_flash_lite(self) -> None:
         self.assertNotIn("gemini-2.5-flash-lite", self.mod.DEFAULT_FALLBACK_MODELS)
-        self.assertTrue(
-            any(model.endswith("-latest") for model in self.mod.DEFAULT_FALLBACK_MODELS),
+        self.assertEqual(
             self.mod.DEFAULT_FALLBACK_MODELS,
+            ("gemini-3.1-flash-lite",),
+        )
+        self.assertEqual(
+            self.mod.build_model_candidates(
+                "gemini-3.1-flash-lite", self.mod.DEFAULT_FALLBACK_MODELS
+            ),
+            ["gemini-3.1-flash-lite"],
+            "same verified Free model must not be invoked twice",
         )
 
     def test_model_candidates_keep_primary_then_unique_gemini_only_fallbacks(self) -> None:
@@ -536,15 +543,15 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertIn('if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]', failover)
         self.assertIn('--prompt-file "$PROMPT_FILE"', failover)
         self.assertIn('--model "$GEMINI_MODEL"', failover)
-        self.assertIn("BACKGROUND_ORDER=(gemini)", failover)
+        self.assertIn("BACKGROUND_ORDER=(gemini ollama)", failover)
         self.assertIn("background_paid_fallback_forbidden=true", failover)
-        self.assertIn("background_codex_fallback_authorized=true", failover)
+        self.assertIn("background_paid_fallback_ignored=true", failover)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK", failover)
         self.assertIn("codex_auto", failover)
         self.assertIn("--sandbox danger-full-access", failover)
         self.assertIn("--ask-for-approval never", failover)
         self.assertIn('CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"', failover)
-        self.assertIn('GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"', failover)
+        self.assertIn('GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite}"', failover)
 
 
 if __name__ == "__main__":

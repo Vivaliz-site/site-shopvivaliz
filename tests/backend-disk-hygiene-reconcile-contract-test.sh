@@ -19,6 +19,9 @@ check_fixed 'schedule:' 'disk hygiene reconciliation has an independent schedule
 check_fixed "cron: '*/30 * * * *'" 'disk hygiene reconciliation runs at least every thirty minutes'
 check_fixed 'shopvivaliz-a1-deploy' 'reconciliation runs outside the backend it protects'
 check_fixed "'ops/host/shopvivaliz-disk-guard'" 'guard source changes trigger reconciliation'
+check_fixed "'ops/host/shopvivaliz-safe-anonymous-volume-reclaim.py'" 'reconciler reacts to anonymous-volume cleanup changes'
+check_fixed 'source_anon=' 'reconciler computes canonical volume-cleaner hash'
+check_fixed 'runtime_anon=' 'reconciler tracks deployed volume-cleaner hash'
 check_fixed "'ops/host/shopvivaliz-workspace-housekeeper'" 'housekeeper source changes trigger reconciliation'
 check_fixed "'scripts/install-disk-hygiene.sh'" 'installer changes trigger reconciliation'
 check_fixed "'deploy/systemd/shopvivaliz-disk-guard.timer'" 'timer changes trigger reconciliation'
@@ -29,5 +32,23 @@ check_fixed 'systemctl is-active --quiet shopvivaliz-disk-guard.timer' 'reconcil
 check_fixed 'systemctl start shopvivaliz-disk-guard.service' 'reconciliation runs the guard after reconciling'
 check_fixed 'MIN_FREE_BYTES: 6442450944' 'reconciliation enforces the 6 GiB free-space floor during verification'
 check_fixed 'DISK_HYGIENE_RECONCILE=PASS' 'reconciliation emits an explicit terminal proof'
+
+
+# This workflow runs on the web host, while the service's ExecStart
+# binary is installed only on the backend. Unit validation must run in
+# the backend installer, not against missing binaries on the web runner.
+if sed -n '/      - name: Validate disk hygiene policy/,/      - name: Configure verified backend SSH/p' "$WORKFLOW" | grep -Fq 'systemd-analyze verify'; then
+  printf 'FAIL: backend-only service executables must not be validated on the web runner\n'
+  fail=1
+else
+  printf 'PASS: backend-only service executables are not required on the web runner\n'
+fi
+check_fixed 'systemd-analyze verify "$stage/deploy/systemd/shopvivaliz-disk-guard.service"' 'backend reconciler validates staged service units on their actual host'
+if grep -Fq 'systemd-analyze verify' "$ROOT/scripts/install-disk-hygiene.sh"; then
+  printf 'PASS: canonical backend installer still verifies systemd units\n'
+else
+  printf 'FAIL: canonical backend installer must verify systemd units\n'
+  fail=1
+fi
 
 exit "$fail"

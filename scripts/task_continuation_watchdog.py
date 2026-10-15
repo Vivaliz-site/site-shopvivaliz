@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import fcntl
+import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -119,6 +120,7 @@ def _run_once_locked(
     scanned = 0
     eligible = 0
     dispatched = 0
+    skipped_unbound_origin = 0
     skipped_outside_lookback = 0
     skipped_invalid_timestamp = 0
 
@@ -151,6 +153,19 @@ def _run_once_locked(
         if not proactive and age_seconds < cutoff:
             continue
 
+        # Proactive (durable) ChatGPT handoff must never enqueue a new
+        # request without an exact, account-scoped origin. Legacy checkpoints
+        # remain RUNNING and observable until their real route is attested.
+        # Stale-only compatibility retains its existing queue behavior.
+        conversation_id = str(payload.get("conversation_id", "")).strip()
+        browser_session = str(payload.get("browser_session", "")).strip()
+        if proactive and (
+            re.fullmatch(r"[A-Za-z0-9_-]{8,160}", conversation_id) is None
+            or browser_session not in {"dev", "atendimento"}
+        ):
+            skipped_unbound_origin += 1
+            continue
+
         eligible += 1
         fingerprint = _fingerprint(payload)
         if fingerprint in existing:
@@ -181,6 +196,11 @@ def _run_once_locked(
             "fingerprint": fingerprint,
             "created_at": utc_now(),
         }
+        if proactive:
+            # Preserve provenance metadata from the same checkpoint; the
+            # dispatcher still revalidates its fingerprint and ownership.
+            request["conversation_id"] = conversation_id
+            request["browser_session"] = browser_session
         _append_request(root, request)
         existing.add(fingerprint)
         dispatched += 1
@@ -195,6 +215,7 @@ def _run_once_locked(
         "scanned": scanned,
         "eligible": eligible,
         "dispatched": dispatched,
+        "skipped_unbound_origin": skipped_unbound_origin,
         "skipped_outside_lookback": skipped_outside_lookback,
         "skipped_invalid_timestamp": skipped_invalid_timestamp,
         "queue": {
@@ -230,6 +251,7 @@ def run_once(
                 "scanned": 0,
                 "eligible": 0,
                 "dispatched": 0,
+                "skipped_unbound_origin": 0,
                 "locked": True,
                 "generated_at": utc_now(),
             }

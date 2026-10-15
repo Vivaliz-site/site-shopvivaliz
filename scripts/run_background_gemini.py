@@ -8,9 +8,14 @@ removes unrelated AI provider secrets from the Gemini child environment.
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
+import hmac
 import json
 import os
+import signal
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,8 +24,29 @@ from typing import Mapping
 
 DEFAULT_ENV_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/.env")
 DEFAULT_GEMINI_BIN = Path("/home/ubuntu/.local/bin/gemini")
+# A model offered on the free tier can still be billed when the API key
+# belongs to a paid project. Never infer billing tier from a model alias.
+DEFAULT_TIER_ATTESTATION = Path(
+    "/home/ubuntu/shopvivaliz-deploy/shared/ai-free-policy/gemini-free-tier.json"
+)
+MAX_FREE_TIER_ATTESTATION_AGE_DAYS = 30
 SUPPORTED_KEYS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GEMINI_API_KEY")
-DEFAULT_FALLBACK_MODELS = ("gemini-flash-lite-latest",)
+DEFAULT_FALLBACK_MODELS = ("gemini-3.1-flash-lite",)
+DEFAULT_GEMINI_ATTEMPT_TIMEOUT_SECONDS = 60
+
+# Flash is eligible for Gemini free-tier usage; actual billing eligibility
+# depends on the Google project. Never silently select Pro/paid-only models.
+FREE_TIER_FLASH_MODELS = frozenset({
+    "gemini-flash-latest", "gemini-flash-lite-latest",
+    "gemini-2.5-flash", "gemini-2.5-flash-lite",
+    "gemini-3.5-flash", "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite", "gemini-3.6-flash",
+})
+
+
+def is_flash_free_tier_eligible(name: str) -> bool:
+    return str(name).strip() in FREE_TIER_FLASH_MODELS
+
 RETRYABLE_GEMINI_REASONS = frozenset({"quota_exhausted", "model_unavailable", "authentication_failed"})
 SECRET_KEYS_TO_REMOVE = (
     "OPENAI_API_KEY",
@@ -59,6 +85,62 @@ def select_gemini_credentials(text: str) -> list[tuple[str, str]]:
             credentials.append((key, value))
             seen_values.add(value)
     return credentials
+
+
+def free_tier_approved_credentials(
+    credentials: list[tuple[str, str]],
+    attestation_file: Path,
+    *,
+    now: datetime.datetime | None = None,
+) -> list[tuple[str, str]]:
+    """Require recent operator-verified Free billing on the exact API key.
+
+    The attestation is non-secret evidence saved only after the operator
+    confirms the key's project and its Free billing tier in Google AI Studio.
+    There is no API-based self-certification and no billable test request.
+    Invalid/missing/expired attestations fail closed to local Ollama.
+    """
+    try:
+        meta = attestation_file.stat()
+        if not stat.S_ISREG(meta.st_mode) or stat.S_IMODE(meta.st_mode) & 0o077:
+            return []
+        data = json.loads(attestation_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        return []
+    if data.get("billing_tier") != "free" or data.get("verified_source") != "google_ai_studio":
+        return []
+    project = data.get("project_id")
+    if not isinstance(project, str) or len(project.strip()) < 3:
+        return []
+    raw = data.get("verified_at")
+    if not isinstance(raw, str):
+        return []
+    try:
+        verified = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if verified.tzinfo is None:
+            return []
+        current = now or datetime.datetime.now(datetime.timezone.utc)
+        age = current - verified
+        if not (datetime.timedelta(0) <= age <= datetime.timedelta(
+            days=MAX_FREE_TIER_ATTESTATION_AGE_DAYS
+        )):
+            return []
+    except (ValueError, OverflowError, TypeError):
+        return []
+    approved = data.get("key_sha256")
+    if not isinstance(approved, list) or not approved or len(approved) > 10:
+        return []
+    hashes = [h for h in approved if isinstance(h, str) and len(h) == 64
+              and all(c in "0123456789abcdef" for c in h)]
+    if len(hashes) != len(approved):
+        return []
+    return [
+        (source, key) for source, key in credentials
+        if any(hmac.compare_digest(hashlib.sha256(key.encode()).hexdigest(), h)
+               for h in hashes)
+    ]
 
 
 def select_gemini_credential(text: str) -> tuple[str, str]:
@@ -238,6 +320,51 @@ def classify_gemini_failure(output: str, returncode: int) -> str | None:
     return "unknown_safe_error"
 
 
+def run_bounded_gemini(
+    command: list[str], child_env: dict[str, str], timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    """GEMINI_BOUNDED_RUN_V1: stop an entire isolated CLI process group.
+
+    Do not inherit stdin (noninteractive worker), do not allow unbounded
+    provider hangs, and never print partially generated content on timeout.
+    Models remain on the explicitly verified Free tier.
+    """
+    process = subprocess.Popen(
+        command, env=child_env, stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True,
+    )
+    try:
+        output, _ = process.communicate(timeout=max(1, int(timeout_seconds)))
+        return subprocess.CompletedProcess(command, process.returncode, output)
+    except subprocess.TimeoutExpired:
+        # Node-based CLI may fork grandchildren; kill only the isolated
+        # process group created above, never a user or agent session.
+        def _signal_group(sig: int) -> None:
+            try:
+                os.killpg(process.pid, sig)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                process.kill()
+
+        _signal_group(signal.SIGTERM)
+        try:
+            process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            _signal_group(signal.SIGKILL)
+            try:
+                process.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                if process.stdout is not None:
+                    process.stdout.close()
+                process.kill()
+                process.wait(timeout=3)
+        # Discard any partial assistant text, logs or credentials from a
+        # timed-out generation attempt. The caller logs status codes only.
+        return subprocess.CompletedProcess(command, 124, "")
+
+
 def _resolve_binary(configured: str) -> str:
     candidate = Path(configured).expanduser()
     if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -253,6 +380,8 @@ def run(
     env_file: Path,
     gemini_bin: str,
     fallback_models: tuple[str, ...] = DEFAULT_FALLBACK_MODELS,
+    tier_attestation_file: Path = DEFAULT_TIER_ATTESTATION,
+    attempt_timeout_seconds: int = DEFAULT_GEMINI_ATTEMPT_TIMEOUT_SECONDS,
 ) -> int:
     if not prompt_file.is_file():
         print("background_gemini_error=prompt_file_missing", file=sys.stderr)
@@ -271,6 +400,16 @@ def run(
     if not credentials:
         print("background_gemini_error=credential_missing", file=sys.stderr)
         return 78
+
+    # FREE_TIER_BILLING_GUARD_V1: do not call a Google model solely because
+    # its ID is free-tier eligible. Paid projects may bill the same model.
+    # Only apply to detached/persistent jobs; legitimate human-controlled
+    # interactive flows retain their separately configured approvals.
+    if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        credentials = free_tier_approved_credentials(credentials, tier_attestation_file)
+        if not credentials:
+            print("background_gemini_error=free_tier_not_verified", file=sys.stderr)
+            return 78
 
     executable = _resolve_binary(gemini_bin)
     if not executable:
@@ -317,16 +456,12 @@ def run(
                     prompt=prompt,
                     admin_policy_path=policy_path,
                 )
-                completed = subprocess.run(
-                    command,
-                    env=child,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    check=False,
-                )
+                completed = run_bounded_gemini(command, child, attempt_timeout_seconds)
                 output = redact_credentials(completed.stdout or "", credentials)
-                reason = classify_gemini_failure(output, completed.returncode)
+                reason = (
+                    "request_timeout" if completed.returncode == 124
+                    else classify_gemini_failure(output, completed.returncode)
+                )
                 print(
                     "background_gemini_attempt="
                     f"credential_source:{source},model:{candidate_model},"
@@ -350,6 +485,11 @@ def run(
                 last_model = candidate_model
 
                 if last_reason == "authentication_failed":
+                    break
+                if last_reason == "request_timeout":
+                    # Do not try another remote model after a stalled request.
+                    # Return promptly to the local Ollama fallback.
+                    stop_all = True
                     break
                 if last_reason in {"quota_exhausted", "model_unavailable"}:
                     continue
@@ -408,12 +548,27 @@ def main() -> int:
         if value.strip()
     )
     fallback_models = tuple(args.fallback_model or configured_fallbacks or DEFAULT_FALLBACK_MODELS)
+
+    if os.environ.get("SHOPVIVALIZ_RESUME_BACKGROUND") == "1":
+        candidates = build_model_candidates(args.model, fallback_models)
+        if not all(is_flash_free_tier_eligible(item) for item in candidates):
+            print("background_gemini_error=non_flash_model_forbidden", file=sys.stderr)
+            return 78
+    try:
+        timeout_seconds = int(os.getenv(
+            "GEMINI_BACKGROUND_TIMEOUT_SECONDS",
+            str(DEFAULT_GEMINI_ATTEMPT_TIMEOUT_SECONDS),
+        ))
+    except ValueError:
+        timeout_seconds = DEFAULT_GEMINI_ATTEMPT_TIMEOUT_SECONDS
+    timeout_seconds = max(15, min(90, timeout_seconds))
     return run(
         model=args.model,
         prompt_file=Path(args.prompt_file).expanduser(),
         env_file=Path(args.env_file).expanduser(),
         gemini_bin=args.gemini_bin,
         fallback_models=fallback_models,
+        attempt_timeout_seconds=timeout_seconds,
     )
 
 

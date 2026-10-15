@@ -964,9 +964,7 @@ jobs:
 
           help_tmp="$(mktemp)"
           auth_tmp="$(mktemp)"
-          probe_out="$(mktemp)"
-          probe_err="$(mktemp)"
-          trap 'rm -f "$help_tmp" "$auth_tmp" "$probe_out" "$probe_err"' EXIT
+          trap 'rm -f "$help_tmp" "$auth_tmp"' EXIT
 
           sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin /home/ubuntu/.local/bin/claude --help >"$help_tmp" 2>&1 || :
           for spec in SAFE_MODE:--safe-mode RESTRICTED:--restricted PERMISSION_PROMPTS:--permission-prompts NO_CHROME:--no-chrome; do
@@ -1003,38 +1001,13 @@ jobs:
           case "$process_count" in ''|*[!0-9]*) process_count=0 ;; esac
           printf 'AI_SQUAD_CLAUDE_PROCESS_COUNT=%s\n' "$process_count"
 
-          probe_rc=0
-          if timeout 35s sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin             /home/ubuntu/.local/bin/claude -p             --output-format stream-json --verbose --no-session-persistence             --safe-mode --restricted --permission-mode dontAsk --permission-prompts none             --disable-slash-commands --no-chrome --model claude-sonnet-5 --effort low             --system-prompt 'AI Squad authentication health probe. Reply only OK.' --tools ''             >"$probe_out" 2>"$probe_err" <<'INNER_PROMPT'
-          OK
-          INNER_PROMPT
-          then
-            probe_rc=0
-          else
-            probe_rc=$?
-          fi
-
-          failure_class=none
-          if [ "$probe_rc" -ne 0 ]; then
-            combined="$(tr '[:upper:]' '[:lower:]' <"$probe_err"; tr '[:upper:]' '[:lower:]' <"$probe_out")"
-            if [ "$probe_rc" -eq 124 ]; then
-              failure_class=timeout
-            elif grep -Eq 'another claude code process is refreshing|exited mid-refresh|refresh oauth token' <<<"$combined"; then
-              failure_class=oauth_refresh_contention
-            elif grep -Eq 'unknown option|unknown argument|invalid option' <<<"$combined"; then
-              failure_class=cli_flags
-            elif grep -Eq 'selected model|model.*(not exist|access)|not.*access.*model' <<<"$combined"; then
-              failure_class=model_access
-            elif grep -Eq 'usage limit|rate limit|quota|credit balance' <<<"$combined"; then
-              failure_class=quota
-            elif grep -Eq 'oauth|authenticate|authentication|not logged in|token expired|login' <<<"$combined"; then
-              failure_class=auth
-            else
-              failure_class=transport
-            fi
-          elif ! grep -q '"type":"result"' "$probe_out"; then
-            failure_class=invalid_output
-          fi
-          printf 'AI_SQUAD_CLAUDE_PROBE_OK=%s\n' "$([ "$failure_class" = none ] && echo true || echo false)"
+          # PAID_MODEL_DIAGNOSTIC_NO_GENERATION_V1: never generate paid model output
+          # in a diagnostic, even if a human-owned issue starts this workflow.
+          # Remote-control and auth status are read-only; successful inference
+          # requires an independently authorized interactive session.
+          failure_class=not_run_paid_generation
+          printf 'AI_SQUAD_CLAUDE_PROBE_OK=not_run\n'
+          printf 'AI_SQUAD_CLAUDE_PROBE_SKIPPED=paid_generation_requires_explicit_approval\n'
           printf 'AI_SQUAD_CLAUDE_PROBE_FAILURE_CLASS=%s\n' "$failure_class"
           '''
 

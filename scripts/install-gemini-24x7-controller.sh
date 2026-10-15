@@ -38,6 +38,9 @@ case "$durable_handoff" in 0|1) ;; *) echo "ERROR invalid SHOPVIVALIZ_CONTINUITY
 
 test -d "$release_dir"
 test -f "$release_dir/scripts/gemini_24x7_controller.py"
+# agent_task_state.py pins the trusted V5 certifier to ROOT/scripts.
+# Verify before any privileged changes, then ship it in the SAME immutable SHA.
+test -f "$release_dir/scripts/certify-audit-manifest.py"
 test -f "$unit_source"
 test -f "$resume_worker_service_source"
 test -f "$watchdog_service_source"
@@ -46,14 +49,14 @@ test -f "$nudge_service_source"
 test -f "$nudge_timer_source"
 compile_cache="$(mktemp -d)"
 trap 'rm -rf "$compile_cache"' EXIT
-PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py"
+PYTHONPYCACHEPREFIX="$compile_cache" python3 -m py_compile "$release_dir/scripts/gemini_24x7_controller.py" "$release_dir/scripts/certify-audit-manifest.py"
 rm -rf "$compile_cache"
 trap - EXIT
 if [ -z "$release_id" ] && [ -f "$release_dir/.release-sha" ]; then
   release_id="$(tr -d '[:space:]' < "$release_dir/.release-sha")"
 fi
-if ! [[ "$release_id" =~ ^[A-Za-z0-9._-]{7,160}$ ]]; then
-  echo "ERROR: immutable release id is required" >&2
+if ! [[ "$release_id" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ERROR: immutable release id must be a full 40-character lowercase commit SHA" >&2
   exit 64
 fi
 
@@ -76,7 +79,7 @@ if [ ! -d "$target_dir" ]; then
   trap cleanup EXIT
   sudo install -d -o root -g root -m 0755 "$stage_dir/scripts"
   sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"
-  for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py; do
+  for source in agent_task_state.py certify-audit-manifest.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py attest-gemini-free-tier.py run_background_ollama.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py; do
     sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"
   done
   for source in "$release_dir"/scripts/continuity/*.py; do
@@ -98,6 +101,8 @@ if [ ! -d "$target_dir" ]; then
   sudo mv "$stage_dir" "$target_dir"
   trap - EXIT
 fi
+# Never activate a partially staged/legacy SHA that lacks its pinned verifier.
+test -f "$target_dir/scripts/certify-audit-manifest.py" || { echo "ERROR: immutable controller release missing V5 certifier" >&2; exit 66; }
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "ERROR: npm is required to install Gemini CLI" >&2
@@ -126,7 +131,7 @@ fi
 
 environment_temp="$(mktemp)"
 trap 'rm -f "$environment_temp"' EXIT
-printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_RESUME_WORKER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_MONITOR_REQUIRED=0\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=1\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1\nCLAUDE_BIN=/home/ubuntu/.local/bin/claude\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
+printf 'SHOPVIVALIZ_GEMINI_CONTROLLER_ENTRY=%s\nSHOPVIVALIZ_RESUME_WORKER_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_WATCHDOG_ENTRY=%s\nSHOPVIVALIZ_CHATGPT_NUDGE_ENTRY=%s\nSHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=%s\nSHOPVIVALIZ_AGENT_TASK_STATE_DIR=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state\nCHATGPT_CONTINUITY_MONITOR_REQUIRED=1\nCHATGPT_CONTINUITY_BRIDGE_URL=http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php\nCHATGPT_CONTINUITY_BRIDGE_TOKEN_FILE=/home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token\nCHATGPT_CONTINUITY_BRIDGE_HOST_HEADER=shopvivaliz.com.br\nGEMINI_ENV_FILE=/home/ubuntu/.config/shopvivaliz-gemini-24x7/gemini.env\nSHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=0\nSHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0\nCLAUDE_BIN=/home/ubuntu/.local/bin/claude\nCODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto\n' \
   "$target_dir/scripts/gemini_24x7_controller.py" \
   "$target_dir/scripts/task_resume_worker.py" \
   "$target_dir/scripts/task_continuation_watchdog.py" \

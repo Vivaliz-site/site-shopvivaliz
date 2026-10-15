@@ -114,12 +114,31 @@ auth_blocked() {
 }
 
 provider_socket_connected() {
-  local pid age
+  local pid age member cgroup_pids sockets
   pid="$(pgrep -f 'desktop-commander/dist/index[.]js' 2>/dev/null | head -1 || :)"
   [[ -n "$pid" ]] || return 1
   age="$(( $(date +%s) - $(stat -c %Y "/proc/$pid" 2>/dev/null || echo 0) ))"
   (( age < PROVIDER_SOCKET_GRACE_SECONDS )) && return 0
-  ss -H -tnp 2>/dev/null | grep -F "pid=$pid," | grep -q 'ESTAB'
+
+  # Child Node workers or the npm launcher can own the healthy provider
+  # WebSocket instead of the FIRST matching dist/index.js PID. Restrict the
+  # socket check to the systemd unit's real cgroup; never count foreign
+  # processes, and never mistake an unreadable probe for a disconnection.
+  cgroup_pids="$(cat "/sys/fs/cgroup${SERVICE_CGROUP}/cgroup.procs" 2>/dev/null)" || return 2
+  [[ -n "$cgroup_pids" ]] || return 2
+  sockets="$(ss -H -tnp 2>/dev/null)" || return 2
+  [[ -n "$sockets" ]] || return 1
+
+  while IFS= read -r member; do
+    [[ "$member" =~ ^[0-9]+$ ]] || continue
+    if awk -v want="$member" '
+      $1 == "ESTAB" && index($0, "pid=" want ",") > 0 { found=1 }
+      END { exit found ? 0 : 1 }
+    ' <<< "$sockets"; then
+      return 0
+    fi
+  done <<< "$cgroup_pids"
+  return 1
 }
 
 service_state() {
@@ -137,11 +156,22 @@ service_state() {
 
 kill_foreign_launchers
 active="$(service_state)"
-if [[ "$active" == 'active' ]] && ! provider_socket_connected; then
-  log_guardian 'provider_connection_stale=true action=restart_service'
-  systemctl restart "$SERVICE"
-  sleep 5
-  active="$(service_state)"
+if [[ "$active" == 'active' ]]; then
+  provider_probe_rc=0
+  provider_socket_connected || provider_probe_rc=$?
+  case "$provider_probe_rc" in
+    0) ;;
+    1)
+      log_guardian 'provider_connection_stale=true action=restart_service'
+      systemctl restart "$SERVICE"
+      sleep 5
+      active="$(service_state)"
+      ;;
+    *)
+      # A probe failure must not kill an otherwise live remote session.
+      log_guardian 'provider_probe_indeterminate=true action=defer_restart'
+      ;;
+  esac
 fi
 if [[ "$active" != 'active' ]]; then
   if auth_blocked; then

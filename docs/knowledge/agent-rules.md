@@ -1,3 +1,22 @@
+<!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
+
+Auditorias extremas, completas, V5 ou de aptidao de qualquer sistema com interface exigem **execucao do proprio agente na UI real publicada**, percorrendo as jornadas e casos aplicaveis de ponta a ponta. Logs, API, SQL, codigo, mocks, simples HTTP 200, screenshot isolado ou execucao somente headless nao substituem interacao visual. Para cada fluxo: entrar na tela real, navegar, acionar controles, observar erros, gravar provas de antes/depois, recarregar/revisitar, confirmar persistencia e reconciliar efeitos. Investigar, corrigir, prevenir e reauditar pela UI apos cada correcao aplicavel. Sem evidencias reais: `NAO_VALIDADO_UI` e nunca `APTO`/`CONCLUIDO`. Proibido esconder UI existente em `browser.required=false` ou `journey.ui=false`; a ausencia real de UI requer inventario negativo documentado e evidencias. Usar hosts, perfis e leases autorizados, sem bypass de MFA ou acoes irreversiveis sem permissao exata. Ver `AGENTS.md`, `AUDIT_POLICY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
+<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
+<!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
+
+Em `Retome`, `Continue`, `Prossiga`, `Siga` ou qualquer trabalho remoto, **um erro em um unico canal jamais comprova inacessibilidade do host**. Antes de `BLOCKED_EXTERNAL` ou de solicitar ao usuario uma acao que o agente pode executar:
+1. Ler `docs/knowledge/host-access.md` no `main` atual e o runbook do repositorio; verificar destino, identidade, privilegios, capacidades expostas e autorizacoes efetivas. Nunca adivinhar que uma rota existe.
+2. **Avaliar todas as rotas remotas realmente provisionadas, permitidas e adequadas a acao**, com a prioridade do runbook: (a) ShopVivaliz Remote Control MCP/controlador e ferramentas de host/tarefa/desktop; (b) RDC e RDC 2 para os hosts e capacidades explicitamente autorizados; (c) SSH privado/VCN/Tailscale e tunel/reverse SSH documentado, usando credenciais protegidas existentes; (d) GUI remota por bridge `desktop_*` ou RustDesk self-hosted quando a tarefa exigir interface; (e) OCI Bastion, OCI Compute Run Command, console serial e GitHub Actions/control plane somente para bootstrap, recuperacao ou reparo, conforme suas regras. Usar outras rotas somente se estiverem documentadas e autorizadas.
+3. Para cada rota aplicavel, provar disponibilidade, autenticacao/autorizacao, conectividade, identidade do host e capacidade da operacao; diagnosticar e reparar falhas tecnicas que estejam ao alcance, testar novamente com tentativas limitadas e idempotentes e passar ao proximo caminho quando apropriado. Nao confundir canal de GUI com shell nem rotas de recovery com transporte normal de runtime.
+4. Registrar checkpoint nao secreto `remote_access_attempts` por host e tarefa: canal, objetivo, permissao, teste, resultado, causa, reparo, proximo fallback e evidencia com instante. Canal nao disponivel deve ser classificado `NOT_PROVISIONED` com evidencia, nao `TRIED`.
+5. **So declarar host inacessivel/bloqueio externo depois de examinar e esgotar todos os caminhos adequados, seguros, tecnicamente viaveis e autorizados**, justificando cada nao utilizacao. Enquanto houver rota executavel, manter `RUNNING` e continuar a tarefa. Pedir aprovacao apenas quando obrigatoria, indicando a permissao exata.
+
+Limites: nao contornar MFA, CAPTCHA, RBAC, protecoes de branch, limites administrativos ou aprovacoes; nao procurar/extrair secrets nem tentar senhas indiscriminadamente; nao habilitar SSH publico ou usar IP publico como fallback indevido. Browser de agente ShopVivaliz permanece na VM backend com perfil isolado; Windows e apenas host de tarefas/GUI autorizadas, nao fallback de navegador. Sem loops ilimitados nem alegacao de acesso nao testado.
+<!-- /REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
+
 <!-- AUDIT_EXTERNAL_REMEDIATION_V1 -->
 ## Auditoria externa também é corretiva
 - Auditoria externa/independente segue o mesmo ciclo de investigação, correção, prevenção e validação.
@@ -30,6 +49,63 @@ Acione o plugin Gepeto junto com Superpowers em toda tarefa e retomada, sem nova
 - A fonte central desta regra é `REGRAS-AGENTES-CENTRALIZADAS.md`.
 
 ## Credenciais, MFA e fontes seguras já provisionadas
+
+
+<!-- CREDENTIAL_REPROMPT_GATE_V1 -->
+## Credencial ChatGPT ja provisionada: preflight obrigatorio antes de solicitar senha
+
+Para `atendimento@shopvivaliz.com.br` ou `dev@shopvivaliz.com.br`, o agente
+(GPT, Claude, Codex, Gemini, subagentes e controladores) deve, **antes de
+solicitar ao usuario senha, OTP ou novo provisionamento**, confirmar a sessao
+correta e executar na VM backend, via MCP autorizado, a verificacao somente
+de metadados:
+
+`python3 scripts/chatgpt_credential_preflight.py --session atendimento`
+(ou `--session dev` para o perfil Dev).
+
+- `saved_entry=PRESENT` / `DENY_EXISTING_CREDENTIAL`: a senha ja possui
+  referencia salva no perfil dedicado. **Nao solicitar senha novamente**;
+  primeiro reparar a integracao navegador/GNOME Keyring e tentar o
+  preenchimento **nativo e autorizado**, sem ler ou exportar o segredo.
+- `saved_entry=NOT_VERIFIED` / `DENY_ABSENCE_NOT_PROVEN`: perfil
+  inacessivel, banco ocupado, erro de probe ou ausencia nos locais consultados
+  **nao** prova que a credencial nao existe. Recuperar transporte/MCP,
+  consultar as demais fontes protegidas previstas no runbook e continuar.
+- O probe jamais concede permissao para pedir senha: nova intervencao humana
+  somente apos evidencia independente de credencial ausente/revogada/invalida,
+  ou desbloqueio/consentimento/MFA humano obrigatorio pelo fluxo oficial.
+- Um registro salvo **nao prova** que a senha e valida ou que o ChatGPT esta
+  autenticado. Validar cada sessao pelo email exato em `/api/auth/session`.
+- Nunca copiar senha do iPhone ou navegador para terminal, Git, chat, logs,
+  processo ou outro perfil. Nunca tentar descriptografar/mostrar a credencial.
+
+Evidencia obrigatoria do preflight: apenas status, sessao verificada, timestamp
+e acao permitida, **sem** qualquer valor secreto. Se a VM nao estiver
+acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
+`CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
+<!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
+
+<!-- CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+### Execucao rapida do preflight pelo Claude/MCP (evitar fila e timeout)
+
+Na VM backend, executar o preflight pelo **ShopVivaliz Remote Control**
+`admin_command_run` com os argumentos explicitos abaixo. O comando e
+somente leitura e retorna em chamada inline, sem `task_submit`, `Monitor`,
+`task_status` repetido ou `Bash` local:
+
+- `host="always-free-arm-1787907847-26"`
+- `command="python3 /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz/scripts/chatgpt_credential_preflight.py --session atendimento"`
+- `timeout=5`
+- `durable=false`
+
+Para Dev, trocar exclusivamente `--session atendimento` por `--session dev`.
+O timeout do adaptador pode transformar a solicitacao em tarefa duravel se
+esses parametros forem omitidos; **nao** fazer polling longo de credencial.
+Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
+`ABSENT`, e continua proibido pedir novamente a senha sem prova.
+<!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+
+
 
 - Em projetos ShopVivaliz com autenticação já provisionada, o agente deve primeiro usar as fontes seguras existentes (env/arquivo protegido/systemd/secret/host autenticador) e **não pedir ao usuário novamente usuário, senha ou OTP** sem antes provar que a fonte existente está ausente ou inválida.
 - Para Amazon Returns / Seller Central, o browser/bridge roda em `shopvivaliz-free-a1` e o TOTP é fornecido de forma restrita por `always-free-arm-1787907847-26`. O agente deve usar esse caminho automático e nunca depender de o usuário transcrever OTP rotineiramente.
@@ -156,7 +232,7 @@ Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações 
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois usar SSH privado/Tailscale e, para bootstrap/recovery, GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Nenhuma dessas rotas deve consumir Codex por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- Nenhum daemon/cron/watch pode consumir Codex automaticamente: a excecao historica de 2026-10-01 foi REVOGADA em 2026-10-11 por FREE_PROVIDER_FALLBACK_V2. Codex e Claude sao apenas ultimas opcoes interativas com aprovacao humana explicita.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->
@@ -211,7 +287,7 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ## ChatGPT VM: autenticação local obrigatória
 
 - As contas ChatGPT operacionais são `dev@shopvivaliz.com.br` e `atendimento@shopvivaliz.com.br`. Fontes locais de MFA só podem ser declaradas provisionadas após validação real; referências antigas de `fredmourao` são legado de migração.
-- A fonte operacional é o OTPClient da sessão `fredrdp` em `DISPLAY=:99`; seeds, senhas e códigos nunca podem ser versionados ou impressos.
+- A fonte operacional é a instância OTPClient realmente ativa, identificada por UID e `DISPLAY` do processo e janela correspondente; `fredrdp`/`:99` era apenas o registro histórico. A sessão do OTPClient não precisa coincidir com o display do navegador ChatGPT. Seeds, senhas e códigos nunca podem ser versionados ou impressos.
 - O agente deve conseguir preencher senha e OTP por caminho write-only/redigido, sem persistir o segredo em logs, histórico de shell, argumentos de processo ou auditoria.
 - Não pedir ao usuário para transcrever senha/OTP enquanto a fonte local autorizada estiver disponível.
 - Se faltar capacidade segura de digitação em aplicação desktop, tratar como lacuna do Remote Control MCP a ser corrigida, mantendo a tarefa em andamento até existir rota segura.
@@ -227,3 +303,34 @@ Interrupção de streaming não autoriza pular para CLI. O watchdog não chama C
 ### Foreground durable handoff lease lifecycle
 
 When `SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF=1` and a foreground turn calls `foreground_handoff`, the returned conversation lease is part of the user-turn lifecycle. The foreground agent MUST call `foreground_release` with the exact `task_id`, `lease_id`, and `fencing_token` immediately before returning its user-facing final response. If bounded foreground preparation genuinely approaches lease expiry, it MAY call `foreground_renew`; renewal MUST NOT be used to wait for CI, deploy, durable task completion, sleeps, or background polling. If the client stream disappears before release, the bounded TTL remains the crash/disconnect fallback and recovery may claim ownership only after that lease expires.
+
+<!-- CONTINUITY_AUTH_REMEDIATION_V2 -->
+## Gate de autenticacao e continuidade: correcao obrigatoria
+- Diagnostico, health check e auditoria de continuidade com bloqueio material exigem remediacao e revalidacao E2E, nao apenas status de servico.
+- Validar a identidade e a sessao antes de qualquer login. OTPClient e navegador podem pertencer a usuarios/displays diferentes; verificar em runtime, nao presumir pelo documento.
+- Segredos permanecem no contexto protegido de origem: proibido imprimir, ler em saida de ferramentas, transportar por argumentos de comando, copiar entre contas ou registrar em auditorias. A ausencia de ponte protegida e bloqueio de capacidade, nao autorizacao para exfiltrar valores.
+- Nunca inventar vinculos de conversas, reexecutar tarefa indeterminada ou criar consumidor duplicado. Recuperacao so e comprovada apos vinculo autentico, dispatcher executado e progresso E2E observado.
+- Enquanto nao houver recuperacao comprovada, manter RUNNING ou BLOCKED_EXTERNAL com causa, IDs de auditoria e proxima acao concreta. Pedido direto de prosseguir sempre recebe resposta.
+<!-- /CONTINUITY_AUTH_REMEDIATION_V2 -->
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+Para diagnosticos de login/GUI na backend, obrigatorio ler `docs/knowledge/shopvivaliz-graphical-session-recovery.md` e diferenciar `fredconsole/:0` (XFCE/RustDesk), `lightdm/:1` (greeter) e `fredrdp/:99` (Chromium Dev/Atendimento). Se o proprietario mostrar Dev/Atendimento no seletor do ChatGPT, registrar o fato sem declarar autenticacao dos perfis CDP9559/9556: usar somente prova por sessao `/api/auth/session` com email exato. Nao pedir senha Ubuntu como senha ChatGPT, nem redefinir Keyring por tentativa. Incluir runbook nos handoffs de agentes.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->

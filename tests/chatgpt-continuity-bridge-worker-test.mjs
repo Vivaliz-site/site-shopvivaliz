@@ -25,6 +25,7 @@ const {
   clickRecoverableRetryButton,
   outcomeStatusDetailCode,
   persistReinforcementHealth,
+  pruneStaleMonitorTempFiles,
   reinforcementHealthPayload,
   bridgeResultPayload,
   recoveryStateForOutcome,
@@ -67,6 +68,25 @@ const {
   mutationAuthorizationAllows,
   guardedRecoveryMutation,
 } = await import('../scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs');
+
+// A crashed monitor writer may leave temp files, but its janitor must never
+// touch the current process, recent writes, or unrelated artifacts.
+{
+  const target = path.join(testTaskStateDir, '_monitor-janitor-fixture.json');
+  const stale = target + '.tmp.99999999';
+  const current = target + '.tmp.' + process.pid;
+  const recent = target + '.tmp.99999998';
+  const notMonitor = target + '.tmp.99999997.backup';
+  for (const filename of [stale, current, recent, notMonitor]) fs.writeFileSync(filename, 'fixture');
+  const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  for (const filename of [stale, current, notMonitor]) fs.utimesSync(filename, old, old);
+  const removed = pruneStaleMonitorTempFiles(target);
+  assert.equal(removed, 1, 'only an old, dead-PID regular monitor temp may be removed');
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(fs.existsSync(current), true, 'live writer files must never be removed');
+  assert.equal(fs.existsSync(recent), true, 'recent interrupted writes must be retained');
+  assert.equal(fs.existsSync(notMonitor), true, 'unrelated artifacts must be retained');
+}
 
 assert.match(
   recoverableRetryButtonTarget.toString(),
@@ -494,6 +514,66 @@ async function run() {
     });
     assert.deepEqual(attempts, ['ws://stale', 'ws://live'], 'must fall through stale same-rank target before lower-rank home');
     assert.equal(connected?.marker, 'ws://live');
+  }
+
+  {
+    // A busy browser restores many tabs. Guardian probes may use bounded
+    // parallelism, but never accept an unauthenticated first response.
+    const connections = [];
+    let concurrent = 0;
+    let peak = 0;
+    const targets = Array.from({ length: 13 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/tab-' + i,
+      webSocketDebuggerUrl: 'ws://candidate-' + i,
+    }));
+    const selected = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        concurrent += 1;
+        peak = Math.max(peak, concurrent);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        concurrent -= 1;
+        const candidate = {
+          name: tab.webSocketDebuggerUrl,
+          closed: false,
+          close() { this.closed = true; },
+        };
+        connections.push(candidate);
+        return candidate;
+      },
+      async candidate => {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        return candidate.name === 'ws://candidate-10';
+      },
+      { maxParallel: 5 },
+    );
+    assert.equal(selected?.name, 'ws://candidate-10');
+    assert.ok(peak > 1 && peak <= 5, 'guardian must inspect tabs concurrently but never exceed its limit');
+    assert.ok(connections.every(candidate => candidate === selected || candidate.closed),
+      'all losing CDP connections must be closed');
+    selected.close();
+  }
+
+  {
+    const targets = Array.from({ length: 8 }, (_, i) => ({
+      type: 'page', url: 'https://chatgpt.com/c/test-' + i,
+      webSocketDebuggerUrl: 'ws://rejected-' + i,
+    }));
+    const connections = [];
+    const fallback = await connectFirstUsableChatgptTab(
+      targets,
+      async tab => {
+        const c = { name: tab.webSocketDebuggerUrl, closed: false, close() { this.closed = true; } };
+        connections.push(c);
+        return c;
+      },
+      async () => false,
+      { maxParallel: 4 },
+    );
+    assert.equal(fallback, connections[0], 'fallback should be the first healthy tab, not random completion order');
+    assert.ok(connections.slice(1).every(candidate => candidate.closed),
+      'unaccepted parallel candidates must not leak browser connections');
+    fallback.close();
   }
 
   {
@@ -2727,6 +2807,58 @@ async function run() {
     assert.equal(result.action, 'navigated_sidebar_fallback');
     assert.equal(result.http_status, 429);
     assert.equal(result.sidebar_fallback, true);
+  }
+
+  // HTTP 200 with no valid candidates is not proof of account history being
+  // empty. The same safe, synchronized sidebar fallback must remain available.
+  {
+    let currentPath = '/';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/local-latest-20261008';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/local-latest-20261008';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'navigated_sidebar_fallback');
+    assert.equal(result.http_status, 200);
+    assert.equal(result.sidebar_fallback, true);
+    assert.equal(result.candidate_count, 0);
+    assert.equal(currentPath, '/c/local-latest-20261008');
+  }
+
+  // A 200-empty response does not authorize tab takeover without independent
+  // proof that the tab is a safe neutral or unique discovery context.
+  {
+    let currentPath = '/c/unproven-20261008';
+    const base = fakeCdp({ pageText: 'normal reply' });
+    const originalEvaluate = base.evaluate.bind(base);
+    base.evaluate = async expression => {
+      const source = String(expression);
+      if (source.includes('sidebar-latest-conversation')) return '/c/other-conversation';
+      if (source.trim() === 'location.pathname') return currentPath;
+      if (source.includes('location.assign')) {
+        currentPath = '/c/other-conversation';
+        return true;
+      }
+      return originalEvaluate(expression);
+    };
+    const result = await alignLatestForReinforcement(
+      base,
+      async () => ({ http_status: 200, source: 'combined', item_present: false, candidates: [] }),
+    );
+    assert.equal(result.action, 'latest_unavailable');
+    assert.equal(result.http_status, 200);
+    assert.equal(currentPath, '/c/unproven-20261008');
   }
 
   // Live post-deploy state can contain exactly one conversation tab and no

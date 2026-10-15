@@ -1,3 +1,15 @@
+<!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
+
+Auditorias extremas, completas, V5 ou de aptidao de qualquer sistema com interface exigem **execucao do proprio agente na UI real publicada**, percorrendo as jornadas e casos aplicaveis de ponta a ponta. Logs, API, SQL, codigo, mocks, simples HTTP 200, screenshot isolado ou execucao somente headless nao substituem interacao visual. Para cada fluxo: entrar na tela real, navegar, acionar controles, observar erros, gravar provas de antes/depois, recarregar/revisitar, confirmar persistencia e reconciliar efeitos. Investigar, corrigir, prevenir e reauditar pela UI apos cada correcao aplicavel. Sem evidencias reais: `NAO_VALIDADO_UI` e nunca `APTO`/`CONCLUIDO`. Proibido esconder UI existente em `browser.required=false` ou `journey.ui=false`; a ausencia real de UI requer inventario negativo documentado e evidencias. Usar hosts, perfis e leases autorizados, sem bypass de MFA ou acoes irreversiveis sem permissao exata. Ver `AGENTS.md`, `AUDIT_POLICY.md` e `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md`.
+<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
+<!-- MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+## Leitura comprovada antes de executar "Retome"
+
+Qualquer comando curto `Retome`, `Continue`, `Prossiga` ou `Siga` dispara a retomada operacional integral. O agente deve consultar o `AGENTS.md` e esta base de conhecimento diretamente no `main` atual, incluindo `host-access.md`, `README.md`, `agent-rules.md` e as instrucoes especificas do modulo. Antes de alteracoes, registrar checkpoint nao secreto de leitura: caminhos, ref, SHA e instante; um simples reconhecimento textual nao vale como prova. Revalidar a revisao a cada nova sessao/retomada. Sem acesso de leitura, evitar mutacoes ate restaurar as fontes; manter apenas diagnosticos read-only seguros.
+<!-- /MANDATORY_AGENT_RULES_READ_GATE_V1 -->
+
 # Bootstrap da conta ChatGPT Atendimento
 
 Este documento é o bootstrap canônico, **não secreto**, da conta corporativa `atendimento@shopvivaliz.com.br`. Ele existe para que uma nova sessão dessa conta consiga operar os projetos ShopVivaliz sem depender de memória informal, de outra conta ChatGPT ou de credenciais versionadas.
@@ -52,6 +64,63 @@ Obrigatórios quando disponíveis no workspace:
 `@Superpowers` deve ser usado em cada etapa material. Gepeto também é obrigatório pela política do projeto; se não estiver exposto pelo runtime, registrar `GEPETO_UNAVAILABLE` e continuar sem simular participação.
 
 ## Credenciais e autenticação
+
+
+<!-- CREDENTIAL_REPROMPT_GATE_V1 -->
+## Credencial ChatGPT ja provisionada: preflight obrigatorio antes de solicitar senha
+
+Para `atendimento@shopvivaliz.com.br` ou `dev@shopvivaliz.com.br`, o agente
+(GPT, Claude, Codex, Gemini, subagentes e controladores) deve, **antes de
+solicitar ao usuario senha, OTP ou novo provisionamento**, confirmar a sessao
+correta e executar na VM backend, via MCP autorizado, a verificacao somente
+de metadados:
+
+`python3 scripts/chatgpt_credential_preflight.py --session atendimento`
+(ou `--session dev` para o perfil Dev).
+
+- `saved_entry=PRESENT` / `DENY_EXISTING_CREDENTIAL`: a senha ja possui
+  referencia salva no perfil dedicado. **Nao solicitar senha novamente**;
+  primeiro reparar a integracao navegador/GNOME Keyring e tentar o
+  preenchimento **nativo e autorizado**, sem ler ou exportar o segredo.
+- `saved_entry=NOT_VERIFIED` / `DENY_ABSENCE_NOT_PROVEN`: perfil
+  inacessivel, banco ocupado, erro de probe ou ausencia nos locais consultados
+  **nao** prova que a credencial nao existe. Recuperar transporte/MCP,
+  consultar as demais fontes protegidas previstas no runbook e continuar.
+- O probe jamais concede permissao para pedir senha: nova intervencao humana
+  somente apos evidencia independente de credencial ausente/revogada/invalida,
+  ou desbloqueio/consentimento/MFA humano obrigatorio pelo fluxo oficial.
+- Um registro salvo **nao prova** que a senha e valida ou que o ChatGPT esta
+  autenticado. Validar cada sessao pelo email exato em `/api/auth/session`.
+- Nunca copiar senha do iPhone ou navegador para terminal, Git, chat, logs,
+  processo ou outro perfil. Nunca tentar descriptografar/mostrar a credencial.
+
+Evidencia obrigatoria do preflight: apenas status, sessao verificada, timestamp
+e acao permitida, **sem** qualquer valor secreto. Se a VM nao estiver
+acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
+`CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
+<!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
+
+<!-- CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+### Execucao rapida do preflight pelo Claude/MCP (evitar fila e timeout)
+
+Na VM backend, executar o preflight pelo **ShopVivaliz Remote Control**
+`admin_command_run` com os argumentos explicitos abaixo. O comando e
+somente leitura e retorna em chamada inline, sem `task_submit`, `Monitor`,
+`task_status` repetido ou `Bash` local:
+
+- `host="always-free-arm-1787907847-26"`
+- `command="python3 /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz/scripts/chatgpt_credential_preflight.py --session atendimento"`
+- `timeout=5`
+- `durable=false`
+
+Para Dev, trocar exclusivamente `--session atendimento` por `--session dev`.
+O timeout do adaptador pode transformar a solicitacao em tarefa duravel se
+esses parametros forem omitidos; **nao** fazer polling longo de credencial.
+Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
+`ABSENT`, e continua proibido pedir novamente a senha sem prova.
+<!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+
+
 
 - Reutilizar primeiro as fontes seguras já provisionadas no runtime/host.
 - Não pedir novamente ao usuário senha, OTP ou outra credencial antes de provar que a fonte existente está ausente, revogada ou inválida.
@@ -159,3 +228,15 @@ Considere esse material como contexto operacional persistente da ShopVivaliz. Hi
 ## Estado de conectores
 
 A presença de um plugin no diretório não prova OAuth concluído. Gmail, Drive, Calendar e Contacts só são considerados conectados quando o fluxo corporativo Google terminar e uma chamada real do conector passar. Se o Google exigir CAPTCHA/Turnstile ou verificação humana, registrar o ponto exato e continuar o restante do onboarding sem usar uma conta pessoal como atalho.
+
+## Account access parity
+
+Atendimento must have the same authorized apps, tools, workspace role and
+effective permissions as Dev. Use its own provider grants, ChatGPT browser
+profile and authentication, never Dev's credentials or session. Follow
+[`chatgpt-access-parity.md`](chatgpt-access-parity.md) and prove an
+independently authorized RDC 2 connection and `who_am_i` result before declaring parity.
+
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**Obrigatorio na inicializacao/retomada:** leia `docs/knowledge/shopvivaliz-graphical-session-recovery.md` antes de interpretar a tela RustDesk ou a presenca de Dev/Atendimento no seletor da GUI como login autenticado nos perfis CDP. Preservar sessoes; a GUI `fredconsole/:0`, greeter `lightdm/:1` e os browsers `fredrdp/:99` sao contextos diferentes.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->

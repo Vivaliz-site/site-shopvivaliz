@@ -200,3 +200,56 @@ def test_trade_still_rejects_zero_leverage():
     raw["suggested_leverage"]="0"
     with pytest.raises(DecisionValidationError):
         DecisionParser.parse(raw,datetime.now(timezone.utc))
+
+
+def test_codex_provider_owns_temporal_envelope_instead_of_model_output():
+    m = snap()
+    model_payload = valid_payload(m)
+    model_payload["created_at"] = "2020-01-01T00:00:00+00:00"
+    model_payload["expires_at"] = "2020-01-01T00:01:00+00:00"
+    model_payload["market_snapshot_ts"] = "2020-01-01T00:00:00+00:00"
+
+    def transport(url, payload, timeout):
+        return {
+            "ok": True,
+            "text": json.dumps(model_payload),
+            "model": "gpt-5.6-terra",
+            "transport": "codex_chatgpt",
+        }
+
+    provider = CodexBridgeDecisionProvider(
+        "http://127.0.0.1:17656/v1/respond", transport=transport
+    )
+    before = datetime.now(timezone.utc)
+    raw = provider.analyze(m, context={})
+    after = datetime.now(timezone.utc)
+
+    created_at = datetime.fromisoformat(raw["created_at"])
+    expires_at = datetime.fromisoformat(raw["expires_at"])
+    assert before <= created_at <= after
+    assert expires_at - created_at == timedelta(seconds=120)
+    assert raw["market_snapshot_ts"] == m.timestamp.isoformat()
+    intent = DecisionParser.parse(raw, now=after)
+    assert intent.market_snapshot_ts == m.timestamp
+
+
+def test_prompt_bounds_output_size_and_forbids_direction_none():
+    m=snap()
+    provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=lambda *a: {})
+    prompt=provider._prompt(m,{"paper_account":{"total_equity":"100"},"market_research":{}})
+    assert "STRICT_COMPACTNESS" in prompt
+    assert "assessment <= 24 characters" in prompt
+    assert "evidence must contain exactly 1 string <= 60 characters" in prompt
+    assert "supporting_evidence exactly 1 string <= 96 characters" in prompt
+    assert "direction must always be exactly LONG or SHORT; never NONE" in prompt
+
+
+def test_prompt_example_uses_full_allowed_120_second_validity_window():
+    m=snap()
+    provider=CodexBridgeDecisionProvider("http://127.0.0.1:17656/v1/respond",transport=lambda *a: {})
+    prompt=provider._prompt(m,{})
+    encoded=prompt.split("OUTPUT_SCHEMA_EXAMPLE=",1)[1].split("\nMARKET_SNAPSHOT=",1)[0]
+    example=json.loads(encoded)
+    created=datetime.fromisoformat(example["created_at"])
+    expires=datetime.fromisoformat(example["expires_at"])
+    assert expires-created == timedelta(seconds=120)
