@@ -102,19 +102,19 @@ jobs:
           echo "CHATGPT_CONTINUITY_CDP_RUNTIME=PASS"
           echo "CHATGPT_CONTINUITY_BRIDGE_RUNTIME=PASS"
 
-      - name: Verify Gemini controller and codex-auto fallback capability
+      - name: Verify Gemini controller and free-only background policy
         shell: bash
         run: |
           set -Eeuo pipefail
           systemctl is-enabled --quiet shopvivaliz-gemini-24x7-controller.service
           systemctl is-active --quiet shopvivaliz-gemini-24x7-controller.service
-          sudo -n grep -Fxq 'SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1'             /etc/shopvivaliz-gemini-24x7-controller.env
-          sudo -n grep -Fxq 'CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto'             /etc/shopvivaliz-gemini-24x7-controller.env
-
-          test -x /home/ubuntu/.local/bin/codex-auto
-          env -u OPENAI_API_KEY -u CODEX_API_KEY             /home/ubuntu/.local/bin/codex-auto exec --help 2>&1             | grep -F -- '--approve-for-me' >/dev/null
+          # Paid CLI availability does not authorize an autonomous background fallback.
+          sudo -n grep -Fxq 'SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0' \
+            /etc/shopvivaliz-gemini-24x7-controller.env
+          sudo -n grep -Fxq 'SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=0' \
+            /etc/shopvivaliz-gemini-24x7-controller.env
 
           controller_pid="$(systemctl show -p MainPID --value shopvivaliz-gemini-24x7-controller.service)"
           test "$controller_pid" -gt 0
           echo "GEMINI_24X7_CONTROLLER_RUNTIME=PASS"
-          echo "CODEX_AUTO_APPROVE_FOR_ME_CAPABILITY=PASS"
+          echo "AI_FREE_ONLY_BACKGROUND_POLICY=PASS"

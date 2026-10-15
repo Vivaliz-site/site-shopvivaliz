@@ -1,0 +1,7 @@
+node_modules/
+isolated-profile/
+upload-staging/
+downloads/
+probe-download.txt
+tabs-state.json
+*.tmp

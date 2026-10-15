@@ -219,26 +219,10 @@ reconcile_ai_squad_claude_bridge_unit() {
 }
 
 verify_ai_squad_bridges_health() {
-  local codex_health claude_health
-
-  if ! codex_health="$(curl -fsS --max-time 5 http://127.0.0.1:17656/health)"; then
-    return 1
-  fi
-  if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
-    || ! printf '%s' "$codex_health" | grep -q '"web_search_mode":"live"'; then
-    return 1
-  fi
-
-  if ! claude_health="$(curl -fsS --max-time 5 http://127.0.0.1:17657/health)"; then
-    return 1
-  fi
-  if ! printf '%s' "$claude_health" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-    || ! printf '%s' "$claude_health" | grep -q '"ok":true' \
-    || ! printf '%s' "$claude_health" | grep -q '"authenticated":true'; then
-    return 1
-  fi
-
-  return 0
+  # Deliberately disabled paid bridges are healthy only when their inference
+  # endpoint rejects requests with HTTP 403. Do not trigger a rollback.
+  local checker="$(cd -- "$(dirname -- "$0")/../ops/ai-squad" && pwd -P)/bridge-health-policy.py"
+  python3 "$checker" codex && python3 "$checker" claude
 }
 
 ai_squad_runtime_changed_between_releases() {
@@ -464,6 +448,15 @@ remove_release_tree() {
   local release_path="$1"
 
   if ! assert_managed_release_path "$release_path"; then
+    return 1
+  fi
+
+  # Previous immutable releases may contain Python caches created by
+  # privileged workers. Reconcile ownership before the first deletion,
+  # preventing routine Permission denied warnings in successful deploys.
+  # The preflight itself validates that this is NOT the active release.
+  if ! ensure_release_tree_cleanup_safe "$release_path"; then
+    log ERROR "Preflight de limpeza recusou release inativa $(basename "$release_path")"
     return 1
   fi
 
@@ -890,6 +883,23 @@ if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_
   log ERROR "Extracao da release falhou"
   exit 1
 fi
+# git archive intentionally excludes docs/ via .gitattributes. The Claude
+# bridge installer requires exactly one versioned, non-secret bootstrap doc.
+# Materialize it into the NEW immutable release from the SAME commit, before
+# the release is made active. Do not copy docs/ wholesale or borrow stale docs
+# from the previous current symlink.
+bootstrap_rel="docs/knowledge/claude-vm-bootstrap.md"
+if ! install -d -m 0755 "$NEW_RELEASE_PATH/docs/knowledge" \
+  || ! git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel" > "$NEW_RELEASE_PATH/$bootstrap_rel" \
+  || [ ! -s "$NEW_RELEASE_PATH/$bootstrap_rel" ]; then
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar release incompleta apos doc bootstrap ausente"
+  fi
+  log ERROR "Bootstrap Claude versionado ausente ou invalido no release"
+  exit 1
+fi
+chmod 0644 "$NEW_RELEASE_PATH/$bootstrap_rel"
+log INFO "Bootstrap Claude selecionado do mesmo commit da release"
 printf '%s\n' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
 
 declare -a SYMLINKS=(

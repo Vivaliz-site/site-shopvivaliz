@@ -40,6 +40,12 @@ except ImportError:  # direct execution from a release checkout
     from scripts import task_resume_dispatcher as dispatcher
 
 
+try:
+    from .continuity import route_reconciler
+except ImportError:
+    from scripts.continuity import route_reconciler
+
+
 LEASE_FILE = "_gemini-24x7-controller-lease.json"
 LOCK_FILE = "_gemini-24x7-controller.lock"
 DAEMON_LOCK_FILE = "_gemini-24x7-controller-daemon.lock"
@@ -183,6 +189,8 @@ def _completion_sweep(
         "deferred_unbound_session": 0,
         "skipped_invalid_timestamp": 0,
         "skipped_outside_lookback": 0,
+        "active_invalid_timestamp": 0,
+        "active_outside_lookback": 0,
     }
 
     previous_runtime = task_state.RUNTIME_DIR
@@ -194,16 +202,21 @@ def _completion_sweep(
             payload = _read_json(path)
             if not payload:
                 continue
+            status = str(payload.get("status", "")).strip()
+            is_active = status in {"RUNNING", "READY_TO_COMPLETE"}
             created = _parse_utc(payload.get("created_at"))
             if created is None:
                 summary["skipped_invalid_timestamp"] += 1
+                if is_active:
+                    summary["active_invalid_timestamp"] += 1
                 continue
             if created < lookback_cutoff:
                 summary["skipped_outside_lookback"] += 1
+                if is_active:
+                    summary["active_outside_lookback"] += 1
                 continue
 
             summary["scanned"] += 1
-            status = str(payload.get("status", "")).strip()
             if status not in {"RUNNING", "READY_TO_COMPLETE"}:
                 continue
 
@@ -569,6 +582,9 @@ def run_once(
         return {"ok": True, "owner_id": owner, "duplicate_suppressed": True, "reason": lease.reason}
     try:
         durable_handoff_enabled = os.getenv("SHOPVIVALIZ_CONTINUITY_DURABLE_HANDOFF", "0").strip().lower() in {"1", "true", "yes", "on"}
+        # Repair exact attested routes before either browser or detached dispatch.
+        # Never guess missing conversation IDs from titles or agent names.
+        route_recovery = route_reconciler.reconcile(root)
         completion_sweep = _completion_sweep(
             root,
             durable_handoff_enabled=durable_handoff_enabled,
@@ -590,16 +606,33 @@ def run_once(
         browser_health = _chatgpt_browser_health(root)
         claude_health = _claude_remote_control_health()
         degraded_reasons: list[str] = []
+        if int(route_recovery.get("failed") or 0) > 0:
+            degraded_reasons.append("conversation_route_recovery_failed")
         if no_progress > 0:
             degraded_reasons.append("dispatcher_no_progress")
         if failed > 0:
             degraded_reasons.append("dispatcher_failed")
         if int(completion_sweep.get("failed") or 0) > 0:
             degraded_reasons.append("completion_sweep_failed")
+        if int(completion_sweep.get("active_outside_lookback") or 0) > 0:
+            degraded_reasons.append("active_checkpoint_outside_recovery_window")
+        if int(completion_sweep.get("active_invalid_timestamp") or 0) > 0:
+            degraded_reasons.append("active_checkpoint_invalid_timestamp")
+        if durable_handoff_enabled and int(completion_sweep.get("unbound_active") or 0) > 0:
+            degraded_reasons.append("active_checkpoint_unbound")
         if int(completion_sweep.get("deferred_unbound_session") or 0) > 0:
             degraded_reasons.append("completion_sweep_unbound_session")
         if int(nudge.get("failed") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_failed")
+        # Without durable handoff, the legacy detached fallback is allowed to
+        # progress without a browser binding; do not misclassify it as unhealthy.
+        if durable_handoff_enabled:
+            if int(nudge.get("skipped_unbound") or 0) > 0:
+                degraded_reasons.append("chatgpt_resume_unbound_conversation")
+            if int(resumed.get("deferred_unbound") or 0) > 0:
+                degraded_reasons.append("dispatcher_unbound_conversation")
+            if int(resumed.get("deferred_unbound_session") or 0) > 0:
+                degraded_reasons.append("dispatcher_unbound_session")
         if int(nudge.get("skipped_no_token") or 0) > 0:
             degraded_reasons.append("chatgpt_resume_missing_token")
         if int(nudge.get("skipped_attempt_limit") or 0) > 0:
@@ -608,12 +641,16 @@ def run_once(
             degraded_reasons.append("chatgpt_bound_session_unavailable")
         if monitor_required and monitor.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_monitor_stale")
+        if monitor_required and str(monitor.get("action") or "") == "monitor_disabled":
+            degraded_reasons.append("chatgpt_browser_monitor_disabled")
         if monitor_required and monitor.get("degraded") is True:
             degraded_reasons.append("chatgpt_browser_stall_unresolved")
         if browser_health.get("fresh") is not True:
             degraded_reasons.append("chatgpt_browser_auth_unknown")
         elif browser_health.get("session_state") == "AUTH_FLOW":
             degraded_reasons.append("chatgpt_browser_auth_in_progress")
+        elif browser_health.get("session_state") == "IDENTITY_MISMATCH":
+            degraded_reasons.append("chatgpt_browser_identity_mismatch")
         elif browser_health.get("authenticated") is not True:
             if browser_health.get("session_state") == "LOGGED_OUT":
                 degraded_reasons.append("chatgpt_browser_not_authenticated")
@@ -641,17 +678,18 @@ def run_once(
             "lease_recovered": lease.recovered,
             "durable_handoff_enabled": durable_handoff_enabled,
             "single_writer_enforced": durable_handoff_enabled,
+            "route_recovery": route_recovery,
             "completion_sweep": completion_sweep,
             "watchdog": {key: watch.get(key) for key in ("scanned", "eligible", "dispatched", "mode")},
-            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
-            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt")},
+            "chatgpt_nudge": {key: nudge.get(key) for key in ("scanned", "eligible", "dispatched", "skipped_no_token", "skipped_stale_checkpoint", "skipped_unbound", "failed", "skipped_attempt_limit", "skipped_session_unavailable", "progress_followup_attempted", "skipped_foreground_active", "skipped_ownership_busy")},
+            "dispatcher": {key: resumed.get(key) for key in ("scanned", "eligible", "executed", "launched", "in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed", "deferred_chatgpt", "deferred_unbound", "deferred_unbound_session", "deferred_ownership_busy")},
             "chatgpt_monitor": monitor,
             "chatgpt_browser": browser_health,
             "claude_remote_control": claude_health,
             "generated_at": utc_now(),
         }
         _atomic_json(root / STATE_FILE, summary)
-        if _has_material_activity(lease, watch, nudge, resumed) or any(
+        if int(route_recovery.get("bound") or 0) > 0 or _has_material_activity(lease, watch, nudge, resumed) or any(
             int(completion_sweep.get(key) or 0) > 0
             for key in ("completed", "requeued", "failed")
         ):
@@ -660,6 +698,7 @@ def run_once(
                 "cycle_completed",
                 owner_id=owner,
                 lease_recovered=lease.recovered,
+                route_recovery=summary["route_recovery"],
                 completion_sweep=summary["completion_sweep"],
                 watchdog=summary["watchdog"],
                 chatgpt_nudge=summary["chatgpt_nudge"],
