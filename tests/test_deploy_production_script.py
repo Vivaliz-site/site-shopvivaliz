@@ -318,3 +318,18 @@ def test_deploy_enters_canonical_repo_dir_before_find_audits() -> None:
     validate = 'git -C "$REPO_DIR" rev-parse --is-inside-work-tree'
     audit_call = 'if ! ensure_release_tree_cleanup_safe "$NEW_RELEASE_PATH"; then'
     assert text.index(validate) < text.index(marker) < text.index(audit_call)
+
+
+def test_retention_cleanup_preflights_inactive_release_permissions() -> None:
+    """Never try an unprivileged recursive delete on root-owned caches first."""
+    text = _text()
+    body = text.split('remove_release_tree() {', 1)[1].split('rollback_to() {', 1)[0]
+    assert 'assert_managed_release_path "$release_path"' in body
+    assert 'ensure_release_tree_cleanup_safe "$release_path"' in body
+    assert body.index('assert_managed_release_path "$release_path"') < body.index(
+        'ensure_release_tree_cleanup_safe "$release_path"'
+    )
+    assert body.index('ensure_release_tree_cleanup_safe "$release_path"') < body.index(
+        'if rm -rf -- "$release_path"; then'
+    )
+    assert 'sudo rm -rf -- "$release_path"' in body

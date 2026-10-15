@@ -80,6 +80,23 @@ class Gemini24x7ControllerTests(unittest.TestCase):
             os.environ["CLAUDE_REMOTE_CONTROL_POINTER_FILE"] = self.previous_claude_pointer
         self.temp.cleanup()
 
+    def test_account_mismatch_degrades_controller_even_if_transport_is_live(self) -> None:
+        controller = load_controller()
+        health = self.runtime / "_chatgpt-browser-health.json"
+        health.write_text(json.dumps({
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "session_state": "IDENTITY_MISMATCH",
+            "authenticated": False,
+        }), encoding="utf-8")
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="account-mismatch-observer")
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("chatgpt_browser_identity_mismatch", result["degraded_reasons"])
+
     def test_controller_reports_single_writer_ownership_counters(self) -> None:
         controller = load_controller()
         with (
@@ -96,6 +113,50 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertTrue(result["durable_handoff_enabled"])
         self.assertEqual(result["chatgpt_nudge"]["skipped_foreground_active"], 1)
         self.assertEqual(result["chatgpt_nudge"]["skipped_ownership_busy"], 2)
+
+    def test_old_running_task_is_visible_as_outside_recovery_window(self) -> None:
+        controller = load_controller()
+        old = (datetime.now(timezone.utc) - timedelta(days=45)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        for task_id, status in (("very-old-open", "RUNNING"), ("very-old-done", "CONCLUIDO")):
+            (self.runtime / f"{task_id}.json").write_text(
+                json.dumps({
+                    "task_id": task_id, "created_at": old, "updated_at": old,
+                    "status": status, "next_action": "preserve original intent",
+                }),
+                encoding="utf-8",
+            )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="old-running-task")
+        self.assertEqual(result["completion_sweep"]["active_outside_lookback"], 1)
+        self.assertEqual(result["completion_sweep"]["skipped_outside_lookback"], 2)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_outside_recovery_window", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
+
+    def test_malformed_timestamp_on_active_task_fails_readiness_closed(self) -> None:
+        controller = load_controller()
+        (self.runtime / "malformed-active.json").write_text(
+            json.dumps({
+                "task_id": "malformed-active", "created_at": "not-a-time",
+                "updated_at": "not-a-time", "status": "READY_TO_COMPLETE",
+                "next_action": "verify before finishing",
+            }),
+            encoding="utf-8",
+        )
+        with (
+            patch.object(controller.watchdog, "run_once", return_value={}),
+            patch.object(controller.nudge_dispatcher, "run_once", return_value={}),
+            patch.object(controller.dispatcher, "run_once", return_value={}),
+        ):
+            result = controller.run_once(runtime_dir=self.runtime, owner_id="malformed-running-task")
+        self.assertEqual(result["completion_sweep"]["active_invalid_timestamp"], 1)
+        self.assertFalse(result["continuity_ready"])
+        self.assertIn("active_checkpoint_invalid_timestamp", result["degraded_reasons"])
+        self.assertEqual(result["completion_sweep"]["completed"], 0)
 
     def test_unbound_running_checkpoint_must_fail_readiness_closed(self) -> None:
         controller = load_controller()
@@ -813,6 +874,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_release_packages_free_tier_attestation_helper(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        source_loop = next(
+            line.strip() for line in installer.splitlines()
+            if line.strip().startswith("for source in agent_task_state.py")
+        )
+        self.assertIn("run_background_gemini.py", source_loop)
+        self.assertIn("attest-gemini-free-tier.py", source_loop)
+        self.assertIn(
+            'sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"',
+            installer,
+        )
+        self.assertTrue((ROOT / "scripts" / "attest-gemini-free-tier.py").is_file())
+
     def test_controller_immutable_release_bundles_continuity_dependencies(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"', installer)
@@ -864,7 +939,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("read_gemini_package_version()", installer)
         self.assertNotIn('"$gemini_cli_bin" --version', installer)
         self.assertIn('npm install -g "@google/gemini-cli@$gemini_cli_version" --prefix /home/ubuntu/.local', installer)
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", installer)
         self.assertIn("CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto", installer)
         self.assertIn('runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"', installer)
         self.assertIn('e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"', installer)

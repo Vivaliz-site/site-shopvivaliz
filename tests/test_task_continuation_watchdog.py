@@ -333,7 +333,11 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
     def test_proactive_mode_dispatches_fresh_running_checkpoint(self) -> None:
         from scripts import task_continuation_watchdog as watchdog
 
-        state.start_task("fresh-proactive", "acompanhar ate concluir", "gpt")
+        state.start_task(
+            "fresh-proactive", "acompanhar ate concluir", "gpt",
+            conversation_id="12345678-1234-4123-8123-1234567890ab",
+            browser_session="dev",
+        )
         state.record_progress(
             "fresh-proactive",
             next_action="continuar a tarefa sem aguardar travamento",
@@ -351,6 +355,57 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self.assertEqual(result["dispatched"], 1)
         requests = watchdog.read_requests(self.runtime)
         self.assertEqual([row["task_id"] for row in requests], ["fresh-proactive"])
+        self.assertEqual(requests[0]["conversation_id"], "12345678-1234-4123-8123-1234567890ab")
+        self.assertEqual(requests[0]["browser_session"], "dev")
+        self.assertEqual(result["skipped_unbound_origin"], 0)
+
+    def test_proactive_mode_quarantines_unbound_legacy_without_losing_checkpoint(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("unbound-legacy", "preservar origem real", "gpt")
+        state.record_progress("unbound-legacy", next_action="retomar somente na conversa original")
+        path = self.runtime / "unbound-legacy.json"
+        before = json.loads(path.read_text(encoding="utf-8"))
+
+        first = watchdog.run_once(runtime_dir=self.runtime, proactive=True)
+        self.assertEqual(first["eligible"], 0)
+        self.assertEqual(first["dispatched"], 0)
+        self.assertEqual(first["skipped_unbound_origin"], 1)
+        self.assertEqual(watchdog.read_requests(self.runtime), [])
+        after = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(after["status"], "RUNNING")
+        self.assertEqual(after["updated_at"], before["updated_at"])
+        self.assertNotIn("conversation_id", after)
+
+        # Attestation comes from an authorized origin workflow, never
+        # synthesized by the watchdog itself.
+        state.bind_route(
+            "unbound-legacy",
+            conversation_id="f1234567-1234-4123-8123-1234567890ab",
+            browser_session="atendimento",
+        )
+        second = watchdog.run_once(runtime_dir=self.runtime, proactive=True)
+        self.assertEqual(second["eligible"], 1)
+        self.assertEqual(second["dispatched"], 1)
+        self.assertEqual(second["skipped_unbound_origin"], 0)
+        requests = watchdog.read_requests(self.runtime)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["conversation_id"], "f1234567-1234-4123-8123-1234567890ab")
+        self.assertEqual(requests[0]["browser_session"], "atendimento")
+
+    def test_proactive_mode_rejects_partial_route(self) -> None:
+        from scripts import task_continuation_watchdog as watchdog
+
+        state.start_task("partial-legacy", "preservar identidade de origem", "gpt")
+        state.record_progress("partial-legacy", next_action="aguardar sessao comprovada")
+        state.bind_conversation(
+            "partial-legacy",
+            conversation_id="b1234567-1234-4123-8123-1234567890ab",
+        )
+        result = watchdog.run_once(runtime_dir=self.runtime, proactive=True)
+        self.assertEqual(result["skipped_unbound_origin"], 1)
+        self.assertEqual(result["dispatched"], 0)
+        self.assertEqual(watchdog.read_requests(self.runtime), [])
 
 
 if __name__ == "__main__":

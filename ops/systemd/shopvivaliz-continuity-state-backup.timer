@@ -1,0 +1,13 @@
+[Unit]
+Description=Twice-daily ShopVivaliz durable state backup
+After=local-fs.target
+
+[Timer]
+OnBootSec=5min
+OnCalendar=*-*-* 03,15:00:00
+Persistent=true
+AccuracySec=1min
+Unit=shopvivaliz-continuity-state-backup.service
+
+[Install]
+WantedBy=timers.target

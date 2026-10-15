@@ -23,6 +23,8 @@ on:
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/test_controller_remote_recovery_gate.py'
+      - 'scripts/controller-recovery-with-lease.py'
       - 'tests/remote-control-mcp-test.py'
       - 'tests/test_fredwin_mcp_persistence.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
@@ -56,6 +58,8 @@ on:
       - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
       - 'scripts/desktopkocepsv-remote-control-ssh-bridge.ps1'
       - 'deploy/systemd/shopvivaliz-remote-control-mcp.service'
+      - 'tests/test_controller_remote_recovery_gate.py'
+      - 'scripts/controller-recovery-with-lease.py'
       - 'tests/remote-control-mcp-test.py'
       - 'tests/test_fredwin_mcp_persistence.py'
       - 'tests/test_secure_mcp_tunnel_stability.py'
@@ -81,6 +85,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m py_compile remote-control-mcp/server.py tests/remote-control-mcp-test.py tests/iphone-private-ssh-relay-contract-test.py scripts/claude-remote-control-mcp-stdio.py scripts/claude_workspace_trust_bootstrap.py scripts/oci-mcp-stage7-action.py scripts/ensure-chatgpt-freeze-successor.py tests/test_chatgpt_freeze_successor.py tests/test_secure_mcp_tunnel_stability.py tests/test_fredwin_mcp_persistence.py
+          python3 -m py_compile scripts/controller-recovery-with-lease.py tests/test_controller_remote_recovery_gate.py
+          python3 tests/test_controller_remote_recovery_gate.py
           python3 tests/remote-control-mcp-test.py
           python3 tests/iphone-private-ssh-relay-contract-test.py
           python3 tests/test_chatgpt_freeze_successor.py

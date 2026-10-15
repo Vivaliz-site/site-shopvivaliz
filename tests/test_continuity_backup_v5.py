@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Regression tests for fail-closed canonical task-state backups."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts/continuity/backup_state_v5.py"
+SERVICE = ROOT / "ops/systemd/shopvivaliz-continuity-state-backup.service"
+TIMER = ROOT / "ops/systemd/shopvivaliz-continuity-state-backup.timer"
+
+
+class BackupStateV5Tests(unittest.TestCase):
+    def setUp(self):
+        self.workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workspace.cleanup)
+        root = Path(self.workspace.name)
+        self.state = root / "agent-task-state"
+        self.backups = root / "backups"
+        self.state.mkdir(mode=0o700)
+        self.backups.mkdir(mode=0o700)
+        (self.state / "_agent-task-state.lock").touch(mode=0o600)
+        self.record = {
+            "task_id": "v5-test", "status": "RUNNING",
+            "next_action": "preserve progress", "created_at": "2026-10-13T00:00:00Z",
+        }
+        (self.state / "v5-test.json").write_text(json.dumps(self.record))
+
+    def run_backup(self):
+        return subprocess.run(
+            [sys.executable, str(SCRIPT),
+             "--state-dir", str(self.state), "--backup-dir", str(self.backups)],
+            text=True, capture_output=True, timeout=25, check=False,
+        )
+
+    def archives(self):
+        return list(self.backups.glob("continuity-v5-*.tar.gz"))
+
+    def test_archive_hash_and_readback(self):
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.archives()), 1)
+        archive = self.archives()[0]
+        self.assertEqual(archive.stat().st_mode & 0o777, 0o600)
+        sidecar = (self.backups / (archive.name + ".sha256")).read_text()
+        self.assertEqual(sidecar.split()[0], hashlib.sha256(archive.read_bytes()).hexdigest())
+        with tarfile.open(archive, "r:gz") as tf:
+            self.assertEqual(json.load(tf.extractfile("v5-test.json")), self.record)
+
+    def test_transient_files_excluded(self):
+        (self.state / ".resume-private.txt").write_text("never include ephemeral prompts")
+        (self.state / "checkpoint.tmp.1").write_text("partial")
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            names = set(tf.getnames())
+        self.assertIn("v5-test.json", names)
+        self.assertNotIn(".resume-private.txt", names)
+        self.assertNotIn("checkpoint.tmp.1", names)
+
+    def test_volatile_controller_lease_is_not_archived(self):
+        # The controller creates/deletes this lease outside the checkpoint
+        # writer's lock; including it caused a real scheduled backup failure.
+        volatile = self.state / "_gemini-24x7-controller-lease.json"
+        volatile.write_text(json.dumps({"owner_kind": "test", "expires_at": 0}))
+        retained = self.state / "_durable-metadata.json"
+        retained.write_text(json.dumps({"source": "checkpoint"}))
+
+        result = self.run_backup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.archives()), 1)
+        with tarfile.open(self.archives()[0], "r:gz") as tf:
+            archived = set(tf.getnames())
+        self.assertIn("v5-test.json", archived)
+        self.assertIn("_durable-metadata.json", archived)
+        self.assertNotIn("_gemini-24x7-controller-lease.json", archived)
+
+    def test_invalid_task_json_blocks_publication(self):
+        (self.state / "damaged.json").write_text("{broken")
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.archives(), [])
+
+    def test_symlink_blocks_publication(self):
+        outside = Path(self.workspace.name) / "outside"
+        outside.write_text("never archive outside data")
+        (self.state / "outside-link").symlink_to(outside)
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.archives(), [])
+
+    def test_public_backup_directory_is_rejected(self):
+        self.backups.chmod(0o755)
+        result = self.run_backup()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.archives(), [])
+
+    def test_systemd_timer_and_service_are_readonly_to_source(self):
+        service = SERVICE.read_text()
+        timer = TIMER.read_text()
+        self.assertIn("ProtectSystem=strict", service)
+        self.assertIn("ProtectHome=read-only", service)
+        self.assertIn("ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-backups", service)
+        self.assertIn("NoNewPrivileges=true", service)
+        self.assertIn("Persistent=true", timer)
+        self.assertIn("OnCalendar=", timer)
+
+
+    def test_installer_runs_one_real_backup_and_schedules_timer(self):
+        body = (ROOT / "scripts/continuity/install_backup_v5.sh").read_text()
+        self.assertIn("systemctl start shopvivaliz-continuity-state-backup.service", body)
+        self.assertIn("systemctl enable --now shopvivaliz-continuity-state-backup.timer", body)
+        self.assertIn("sha256sum -c", body)
+        for unsafe in ("systemctl restart", "systemctl stop", "docker prune", "rm -rf"):
+            self.assertNotIn(unsafe, body)
+
+
+    def test_installer_accepts_empty_lock_inode(self):
+        body = (ROOT / "scripts/continuity/install_backup_v5.sh").read_text()
+        self.assertIn('test -f "$state_dir/_agent-task-state.lock"', body)
+        self.assertNotIn('"$source_timer" "$state_dir/_agent-task-state.lock"', body)
+
+
+    def test_canonical_remote_repair_is_allowlisted_and_backend_only(self):
+        workflow = (ROOT / ".github/workflows/shopvivaliz-remote-access.yml").read_text()
+        repair = (ROOT / "scripts/continuity/remote_repair_v5.sh").read_text()
+        self.assertIn('"continuity_backup_v5_repair"', workflow)
+        self.assertIn("continuity_backup_v5_repair)", workflow)
+        self.assertIn('if action == "continuity_backup_v5_repair" and target != "always-free-arm-1787907847-26"', workflow)
+        self.assertIn('remote_repair_v5.sh', workflow)
+        self.assertIn("BACKUP_V5_REPAIR=SOURCE_MISMATCH", repair)
+        self.assertIn("BACKUP_V5_REPAIR=BLOCKED_INSUFFICIENT_SPACE", repair)
+        self.assertIn("BACKUP_V5_INSTALLED_SOURCE_MATCH=PASS", repair)
+        self.assertIn("BACKUP_V5_ONESHOT_AND_TIMER=PASS", repair)
+        self.assertIn('shopvivaliz-continuity-state-backup.timer', repair)
+        self.assertIn('sudo -n bash "$staging_dir/scripts/continuity/install_backup_v5.sh"', repair)
+        self.assertIn('test "$(hostname)" = "always-free-arm-1787907847-26"', repair)
+        self.assertNotIn("systemctl restart", repair)
+        self.assertNotIn("systemctl stop", repair)
+        self.assertNotIn("docker prune", repair)
+        result = subprocess.run(["bash", "-n", str(ROOT / "scripts/continuity/remote_repair_v5.sh")],
+                                text=True, capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

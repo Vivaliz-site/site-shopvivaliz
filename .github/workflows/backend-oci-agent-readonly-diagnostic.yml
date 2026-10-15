@@ -1,0 +1,166 @@
+name: OCI Backend Agent Read-Only Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Diagnose the exact backend via OCI Agent; no SSH, restart, cleanup, or paid AI."
+        required: true
+        type: choice
+        options:
+          - READ_ONLY_DIAGNOSTIC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-oci-backend-agent-readonly
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    if: >
+      ${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && inputs.confirmation == 'READ_ONLY_DIAGNOSTIC' }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_NAME: always-free-arm-1787907847-26
+    steps:
+      - name: Configure protected Oracle Cloud identity
+        shell: bash
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::OCI backend diagnostic credential unavailable: $name"; exit 2; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/shopvivaliz-oci-backend-agent/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/shopvivaliz-oci-backend-agent/key.pem"
+          install -d -m 0700 "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 0600 "$OCI_KEY_FILE"
+          printf '[AGENTS]\nuser=%s\nfingerprint=%s\ntenancy=%s\nregion=%s\nkey_file=%s\n' \
+            "$OCI_CLI_USER" "$OCI_CLI_FINGERPRINT" "$OCI_CLI_TENANCY" "$OCI_CLI_REGION" "$OCI_KEY_FILE" > "$OCI_CONFIG_FILE"
+          chmod 0600 "$OCI_CONFIG_FILE"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          echo OCI_PROTECTED_IDENTITY_READY=1
+
+      - name: Install official Oracle Python SDK
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci
+          echo OCI_DIAGNOSTIC_SDK_READY=1
+
+      - name: Diagnose backend through Oracle instance agent without SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import time
+          import oci
+
+          name = os.environ["BACKEND_NAME"]
+          config = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          search = oci.resource_search.ResourceSearchClient(config)
+          compute = oci.core.ComputeClient(config)
+          agent = oci.compute_instance_agent.ComputeInstanceAgentClient(config)
+          models = oci.compute_instance_agent.models
+
+          query = "query instance resources where displayName = '" + name + "'"
+          items = search.search_resources(
+              oci.resource_search.models.StructuredSearchDetails(query=query, type="Structured")
+          ).data.items
+          if len(items) != 1:
+              raise SystemExit("OCI_BACKEND_IDENTITY=NOT_UNIQUE")
+          instance = compute.get_instance(items[0].identifier).data
+          if instance.display_name != name:
+              raise SystemExit("OCI_BACKEND_IDENTITY=MISMATCH")
+          print("OCI_BACKEND_IDENTITY=PASS", flush=True)
+          state = instance.lifecycle_state
+          print("OCI_BACKEND_LIFECYCLE=" + str(state), flush=True)
+          if state != "RUNNING":
+              raise SystemExit("OCI_BACKEND_STATE=NOT_RUNNING")
+
+          # Pure reads, no sudo, log inspection, secret files, cleanup, restart or reboot.
+          command = r'''set -Eeuo pipefail
+          printf 'BACKEND_HOST=%s\n' "$(hostname)"
+          printf 'BACKEND_UPTIME_SECONDS=%s\n' "$(cut -d. -f1 </proc/uptime | awk '{print $1}')"
+          printf 'BACKEND_ROOT_USED_PCT=%s\n' "$(df -P / | awk 'NR==2 {print $5}')"
+          printf 'BACKEND_ROOT_FREE_KB=%s\n' "$(df -Pk / | awk 'NR==2 {print $4}')"
+          printf 'BACKEND_ROOT_INODES_USED_PCT=%s\n' "$(df -Pi / | awk 'NR==2 {print $5}')"
+          printf 'BACKEND_MEMORY_AVAILABLE_KB=%s\n' "$(awk '$1=="MemAvailable:" {print $2}' /proc/meminfo)"
+          for unit in ssh.service shopvivaliz-remote-control-mcp.service shopvivaliz-gemini-24x7-controller.service shopvivaliz-task-resume-worker.service ollama.service; do
+            service_name="$(printf '%s' "$unit" | tr '.-' '__')"
+            if status="$(systemctl is-active "$unit" 2>/dev/null)"; then :; else status="${status:-unknown}"; fi
+            case "$status" in active|inactive|failed|activating|deactivating) ;; *) status=unknown ;; esac
+            printf 'BACKEND_UNIT_%s=%s\n' "$service_name" "$status"
+          done
+          echo BACKEND_READONLY_DIAGNOSTIC_DONE=PASS
+          '''
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=instance.compartment_id,
+              execution_time_out_in_seconds=90,
+              target=models.InstanceAgentCommandTarget(instance_id=instance.id),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(
+                      source_type="TEXT", text=command
+                  ),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="shopvivaliz-backend-agent-readonly-audit",
+          )
+          try:
+              command_id = agent.create_instance_agent_command(details).data.id
+              print("OCI_AGENT_COMMAND_ACCEPTED=PASS", flush=True)
+          except oci.exceptions.ServiceError as err:
+              print("OCI_AGENT_COMMAND_API_HTTP=" + str(err.status))
+              print("OCI_AGENT_COMMAND_API_CODE=" + str(err.code)[:90])
+              raise SystemExit(20)
+          execution = None
+          for attempt in range(52):
+              execution = agent.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id, instance_id=instance.id
+              ).data
+              status = execution.lifecycle_state
+              if status in ("SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELED"):
+                  break
+              if attempt % 6 == 0:
+                  print("OCI_AGENT_COMMAND_POLL=" + str(attempt), flush=True)
+              time.sleep(5)
+          if execution is None:
+              raise SystemExit("OCI_AGENT_COMMAND_STATUS=UNKNOWN")
+          print("OCI_AGENT_COMMAND_STATUS=" + str(execution.lifecycle_state), flush=True)
+          output = execution.content
+          body = str(getattr(output, "text", "") or "")
+          allowed = re.compile(r"^(?:BACKEND_HOST|BACKEND_UPTIME_SECONDS|BACKEND_ROOT_USED_PCT|BACKEND_ROOT_FREE_KB|BACKEND_ROOT_INODES_USED_PCT|BACKEND_MEMORY_AVAILABLE_KB|BACKEND_UNIT_[a-zA-Z0-9_]+|BACKEND_READONLY_DIAGNOSTIC_DONE)=[a-zA-Z0-9_.%-]{1,100}$")
+          sanitized = [line for line in body.splitlines() if allowed.fullmatch(line)]
+          for line in sanitized:
+              print(line, flush=True)
+          exit_code = getattr(output, "exit_code", None)
+          if execution.lifecycle_state != "SUCCEEDED" or exit_code != 0:
+              raise SystemExit("OCI_AGENT_READONLY_DIAGNOSTIC=FAILED")
+          if "BACKEND_HOST=" + name not in sanitized:
+              raise SystemExit("OCI_AGENT_READONLY_DIAGNOSTIC=HOST_MISMATCH")
+          if "BACKEND_READONLY_DIAGNOSTIC_DONE=PASS" not in sanitized:
+              raise SystemExit("OCI_AGENT_READONLY_DIAGNOSTIC=INCOMPLETE")
+          print("OCI_AGENT_READONLY_DIAGNOSTIC=PASS")
+          PY
+
+      - name: Remove temporary Oracle credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if test -f "${OCI_KEY_FILE:-}"; then shred -u "$OCI_KEY_FILE"; fi
+          if test -f "${OCI_CONFIG_FILE:-}"; then shred -u "$OCI_CONFIG_FILE"; fi
+          echo OCI_DIAGNOSTIC_CREDENTIALS_CLEANED=1

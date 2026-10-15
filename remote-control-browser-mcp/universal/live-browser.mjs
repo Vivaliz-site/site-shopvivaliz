@@ -10,7 +10,7 @@ const defaultRoot=dirname(fileURLToPath(import.meta.url));
 const MAX_DOWNLOAD_BYTES=10_000_000;
 const allowedKeys=new Set(['Enter','Tab','Escape','ArrowUp','ArrowDown','Space']);
 
-function forbidIp(ip) {
+export function forbidIp(ip) {
   if (ip.includes(':')) {
     const v=ip.toLowerCase();
     if (v.startsWith('::ffff:')) {
@@ -33,8 +33,9 @@ function forbidIp(ip) {
     (p[0]===100 && p[1]>=64 && p[1]<=127) ||
     (p[0]===169 && p[1]===254) ||
     (p[0]===172 && p[1]>=16 && p[1]<=31) ||
-    (p[0]===192 && (p[1]===168 || (p[1]===0 && p[2]===0))) ||
-    (p[0]===198 && (p[1]===18 || p[1]===19));
+    (p[0]===192 && (p[1]===168 || (p[1]===0 && p[2]===0) || (p[1]===0 && p[2]===2) || (p[1]===88 && p[2]===99))) ||
+    (p[0]===198 && (p[1]===18 || p[1]===19 || (p[1]===51 && p[2]===100))) ||
+    (p[0]===203 && p[1]===0 && p[2]===113);
 }
 
 async function validateUrl(value) {

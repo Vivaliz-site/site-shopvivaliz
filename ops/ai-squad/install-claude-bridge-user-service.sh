@@ -8,7 +8,8 @@ service_dir="$HOME/.config/systemd/user"
 unit="$service_dir/$service"
 runtime="$HOME/.local/share/shopvivaliz-squad-claude"
 workspace="$runtime/workspace"
-bridge="/home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/claude-bridge.mjs"
+bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/claude-bridge.mjs"
+bridge="$HOME/.local/share/shopvivaliz-ai-squad/claude-bridge.mjs"
 claude_bin="/home/ubuntu/.local/bin/claude"
 env_path="/home/ubuntu/shopvivaliz-deploy/shared/.env"
 credentials_path="/home/ubuntu/.claude/.credentials.json"
@@ -19,12 +20,22 @@ bootstrap_link="$claude_dir/shopvivaliz-bootstrap.md"
 node_bin="$(command -v node)"
 
 test -n "$node_bin"
-test -f "$bridge"
+test -f "$bridge_source"
 test -x "$claude_bin"
 test -f "$env_path"
 test -f "$bootstrap_doc"
 mkdir -p "$service_dir" "$workspace" "$claude_dir"
 chmod 700 "$runtime" "$workspace" "$claude_dir"
+# Install the policy-gated bridge into a stable user-owned runtime location.
+# This avoids an old release symlink enabling paid inference during rollback.
+mkdir -p "$(dirname "$bridge")"
+chmod 700 "$(dirname "$bridge")"
+staged_bridge="$(mktemp "$(dirname "$bridge")/.claude-bridge.XXXXXX.mjs")"
+trap 'rm -f "$staged_bridge"' EXIT
+install -m 0644 "$bridge_source" "$staged_bridge"
+"$node_bin" --check "$staged_bridge"
+mv -f "$staged_bridge" "$bridge"
+trap - EXIT
 
 # Claude Code user memory is global across projects. Keep a stable import in
 # ~/.claude/CLAUDE.md and point it at the canonical bootstrap from the active
@@ -53,6 +64,8 @@ Type=simple
 WorkingDirectory=$workspace
 ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CLAUDE_BRIDGE_PORT=17657
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
 Environment=AI_SQUAD_CLAUDE_BIN=$claude_bin
 Environment=AI_SQUAD_CLAUDE_ENV_PATH=$env_path
 Environment=AI_SQUAD_CLAUDE_HOME=/home/ubuntu
@@ -92,16 +105,12 @@ fi
 systemctl --user enable "$service" >/dev/null
 systemctl --user start "$service"
 
-health_url="http://127.0.0.1:17657/health"
+checker="$(cd -- "$(dirname -- "$0")" && pwd -P)/bridge-health-policy.py"
+test -f "$checker"
 for _ in $(seq 1 120); do
-  if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
-    if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-      && printf '%s' "$body" | grep -q '"ok":true' \
-      && printf '%s' "$body" | grep -q '"authenticated":true'; then
-      printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_SERVICE=ACTIVE"
-      printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=VERIFIED"
-      exit 0
-    fi
+  if python3 "$checker" claude; then
+    printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_SERVICE=ACTIVE"
+    exit 0
   fi
   sleep 1
 done

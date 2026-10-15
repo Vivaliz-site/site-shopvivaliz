@@ -4,5 +4,8 @@ Description=ShopVivaliz disk guard
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/shopvivaliz-disk-guard
-Nice=10
+Nice=19
 IOSchedulingClass=idle
+CPUWeight=20
+IOWeight=20
+TimeoutStartSec=180s
