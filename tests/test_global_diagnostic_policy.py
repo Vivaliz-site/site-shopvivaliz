@@ -25,5 +25,39 @@ class GlobalDiagnosticPolicyTests(unittest.TestCase):
                 self.assertIn(term, text)
 
 
+    def test_absolute_error_remediation_rule_is_present_everywhere(self):
+        required = [
+            "AGENTS.md",
+            "REGRAS-AGENTES-CENTRALIZADAS.md",
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/README.md",
+            "CLAUDE.md",
+            "GEMINI.md",
+            "GEPETO-POLICY.md",
+        ]
+        for path in required:
+            with self.subTest(path=path):
+                doc = (ROOT / path).read_text(encoding="utf-8")
+                self.assertIn("<!-- EVERY_CONFIRMED_ERROR_REMEDIATE_V1 -->", doc)
+                self.assertIn("<!-- /EVERY_CONFIRMED_ERROR_REMEDIATE_V1 -->", doc)
+
+    def test_absolute_rule_includes_correction_evidence_and_safety(self):
+        policy = (ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md").read_text(encoding="utf-8")
+        for term in (
+            "todo erro encontrado deve ser corrigido",
+            "causa raiz",
+            "RED",
+            "GREEN",
+            "regressao",
+            "E2E",
+            "RUNNING",
+            "BLOCKED_EXTERNAL",
+            "somente leitura",
+            "protecoes Git/CI",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, policy)
+
+
 if __name__ == "__main__":
     unittest.main()
