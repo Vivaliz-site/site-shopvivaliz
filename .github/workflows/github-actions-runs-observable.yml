@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout request
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
@@ -66,7 +66,7 @@ jobs:
             artifacts/github-actions-runs/github-actions-last-runs.json
 
       - name: Upload immutable observable result
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: github-actions-runs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/github-actions-runs/github-actions-last-runs.json

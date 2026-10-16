@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Resolve request
         id: req
@@ -330,7 +330,7 @@ jobs:
 
       - name: Upload private reauth links
         if: steps.req.outputs.phase == 'begin'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: dc-reauth-links-${{ github.run_id }}
           path: ${{ env.LINK_DIR }}/

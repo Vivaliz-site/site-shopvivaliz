@@ -24,7 +24,7 @@ jobs:
       SITE_A1_HOST: 127.0.0.1
       REMOTE_STAGE: /tmp/production-functional-audit-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 

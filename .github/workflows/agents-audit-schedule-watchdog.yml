@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check latest scheduled audit run
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const fs = require('fs');
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload watchdog evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: agents-audit-watchdog-${{ github.run_id }}
           path: artifacts/agents-audit-watchdog/report.json

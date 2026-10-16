@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Verify PHP runtime
         run: php -v
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload Search Console audit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: google-search-console-audit-${{ github.run_id }}
           path: reports/google-search-console-audit.json
