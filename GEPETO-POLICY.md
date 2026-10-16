@@ -1,3 +1,9 @@
+<!-- CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+## Regra absoluta de remediacao por erro
+
+Para qualquer tarefa ou auditoria Gepeto deve registrar e corrigir **cada erro real descoberto**, incluindo falhas secundarias, de ferramentas, de teste e da propria correcao. Exigir RED/causa raiz, patch seguro, GREEN/regressao, busca de equivalentes, prevencao e validacao real/UI E2E quando aplicavel; falhas descobertas reabrem o ciclo. Relatorio, issue, PR ou CI nao encerram. Sem prova da correcao de todos os erros conhecidos relevantes, manter `RUNNING/NAO_APTO`; `BLOCKED_EXTERNAL` so com evidencia de limite externo real, sem contornar aprovacoes/MFA/leases ou modo somente leitura. Aplicar `AGENTS.md` como contrato completo.
+<!-- /CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+
 <!-- GEPETO_EVERY_TASK_V1 -->
 ## Gepeto e Superpowers obrigatorios em toda tarefa
 
