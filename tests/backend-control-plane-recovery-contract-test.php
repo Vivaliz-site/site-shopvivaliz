@@ -34,6 +34,7 @@ $forbidden = [
     'curl -fsSL http://',
     'StrictHostKeyChecking=no',
     'sshpass',
+    'exit 0',
 ];
 foreach ($forbidden as $needle) {
     if (strpos($src, $needle) !== false) {
