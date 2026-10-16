@@ -31,7 +31,7 @@ jobs:
           for prefix,name in [('P','PRINCIPAL'),('E','ESPOSA')]:
               values={k:os.environ.get(prefix+'_'+k,'') for k in ('USER','TENANCY','FINGERPRINT','REGION','PRIVATE_KEY')}
               if not all(values.values()):raise SystemExit('OCI_'+name+'_MISSING_SECRET')
-              signer=oci.signer.Signer(tenancy=values['TENANCY'],user=values['USER'],fingerprint=values['FINGERPRINT'],private_key_content=values['PRIVATE_KEY'])
+              signer=oci.signer.Signer(tenancy=values['TENANCY'],user=values['USER'],fingerprint=values['FINGERPRINT'],private_key_file_location=None,private_key_content=values['PRIVATE_KEY'])
               identity=oci.identity.IdentityClient({'region':values['REGION'],'tenancy':values['TENANCY']},signer=signer)
               result=identity.list_region_subscriptions(values['TENANCY'])
               if not result.data:raise SystemExit('OCI_'+name+'_NO_REGIONS')
