@@ -46,6 +46,11 @@ if [[ -z "$DC_BIN" || ! -x "$DC_BIN" ]]; then
   echo 'SESSION_REFRESH_PATCH=false reason=package_binary_missing'
   exit 22
 fi
+DC_ENTRYPOINT="$(readlink -f "$DC_BIN")"
+if [[ ! -f "$DC_ENTRYPOINT" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=package_entrypoint_missing'
+  exit 22
+fi
 DC_PACKAGE_ROOT="$(cd "$(dirname "$(readlink -f "$DC_BIN")")/.." && pwd -P)"
 "$NODE_BIN" "$SESSION_PATCHER" "$DC_PACKAGE_ROOT"
 
@@ -142,7 +147,7 @@ ready_is_current() {
 }
 
 echo "REMOTE_OWNER_PID=$REMOTE_OWNER_PID REMOTE_OWNER_SESSION=$REMOTE_OWNER_SESSION"
-setsid "$DC_BIN" remote --persist-session >"$tmp" 2>&1 &
+setsid "$NODE_BIN" "$DC_ENTRYPOINT" remote --persist-session >"$tmp" 2>&1 &
 child=$!
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do
