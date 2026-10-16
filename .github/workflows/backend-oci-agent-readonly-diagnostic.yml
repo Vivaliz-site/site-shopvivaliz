@@ -19,8 +19,7 @@ concurrency:
 
 jobs:
   diagnose:
-    if: >
-      ${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && inputs.confirmation == 'READ_ONLY_DIAGNOSTIC' }}
+    if: ${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && inputs.confirmation == 'READ_ONLY_DIAGNOSTIC' }}
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 12
