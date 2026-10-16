@@ -1,0 +1,107 @@
+name: Backend Control Plane Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Soft-reset exact backend only when SSH/MCP/agent command execution is unresponsive."
+        required: true
+        type: choice
+        options:
+          - SOFTRESET_UNRESPONSIVE_BACKEND
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-control-plane-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: ${{ github.repository == 'Vivaliz-site/site-shopvivaliz' && inputs.confirmation == 'SOFTRESET_UNRESPONSIVE_BACKEND' }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure protected OCI identity
+        shell: bash
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI recovery secret missing: $name"; exit 2; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          install -d -m 0700 "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 0600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 0600 "$OCI_CONFIG_FILE"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Install OCI CLI and resolve exact backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1 || { echo "::error::Expected exactly one backend instance, found $count"; exit 3; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Backend is not RUNNING"; exit 4; }
+          printf 'BACKEND_INSTANCE_ID=%s\n' "$instance_id" >> "$GITHUB_ENV"
+          echo OCI_BACKEND_IDENTITY=PASS
+
+      - name: Soft-reset exact unresponsive backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" compute instance action             --instance-id "$BACKEND_INSTANCE_ID"             --action SOFTRESET             --wait-for-state RUNNING             --wait-interval-seconds 15             --max-wait-seconds 900 >/dev/null
+          echo OCI_BACKEND_SOFTRESET=PASS
+
+      - name: Verify backend control-plane state after reset
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          recovered=false
+          for attempt in $(seq 1 24); do
+            lifecycle="$("${OCI[@]}" compute instance get --instance-id "$BACKEND_INSTANCE_ID" --query 'data."lifecycle-state"' --raw-output)"
+            if [ "$lifecycle" = RUNNING ]; then
+              recovered=true
+              break
+            fi
+            sleep 5
+          done
+          test "$recovered" = true || { echo "::error::Backend did not return to RUNNING state"; exit 5; }
+          echo OCI_BACKEND_POSTRESET_STATE=RUNNING
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test ! -f "${OCI_KEY_FILE:-}" || shred -u "$OCI_KEY_FILE"
+          test ! -f "${OCI_CONFIG_FILE:-}" || shred -u "$OCI_CONFIG_FILE"
