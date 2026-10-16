@@ -1,3 +1,9 @@
+<!-- OCI_DUAL_ACCOUNT_CANONICAL_V1 -->
+## OCI: duas contas Oracle Cloud (PRINCIPAL / ESPOSA)
+
+Antes de executar operacoes Oracle Cloud, leia obrigatoriamente [docs/ops/oci-dual-account-access.md](docs/ops/oci-dual-account-access.md). Essa e a referencia canonica de arquitetura, configuracao, nomes dos GitHub Actions secrets, comandos permitidos, validacao e limites operacionais. Ambas as contas foram autenticadas de forma independente via GitHub Actions (run 38908995411): OCI_PRINCIPAL_AUTH=PASS e OCI_ESPOSA_AUTH=PASS. Nao confundir esse resultado com acesso OCI nativo pelo MCP do backend, ainda nao comprovado. Nao copiar, imprimir, registrar ou publicar chaves privadas. Preservar isolamento de tenancies, IAM e aprovacoes para mudancas de recursos.
+<!-- /OCI_DUAL_ACCOUNT_CANONICAL_V1 -->
+
 <!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
 ## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
 
