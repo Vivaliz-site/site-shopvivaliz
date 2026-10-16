@@ -1,3 +1,9 @@
+<!-- CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+## Regra absoluta: todo erro encontrado deve ser corrigido
+
+**Obrigatorio em qualquer tarefa, por qualquer agente, subagente, auditor, revisor ou controlador.** Nao basta diagnosticar, abrir issue/PR ou relatar falhas. Para **cada** erro real encontrado (inclusive incidental, herdado, intermitente, em teste, ferramenta, CI, browser, infraestrutura ou na propria correcao), registrar evidencia e responsavel; reproduzir RED quando viavel; investigar causa raiz; corrigir com seguranca; testar GREEN e regressao; buscar equivalentes; prevenir recorrencia; comprovar no runtime e na UI real/E2E quando houver; reauditar. Cada erro novo reabre o ciclo. Sem correcao validada de todos os erros conhecidos relevantes ao escopo, nao declarar `APTO` nem `CONCLUIDO`: preservar `RUNNING/NAO_APTO` e `next_action` concreta. Um achado fora do escopo deve ser encaminhado com identidade e dono, sem ser descartado. Modo SOMENTE LEITURA nunca autoriza alteracoes: registrar e encaminhar a executor habilitado. Nao contornar aprovacoes, MFA, secrets, consentimento, branch protection, lease/fencing ou bloqueios da plataforma. Se acao externa especifica impedir a correcao apos alternativas autorizadas esgotadas, registrar `BLOCKED_EXTERNAL` com evidencia e condicao exata de desbloqueio; nunca um falso sucesso. Fonte operacional detalhada: `AGENTS.md`. Complementa `DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1`.
+<!-- /CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+
 <!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
 ## Auditoria Extrema V5: execucao obrigatoria na UI real (gate de aceite)
 
