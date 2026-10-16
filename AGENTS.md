@@ -1,3 +1,19 @@
+<!-- CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+## REGRA ABSOLUTA: todo erro encontrado exige correcao comprovada
+
+**Ordem permanente do proprietario (2026-10-15), obrigatoria para GPT, Gepeto, Claude, Gemini, Codex, agentes, subagentes, controladores, auditores e revisores de todos os repositorios ShopVivaliz.** Esta regra aplica-se a qualquer tarefa: desenvolvimento, infraestrutura, CI/CD, browser, autenticacao, auditoria, suporte, seguranca, dados, integracoes, manutencao e recuperacao. Um erro descoberto durante a correcao de outro erro tambem deve ser tratado.
+
+1. **Zero achados ignorados:** todo erro real detectado, mesmo incidental, secundario, intermitente, silencioso, preexistente, de teste, de automacao ou de ferramenta, deve ser registrado com identificador, escopo, severidade/impacto, evidencia verificavel e responsavel. Confirmar se e erro ou comportamento esperado antes de alterar; nao gerar falsos defeitos.
+2. **Corrigir, nao apenas diagnosticar:** reproduzir RED quando viavel, investigar causa raiz, aplicar a menor correcao segura e autorizada, buscar equivalentes, prevenir recorrencia, executar testes GREEN e regressao; validar o efeito no runtime e na **UI real** quando existir, inclusive apos deploy, com persistencia/revisita e evidencia. A descoberta de novo erro reabre o ciclo.
+3. **Nao estacionar problemas corrigiveis:** relatorio, issue, PR, comentario, patch, CI verde, merge, deploy, heartbeat ou transferencia para outro agente NAO quitam achado. O agente executor permanece responsavel por obter reparo validado. Erros identificados fora do escopo imediato sao registrados/encaminhados ao fluxo e dono corretos, deduplicados e acompanhados; nao sao silenciosamente descartados.
+4. **Proibido maquiar verde:** nao suprimir logs, testes, alertas ou falhas; nao reduzir severidade, coverage ou gates, alterar dados/checagens artificiosamente, inventar prova, fabricar IDs de conversa, omitir caminhos quebrados ou marcar erro como resolvido sem teste pos-correcao.
+5. **Criterio terminal absoluto:** `APTO` e `CONCLUIDO` so podem ser declarados quando **todos os erros conhecidos e relevantes para o objetivo/escopo certificado** estiverem corrigidos e validados, sem bloqueadores abertos. A auditoria V5 exige `AUDIT_VERDICT=APTO` do certifier para o mesmo SHA/release/ambiente e E2E/UI real. Manter `RUNNING/NAO_APTO` com checkpoint, ownership, evidencias e proxima acao concreta enquanto existir reparo seguro executavel.
+6. **Seguranca e excecao estrita:** nenhuma regra autoriza contornar MFA, RBAC, recusas de ferramenta/plataforma, branch protection, consentimento, leases/fencing, modo somente leitura, segredos ou aprovacoes de acoes destrutivas. Se a correção depender de autorizacao humana/especifica ou terceiro incontornavel, preservar o erro aberto, demonstrar alternativas seguras esgotadas e registrar `BLOCKED_EXTERNAL` (nunca `APTO`) com evidencia, responsavel, impacto, condicao exata de desbloqueio e retomada. Em monitor SOMENTE LEITURA, registrar e encaminhar pelo executor autorizado, sem mutar.
+7. **Garantia contra recorrencia:** cada falha corrigida deve, quando tecnicamente pertinente, receber regressao automatizada, alerta/observabilidade, guarda deterministica e busca de ocorrencias equivalentes em outras rotas/repositorios. Conferir a correcao numa sessao independente quando a criticidade exigir.
+
+**Regra curta:** encontrou erro -> registre -> reproduza -> investigue -> corrija com seguranca -> teste -> valide E2E -> previna -> reaudite. Erro novo reinicia o ciclo; sem prova real, nao existe conclusao. Esta regra reforca `DIAGNOSTIC_REMEDIATE_VALIDATE_GLOBAL_V1` e `AUDIT_APTO_REMEDIATION_LOOP_V1`; restricoes de seguranca permanecem superiores a qualquer comando de mutacao.
+<!-- /CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+
 <!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
 ## Gate da Auditoria Extrema V5: E2E UI real, prova em disco e continuidade
 
