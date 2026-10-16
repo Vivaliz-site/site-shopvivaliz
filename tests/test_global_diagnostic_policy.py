@@ -25,37 +25,36 @@ class GlobalDiagnosticPolicyTests(unittest.TestCase):
                 self.assertIn(term, text)
 
 
-    def test_absolute_error_remediation_rule_is_present_everywhere(self):
-        required = [
+    def test_absolute_rule_required_in_agent_entrypoints(self):
+        required = (
             "AGENTS.md",
             "docs/knowledge/agent-rules.md",
-            "docs/knowledge/README.md",
             "CLAUDE.md",
             "GEMINI.md",
             "GEPETO-POLICY.md",
-        ]
-        for path in required:
-            with self.subTest(path=path):
-                doc = (ROOT / path).read_text(encoding="utf-8")
-                self.assertIn("<!-- EVERY_CONFIRMED_ERROR_REMEDIATE_V1 -->", doc)
-                self.assertIn("<!-- /EVERY_CONFIRMED_ERROR_REMEDIATE_V1 -->", doc)
+            "docs/knowledge/README.md",
+        )
+        for relative in required:
+            with self.subTest(path=relative):
+                doc = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("<!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->", doc)
+                self.assertIn("<!-- /ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->", doc)
 
-    def test_absolute_rule_includes_correction_evidence_and_safety(self):
-        policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        for term in (
-            "todo erro encontrado deve ser corrigido",
-            "causa raiz",
+    def test_absolute_rule_does_not_allow_false_success_or_safety_bypass(self):
+        doc = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        for phrase in (
+            "todo erro identificado exige correcao real e validacao",
             "RED",
             "GREEN",
+            "causa raiz",
             "regressao",
-            "E2E",
-            "RUNNING",
-            "BLOCKED_EXTERNAL",
-            "somente leitura",
-            "protecoes Git/CI",
+            "RUNNING/NAO_APTO",
+            "next_action",
+            "SOMENTE LEITURA",
+            "Sem bypass",
         ):
-            with self.subTest(term=term):
-                self.assertIn(term, policy)
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, doc)
 
 
 if __name__ == "__main__":
