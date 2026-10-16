@@ -1,0 +1,97 @@
+name: OCI Dual Account Backend Provisioning
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oci-dual-backend-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    steps:
+      - name: Prepare protected OCI files
+        env:
+          P_USER: ${{ secrets.OCI_PRINCIPAL_USER }}
+          P_TENANCY: ${{ secrets.OCI_PRINCIPAL_TENANCY }}
+          P_FINGERPRINT: ${{ secrets.OCI_PRINCIPAL_FINGERPRINT }}
+          P_REGION: ${{ secrets.OCI_PRINCIPAL_REGION }}
+          P_PRIVATE_KEY: ${{ secrets.OCI_PRINCIPAL_PRIVATE_KEY }}
+          E_USER: ${{ secrets.OCI_ESPOSA_USER }}
+          E_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+          E_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+          E_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+          E_PRIVATE_KEY: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'dual'
+          for name,prefix in [('principal','P'),('esposa','E')]:
+              vals={k:os.environ.get(prefix+'_'+k,'') for k in ('USER','TENANCY','FINGERPRINT','REGION','PRIVATE_KEY')}
+              if not all(vals.values()): raise SystemExit('MISSING_'+name.upper()+'_SECRET')
+              d=root/name
+              d.mkdir(parents=True,exist_ok=True,mode=0o700)
+              (d/'oci_api_key.pem').write_text(vals['PRIVATE_KEY'].rstrip()+'\n')
+              (d/'oci_api_key.pem').chmod(0o600)
+              data='['+name.upper()+']\n'+''.join(k.lower()+'='+vals[k]+'\n' for k in ('USER','TENANCY','FINGERPRINT','REGION'))
+              data+='key_file=/home/ubuntu/.oci/'+name+'/oci_api_key.pem\n'
+              (d/'config').write_text(data)
+              (d/'config').chmod(0o600)
+          print('DUAL_OCI_FILES_READY=PASS')
+          PY
+      - name: Resolve exact backend instance via principal OCI API
+        env:
+          P_USER: ${{ secrets.OCI_PRINCIPAL_USER }}
+          P_TENANCY: ${{ secrets.OCI_PRINCIPAL_TENANCY }}
+          P_FINGERPRINT: ${{ secrets.OCI_PRINCIPAL_FINGERPRINT }}
+          P_REGION: ${{ secrets.OCI_PRINCIPAL_REGION }}
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install -q --disable-pip-version-check oci
+          python3 - <<'PY'
+          import os,oci
+          from pathlib import Path
+          cfg=dict(user=os.environ['P_USER'],tenancy=os.environ['P_TENANCY'],fingerprint=os.environ['P_FINGERPRINT'],region=os.environ['P_REGION'],key_file=str(Path(os.environ['RUNNER_TEMP'])/'dual/principal/oci_api_key.pem'))
+          oci.config.validate_config(cfg)
+          query="query instance resources where displayName = 'always-free-arm-1787907847-26'"
+          items=oci.resource_search.ResourceSearchClient(cfg).search_resources(oci.resource_search.models.StructuredSearchDetails(query=query,type='Structured')).data.items
+          if len(items)!=1: raise SystemExit('BACKEND_NOT_UNIQUE')
+          compute=oci.core.ComputeClient(cfg)
+          inst=compute.get_instance(items[0].identifier).data
+          if inst.display_name!='always-free-arm-1787907847-26' or inst.lifecycle_state!='RUNNING': raise SystemExit('WRONG_BACKEND')
+          net=oci.core.VirtualNetworkClient(cfg)
+          v=compute.list_vnic_attachments(inst.compartment_id,instance_id=inst.id).data
+          ips=[net.get_vnic(a.vnic_id).data.public_ip for a in v if a.lifecycle_state=='ATTACHED']
+          ips=[x for x in ips if x]
+          if len(ips)!=1: raise SystemExit('BACKEND_IP_AMBIGUOUS')
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('TARGET_IP='+ips[0]+'\n')
+          print('BACKEND_IDENTITY=PASS')
+          PY
+      - name: Transfer credentials to verified backend and validate both accounts
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS" || { echo SSH_SECRETS_MISSING; exit 2; }
+          umask 077
+          mkdir -p "$RUNNER_TEMP/oci-ssh"
+          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/oci-ssh/id"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/oci-ssh/known_hosts"
+          ssh_opts=(-i "$RUNNER_TEMP/oci-ssh/id" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12 -o UserKnownHostsFile="$RUNNER_TEMP/oci-ssh/known_hosts")
+          remote=(ssh "${ssh_opts[@]}" "ubuntu@$TARGET_IP")
+          actual=$("${remote[@]}" hostname)
+          test "$actual" = always-free-arm-1787907847-26 || { echo SSH_HOST_MISMATCH; exit 3; }
+          tar -C "$RUNNER_TEMP/dual" -cf - principal esposa | "${remote[@]}" 'set -eu; umask 077; mkdir -p ~/.oci/principal ~/.oci/esposa; tar -xf - -C ~/.oci; chmod 700 ~/.oci/principal ~/.oci/esposa; chmod 600 ~/.oci/principal/* ~/.oci/esposa/*'
+          "${remote[@]}" 'set -eu; OCI=/opt/shopvivaliz-oci-cli/bin/oci; for account in principal esposa; do profile=$(echo "$account" | tr "[:lower:]" "[:upper:]"); "$OCI" iam region-subscription list --profile "$profile" --config-file "$HOME/.oci/$account/config" >/dev/null; echo "OCI_${profile}_AUTH=PASS"; done'
+      - name: Remove runner credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/dual" "$RUNNER_TEMP/oci-ssh"
