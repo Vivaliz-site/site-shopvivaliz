@@ -60,5 +60,11 @@ class DisplayRecoveryTests(unittest.TestCase):
         ).returncode)
 
 
+    def test_aux_acl_uses_existing_runuser_path_not_invalid_hardcoded_location(self):
+        body = (ROOT / "scripts/setup-shopvivaliz-display-recovery.sh").read_text()
+        self.assertIn('runuser_bin="$(command -v runuser)"', body)
+        self.assertIn("ExecStartPre=+" + "${runuser_bin} -u fredconsole", body)
+        self.assertNotIn("ExecStartPre=+/usr/bin/runuser", body)
+
 if __name__ == "__main__":
     unittest.main()

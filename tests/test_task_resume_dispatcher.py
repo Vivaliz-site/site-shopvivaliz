@@ -820,7 +820,7 @@ state_path.write_text(json.dumps(state))
     def test_background_resume_cannot_fall_through_to_paid_cli_providers(self) -> None:
         failover = (SCRIPTS / "autonomous-provider-failover.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_RESUME_BACKGROUND", failover)
-        self.assertIn("BACKGROUND_ORDER=(gemini)", failover)
+        self.assertIn("BACKGROUND_ORDER=(gemini ollama)", failover)
         self.assertIn('ORDER=("${BACKGROUND_ORDER[@]}")', failover)
         self.assertIn("background_paid_fallback_forbidden=true", failover)
 

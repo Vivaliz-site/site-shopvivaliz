@@ -12,6 +12,11 @@ on:
       - 'scripts/*.js'
       - 'tests/*.php'
       - 'tests/*.js'
+      - 'remote-control-browser-mcp/**'
+      - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'scripts/adopt-verified-dev-aux-browser.sh'
+      - 'tests/remote-control-browser-mcp-test.py'
+      - 'docs/knowledge/browser-sessions.md'
       - 'blog/**'
       - '*.php'
       - '.github/workflows/shopvivaliz-qa.yml'
@@ -27,6 +32,22 @@ permissions:
   contents: read
 
 jobs:
+  dev-aux-browser-identity-regression:
+    name: Verified Dev browser routing
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Dev MCP exact-account identity and rollback contracts
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile remote-control-browser-mcp/server.py
+          python3 tests/remote-control-browser-mcp-test.py
+          python3 tests/test_dev_aux_adoption_deploy.py
+          bash -n scripts/adopt-verified-dev-aux-browser.sh
+
   memory-nudge:
     name: Lembrete de memoria compartilhada
     if: github.event_name == 'pull_request'

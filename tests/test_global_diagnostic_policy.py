@@ -25,5 +25,37 @@ class GlobalDiagnosticPolicyTests(unittest.TestCase):
                 self.assertIn(term, text)
 
 
+    def test_absolute_rule_required_in_agent_entrypoints(self):
+        required = (
+            "AGENTS.md",
+            "docs/knowledge/agent-rules.md",
+            "CLAUDE.md",
+            "GEMINI.md",
+            "GEPETO-POLICY.md",
+            "docs/knowledge/README.md",
+        )
+        for relative in required:
+            with self.subTest(path=relative):
+                doc = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn("<!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->", doc)
+                self.assertIn("<!-- /ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->", doc)
+
+    def test_absolute_rule_does_not_allow_false_success_or_safety_bypass(self):
+        doc = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        for phrase in (
+            "todo erro identificado exige correcao real e validacao",
+            "RED",
+            "GREEN",
+            "causa raiz",
+            "regressao",
+            "RUNNING/NAO_APTO",
+            "next_action",
+            "SOMENTE LEITURA",
+            "Sem bypass",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, doc)
+
+
 if __name__ == "__main__":
     unittest.main()

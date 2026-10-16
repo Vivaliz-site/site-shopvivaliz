@@ -15,6 +15,10 @@ on:
       - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'scripts/adopt-verified-dev-aux-browser.sh'
+      - 'scripts/chatgpt_credential_preflight.py'
+      - 'tests/test_chatgpt_credential_preflight.py'
       - 'tests/test_mcp_desktop_browser_named_tools.py'
       - 'tests/browser-gui-stdin-x11-test.py'
       - 'tests/audit-v5-gui-input-privacy-test.py'
@@ -34,6 +38,10 @@ on:
       - 'tests/test_shopvivaliz_display_recovery.py'
       - 'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service'
       - 'tests/remote-control-browser-mcp-test.py'
+      - 'tests/test_dev_aux_adoption_deploy.py'
+      - 'scripts/adopt-verified-dev-aux-browser.sh'
+      - 'scripts/chatgpt_credential_preflight.py'
+      - 'tests/test_chatgpt_credential_preflight.py'
       - 'tests/test_mcp_desktop_browser_named_tools.py'
       - 'tests/browser-gui-stdin-x11-test.py'
       - 'tests/audit-v5-gui-input-privacy-test.py'
@@ -51,7 +59,7 @@ jobs:
       - name: Python syntax
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py
+          python3 -m py_compile remote-control-mcp/server.py remote-control-browser-mcp/server.py remote-control-browser-mcp/login_email_watch.py
       - name: Authenticated display persistence regression
         run: |
           set -Eeuo pipefail
@@ -62,10 +70,24 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tests/remote-control-browser-mcp-test.py
+      - name: Verified Dev auxiliary adoption contract
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/adopt-verified-dev-aux-browser.sh
+          python3 tests/test_dev_aux_adoption_deploy.py
       - name: Protected account-auth maintenance contract
         run: |
           set -Eeuo pipefail
           python3 remote-control-browser-mcp/tests/test_account_auth_gate.py
+      - name: Ten-minute Gmail readonly metadata watch contract
+        run: |
+          set -Eeuo pipefail
+          python3 remote-control-browser-mcp/tests/test_login_email_watch.py
+      - name: Prevent unnecessary ChatGPT credential reprompts
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/chatgpt_credential_preflight.py tests/test_chatgpt_credential_preflight.py
+          python3 tests/test_chatgpt_credential_preflight.py
       - name: Encrypted OTPClient boot persistence contract
         run: python3 tests/test_otpclient_persistence.py
       - name: Named desktop/browser tools contracts

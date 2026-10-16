@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import json
@@ -35,6 +36,54 @@ class BrowserMcpTests(unittest.TestCase):
             m.BROWSER_TOOLS,
         )
         self.assertTrue(m.BROWSER_TOOLS <= names)
+
+    def test_continuity_status_degraded_is_a_valid_mcp_read(self):
+        # The browser MCP exposes inherited controller tools and must not
+        # regress the base MCP's separation of call success from readiness.
+        cases = [
+            ("continuity_status", {
+                "ok": False, "controller": {"service_active": True},
+                "continuity_ready": False, "degraded": True,
+                "degraded_reasons": ["active_checkpoint_unbound"],
+            }, False, "observed_degraded"),
+            ("continuity_status", {
+                "ok": False, "error": "probe_failed",
+            }, True, "command_failed"),
+            ("controller_status", {
+                "ok": False, "error": "backend_unavailable",
+            }, True, "command_failed"),
+        ]
+        for name, output, expected_is_error, expected_audit_summary in cases:
+            with self.subTest(tool=name, output=output):
+                payload = json.dumps({
+                    "jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                    "params": {"name": name, "arguments": {}},
+                }).encode("utf-8")
+                handler = object.__new__(m.BrowserHandler)
+                handler.path = "/mcp"
+                handler.client_address = ("127.0.0.1", 12345)
+                handler.headers = {
+                    "Authorization": "Bearer synthetic-test",
+                    "Content-Length": str(len(payload)),
+                }
+                handler.rfile = io.BytesIO(payload)
+                with (
+                    mock.patch.object(m.base, "is_authorized", return_value=True),
+                    mock.patch.object(m, "execute_tool", return_value=dict(output)),
+                    mock.patch.object(m, "audit", return_value="audit-test") as audit,
+                    mock.patch.object(m.BrowserHandler, "_client_disconnected", return_value=False),
+                    mock.patch.object(m.BrowserHandler, "_json", autospec=True) as reply,
+                ):
+                    handler.do_POST()
+                reply.assert_called_once()
+                self.assertEqual(reply.call_args.args[1], 200)
+                result = reply.call_args.args[2]["result"]
+                self.assertIs(result["isError"], expected_is_error)
+                self.assertEqual(result["structuredContent"]["ok"], output["ok"])
+                if name == "continuity_status" and "controller" in output:
+                    self.assertIs(result["structuredContent"]["continuity_ready"], False)
+                audit.assert_called_once()
+                self.assertEqual(audit.call_args.args[4], expected_audit_summary)
 
     def test_browser_open_routes_to_isolated_gui_browser(self):
         args = {"url": "https://claude.ai/login"}
@@ -74,6 +123,127 @@ class BrowserMcpTests(unittest.TestCase):
         specs = {item["name"]: item for item in m.tool_specs()}
         self.assertTrue(specs["browser_health"]["annotations"]["readOnlyHint"])
         self.assertFalse(specs["browser_health"]["annotations"]["destructiveHint"])
+
+    def test_adopted_dev_chrome_requires_explicit_isolated_aux_flag_and_exact_identity(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        metadata = json.dumps({
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9557/devtools/browser/id"
+        }).encode()
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "urlopen", return_value=io.BytesIO(metadata)) as fetch,
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "AUTHENTICATED",
+                                            "identity_match": True,
+                                            "user_present": True}) as identify,
+        ):
+            health = m.browser_service_health()
+        self.assertTrue(health["ok"])
+        self.assertTrue(health["account_authenticated"])
+        self.assertTrue(health["account_identity_verified"])
+        self.assertEqual("dev", health["session"])
+        identify.assert_called_once_with("dev_aux", "status")
+        self.assertEqual("http://127.0.0.1:9557/json/version", fetch.call_args.args[0])
+
+    def test_adopted_dev_chrome_fails_closed_for_wrong_identity_and_no_flag(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        metadata = json.dumps({
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9557/devtools/browser/id"
+        }).encode()
+        for state in ("NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"):
+            with (
+                self.subTest(state=state),
+                mock.patch.dict(m.os.environ, env),
+                mock.patch.object(m, "urlopen", return_value=io.BytesIO(metadata)),
+                mock.patch.object(m, "_corporate_profile_probe",
+                                  return_value={"state": state, "identity_match": False}),
+            ):
+                result = m.browser_service_health()
+                self.assertFalse(result["ok"])
+                self.assertEqual("dev_aux_identity_unverified", result["reason"])
+        with (
+            mock.patch.dict(m.os.environ, {**env, "SHOPVIVALIZ_DEV_ADOPTED_CDP": ""}),
+            mock.patch.object(m, "urlopen") as fetch,
+        ):
+            result = m.browser_service_health()
+        self.assertFalse(result["ok"])
+        self.assertEqual("cdp_session_binding_mismatch", result["reason"])
+        fetch.assert_not_called()
+
+    def test_adopted_dev_browser_tools_are_identity_gated_before_execution(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "IDENTITY_MISMATCH",
+                                            "identity_match": False}) as identify,
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser_tabs", {})
+            base.assert_not_called()
+            identify.assert_called_once_with("dev_aux", "status")
+
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state": "AUTHENTICATED",
+                                            "identity_match": True}),
+            mock.patch.object(m, "BASE_EXECUTE_TOOL", return_value={"ok": True}) as base,
+        ):
+            self.assertEqual({"ok": True}, m.execute_tool("browser_tabs", {}))
+            base.assert_called_once_with("browser_tabs", {}, cancel_check=None)
+
+    def test_adopted_dev_dom_aliases_require_exact_identity(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "_corporate_profile_probe",
+                              return_value={"state":"IDENTITY_MISMATCH","identity_match":False}),
+            mock.patch.object(m, "browser_dom_inspect") as inspect,
+            mock.patch.object(m, "browser_click_index") as click,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser.dom.inspect", {"tab_id":"example"})
+            with self.assertRaisesRegex(ValueError, "dev_aux_identity_unverified"):
+                m.execute_tool("browser.click", {"tab_id":"example","index":0})
+            inspect.assert_not_called()
+            click.assert_not_called()
+
+    def test_adopted_dev_rejects_atendimento_named_aliases(self):
+        env = {
+            "SHOPVIVALIZ_REMOTE_MCP_PORT": "5583",
+            "SHOPVIVALIZ_BROWSER_SESSION_NAME": "dev",
+            "SHOPVIVALIZ_BROWSER_CDP_URL": "http://127.0.0.1:9557",
+            "SHOPVIVALIZ_DEV_ADOPTED_CDP": "9557",
+        }
+        with (
+            mock.patch.dict(m.os.environ, env),
+            mock.patch.object(m, "BASE_EXECUTE_TOOL") as base,
+        ):
+            with self.assertRaisesRegex(ValueError, "dev_aux_cross_session_tool_denied"):
+                m.execute_tool("browser_atendimento_tabs", {})
+            base.assert_not_called()
 
     def test_dedicated_bridge_health_uses_only_its_cdp_and_no_gui(self):
         for port, session, cdp in (
@@ -202,8 +372,13 @@ class BrowserMcpTests(unittest.TestCase):
 
     def test_browser_source_does_not_automate_debug_ports_or_profile_cookies(self):
         src = (ROOT / "remote-control-browser-mcp" / "server.py").read_text(encoding="utf-8").lower()
+        # The explicitly isolated and read-only corporate identity probe
+        # is permitted to inspect its own CDP endpoint. General browser
+        # navigation, focus, and cookie APIs remain disconnected from it.
+        general_source = src.replace(m.CORPORATE_PROFILE_NODE_SCRIPT.lower(), "")
         for token in ("remote-debugging-port", "devtoolsactiveport", "/json/list", "cookies sqlite"):
-            self.assertNotIn(token, src)
+            self.assertNotIn(token, general_source)
+        self.assertIn("/json/list", m.CORPORATE_PROFILE_NODE_SCRIPT)
         # CDP /json/version is allowed exclusively for bounded dedicated
         # transport health, never for general GUI browsing or cookie access.
         self.assertEqual(src.count('endpoint + "/json/version"'), 1)
@@ -604,9 +779,51 @@ class BrowserMcpTests(unittest.TestCase):
             self.assertEqual(["123"], m.browser_windows())
         run.assert_called_once_with(["xdotool", "search", "--onlyvisible", "--class", "shopvivaliz-general"], check=False)
 
+    def test_gui_session_probe_requires_matching_active_seat(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c1\n"),
+            mock.Mock(returncode=0, stdout="Name=fredconsole\nDisplay=:0\nActive=yes\n"),
+        ]) as run:
+            self.assertTrue(m.gui_session_active())
+        self.assertEqual(2, run.call_count)
+
+    def test_gui_session_probe_rejects_lightdm_as_active_session(self):
+        with mock.patch.object(m.subprocess, "run", side_effect=[
+            mock.Mock(returncode=0, stdout="c2\n"),
+            mock.Mock(returncode=0, stdout="Name=lightdm\nDisplay=:1\nActive=yes\n"),
+        ]):
+            self.assertFalse(m.gui_session_active())
+
+    def test_browser_health_fails_closed_on_inactive_seat_even_when_xdotool_works(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]),
+            mock.patch.object(m.shutil, "which", return_value="/usr/bin/xdotool"),
+            mock.patch.object(m.os.path, "isfile", return_value=True),
+            mock.patch.object(m.os, "access", return_value=True),
+            mock.patch.object(m, "run_gui", return_value=mock.Mock(returncode=0, stdout="123\n")),
+        ):
+            health = m.browser_health()
+        self.assertFalse(health["ok"], health)
+        self.assertFalse(health["gui_session_active"])
+        self.assertEqual("gui_session_inactive", health["reason"])
+
+    def test_browser_open_refuses_input_when_gui_session_is_inactive(self):
+        with (
+            mock.patch.object(m, "gui_session_active", return_value=False, create=True),
+            mock.patch.object(m, "browser_windows", return_value=["123"]) as windows,
+            mock.patch.object(m, "focus"),
+            mock.patch.object(m, "key"),
+            mock.patch.object(m, "type_text"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "gui_session_inactive"):
+                m.browser_open({"url": "https://example.com/"})
+        windows.assert_not_called()
+
     def test_browser_health_is_ready_when_general_browser_is_launchable_without_window(self):
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m.shutil, "which", return_value="/usr/bin/fake"),
             mock.patch.object(m.os.path, "isfile", return_value=True),
@@ -628,6 +845,7 @@ class BrowserMcpTests(unittest.TestCase):
             return FakeProcess()
         with (
             mock.patch.object(m, "browser_windows", return_value=[]),
+            mock.patch.object(m, "gui_session_active", return_value=True, create=True),
             mock.patch.object(m, "BROWSER_BINARY", "/opt/shopvivaliz-browser/chrome-linux/chrome", create=True),
             mock.patch.object(m, "BROWSER_PROFILE_DIR", "/home/fredconsole/.config/shopvivaliz-general-chromium", create=True),
             mock.patch.object(m, "BROWSER_WINDOW_CLASS", "shopvivaliz-general", create=True),
@@ -658,12 +876,441 @@ class BrowserMcpTests(unittest.TestCase):
         self.assertIn("systemctl restart shopvivaliz-remote-control-browser-mcp.service", setup)
         self.assertNotIn("systemctl enable --now shopvivaliz-remote-control-browser-mcp.service", setup)
 
+    def test_installer_separates_transport_health_from_inactive_gui(self):
+        setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
+        start = "    python3 - <<'PY'\n"
+        end = "\nPY\n    rm -f /tmp/shopvivaliz-browser-mcp-health.json"
+        block = setup.split(start, 1)[1].split(end, 1)[0]
+        base_health = {
+            "endpoint": "shopvivaliz-remote-control-browser-mcp",
+            "dependencies": {"xdotool": True, "xclip": True, "scrot": True, "xwd": True},
+        }
+        for fields, expected in (
+            ({"ok": True, "gui_session_active": True}, "REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS"),
+            ({"ok": False, "gui_session_active": False, "reason": "gui_session_inactive"},
+             "REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive"),
+        ):
+            fixture = json.dumps({**base_health, **fields})
+            captured = io.StringIO()
+            with (
+                mock.patch("builtins.open", return_value=io.StringIO(fixture)),
+                contextlib.redirect_stdout(captured),
+            ):
+                exec(block, {})
+            self.assertIn(expected, captured.getvalue())
+            if not fields["ok"]:
+                self.assertNotIn("HEALTH=PASS", captured.getvalue())
+
+        with mock.patch("builtins.open", return_value=io.StringIO(json.dumps({
+            **base_health, "ok": False, "reason": "unknown_failure",
+        }))):
+            with self.assertRaises(AssertionError):
+                exec(block, {})
+
     def test_setup_validates_health_identity(self):
         setup = (ROOT / "scripts" / "setup-remote-control-browser-mcp.sh").read_text(encoding="utf-8")
         self.assertIn("shopvivaliz-remote-control-browser-mcp", setup)
         self.assertIn("REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS", setup)
         self.assertNotIn("|| true", setup)
         self.assertNotIn("set +e", setup)
+
+
+    def test_cached_mcp_fill_code_without_value_uses_private_gnome_at_exact_mfa(self):
+        # Older ChatGPT MCP clients expose fill_code but not fill_gnome_totp.
+        # Optional value is authorized only for verified MFA stage + exact lease.
+        for session in ("dev", "atendimento"):
+            with self.subTest(session=session):
+                args = {
+                    "session": session, "tab_id": "A123", "action": "fill_code",
+                    "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+                }
+                lease = {
+                    "owner_kind": "maintenance",
+                    "owner_id": "shopvivaliz-account-auth:" + session,
+                }
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs",
+                                      return_value={"tabs": [{"tab_id": "A123", "stage": "/mfa-challenge"}]}),
+                    mock.patch.object(m, "account_auth_local_totp", return_value="123456") as reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin",
+                                      return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+                ):
+                    result = m.browser_auth_action(args)
+                self.assertTrue(result["ok"])
+                reader.assert_called_once_with(session)
+                argv, code = executor.call_args.args[:2]
+                self.assertEqual("fill_code", argv[-1])
+                self.assertEqual("123456", code)
+                self.assertNotIn(code, repr(argv))
+                self.assertNotIn(code, repr(result))
+
+    def test_cached_mcp_empty_code_never_reads_secret_before_mfa(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_code",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        for tabs in ([], [{"tab_id": "A123", "stage": "/email-verification"}],
+                     [{"tab_id": "WRONG", "stage": "/mfa-challenge"}]):
+            with self.subTest(tabs=tabs):
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs", return_value={"tabs": tabs}),
+                    mock.patch.object(m, "account_auth_local_totp") as reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin") as executor,
+                ):
+                    with self.assertRaisesRegex(ValueError, "mfa_stage_required"):
+                        m.browser_auth_action(args)
+                reader.assert_not_called()
+                executor.assert_not_called()
+
+    def test_cached_mcp_explicit_email_code_never_uses_local_gnome(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_code",
+            "value": "ABCD1234",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+        ):
+            result = m.browser_auth_action(args)
+        self.assertTrue(result["ok"])
+        reader.assert_not_called()
+        self.assertEqual("ABCD1234", executor.call_args.args[1])
+
+    def test_gnome_totp_helper_is_syntax_valid_and_private(self):
+        compile(m.ACCOUNT_GNOME_TOTP_PYTHON, "<private-gnome-totp>", "exec")
+        self.assertIn("Secret.password_lookup_sync", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertIn("WHERE lower(username)=?", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertIn("sys.stdout.write(code)", m.ACCOUNT_GNOME_TOTP_PYTHON)
+        self.assertNotIn("print(seed)", m.ACCOUNT_GNOME_TOTP_PYTHON)
+
+    def test_local_totp_uses_only_private_pipe_and_fixed_owner(self):
+        child = mock.Mock(returncode=0, stdout=b"123456")
+        with mock.patch.object(m.subprocess, "run", return_value=child) as runner:
+            self.assertEqual("123456", m.account_auth_local_totp("dev"))
+        argv = runner.call_args.args[0]
+        kwargs = runner.call_args.kwargs
+        self.assertEqual(["runuser", "-u", "fredrdp"], argv[:3])
+        self.assertEqual("dev@shopvivaliz.com.br", argv[-1])
+        self.assertNotIn("123456", repr(argv))
+        self.assertEqual(m.subprocess.PIPE, kwargs["stdout"])
+        self.assertEqual(m.subprocess.DEVNULL, kwargs["stderr"])
+
+    def test_local_totp_never_exposes_failed_or_malformed_outputs(self):
+        for returned in (
+            mock.Mock(returncode=1, stdout=b""),
+            mock.Mock(returncode=0, stdout=b"notacode"),
+            mock.Mock(returncode=0, stdout=b"123456\n"),
+            mock.Mock(returncode=0, stdout=b"1234567"),
+        ):
+            with self.subTest(output_type=returned.returncode):
+                with mock.patch.object(m.subprocess, "run", return_value=returned):
+                    with self.assertRaisesRegex(ValueError, "account_auth_local_totp_"):
+                        m.account_auth_local_totp("dev")
+        with mock.patch.object(m.subprocess, "run") as runner:
+            with self.assertRaisesRegex(ValueError, "scope_invalid"):
+                m.account_auth_local_totp("personal")
+        runner.assert_not_called()
+
+    def test_gnome_totp_action_requires_matching_mfa_page_before_secret(self):
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        for tabs in (
+            [],
+            [{"tab_id": "A123", "stage": "/email-verification"}],
+            [{"tab_id": "B456", "stage": "/mfa-challenge"}],
+        ):
+            with self.subTest(tabs=tabs):
+                with (
+                    mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+                    mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+                    mock.patch.object(m, "browser_auth_tabs", return_value={"tabs": tabs}),
+                    mock.patch.object(m, "account_auth_local_totp") as secret_reader,
+                    mock.patch.object(m.base, "run_local_command_with_stdin") as executor,
+                ):
+                    with self.assertRaisesRegex(ValueError, "mfa_stage_required"):
+                        m.browser_auth_action(args)
+                secret_reader.assert_not_called()
+                executor.assert_not_called()
+
+    def test_gnome_totp_never_accepts_an_external_value(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "value": "123456", "runtime_lease_id": "lease-123",
+            "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+        ):
+            with self.assertRaisesRegex(ValueError, "value_not_allowed"):
+                m.browser_auth_action(args)
+        reader.assert_not_called()
+
+    def test_gnome_totp_fails_closed_for_wrong_lease_owner(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:atendimento"}),
+            mock.patch.object(m, "account_auth_local_totp") as reader,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.browser_auth_action(args)
+        reader.assert_not_called()
+
+    def test_gnome_totp_action_routes_private_code_to_existing_cdp_auth_gate(self):
+        args = {
+            "session": "dev", "tab_id": "A123", "action": "fill_gnome_totp",
+            "runtime_lease_id": "lease-123", "runtime_fencing_token": 10,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"}),
+            mock.patch.object(m, "browser_auth_tabs",
+                              return_value={"tabs": [{"tab_id": "A123", "stage": "/mfa-challenge"}]}),
+            mock.patch.object(m, "account_auth_local_totp", return_value="123456") as reader,
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code": 0, "stdout": '{"typed":true}'}) as executor,
+        ):
+            result = m.browser_auth_action(args)
+        self.assertTrue(result["ok"])
+        reader.assert_called_once_with("dev")
+        argv, private_stdin = executor.call_args.args[:2]
+        self.assertNotIn("123456", repr(argv))
+        self.assertEqual("fill_code", argv[-1])
+        self.assertEqual("123456", private_stdin)
+        self.assertNotIn("123456", repr(result))
+        self.assertIn("fill_gnome_totp", m.ACCOUNT_AUTH_ACTIONS)
+        schema = next(s for s in m.tool_specs() if s["name"] == "browser_auth_action")
+        self.assertIn("fill_gnome_totp", schema["inputSchema"]["properties"]["action"]["enum"])
+
+
+
+
+    def test_expired_mfa_recovery_uses_only_exact_official_login_link(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
+        block = block.split("const buttons=[", 1)[0]
+        self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
+        self.assertIn("/^[0-9a-f]{32}$/i.test", block)
+        self.assertIn("Your session has ended", block)
+        self.assertIn("input[autocomplete=one-time-code],input[name=code]", block)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", block)
+        self.assertIn("recoveryLinks.length!==1", block)
+        self.assertIn("recoveryLinks[0].click()", block)
+
+    def test_expired_password_and_passkey_official_try_again_recovery(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = script.split("if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1)[1]
+        block = block.split("const buttons=[", 1)[0]
+        # Provider renders "Session ended" on password stage and offers an
+        # anchor "Try again", not always "Your session has ended"/"Log in".
+        self.assertIn("document.title||''", block)
+        self.assertIn("('Session ended')", block)
+        self.assertIn("('Your session has ended')", block)
+        self.assertIn("'/log-in/passkey'", block)
+        self.assertIn("/^(?:log in|try again)$/i", block)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", block)
+        self.assertIn("recoveryLinks.length!==1", block)
+        self.assertIn("recoveryLinks[0].click()", block)
+        # No bypass of live MFA inputs or account-scoped auth gate.
+        self.assertIn("input[autocomplete=one-time-code],input[name=code]", block)
+        self.assertIn("u.pathname.startsWith('/mfa-challenge/')", block)
+        self.assertIn("account_auth_mfa_stage_required", Path(m.__file__).read_text())
+
+    def test_oauth_callback_error_retry_requires_exact_first_party_go_back(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn('u.pathname === "/auth/error"', script)
+        self.assertIn("u.pathname==='/auth/error'", script)
+        key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/error'){"
+        self.assertIn(key, script)
+        block = script.split(key, 1)[1].split(
+            "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){",
+            1,
+        )[0]
+        for guard in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^go back$/i",
+            "backButtons.length!==1",
+            "backButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(guard, block)
+        self.assertNotIn("window.location", block)
+        self.assertNotIn("document.cookie", block)
+
+    def test_chatgpt_login_with_retry_does_not_bypass_security_checks(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        key = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"
+        self.assertIn(key, script)
+        block = script.split(key, 1)[1].split("const buttons=[", 1)[0]
+        for required in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^try again$/i",
+            "retryButtons.length!==1",
+        ):
+            self.assertIn(required, block)
+        self.assertIn("retryButtons[0].click();return {clicked:true}", block)
+
+    def test_expired_mfa_recovery_does_not_weaken_lease_or_stage_gates(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn("if (!validStage(targetUrl)) throw new Error(\"auth_stage_not_allowed\")", script)
+        self.assertIn("if(action==='continue'&&u.origin==='https://auth.openai.com'", script)
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
+
+
+    def test_corporate_auth_script_passes_real_node_syntax_check(self):
+        import shutil
+        self.assertIsNotNone(shutil.which("node"), "Node.js is required for browser MCP")
+        result = m.subprocess.run(
+            ["node", "--input-type=module", "--check"],
+            input=m.CORPORATE_PROFILE_NODE_SCRIPT,
+            capture_output=True, text=True, check=False, timeout=6,
+        )
+        self.assertEqual(0, result.returncode, result.stderr[:3000])
+
+    def test_corporate_auth_status_schema_is_read_only_and_home_is_lease_gated(self):
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for name in ("browser_auth_status", "browser_profile_home_open"):
+            self.assertIn(name, specs)
+            self.assertEqual(
+                ["dev", "atendimento"],
+                specs[name]["inputSchema"]["properties"]["session"]["enum"],
+            )
+        self.assertTrue(specs["browser_auth_status"]["annotations"]["readOnlyHint"])
+        self.assertFalse(specs["browser_profile_home_open"]["annotations"]["readOnlyHint"])
+        self.assertEqual(
+            {"session", "runtime_lease_id", "runtime_fencing_token"},
+            set(specs["browser_profile_home_open"]["inputSchema"]["required"]),
+        )
+        self.assertIn("fetch('/api/auth/session'", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("document.cookie", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("localStorage", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertNotIn("sessionStorage", m.CORPORATE_PROFILE_NODE_SCRIPT)
+        self.assertIn('url:"https://chatgpt.com/"', m.CORPORATE_PROFILE_NODE_SCRIPT)
+
+    def test_corporate_auth_probe_strips_injected_secret_fields(self):
+        synthetic = {
+            "ok": True, "session": "atendimento", "state": "AUTHENTICATED",
+            "cdp_accessible": True, "tabs_seen": 12, "tabs_checked": 4,
+            "session_http": 200, "user_present": True, "identity_match": True,
+            "user_email": "sensitive@example.invalid", "accessToken": "SENSITIVE_EXAMPLE",
+            "cookies": ["SENSITIVE_EXAMPLE"],
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ) as runner:
+            result = m.browser_auth_status({"session": "atendimento"})
+        self.assertEqual("AUTHENTICATED", result["state"])
+        self.assertTrue(result["identity_match"])
+        self.assertNotIn("SENSITIVE_EXAMPLE", json.dumps(result))
+        self.assertNotIn("sensitive@example.invalid", json.dumps(result))
+        self.assertNotIn("accessToken", result)
+        self.assertEqual("status", runner.call_args.args[0][-1])
+        self.assertEqual("", runner.call_args.args[1])
+
+    def test_corporate_auth_probe_rejects_inconsistent_identity(self):
+        synthetic = {
+            "ok": True, "session": "dev", "state": "AUTHENTICATED",
+            "session_http": 200, "user_present": False, "identity_match": False,
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ):
+            with self.assertRaisesRegex(ValueError, "account_profile_probe_invalid"):
+                m.browser_auth_status({"session": "dev"})
+
+    def test_corporate_auth_probe_mismatch_stays_denied(self):
+        synthetic = {
+            "ok": True, "session": "dev", "state": "IDENTITY_MISMATCH",
+            "session_http": 200, "user_present": True, "identity_match": False,
+        }
+        with mock.patch.object(
+            m.base, "run_local_command_with_stdin",
+            return_value={"exit_code": 0, "stdout": json.dumps(synthetic)},
+        ):
+            status = m.browser_auth_status({"session": "dev"})
+        self.assertEqual("IDENTITY_MISMATCH", status["state"])
+        self.assertFalse(status["identity_match"])
+
+    def test_corporate_home_does_not_run_without_correct_maintenance_lease(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 7,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(
+                m.base.runtime_lock, "assert_runtime_lock",
+                return_value={"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:dev"},
+            ),
+            mock.patch.object(m, "_corporate_profile_probe") as probe,
+        ):
+            with self.assertRaisesRegex(ValueError, "maintenance_owner_required"):
+                m.browser_profile_home_open(args)
+            probe.assert_not_called()
+        with mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True):
+            with self.assertRaisesRegex(ValueError, "account_profile_scope_invalid"):
+                m.browser_profile_home_open({"session": "atendimento"})
+            with self.assertRaisesRegex(ValueError, "runtime_lock_required"):
+                m.browser_profile_home_open({
+                    "session": "atendimento", "runtime_lease_id": "",
+                    "runtime_fencing_token": 7,
+                })
+
+    def test_corporate_home_requires_exact_session_and_identity_result(self):
+        args = {
+            "session": "atendimento", "runtime_lease_id": "synthetic-lease",
+            "runtime_fencing_token": 7,
+        }
+        lease = {"owner_kind": "maintenance", "owner_id": "shopvivaliz-account-auth:atendimento"}
+        output = {
+            "ok": True, "session": "atendimento", "state": "NOT_AUTHENTICATED",
+            "user_present": False, "identity_match": False,
+            "tab_id": "A" * 32,
+        }
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock", return_value=lease),
+            mock.patch.object(
+                m.base, "run_local_command_with_stdin",
+                return_value={"exit_code": 0, "stdout": json.dumps(output)},
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "home_unconfirmed"):
+                m.browser_profile_home_open(args)
 
 
 if __name__ == "__main__":

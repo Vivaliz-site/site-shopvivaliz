@@ -15,6 +15,18 @@ PASSWORD_FILE="/etc/shopvivaliz/rustdesk-unattended-password"
 
 die() { echo "RUSTDESK_ERROR=$1" >&2; exit "${2:-1}"; }
 
+# Docker may fail to stop/delete an old containerd task during recreation.
+# With host networking, two hbbs instances can then bind the same port
+# via SO_REUSEPORT. A reachable TCP listener does not prove singleton health.
+# This is strictly observational: never kill tasks or restart browsers here.
+hbbs_process_singleton() {
+  local expected_pid actual_pids
+  expected_pid="$(docker inspect -f '{{.State.Pid}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)" || return 1
+  case "$expected_pid" in ''|*[!0-9]*|0) return 1 ;; esac
+  actual_pids="$(pgrep -x hbbs 2>/dev/null)" || return 1
+  [ "$actual_pids" = "$expected_pid" ]
+}
+
 require_root() {
   [ "$(id -u)" -eq 0 ] || die root_required 20
 }
@@ -139,6 +151,8 @@ set -Eeuo pipefail
 CHAIN=SHOPVIVALIZ_RUSTDESK
 if ! iptables -N "$CHAIN" 2>/dev/null; then iptables -F "$CHAIN"; fi
 iptables -F "$CHAIN"
+# Preserve local checks and clients; the INPUT loopback ACCEPT is below this chain.
+iptables -A "$CHAIN" -i lo -j ACCEPT
 iptables -A "$CHAIN" -s 10.0.0.0/8 -j ACCEPT
 iptables -A "$CHAIN" -s 100.64.0.0/10 -j ACCEPT
 iptables -A "$CHAIN" -j REJECT
@@ -176,6 +190,14 @@ install_server() {
   require_root
   assert_host
   [ "$HOST" = "$BACKEND_HOST" ] || die server_must_run_on_backend 40
+  # Fail before applying a new Compose config if an existing server is split-brain.
+  if command -v docker >/dev/null 2>&1; then
+    if docker_state="$(docker inspect -f '{{.State.Running}}' shopvivaliz-rustdesk-hbbs 2>/dev/null)"; then
+      if [ "$docker_state" = true ]; then
+        hbbs_process_singleton || die hbbs_duplicate_or_orphan_before_install 47
+      fi
+    fi
+  fi
   if ! command -v docker >/dev/null 2>&1; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io docker-compose-v2
@@ -239,6 +261,8 @@ EOF
   }
   wait_tcp_listener 21116 HBBS 44
   wait_tcp_listener 21117 HBBR 45
+  hbbs_process_singleton || die hbbs_duplicate_or_orphan_after_install 47
+  echo "RUSTDESK_HBBS_SINGLETON=PASS"
   echo "RUSTDESK_SERVER_INSTALL=PASS"
   echo "RUSTDESK_SERVER_PRIVATE=$SERVER_PRIVATE_IP"
   echo "RUSTDESK_SERVER_TAILSCALE=$SERVER_TAILSCALE_IP"
@@ -270,6 +294,11 @@ status() {
       if hbbr="$(docker inspect -f '{{.State.Status}}' shopvivaliz-rustdesk-hbbr 2>/dev/null)"; then :; else hbbr="missing"; fi
       echo "RUSTDESK_HBBS=${hbbs:-missing}"
       echo "RUSTDESK_HBBR=${hbbr:-missing}"
+      if hbbs_process_singleton; then
+        echo "RUSTDESK_HBBS_SINGLETON=PASS"
+      else
+        echo "RUSTDESK_HBBS_SINGLETON=DEGRADED"
+      fi
       [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] && echo "RUSTDESK_SERVER_KEY_PRESENT=true" || echo "RUSTDESK_SERVER_KEY_PRESENT=false"
       if systemctl is-active --quiet shopvivaliz-rustdesk-firewall.service; then
         echo "RUSTDESK_FIREWALL=active"
@@ -289,6 +318,12 @@ status() {
 }
 
 case "$ACTION" in
+  server_integrity)
+    assert_host
+    [ "$HOST" = "$BACKEND_HOST" ] || die server_must_run_on_backend 40
+    hbbs_process_singleton || die hbbs_duplicate_or_orphan 47
+    echo "RUSTDESK_HBBS_SINGLETON=PASS"
+    ;;
   server_install) install_server ;;
   client_install) install_client ;;
   client_recovery_ensure) ensure_client_recovery_policy; status ;;

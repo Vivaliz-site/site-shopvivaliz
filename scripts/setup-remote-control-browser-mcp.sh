@@ -62,8 +62,17 @@ bash scripts/setup-shopvivaliz-display-recovery.sh
 
 install -d -m 0755 "$INSTALL_DIR"
 install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
+# The watcher has no OAuth grant by default; installing code never enables
+# Gmail access or transfers login codes. The OAuth file is provisioned separately.
+SOURCE_EMAIL_WATCH="$(dirname "$SOURCE_SERVER")/login_email_watch.py"
+if [ -f "$SOURCE_EMAIL_WATCH" ]; then
+  install -m 0644 "$SOURCE_EMAIL_WATCH" "$INSTALL_DIR/login_email_watch.py"
+fi
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
 python3 -m py_compile "$INSTALL_DIR/server.py"
+if [ -f "$INSTALL_DIR/login_email_watch.py" ]; then
+  python3 -m py_compile "$INSTALL_DIR/login_email_watch.py"
+fi
 # The universal browser is a separate unprivileged Chromium/Playwright runtime.
 # Install it from the same source tree as the parent, atomically at service
 # boundaries; never copy an authenticated Atendimento/Dev browser profile.
@@ -127,14 +136,20 @@ for _ in $(seq 1 20); do
     python3 - <<'PY'
 import json
 p=json.load(open('/tmp/shopvivaliz-browser-mcp-health.json', encoding='utf-8'))
-assert p.get('ok') is True
 assert p.get('endpoint') == 'shopvivaliz-remote-control-browser-mcp'
 deps=p.get('dependencies') or {}
 assert deps.get('xdotool') is True
 assert deps.get('xclip') is True
 assert deps.get('scrot') is True
 assert deps.get('xwd') is True
-print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+if p.get('ok') is True:
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=PASS')
+elif p.get('ok') is False and p.get('gui_session_active') is False and p.get('reason') == 'gui_session_inactive':
+    # The GUI is unavailable, but the MCP transport can still be updated safely.
+    # Do not mislabel this state PASS or block independently authenticated bridges.
+    print('REMOTE_CONTROL_BROWSER_MCP_HEALTH=DEGRADED reason=gui_session_inactive')
+else:
+    raise AssertionError('browser_mcp_invalid_health')
 PY
     rm -f /tmp/shopvivaliz-browser-mcp-health.json
     REMOTE_CONTROL_BROWSER_MCP_READY=1

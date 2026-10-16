@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import inspect
 import json
 import os
 from pathlib import Path
@@ -151,8 +152,10 @@ class AccountAuthGateTests(unittest.TestCase):
         source = m.ACCOUNT_AUTH_NODE_SCRIPT
         for item in (
             "back_to_methods", "open_login", "continue_google",
-            "u.pathname!=='/log-in/password'",
+            "!['/log-in/password','/log-in/passkey'].includes(u.pathname)",
+            "u.origin!=='https://auth.openai.com'",
             "u.pathname!=='/log-in-or-create-account'",
+            "u.pathname!=='/log-in'",
             "u.pathname==='/auth/login_with'",
             "u.pathname==='/log-in'",
             "safeLink(a,'https://auth.openai.com','/log-in-or-create-account')",
@@ -161,6 +164,175 @@ class AccountAuthGateTests(unittest.TestCase):
             "if(choices.length!==1)",
         ):
             self.assertIn(item, source)
+
+    def test_passkey_alternate_method_is_official_and_precisely_scoped(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(u.hostname!=='auth.openai.com'||!['/log-in/password','/log-in/passkey'].includes(u.pathname))",
+            script,
+        )
+        self.assertIn(
+            "if(u.pathname==='/log-in/password')",
+            script,
+        )
+        self.assertIn(
+            "choices=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try another way$/i.test(label(b)))",
+            script,
+        )
+        self.assertIn("if(choices.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
+        # Never allow this account-scoped action on OAuth consent or another origin.
+        for url in (
+            "https://auth.openai.com/oauth/consent",
+            "https://accounts.google.com/log-in/passkey",
+            "https://example.com/log-in/passkey",
+            "http://auth.openai.com/log-in/passkey",
+        ):
+            self.assertIsNone(m._auth_stage(url))
+
+    def test_log_in_link_is_allowed_only_on_two_exact_official_stages(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');",
+            source,
+        )
+        self.assertIn(
+            "safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a))",
+            source,
+        )
+        self.assertEqual("/log-in", m._auth_stage("https://auth.openai.com/log-in?state=SECRET"))
+        self.assertIsNone(m._auth_stage("https://auth.openai.com/oauth/consent"))
+        self.assertIsNone(m._auth_stage("https://example.com/log-in"))
+
+    def test_expired_session_continue_only_uses_official_login_link(self):
+        # An expired OpenAI login presents an anchor rather than a button.
+        # Recovery must accept only one exact official login URL.
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        self.assertIn(
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&",
+            script,
+        )
+        self.assertIn(
+            "(['/log-in','/log-in/password','/log-in/passkey','/email-verification'].includes(u.pathname)||",
+            script,
+        )
+        self.assertIn(
+            "(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(",
+            script,
+        )
+        self.assertIn(
+            "if(u.pathname.startsWith('/mfa-challenge/')&&document.querySelector(",
+            script,
+        )
+        self.assertNotIn("if(action==='continue'&&u.hostname==='auth.openai.com'", script)
+        self.assertIn("(document.body?.innerText||'').includes('Your session has ended')", script)
+        self.assertIn("(document.title||'').includes('Session ended')", script)
+        self.assertIn("/^(?:log in|try again)$/i", script)
+        self.assertIn("const recoveryLinks=[...document.querySelectorAll('a')]", script)
+        self.assertIn("safeLink(a,'https://chatgpt.com','/auth/login_with')", script)
+        self.assertIn("if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')", script)
+        self.assertIn("recoveryLinks[0].click();return {clicked:true}", script)
+
+    def test_expired_email_challenge_retries_only_exact_safe_first_party_button(self):
+        source = m.ACCOUNT_AUTH_NODE_SCRIPT
+        block = source.split(
+            "if(action==='continue'&&u.origin==='https://auth.openai.com'&&", 1
+        )[1].split(
+            "if(action==='continue'&&u.origin==='https://chatgpt.com'", 1
+        )[0]
+        for required in (
+            "u.pathname==='/email-verification'",
+            "(document.title||'').includes('Session ended')",
+            "if(recoveryLinks.length===0&&u.pathname==='/email-verification')",
+            "h==='challenges.cloudflare.com'",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "const retryButtons=[...document.querySelectorAll('button')]",
+            "/^try again$/i.test",
+            "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+            "retryButtons[0].click();return {clicked:true};",
+            "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+        ):
+            self.assertIn(required, block)
+        self.assertLess(
+            block.index("if(recoveryLinks.length===0&&u.pathname==='/email-verification')"),
+            block.index("if(recoveryLinks.length!==1)throw Error("),
+        )
+
+    def test_official_chatgpt_login_with_retry_requires_empty_unprotected_page(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        target = "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){"
+        self.assertIn(target, script)
+        block = script.split(target, 1)[1].split("const buttons=[", 1)[0]
+        for guard in (
+            "challenges.cloudflare.com",
+            ".hcaptcha.com",
+            ".recaptcha.net",
+            "[name=cf-turnstile-response]",
+            "document.forms.length!==0",
+            "document.querySelectorAll('input').length!==0",
+            "/^try again$/i",
+            "retryButtons.length!==1",
+            "retryButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(guard, block)
+        source = Path(m.__file__).read_text(encoding="utf-8")
+        self.assertIn('assert_runtime_lock(lease_id, int(fencing_token), "browser_auth_action")', source)
+        self.assertIn('lease.get("owner_id") != "shopvivaliz-account-auth:" + session', source)
+
+    def test_terminal_mfa_continue_retries_only_unique_official_error_button(self):
+        script = m.ACCOUNT_AUTH_NODE_SCRIPT
+        for requirement in (
+            "u.origin==='https://auth.openai.com'",
+            "u.pathname.startsWith('/mfa-challenge/')",
+            "document.body?.innerText?.includes('Oops, an error occurred!')",
+            "document.querySelectorAll('input[autocomplete=one-time-code],input[name=code]').length===0",
+            "challenges.cloudflare.com",
+            "const retryButtons=[...document.querySelectorAll('button')]",
+            "/^try again$/i.test(",
+            "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable')",
+            "retryButtons[0].click();return {clicked:true}",
+        ):
+            self.assertIn(requirement, script)
+        for forbidden in ("Target.closeTarget", "Page.navigate", "Page.reload"):
+            self.assertNotIn(forbidden, script)
+        process = subprocess.run(
+            ["node", "--check", "--input-type=module"],
+            input=script, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(0, process.returncode, process.stderr)
+
+    def test_exact_mfa_challenge_is_listed_with_sanitized_stage(self):
+        challenge = "a" * 32
+        exact = "https://auth.openai.com/mfa-challenge/" + challenge + "?state=SENSITIVE"
+        self.assertEqual("/mfa-challenge", m._auth_stage(exact))
+        for invalid in (
+            "http://auth.openai.com/mfa-challenge/" + challenge,
+            "https://example.com/mfa-challenge/" + challenge,
+            "https://auth.openai.com/mfa-challenge/" + "a" * 31,
+            "https://auth.openai.com/mfa-challenge/" + challenge + "/consent",
+            "https://auth.openai.com/mfa-challenge/unknown",
+            "https://auth.openai.com/oauth/consent",
+        ):
+            self.assertIsNone(m._auth_stage(invalid))
+        pages = [{"type": "page", "id": "tab_mfa", "url": exact}]
+        with mock.patch.object(m, "urlopen", return_value=io.BytesIO(json.dumps(pages).encode())):
+            result = m.browser_auth_tabs({"session": "dev"})
+        self.assertEqual(
+            [{"tab_id": "tab_mfa", "stage": "/mfa-challenge", "session": "dev"}],
+            result["tabs"],
+        )
+        self.assertNotIn(challenge, json.dumps(result))
+        self.assertNotIn("SENSITIVE", json.dumps(result))
+
+    def test_mfa_stage_guard_present_in_protected_action_and_new_tab_preflight(self):
+        for source in (m.ACCOUNT_AUTH_NODE_SCRIPT, m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT):
+            self.assertIn("mfa-challenge", source)
+            self.assertIn("[0-9a-f]{32}", source)
+        self.assertIn("input[autocomplete=one-time-code]", m.ACCOUNT_AUTH_NODE_SCRIPT)
+        self.assertIn("account_auth_code_invalid", inspect.getsource(m.browser_auth_action))
 
     def test_sanitized_tabs_return_no_auth_query_or_tokens(self):
         pages = [
@@ -246,6 +418,68 @@ class AccountAuthGateTests(unittest.TestCase):
                               input=m.ACCOUNT_AUTH_OPEN_NODE_SCRIPT,
                               text=True, capture_output=True, check=False)
         self.assertEqual(0, proc.returncode, proc.stderr)
+
+    def test_login_email_watch_only_starts_after_authorized_official_login_action(self):
+        args = payload(action="continue", value="")
+        fake = {"exit_code": 0, "stdout": '{"ok":true}', "stderr": ""}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin", return_value=fake),
+            mock.patch.object(m, "browser_auth_tabs",
+                              return_value={"tabs":[{"tab_id":"example-tab","stage":"/email-verification"}]}),
+            mock.patch.object(m, "_start_bounded_login_email_watch",
+                              return_value={"status":"oauth_not_provisioned"}) as begin,
+        ):
+            result = m.browser_auth_action(args)
+            self.assertTrue(result["ok"])
+            self.assertEqual("oauth_not_provisioned", result["email_watch"]["status"])
+            begin.assert_called_once_with("dev")
+            m.browser_auth_action(payload(action="fill_password", value="SYNTHETIC_ONLY"))
+            begin.assert_called_once_with("dev")
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code":1,"stdout":"","stderr":""}),
+            mock.patch.object(m, "_start_bounded_login_email_watch") as begin,
+        ):
+            self.assertFalse(m.browser_auth_action(args)["ok"])
+            begin.assert_not_called()
+
+    def test_login_email_watch_starts_after_explicit_account_scoped_tab_open(self):
+        args = {"session":"dev","runtime_lease_id":"example-lease","runtime_fencing_token":1}
+        with (
+            mock.patch.object(m.base, "_durable_handoff_enabled", return_value=True),
+            mock.patch.object(m.base.runtime_lock, "assert_runtime_lock",
+                              return_value=allowed_lease("dev")),
+            mock.patch.object(m.base, "run_local_command_with_stdin",
+                              return_value={"exit_code":0,"stdout":'{"ok":true}',"stderr":""}),
+            mock.patch.object(m, "_start_bounded_login_email_watch",
+                              return_value={"status":"started", "duration_seconds":600}) as begin,
+        ):
+            result = m.browser_auth_open(args)
+            self.assertTrue(result["ok"])
+            self.assertEqual(600,result["email_watch"]["duration_seconds"])
+            begin.assert_called_once_with("dev")
+
+    def test_auth_tab_read_can_expose_bounded_watch_status_without_message_id(self):
+        pages = [{"type":"page","id":"example-tab",
+                  "url":"https://auth.openai.com/email-verification"}]
+        with (
+            mock.patch.object(m, "urlopen",
+                              return_value=io.BytesIO(json.dumps(pages).encode())),
+            mock.patch.object(m, "_read_bounded_login_email_watch_status",
+                              return_value={"status":"matched","session":"dev",
+                                            "received_at":12345678}) as observe,
+        ):
+            state = m.browser_auth_tabs({"session":"dev"})
+        self.assertEqual("matched",state["email_watch"]["status"])
+        self.assertNotIn("message_id",state["email_watch"])
+        self.assertEqual("dev",state["session"])
+        observe.assert_called_once_with("dev")
 
     def test_node_script_parses_without_exposing_values(self):
         proc = subprocess.run(["node","--check","--input-type=module"],input=m.ACCOUNT_AUTH_NODE_SCRIPT,
