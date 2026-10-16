@@ -86,16 +86,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          recovered=false
           for attempt in $(seq 1 24); do
             lifecycle="$("${OCI[@]}" compute instance get --instance-id "$BACKEND_INSTANCE_ID" --query 'data."lifecycle-state"' --raw-output)"
             if [ "$lifecycle" = RUNNING ]; then
-              echo OCI_BACKEND_POSTRESET_STATE=RUNNING
-              exit 0
+              recovered=true
+              break
             fi
             sleep 5
           done
-          echo "::error::Backend did not return to RUNNING state"
-          exit 5
+          test "$recovered" = true || { echo "::error::Backend did not return to RUNNING state"; exit 5; }
+          echo OCI_BACKEND_POSTRESET_STATE=RUNNING
 
       - name: Cleanup OCI credentials
         if: always()
