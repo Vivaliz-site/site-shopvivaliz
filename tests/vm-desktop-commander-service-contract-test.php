@@ -35,7 +35,7 @@ $supervisor = file_get_contents($supervisorPath);
 $requiredSupervisor = [
     'DEVICE_DIR="$HOME_DIR/.desktop-commander-device"',
     'DEVICE_FILE="$DEVICE_DIR/device.json"',
-    'DC_BIN="${DC_BIN:-/opt/shopvivaliz-desktop-commander/node_modules/.bin/desktop-commander}"','@wonderwhy-er/desktop-commander@0.2.48','AUTH_REQUIRED','exit 20','setsid "$DC_BIN" remote --persist-session'
+    'DC_BIN="${DC_BIN:-/opt/shopvivaliz-desktop-commander/node_modules/.bin/desktop-commander}"','DC_ENTRYPOINT="$(readlink -f "$DC_BIN")"','@wonderwhy-er/desktop-commander@0.2.48','AUTH_REQUIRED','exit 20','setsid "$NODE_BIN" "$DC_ENTRYPOINT" remote --persist-session'
 ];
 foreach ($requiredSupervisor as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
