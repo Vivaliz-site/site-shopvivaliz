@@ -130,48 +130,65 @@ restart_runtime_services() {
 
 reconcile_runtime_service_units() {
   local release_path="$1"
-  local service="$ML_RENEWER_SERVICE"
-  local source="$release_path/deploy/systemd/$service"
-  local target="/etc/systemd/system/$service"
-  local owner
+  local owner service source target
+  local -a enabled_services=()
+
   owner="$(shared_ml_token_owner)"
-  # Propriedade MLRR: o renovador legado do Mercado Livre nunca pode ficar
-  # habilitado, nem em deploy nem em rollback para uma release antiga.
-  if [ "$owner" = "mlrr" ]; then
-    if sudo systemctl cat "$ML_RENEWER_SERVICE" >/dev/null 2>&1; then
-      if ! sudo systemctl disable --now "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
-        log ERROR "Falha ao desabilitar o renovador Mercado Livre sob propriedade do MLRR"
-        return 1
+  for service in "${RUNTIME_SERVICES[@]}"; do
+    source="$release_path/deploy/systemd/$service"
+    target="/etc/systemd/system/$service"
+
+    # Propriedade MLRR: o renovador legado do Mercado Livre nunca pode ficar
+    # habilitado, nem em deploy nem em rollback para uma release antiga.
+    if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
+      if sudo systemctl cat "$ML_RENEWER_SERVICE" >/dev/null 2>&1; then
+        if ! sudo systemctl disable --now "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
+          log ERROR "Falha ao desabilitar o renovador Mercado Livre sob propriedade do MLRR"
+          return 1
+        fi
       fi
       log INFO "Renovador Mercado Livre desabilitado: credenciais pertencem ao MLRR"
+      continue
     fi
-    return 0
-  fi
-  if [ ! -f "$source" ]; then
-    if [ -f "$release_path/daemon-mercadolivre-token-renewer.php" ]; then
-      log ERROR "Unit do renovador Mercado Livre ausente na release: $source"
+
+    # Releases antigas podem não carregar o daemon legado do ML. Nesse caso,
+    # não reintroduza a unit órfã; os demais runtime units continuam obrigatórios.
+    if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ ! -f "$release_path/daemon-mercadolivre-token-renewer.php" ]; then
+      if sudo systemctl cat "$ML_RENEWER_SERVICE" >/dev/null 2>&1; then
+        if ! sudo systemctl disable --now "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
+          log ERROR "Falha ao desabilitar renovador Mercado Livre sem daemon na release"
+          return 1
+        fi
+      fi
+      continue
+    fi
+
+    if [ ! -f "$source" ]; then
+      log ERROR "Unit de runtime ausente na release: $source"
       return 1
     fi
-    return 0
-  fi
-  if ! sudo install -o root -g root -m 0644 "$source" "$target"; then
-    log ERROR "Falha ao instalar unit do renovador Mercado Livre"
-    return 1
-  fi
-  if ! sudo systemd-analyze verify "$target" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Unit do renovador Mercado Livre invalida"
-    return 1
-  fi
+    if ! sudo install -o root -g root -m 0644 "$source" "$target"; then
+      log ERROR "Falha ao instalar unit de runtime: $service"
+      return 1
+    fi
+    if ! sudo systemd-analyze verify "$target" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Unit de runtime invalida: $service"
+      return 1
+    fi
+    enabled_services+=("$service")
+  done
+
   if ! sudo systemctl daemon-reload; then
     log ERROR "systemd daemon-reload falhou"
     return 1
   fi
-  if ! sudo systemctl enable "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Falha ao habilitar renovador Mercado Livre"
-    return 1
-  fi
+  for service in "${enabled_services[@]}"; do
+    if ! sudo systemctl enable "$service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao habilitar unit de runtime: $service"
+      return 1
+    fi
+  done
 }
-
 
 reconcile_ai_squad_codex_bridge_unit() {
   local release_path="$1"
