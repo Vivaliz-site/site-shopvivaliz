@@ -28,7 +28,6 @@ class GlobalDiagnosticPolicyTests(unittest.TestCase):
     def test_absolute_error_remediation_rule_is_present_everywhere(self):
         required = [
             "AGENTS.md",
-            "REGRAS-AGENTES-CENTRALIZADAS.md",
             "docs/knowledge/agent-rules.md",
             "docs/knowledge/README.md",
             "CLAUDE.md",
@@ -42,7 +41,7 @@ class GlobalDiagnosticPolicyTests(unittest.TestCase):
                 self.assertIn("<!-- /EVERY_CONFIRMED_ERROR_REMEDIATE_V1 -->", doc)
 
     def test_absolute_rule_includes_correction_evidence_and_safety(self):
-        policy = (ROOT / "REGRAS-AGENTES-CENTRALIZADAS.md").read_text(encoding="utf-8")
+        policy = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         for term in (
             "todo erro encontrado deve ser corrigido",
             "causa raiz",
