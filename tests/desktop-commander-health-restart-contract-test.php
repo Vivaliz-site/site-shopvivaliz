@@ -37,6 +37,7 @@ $required = [
     "fredwin-desktop-commander-status.ps1",
     "desktopkocepsv-desktop-commander-status.ps1",
     "shopvivaliz-desktop-commander.service",
+    "/opt/shopvivaliz-desktop-commander/node_modules/@wonderwhy-er/desktop-commander/dist/index.js",
     "ALLOW_REPAIR: \${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '1' || '0' }}",
     "MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0",
     "Desktop Commander 24h Control Plane Status"
@@ -59,7 +60,8 @@ $forbidden = [
     'contents: write',
     'issues: write',
     'gh issue',
-    'git push'
+    'git push',
+    '[n]pm exec @wonderwhy-er/desktop-commander@.* remote'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) {
