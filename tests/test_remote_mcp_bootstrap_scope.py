@@ -58,6 +58,39 @@ def test_controller_or_windows_changes_still_require_four_host_bootstrap():
     assert not scope.is_browser_only(["deploy/systemd/shopvivaliz-remote-control-mcp.service"])
 
 
+def test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap():
+    assert scope.is_backend_controller_only([
+        "remote-control-mcp/server.py",
+        "remote-control-mcp/SPEC.md",
+        "scripts/continuity/checkpoint_update_atomic.py",
+        "tests/test_orquestrador_atomic_checkpoint.py",
+        "tests/remote-control-mcp-test.py",
+        "scripts/remote_mcp_bootstrap_scope.py",
+        "tests/test_remote_mcp_bootstrap_scope.py",
+        ".github/workflows/remote-control-mcp-bootstrap.yml",
+        "scripts/should-deploy-production.sh",
+        "scripts/setup-remote-control-access.sh",
+        "tests/should-deploy-production-test.sh",
+    ])
+    assert not scope.is_backend_controller_only(["remote-control-mcp/server.py"])
+    assert not scope.is_backend_controller_only(["scripts/continuity/checkpoint_update_atomic.py"])
+    assert not scope.is_backend_controller_only(["remote-control-mcp/server.py", "scripts/continuity/checkpoint_update_atomic.py", "scripts/setup-remote-control-windows.ps1"])
+    assert not scope.is_backend_controller_only(["remote-control-mcp/server.py", "scripts/continuity/checkpoint_update_atomic.py", "deploy/systemd/shopvivaliz-remote-control-mcp.service"])
+    assert not scope.is_backend_controller_only(["../remote-control-mcp/server.py"])
+
+
+def test_code_only_installer_leaves_config_and_other_hosts_untouched():
+    script = (ROOT / "scripts" / "setup-remote-control-access.sh").read_text(encoding="utf-8")
+    narrow = script.split("install_controller_code_only() {", 1)[1].split("\ninstall_target() {", 1)[0]
+    assert 'BACKEND_MCP_ONLY_RESTRICTED_INSTALL=PASS' in narrow
+    assert 'systemctl restart "$SERVICE"' in narrow
+    assert 'systemctl restart "$BROWSER_SERVICE"' in narrow
+    for forbidden in ("mcp-token", "service.env", "ssh-keygen", "authorized_keys", "known_hosts", "daemon-reload", "install-target", "useradd", "visudo"):
+        assert forbidden not in narrow, forbidden
+
+
+
+
 def test_empty_or_untrusted_diff_fails_closed():
     for bad in ([], [""], ["../secrets"], [r"C:\external\path"], ["/etc/passwd"]):
         assert not scope.is_browser_only(bad)
@@ -71,6 +104,9 @@ def test_workflow_keeps_full_bootstrap_and_browser_only_separate():
     assert "browser_only: " in yml
     assert "needs.scope.outputs.browser_only == 'true'" in yml
     assert "needs.scope.outputs.browser_only != 'true'" in yml
+    assert "needs.scope.outputs.backend_controller_only == 'true'" in yml
+    assert "needs.scope.outputs.backend_controller_only != 'true'" in yml
+    assert "Install only the backend MCP services" in yml
     assert "scripts/remote_mcp_bootstrap_scope.py" in yml
     assert "sudo -n bash scripts/setup-remote-control-browser-mcp.sh" in yml
     assert "Bootstrap Windows reverse SSH relays" in yml
@@ -81,6 +117,12 @@ if __name__ == "__main__":
     test_display_recovery_changes_are_backend_only()
     test_merged_browser_health_patch_does_not_trigger_four_host_bootstrap()
     test_controller_or_windows_changes_still_require_four_host_bootstrap()
+    test_restricted_backend_checkpoint_changes_never_use_four_host_bootstrap()
+    test_code_only_installer_leaves_config_and_other_hosts_untouched()
     test_empty_or_untrusted_diff_fails_closed()
     test_workflow_keeps_full_bootstrap_and_browser_only_separate()
+    # Run the actual production classifier contract on every PR quality gate.
+    # This proves that the restricted MCP-only merge cannot launch a web deploy.
+    import subprocess
+    subprocess.run(["bash", str(ROOT / "tests" / "should-deploy-production-test.sh")], check=True, timeout=20)
     print("REMOTE_CONTROL_BOOTSTRAP_SCOPE_TEST=PASS")

@@ -24,6 +24,14 @@ REQUIRED_DOCS = (
     "AGENTS-ACCESS-INDEX.md",
     "docs/ai-agents-map.md",
     "docs/AGENT-DOCS-PREFLIGHT.md",
+    # The normative main-branch bootstrap must be in the delivered manifest,
+    # not merely cited by AGENTS.md. Any revision invalidates stale receipts.
+    "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+    "docs/knowledge/host-access.md",
+    "docs/knowledge/README.md",
+    "docs/knowledge/agent-rules.md",
+    "docs/knowledge/task-continuity.md",
+    "GEPETO-POLICY.md",
 )
 RUNTIME_DIR = ROOT / "storage" / "private" / "agent-docs-read"
 

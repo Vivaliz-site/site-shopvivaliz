@@ -39,6 +39,19 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('--exclude=docs/***', text)
         self.assertNotIn('--exclude=docs \\n', text)
 
+    def test_local_deploy_materializes_only_versioned_claude_bootstrap(self) -> None:
+        text = (ROOT / "scripts/deploy-production.sh").read_text(encoding="utf-8")
+        self.assertIn('bootstrap_rel="docs/knowledge/claude-vm-bootstrap.md"', text)
+        self.assertIn('git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel"', text)
+        self.assertIn('"$NEW_RELEASE_PATH/$bootstrap_rel"', text)
+        self.assertIn('chmod 0644 "$NEW_RELEASE_PATH/$bootstrap_rel"', text)
+        self.assertLess(
+            text.index('git -C "$REPO_DIR" show "$REMOTE_SHA:$bootstrap_rel"'),
+            text.index('printf \'%s\\n\' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"'),
+        )
+        self.assertNotIn('cp -a "$REPO_DIR/docs"', text)
+        self.assertNotIn('cp -r "$REPO_DIR/docs"', text)
+
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('printf \'%s\\n\' "$sha" > "$release/.release-sha"', text)
@@ -95,8 +108,11 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertEqual(workflow.count('scripts/reconcile-ai-squad-runtime.sh" "$current"'), 2)
         self.assertIn('ai_squad_runtime_reconcile_failed=true', workflow)
         self.assertIn('ai_squad_runtime_rollback_reconcile_failed=true', workflow)
-        self.assertIn('17656/health', helper)
-        self.assertIn('"web_search_mode":"live"', helper)
+        checker = (ROOT / 'ops/ai-squad/bridge-health-policy.py').read_text(encoding='utf-8')
+        self.assertIn('bridge-health-policy.py', helper)
+        self.assertIn('python3 "$bridge_checker" codex', helper)
+        self.assertIn('17656', checker)
+        self.assertIn('body.get("web_search_mode") == "live"', checker)
         self.assertIn('shopvivaliz-squad-claude-bridge.service', helper)
         self.assertIn('shopvivaliz-claude-bridge.service', helper)
         self.assertIn('disable --now "$legacy_claude_service"', helper)
@@ -107,7 +123,9 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('install-claude-bridge-user-service.sh', helper)
         self.assertNotIn('/etc/systemd/system', helper)
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
-        self.assertIn('17657/health', helper)
+        self.assertIn('python3 "$bridge_checker" claude', helper)
+        self.assertIn('17657', checker)
+        self.assertIn('return "disabled" if error.code == 403', checker)
 
     def test_master_pipeline_skips_unchanged_ai_squad_runtime_on_activate_and_rollback(self) -> None:
         workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")

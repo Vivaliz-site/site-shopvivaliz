@@ -874,6 +874,20 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn('sudo systemctl restart "$resume_worker_service_name"', installer)
         self.assertIn('sudo systemctl is-active --quiet "$resume_worker_service_name"', installer)
 
+    def test_controller_release_packages_free_tier_attestation_helper(self) -> None:
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        source_loop = next(
+            line.strip() for line in installer.splitlines()
+            if line.strip().startswith("for source in agent_task_state.py")
+        )
+        self.assertIn("run_background_gemini.py", source_loop)
+        self.assertIn("attest-gemini-free-tier.py", source_loop)
+        self.assertIn(
+            'sudo install -o root -g root -m 0755 "$release_dir/scripts/$source" "$stage_dir/scripts/$source"',
+            installer,
+        )
+        self.assertTrue((ROOT / "scripts" / "attest-gemini-free-tier.py").is_file())
+
     def test_controller_immutable_release_bundles_continuity_dependencies(self) -> None:
         installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn('sudo install -d -o root -g root -m 0755 "$stage_dir/scripts/continuity"', installer)
@@ -925,7 +939,7 @@ class Gemini24x7ControllerTests(unittest.TestCase):
         self.assertIn("read_gemini_package_version()", installer)
         self.assertNotIn('"$gemini_cli_bin" --version', installer)
         self.assertIn('npm install -g "@google/gemini-cli@$gemini_cli_version" --prefix /home/ubuntu/.local', installer)
-        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1", installer)
+        self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", installer)
         self.assertIn("CODEX_AUTO_BIN=/home/ubuntu/.local/bin/codex-auto", installer)
         self.assertIn('runtime_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"', installer)
         self.assertIn('e2e_failures_dir="/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state-e2e-failures"', installer)

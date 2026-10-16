@@ -1,3 +1,131 @@
+<!-- OCI_DUAL_ACCOUNT_CANONICAL_V1 -->
+## OCI: duas contas Oracle Cloud (PRINCIPAL / ESPOSA)
+
+Antes de executar operacoes Oracle Cloud, leia obrigatoriamente [docs/ops/oci-dual-account-access.md](docs/ops/oci-dual-account-access.md). Essa e a referencia canonica de arquitetura, configuracao, nomes dos GitHub Actions secrets, comandos permitidos, validacao e limites operacionais. Ambas as contas foram autenticadas de forma independente via GitHub Actions (run 38908995411): OCI_PRINCIPAL_AUTH=PASS e OCI_ESPOSA_AUTH=PASS. Nao confundir esse resultado com acesso OCI nativo pelo MCP do backend, ainda nao comprovado. Nao copiar, imprimir, registrar ou publicar chaves privadas. Preservar isolamento de tenancies, IAM e aprovacoes para mudancas de recursos.
+<!-- /OCI_DUAL_ACCOUNT_CANONICAL_V1 -->
+
+<!-- ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
+## REGRA ABSOLUTA: todo erro identificado exige correcao real e validacao
+
+Esta regra vale para **todos os agentes, auditorias, automacoes, repositorios, servicos, ambientes e fluxos ShopVivaliz**, inclusive durante a propria recuperacao: erro, falha, regressao, timeout, bloqueio tecnico, resultado incorreto ou problema de validacao detectado **nao pode ser ignorado, apenas documentado ou encerrado sem remediacao**.
+
+Para cada erro, executar e evidenciar: (1) RED/reproducao observavel e impacto, com prioridade e proprietario; (2) investigacao da causa raiz e de falhas semelhantes; (3) correcao efetiva minima, segura e autorizada com prevencao de recorrencia; (4) GREEN, regressao, verificacao da revisao implantada e E2E na UI real, com trace/midia, persistencia e revisao independente quando aplicavel; (5) registro do resultado e somente entao fechamento individual. Um erro descoberto na tentativa de reparo integra a mesma obrigacao; nenhuma contagem de falhas pode cair por expiracao de janela ou descarte de checkpoints.
+
+**Continuidade obrigatoria:** se a reparacao estiver bloqueada por recusa explicita da plataforma, ownership/lease/fencing ausente, gate de I/O, autorizacao especifica pendente, restricao de seguranca ou terceiro, manter o erro PENDENTE e a tarefa `RUNNING/NAO_APTO` com evidencias, responsavel, impedimento concreto e `next_action` seguro; continuar a retomada pelo fluxo ja existente, sem criar duplicata. Nunca declarar `APTO`, `CONCLUIDO` ou sucesso com erro aplicavel em aberto, diagnostico, ACK, HTTP 200, PR, CI verde ou teste isolado.
+
+**Sem bypass:** esta obrigacao nao amplia permissoes. Respeitar protecoes de branch/producao, controles de seguranca, segredos, MFA, gastos, backups, CAS, ownership, leases/fencing, bloqueios explicitos e gate de I/O. Se a tarefa/automacao for `SOMENTE LEITURA`, **nao executar mutacoes**: registrar e encaminhar cada defeito ao mecanismo de reparo autorizado ja existente. Proibido contornar recusas por conectores, shell ou agentes alternativos ou duplicar agentes, monitorias, automacoes, tarefas, bindings e PRs.
+<!-- /ABSOLUTE_REMEDIATE_EVERY_ERROR_V1 -->
+
+<!-- AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+## Gate da Auditoria Extrema V5: E2E UI real, prova em disco e continuidade
+
+Todo agente deve executar integralmente `docs/quality/AUDIT_UI_EVIDENCE_INTEGRITY_V2.md`: inventariar tela/controles/casos reais, percorrer cada jornada via UI grafica, capturar trace/midia real, corrigir via RED/GREEN/regressao, reauditar em sessao independente e validar UI novamente depois do deploy. O certifier deve ler hashes de arquivos fisicos e devolver `AUDIT_VERDICT=APTO` no mesmo SHA/release/ambiente antes de marcar tarefa `CONCLUIDO`. Nao aceitar afirmacoes/flags, screenshot isolado, API/CLI/SQL ou headless-only como prova. Manter checkpoint `RUNNING` com `next_action` e retomada controlada enquanto NAO_APTO; nao abandonar E2E por timeout, PR, merge, CI, falha de browser ou limite de turno. Respeitar ownership, seguranca e controles de custo. `BLOCKED_EXTERNAL` exige comprovacao real, nao e APTO.
+<!-- /AUDIT_UI_EVIDENCE_INTEGRITY_V2 -->
+
+<!-- EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+## GATE INEGOCIAVEL: Auditoria Extrema V5 executada pela UI real
+
+**Ordem explicita do proprietario (2026-10-13), vinculante a GPT, Claude, Gemini, Codex, subagentes, orquestradores e revisores:** toda auditoria extrema/completa/V5/aptidao de sistema que tenha UI **DEVE ser executada pelo proprio agente atraves da interface grafica real**. O auditor nao pode substituir a UI por API, terminal, SQL, inspecao de codigo, logs, mocks, healthcheck, testes unitarios, Playwright exclusivamente headless nem screenshot estatico. Esses meios sao auxiliares para investigar/reconciliar, jamais prova suficiente do funcionamento que o usuario vivencia.
+
+1. **UI primeiro, sem atalhos:** inventariar telas, jornadas, perfis, estados e casos reais; abrir a interface publicada no host/perfil autorizado; navegar, clicar, preencher, filtrar, salvar/submeter dentro das permissoes; observar resposta visual, erros e efeitos; recarregar, sair e voltar para provar persistencia. Para Amazon Seller Central, Mercado Livre e paineis externos, auditar os casos e transicoes acessiveis na UI oficial, um a um conforme escopo, sem declarar sucesso por API somente.
+2. **Evidencia obrigatoria por jornada:** registrar ambiente/URL, SHA/release quando aplicavel, sessao autorizada sem segredos, timestamp, passos efetivamente executados, capturas/trace/video, estado antes/depois, erros de console/rede, reload/revisita e reconciliacao independente dos efeitos duraveis. Screenshot isolado, abertura de pagina, resposta HTTP 200 ou teste simulado nao certificam jornada.
+3. **Auditoria inclui reparo:** ao encontrar falha corrigivel no escopo autorizado, investigar causa raiz, corrigir, prevenir recorrencia, executar testes e **repetir o mesmo fluxo pela UI real apos correcao/deploy**, com evidencia independente. Nao encerrar no diagnostico, em PR ou em teste apenas de backend.
+4. **Gate fail-closed, sem falso APTO:** qualquer fluxo com UI nao percorrido e comprovado permanece `NAO_VALIDADO_UI` / `NAO_APTO`; e proibido declarar `APTO`, `CONCLUIDO`, 100% ou verde. `browser.required=false` ou `journey.ui=false` nao podem ser usados para ocultar UI existente. Se realmente nao existir interface para o componente auditado, registrar inventario negativo de UI, justificativa e evidencias; validar os caminhos reais nao visuais pertinentes. Ausencia/falha transitoria de browser exige reparo/fallback autorizado antes de `BLOCKED_EXTERNAL`.
+5. **Seguranca:** usar browser/desktop/MCP/RDC nos hosts e perfis previstos nos runbooks, com ownership/leases, controles de autorizacao e MFA; preservar sessoes. A auditoria nao autoriza exclusao, faturamento real, modificacao irreversivel ou acesso a segredo. Quando a acao terminal nao puder ser realizada com seguranca, testar ate o limite seguro e registrar exatamente a cobertura pendente; nunca inventar sucesso.
+
+Fonte complementar: `AUDIT_POLICY.md`, `docs/quality/AUDIT_BROWSER_E2E_REAL_V1.md` e `docs/quality/AUDIT_ABSOLUTE_GATE_V1.md` do repositorio governado. **Este gate prevalece sobre instrucoes mais brandas que permitam certificar por API ou parecer do agente.**
+<!-- /EXTREME_AUDIT_UI_FIRST_HARD_GATE_V1 -->
+
+<!-- RESUME_EXECUTION_GATE_V1 -->
+## Execução obrigatória ao receber Retome / Continue / Prossiga / Siga
+
+Para qualquer executor, subagente ou ferramenta neste projeto: carregue `AGENTS.md` e a documentação aplicável do `main`; persista prova `rules_loaded` (SHA/ref/data). `Retome` significa **executar agora** a próxima ação do checkpoint, não só relatar status nem pedir aprovação genérica já fornecida. Preserve sessões e ownership; corrija falhas, tente rotas seguras alternativas, teste e valide o objetivo original antes de encerrar. Continue como `RUNNING` com `next_action` específico enquanto existir caminho autorizado; `CONCLUIDO` exige evidência E2E fresca, e `BLOCKED_EXTERNAL` exige causa externa, alternativas exauridas e condição exata para retorno. Quando existir, use `agent_task_state.py terminal --task <task_id>` antes de declarar conclusão; ACK, erro transitório, PR, merge, `Pensando` e mensagem intermediária não são término. Não contorne MFA, CI, approvals ou controles. Não prometa continuidade fora de sessão sem checkpoint/controlador real. O agente delegado segue esta mesma regra.
+<!-- /RESUME_EXECUTION_GATE_V1 -->
+
+
+<!-- CREDENTIAL_REPROMPT_GATE_V1 -->
+## Credencial ChatGPT ja provisionada: preflight obrigatorio antes de solicitar senha
+
+Para `atendimento@shopvivaliz.com.br` ou `dev@shopvivaliz.com.br`, o agente
+(GPT, Claude, Codex, Gemini, subagentes e controladores) deve, **antes de
+solicitar ao usuario senha, OTP ou novo provisionamento**, confirmar a sessao
+correta e executar na VM backend, via MCP autorizado, a verificacao somente
+de metadados:
+
+`python3 scripts/chatgpt_credential_preflight.py --session atendimento`
+(ou `--session dev` para o perfil Dev).
+
+- `saved_entry=PRESENT` / `DENY_EXISTING_CREDENTIAL`: a senha ja possui
+  referencia salva no perfil dedicado. **Nao solicitar senha novamente**;
+  primeiro reparar a integracao navegador/GNOME Keyring e tentar o
+  preenchimento **nativo e autorizado**, sem ler ou exportar o segredo.
+- `saved_entry=NOT_VERIFIED` / `DENY_ABSENCE_NOT_PROVEN`: perfil
+  inacessivel, banco ocupado, erro de probe ou ausencia nos locais consultados
+  **nao** prova que a credencial nao existe. Recuperar transporte/MCP,
+  consultar as demais fontes protegidas previstas no runbook e continuar.
+- O probe jamais concede permissao para pedir senha: nova intervencao humana
+  somente apos evidencia independente de credencial ausente/revogada/invalida,
+  ou desbloqueio/consentimento/MFA humano obrigatorio pelo fluxo oficial.
+- Um registro salvo **nao prova** que a senha e valida ou que o ChatGPT esta
+  autenticado. Validar cada sessao pelo email exato em `/api/auth/session`.
+- Nunca copiar senha do iPhone ou navegador para terminal, Git, chat, logs,
+  processo ou outro perfil. Nunca tentar descriptografar/mostrar a credencial.
+
+Evidencia obrigatoria do preflight: apenas status, sessao verificada, timestamp
+e acao permitida, **sem** qualquer valor secreto. Se a VM nao estiver
+acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
+`CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
+<!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
+
+<!-- CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+### Execucao rapida do preflight pelo Claude/MCP (evitar fila e timeout)
+
+Na VM backend, executar o preflight pelo **ShopVivaliz Remote Control**
+`admin_command_run` com os argumentos explicitos abaixo. O comando e
+somente leitura e retorna em chamada inline, sem `task_submit`, `Monitor`,
+`task_status` repetido ou `Bash` local:
+
+- `host="always-free-arm-1787907847-26"`
+- `command="python3 /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz/scripts/chatgpt_credential_preflight.py --session atendimento"`
+- `timeout=5`
+- `durable=false`
+
+Para Dev, trocar exclusivamente `--session atendimento` por `--session dev`.
+O timeout do adaptador pode transformar a solicitacao em tarefa duravel se
+esses parametros forem omitidos; **nao** fazer polling longo de credencial.
+Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
+`ABSENT`, e continua proibido pedir novamente a senha sem prova.
+<!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+
+
+<!-- CHATGPT_LOGIN_GMAIL_WATCH_10_MINUTES_V1 -->
+## Login corporativo: monitorar Gmail por ate 10 minutos por tentativa
+
+Quando o agente SOLICITAR ou iniciar realmente um login para
+dev@shopvivaliz.com.br ou atendimento@shopvivaliz.com.br, monitorar o
+Gmail fredmourao@gmail.com por ate **600 segundos**, iniciando com a
+acao oficial sob lease, checando mensagem nova da OpenAI para a conta
+exata e terminando ao identificar a mensagem ou expirar o prazo.
+Na VM, remote-control-browser-mcp/login_email_watch.py realiza
+verificacao **somente de metadados** a cada **15 segundos**, com
+identidade exata, prazo fixo, deduplicacao por conta, resultado privado
+e leitura sanitizada por browser_auth_tabs. Nenhum codigo e lido,
+transmitido ou usado automaticamente para entrar no ChatGPT.
+A janela exige **OAuth Gmail readonly independente do backend**;
+se ele nao existir, retornar oauth_not_provisioned e NAO fingir que
+a monitoria de 10 minutos foi iniciada. No chat com Gmail conectado,
+o agente pode consultar os metadados durante a tentativa interativa,
+mas NAO prometer acompanhamento depois de encerrar a resposta.
+A automacao ChatGPT horaria NAO substitui o acompanhamento curto.
+O codigo de e-mail, senha e GNOME TOTP sao etapas separadas;
+a pessoa autorizada preenche na tela oficial quando o cliente bloquear
+a transferencia automatica, jamais via CDP/shell/clipboard/ponte
+alternativa. Preservar browser_session, lease/fencing, controles MFA,
+sem pedir novamente secrets. Detalhes no runbook
+docs/knowledge/chatgpt-vm-auth.md.
+<!-- /CHATGPT_LOGIN_GMAIL_WATCH_10_MINUTES_V1 -->
+
+
 <!-- REMOTE_ACCESS_EXHAUSTION_GATE_V1 -->
 ## Gate obrigatorio: esgotar rotas de acesso remoto antes de bloquear
 
@@ -678,7 +806,7 @@ Em auditoria/aptidão, leia `docs/quality/AUDIT_MERGE_ENFORCEMENT_V1.md`. O gate
 - Para operações de host, serviço e diagnóstico, preferir **Remote Control MCP**; depois SSH privado/Tailscale e somente para bootstrap/recovery GitHub connector/Actions ou OCI Bastion. Browser permanece na backend. Não consumir Codex para esse trabalho por padrão.
 - Esgotamento de tokens/cota, rate limit, indisponibilidade ou falha de autenticação do Codex **não é estado terminal**. A tarefa permanece `RUNNING`, preserva checkpoint e tenta as rotas anteriores/alternativas que ainda forem seguras.
 - `BLOCKED_EXTERNAL` só é permitido depois de provar que todas as rotas autorizadas e adequadas ao objetivo estão indisponíveis/intransponíveis; "Codex sem tokens" isoladamente nunca satisfaz esse critério.
-- Nenhum daemon/cron/watch deve consumir Codex automaticamente por padrão. Exceção explicitamente autorizada em 2026-10-01: o controlador Gemini 24/7 pode executar exatamente um fallback finito `codex-auto` por fingerprint elegível, somente depois de Gemini não produzir progresso, com lease/deduplicação/cooldown do dispatcher e `SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=1`; Codex continua sendo a última opção e nunca transforma ACK/exit code em conclusão.
+- Nenhum daemon/cron/watch pode consumir Codex automaticamente: a excecao historica de 2026-10-01 foi REVOGADA em 2026-10-11 por FREE_PROVIDER_FALLBACK_V2. Codex e Claude sao apenas ultimas opcoes interativas com aprovacao humana explicita.
 <!-- /CODEX_LAST_RESORT_V1 -->
 
 <!-- CHATGPT_RESUME_ORDER_V5 -->
@@ -720,3 +848,41 @@ consegue alcançar o controlador canônico, falhe fechado para tarefas que depen
 retomada automática e use a rota operacional auditável que consiga registrar o estado.
 <!-- /CHECKPOINT_FIRST_V9 -->
 
+<!-- SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+**Obrigatorio para todos os agentes (ChatGPT, Claude, Gemini, Gepeto e executores delegados):** antes de diagnosticar GUI Ubuntu, RustDesk, perfis corporativos ou login na backend, ler `docs/knowledge/shopvivaliz-graphical-session-recovery.md` no `main`. A captura de Dev/Atendimento no seletor de contas da sessao XFCE `fredconsole/:0` nao comprova autenticacao individual dos perfis Chromium `fredrdp/:99` CDP 9559/9556. Distinguir o greeter LightDM `:1`, desktop `:0` e Xvfb `:99`; validar cada conta via `/api/auth/session` e email exato. Para greeter, examinar sessao `logind` preexistente antes de solicitar/redefinir senha. Preservar Keyring, perfis, cookies e MFA, sem bypass.
+<!-- /SHOPVIVALIZ_GRAPHICAL_SESSION_RECOVERY_V1 -->
+
+<!-- FREE_PROVIDER_FALLBACK_V2 -->
+## Rotinas persistentes: IA gratuita obrigatoria e ordem de fallback
+- Camada primaria: Gemini Flash elegivel ao nivel gratuito e Ollama local;
+  ambos sao os unicos modelos autorizados nas tentativas autonomas de background.
+- Gemini Flash requer que a credencial/projeto seja elegivel ao nivel gratuito;
+  nome do modelo por si so nao prova que a conta Google nao tenha faturamento.
+- Primeira alternativa fora da camada gratuita: ChatGPT normal na sessao
+  ja autenticada, com lease/checkpoint. ChatGPT Work pode preceder CLI.
+- Codex e Claude so podem ser acionados como ultimas alternativas para tarefa
+  interativa, finita, com aprovacao humana explicita e controle de cota.
+- Cron, controller, worker e bridges nao podem promover fallback pago por
+  variavel de ambiente legada, healthcheck ou indisponibilidade do Gemini.
+- Em caso de cota gratis esgotada: registrar motivo seguro, preservar RUNNING
+  e pedir a proxima retomada autorizada, sem cobrar silenciosamente.
+- Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
+  ignora paid fallback=1 e bridges pagos negam acesso por padrao.
+<!-- /FREE_PROVIDER_FALLBACK_V2 -->
+
+<!-- BACKEND_IO_PRESSURE_ADMISSION_V1 -->
+## Gate obrigatorio contra saturacao de I/O da VM backend (todos os agentes)
+
+**Incidente real 2026-10-14, P1:** a VM `always-free-arm-1787907847-26` (2 vCPU/12 GiB) registrou PSI `/proc/pressure/io` `some.avg10=99.34%`, `full.avg10=55.49%`, carga 77 e interrupcoes de guardas/transportes. A auditoria do Remote Control MCP confirmou mais de vinte `task_submit` independentes em cinco minutos. Limitar somente a duas tarefas duraveis simultaneas **nao basta**, pois a fila ainda inicia novas tarefas seriadas durante saturacao. Nao tratar recuperacao pontual de um oneshot como estabilidade.
+
+**Antes de iniciar qualquer nova operacao pesada no backend, por qualquer canal** (MCP `task_submit`, `admin_command_run`, RDC, SSH, Claude/Code, CI, script ou shell): consulte **somente por leitura** `/proc/pressure/io` e `/proc/loadavg`, inspecione as tarefas ja ativas, confirme o dono/lease e evite repeticao de tarefas equivalentes. Incluem-se varreduras recursivas de Git/worktrees/disco, `du`/`find`, limpeza Docker, caches, `npm ci`, builds, instalacoes, E2E intensivo e suites de teste extensas.
+
+- Se `some.avg10 >= 30` **ou** `full.avg10 >= 10`, **NAO iniciar** a nova operacao pesada. Manter checkpoint `RUNNING`, preservar fila/dados/ownership e salvar `next_action` para reavaliacao, sem envio de tasks duplicadas.
+- Para retomar trabalho pesado, exigir **duas medidas temporariamente separadas**, ambas com `some.avg10 < 15` **e** `full.avg10 < 3`, sem regressao relevante; repetir a checagem imediatamente antes de criar/executar o job. Se PSI nao puder ser lido, nao considerar o host saudavel nem iniciar novo trabalho de alto impacto somente por falha de observabilidade.
+- **Nao interromper** autenticacao, login-integrity, sentinelas, monitores *read-only*, acessos de emergencia ou consultas leves. Operacoes somente leitura devem permanecer curtas e nao fazer `du`/`find` recursivo sob pressao.
+- **Nao contornar** esta regra usando outro transporte ou outro agente. Nao matar/cancelar jobs, reiniciar Chromium/containers/VM, limpar volumes ou worktrees sujos, fazer `swapoff` ou aumentar custo de OCI sem ownership, provas, backup e autorizacao apropriados.
+- Antes de atribuir toda carga ao runner GitHub Actions, verificar o cgroup efetivo: o runner da Solange ja foi observado com `IOWeight=20`, `CPUWeight=20` e `CPUQuota=25%`; havia tambem trabalho Docker, navegador, diagnosticos MCP e CI. Identificar responsaveis por janela, sem associar causalidade pela leitura isolada.
+- O gate acima e uma **regra operacional do agente**, nao um circuito de protecao implantado no servidor. A prevencao permanente exige controle de admissao centralizado em MCP/CI, com limites por host, lock, prioridades, PSI, histerese, observabilidade, provas RED/GREEN e regressao. Alteracao anterior de `remote-control-mcp/server.py` foi recusada pelos controles da plataforma: **nao tentar contornar essa recusa por shell, outro conector ou PR alternativo**.
+
+Referencia de acompanhamento: issue #2934. Enquanto houver PSI extremo recorrente, tarefas de continuidade sem vinculacao comprovada ou E2E real faltante, nao declarar `AUDIT_VERDICT=APTO`.
+<!-- /BACKEND_IO_PRESSURE_ADMISSION_V1 -->

@@ -616,6 +616,77 @@ class ChatgptContinuityNudgeDispatcherTests(unittest.TestCase):
         self.assertEqual(stopped["skipped_attempt_limit"], 1)
         self.assertEqual(len(self.calls), 1)
 
+    def test_progress_receipt_attests_only_exact_current_browser_profile(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.bind_browser_session("task-1", browser_session="dev")
+        route = "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee"
+        options = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        first = self.dispatcher.run_once(**options)
+        self.assertEqual(first["dispatched"], 1)
+        ledger_path = self.runtime / self.dispatcher.LEDGER_FILE
+        before_rows = [json.loads(v) for v in ledger_path.read_text().splitlines() if v]
+        self.assertNotIn("browser_session", before_rows[-1],
+                         "enqueue is not a real authenticated worker receipt")
+
+        options["query_status"] = lambda **unused: {
+            "ok": True, "http_status": 200,
+            "body": {"status": "OK", "nudge": {
+                "status": "PROGRESS_CONFIRMED", "conversation_id": route,
+            }},
+        }
+        self.dispatcher.run_once(**options)
+        rows = [json.loads(v) for v in ledger_path.read_text().splitlines() if v]
+        confirmed = rows[-1]
+        self.assertEqual(confirmed["worker_status"], "PROGRESS_CONFIRMED")
+        self.assertEqual(confirmed["conversation_id"], route)
+        self.assertEqual(confirmed["browser_session"], "dev")
+        fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, fingerprint),
+            "dev",
+        )
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1", route, "stale-fingerprint"),
+            "",
+        )
+        self.assertEqual(
+            self.dispatcher._attested_browser_session(self.runtime, "task-1",
+                                                       "6ac0f8b7-f2f0-83e9-95c5-54be614b9def", fingerprint),
+            "",
+        )
+
+    def test_mismatched_worker_conversation_is_never_attested_as_bound_profile(self) -> None:
+        self._stale_checkpoint_and_request()
+        state.bind_browser_session("task-1", browser_session="atendimento")
+        options = dict(
+            runtime_dir=self.runtime,
+            bridge_url="https://example.invalid/bridge.php",
+            token="test-token",
+            enqueue=self._fake_enqueue_ok,
+        )
+        self.dispatcher.run_once(**options)
+        options["query_status"] = lambda **unused: {
+            "ok": True, "http_status": 200,
+            "body": {"status": "OK", "nudge": {
+                "status": "PROGRESS_CONFIRMED",
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9def",
+            }},
+        }
+        self.dispatcher.run_once(**options)
+        ledger = self.runtime / self.dispatcher.LEDGER_FILE
+        rows = [json.loads(v) for v in ledger.read_text().splitlines() if v]
+        self.assertEqual(rows[-1]["worker_status"], "PROGRESS_CONFIRMED")
+        self.assertNotIn("browser_session", rows[-1])
+        self.assertEqual(
+            state.load_task("task-1")["conversation_id"],
+            "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+        )
+
     def test_active_claim_is_repolled_until_worker_reaches_terminal_result(self) -> None:
         self._stale_checkpoint_and_request()
         fingerprint = watchdog.read_requests(self.runtime)[0]["fingerprint"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import importlib.util
 import sys
@@ -36,6 +37,59 @@ class AgentTaskStateTests(unittest.TestCase):
     def tearDown(self) -> None:
         state.RUNTIME_DIR = self.original_runtime
         self.temp.cleanup()
+
+    def test_new_chatgpt_checkpoint_fails_closed_without_verified_origin(self) -> None:
+        # An ordinary test runtime can simulate the controller's enforced gate.
+        legacy = state.start_task("legacy-unbound", "keep prior progress", "chatgpt")
+        self.assertNotIn("conversation_id", legacy)
+        with mock.patch.dict(state.os.environ, {
+            "SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1",
+            "SHOPVIVALIZ_TASK_CONVERSATION_ID": "",
+            "SHOPVIVALIZ_TASK_BROWSER_SESSION": "",
+        }):
+            for agent in ("chatgpt", "gpt", "gpt6", "orquestrador"):
+                with self.subTest(agent=agent):
+                    task = "unbound-" + agent
+                    with self.assertRaisesRegex(state.TaskStateError, "exact verified conversation_id"):
+                        state.start_task(task, "retain the intended objective", agent)
+                    self.assertFalse((state.RUNTIME_DIR / (task + ".json")).exists())
+            self.assertEqual(state.start_task("legacy-unbound", "keep prior progress", "chatgpt"), legacy)
+            corporate = state.start_task(
+                "fresh-bound", "continue same verified conversation", "chatgpt",
+                conversation_id="6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                browser_session="dev",
+            )
+            self.assertEqual(corporate["browser_session"], "dev")
+            self.assertEqual(corporate["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
+            other_provider = state.start_task("claude-independent", "continue safe CLI work", "claude")
+            self.assertNotIn("conversation_id", other_provider)
+
+    def test_new_chatgpt_successor_needs_original_verified_route(self) -> None:
+        predecessor = {
+            "status": "CONCLUIDO",
+            "task_id": "completed-predecessor",
+            "repository": "Vivaliz-site/site-shopvivaliz",
+            "completed_at": "2026-10-11T14:00:00Z",
+        }
+        with mock.patch.dict(state.os.environ, {"SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS": "1"}):
+            with mock.patch.object(state, "_load", return_value=predecessor):
+                with self.assertRaisesRegex(state.TaskStateError, "verified original conversation"):
+                    state.start_successor_task(
+                        "unbound-successor", predecessor_task_id="completed-predecessor",
+                        goal="next safely resumed goal", agent_id="chatgpt",
+                    )
+            self.assertFalse((state.RUNTIME_DIR / "unbound-successor.json").exists())
+            with mock.patch.object(state, "_load", return_value={
+                **predecessor,
+                "conversation_id": "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee",
+                "browser_session": "atendimento",
+            }):
+                successor = state.start_successor_task(
+                    "bound-successor", predecessor_task_id="completed-predecessor",
+                    goal="next verified goal", agent_id="chatgpt",
+                )
+            self.assertEqual(successor["browser_session"], "atendimento")
+            self.assertEqual(successor["conversation_id"], "6ac0f8b7-f2f0-83e9-95c5-54be614b9dee")
 
     def test_stale_background_cannot_complete_after_foreground_progress(self) -> None:
         state.start_task("race-proof", "verify deployment", "work")
@@ -106,6 +160,74 @@ class AgentTaskStateTests(unittest.TestCase):
             state.record_progress("owned-proof-checked", next_action="verify next")
             state.mark_ready("owned-proof-checked", evidence=["observed PASS"], verification="fresh")
             self.assertEqual(state.complete_task("owned-proof-checked")["status"], "CONCLUIDO")
+
+    def test_extreme_audit_requires_actual_pinned_apto_certifier(self) -> None:
+        state.start_task("audit-v5-no-proof", "Auditoria extrema V5 pela UI real", "worker")
+        with self.assertRaisesRegex(state.TaskStateError, "requires exactly one pinned real-UI APTO certifier"):
+            state.mark_ready("audit-v5-no-proof", evidence=["claimed green"], verification="claimed E2E")
+        self.assertEqual(state.load_task("audit-v5-no-proof")["status"], "RUNNING")
+
+    def test_extreme_audit_file_probes_cannot_substitute_for_certification(self) -> None:
+        file = Path(self.temp.name) / "existence-only"
+        file.touch()
+        state.start_task("audit-v5-file", "Extreme Audit V5 e2e", "worker",
+                         completion_checks=[["/usr/bin/test", "-f", str(file)]])
+        with self.assertRaisesRegex(state.TaskStateError, "requires exactly one pinned"):
+            state.mark_ready("audit-v5-file", evidence=["test file exists"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-file")["status"], "RUNNING")
+
+    def _audit_proof_fixture(self, name: str, repository: str = "Vivaliz-site/site-shopvivaliz") -> tuple[Path, Path, Path]:
+        evidence = Path(self.temp.name) / (name + "-evidence")
+        evidence.mkdir()
+        manifest = evidence / "manifest.json"
+        manifest.write_text(json.dumps({"identity": {"repository": repository}}), encoding="utf-8")
+        requirements = evidence / "requirements.json"
+        requirements.write_text("{}", encoding="utf-8")
+        return manifest, evidence, requirements
+
+    def test_extreme_audit_pinning_requires_same_repository_and_apto_stdout(self) -> None:
+        state.start_task("audit-v5-untrusted", "Auditoria Extrema V5", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("untrusted", repository="other-owner/other-repo")
+        state.pin_audit_certifier("audit-v5-untrusted", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with self.assertRaisesRegex(state.TaskStateError, "repository mismatches"):
+            state.mark_ready("audit-v5-untrusted", evidence=["claim"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-untrusted")["status"], "RUNNING")
+        manifest.write_text(json.dumps({"identity": {"repository": "Vivaliz-site/site-shopvivaliz"}}), encoding="utf-8")
+        with mock.patch.object(state.subprocess, "run", return_value=mock.Mock(returncode=0, stdout="NOT_CERTIFIED")):
+            with self.assertRaisesRegex(state.TaskStateError, "did not produce AUDIT_VERDICT=APTO"):
+                state.mark_ready("audit-v5-untrusted", evidence=["claim"], verification="claim")
+        self.assertEqual(state.load_task("audit-v5-untrusted")["status"], "RUNNING")
+
+    def test_extreme_audit_real_certifier_is_rerun_at_ready_and_complete(self) -> None:
+        state.start_task("audit-v5-verified", "Auditoria extrema V5 integral", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("verified")
+        state.pin_audit_certifier("audit-v5-verified", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout="AUDIT_VERDICT=APTO\n")) as run:
+            state.mark_ready("audit-v5-verified", evidence=["synthetic fixture, not live proof"],
+                             verification="unit-test of the certifier boundary")
+            state.complete_task("audit-v5-verified")
+        self.assertGreaterEqual(run.call_count, 2)
+        self.assertEqual(state.load_task("audit-v5-verified")["status"], "CONCLUIDO")
+
+    def test_extreme_audit_ready_reverts_to_running_on_certifier_failure_at_complete(self) -> None:
+        state.start_task("audit-v5-stale", "Auditoria extrema v5 real", "worker")
+        manifest, evidence, req = self._audit_proof_fixture("stale")
+        state.pin_audit_certifier("audit-v5-stale", manifest=str(manifest),
+                                  evidence_root=str(evidence), project_requirements=str(req))
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=0, stdout="AUDIT_VERDICT=APTO\n")):
+            state.mark_ready("audit-v5-stale", evidence=["fixture"], verification="ready")
+        with mock.patch.object(state.subprocess, "run",
+                               return_value=mock.Mock(returncode=1, stdout="AUDIT_VERDICT=NAO_APTO\n")):
+            with self.assertRaisesRegex(state.TaskStateError, "failed with exit"):
+                state.complete_task("audit-v5-stale")
+        checkpoint = state.load_task("audit-v5-stale")
+        self.assertEqual(checkpoint["status"], "RUNNING")
+        self.assertTrue(checkpoint["next_action"])
+
 
     def test_conversation_binding_is_explicit_idempotent_and_immutable(self) -> None:
         with mock.patch.object(
@@ -587,6 +709,40 @@ class TaskContinuityPolicyTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn(marker, text, str(path))
             self.assertIn("BLOCKED_EXTERNAL", text, str(path))
+
+    def test_resume_entrypoints_cannot_drop_execution_contract(self) -> None:
+        required = (
+            ROOT / "AGENTS.md",
+            ROOT / "CLAUDE.md",
+            ROOT / "GEMINI.md",
+            ROOT / ".github" / "copilot-instructions.md",
+        )
+        for path in required:
+            contents = path.read_text(encoding="utf-8")
+            for token in (
+                "RESUME_EXECUTION_GATE_V1",
+                "Retome",
+                "rules_loaded",
+                "CONCLUIDO",
+                "BLOCKED_EXTERNAL",
+            ):
+                with self.subTest(path=path, token=token):
+                    self.assertIn(token, contents)
+        validator = (ROOT / "scripts" / "validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
+        self.assertIn("RESUME_EXECUTION_GATE_V1", validator)
+
+    def test_docs_preflight_covers_canonical_resume_rules(self) -> None:
+        from agent_docs_gate import REQUIRED_DOCS
+        for path in (
+            "docs/knowledge/atendimento-chatgpt-bootstrap.md",
+            "docs/knowledge/host-access.md",
+            "docs/knowledge/README.md",
+            "docs/knowledge/agent-rules.md",
+            "docs/knowledge/task-continuity.md",
+            "GEPETO-POLICY.md",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, REQUIRED_DOCS)
 
     def test_governance_executes_continuity_validator(self) -> None:
         governance = (ROOT / "scripts" / "repository-governance-validate.sh").read_text(encoding="utf-8")

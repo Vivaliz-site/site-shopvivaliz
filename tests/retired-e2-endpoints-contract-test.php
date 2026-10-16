@@ -7,11 +7,25 @@ $roots = ['.github','scripts','ops','config','installer','deploy','automation','
 $skipParts = ['/.git/','/node_modules/','/vendor/','/docs/','/reports/','/storage/','/backups/','/history/','/scripts/retired/','/tests/'];
 $violations = [];
 
-$inspect = static function (string $path) use ($root, $retired, &$violations): void {
+// Retired hostnames must be complete identifiers. A live artifact such as
+// shopvivaliz-ai-squad is not an endpoint named shopvivaliz-ai.
+$matchesRetired = static function (string $body, string $token): bool {
+    if (in_array($token, ['shopvivaliz-ai', 'shopvivaliz-micro-2'], true)) {
+        return preg_match('/(?<![A-Za-z0-9_-])' . preg_quote($token, '/') .
+            '(?![A-Za-z0-9_-])/', $body) === 1;
+    }
+    return strpos($body, $token) !== false;
+};
+if ($matchesRetired('shopvivaliz-ai-squad', 'shopvivaliz-ai') ||
+    !$matchesRetired('ssh shopvivaliz-ai', 'shopvivaliz-ai') ||
+    !$matchesRetired('http://10.0.1.203', '10.0.1.203')) {
+    throw new RuntimeException('retired endpoint matcher contract failed');
+}
+$inspect = static function (string $path) use ($root, $retired, $matchesRetired, &$violations): void {
     $body = @file_get_contents($path);
     if ($body === false) return;
     foreach ($retired as $token) {
-        if (strpos($body, $token) !== false) {
+        if ($matchesRetired($body, $token)) {
             $relative = str_replace('\\', '/', substr($path, strlen($root) + 1));
             $violations[] = $relative . ':' . $token;
             return;

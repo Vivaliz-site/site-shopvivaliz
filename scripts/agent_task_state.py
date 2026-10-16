@@ -57,14 +57,33 @@ NON_TERMINAL_STATES = frozenset({"RUNNING", "READY_TO_COMPLETE"})
 SCHEMA_VERSION = 1
 PROOF_SCHEMA_VERSION = 2
 DEFAULT_REPOSITORY = "Vivaliz-site/site-shopvivaliz"
+CANONICAL_CONTROLLER_RUNTIME_DIR = Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state")
+CHATGPT_AGENT_ID_RE = re.compile(r"(?:^|[^a-z0-9])(?:chatgpt|gpt[0-9]*|orquestrador)(?=$|[^a-z0-9])", re.I)
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 CHATGPT_FREEZE_GENERATION_RE = re.compile(r"^chatgpt-freeze-root-cause-\d{8}-g[1-9][0-9]*$")
 CHATGPT_NUDGE_LEDGER_FILE = "_chatgpt-continuity-nudges.jsonl"
 STATE_LOCK_FILE = "_agent-task-state.lock"
+EXTREME_AUDIT_GOAL_RE = re.compile(r"(?:auditoria\s+(?:extrema|v5|absoluta)|extreme\s+audit|audit\s+v5|v5\s+audit)", re.I)
 
 
 class TaskStateError(RuntimeError):
     pass
+
+
+def _require_verified_chatgpt_origin_on_create(agent_id: str) -> bool:
+    """Fail closed for new ChatGPT checkpoints on the canonical controller.
+
+    The durable dispatcher cannot recover an unbound ChatGPT conversation.
+    Keep legacy checkpoints and tests usable; only new corporate ChatGPT
+    starts in the live controller (or explicit strict-mode tests) are gated.
+    """
+    strict_test_mode = os.getenv("SHOPVIVALIZ_REQUIRE_CHATGPT_ORIGIN_FOR_NEW_TASKS", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    canonical_runtime = RUNTIME_DIR.resolve() == CANONICAL_CONTROLLER_RUNTIME_DIR
+    return bool(CHATGPT_AGENT_ID_RE.search(str(agent_id or ""))) and (
+        canonical_runtime or strict_test_mode
+    )
 
 RECOVERY_STATES = frozenset({
     'FOREGROUND_ACTIVE', 'FOREGROUND_RELEASED', 'LEASE_EXPIRED',
@@ -332,6 +351,82 @@ def _require_background_terminal_checks(payload: dict[str, Any]) -> None:
         raise TaskStateError("background terminal certification requires pinned completion checks")
 
 
+def _is_extreme_audit(payload: dict[str, Any]) -> bool:
+    return bool(EXTREME_AUDIT_GOAL_RE.search(str(payload.get("goal", ""))))
+
+
+def _is_certifier_probe(argv: list[str]) -> bool:
+    if not isinstance(argv, list) or len(argv) != 7 or argv[3] != "--evidence-root" or argv[5] != "--project-requirements":
+        return False
+    try:
+        trusted = {Path(sys.executable).resolve(strict=True)}
+        if Path("/usr/bin/python3").exists():
+            trusted.add(Path("/usr/bin/python3").resolve(strict=True))
+        return (
+            Path(argv[0]).resolve(strict=True) in trusted
+            and Path(argv[1]).resolve(strict=True) == (ROOT / "scripts" / "certify-audit-manifest.py").resolve(strict=True)
+            and all(Path(argv[i]).is_absolute() for i in (2, 4, 6))
+            and len(set(argv[i] for i in (2, 4, 6))) == 3
+        )
+    except OSError:
+        return False
+
+
+def _require_extreme_audit_proof(payload: dict[str, Any]) -> None:
+    if not _is_extreme_audit(payload):
+        return
+    audits = [check for check in _normalize_completion_checks(payload.get("completion_checks", [])) if _is_certifier_probe(check)]
+    if len(audits) != 1:
+        raise TaskStateError("Extreme Audit V5 requires exactly one pinned real-UI APTO certifier before readiness")
+    argv = audits[0]
+    try:
+        if Path(argv[2]).is_symlink():
+            raise ValueError("audit manifest symlink")
+        manifest = json.loads(Path(argv[2]).read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest object required")
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise TaskStateError(f"Extreme Audit V5 manifest unavailable: {type(exc).__name__}") from exc
+    identity = manifest.get("identity")
+    if not isinstance(identity, dict) or identity.get("repository") != payload.get("repository"):
+        raise TaskStateError("Extreme Audit V5 manifest repository mismatches task ownership")
+    if not Path(argv[4]).is_dir() or not Path(argv[6]).is_file():
+        raise TaskStateError("Extreme Audit V5 evidence root or project requirements missing; continue RUNNING")
+
+
+@_serialized_transition
+def pin_audit_certifier(task_id: str, *, manifest: str, evidence_root: str, project_requirements: str) -> dict[str, Any]:
+    payload = _load(task_id)
+    if is_terminal(payload):
+        raise TaskStateError("terminal task cannot pin audit evidence")
+    if not _is_extreme_audit(payload):
+        raise TaskStateError("pin-audit-certifier requires an explicit Extreme Audit V5 goal")
+    _require_current_resume(payload)
+    argv = [
+        sys.executable, str((ROOT / "scripts" / "certify-audit-manifest.py").resolve()),
+        str(Path(manifest).expanduser().absolute()), "--evidence-root",
+        str(Path(evidence_root).expanduser().absolute()), "--project-requirements",
+        str(Path(project_requirements).expanduser().absolute()),
+    ]
+    if not _is_certifier_probe(argv):
+        raise TaskStateError("untrusted audit certifier command")
+    existing = _normalize_completion_checks(payload.get("completion_checks", []))
+    if argv in existing:
+        return payload
+    if any(_is_certifier_probe(check) for check in existing):
+        raise TaskStateError("audit certifier already pinned; scope cannot change implicitly")
+    if len(existing) >= 4:
+        raise TaskStateError("completion checks full; reconcile before pinning audit certifier")
+    payload["completion_checks"] = existing + [argv]
+    payload["schema_version"] = PROOF_SCHEMA_VERSION
+    payload["status"] = "RUNNING"
+    payload["next_action"] = str(payload.get("next_action", "")).strip() or "Run real UI E2E and collect certified APTO evidence"
+    _bump_checkpoint_version(payload)
+    _history(payload, "audit_certifier_pinned", argv_sha256=hashlib.sha256(json.dumps(argv).encode()).hexdigest())
+    _atomic_write(_path(task_id), payload)
+    return payload
+
+
 def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
     normalized = []
     for command in checks:
@@ -346,8 +441,9 @@ def _normalize_completion_checks(checks: Iterable[Any]) -> list[list[str]]:
         service_probe = len(argv) == 4 and argv[:3] == ["/usr/bin/systemctl", "is-active", "--quiet"] and argv[3] in {
             "shopvivaliz-gemini-24x7-controller.service", "shopvivaliz-dev-browser.service", "shopvivaliz-chatgpt-browser.service",
         }
-        if not (file_probe or hash_probe or service_probe):
-            raise TaskStateError("completion check must use a bounded read-only file/hash/service probe")
+        certifier_probe = _is_certifier_probe(argv)
+        if not (file_probe or hash_probe or service_probe or certifier_probe):
+            raise TaskStateError("completion check must use a bounded read-only file/hash/service or trusted real-UI certifier probe")
         normalized.append(argv)
     if len(normalized) > 4:
         raise TaskStateError("at most four bounded completion checks are supported")
@@ -358,12 +454,17 @@ def _run_completion_checks(payload: dict[str, Any]) -> None:
     receipts = []
     for index, argv in enumerate(_normalize_completion_checks(payload.get("completion_checks", []))):
         try:
-            result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL, timeout=10, check=False)
+            is_audit = _is_certifier_probe(argv)
+            result = subprocess.run(argv, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE if is_audit else subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, timeout=90 if is_audit else 10,
+                                    check=False, text=is_audit)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise TaskStateError(f"completion check {index} unavailable: {type(exc).__name__}") from exc
         if result.returncode != 0:
             raise TaskStateError(f"completion check {index} failed with exit {result.returncode}; keep working")
+        if _is_certifier_probe(argv) and "AUDIT_VERDICT=APTO" not in str(result.stdout or "").splitlines():
+            raise TaskStateError("Extreme Audit V5 certifier did not produce AUDIT_VERDICT=APTO; continue RUNNING")
         receipts.append({"index": index, "exit_code": 0, "checked_at": utc_now(),
                          "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest()})
     if receipts:
@@ -411,6 +512,12 @@ def start_task(task_id: str, goal: str, agent_id: str = "", repository: str = ""
             return existing
         raise TaskStateError(
             "task state already exists with different identity; use successor or explicit resume"
+        )
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not conversation:
+        raise TaskStateError(
+            "new ChatGPT checkpoint requires an exact verified conversation_id and "
+            "corporate browser_session before creation; preserve work outside "
+            "the recovery queue until that provenance is available"
         )
 
     now = utc_now()
@@ -499,6 +606,13 @@ def start_successor_task(
             if inherited_session not in {"dev", "atendimento", "fred"}:
                 raise TaskStateError("predecessor has invalid browser session binding")
             payload["browser_session"] = inherited_session
+    if _require_verified_chatgpt_origin_on_create(agent_id) and not (
+        payload.get("conversation_id") and payload.get("browser_session") in {"dev", "atendimento"}
+    ):
+        raise TaskStateError(
+            "new ChatGPT successor requires a verified original conversation and "
+            "corporate browser session; an unbound predecessor cannot supply provenance"
+        )
     _atomic_write(path, payload)
     return payload
 
@@ -552,6 +666,7 @@ def mark_ready(
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     _require_background_terminal_checks(payload)
+    _require_extreme_audit_proof(payload)
     _run_completion_checks(payload)
     payload.setdefault("evidence", []).extend(evidence_rows)
     payload["verification"] = verification_text
@@ -574,6 +689,7 @@ def _complete_task_transition(task_id: str) -> dict[str, Any]:
     _require_freeze_browser_progress(str(payload.get("task_id", task_id)))
     _require_current_resume(payload)
     try:
+        _require_extreme_audit_proof(payload)
         _run_completion_checks(payload)
     except TaskStateError:
         payload["status"] = "RUNNING"
@@ -999,6 +1115,12 @@ def _parser() -> argparse.ArgumentParser:
     ready.add_argument("--evidence", action="append", required=True)
     ready.add_argument("--verification", required=True)
 
+    pin = sub.add_parser("pin-audit-certifier")
+    pin.add_argument("--task", required=True)
+    pin.add_argument("--manifest", required=True)
+    pin.add_argument("--evidence-root", required=True)
+    pin.add_argument("--project-requirements", required=True)
+
     complete = sub.add_parser("complete")
     complete.add_argument("--task", required=True)
 
@@ -1054,6 +1176,10 @@ def main() -> int:
             payload = mark_ready(args.task, evidence=args.evidence, verification=args.verification)
         elif args.command == "complete":
             payload = complete_task(args.task)
+        elif args.command == "pin-audit-certifier":
+            payload = pin_audit_certifier(args.task, manifest=args.manifest,
+                                           evidence_root=args.evidence_root,
+                                           project_requirements=args.project_requirements)
         elif args.command == "block":
             payload = block_task(
                 args.task,

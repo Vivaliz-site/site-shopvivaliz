@@ -16,7 +16,10 @@ effective app permissions are separate checks. Installed != connected.
 
 ## Identity and isolation (not optional)
 
-- Dev Chromium: `shopvivaliz-dev-chromium`, CDP `9559`, dedicated MCP `5583`.
+- Canonical Dev Chromium: `shopvivaliz-dev-chromium`, CDP `9559`,
+  dedicated MCP `5583`; the **temporary explicitly approved MCP-only**
+  adoption of already-logged-in same-account auxiliary CDP `9557` is
+  documented below and is never a cookie/profile transfer.
 - Atendimento Chromium: `shopvivaliz-atendimento-chromium`, CDP `9556`, dedicated MCP `5582`.
 - The dedicated bridges on ports `5582`/`5583` must check their own
   canonical CDP `/json/version` with a bounded timeout for `/health`.
@@ -31,12 +34,12 @@ effective app permissions are separate checks. Installed != connected.
   CPU, memory, process limits, security hardening, restart policy and browser
   flags, except their explicit session-specific profile, class and CDP port.
   `tests/test_chatgpt_access_parity.py` enforces this at the blocking CI gate.
-- After installing updated MCP code, restart **both** dedicated systemd
-  bridge services (`shopvivaliz-browser-atendimento-mcp` and
-  `shopvivaliz-browser-dev-mcp`). `systemctl enable --now` alone does not
-  reload an already-active Python process. Verify both service start times
-  are newer than the installed server.py mtime, then recheck their health.
-  Never restart/copy the authenticated Chromium profile as part of this.
+- After ordinary browser MCP code upgrades, restart both dedicated
+  systemd adapters so updated server.py is loaded and verify freshness.
+  For the **explicit Dev-only auxiliary adoption operation** below, restart
+  **only** the Dev MCP adapter; do not restart Atendimento's running MCP
+  or any authenticated Chromium process. Never copy cookies or profiles.
+  The Dev adapter must prove exact account identity on each operation.
 - Automatic backend updates limited to the browser MCP use the browser-only
   deployment job; a support Windows machine going offline must not prevent
   refreshing the Dev/Atendimento bridges. Controller, SSH or Windows changes
@@ -49,6 +52,49 @@ effective app permissions are separate checks. Installed != connected.
 - Dev and Atendimento checkpoints bind to their actual conversation/profile;
   never route one through the other's authenticated session.
 
+
+## Dev MCP-only adoption of verified auxiliary Chromium (2026-10-12)
+
+The owner explicitly requested to **use the already authenticated Dev
+browser** instead of repeatedly attempting OpenAI's email verification in
+the canonical Dev profile. Live exact-account identity was independently
+verified through `https://chatgpt.com/api/auth/session` on the auxiliary
+Chromium CDP9557 (`dev@shopvivaliz.com.br`), audit
+`f15a9d6e-e3f7-47ab-9fa0-e3eb4f65d845`.
+
+A narrowly scoped, reversible **transport-only** route allows only the
+dedicated Dev MCP adapter at TCP5583 to use that **unchanged, running**
+Chromium. Explicit opt-in requires
+`SHOPVIVALIZ_BROWSER_SESSION_NAME=dev`,
+`SHOPVIVALIZ_BROWSER_CDP_URL=http://127.0.0.1:9557`,
+`SHOPVIVALIZ_DEV_ADOPTED_CDP=9557`, and a live exact-email match on
+every tool call. Identity mismatch, unauthenticated page, wrong service
+port, missing opt-in or cross-account tool alias fails closed. Existing
+conversation/runtime/fencing gates are unchanged. The versioned
+`scripts/adopt-verified-dev-aux-browser.sh` requires owner authorization,
+a maintenance lease, read-only identity checks on both accounts, and a
+healthy protected loopback 5583 endpoint; it changes **only the Dev MCP
+systemd drop-in** with automatic rollback. It must never copy/export
+cookies, passwords, OAuth credentials, QR/TOTP or restart Chromium.
+
+The **MCP Dev adoption alone** does **not** log the canonical Dev
+CDP9559 in, nor modify the independent guardian/worker or identify
+historical conversation bindings. Atendimento remains isolated on CDP9556.
+A second, separately authorized **continuity-only** opt-in may now observe
+and use the existing authenticated Dev auxiliary CDP9557 without cookies
+or profile transfers. It is installed only by
+`scripts/adopt-verified-dev-aux-continuity.sh` under a real maintenance
+lease, SHA40 source attestation and live exact-email checks. The worker
+reroutes **only explicitly bound Dev conversation checkpoints**; the
+guardian is strictly read-only for the auxiliary Chromium and never
+restarts it. There is no implicit fallback when the auxiliary logs out.
+Without this second opt-in, the worker and guardian remain on CDP9559.
+
+Regardless of the selected authenticated Dev transport, continuity
+readiness/E2E stays `RUNNING` until the original
+`task_id+conversation_id+browser_session+fingerprint` proofs and a real
+`PROGRESS_CONFIRMED` receipt are present. See
+`docs/knowledge/browser-sessions.md` for separate rollback procedures.
 
 ## Official sign-in before a conversation exists
 
@@ -128,6 +174,38 @@ Both dedicated corporate Chrome services use the protected persistent
 `dbus-run-session`. This permits native password-manager access
 to the user's GNOME Keyring but **does not unlock the collection**.
 The profile, cookies, Chrome user-data-dir and CDP port remain isolated.
+
+## Corporate identity and neutral home tab MCP tools
+
+The base **ShopVivaliz Remote Control** and its browser peer now define two
+additional operations. **Deployed server code is not an approved ChatGPT plugin
+catalog**: check the installed app tool-name/inputSchema list separately from
+the MCP server's `tools/list` before claiming the new actions are exposed.
+
+- `browser_auth_status(session)`: read-only; queries
+  `https://chatgpt.com/api/auth/session` inside the selected isolated browser,
+  compares `user.email` to its dedicated corporate account, and returns only
+  redacted booleans, state, HTTP status and bounded counts. Neither credentials
+  nor email from the API response are returned. HTTP 200 alone proves nothing.
+  `UNKNOWN`, `NOT_AUTHENTICATED` and `IDENTITY_MISMATCH` fail closed.
+- `browser_profile_home_open(session, runtime_lease_id, runtime_fencing_token)`:
+  reuses a neutral ChatGPT home tab or creates a new background tab only after
+  an exact match, in the selected corporate CDP profile. Requires durable
+  handoff and a valid maintenance runtime lease owned by
+  `shopvivaliz-account-auth:<session>` with action
+  `browser_profile_home_open`, checked at the proxy and browser peer.
+  It cannot accept custom URLs, navigate an existing conversation, clone
+  sessions, transfer cookies or authentication, or bypass MFA/consent.
+
+The neutral-tab action does not copy a logged-in profile into an unauthenticated
+one. Dev remains CDP9559, Atendimento CDP9556; XFCE `fredconsole/:0` and the
+LightDM greeter are independent of corporate `fredrdp/:99` profiles.
+
+Both corporate email addresses deliver to the Gmail `fredmourao` mailbox,
+per the owner (2026-10-11). This is email routing only, not a shared OAuth
+grant or ChatGPT authentication. Preferred login: existing password + GNOME
+TOTP on the official MFA challenge, without automatically falling back to
+email code, passkey or SSO.
 
 ## Parity requirements
 

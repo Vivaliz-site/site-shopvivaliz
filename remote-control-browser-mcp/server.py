@@ -62,7 +62,7 @@ spec.loader.exec_module(base)
 
 VERSION = "1.1.0-browser"
 BROWSER_HOST = "always-free-arm-1787907847-26"
-ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_action", "browser_auth_open"}
+ACCOUNT_AUTH_TOOLS = {"browser_auth_tabs", "browser_auth_status", "browser_auth_action", "browser_auth_open", "browser_profile_home_open"}
 
 BROWSER_TOOLS = {
     "browser_health",
@@ -482,12 +482,42 @@ DEDICATED_BROWSER_BRIDGES = {
 }
 
 
+def _dev_aux_opt_in() -> bool:
+    """An explicit temporary Dev-only MCP adoption, never a profile copy.
+
+    The original canonical Dev CDP9559 and Atendimento CDP9556 remain intact.
+    No change takes effect without ALL exact environment bindings.
+    """
+    return (
+        os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT") == "5583"
+        and os.environ.get("SHOPVIVALIZ_BROWSER_SESSION_NAME") == "dev"
+        and os.environ.get("SHOPVIVALIZ_BROWSER_CDP_URL") == "http://127.0.0.1:9557"
+        and os.environ.get("SHOPVIVALIZ_DEV_ADOPTED_CDP") == "9557"
+    )
+
+
+def _require_dev_aux_authenticated() -> None:
+    """Fail closed on any identity change in the already-running auxiliary Chrome."""
+    try:
+        status = _corporate_profile_probe("dev_aux", "status")
+        if status.get("state") == "AUTHENTICATED" and status.get("identity_match") is True:
+            return
+    except (ValueError, OSError, TimeoutError, RuntimeError):
+        pass
+    raise ValueError("dev_aux_identity_unverified")
+
+
 def browser_service_health() -> dict[str, Any]:
     service_port = os.environ.get("SHOPVIVALIZ_REMOTE_MCP_PORT", "").strip()
     binding = DEDICATED_BROWSER_BRIDGES.get(service_port)
     if binding is None:
         return browser_health()
 
+    # Do not silently remap Dev. Only the Dev MCP adapter with the explicitly
+    # bound CDP9557 opt-in may reuse a legitimately authenticated same-account
+    # auxiliary profile. The physical Chrome process and cookies stay untouched.
+    if _dev_aux_opt_in():
+        binding = ("dev", "http://127.0.0.1:9557")
     session, endpoint = binding
     result: dict[str, Any] = {
         "ok": False,
@@ -520,7 +550,17 @@ def browser_service_health() -> dict[str, Any]:
     except (OSError, ValueError, TypeError):
         result["reason"] = "cdp_unavailable"
         return result
-    result.update({"ok": True, "cdp_reachable": True})
+    if _dev_aux_opt_in():
+        try:
+            _require_dev_aux_authenticated()
+        except ValueError:
+            result["reason"] = "dev_aux_identity_unverified"
+            return result
+        result.update({"ok": True, "cdp_reachable": True,
+                       "account_authenticated": True,
+                       "account_identity_verified": True})
+    else:
+        result.update({"ok": True, "cdp_reachable": True})
     return result
 
 
@@ -556,6 +596,7 @@ def browser_tabs() -> dict[str, Any]:
 
 def browser_open(args: dict[str, Any]) -> dict[str, Any]:
     url = validate_url(args.get("url"))
+    base._assert_no_corporate_logout_url(url)
     if not gui_session_active():
         raise RuntimeError("gui_session_inactive")
     windows = browser_windows()
@@ -589,6 +630,7 @@ def browser_open(args: dict[str, Any]) -> dict[str, Any]:
 
 def browser_navigate(args: dict[str, Any]) -> dict[str, Any]:
     url = validate_url(args.get("url"))
+    base._assert_no_corporate_logout_url(url)
     window = active_browser_window()
     focus(window)
     key("ctrl+l")
@@ -635,6 +677,8 @@ def browser_type(args: dict[str, Any]) -> dict[str, Any]:
     if not text:
         raise ValueError("browser_text_required")
     check_text(text)
+    if bool(args.get("press_enter", False)) and text.strip().lower().startswith(("https://", "http://")):
+        base._assert_no_corporate_logout_url(text)
     window = active_browser_window()
     focus(window)
     type_text(text)
@@ -886,7 +930,61 @@ ACCOUNT_AUTH_EMAILS = {
     "dev": "dev@shopvivaliz.com.br",
     "atendimento": "atendimento@shopvivaliz.com.br",
 }
-ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+ACCOUNT_AUTH_ACTIONS = {"fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"}
+
+ACCOUNT_GNOME_TOTP_PYTHON = r"""
+# This child is invoked ONLY from browser_auth_action with an account-matched
+# maintenance lease. Its stdout is a private pipe to the parent, never an MCP
+# response or audit. Secrets stay in the local user's Secret Service collection.
+import os
+import pwd
+import re
+import sqlite3
+import sys
+import time
+
+import gi
+import pyotp
+
+gi.require_version("Secret", "1")
+from gi.repository import Secret
+
+email = sys.argv[1] if len(sys.argv) == 2 else ""
+if email not in ("dev@shopvivaliz.com.br", "atendimento@shopvivaliz.com.br"):
+    sys.exit(2)
+if os.geteuid() != pwd.getpwnam("fredrdp").pw_uid:
+    sys.exit(2)
+db = "file:/home/fredrdp/.config/Authenticator/database-7.db?mode=ro"
+try:
+    with sqlite3.connect(db, uri=True, timeout=2) as con:
+        records = con.execute(
+            "SELECT token_id FROM accounts WHERE lower(username)=? LIMIT 2",
+            (email,),
+        ).fetchall()
+    if len(records) != 1:
+        raise ValueError("ambiguous_account")
+    token_id = records[0][0]
+    if not isinstance(token_id, str) or not re.fullmatch(r"[a-f0-9]{64}", token_id):
+        raise ValueError("invalid_reference")
+    schema = Secret.Schema.new(
+        "com.github.bilelmoussaoui.Authenticator",
+        Secret.SchemaFlags.NONE,
+        {"id": Secret.SchemaAttributeType.STRING, "name": Secret.SchemaAttributeType.STRING},
+    )
+    seed = Secret.password_lookup_sync(schema, {"id": token_id}, None)
+    if not isinstance(seed, str) or not seed:
+        raise ValueError("token_unavailable")
+    # Avoid a code about to expire. No seed or code is logged to stderr.
+    remaining = 30 - (time.time() % 30)
+    if remaining < 6:
+        time.sleep(remaining + 0.15)
+    code = pyotp.TOTP(seed).now()
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValueError("invalid_code")
+    sys.stdout.write(code)
+except Exception:
+    sys.exit(3)
+"""
 
 ACCOUNT_AUTH_NODE_SCRIPT = r"""
 const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
@@ -899,8 +997,8 @@ for await (const chunk of process.stdin) input += chunk;
 if (input.length > 512) throw new Error("auth_text_too_long");
 const port = ports[session];
 const validStage = u => u.protocol === "https:" && (
-    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
-    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
+    (u.hostname === "auth.openai.com" && (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
+    (u.hostname === "chatgpt.com" && (u.pathname === "/auth/login_with" || u.pathname === "/auth/error" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
 const tabs = await (await fetch("http://127.0.0.1:" + port + "/json", {
     signal: AbortSignal.timeout(2500)
@@ -932,7 +1030,7 @@ try {
     }
     const expr = "(()=>{" +
         "const u=new URL(location.href);" +
-        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
+        "const allowed=u.protocol==='https:'&&((u.hostname==='auth.openai.com'&&(u.pathname==='/log-in-or-create-account'||/^\\/(?:log-in|email-verification)(?:\\/|$)/.test(u.pathname)||(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length)))))||(u.hostname==='chatgpt.com'&&(u.pathname==='/auth/login_with'||u.pathname==='/auth/error'||/^\\/auth\\/login(?:\\/|$)/.test(u.pathname))));" +
         "if(!allowed)throw Error('auth_stage_not_allowed');" +
         "const action=" + JSON.stringify(action) + ";" +
         "if(['back_to_methods','open_login','continue_google','continue_microsoft'].includes(action)){" +
@@ -940,11 +1038,15 @@ try {
         "const label=e=>String(e.innerText||e.getAttribute('aria-label')||'').trim();" +
         "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
         "if(action==='back_to_methods'){" +
-        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in/password')throw Error('auth_stage_not_allowed');" +
+        "if(u.hostname!=='auth.openai.com'||!['/log-in/password','/log-in/passkey'].includes(u.pathname))throw Error('auth_stage_not_allowed');" +
+        "if(u.pathname==='/log-in/password'){" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://auth.openai.com','/log-in-or-create-account')&&/^edit$/i.test(label(a)));" +
+        "}else{" +
+        "choices=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try another way$/i.test(label(b)));" +
+        "}" +
         "}" +
         "if(action==='open_login'){" +
-        "if(u.hostname!=='auth.openai.com'||u.pathname!=='/log-in-or-create-account')throw Error('auth_stage_not_allowed');" +
+        "if(u.origin!=='https://auth.openai.com'||(u.pathname!=='/log-in-or-create-account'&&u.pathname!=='/log-in'))throw Error('auth_stage_not_allowed');" +
         "choices=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^log in$/i.test(label(a)));" +
         "}" +
         "if(action==='continue_google'||action==='continue_microsoft'){" +
@@ -961,6 +1063,52 @@ try {
         "if(action==='fill_code')e=document.querySelector('input[autocomplete=one-time-code],input[name=code]');" +
         "if(!e||e.tagName!=='INPUT'||e.disabled||e.readOnly)throw Error('auth_field_unavailable');" +
         "e.focus();e.select();return {ready:true};" +
+        "}" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))&&" +
+        "document.body?.innerText?.includes('Oops, an error occurred!')&&" +
+        "document.querySelectorAll('input[autocomplete=one-time-code],input[name=code]').length===0){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha');" +
+        "if(unsafe||document.forms.length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
+        "}" +
+        "if(action==='continue'&&u.origin==='https://auth.openai.com'&&" +
+        "(['/log-in','/log-in/password','/log-in/passkey','/email-verification'].includes(u.pathname)||" +
+        "(u.pathname.startsWith('/mfa-challenge/')&&/^[0-9a-f]{32}$/i.test(u.pathname.slice('/mfa-challenge/'.length))))&&" +
+        "((document.title||'').includes('Session ended')||(document.title||'').includes('Your session has ended')||" +
+        "(document.body?.innerText||'').includes('Your session has ended')||(document.body?.innerText||'').includes('Session ended'))){" +
+        "if(u.pathname.startsWith('/mfa-challenge/')&&document.querySelector('input[autocomplete=one-time-code],input[name=code]'))throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const safeLink=(a,origin,path)=>{try{const d=new URL(a.href);return d.origin===origin&&d.pathname===path;}catch{return false;}};" +
+        "const recoveryLinks=[...document.querySelectorAll('a')].filter(a=>safeLink(a,'https://chatgpt.com','/auth/login_with')&&/^(?:log in|try again)$/i.test(String(a.innerText||'').trim()));" +
+        // An expired first-party email challenge can show exactly one
+        // 'Try again' BUTTON rather than the /auth/login_with anchor.
+        // Retry only if the expired page has no form or CAPTCHA.
+        "if(recoveryLinks.length===0&&u.pathname==='/email-verification'){" +
+        "const blocked=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(blocked||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
+        "}" +
+        "if(recoveryLinks.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "recoveryLinks[0].click();return {clicked:true};" +
+        "}" +
+        // Retry only the first-party OAuth error's exact Go back control.
+        // Never enter CAPTCHA, forms, foreign origins or arbitrary pages.
+        "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/error'){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(unsafe||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const backButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^go back$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(backButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "backButtons[0].click();return {clicked:true};" +
+        "}" +
+        "if(action==='continue'&&u.origin==='https://chatgpt.com'&&u.pathname==='/auth/login_with'){" +
+        "const unsafe=[...document.querySelectorAll('iframe')].some(f=>{try{const h=new URL(f.src).hostname;return h==='challenges.cloudflare.com'||h.endsWith('.hcaptcha.com')||h.endsWith('.recaptcha.net')}catch{return false}})||!!document.querySelector('[data-sitekey],.h-captcha,.g-recaptcha,[name=cf-turnstile-response]');" +
+        "if(unsafe||document.forms.length!==0||document.querySelectorAll('input').length!==0)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "const retryButtons=[...document.querySelectorAll('button')].filter(b=>!b.disabled&&/^try again$/i.test(String(b.innerText||b.value||'').trim()));" +
+        "if(retryButtons.length!==1)throw Error('auth_action_ambiguous_or_unavailable');" +
+        "retryButtons[0].click();return {clicked:true};" +
         "}" +
         "const buttons=[...document.querySelectorAll('button,input[type=submit]')].filter(b=>!b.disabled);" +
         "const labels=action==='resend'?/^(?:resend(?: (?:email|e-mail|code))?|send a new (?:email|code)|reenviar(?: (?:e-?mail|c[oó]digo))?)$/i:/^(?:continue|next|log in|sign in|verify|confirm|continuar|entrar|verificar)$/i;" +
@@ -1003,7 +1151,7 @@ const preflight = await (await fetch(origin + "/json", {signal:AbortSignal.timeo
 if (!Array.isArray(preflight) || preflight.length > 512) throw new Error("auth_tabs_invalid");
 const stage = u => u.protocol === "https:" && (
     (u.hostname === "auth.openai.com" &&
-        (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname))) ||
+        (u.pathname === "/log-in-or-create-account" || /^\/(?:log-in|email-verification)(?:\/|$)/.test(u.pathname) || (u.pathname.startsWith("/mfa-challenge/") && /^[0-9a-f]{32}$/i.test(u.pathname.slice("/mfa-challenge/".length))))) ||
     (u.hostname === "chatgpt.com" &&
         (u.pathname === "/auth/login_with" || /^\/auth\/login(?:\/|$)/.test(u.pathname)))
 );
@@ -1050,6 +1198,10 @@ def _auth_stage(url: str) -> str | None:
         parsed = urlsplit(url)
         if parsed.scheme != "https":
             return None
+        if parsed.hostname == "auth.openai.com" and re.fullmatch(
+            r"/mfa-challenge/[0-9a-fA-F]{32}", parsed.path
+        ):
+            return "/mfa-challenge"
         if parsed.hostname == "auth.openai.com" and (
             parsed.path == "/log-in-or-create-account"
             or re.match(r"^/(log-in|email-verification)(/|$)", parsed.path)
@@ -1084,7 +1236,279 @@ def browser_auth_tabs(args: dict[str, Any]) -> dict[str, Any]:
         stage = _auth_stage(str(item.get("url") or ""))
         if stage is not None and re.fullmatch(r"[A-Za-z0-9_.:-]{1,240}", str(item.get("id") or "")):
             tabs.append({"tab_id": item["id"], "stage": stage, "session": session})
-    return {"ok": True, "session": session, "tabs": tabs}
+    result = {"ok": True, "session": session, "tabs": tabs}
+    watch_state = _read_bounded_login_email_watch_status(session)
+    if watch_state is not None:
+        result["email_watch"] = watch_state
+    return result
+
+
+
+# Read-only identity verification is executed *inside* the two isolated
+# corporate Chromium profiles. The secret-bearing /api/auth/session response
+# never leaves the page: only booleans/status are sent through CDP and MCP.
+# A home-tab open uses the same probe and additionally requires an exact
+# account-scoped maintenance lease before touching the browser.
+CORPORATE_PROFILE_NODE_SCRIPT = r"""
+const { Cdp } = await import("file:///home/ubuntu/.local/share/shopvivaliz-chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs");
+const [session, mode] = process.argv.slice(1);
+const profiles = {
+  dev: {port:9559, email:"dev@shopvivaliz.com.br"},
+  atendimento: {port:9556, email:"atendimento@shopvivaliz.com.br"},
+  // Readonly identity probe only, guarded by the exact Dev-only adapter opt-in.
+  dev_aux: {port:9557, email:"dev@shopvivaliz.com.br"},
+};
+if (!Object.prototype.hasOwnProperty.call(profiles,session) ||
+    !["status","home"].includes(mode)) throw new Error("corporate_profile_scope_invalid");
+const {port,email} = profiles[session];
+const origin = "http://127.0.0.1:" + port;
+const observed = {
+  ok:true, session, cdp_accessible:false, tabs_seen:0, tabs_checked:0,
+  session_http:0, user_present:false, identity_match:false, state:"UNKNOWN"
+};
+function validPage(t){
+  if (t?.type !== "page" || !/^[A-F0-9]{32}$/i.test(String(t.id||""))) return false;
+  try {
+    const u=new URL(String(t.url||""));
+    const w=new URL(String(t.webSocketDebuggerUrl||""));
+    return u.origin==="https://chatgpt.com" && w.protocol==="ws:" &&
+      ["localhost","127.0.0.1"].includes(w.hostname) &&
+      Number(w.port)===port && w.pathname.startsWith("/devtools/page/");
+  }catch{return false;}
+}
+async function connect(url){
+  const ws=new WebSocket(url);
+  try{
+    await Promise.race([
+      new Promise((resolve,reject)=>{
+        ws.addEventListener("open",resolve,{once:true});
+        ws.addEventListener("error",reject,{once:true});
+      }),
+      new Promise((_,reject)=>setTimeout(()=>reject(Error("corporate_socket_timeout")),2400))
+    ]);
+    return ws;
+  }catch(e){try{ws.close()}catch{}throw e;}
+}
+async function identity(tab){
+  let ws;
+  try{
+    ws=await connect(tab.webSocketDebuggerUrl);
+    const c=new Cdp(ws,{commandTimeoutMs:3000});
+    const expr="(async()=>{try{" +
+      "if(location.origin!=='https://chatgpt.com')return {http:0,present:false,match:false};" +
+      "const r=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(1800)});" +
+      "if(!r.ok)return {http:r.status,present:false,match:false};" +
+      "const d=await r.json();const e=String(d?.user?.email||'').trim().toLowerCase();" +
+      "return {http:r.status,present:Boolean(e),match:e===" + JSON.stringify(email) + "};" +
+      "}catch{return {http:0,present:false,match:false}}})()";
+    const v=await c.evaluate(expr);
+    return {http:Number(v?.http)||0,present:v?.present===true,match:v?.match===true};
+  }catch{return {http:0,present:false,match:false};}
+  finally{try{ws?.close()}catch{}}
+}
+try{
+  const response=await fetch(origin+"/json/list",{signal:AbortSignal.timeout(2600)});
+  if(!response.ok)throw Error("corporate_cdp_unavailable");
+  observed.cdp_accessible=true;
+  const all=await response.json();
+  if(!Array.isArray(all)||all.length>512)throw Error("corporate_tabs_invalid");
+  const eligible=all.filter(validPage);
+  observed.tabs_seen=eligible.length;
+  const prioritized=[...eligible].sort((a,b)=>{
+    const rank=t=>{try{return new URL(t.url).pathname==="/" ? 0 : 1;}catch{return 2;}};
+    return rank(a)-rank(b);
+  });
+  // A bounded batch avoids CDP tab storms; no navigation, focus or reload.
+  // At most sixteen tabs, in small batches. The profile may contain many
+  // restored tabs and the first tab may not be the authenticated Home.
+  const checks=[];
+  for(let offset=0;offset<Math.min(16,prioritized.length);offset+=4){
+    const batch=await Promise.all(prioritized.slice(offset,offset+4).map(identity));
+    checks.push(...batch);
+    if(batch.some(v=>v.match||v.present))break;
+  }
+  observed.tabs_checked=checks.filter(v=>v.http>0).length;
+  const mismatch=checks.some(v=>v.present&&!v.match);
+  const matched=checks.some(v=>v.match);
+  observed.session_http=checks.some(v=>v.http===200)?200:(checks.find(v=>v.http>0)?.http||0);
+  observed.user_present=checks.some(v=>v.present);
+  observed.identity_match=matched&&!mismatch;
+  observed.state=mismatch?"IDENTITY_MISMATCH":observed.identity_match?"AUTHENTICATED":
+    observed.session_http===200?"NOT_AUTHENTICATED":"UNKNOWN";
+  if(mode==="home"){
+    if(observed.state!=="AUTHENTICATED")throw Error("corporate_identity_unverified");
+    const existing=eligible.find(t=>{
+      try{const u=new URL(t.url);return u.pathname==="/"&&!u.search&&!u.hash;}
+      catch{return false;}
+    });
+    if(existing){
+      observed.tab_id=existing.id;
+      observed.reused=true;
+    }else{
+      // No source URL, cookie, profile, session storage, or conversation ID is
+      // accepted from the caller. Open only the official neutral home page.
+      const version=await (await fetch(origin+"/json/version",{signal:AbortSignal.timeout(2600)})).json();
+      const endpoint=new URL(String(version.webSocketDebuggerUrl||""));
+      if(endpoint.protocol!=="ws:"||
+          !["localhost","127.0.0.1"].includes(endpoint.hostname)||
+          Number(endpoint.port)!==port||
+          !endpoint.pathname.startsWith("/devtools/browser/"))
+        throw Error("corporate_browser_socket_invalid");
+      const ws=await connect(endpoint.href);
+      try{
+        const browser=new Cdp(ws,{commandTimeoutMs:4000});
+        const created=await browser.send("Target.createTarget",{
+          url:"https://chatgpt.com/",background:true,newWindow:false
+        });
+        if(!/^[A-F0-9]{32}$/i.test(String(created?.targetId||"")))
+          throw Error("corporate_home_tab_invalid");
+        observed.tab_id=created.targetId;
+        observed.reused=false;
+      }finally{try{ws.close()}catch{}}
+    }
+  }
+  console.log(JSON.stringify(observed));
+}catch{
+  if(mode==="status")console.log(JSON.stringify(observed));
+  else {console.error("corporate_profile_operation_denied");process.exitCode=1;}
+}
+"""
+
+def _corporate_profile_probe(session: str, mode: str, cancel_check=None) -> dict[str, Any]:
+    if session == "dev_aux":
+        if mode != "status" or not _dev_aux_opt_in():
+            raise ValueError("account_profile_scope_invalid")
+    elif session not in ACCOUNT_AUTH_PORTS or mode not in {"status", "home"}:
+        raise ValueError("account_profile_scope_invalid")
+    invocation = [
+        base.BROWSER_NODE_BIN, "--input-type=module", "-e",
+        CORPORATE_PROFILE_NODE_SCRIPT, session, mode,
+    ]
+    result = base.run_local_command_with_stdin(
+        invocation, "", base.DEFAULT_TIMEOUT, cancel_check
+    )
+    if result.get("exit_code") != 0:
+        raise ValueError("account_profile_probe_failed")
+    try:
+        data = json.loads(str(result.get("stdout") or ""))
+    except (TypeError, ValueError):
+        raise ValueError("account_profile_probe_invalid") from None
+    if not isinstance(data, dict) or data.get("ok") is not True or data.get("session") != session:
+        raise ValueError("account_profile_probe_invalid")
+    state = str(data.get("state") or "")
+    match = data.get("identity_match") is True
+    present = data.get("user_present") is True
+    if (state not in {"AUTHENTICATED", "NOT_AUTHENTICATED", "IDENTITY_MISMATCH", "UNKNOWN"}
+            or (state == "AUTHENTICATED") != match
+            or (match and not present)):
+        raise ValueError("account_profile_probe_invalid")
+    status = {
+        "ok": True,
+        "session": session,
+        "cdp_accessible": data.get("cdp_accessible") is True,
+        "tabs_seen": min(max(0, int(data.get("tabs_seen", 0))), 512),
+        "tabs_checked": min(max(0, int(data.get("tabs_checked", 0))), 16),
+        "session_http": min(max(0, int(data.get("session_http", 0))), 599),
+        "user_present": present,
+        "identity_match": match,
+        "state": state,
+    }
+    if mode == "home":
+        tab_id = str(data.get("tab_id") or "")
+        if not match or not re.fullmatch(r"[A-F0-9]{32}", tab_id, re.I):
+            raise ValueError("account_profile_home_unconfirmed")
+        status = {
+            "ok": True, "session": session, "tab_id": tab_id,
+            "reused": data.get("reused") is True,
+            "identity_match": True,
+        }
+    return status
+
+
+def browser_auth_status(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if set(args) != {"session"}:
+        raise ValueError("account_profile_scope_invalid")
+    return _corporate_profile_probe(str(args["session"]), "status", cancel_check)
+
+
+def browser_profile_home_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if set(args) != {"session", "runtime_lease_id", "runtime_fencing_token"}:
+        raise ValueError("account_profile_scope_invalid")
+    session = str(args.get("session") or "")
+    if session not in ACCOUNT_AUTH_PORTS:
+        raise ValueError("account_profile_scope_invalid")
+    if not base._durable_handoff_enabled():
+        raise ValueError("account_auth_lease_mode_required")
+    lease_id = str(args.get("runtime_lease_id") or "")
+    token = args.get("runtime_fencing_token")
+    if not lease_id or token is None:
+        raise ValueError("account_auth_runtime_lock_required")
+    try:
+        lease = base.runtime_lock.assert_runtime_lock(
+            lease_id, int(token), "browser_profile_home_open"
+        )
+    except (ValueError, TypeError, base.runtime_lock.RuntimeLockConflict):
+        raise ValueError("account_auth_runtime_lock_invalid") from None
+    if (lease.get("owner_kind") != "maintenance"
+            or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
+        raise ValueError("account_auth_maintenance_owner_required")
+    return _corporate_profile_probe(session, "home", cancel_check)
+
+
+def _start_bounded_login_email_watch(session: str) -> dict[str, Any]:
+    """Start a 10-minute metadata-only watch after an authorized login event.
+
+    A dedicated Gmail readonly OAuth grant is mandatory. Never fetch email
+    bodies/codes, impersonate the ChatGPT Gmail connector or bypass MFA.
+    """
+    watcher = Path(__file__).resolve().with_name("login_email_watch.py")
+    if not watcher.is_file():
+        return {"status": "watcher_not_installed"}
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_login_email_watch", watcher
+        )
+        if spec is None or spec.loader is None:
+            return {"status": "watcher_unavailable"}
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.launch_watch(session)
+    except Exception:
+        return {"status": "watcher_unavailable"}
+
+
+def _read_bounded_login_email_watch_status(session: str) -> dict | None:
+    """Return only sanitised local status, not Gmail message ID or OTP."""
+    watcher = Path(__file__).resolve().with_name("login_email_watch.py")
+    if not watcher.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "shopvivaliz_login_email_watch_status", watcher
+        )
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.read_public_status(session)
+    except Exception:
+        return None
+
+
+def _official_email_watch_stage(session: str, tab_id: str) -> bool:
+    """Only a verified login-stage tab may start a new account-specific watch."""
+    eligible = {
+        "/auth/login", "/auth/login_with", "/log-in",
+        "/log-in-or-create-account", "/log-in/password", "/email-verification",
+    }
+    try:
+        tabs = browser_auth_tabs({"session": session})["tabs"]
+    except (ValueError, OSError, KeyError, TimeoutError):
+        return False
+    return any(
+        tab.get("tab_id") == tab_id and tab.get("stage") in eligible
+        for tab in tabs
+    )
 
 
 def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
@@ -1109,7 +1533,39 @@ def browser_auth_open(args: dict[str, Any], cancel_check=None) -> dict[str, Any]
                   ACCOUNT_AUTH_OPEN_NODE_SCRIPT, session]
     result = base.run_local_command_with_stdin(invocation, "", base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
+    if result["ok"]:
+        result["email_watch"] = _start_bounded_login_email_watch(session)
     return result
+
+
+def account_auth_local_totp(session: str) -> str:
+    """Return the account's current code via a PRIVATE child pipe (never log)."""
+    if session not in ACCOUNT_AUTH_EMAILS:
+        raise ValueError("account_auth_scope_invalid")
+    invocation = [
+        "runuser", "-u", "fredrdp", "--", "env",
+        "HOME=/home/fredrdp",
+        "XDG_RUNTIME_DIR=/run/user/1002",
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus",
+        "/usr/bin/python3", "-c", ACCOUNT_GNOME_TOTP_PYTHON,
+        ACCOUNT_AUTH_EMAILS[session],
+    ]
+    try:
+        child = subprocess.run(
+            invocation, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError("account_auth_local_totp_unavailable") from None
+    if child.returncode != 0:
+        raise ValueError("account_auth_local_totp_unavailable")
+    try:
+        code = child.stdout.decode("ascii")
+    except UnicodeError:
+        raise ValueError("account_auth_local_totp_invalid") from None
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValueError("account_auth_local_totp_invalid")
+    return code
 
 
 def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
@@ -1134,7 +1590,19 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             or lease.get("owner_id") != "shopvivaliz-account-auth:" + session):
         raise ValueError("account_auth_maintenance_owner_required")
     value = str(args.get("value") or "")
-    if action.startswith("fill_"):
+    # Backward-compatible contract: MCP clients with a cached action enum can
+    # request the same already-protected GNOME action via fill_code without a
+    # value. The current email-code path still requires its explicit value.
+    # Both spellings must pass the exact-account lease and official MFA gate.
+    if action == "fill_gnome_totp" or (action == "fill_code" and not value):
+        if value:
+            raise ValueError("account_auth_value_not_allowed")
+        # Fail closed unless the *same account profile* is already at official MFA.
+        tabs = browser_auth_tabs({"session": session})["tabs"]
+        if not any(t["tab_id"] == tab_id and t["stage"] == "/mfa-challenge" for t in tabs):
+            raise ValueError("account_auth_mfa_stage_required")
+        value = account_auth_local_totp(session)
+    elif action.startswith("fill_"):
         if not value or len(value) > 512 or "\x00" in value or "\n" in value:
             raise ValueError("account_auth_value_invalid")
         if action == "fill_email" and value.strip().lower() != ACCOUNT_AUTH_EMAILS[session]:
@@ -1143,18 +1611,37 @@ def browser_auth_action(args: dict[str, Any], cancel_check=None) -> dict[str, An
             raise ValueError("account_auth_code_invalid")
     elif value:
         raise ValueError("account_auth_value_not_allowed")
+    # Snapshot the approved page stage BEFORE the official button redirects.
+    # Never start a watch from a read-only tab listing or from a TOTP submit.
+    should_watch = (action in {"continue", "resend"}
+                    and _official_email_watch_stage(session, tab_id))
     invocation = [
         base.BROWSER_NODE_BIN, "--input-type=module", "-e",
-        ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id, action,
+        ACCOUNT_AUTH_NODE_SCRIPT, session, tab_id,
+        "fill_code" if action == "fill_gnome_totp" else action,
     ]
     result = base.run_local_command_with_stdin(invocation, value, base.DEFAULT_TIMEOUT, cancel_check)
     result["ok"] = result.get("exit_code") == 0
+    if result["ok"] and should_watch:
+        result["email_watch"] = _start_bounded_login_email_watch(session)
     return result
 
 
 def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str, Any]:
+    if _dev_aux_opt_in():
+        if name in ATTENDIMENTO_TOOL_MAP:
+            # A Dev process must never advertise Atendimento aliases that
+            # would actually operate the Dev profile.
+            raise ValueError("dev_aux_cross_session_tool_denied")
+        if name in {"browser.dom.inspect", "browser.click"}:
+            # These aliases dispatch before the ordinary base tool gate.
+            _require_dev_aux_authenticated()
     if name == "browser_auth_tabs":
         return browser_auth_tabs(args)
+    if name == "browser_auth_status":
+        return browser_auth_status(args, cancel_check=cancel_check)
+    if name == "browser_profile_home_open":
+        return browser_profile_home_open(args, cancel_check=cancel_check)
     if name == "browser_auth_open":
         return browser_auth_open(args, cancel_check=cancel_check)
     if name == "browser_auth_action":
@@ -1206,6 +1693,10 @@ def execute_tool(name: str, args: dict[str, Any], cancel_check=None) -> dict[str
     if name == "browser_type" and "tab_id" not in args and "selector" not in args:
         return browser_type(args)
 
+    # Re-check exact Dev identity on EVERY tool call routed through the
+    # opted-in auxiliary port. Base conversation/lease mutation gates still run.
+    if _dev_aux_opt_in():
+        _require_dev_aux_authenticated()
     return BASE_EXECUTE_TOOL(name, args, cancel_check=cancel_check)
 
 
@@ -1224,6 +1715,27 @@ def audit(tool: str, host: str | None, args: dict[str, Any], ok: bool, summary: 
 
 
 BROWSER_TOOL_SPECS = [
+    {
+        "name": "browser_auth_status",
+        "description": "Read exact ChatGPT user.email identity in the isolated Dev or Atendimento CDP profile, returning sanitized status/booleans only; never cookies or tokens.",
+        "inputSchema": {"type": "object", "properties": {"session": {"type": "string", "enum": ["dev", "atendimento"]}}, "required": ["session"], "additionalProperties": False},
+        "annotations": {"readOnlyHint": True, "openWorldHint": False, "destructiveHint": False},
+    },
+    {
+        "name": "browser_profile_home_open",
+        "description": "Reuse or open one neutral chatgpt.com home tab ONLY in the exact authenticated corporate profile under its own maintenance lease. Never copies session data or a conversation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session": {"type": "string", "enum": ["dev", "atendimento"]},
+                "runtime_lease_id": {"type": "string", "maxLength": 200},
+                "runtime_fencing_token": {"type": "integer", "minimum": 1},
+            },
+            "required": ["session", "runtime_lease_id", "runtime_fencing_token"],
+            "additionalProperties": False,
+        },
+        "annotations": {"readOnlyHint": False, "openWorldHint": False, "destructiveHint": False},
+    },
     {
         "name": "browser_auth_open",
         "description": "Open a new fixed official ChatGPT sign-in tab only in the requested isolated corporate profile using a valid account-specific maintenance runtime lease. Never touches an existing conversation or secrets.",
@@ -1253,7 +1765,7 @@ BROWSER_TOOL_SPECS = [
             "properties": {
                 "session": {"type": "string", "enum": ["dev", "atendimento"]},
                 "tab_id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,240}$"},
-                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
+                "action": {"type": "string", "enum": ["fill_email", "fill_password", "fill_code", "fill_gnome_totp", "continue", "resend", "back_to_methods", "open_login", "continue_google", "continue_microsoft"]},
                 "value": {"type": "string", "maxLength": 512},
                 "runtime_lease_id": {"type": "string", "maxLength": 200},
                 "runtime_fencing_token": {"type": "integer", "minimum": 1},
@@ -1419,8 +1931,14 @@ class BrowserHandler(base.Handler):
                 try:
                     output = execute_tool(name, args, cancel_check=self._client_disconnected)
                     image_data = output.pop("__mcp_image__", None) if isinstance(output, dict) else None
-                    ok = not (isinstance(output, dict) and output.get("ok") is False)
-                    aid = audit(name, host, args, ok, "ok" if ok else "command_failed")
+                    # Health readiness is not the outcome of a successful MCP read.
+                    # Reuse the base contract so both endpoints classify a
+                    # diagnosed degraded state without reporting a tool failure.
+                    ok = base._tool_call_ok(name, output)
+                    summary = "ok" if ok else "command_failed"
+                    if name == "continuity_status" and ok and output.get("ok") is False:
+                        summary = "observed_degraded"
+                    aid = audit(name, host, args, ok, summary)
                     if isinstance(output, dict):
                         output["audit_id"] = aid
                     content = [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}]

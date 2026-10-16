@@ -25,6 +25,17 @@ class Response(io.BytesIO):
     status = 200
 
 
+class TransportContractDocumentationTests(unittest.TestCase):
+    def test_documented_inline_budget_matches_executable_limit(self):
+        doc = (ROOT / "docs" / "knowledge" / "mcp-transport.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"at most {adapter.FOREGROUND_BUDGET} seconds remains inline",
+            doc,
+            "The operator runbook must match the enforced foreground budget; "
+            "otherwise longer admin commands fail unexpectedly",
+        )
+
+
 class StdioTransportTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

@@ -106,6 +106,70 @@ if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then cat "$FIXTURE_SE
         self.assertIn('session_observed_at', data)
         return data
 
+    def test_dev_aux_guardian_optin_is_readonly_and_fail_closed(self):
+        body = GUARDIAN.read_text(encoding='utf-8')
+        self.assertIn('SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP', body)
+        self.assertIn('http://127.0.0.1:9557/json/version', body)
+        self.assertIn('CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY', body)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', body)
+        self.assertIn('DEV_AUX_UNAVAILABLE', body)
+        self.assertIn('DEV_AUX_IDENTITY_MISMATCH', body)
+        start = body.index('# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.')
+        end = body.index('# End of readonly Dev auxiliary continuity adoption.', start)
+        read_only_path = body[start:end]
+        self.assertNotIn('systemctl restart', read_only_path)
+        self.assertNotIn('kill -', read_only_path)
+        self.assertNotIn('systemctl start "$browser_unit"', read_only_path)
+
+    def test_dev_aux_refuses_cross_account_marker_before_any_browser_action(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9556'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertEqual(self.probes(), 0)
+        self.assertFalse(self.system_log.exists(), 'invalid route must not invoke systemctl')
+
+    def test_dev_aux_rejects_nonapproved_endpoint_override(self):
+        env = self.env.copy()
+        env['SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP'] = '9557'
+        r = subprocess.run(['bash', str(GUARDIAN)], env=env,
+                           capture_output=True, text=True, timeout=15)
+        self.assertEqual(r.returncode, 64, r.stderr)
+        self.assertIn('DEV_AUX_INVALID_OPTIN', r.stderr)
+        self.assertFalse(self.system_log.exists(), 'CDP override mismatch must not restart browser')
+
+    def test_dev_aux_identity_is_not_blocked_by_redundant_renderer_preflight(self):
+        # A browser identity probe can succeed despite the extra generic
+        # renderer evaluation failing; never skip exact-account verification.
+        self.executable("curl", """printf '%s\\n' '{"webSocketDebuggerUrl":"ws://127.0.0.1/test"}'
+""")
+        self.executable("node", """printf 'probe\\n' >> "$FIXTURE_NODE_LOG"
+if [[ "$*" == *CONTINUITY_BROWSER_SESSION_STATE_PROBE* ]]; then printf 'AUTHENTICATED\\n'; exit 0; fi
+exit 1
+""")
+        helper = self.root / "isolated-aux-cache.py"
+        helper.write_text("""import json,sys
+from pathlib import Path
+args=sys.argv
+path=Path(args[args.index('--health')+1])
+state=args[args.index('--state')+1]
+path.write_text(json.dumps({'session_state':state,'authenticated':state=='AUTHENTICATED'}))
+""")
+        env=self.env.copy()
+        env["SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP"]="9557"
+        env["CHATGPT_BROWSER_PROBE_CACHE_HELPER"]=str(helper)
+        env.pop("CHATGPT_BROWSER_CDP_BASE",None)
+        env.pop("CHATGPT_BROWSER_CDP_URL",None)
+        result=subprocess.run(["bash",str(GUARDIAN)],env=env,capture_output=True,text=True,timeout=15)
+        self.assertEqual(result.returncode,0,result.stderr+" stdout="+result.stdout)
+        self.assertIn("CHATGPT_BROWSER_GUARDIAN=HEALTHY_DEV_AUX_READONLY",result.stdout)
+        self.assertEqual(self.probes(),1)
+        self.assertTrue(json.loads(self.health.read_text())["authenticated"])
+        actions=self.system_log.read_text() if self.system_log.exists() else ""
+        self.assertNotIn("restart shopvivaliz-dev-browser.service",actions)
+
     def test_terminal_auth_repeat_skips_expensive_probes(self):
         first = self.run_guardian()
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -238,6 +302,19 @@ exit 0
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.system_log.read_text() if self.system_log.exists() else ''
         self.assertNotIn('--user --machine=ubuntu@ start shopvivaliz-chatgpt-continuity.service', calls)
+
+    def test_live_cdp_http_with_failed_renderer_preserves_dev_chrome(self):
+        # CDP transport is live, but the tab renderer cannot be evaluated.
+        # Restarting Chrome loses an authenticated working session.
+        self.executable('node', 'exit 1\n')
+        result = self.run_guardian()
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn('DEGRADED_RENDERER_UNVERIFIED', result.stdout)
+        actions = self.system_log.read_text() if self.system_log.exists() else ''
+        self.assertNotIn('restart shopvivaliz-dev-browser.service', actions)
+        data = json.loads(self.health.read_text())
+        self.assertEqual(data['session_state'], 'UNKNOWN')
+        self.assertFalse(data['authenticated'])
 
     def test_failed_transport_is_not_hidden_by_negative_cache(self):
         self.run_guardian()

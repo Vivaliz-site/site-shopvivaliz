@@ -62,8 +62,17 @@ bash scripts/setup-shopvivaliz-display-recovery.sh
 
 install -d -m 0755 "$INSTALL_DIR"
 install -m 0755 "$SOURCE_SERVER" "$INSTALL_DIR/server.py"
+# The watcher has no OAuth grant by default; installing code never enables
+# Gmail access or transfers login codes. The OAuth file is provisioned separately.
+SOURCE_EMAIL_WATCH="$(dirname "$SOURCE_SERVER")/login_email_watch.py"
+if [ -f "$SOURCE_EMAIL_WATCH" ]; then
+  install -m 0644 "$SOURCE_EMAIL_WATCH" "$INSTALL_DIR/login_email_watch.py"
+fi
 install -m 0644 "$SOURCE_UNIT" "$UNIT_PATH"
 python3 -m py_compile "$INSTALL_DIR/server.py"
+if [ -f "$INSTALL_DIR/login_email_watch.py" ]; then
+  python3 -m py_compile "$INSTALL_DIR/login_email_watch.py"
+fi
 # The universal browser is a separate unprivileged Chromium/Playwright runtime.
 # Install it from the same source tree as the parent, atomically at service
 # boundaries; never copy an authenticated Atendimento/Dev browser profile.
