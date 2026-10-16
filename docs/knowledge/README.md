@@ -1,3 +1,7 @@
+<!-- CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+> **Regra absoluta:** todo erro real encontrado por qualquer agente deve ser rastreado, corrigido, testado, prevenido e validado no runtime/E2E. Erro incidental, preexistente ou descoberto durante correcao nao pode ser ignorado. Nunca declarar `APTO/CONCLUIDO` com erro conhecido relevante aberto. Preservar `RUNNING` ate reparo provado ou `BLOCKED_EXTERNAL` com evidencia e controle de seguranca; monitor SOMENTE LEITURA encaminha a executor autorizado. Detalhes: `AGENTS.md` e `docs/knowledge/agent-rules.md`.
+<!-- /CORRIGIR_CADA_ERRO_ABSOLUTO_V1 -->
+
 # Knowledge Base do ShopVivaliz
 - [Monitor de provedores gratuitos](ai-free-provider-sentinel.md) — monitor somente leitura das duas VMs para uso de provedores pagos e desvios da política Gemini/Ollama.
 
