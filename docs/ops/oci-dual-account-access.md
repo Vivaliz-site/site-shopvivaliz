@@ -1,3 +1,17 @@
+## Verified independent access (2026-10-16, 13:35 UTC)
+
+GitHub Actions workflow `.github/workflows/oci-dual-api-validation.yml` executed successfully without requiring the laptop after PRs #2979, #2980 and #2981. Verified run: https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/38908995411
+
+Sanitized actual job output:
+
+```text
+OCI_PRINCIPAL_AUTH=PASS
+OCI_ESPOSA_AUTH=PASS
+OCI_BOTH_ACCOUNTS_APTO=PASS
+```
+
+Status: **APTO for independent, read-only OCI API authentication through GitHub Actions**. Do not conflate this proof with on-VM MCP native OCI administration or VM provisioning: on-VM secrets were not deployed and provisioning actions have not been tested. The GitHub Actions runner uses protected GitHub secrets, temporary private-key files with restricted mode, and the OCI Python SDK. Run manually via `gh workflow run oci-dual-api-validation.yml -R Vivaliz-site/site-shopvivaliz --ref main`; inspect run checks and logs. Future privileged operations require a separately reviewed least-privilege workflow with appropriate approvals.
+
 # OCI Dual Account Access — ShopVivaliz
 
 Updated: 2026-10-16. Operational owner: ShopVivaliz infrastructure.
