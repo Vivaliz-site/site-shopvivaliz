@@ -484,6 +484,15 @@ if ($notFound) {
             'priceValidUntil' => date('Y-12-31'),
             'itemCondition' => 'https://schema.org/NewCondition',
             'seller'        => ['@type' => 'Organization', 'name' => 'Shopvivaliz'],
+            // A política publicada garante arrependimento em até 7 dias após o recebimento.
+            // O frete permanece calculado por CEP no checkout; não declarar tarifa/prazo
+            // fixos aqui sem uma fonte de dados de frete que os sustente.
+            'hasMerchantReturnPolicy' => [
+                '@type'                => 'MerchantReturnPolicy',
+                'applicableCountry'    => 'BR',
+                'returnPolicyCategory' => 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                'merchantReturnDays'   => 7,
+            ],
         ],
     ];
 
