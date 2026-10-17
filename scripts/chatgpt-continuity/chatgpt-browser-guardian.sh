@@ -12,6 +12,29 @@ probe_cache_helper="${CHATGPT_BROWSER_PROBE_CACHE_HELPER:-$(dirname "$0")/chatgp
 task_state_dir="${SHOPVIVALIZ_AGENT_TASK_STATE_DIR:-/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state}"
 browser_pattern='^/opt/shopvivaliz-browser/chrome-linux/chrome --user-data-dir=/home/fredrdp/.config/shopvivaliz-dev-chromium .*--remote-debugging-port=9559'
 
+# Explicit continuity opt-in is separate from the existing MCP Dev adoption.
+# Auxiliary browser belongs to another service; do not restart or manage it.
+dev_aux_adoption="${SHOPVIVALIZ_CONTINUITY_DEV_ADOPTED_CDP:-}"
+case "$dev_aux_adoption" in
+  '') ;;
+  9557)
+    # Reject untrusted endpoint overrides; no arbitrary local/remote CDP.
+    if [[ -n "${CHATGPT_BROWSER_CDP_URL:-}" &&
+          "${CHATGPT_BROWSER_CDP_URL}" != 'http://127.0.0.1:9557/json/version' ]] ||
+       [[ -n "${CHATGPT_BROWSER_CDP_BASE:-}" &&
+          "${CHATGPT_BROWSER_CDP_BASE}" != 'http://127.0.0.1:9557' ]]; then
+      echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+      exit 64
+    fi
+    cdp_url='http://127.0.0.1:9557/json/version'
+    cdp_base='http://127.0.0.1:9557'
+    ;;
+  *)
+    echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_INVALID_OPTIN' >&2
+    exit 64
+    ;;
+esac
+
 runtime_eval_ready() {
   CHATGPT_CONTINUITY_WORKER_MODULE="$worker_module" CHATGPT_BROWSER_CDP_BASE="$cdp_base" \
     timeout 8s node --input-type=module -e '
@@ -301,11 +324,14 @@ validate_browser_session() {
   esac
 }
 
-cdp_ready() {
+cdp_http_ready() {
   curl -fsS --connect-timeout 2 --max-time 3 "$cdp_url" 2>/dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if isinstance(d.get("webSocketDebuggerUrl"), str) and d["webSocketDebuggerUrl"].startswith(("ws://","wss://")) else 1)' \
-    >/dev/null 2>&1 \
-    && runtime_eval_ready
+    >/dev/null 2>&1
+}
+
+cdp_ready() {
+  cdp_http_ready && runtime_eval_ready
 }
 
 wait_for_cdp() {
@@ -347,6 +373,39 @@ ensure_continuity_worker() {
 
 status=0
 
+# Guarded Dev auxiliary continuity adoption: readonly, never restart Chrome.
+# The same-account identity is checked by browser_session_state() on each
+# observation. No health success is possible on a missing/foreign identity.
+if [[ "$dev_aux_adoption" == 9557 ]]; then
+  echo 'CHATGPT_BROWSER_GUARDIAN=DEV_AUX_READONLY'
+  if ! cdp_http_ready; then
+    report_browser_state 'DEV_AUX_UNAVAILABLE' 'UNREACHABLE'
+    status=1
+  else
+    # The exact-account session probe already exercises the renderer and CDP.
+    # Do not run a second generic renderer probe first: on a busy VM it can
+    # time out even when the verified Dev session remains authenticated.
+    # HTTP CDP alone never grants readiness; the identity branch below does.
+    session_state="$(browser_session_state | tail -n 1)"
+    case "$session_state" in
+      AUTHENTICATED)
+        report_browser_state 'HEALTHY_DEV_AUX_READONLY' 'AUTHENTICATED'
+        if ! ensure_continuity_worker; then status=1; fi
+        ;;
+      IDENTITY_MISMATCH)
+        report_browser_state 'DEV_AUX_IDENTITY_MISMATCH' 'IDENTITY_MISMATCH'
+        status=1
+        ;;
+      *)
+        report_browser_state 'DEV_AUX_UNAVAILABLE' "${session_state:-UNKNOWN}"
+        status=1
+        ;;
+    esac
+  fi
+  exit "${status}"
+fi
+# End of readonly Dev auxiliary continuity adoption.
+
 # Keep the timer and transport liveness checks enabled. Reuse only a negative
 # session observation, for a bounded window, when browser/task context agrees.
 # No renderer evaluation or account request is made on this path.
@@ -369,6 +428,13 @@ else
     sleep 5
     if cdp_ready; then
       validate_browser_session "HEALTHY_AFTER_RECHECK" || status=1
+    elif cdp_http_ready; then
+      # HTTP CDP availability is proof the managed browser still owns the
+      # listening port. An unresponsive tab renderer is not permission to
+      # restart Chrome and disrupt the authenticated corporate profile.
+      # Preserve the session and fail closed until a later probe succeeds.
+      report_browser_state "DEGRADED_RENDERER_UNVERIFIED" "UNKNOWN"
+      status=1
     else
       systemctl restart "$browser_unit"
       if wait_for_cdp; then

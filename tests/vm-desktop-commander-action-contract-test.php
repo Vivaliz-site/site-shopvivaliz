@@ -15,7 +15,9 @@ $required = [
     'shopvivaliz-desktop-commander.service',
     'systemctl is-enabled shopvivaliz-desktop-commander.service',
     'systemctl is-active shopvivaliz-desktop-commander.service',
-    'git clone --filter=blob:none --branch main', 'git restore --source=origin/main --'
+    'git clone --filter=blob:none --branch main', 'git restore --source=origin/main --',
+    '/opt/shopvivaliz-desktop-commander/node_modules/@wonderwhy-er/desktop-commander/dist/index.js',
+    'pkill -f "desktop-commander/dist/index[.]js remote --persist-session"'
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
@@ -23,7 +25,9 @@ foreach ($required as $needle) {
 $forbidden = [
     'cat ~/.desktop-commander-device/device.json',
     'access_token', 'refresh_token', 'auth_token',
-    'set +' . 'e'
+    'set +' . 'e',
+    'npm exec @wonderwhy-er/desktop-commander',
+    '[n]pm exec @wonderwhy-er/desktop-commander'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: padrao proibido {$needle}\n"); exit(1); }

@@ -1,3 +1,13 @@
+import { paidBridgeEnabled as paidBridgeEnabledForTest } from '../ops/ai-squad/codex-bridge.mjs';
+import assertPaid from 'node:assert/strict';
+assertPaid.equal(paidBridgeEnabledForTest({}), false);
+assertPaid.equal(paidBridgeEnabledForTest({
+  SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: '1'
+}), false);
+assertPaid.equal(paidBridgeEnabledForTest({
+  SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED: '1',
+  SHOPVIVALIZ_PAID_BRIDGE_MODE: 'interactive'
+}), true);
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';

@@ -122,6 +122,8 @@ Wants=network-online.target tailscaled.service
 
 [Socket]
 ListenStream=$tailscale_ip:$RELAY_PORT
+# Allow boot before tailscaled has assigned its address; listener remains IP-bound.
+FreeBind=yes
 NoDelay=true
 
 [Install]

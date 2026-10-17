@@ -239,6 +239,83 @@ if [ "$root_pct_pre" -ge 85 ]; then
   SNAPSHOT_TTL_HOURS=4
 fi
 
+
+# Reclaim orphaned *linked* deploy worktrees that the legacy scan does not see.
+# Bounded to five eligibility probes and two successful removals per cycle.
+# A cursor ensures that expensive/unusable checkouts cannot starve later ones.
+# No broad rm, no ignored/untracked files, no orphaned/unpushed commits.
+deploy_worktree_reclaim() {
+  local base=/home/ubuntu/shopvivaliz-deploy/worktrees
+  local repo=/home/ubuntu/shopvivaliz-deploy/repo
+  local state="$STATE_DIR/deploy-worktree-cursor"
+  local checkpoint_root=/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state
+  local -a candidates checkpoint_files
+  local total idx cursor=0 tried=0 success=0 d name age common changes ignored refs
+  local rc existing
+  [ "$PRESSURE_RECLAIM_PUSHED" = 1 ] || return 0
+  [ "$root_pct_pre" -ge 85 ] || return 0
+  [ -d "$base" ] && [ -d "$repo/.git" ] && [ -d "$checkpoint_root" ] || return 0
+  candidates=("$base"/*)
+  checkpoint_files=("$checkpoint_root"/*.json)
+  [ -f "${checkpoint_files[0]}" ] || return 0
+  total=${#candidates[@]}
+  [ "$total" -gt 0 ] || return 0
+  if [ -f "$state" ] && [ ! -L "$state" ]; then
+    IFS= read -r existing < "$state" || existing=''
+    case "$existing" in
+      ''|*[!0-9]*) cursor=0 ;;
+      *) if [ "$existing" -le 100000 ]; then cursor="$existing"; fi ;;
+    esac
+  fi
+  while [ "$tried" -lt 5 ] && [ "$success" -lt 2 ] && [ "$tried" -lt "$total" ]; do
+    idx=$((cursor % total))
+    d="${candidates[$idx]}"
+    cursor=$((idx+1))
+    # Update the cursor before doing work so an interrupted probe cannot
+    # repeatedly hammer the same oversized checkout on future cycles.
+    printf '%s\n' "$cursor" > "$state"
+    tried=$((tried+1))
+    [ -d "$d" ] && [ -f "$d/.git" ] && [ ! -L "$d/.git" ] && [ ! -L "$d" ] || continue
+    name="${d##*/}"
+    age="$(stat -c %Y "$d")" || continue
+    case "$age" in ''|*[!0-9]*) continue ;; esac
+    [ "$((now_epoch-age))" -ge 86400 ] || continue
+    worktree_protected "$d" && continue
+    path_active "$d" && continue
+    if ! common="$(timeout 3s sudo -u ubuntu git -c safe.directory="$d" -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then continue; fi
+    [ "$common" = "$repo/.git" ] || continue
+    if ! changes="$(timeout 5s sudo -u ubuntu git -c safe.directory="$d" -C "$d" status --porcelain -uall 2>/dev/null)"; then continue; fi
+    [ -z "$changes" ] || continue
+    if ! ignored="$(timeout 4s sudo -u ubuntu git -c safe.directory="$d" -C "$d" ls-files -o -i --exclude-standard 2>/dev/null | wc -l)"; then continue; fi
+    [ "$ignored" = 0 ] || continue
+    if ! refs="$(timeout 4s sudo -u ubuntu git -c safe.directory="$d" -C "$d" branch -r --contains HEAD 2>/dev/null)"; then continue; fi
+    [ -n "$refs" ] || continue
+    if timeout 4s grep -Fql -- "$d" "${checkpoint_files[@]}"; then
+      continue
+    else
+      rc=$?
+      [ "$rc" -eq 1 ] || continue
+    fi
+    # Recheck ownership/dirty/ignored state just before Git's non-force remove.
+    worktree_protected "$d" && continue
+    path_active "$d" && continue
+    if ! changes="$(timeout 5s sudo -u ubuntu git -c safe.directory="$d" -C "$d" status --porcelain -uall 2>/dev/null)"; then continue; fi
+    [ -z "$changes" ] || continue
+    if [ "$DRY_RUN" = 0 ]; then
+      if ! timeout -k 3s 15s ionice -c3 nice -n19 sudo -u ubuntu git -c safe.directory="$repo" -C "$repo" worktree remove -- "$d"; then
+        log "deploy_worktree_preserved reason=remove_failed name=$name"
+        continue
+      fi
+      [ ! -e "$d" ] || continue
+    fi
+    success=$((success+1))
+    log "deploy_worktree_reclaimed name=$name dry_run=$DRY_RUN"
+  done
+  log "deploy_worktree_reclaim_summary checked=$tried eligible_or_removed=$success dry_run=$DRY_RUN"
+}
+
+deploy_worktree_reclaim
+
 temp_removed=0
 for pattern in   '/tmp/control-plane-*'   '/tmp/guardian-node.*'   '/tmp/shopvivaliz-guardian-*'   '/tmp/solange-nfse-*'   '/tmp/shopvivaliz-db-backup-*'   '/tmp/ml-pricing-artifact-*'   '/tmp/solange-v5-*'   '/tmp/controller-*'   '/tmp/continuity-*'   '/tmp/shopvivaliz-continuity-*'   '/tmp/chatgpt-continuity-*'   '/tmp/objective-terminal-*'   '/tmp/prosemirror-*'   '/tmp/shopvivaliz-provider-verification*'   '/tmp/persistence-*'   '/tmp/shopvivaliz-persistence-*'   '/tmp/shopvivaliz-controller-*'   '/tmp/playwright-download-*'   '/tmp/playwright-artifacts-*'   '/tmp/playwright_chromiumdev_profile-*'   '/tmp/playwright-transform-cache-*'   '/tmp/shopvivaliz-chatgpt-continuity-*'   '/tmp/shopvivaliz-gemini-controller-*'   '/tmp/shopvivaliz-browser-mcp-test.*'   '/tmp/node-compile-cache'   '/tmp/phpstan'   '/tmp/gh-cli-cache'
 do

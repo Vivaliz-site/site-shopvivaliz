@@ -19,6 +19,63 @@ O registro legado de 2026-10-04 indicava `DISPLAY=:99`, usuário `fredrdp`. **N�
 
 ## Regra obrigatória para agentes
 
+
+<!-- CREDENTIAL_REPROMPT_GATE_V1 -->
+## Credencial ChatGPT ja provisionada: preflight obrigatorio antes de solicitar senha
+
+Para `atendimento@shopvivaliz.com.br` ou `dev@shopvivaliz.com.br`, o agente
+(GPT, Claude, Codex, Gemini, subagentes e controladores) deve, **antes de
+solicitar ao usuario senha, OTP ou novo provisionamento**, confirmar a sessao
+correta e executar na VM backend, via MCP autorizado, a verificacao somente
+de metadados:
+
+`python3 scripts/chatgpt_credential_preflight.py --session atendimento`
+(ou `--session dev` para o perfil Dev).
+
+- `saved_entry=PRESENT` / `DENY_EXISTING_CREDENTIAL`: a senha ja possui
+  referencia salva no perfil dedicado. **Nao solicitar senha novamente**;
+  primeiro reparar a integracao navegador/GNOME Keyring e tentar o
+  preenchimento **nativo e autorizado**, sem ler ou exportar o segredo.
+- `saved_entry=NOT_VERIFIED` / `DENY_ABSENCE_NOT_PROVEN`: perfil
+  inacessivel, banco ocupado, erro de probe ou ausencia nos locais consultados
+  **nao** prova que a credencial nao existe. Recuperar transporte/MCP,
+  consultar as demais fontes protegidas previstas no runbook e continuar.
+- O probe jamais concede permissao para pedir senha: nova intervencao humana
+  somente apos evidencia independente de credencial ausente/revogada/invalida,
+  ou desbloqueio/consentimento/MFA humano obrigatorio pelo fluxo oficial.
+- Um registro salvo **nao prova** que a senha e valida ou que o ChatGPT esta
+  autenticado. Validar cada sessao pelo email exato em `/api/auth/session`.
+- Nunca copiar senha do iPhone ou navegador para terminal, Git, chat, logs,
+  processo ou outro perfil. Nunca tentar descriptografar/mostrar a credencial.
+
+Evidencia obrigatoria do preflight: apenas status, sessao verificada, timestamp
+e acao permitida, **sem** qualquer valor secreto. Se a VM nao estiver
+acessivel, registrar `SOURCE_NOT_VERIFIED`; nao converter isso em
+`CREDENTIAL_ABSENT` nem pedir novamente a mesma senha.
+<!-- /CREDENTIAL_REPROMPT_GATE_V1 -->
+
+<!-- CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+### Execucao rapida do preflight pelo Claude/MCP (evitar fila e timeout)
+
+Na VM backend, executar o preflight pelo **ShopVivaliz Remote Control**
+`admin_command_run` com os argumentos explicitos abaixo. O comando e
+somente leitura e retorna em chamada inline, sem `task_submit`, `Monitor`,
+`task_status` repetido ou `Bash` local:
+
+- `host="always-free-arm-1787907847-26"`
+- `command="python3 /home/ubuntu/shopvivaliz-claude-workspace/site-shopvivaliz/scripts/chatgpt_credential_preflight.py --session atendimento"`
+- `timeout=5`
+- `durable=false`
+
+Para Dev, trocar exclusivamente `--session atendimento` por `--session dev`.
+O timeout do adaptador pode transformar a solicitacao em tarefa duravel se
+esses parametros forem omitidos; **nao** fazer polling longo de credencial.
+Se a chamada inline nao for possivel, a fonte fica `NOT_VERIFIED`, nao
+`ABSENT`, e continua proibido pedir novamente a senha sem prova.
+<!-- /CREDENTIAL_REPROMPT_FAST_MCP_V1 -->
+
+
+
 Quando uma tarefa exigir login ou MFA nas contas ChatGPT acima, o agente deve usar primeiro as credenciais/TOTP já provisionados na VM. Não deve pedir ao usuário para transcrever senha ou OTP enquanto a fonte local estiver disponível e válida.
 
 O fluxo de automação deve permitir que o agente:
@@ -122,7 +179,65 @@ anterior nao encontrou o aplicativo.
 e declaracao do proprietario registradas; entradas individuais, acesso
 seguro ao fator e logins das duas contas ainda nao foram comprovados.
 
+## Ponte TOTP GNOME → ChatGPT, com lease (PR #2877)
+
+A rota `browser_auth_action(action="fill_gnome_totp")`, **quando estiver
+realmente instalada no MCP**, preenche um TOTP de 6 digitos diretamente
+no campo da tela oficial `/mfa-challenge`, sem exigir que o agente ou usuario
+transcrevam codigos pelo chat. Nao pressupor que a branch ou PR ja tenha
+sido implantada; provar a revisao de cada MCP em runtime primeiro.
+
+Pre-condicoes: usuario `fredrdp` provisionado, colecao padrao GNOME
+Keyring desbloqueada, um unico registro por identidade no GNOME
+Authenticator, sessao Chromium separada, **lease de manutencao ao vivo**
+com `owner_id=shopvivaliz-account-auth:<sessao>` e escopo
+`browser_auth_action`. O `value` deve estar ausente.
+
+O servidor verifica o perfil e a pagina oficial **antes** de consultar
+a entrada correspondente no Secret Service, pelo schema do próprio GNOME
+Authenticator. Usa um filho local no UID do proprietário, canal stdout
+privado entre processos para o OTP atual e stdin protegido do worker
+existente. Nao grava seed ou OTP em argumentos com valores, logs,
+auditoria MCP, stdout de ferramenta ou Git. Rejeita codigo externo
+na acao nova, conta diferente, senha pendente ou aba que nao esteja
+na etapa MFA. O codigo e somente **preenchido**; a acao separada
+`continue` realiza o envio oficial, sob o mesmo lease.
+
+**Nao** confundir sucesso do preenchimento com login comprovado:
+validar a identidade por sessao autenticada separadamente. A chave TOTP
+compartilhada anteriormente em conversa deve ser rotacionada pelo processo
+oficial, apos estabilizar recuperacao e os mecanismos de backup.
+
 ## Gmail no controlador autonomo: permissao e isolamento
+
+**Roteamento declarado pelo proprietario (2026-10-11):** mensagens enviadas
+tanto a `dev@shopvivaliz.com.br` quanto a
+`atendimento@shopvivaliz.com.br` chegam na caixa Gmail de
+`fredmourao`. A caixa destinataria nao e um perfil de login substituto:
+proibido autenticar Dev ou Atendimento no perfil pessoal ou migrar
+cookies, grants e armazenamento. O encaminhamento deve ser tratado como
+origem de notificacoes somente, nunca como prova de login, validade de senha
+ou permissao OAuth no controlador. **Preferencia atualizada pelo proprietario
+em 2026-10-12:** manter a senha existente e o TOTP GNOME no desafio MFA
+oficial, mas **tambem esta autorizado** usar o codigo adicional de
+verificacao enviado pela OpenAI ao Gmail `fredmourao@gmail.com` quando
+a pagina oficial apresentar `/email-verification`, identificando
+destinatario e tentativa corretos. O proprietario autorizou ainda
+selecionar `Try another way` / `Tentar outro metodo` quando presente,
+observando apenas os metodos realmente oferecidos e preservando a
+identidade corporativa, as etapas MFA e o isolamento dos perfis.
+Nao presumir que a alternativa sempre exista: a ultima tentativa
+documentada de `Try another way` no Dev voltou a `/email-verification`.
+O acesso do conector Gmail neste chat **nao concede** escopo Gmail
+ao controlador backend, nem autoriza migrar dados do perfil pessoal.
+A transferencia automatizada do OTP do Gmail para o navegador Dev foi
+bloqueada pelos controles da plataforma: **nao contornar** esse veto por
+scripts, CDP, shell, clipboard, conectores ou outra ponte. Se o desafio
+nao puder ser cumprido por uma ferramenta explicitamente autorizada,
+somente a pessoa autorizada digita o codigo na propria interface oficial.
+Nao pedir senha, OTP, seed ou QR no chat e nao marcar login concluido
+sem comprovar `/api/auth/session.user.email` no perfil corporativo certo.
+
 
 O recebimento de codigo ChatGPT destinado a `dev@shopvivaliz.com.br`
 na caixa Gmail conectada ao ChatGPT **nao** demonstra que o backend tenha
@@ -147,3 +262,68 @@ autorizacao Gmail estiver ausente, apenas a etapa dependente de email fica
 em espera de autenticacao; tarefas independentes continuam via worker
 normal sob leases exclusivos e invariantes de conta/conversa. Nenhum
 codigo temporario deve aparecer em logs, comandos, PRs ou auditorias.
+
+## Janela temporaria de acompanhamento Gmail no login — 600 segundos
+
+**Ordem expressa do proprietario (2026-10-12):** toda solicitacao
+**efetiva** de login corporativo deve iniciar um acompanhamento do Gmail
+durante **ate 10 minutos**, exclusivamente para a conta que esta
+autenticando, e terminar assim que uma mensagem nova valida for
+identificada ou o prazo de 600 segundos expirar. Acompanhamento continuo
+neste intervalo **nao** equivale a criar automacao ChatGPT a cada
+15 segundos: a automacao ChatGPT aceita no maximo uma execucao por hora.
+
+O Backend Browser MCP possui o worker deterministico
+remote-control-browser-mcp/login_email_watch.py:
+
+- Dispara **somente** apos acao autenticadora oficial bem-sucedida
+  (browser_auth_open ou browser_auth_action com continue/resend
+  na aba oficial), sob maintenance lease/fencing da mesma conta.
+  browser_auth_tabs e probes somente leitura nao criam watchers.
+- Consulta **apenas metadados** da API Gmail a cada 15 segundos,
+  com limite de 600 segundos por ciclo; compara ID, timestamp posterior
+  ao inicio, remetente oficial, assunto de codigo do ChatGPT e
+  destinatario exato dev@shopvivaliz.com.br ou
+  atendimento@shopvivaliz.com.br. Mensagens antigas ou da outra conta
+  nao encerram a janela.
+- Guarda somente status, session, timestamps e identificador nao
+  secreto da mensagem em estado privado 0600 na VM, sob
+  /var/lib/shopvivaliz-remote-control/email-login-watch/.
+  browser_auth_tabs pode expor apenas status/horarios sem identificador.
+  Nenhum valor do OTP, snippet, corpo, password, token, seed ou cookie
+  e requisitado, exibido ou transferido para o navegador.
+- Sem OAuth Gmail **proprio e autorizado do backend**, responde
+  oauth_not_provisioned e **nao** inicia processo nem alega monitoramento.
+  O conector Gmail do ChatGPT nao autoriza automaticamente esse backend.
+  A prova de readiness exige conta Gmail exata e API real.
+- Autorizacao independente para ativar a VM: realizar consentimento
+  Google OAuth legitimo com escopo Gmail readonly e armazenar com acesso
+  exclusivo root em
+  /var/lib/shopvivaliz-remote-control/gmail-login-readonly-oauth.json
+  (0600, sem symlink), usando apenas as chaves mailbox (igual
+  fredmourao@gmail.com), scope (https://www.googleapis.com/auth/gmail.readonly),
+  client_id, client_secret e refresh_token. **Nunca escrever
+  valores reais em comando, Git, logs, chat ou documentacao** e nao
+  reaproveitar concessao de Google Ads/Amazon Returns sem prova do
+  escopo e da identidade. Sem tal consentimento, permanece desativado.
+- Nao promete notificacao push imediata ao ChatGPT/iPhone: o evento
+  metadata-only e verificavel no monitor da VM e nas leituras aprovadas
+  do Browser MCP. Alertas instantaneos exigem um canal de notificacao
+  adicional legitimamente integrado. O Gmail no telefone pode oferecer
+  notificacoes proprias.
+
+No login assistido em conversa, enquanto o backend nao tiver OAuth
+independente, o agente **deve consultar o Gmail ja conectado ao ChatGPT
+durante a tentativa ativa por ate 10 minutos**, filtrando remetente,
+destinatario e mensagens posteriores ao pedido. Essa alternativa opera
+somente durante a execucao interativa do agente; **nao** afirmar que
+continua monitorando apos encerrar a resposta nem usar automacao horaria
+como substituto do ciclo curto.
+
+Ao detectar mensagem nova: informar prontamente que a verificacao
+chegou e permitir que a pessoa autorizada digite o codigo diretamente
+na pagina oficial. Continua **proibida** a transferencia automatizada
+Gmail para navegador Dev recusada pelos controles da OpenAI. Nao pedir OTP
+no chat, contornar por CDP/shell/clipboard/outro conector ou considerar
+esse evento prova de autenticacao. Somente user.email exato no perfil
+corporativo correto confirma o login.

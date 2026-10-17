@@ -1,0 +1,48 @@
+name: OCI Dual Account API Validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    steps:
+      - name: Validate each OCI tenancy using signing keys from secrets
+        shell: bash
+        env:
+          P_USER: ${{ secrets.OCI_PRINCIPAL_USER }}
+          P_TENANCY: ${{ secrets.OCI_PRINCIPAL_TENANCY }}
+          P_FINGERPRINT: ${{ secrets.OCI_PRINCIPAL_FINGERPRINT }}
+          P_REGION: ${{ secrets.OCI_PRINCIPAL_REGION }}
+          P_PRIVATE_KEY: ${{ secrets.OCI_PRINCIPAL_PRIVATE_KEY }}
+          E_USER: ${{ secrets.OCI_ESPOSA_USER }}
+          E_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+          E_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+          E_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+          E_PRIVATE_KEY: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install -q --disable-pip-version-check oci
+          python3 - <<'PY'
+          import os,oci
+          for prefix,name in [('P','PRINCIPAL'),('E','ESPOSA')]:
+              values={k:os.environ.get(prefix+'_'+k,'') for k in ('USER','TENANCY','FINGERPRINT','REGION','PRIVATE_KEY')}
+              if not all(values.values()):raise SystemExit('OCI_'+name+'_MISSING_SECRET')
+              import tempfile
+              from pathlib import Path
+              with tempfile.TemporaryDirectory(prefix='oci-dual-') as directory:
+                  key_file=Path(directory)/'oci_key.pem'
+                  key_file.write_text(values['PRIVATE_KEY'].rstrip()+'\n')
+                  key_file.chmod(0o600)
+                  config={'region':values['REGION'],'tenancy':values['TENANCY'],
+                          'user':values['USER'],'fingerprint':values['FINGERPRINT'],'key_file':str(key_file)}
+                  oci.config.validate_config(config)
+                  identity=oci.identity.IdentityClient(config)
+                  result=identity.list_region_subscriptions(values['TENANCY'])
+              if not result.data:raise SystemExit('OCI_'+name+'_NO_REGIONS')
+              print('OCI_'+name+'_AUTH=PASS',flush=True)
+          print('OCI_BOTH_ACCOUNTS_APTO=PASS',flush=True)
+          PY

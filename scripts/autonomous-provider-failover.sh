@@ -11,7 +11,7 @@ LOG_DIR="logs"
 ATTEMPTS="$LOG_DIR/autonomous-provider-attempts.jsonl"
 OUTPUT="$LOG_DIR/autonomous-provider-output.txt"
 CODEX_MODEL="${CODEX_MODEL:-${OPENAI_MODEL:-gpt-5.6-terra}}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-flash-latest}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-flash-lite}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
 CLAUDE_MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-0.50}"
 CODEX_AUTO_BIN="${CODEX_AUTO_BIN:-/home/ubuntu/.local/bin/codex-auto}"
@@ -156,30 +156,24 @@ if [ "$SHOPVIVALIZ_RESUME_STAGE" != "cli_last" ]; then
   exit 75
 fi
 
-# Esta e a terceira camada (CLI) da politica de retomada.
-# Em recovery de background, provedores pagos/subscription só entram quando a
-# autorização humana foi materializada explicitamente pelo instalador.
-# A ordem preserva Codex como última opção: Gemini -> Claude -> Codex.
-BACKGROUND_ORDER=(gemini)
+# FREE_PROVIDER_FALLBACK_V2: first tier = Gemini Flash + local Ollama.
+# ChatGPT common is the first external fallback, coordinated by the dispatcher
+# and its conversation lease. Paid CLI providers NEVER run from a background job,
+# even if a stale installer or inherited environment sets the legacy flags.
+BACKGROUND_ORDER=(gemini ollama)
 if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
-  background_paid_fallback_enabled=false
-  if [ "$SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK" = "1" ]; then
-    BACKGROUND_ORDER+=(anthropic)
-    background_paid_fallback_enabled=true
-    echo "background_claude_fallback_authorized=true" | tee -a "$OUTPUT"
-  fi
-  if [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
-    BACKGROUND_ORDER+=(codex_auto)
-    background_paid_fallback_enabled=true
-    echo "background_codex_fallback_authorized=true" | tee -a "$OUTPUT"
-  fi
-  if [ "$background_paid_fallback_enabled" != "true" ]; then
-    echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+  echo "background_paid_fallback_forbidden=true" | tee -a "$OUTPUT"
+  if [ "$SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK" = "1" ] || [ "$SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK" = "1" ]; then
+    echo "background_paid_fallback_ignored=true" | tee -a "$OUTPUT"
   fi
   ORDER=("${BACKGROUND_ORDER[@]}")
 else
-  # Execucao finita/interativa: preservar cota, Gemini -> Claude -> Codex.
-  ORDER=(gemini anthropic codex)
+  ORDER=(gemini ollama)
+  # Paid providers can be added only to a finite, non-background CLI run
+  # explicitly enabled for the human-approved task. Codex stays last.
+  if [ "${SHOPVIVALIZ_INTERACTIVE_PAID_FALLBACK:-0}" = "1" ]; then
+    ORDER+=(anthropic codex)
+  fi
 fi
 
 for provider in "${ORDER[@]}"; do
@@ -187,6 +181,7 @@ for provider in "${ORDER[@]}"; do
     gemini)
       if [ "$SHOPVIVALIZ_RESUME_BACKGROUND" = "1" ]; then
         try_provider gemini \
+          env SHOPVIVALIZ_RESUME_BACKGROUND=1 \
           python3 "$SCRIPT_DIR/run_background_gemini.py" \
             --model "$GEMINI_MODEL" \
             --prompt-file "$PROMPT_FILE" && exit 0
@@ -194,6 +189,11 @@ for provider in "${ORDER[@]}"; do
       fi
       command -v gemini >/dev/null 2>&1 || { record gemini missing_cli 127; continue; }
       try_provider gemini env -u GEMINI_API_KEY -u GOOGLE_API_KEY gemini --model "$GEMINI_MODEL" --approval-mode auto_edit --prompt "$PROMPT" && exit 0
+      ;;
+    ollama)
+      try_provider ollama \
+        python3 "$SCRIPT_DIR/run_background_ollama.py" \
+          --prompt-file "$PROMPT_FILE" && exit 0
       ;;
     anthropic)
       try_provider anthropic run_claude && exit 0

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check ShopVivaliz corporate browser login integrity every five minutes
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*:0/5
+AccuracySec=20s
+Persistent=true
+Unit=shopvivaliz-login-integrity.service
+
+[Install]
+WantedBy=timers.target
