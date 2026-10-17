@@ -13,6 +13,36 @@ SOURCE = ROOT / 'ops/host/shopvivaliz-workspace-housekeeper'
 NOW = 2000000000
 
 
+# The disposable shell loop is POSIX; on Windows use Git Bash rather than
+# System32/bash.exe (WSL, which may have no distribution installed).
+def git_for_windows_tool(*relative_path):
+    import shutil
+    git = shutil.which('git')
+    if not git:
+        raise RuntimeError('Git for Windows unavailable')
+    # Git for Windows may expose cmd/git.exe, mingw64/bin/git.exe or a shim.
+    # Locate the real installation root instead of assuming a fixed depth.
+    for ancestor in Path(git).resolve().parents:
+        binary = ancestor.joinpath(*relative_path)
+        if binary.is_file():
+            return str(binary)
+    raise RuntimeError('Git for Windows tool unavailable: ' + '/'.join(relative_path))
+
+
+def bash_binary():
+    if os.name != 'nt':
+        return 'bash'
+    return git_for_windows_tool('bin', 'bash.exe')
+
+
+def shell_path(path):
+    if os.name != 'nt':
+        return str(path)
+    cygpath = git_for_windows_tool('usr', 'bin', 'cygpath.exe')
+    result = subprocess.run([cygpath, '-u', str(path)],
+                            capture_output=True, text=True, check=True)
+    return result.stdout.strip()
+
 def function_text(source, name):
     match = re.search(r'^' + re.escape(name) + r'\(\) \{\n.*?^\}', source, re.M | re.S)
     if match is None:
@@ -50,7 +80,16 @@ class HousekeeperWorktreeSafetyTests(unittest.TestCase):
             if dirty:
                 (worktree / 'pending.txt').write_text('uncommitted fixture\n')
             if bad_metadata:
-                (worktree / '.git').write_text('gitdir: ' + str(base / 'missing-metadata') + '\n')
+                # Git for Windows marks linked-worktree .git files read-only.
+                # This is a disposable fixture; make it writable to test corruption.
+                git_link = worktree / '.git'
+                if os.name == 'nt':
+                    # Git for Windows makes linked-worktree gitfiles hidden;
+                    # Windows forbids truncation until the hidden flag is removed.
+                    subprocess.run(['attrib', '-H', str(git_link)], check=True,
+                                   capture_output=True, text=True)
+                git_link.chmod(0o666)
+                git_link.write_text('gitdir: ' + str(base / 'missing-metadata') + '\n')
             os.utime(worktree, (NOW - age, NOW - age))
             if chat:
                 os.utime(worktree.parent, (NOW - (age if wrapper_age is None else wrapper_age),) * 2)
@@ -60,14 +99,14 @@ class HousekeeperWorktreeSafetyTests(unittest.TestCase):
             else:
                 start = source.index('worktree_removed=0\nif [ -d /home/ubuntu/worktrees ]; then')
                 end = source.index('\nfor repo in', start)
-                loop = source[start:end].replace('/home/ubuntu/worktrees', str(parent))
+                loop = source[start:end].replace('/home/ubuntu/worktrees', shell_path(parent))
             self.assertNotIn('/home/ubuntu', loop, 'test must never use live workspace paths')
             constant = re.search(r'^WORKTREE_MIN_AGE_SECONDS=.*$', source, re.M)
             self.assertIsNotNone(constant, 'production grace constant missing')
             cache_log = base / 'cache.log'
             guard_log = base / 'guard.log'
             prelude = f'''set -Eeuo pipefail
-ROOT={shlex.quote(str(parent))}
+ROOT={shlex.quote(shell_path(parent))}
 now_epoch={NOW}
 FULL_TTL_HOURS=0
 CACHE_TTL_HOURS=0
@@ -76,9 +115,9 @@ preserved=0
 removed=0
 cache_cleaned=0
 freed_bytes=0
-log() {{ printf '%s\\n' "$*" >> {shlex.quote(str(guard_log))}; }}
+log() {{ printf '%s\\n' "$*" >> {shlex.quote(shell_path(guard_log))}; }}
 path_active() {{ return 1; }}
-cleanup_cache() {{ printf 'cache_called\\n' >> {shlex.quote(str(cache_log))}; }}
+cleanup_cache() {{ printf 'cache_called\\n' >> {shlex.quote(shell_path(cache_log))}; }}
 sudo() {{ if [ "$1" = -u ]; then shift 2; fi; "$@"; }}
 '''
             # Only the original Git queries, protection helper and cleanup loop run.
@@ -89,16 +128,16 @@ sudo() {{ if [ "$1" = -u ]; then shift 2; fi; "$@"; }}
             if real_cache:
                 script += '\n' + function_text(source, 'cleanup_cache')
             if late_lock:
-                lock_command = 'git -C ' + shlex.quote(str(repo)) + ' worktree lock ' + shlex.quote(str(worktree))
+                lock_command = 'git -C ' + shlex.quote(shell_path(repo)) + ' worktree lock ' + shlex.quote(shell_path(worktree))
                 if late_lock == 'delivered':
                     script += '\ndelivered() { ' + lock_command + '; return 0; }\n'
                 elif late_lock == 'cache':
-                    once = shlex.quote(str(base / 'late-lock-created'))
+                    once = shlex.quote(shell_path(base / 'late-lock-created'))
                     script += '\ndu() { if [ ! -e ' + once + ' ]; then ' + lock_command + '; touch ' + once + '; fi; command du "$@"; }\n'
             # Deny unplanned external commands, including timeout-wrapped fallbacks.
             script += '\ntimeout() { shift; "$@"; }\ngh() { return 1; }\n'
             script += '\n' + loop
-            result = subprocess.run(['bash', '-s'], input=script, text=True, cwd=base, env=git_env,
+            result = subprocess.run([bash_binary(), '-s'], input=script, text=True, cwd=base, env=git_env,
                                     capture_output=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.last_guard_log = guard_log.read_text() if guard_log.exists() else ''
@@ -218,3 +257,4 @@ sudo() {{ if [ "$1" = -u ]; then shift 2; fi; "$@"; }}
 
 if __name__ == '__main__':
     unittest.main()
+
