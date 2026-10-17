@@ -176,6 +176,8 @@ function Invoke-Dispatch {
         $workerArguments = @(
             '-NoLogo',
             '-NoProfile',
+            # Avoid temporary PowerShell console stealing focus from the GUI.
+            '-WindowStyle', 'Hidden',
             '-NonInteractive',
             '-ExecutionPolicy', 'Bypass',
             '-Sta',
