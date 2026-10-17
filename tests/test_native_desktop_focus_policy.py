@@ -14,7 +14,7 @@ class NativeDesktopBridgeFocusTests(unittest.TestCase):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("'-WindowStyle', 'Hidden'", source)
         self.assertIn("'System.Windows.Forms'", source)
-        self.assertIn("'-LogonType Interactive'", source.replace("$principal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive", "'-LogonType Interactive'"))
+        self.assertIn("New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive", source)
         self.assertIn("[System.Windows.Forms.SendKeys]::SendWait('^v')", source)
 
     def test_secret_input_remains_clipboard_only_and_cleared(self):
