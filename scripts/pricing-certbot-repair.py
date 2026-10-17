@@ -18,7 +18,7 @@ import tempfile
 DOMAIN = "pricing.shopvivaliz.com.br"
 CREDS_REL = Path("etc/letsencrypt/cloudflare/shopvivaliz-pricing.ini")
 RENEWAL_REL = Path("etc/letsencrypt/renewal") / f"{DOMAIN}.conf"
-LINE_RE = re.compile(r"(?m)^(\\s*dns_cloudflare_credentials\\s*=\\s*)([^\\r\\n]*)$")
+LINE_RE = re.compile(r"(?m)^(\s*dns_cloudflare_credentials\s*=\s*)([^\r\n]*)$")
 
 
 class GateFailure(RuntimeError):
