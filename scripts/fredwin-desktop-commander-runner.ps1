@@ -1,12 +1,13 @@
 param()
 $ErrorActionPreference = 'Continue'
+$env:NODE_OPTIONS = '--dns-result-order=ipv4first'
 $Repo = 'C:\site-shopvivaliz'
 $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $SessionPatcher = Join-Path $Repo 'scripts\patch-desktop-commander-session-persistence.mjs'
-$Package = '@wonderwhy-er/desktop-commander@0.2.48'
+$Package = '@wonderwhy-er/desktop-commander@0.2.52'
 $AuthPattern = 'Persisted session invalid|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ReadyPattern = 'Device ready'
 $DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Failed to (recreate|subscribe)|Subscription unhealthy'
@@ -300,3 +301,6 @@ finally {
 if ($authRequired) { exit 20 }
 Log ('Remote Desktop Commander runner exited rc=' + $rc)
 exit $rc
+
+
+
