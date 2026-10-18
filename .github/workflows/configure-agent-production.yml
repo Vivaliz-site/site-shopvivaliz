@@ -39,15 +39,18 @@ jobs:
           set -euo pipefail
           test "${#SHOPVIVALIZ_AGENT_KEY}" -ge 32
           umask 077
-          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" > /tmp/shopvivaliz-agent-rotation.key
-          chmod 600 /tmp/shopvivaliz-agent-rotation.key
+          rotation_file="/tmp/shopvivaliz-agent-rotation-${GITHUB_RUN_ID}.key"
+          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" > "$rotation_file"
+          chmod 600 "$rotation_file"
+          test "$(stat -c '%a' "$rotation_file")" = 600
 
       - name: Write canonical agent key to shared production environment
         shell: bash
         run: |
           set -euo pipefail
-          trap 'rm -f /tmp/shopvivaliz-agent-rotation.key' EXIT
-          python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env /tmp/shopvivaliz-agent-rotation.key <<'PY'
+          rotation_file="/tmp/shopvivaliz-agent-rotation-${GITHUB_RUN_ID}.key"
+          trap 'rm -f "$rotation_file"' EXIT
+          python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env "$rotation_file" <<'PY'
           from pathlib import Path
           import os
           import re
