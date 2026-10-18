@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Resolver unit tests
         run: python3 -m unittest tests/test_ai_conflict_resolver.py
       - name: Python syntax
@@ -49,7 +49,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
@@ -191,7 +191,7 @@ jobs:
 
       - name: Write resolution commit through GitHub Git Data API
         if: steps.resolve.outputs.resolved == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           MANIFEST_PATH: ${{ runner.temp }}/ai-writeback.json
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}

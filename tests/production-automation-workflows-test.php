@@ -104,7 +104,7 @@ if (!is_file($agentWorkflow)) {
         'active_agent_count',
         'latest-agent-cycle.json',
         'agent_evidence_stale',
-        'actions/upload-artifact@v4',
+        'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
     ];
     foreach ([
         'ubuntu@127.0.0.1',

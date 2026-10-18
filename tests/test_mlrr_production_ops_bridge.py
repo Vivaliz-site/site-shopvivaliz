@@ -23,7 +23,7 @@ def test_bridge_is_manual_auditable_and_fail_closed() -> None:
     assert "startsWith(github.event.comment.body, '/mlrr ')" in text
     assert r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)" in text
 
-    assert "uses: actions/checkout@v4" in text
+    assert "uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in text
     assert "persist-credentials: false" in text
     assert "gh auth status --hostname github.com" in text
     assert "GH_CONFIG_DIR=/home/ubuntu/.config/gh" in text

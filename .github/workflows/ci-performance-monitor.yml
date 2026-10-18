@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout monitor code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -52,7 +52,7 @@ jobs:
 
       - name: Upload daily CI performance report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ci-performance-24h-${{ github.run_id }}
           path: |
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upsert regression issue
         if: steps.analyze.outcome == 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           REPORT_JSON: artifacts/ci-performance-24h.json
           REPORT_MD: artifacts/ci-performance-24h.md

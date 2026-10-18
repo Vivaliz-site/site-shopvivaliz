@@ -60,6 +60,8 @@ def reviewed_bootstrap_push(path: Path, text: str) -> bool:
             'deploy/systemd/shopvivaliz-remote-control-browser-mcp.service',
             'tests/remote-control-browser-mcp-test.py',
             'scripts/setup-remote-control-access.sh',
+            'scripts/agent_task_state.py',
+            'scripts/continuity/**',
             'scripts/setup-remote-control-windows.ps1',
             'scripts/windows-openssh-recovery.ps1',
             'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1',
