@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-10-18T13:35:00-03:00",
-  "reason": "Read Cloudflare WAF, origin, redirect, transform, page-rule and bot settings to identify the public MLRR OAuth callback 403; read-only"
+  "requested_at": "2026-10-18T13:39:00-03:00",
+  "reason": "Read sanitized Cloudflare firewall events for the canonical MLRR OAuth callback 403; action/source counts only; no client data, OAuth state, token changes, DNS changes or WAF updates."
 }
