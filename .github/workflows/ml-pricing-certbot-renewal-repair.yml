@@ -1,0 +1,74 @@
+name: ML Pricing Certbot Renewal Repair
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 20
+    env:
+      PRICING_HOST: pricing.shopvivaliz.com.br
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Repair persistent DNS-01 credentials and validate real renewal
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          test -n "${CF_TOKEN:-}" || { echo "CLOUDFLARE_SECRET_UNAVAILABLE"; exit 1; }
+          renewal="/etc/letsencrypt/renewal/$PRICING_HOST.conf"
+          cert="/etc/letsencrypt/live/$PRICING_HOST/fullchain.pem"
+          credentials="/etc/letsencrypt/secrets/$PRICING_HOST.ini"
+          sudo -n test -s "$renewal"
+          sudo -n test -s "$cert"
+          zone_response="$(curl -fsS --connect-timeout 5 --max-time 15 -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br")"
+          printf "%s" "$zone_response" | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r.get("success") is True and len(r.get("result") or [])==1'
+          echo "DNS_AUTH_READY=1"
+          umask 077
+          temporary="$(mktemp)"
+          trap 'rm -f "$temporary"' EXIT
+          printf "dns_cloudflare_api_token = %s\n" "$CF_TOKEN" > "$temporary"
+          sudo -n install -d -m 0700 -o root -g root /etc/letsencrypt/secrets
+          sudo -n install -m 0600 -o root -g root "$temporary" "$credentials"
+          backup="${renewal}.pre-shopvivaliz-repair"
+          sudo -n cp -p "$renewal" "$backup"
+          sudo -n python3 - "$renewal" "$credentials" <<'PY'
+          import os
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          renewal = Path(sys.argv[1])
+          credentials = Path(sys.argv[2])
+          lines = renewal.read_text(encoding='utf-8').splitlines(keepends=True)
+          matching = [i for i, line in enumerate(lines) if line.strip().startswith('dns_cloudflare_credentials =')]
+          if len(matching) != 1:
+              raise SystemExit('exactly one existing DNS credential reference required')
+          lines[matching[0]] = f'dns_cloudflare_credentials = {credentials}\n'
+          fd, temporary_name = tempfile.mkstemp(prefix='pricing-renewal-', dir=str(renewal.parent))
+          try:
+              os.fchmod(fd, 0o600)
+              with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+                  handle.writelines(lines)
+              os.replace(temporary_name, renewal)
+          finally:
+              if os.path.exists(temporary_name):
+                  os.unlink(temporary_name)
+          PY
+          if ! sudo -n certbot renew --cert-name "$PRICING_HOST" --dry-run --non-interactive --quiet; then
+            sudo -n cp -p "$backup" "$renewal"
+            echo "RENEWAL_VALIDATION_FAILED_CONFIG_RESTORED=1"
+            exit 1
+          fi
+          sudo -n rm -f "$backup"
+          sudo -n test -s "$credentials"
+          sudo -n test "$(stat -c %a "$credentials")" = "600"
+          sudo -n systemctl is-enabled --quiet certbot.timer
+          sudo -n openssl x509 -in "$cert" -noout -checkend 604800 >/dev/null
+          echo "RENEWAL_DRY_RUN_OK=1"
+          echo "PERMANENT_CREDENTIALS_READY=1"
+          echo "CERTBOT_TIMER_ENABLED=1"
