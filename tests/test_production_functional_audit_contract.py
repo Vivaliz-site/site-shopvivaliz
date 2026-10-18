@@ -71,7 +71,7 @@ def test_marina_audit_must_probe_the_destination_not_public_origin() -> None:
     assert "AUDIT_TARGET_IP: 127.0.0.1" in marina, "target must route to Marina loopback, not Cloudflare/public source"
     assert "export AUDIT_TARGET_IP" in marina, "remote audit must receive destination pin"
     assert "AUDIT_TARGET_IP" in audit and "shopvivaliz.com.br:443:" in audit
-    assert audit.count('"\${CURL_PIN_ARGS[@]}"') >= 3, "GET, POST and integration health must all use the target route"
+    assert audit.count('"${CURL_PIN_ARGS[@]}"') >= 3, "GET, POST and integration health must all use the target route"
     assert "url_effective" in audit, "followed redirects must fail closed if they leave the pinned host"
 
 
