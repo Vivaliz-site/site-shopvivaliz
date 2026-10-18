@@ -94,15 +94,17 @@ for (const profile of profiles) {
       // Commit is sufficient to inspect the rendered document; DOMContentLoaded
       // remains a bounded best-effort enhancement instead of the navigation gate.
       const response = await page.goto(url, { waitUntil: 'commit', timeout: navigationTimeoutMs });
-      await Promise.all([
-        page.waitForLoadState('domcontentloaded', { timeout: domContentLoadedTimeoutMs }),
-        page.waitForSelector('footer', { timeout: uiReadyTimeoutMs }),
-        ...(profile.isMobile
-          ? [page.waitForSelector('.sv-mobile-nav-bar,.sv-mobile-bottom-nav', { timeout: uiReadyTimeoutMs })]
-          : []),
-      ]).catch(() => {
-        console.warn(`Document readiness timeout for ${profile.name} ${route}; continuing with committed document`);
+      await page.waitForLoadState('domcontentloaded', { timeout: domContentLoadedTimeoutMs }).catch(() => {
+        console.warn(`DOMContentLoaded timeout for ${profile.name} ${route}; continuing with UI readiness checks`);
       });
+      await page.waitForSelector('footer', { timeout: uiReadyTimeoutMs }).catch(() => {
+        console.warn(`Footer readiness timeout for ${profile.name} ${route}; continuing with committed document`);
+      });
+      if (profile.isMobile) {
+        await page.waitForSelector('.sv-mobile-nav-bar,.sv-mobile-bottom-nav', { timeout: uiReadyTimeoutMs }).catch(() => {
+          console.warn(`Mobile navigation readiness timeout for ${profile.name} ${route}; continuing with committed document`);
+        });
+      }
       const status = response?.status() ?? 0;
       await page.waitForTimeout(1000);
       try {
