@@ -94,7 +94,8 @@ jobs:
           shared=/home/ubuntu/shopvivaliz-deploy/shared
           sudo chown ubuntu:ubuntu "$shared/.env"
           chmod 600 "$shared/.env"
-          php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php
+          sudo env SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data \
+            php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php
           sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
           chmod 640 "$shared/runtime-secrets.php"
           stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"
