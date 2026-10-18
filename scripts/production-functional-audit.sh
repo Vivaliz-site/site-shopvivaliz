@@ -16,7 +16,7 @@ if [[ -n "${AUDIT_TARGET_IP:-}" ]]; then
     echo 'PRODUCTION_FUNCTIONAL_AUDIT=FAIL stage=target_route detail=invalid destination pin' >&2
     exit 1
   fi
-  CURL_PIN_ARGS=(--noproxy '*' --resolve "shopvivaliz.com.br:443:$AUDIT_TARGET_IP" --proto-redir '=https')
+  CURL_PIN_ARGS=(--noproxy '*' --resolve "shopvivaliz.com.br:443:$AUDIT_TARGET_IP" --max-redirs 0)
 fi
 fail() { echo "PRODUCTION_FUNCTIONAL_AUDIT=FAIL stage=$1 detail=$2" >&2; exit 1; }
 pass() { echo "PASS stage=$1 detail=$2"; }
@@ -32,7 +32,7 @@ request() {
   if [[ "$method" == POST ]]; then
     result=$(curl -q -sS "${CURL_PIN_ARGS[@]}" --max-time 30 -o "$output" -w '%{http_code} %{url_effective}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
   else
-    result=$(curl -q -sSL "${CURL_PIN_ARGS[@]}" --max-time 30 -o "$output" -w '%{http_code} %{url_effective}' "$url") || fail network "$url"
+    result=$(curl -q -sS "${CURL_PIN_ARGS[@]}" --max-time 30 -o "$output" -w '%{http_code} %{url_effective}' "$url") || fail network "$url"
   fi
   read -r code effective <<< "$result"
   if [[ "${#CURL_PIN_ARGS[@]}" -gt 0 && "$effective" != "$BASE_URL/"* ]]; then
@@ -56,7 +56,7 @@ except Exception:
 PY
 }
 
-for path in / /catalogo /carrinho /checkout; do
+for path in / /catalogo/ /carrinho /checkout; do
   code=$(request GET "$BASE_URL$path" "" "$TMPDIR/page")
   [[ "$code" == 200 ]] || fail page "$path http=$code"
   pass page "$path http=200"
