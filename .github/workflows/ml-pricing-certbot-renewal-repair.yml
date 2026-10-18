@@ -19,7 +19,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(hostname)" = "shopvivaliz-free-a1"
-          test -n "${CF_TOKEN:-}" || { echo "CLOUDFLARE_SECRET_UNAVAILABLE"; exit 1; }
+          test -n "${CF_TOKEN:-}"
           renewal="/etc/letsencrypt/renewal/$PRICING_HOST.conf"
           cert="/etc/letsencrypt/live/$PRICING_HOST/fullchain.pem"
           credentials="/etc/letsencrypt/secrets/$PRICING_HOST.ini"
@@ -31,7 +31,14 @@ jobs:
           umask 077
           temporary="$(mktemp)"
           trap 'rm -f "$temporary"' EXIT
-          printf "dns_cloudflare_api_token = %s\n" "$CF_TOKEN" > "$temporary"
+          CRED_FILE="$temporary" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path(os.environ["CRED_FILE"]).write_text(
+              "dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n",
+              encoding="utf-8",
+          )
+          PY
           sudo -n install -d -m 0700 -o root -g root /etc/letsencrypt/secrets
           sudo -n install -m 0600 -o root -g root "$temporary" "$credentials"
           backup="${renewal}.pre-shopvivaliz-repair"
