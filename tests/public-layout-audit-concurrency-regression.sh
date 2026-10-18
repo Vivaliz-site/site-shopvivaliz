@@ -16,5 +16,5 @@ if grep -Fq 'cache: npm' "$workflow"; then
 fi
 grep -Fq "import { mapWithConcurrency, resolveAuditConcurrency } from './lib/audit-concurrency.mjs';" "$script"
 grep -Fq 'const auditConcurrency = resolveAuditConcurrency();' "$script"
-grep -Fq 'await mapWithConcurrency(routes, auditConcurrency' "$script"
+grep -Fq 'await mapWithConcurrency(shardRoutes, auditConcurrency' "$script"
 echo 'public-layout-audit-concurrency-regression: ok'
