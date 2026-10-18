@@ -86,6 +86,11 @@ shared_ml_token_owner() {
   fi
 }
 
+# A root-owned migration fence prevents origin writers from restarting while Marina owns them.
+is_origin_workers_fenced() {
+  [ -f /etc/shopvivaliz/migration/origin-workers-fenced ]
+}
+
 # Servicos de runtime aplicaveis ao estado atual de propriedade compartilhada.
 # Com owner=mlrr o renovador legado sai da lista -- inclusive no rollback, que
 # reusa esta mesma funcao e por isso nao consegue ressuscita-lo.
@@ -98,6 +103,12 @@ active_runtime_services() {
     fi
     if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
       continue
+    fi
+    if is_origin_workers_fenced; then
+      case "$service" in
+        shopvivaliz-queue-worker.service|mlrr-fetch-worker.service|ml-pricing-worker.service|amazon-returns-safet.service)
+          continue ;;
+      esac
     fi
     printf '%s\n' "$service"
   done
@@ -120,6 +131,10 @@ restart_runtime_services() {
     fi
     services+=("$service")
   done
+  if [ "${#services[@]}" -eq 0 ]; then
+    log INFO "Nenhum servico de runtime elegivel para reiniciar"
+    return 0
+  fi
   if ! sudo systemctl restart "${services[@]}"; then
     log ERROR "Reinicio dos servicos de runtime falhou"
     return 1
