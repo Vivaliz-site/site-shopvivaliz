@@ -25,11 +25,36 @@ class GateFailure(RuntimeError):
     pass
 
 
+def _assert_trusted_path(path: Path, leaf_kind: str) -> None:
+    """Refuse symlinks and non-root ownership along each existing path component.
+
+    Check with lstat() rather than resolve(), since following a symlink would
+    hide the untrusted directory or file we need to reject.  Newly created
+    credential directories are checked again by verify() after installation.
+    """
+    for item in (*reversed(path.parents), path):
+        try:
+            metadata = item.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(metadata.st_mode):
+            raise GateFailure("path_symlink_refused")
+        if metadata.st_uid != 0:
+            raise GateFailure("path_not_root_owned")
+        if item == path:
+            valid = stat.S_ISDIR(metadata.st_mode) if leaf_kind == "directory" else stat.S_ISREG(metadata.st_mode)
+            if not valid:
+                raise GateFailure("path_type_not_allowed")
+        elif not stat.S_ISDIR(metadata.st_mode):
+            raise GateFailure("path_parent_not_directory")
+
+
 def _assert_target_paths(root: Path) -> tuple[Path, Path]:
     credential = root / CREDS_REL
     renewal = root / RENEWAL_REL
-    if credential.is_symlink() or credential.parent.is_symlink() or renewal.is_symlink():
-        raise GateFailure("path_symlink_refused")
+    _assert_trusted_path(credential.parent, "directory")
+    _assert_trusted_path(credential, "file")
+    _assert_trusted_path(renewal, "file")
     return credential, renewal
 
 
