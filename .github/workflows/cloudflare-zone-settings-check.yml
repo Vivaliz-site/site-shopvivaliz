@@ -60,5 +60,71 @@ jobs:
           echo "BOT_MANAGEMENT=$bot_config"
           echo 'WAF_RULESET_SUMMARY_END'
 
+          # Scope to OAuth callback, record no client identifiers, query strings or OAuth codes.
+          echo 'CF_OAUTH_SECURITY_EVENTS_BEGIN'
+          export CF_ZONE_ID="$zone_id"
+          oauth_query=$(python3 - <<'PY_QUERY'
+          import datetime
+          import json
+          import os
+          now = datetime.datetime.now(datetime.timezone.utc)
+          before = now - datetime.timedelta(hours=6)
+          zulu = lambda value: value.isoformat(timespec="seconds").replace("+00:00", "Z")
+          print(json.dumps({
+              "query": "query CallbackEvents($zoneTag: string, $filter: FirewallEventsAdaptiveFilter_InputObject) { viewer { zones(filter: { zoneTag: $zoneTag }) { firewallEventsAdaptive(filter: $filter, limit: 100, orderBy: [datetime_DESC]) { action source datetime clientRequestPath } } } }",
+              "variables": {
+                  "zoneTag": os.environ["CF_ZONE_ID"],
+                  "filter": {
+                      "datetime_geq": zulu(before),
+                      "datetime_leq": zulu(now),
+                      "clientRequestPath": "/api/mlrr/oauth/callback",
+                  },
+              },
+          }, separators=(",", ":")))
+          PY_QUERY
+          )
+          response_file="$RUNNER_TEMP/mlrr-callback-events-response.json"
+          set +e
+          response_status=$(curl --silent --show-error --connect-timeout 5 --max-time 30 \
+            --output "$response_file" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CF_TOKEN" \
+            --header 'Accept: application/json' \
+            --header 'Content-Type: application/json' \
+            --data-binary "$oauth_query" \
+            https://api.cloudflare.com/client/v4/graphql)
+          response_exit=$?
+          set -e
+          if [ "$response_exit" -ne 0 ] || [ "$response_status" != "200" ]; then
+            echo 'CF_OAUTH_EVENTS_STATUS=DENIED'
+          else
+            python3 - "$response_file" <<'PY_RESPONSE'
+          import collections
+          import json
+          import re
+          import sys
+          try:
+              with open(sys.argv[1], encoding="utf-8") as file:
+                  payload = json.load(file)
+              if payload.get("errors"):
+                  print("CF_OAUTH_EVENTS_STATUS=DENIED")
+              else:
+                  zones = payload["data"]["viewer"]["zones"]
+                  rows = zones[0]["firewallEventsAdaptive"]
+                  if not isinstance(rows, list):
+                      raise ValueError("invalid events")
+                  valid = [row for row in rows if row.get("clientRequestPath") == "/api/mlrr/oauth/callback"]
+                  counts = collections.Counter((row.get("action", "unknown"), row.get("source", "unknown")) for row in valid)
+                  print("CF_OAUTH_EVENTS_STATUS=PASS")
+                  print("CF_OAUTH_CALLBACK_EVENTS_COUNT=" + str(len(valid)))
+                  for (action, source), number in sorted(counts.items()):
+                      safe = lambda x: re.sub(r"[^A-Za-z0-9_-]", "_", str(x))[:40]
+                      print("CF_OAUTH_CALLBACK_ACTION=" + safe(action) + " SOURCE=" + safe(source) + " COUNT=" + str(number))
+          except (KeyError, IndexError, ValueError, TypeError, OSError, json.JSONDecodeError):
+              print("CF_OAUTH_EVENTS_STATUS=QUERY_FAILED")
+          PY_RESPONSE
+          fi
+          rm -f "$response_file"
+          echo 'CF_OAUTH_SECURITY_EVENTS_END'
+
       - name: No changes applied
         run: echo 'READ_ONLY_CHECK_COMPLETE - nenhuma configuracao foi alterada'
