@@ -8,6 +8,16 @@ export -n SHOPVIVALIZ_AGENT_KEY AGENT_KEY
 BASE_URL="${BASE_URL:-https://shopvivaliz.com.br}"
 AUDIT_CEP="${AUDIT_CEP:-35500006}"
 AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY:-${AGENT_KEY:-}}"
+# Shadow audit: map the canonical TLS hostname to this VM, never through public DNS.
+# Only loopback is accepted; production-origin audit leaves this array empty.
+CURL_PIN_ARGS=()
+if [[ -n "${AUDIT_TARGET_IP:-}" ]]; then
+  if [[ "$BASE_URL" != "https://shopvivaliz.com.br" || "$AUDIT_TARGET_IP" != "127.0.0.1" ]]; then
+    echo 'PRODUCTION_FUNCTIONAL_AUDIT=FAIL stage=target_route detail=invalid destination pin' >&2
+    exit 1
+  fi
+  CURL_PIN_ARGS=(--noproxy '*' --resolve "shopvivaliz.com.br:443:$AUDIT_TARGET_IP" --proto-redir '=https')
+fi
 fail() { echo "PRODUCTION_FUNCTIONAL_AUDIT=FAIL stage=$1 detail=$2" >&2; exit 1; }
 pass() { echo "PASS stage=$1 detail=$2"; }
 # Header input is line-oriented. Never allow an embedded header separator.
@@ -18,11 +28,15 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 request() {
-  local method="$1" url="$2" body="${3:-}" output="$4" code
+  local method="$1" url="$2" body="${3:-}" output="$4" code result effective
   if [[ "$method" == POST ]]; then
-    code=$(curl -q -sS --max-time 30 -o "$output" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
+    result=$(curl -q -sS "${CURL_PIN_ARGS[@]}" --max-time 30 -o "$output" -w '%{http_code} %{url_effective}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
   else
-    code=$(curl -q -sSL --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
+    result=$(curl -q -sSL "${CURL_PIN_ARGS[@]}" --max-time 30 -o "$output" -w '%{http_code} %{url_effective}' "$url") || fail network "$url"
+  fi
+  read -r code effective <<< "$result"
+  if [[ "${#CURL_PIN_ARGS[@]}" -gt 0 && "$effective" != "$BASE_URL/"* ]]; then
+    fail target_route 'redirect escaped canonical TLS hostname'
   fi
   printf '%s' "$code"
 }
@@ -91,7 +105,11 @@ json_assert "$TMPDIR/shipping.json" 'd.get("ok") is True and len(d.get("shipping
 pass melhor_envio 'real quote returned shipping_options'
 
 [[ -n "$AGENT_KEY" ]] || fail integrations 'SHOPVIVALIZ_AGENT_KEY/AGENT_KEY missing; cannot prove provider functionality'
-code=$(printf 'X-Agent-Key: %s\n' "$AGENT_KEY" | curl -q -sS --max-time 45 -o "$TMPDIR/integrations.json" -w '%{http_code}' --header @- "$BASE_URL/api/agent/integrations-health.php") || fail integrations network
+integration_response=$(printf 'X-Agent-Key: %s\n' "$AGENT_KEY" | curl -q -sS "${CURL_PIN_ARGS[@]}" --max-time 45 -o "$TMPDIR/integrations.json" -w '%{http_code} %{url_effective}' --header @- "$BASE_URL/api/agent/integrations-health.php") || fail integrations network
+read -r code effective <<< "$integration_response"
+if [[ "${#CURL_PIN_ARGS[@]}" -gt 0 && "$effective" != "$BASE_URL/"* ]]; then
+  fail target_route 'integration health redirected away from destination'
+fi
 [[ "$code" == 200 || "$code" == 207 ]] || fail integrations "http=$code"
 python3 - "$TMPDIR/integrations.json" <<'PY' || fail integrations 'critical provider not connected'
 # Parse errors fail the enclosing stage without echoing response values.
