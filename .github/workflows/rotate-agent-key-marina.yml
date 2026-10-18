@@ -94,6 +94,33 @@ jobs:
           print("MARINA_AGENT_KEY_ROTATION=PASS")
           PY
 
+      - name: Refresh Marina runtime secrets and release link
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-rotation-known-hosts" -i "$HOME/.ssh/marina-rotation-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          deploy=/home/ubuntu/shopvivaliz-deploy
+          shared="$deploy/shared"
+          current=$(readlink -f "$deploy/current")
+          sudo chown ubuntu:ubuntu "$shared/.env"
+          sudo chmod 0600 "$shared/.env"
+          sudo env SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data \
+            php "$current/scripts/materialize-runtime-secrets.php"
+          sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
+          sudo chmod 0640 "$shared/runtime-secrets.php"
+          sudo chgrp www-data "$shared"
+          sudo chmod 2750 "$shared"
+          if [ -e "$current/config/runtime-secrets.php" ] && [ ! -L "$current/config/runtime-secrets.php" ]; then
+            mv "$current/config/runtime-secrets.php" "$current/config/runtime-secrets.php.prelink-$(date -u +%Y%m%dT%H%M%SZ)"
+          fi
+          ln -sfn ../../../shared/runtime-secrets.php "$current/config/runtime-secrets.php"
+          test "$(readlink "$current/config/runtime-secrets.php")" = "../../../shared/runtime-secrets.php"
+          sudo -u www-data test -r "$current/config/runtime-secrets.php"
+          echo MARINA_RUNTIME_SECRETS=PASS
+          REMOTE
+
       - name: Remove temporary SSH material
         if: always()
         run: rm -f "$HOME/.ssh/marina-rotation-key" "$HOME/.ssh/marina-rotation-known-hosts"
