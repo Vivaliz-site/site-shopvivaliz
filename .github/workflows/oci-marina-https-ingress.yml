@@ -122,7 +122,6 @@ jobs:
                       resource.id,
                       oci.core.models.UpdateNetworkSecurityGroupSecurityRulesDetails(
                           security_rules=new_rules,
-                          is_atomic=True,
                       ),
                   )
               else:
