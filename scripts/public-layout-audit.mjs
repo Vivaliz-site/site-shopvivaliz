@@ -15,6 +15,8 @@ const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'arti
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
 const auditConcurrency = resolveAuditConcurrency();
+const auditShardCount = Number.parseInt(process.env.PUBLIC_AUDIT_SHARD_COUNT || '1', 10);
+const auditShardIndex = Number.parseInt(process.env.PUBLIC_AUDIT_SHARD_INDEX || '0', 10);
 const screenshotTimeoutMs = Number.parseInt(process.env.PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS || '10000', 10);
 const navigationTimeoutMs = Number.parseInt(process.env.PUBLIC_AUDIT_NAVIGATION_TIMEOUT_MS || '20000', 10);
 const domContentLoadedTimeoutMs = Math.min(
@@ -45,14 +47,20 @@ const auditFetch = async (url, options = {}) => {
 
 const discoveredRoutes = explicitRoutes.length ? [] : await discoverPublicRoutes({ baseUrl, fetchImpl: auditFetch });
 const routes = [...new Set([...(explicitRoutes.length ? explicitRoutes : discoveredRoutes), ...mandatoryRoutes])].sort((a, b) => a.localeCompare(b));
+if (!Number.isInteger(auditShardCount) || auditShardCount < 1) throw new Error('PUBLIC_AUDIT_SHARD_COUNT must be a positive integer');
+if (!Number.isInteger(auditShardIndex) || auditShardIndex < 0 || auditShardIndex >= auditShardCount) {
+  throw new Error(`PUBLIC_AUDIT_SHARD_INDEX must be between 0 and ${auditShardCount - 1}`);
+}
+const shardRoutes = routes.filter((_, index) => index % auditShardCount === auditShardIndex);
 const profiles = [
   { name: 'mobile', width: 390, height: 844, isMobile: true },
   { name: 'desktop', width: 1440, height: 1000, isMobile: false },
 ];
 
-if (!routes.length) throw new Error('No public routes discovered for audit');
-console.log(`Public layout audit: ${routes.length} routes x ${profiles.length} profiles`);
-console.log(`Public layout audit concurrency: ${Math.min(auditConcurrency, routes.length)}`);
+if (!shardRoutes.length) throw new Error(`No public routes assigned to audit shard ${auditShardIndex}/${auditShardCount}`);
+console.log(`Public layout audit shard: ${auditShardIndex + 1}/${auditShardCount}`);
+console.log(`Public layout audit: ${shardRoutes.length}/${routes.length} routes x ${profiles.length} profiles`);
+console.log(`Public layout audit concurrency: ${Math.min(auditConcurrency, shardRoutes.length)}`);
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
@@ -70,7 +78,7 @@ for (const profile of profiles) {
     hasTouch: profile.isMobile,
   });
 
-  const profileResults = await mapWithConcurrency(routes, auditConcurrency, async (route) => {
+  const profileResults = await mapWithConcurrency(shardRoutes, auditConcurrency, async (route) => {
     const page = await context.newPage();
     const pageErrors = [];
     const resourceFailures = [];
@@ -189,5 +197,5 @@ for (const profile of profiles) {
 }
 
 await browser.close();
-console.log(JSON.stringify({ ok: failures.length === 0, baseUrl, routeCount: routes.length, outDir, failures, results }, null, 2));
+console.log(JSON.stringify({ ok: failures.length === 0, baseUrl, routeCount: shardRoutes.length, totalRouteCount: routes.length, shardIndex: auditShardIndex, shardCount: auditShardCount, outDir, failures, results }, null, 2));
 if (failures.length) process.exit(1);
