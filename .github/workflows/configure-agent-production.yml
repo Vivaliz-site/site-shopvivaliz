@@ -85,7 +85,7 @@ jobs:
           os.replace(temporary, path)
           os.chmod(path, 0o600)
           print("agent_key_configured=true")
-          PY'
+          PY
 
       - name: Refresh minimal web runtime secrets
         shell: bash
