@@ -21,6 +21,11 @@ jobs:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
 
     steps:
+      - name: Checkout controlled revision for certificate repair helper
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Validate canonical production target
         shell: bash
         run: |
@@ -94,18 +99,13 @@ jobs:
             sudo -n apt-get update
             sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
           fi
-          cred="$RUNNER_TEMP/ml-pricing-cloudflare.ini"
-          umask 077
-          CRED_FILE="$cred" python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          Path(os.environ["CRED_FILE"]).write_text(
-              "dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n",
-              encoding="utf-8",
-          )
-          PY
-          trap 'rm -f "$cred"' EXIT
+          # This credential path is stored in Certbot renewal config.
+          # Never leave that reference pointing to a removed runner-temp file.
+          set +x
+          test -n "${CF_TOKEN:-}"
+          cred="/etc/letsencrypt/cloudflare/shopvivaliz-pricing.ini"
+          test -f scripts/pricing-certbot-repair.py
+          printf '%s' "$CF_TOKEN" | sudo -n python3 scripts/pricing-certbot-repair.py --allow-new
           sudo -n certbot certonly \
             --dns-cloudflare \
             --dns-cloudflare-credentials "$cred" \
@@ -113,8 +113,7 @@ jobs:
             -d "$PRICING_HOST" \
             --non-interactive --agree-tos --register-unsafely-without-email \
             --keep-until-expiring
-          rm -f "$cred"
-          trap - EXIT
+          sudo -n python3 scripts/pricing-certbot-repair.py --verify-only
           sudo -n test -s "/etc/letsencrypt/live/$PRICING_HOST/fullchain.pem"
           echo "CERTIFICATE_READY=1"
 
