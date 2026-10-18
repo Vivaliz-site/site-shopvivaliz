@@ -43,6 +43,23 @@ grep -Fq 'cmp -s "$release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer
 }
 
 activation="$(sed -n '/      - name: Activate release atomically/,/^  monitor:/p' "$WORKFLOW")"
+
+# The inline production activation (and its rollback) must honor the root-owned
+# source worker fence. Only the unfenced path may add the queue worker.
+for marker in \
+  'if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then' \
+  'MARINA_ORIGIN_QUEUE_FENCED=SKIP' \
+  'services+=(shopvivaliz-queue-worker.service)'; do
+  grep -Fq "$marker" <<<"$activation" || {
+    echo "Migration worker fence is not enforced in master production activation: $marker" >&2
+    exit 1
+  }
+done
+static_services="$(sed -n '/local -a services=(/,/^            )/p' <<<"$activation")"
+if [ -z "$static_services" ] || grep -Fq 'shopvivaliz-queue-worker.service' <<<"$static_services"; then
+  echo "Master production must never list a fenced queue worker in the unconditional restart array" >&2
+  exit 1
+fi
 grep -Fq "bash -s -- \"\$DEPLOY_SHA\" \"\$release_dir\" <<'REMOTE'" <<<"$activation" || {
   echo 'Production activation must execute locally on the A1 runner' >&2
   exit 1
