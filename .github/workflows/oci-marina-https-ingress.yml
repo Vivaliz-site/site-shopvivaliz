@@ -35,13 +35,13 @@ jobs:
 
       - name: Inspect or apply only TCP/443 ingress
         env:
-          OCI_PRIVATE_KEY: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+          OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
         shell: bash
         run: |
           set -Eeuo pipefail
           umask 077
           key="$RUNNER_TEMP/oci-marina.pem"
-          printf '%s\n' "$OCI_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$OCI_KEY_MATERIAL" > "$key"
           chmod 600 "$key"
           python3 - "$key" <<'PY'
           import ipaddress
