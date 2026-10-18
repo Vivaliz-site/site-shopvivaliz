@@ -107,6 +107,11 @@ jobs:
 
           export GH_CONFIG_DIR=/home/ubuntu/.config/gh
           env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null 2>&1
+          # `gh auth status` validates the runner profile, but git transport used
+          # by `gh repo clone` does not reliably inherit that credential helper.
+          # Keep the token process-local and masked; never write it to disk/logs.
+          export GH_TOKEN="$(env -u GH_TOKEN -u GITHUB_TOKEN gh auth token --hostname github.com)"
+          test -n "$GH_TOKEN"
 
           export EXECUTION_PROVENANCE_HMAC_KEY="$(cat "$key_file")"
           export EXECUTION_PROVENANCE_KEY_ID=shopvivaliz-host-provenance-v1
