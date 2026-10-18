@@ -31,7 +31,7 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Write canonical agent key to shared production environment
+      - name: Transfer canonical agent key to protected temporary file
         env:
           SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
         shell: bash
@@ -44,7 +44,19 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@127.0.0.1 \
-            'set -euo pipefail; key="$(cat)"; SHOPVIVALIZ_AGENT_KEY="$key" python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env <<"PY"
+            'umask 077; cat > /tmp/shopvivaliz-agent-rotation.key'
+
+      - name: Write canonical agent key to shared production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@127.0.0.1 \
+            'python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env /tmp/shopvivaliz-agent-rotation.key' <<'PY'
           from pathlib import Path
           import os
           import re
@@ -52,7 +64,9 @@ jobs:
           from datetime import datetime, timezone
 
           path = Path(sys.argv[1])
-          key = os.environ.get("SHOPVIVALIZ_AGENT_KEY", "").strip()
+          key_path = Path(sys.argv[2])
+          key = key_path.read_text(encoding="utf-8").strip()
+          key_path.unlink(missing_ok=True)
           if len(key) < 32 or any(char.isspace() for char in key):
               raise SystemExit("invalid agent key")
           data = path.read_text(encoding="utf-8") if path.exists() else ""
