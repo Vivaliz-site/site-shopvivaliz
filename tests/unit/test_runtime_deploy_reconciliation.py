@@ -102,6 +102,13 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"', text)
         self.assertIn('mv -Tf "$root/current.rollback" "$current"', text)
 
+    def test_master_pipeline_respects_origin_worker_fence(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        restart = text.split("restart_runtime_services() {", 1)[1].split("\n          }", 1)[0]
+        self.assertIn("origin-workers-fenced", restart)
+        self.assertIn("shopvivaliz-queue-worker.service", restart)
+        self.assertIn("continue", restart)
+
     def test_master_pipeline_reconciles_ai_squad_runtime_on_activate_and_rollback(self) -> None:
         workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         helper = (ROOT / "scripts/reconcile-ai-squad-runtime.sh").read_text(encoding="utf-8")
