@@ -1,0 +1,61 @@
+name: ML Pricing Certbot Renewal Credentials Repair
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-pricing-origin-certbot-repair
+  cancel-in-progress: false
+
+jobs:
+  repair-credential-reference:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout protected repository revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Gate origin identity, cert and renewal config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "Vivaliz-site/site-shopvivaliz"
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          test -f /etc/letsencrypt/renewal/pricing.shopvivaliz.com.br.conf
+          test -s /etc/letsencrypt/live/pricing.shopvivaliz.com.br/fullchain.pem
+          test -f scripts/pricing-certbot-repair.py
+          python3 -m py_compile scripts/pricing-certbot-repair.py
+          echo 'PRICING_REPAIR_ORIGIN_GATE=PASS'
+
+      - name: Restore persistent scoped DNS credentials securely
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          test -n "${CF_TOKEN:-}" || { echo 'PRICING_SECRET_REFERENCE_NOT_AVAILABLE'; exit 2; }
+          printf '%s' "$CF_TOKEN" | sudo -n python3 scripts/pricing-certbot-repair.py
+          unset CF_TOKEN
+          sudo -n python3 scripts/pricing-certbot-repair.py --verify-only
+          echo 'PRICING_CERTBOT_PERSISTENT_CREDENTIAL_REFERENCE=PASS'
+
+      - name: Check certbot timer and existing certificate without DNS writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          systemctl is-active --quiet certbot.timer
+          systemctl is-enabled --quiet certbot.timer
+          openssl x509 -in /etc/letsencrypt/live/pricing.shopvivaliz.com.br/fullchain.pem -noout -checkend 86400 > /dev/null
+          echo 'PRICING_EXISTING_CERT_TIMER=PASS'
+
+# Never dispatch the DNS-publishing production-bootstrap workflow to fix this
+# path. This workflow does not call Certbot renewal, modify DNS, create tokens,
+# copy secrets to Marina or change production routing.
