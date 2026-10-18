@@ -106,9 +106,13 @@ jobs:
           )
           PY
           trap 'rm -f "$cred"' EXIT
+          credential_dir="/etc/letsencrypt/secrets"
+          credential_path="$credential_dir/$PRICING_HOST.ini"
+          sudo -n install -d -m 0700 -o root -g root "$credential_dir"
+          sudo -n install -m 0600 -o root -g root "$cred" "$credential_path"
           sudo -n certbot certonly \
             --dns-cloudflare \
-            --dns-cloudflare-credentials "$cred" \
+            --dns-cloudflare-credentials "$credential_path" \
             --dns-cloudflare-propagation-seconds 30 \
             -d "$PRICING_HOST" \
             --non-interactive --agree-tos --register-unsafely-without-email \
