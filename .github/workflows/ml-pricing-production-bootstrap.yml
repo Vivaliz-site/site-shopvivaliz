@@ -13,14 +13,19 @@ permissions:
 
 jobs:
   bootstrap:
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
       PRICING_HOST: pricing.shopvivaliz.com.br
       ORIGIN_IP: 137.131.149.55
-      CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
 
     steps:
+      - name: Checkout controlled revision for certificate repair helper
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Validate canonical production target
         shell: bash
         run: |
@@ -35,6 +40,8 @@ jobs:
 
       - name: Publish proxied production DNS
         id: dns
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -87,6 +94,8 @@ jobs:
           systemctl is-active --quiet apache2
 
       - name: Obtain or renew origin certificate with DNS-01
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -94,18 +103,24 @@ jobs:
             sudo -n apt-get update
             sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot python3-certbot-dns-cloudflare
           fi
-          cred="$RUNNER_TEMP/ml-pricing-cloudflare.ini"
-          umask 077
-          CRED_FILE="$cred" python3 - <<'PY'
+          # This credential path is stored in Certbot renewal config.
+          # Never leave that reference pointing to a removed runner-temp file.
+          set +x
+          cred="/etc/letsencrypt/cloudflare/shopvivaliz-pricing.ini"
+          test -f scripts/pricing-certbot-repair.py
+          python3 - <<'PY'
           import os
-          from pathlib import Path
+          import subprocess
 
-          Path(os.environ["CRED_FILE"]).write_text(
-              "dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n",
-              encoding="utf-8",
+          value = os.environ.get("CF_TOKEN")
+          if not value:
+              raise SystemExit("PRICING_SECRET_REFERENCE_NOT_AVAILABLE")
+          subprocess.run(
+              ["sudo", "-n", "python3", "scripts/pricing-certbot-repair.py", "--allow-new"],
+              input=value.encode("ascii"),
+              check=True,
           )
           PY
-          trap 'rm -f "$cred"' EXIT
           sudo -n certbot certonly \
             --dns-cloudflare \
             --dns-cloudflare-credentials "$cred" \
@@ -113,8 +128,7 @@ jobs:
             -d "$PRICING_HOST" \
             --non-interactive --agree-tos --register-unsafely-without-email \
             --keep-until-expiring
-          rm -f "$cred"
-          trap - EXIT
+          sudo -n python3 scripts/pricing-certbot-repair.py --verify-only
           sudo -n test -s "/etc/letsencrypt/live/$PRICING_HOST/fullchain.pem"
           echo "CERTIFICATE_READY=1"
 
@@ -133,6 +147,8 @@ jobs:
           echo "RUNTIME_SERVICES_READY=1"
 
       - name: Enable Cloudflare proxy
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -166,6 +182,8 @@ jobs:
 
       - name: Roll back new DNS record on failure
         if: failure() && steps.dns.outputs.created == '1'
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
