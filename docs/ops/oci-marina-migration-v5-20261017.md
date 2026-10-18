@@ -110,3 +110,11 @@ Evidências operacionais da retomada posterior à auditoria inicial:
 | Acesso remoto | **PENDENTE** | SSH com host key fixada via controladora confirmou `marina-a1-4c24g`, porém catálogo do MCP conectado ainda anuncia apenas quatro hosts; quinto host sem prova E2E no conector. Não contornar recusas de RDC/IAM. |
 
 **Nenhuma decisão GO, nem ensaio final de rollback, nem cutover.** A origem `shopvivaliz-free-a1` permanece preservada. A próxima fase permitida é auditoria não mutante de produtores/timers e obtenção da via de manutenção oficialmente elevada, seguida de reconciliação bidirecional e E2E real em staging isolado. Regra de rollback: reconciliar writes próprios da Marina antes de reativar qualquer consumidor na origem.
+
+### Diagnóstico adicional do ciclo do ML Pricing — 2026-10-18 02:53 UTC
+
+- Hash SHA-256 da unit systemd **idêntico** na origem e na Marina: `06bdcc8789d1da25e4015664b08b871b254226524e793360ffcb04442dad504a`.
+- `ExecStart` confirmado no destino: `messenger:consume async --limit=100 --time-limit=300 --memory-limit=256M --no-interaction`; `Restart=always` e `RestartUSec=5s`.
+- Entre as amostras de 02:44:55 e 02:50:00 UTC, `NRestarts` passou de 5 para 6 com `Result=success` e `ExecMainStatus=0`. **Esses reinícios são compatíveis com reciclagem programada de consumidor de cinco minutos, não evidência de crash.** Não há correção de processo indicada apenas pelo contador.
+- Ainda é necessário verificar progresso da fila, jobs/retries, conectividade real com o banco e os logs sem revelar segredos. Esta interpretação técnica não promove o serviço a `APTO` E2E.
+- Evidência MCP: `33643f85-13d7-4355-a569-b1c67c3ea1fb` (destino) e `cb0dd302-b5a4-41a4-b881-f222259eb087` (origem).
