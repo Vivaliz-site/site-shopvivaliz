@@ -21,6 +21,10 @@ const domContentLoadedTimeoutMs = Math.min(
   navigationTimeoutMs,
   Number.parseInt(process.env.PUBLIC_AUDIT_DOMCONTENTLOADED_TIMEOUT_MS || '5000', 10),
 );
+const uiReadyTimeoutMs = Math.min(
+  navigationTimeoutMs,
+  Number.parseInt(process.env.PUBLIC_AUDIT_UI_READY_TIMEOUT_MS || '10000', 10),
+);
 
 const auditFetch = async (url, options = {}) => {
   if (!proxyServer) return fetch(url, options);
@@ -90,9 +94,12 @@ for (const profile of profiles) {
       // Commit is sufficient to inspect the rendered document; DOMContentLoaded
       // remains a bounded best-effort enhancement instead of the navigation gate.
       const response = await page.goto(url, { waitUntil: 'commit', timeout: navigationTimeoutMs });
-      await Promise.race([
+      await Promise.all([
         page.waitForLoadState('domcontentloaded', { timeout: domContentLoadedTimeoutMs }),
-        page.waitForSelector('footer', { timeout: domContentLoadedTimeoutMs }),
+        page.waitForSelector('footer', { timeout: uiReadyTimeoutMs }),
+        ...(profile.isMobile
+          ? [page.waitForSelector('.sv-mobile-nav-bar,.sv-mobile-bottom-nav', { timeout: uiReadyTimeoutMs })]
+          : []),
       ]).catch(() => {
         console.warn(`Document readiness timeout for ${profile.name} ${route}; continuing with committed document`);
       });
