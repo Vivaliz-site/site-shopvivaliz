@@ -17,6 +17,9 @@ jobs:
       contents: read
     env:
       SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+      PUBLIC_AUDIT_CONCURRENCY: '12'
+      PUBLIC_AUDIT_NAVIGATION_TIMEOUT_MS: '20000'
+      PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS: '5000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
