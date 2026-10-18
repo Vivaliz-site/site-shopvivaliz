@@ -28,3 +28,19 @@ test('discoverPublicRoutes follows nested sitemap indexes, deduplicates and pres
   const fetchImpl = async (url) => ({ ok: docs.has(url), text: async () => docs.get(url) || '' });
   assert.deepEqual(await discoverPublicRoutes({ baseUrl: 'https://shopvivaliz.com.br', fetchImpl }), ['/', '/faq/', '/produto/a/']);
 });
+
+test('discoverPublicRoutes aborts a sitemap request after the configured timeout', async () => {
+  let aborted = false;
+  const fetchImpl = async (_url, options) => new Promise((_, reject) => {
+    options.signal.addEventListener('abort', () => {
+      aborted = true;
+      reject(new Error('aborted'));
+    }, { once: true });
+  });
+  assert.deepEqual(await discoverPublicRoutes({
+    baseUrl: 'https://shopvivaliz.com.br',
+    fetchImpl,
+    fetchTimeoutMs: 5,
+  }), []);
+  assert.equal(aborted, true);
+});

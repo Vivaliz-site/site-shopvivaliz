@@ -11,12 +11,25 @@ concurrency:
 
 jobs:
   audit:
+    name: Public layout audit shard ${{ matrix.shard }}/10
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     permissions:
       contents: read
     env:
       SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+      # Keep the browser runner below the storefront's concurrent document
+      # connection limit so each page can finish parsing before inspection.
+      PUBLIC_AUDIT_CONCURRENCY: '4'
+      PUBLIC_AUDIT_SHARD_COUNT: '10'
+      PUBLIC_AUDIT_SHARD_INDEX: ${{ matrix.shard }}
+      PUBLIC_AUDIT_NAVIGATION_TIMEOUT_MS: '20000'
+      PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS: '5000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,16 +48,39 @@ jobs:
         env:
           E2E_BASE_URL: https://shopvivaliz.com.br
         run: node scripts/public-layout-audit.mjs
-      - name: Prove stateful production runtime parity
-        env:
-          E2E_BASE_URL: https://shopvivaliz.com.br
-        run: node scripts/production-runtime-parity.mjs
       - name: Upload visual evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-layout-audit-${{ github.run_id }}
+          name: public-layout-audit-${{ github.run_id }}-shard-${{ matrix.shard }}
           path: artifacts/public-layout-audit
           if-no-files-found: ignore
           retention-days: 1
           compression-level: 0
+
+  runtime-parity:
+    name: Prove stateful production runtime parity
+    needs: audit
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      E2E_BASE_URL: https://shopvivaliz.com.br
+      SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies with ephemeral npm cache
+        env:
+          NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
+        run: npm ci
+      - name: Verify canonical backend browser runtime
+        run: |
+          set -Eeuo pipefail
+          test -x "$SHOPVIVALIZ_CHROMIUM_PATH"
+          curl -fsS http://127.0.0.1:17777/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);if(j.ok!==true||j.endpoint!=="browser-worker"||j.browser_path_exists!==true)process.exit(1);});'
+      - name: Prove stateful production runtime parity
+        run: node scripts/production-runtime-parity.mjs

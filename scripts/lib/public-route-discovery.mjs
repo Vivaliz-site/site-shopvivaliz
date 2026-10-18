@@ -20,7 +20,7 @@ export function normalizeAuditRoute(candidate, baseUrl) {
   return `${path}${url.search}`;
 }
 
-export async function discoverPublicRoutes({ baseUrl, fetchImpl = fetch, seedSitemaps = ['/sitemap.xml'] } = {}) {
+export async function discoverPublicRoutes({ baseUrl, fetchImpl = fetch, seedSitemaps = ['/sitemap.xml'], fetchTimeoutMs = 15000 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
   const base = new URL(baseUrl);
   const queue = seedSitemaps.map((entry) => new URL(entry, base).href);
@@ -31,7 +31,15 @@ export async function discoverPublicRoutes({ baseUrl, fetchImpl = fetch, seedSit
     if (seenSitemaps.has(sitemapUrl)) continue;
     seenSitemaps.add(sitemapUrl);
     let response;
-    try { response = await fetchImpl(sitemapUrl, { redirect: 'follow' }); } catch { continue; }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), fetchTimeoutMs);
+    try {
+      response = await fetchImpl(sitemapUrl, { redirect: 'follow', signal: controller.signal });
+    } catch {
+      continue;
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!response?.ok) continue;
     const xml = await response.text();
     for (const loc of extractLocs(xml)) {

@@ -50,6 +50,12 @@ jobs:
             resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets/phases/$phase/entrypoint")
             echo "PHASE[$phase]=$resp"
           done
+          for phase in http_request_dynamic_redirect http_request_origin http_request_transform http_request_transform_managed http_request_cache_settings; do
+            resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets/phases/$phase/entrypoint")
+            echo "PHASE[$phase]=$resp"
+          done
+          page_rules=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/pagerules")
+          echo "PAGE_RULES=$page_rules"
           bot_config=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/bot_management")
           echo "BOT_MANAGEMENT=$bot_config"
           echo 'WAF_RULESET_SUMMARY_END'
