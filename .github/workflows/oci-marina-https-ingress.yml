@@ -93,29 +93,15 @@ jobs:
               tcp_options=oci.core.models.TcpOptions(destination_port_range=port),
               description="ShopVivaliz Marina public HTTPS cutover",
           )
-          nsg_rule = oci.core.models.UpdateSecurityRuleDetails(
+          nsg_rule = oci.core.models.AddSecurityRuleDetails(
+              direction="INGRESS",
               protocol="6",
               source="0.0.0.0/0",
               source_type="CIDR_BLOCK",
+              is_stateless=False,
               tcp_options=oci.core.models.TcpOptions(destination_port_range=port),
               description="ShopVivaliz Marina public HTTPS cutover",
           )
-
-          def as_update(r):
-              return oci.core.models.UpdateSecurityRuleDetails(
-                  id=r.id,
-                  description=r.description,
-                  direction=r.direction,
-                  destination=r.destination,
-                  destination_type=r.destination_type,
-                  icmp_options=r.icmp_options,
-                  is_stateless=r.is_stateless,
-                  protocol=r.protocol,
-                  source=r.source,
-                  source_type=r.source_type,
-                  tcp_options=r.tcp_options,
-                  udp_options=r.udp_options,
-              )
 
           def is_https(r):
               if r.protocol not in ("6", "tcp", "all") or r.source != "0.0.0.0/0":
@@ -140,11 +126,10 @@ jobs:
               if present or os.environ["APPLY"].lower() != "true":
                   continue
               if kind == "NSG":
-                  new_rules = [as_update(r) for r in rules] + [nsg_rule]
-                  network.update_network_security_group_security_rules(
+                  network.add_network_security_group_security_rules(
                       resource.id,
-                      oci.core.models.UpdateNetworkSecurityGroupSecurityRulesDetails(
-                          security_rules=new_rules,
+                      oci.core.models.AddNetworkSecurityGroupSecurityRulesDetails(
+                          security_rules=[nsg_rule],
                       ),
                   )
               else:
