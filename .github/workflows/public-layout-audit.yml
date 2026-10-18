@@ -17,7 +17,9 @@ jobs:
       contents: read
     env:
       SHOPVIVALIZ_CHROMIUM_PATH: /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
-      PUBLIC_AUDIT_CONCURRENCY: '12'
+      # Keep the browser runner below the storefront's concurrent document
+      # connection limit so each page can finish parsing before inspection.
+      PUBLIC_AUDIT_CONCURRENCY: '4'
       PUBLIC_AUDIT_NAVIGATION_TIMEOUT_MS: '20000'
       PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS: '5000'
     steps:
