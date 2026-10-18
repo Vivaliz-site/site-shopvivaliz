@@ -19,6 +19,7 @@ jobs:
     environment: production
     env:
       BASE_URL: https://shopvivaliz.com.br
+      AUDIT_TARGET_IP: 127.0.0.1
       MARINA_PUBLIC_IP: 137.131.173.240
       REMOTE_STAGE: /tmp/production-functional-audit-marina-${{ github.run_id }}-${{ github.run_attempt }}
       SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
@@ -66,14 +67,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-audit-known-hosts" -i "$HOME/.ssh/marina-audit-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$REMOTE_STAGE" "$BASE_URL" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$REMOTE_STAGE" "$BASE_URL" "$AUDIT_TARGET_IP" <<'REMOTE'
           set -Eeuo pipefail
           stage=$1
           base_url=$2
+          target_ip=$3
+          test "$target_ip" = "127.0.0.1"
           test "$(hostname -s)" = "marina-a1-4c24g"
           case "$stage" in /tmp/production-functional-audit-marina-*) ;; *) exit 2 ;; esac
           test -s "$stage/agent.key"
           export BASE_URL="$base_url"
+          export AUDIT_TARGET_IP="$target_ip"
           export SHOPVIVALIZ_AGENT_KEY="$(cat "$stage/agent.key")"
           bash "$stage/production-functional-audit.sh"
           REMOTE
