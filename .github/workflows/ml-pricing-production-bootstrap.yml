@@ -31,7 +31,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(hostname)" = "shopvivaliz-free-a1"
-          test -n "${CF_TOKEN:-}"
           current="$(readlink -f /home/ubuntu/ml-pricing-api-deploy/current)"
           expected="${{ inputs.expected_release }}"
           test "$(basename "$current")" = "$expected"
@@ -41,10 +40,11 @@ jobs:
       - name: Publish proxied production DNS
         id: dns
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
+          test -n "${CF_TOKEN:-}"
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json")
           zones="$(curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br")"
           zone_id="$(python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if len(r)==1 else "")' <<<"$zones")"
@@ -95,7 +95,7 @@ jobs:
 
       - name: Obtain or renew origin certificate with DNS-01
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -148,7 +148,7 @@ jobs:
 
       - name: Enable Cloudflare proxy
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -183,7 +183,7 @@ jobs:
       - name: Roll back new DNS record on failure
         if: failure() && steps.dns.outputs.created == '1'
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
