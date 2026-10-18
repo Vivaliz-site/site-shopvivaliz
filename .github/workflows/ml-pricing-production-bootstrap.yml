@@ -102,10 +102,21 @@ jobs:
           # This credential path is stored in Certbot renewal config.
           # Never leave that reference pointing to a removed runner-temp file.
           set +x
-          test -n "${CF_TOKEN:-}"
           cred="/etc/letsencrypt/cloudflare/shopvivaliz-pricing.ini"
           test -f scripts/pricing-certbot-repair.py
-          printf '%s' "$CF_TOKEN" | sudo -n python3 scripts/pricing-certbot-repair.py --allow-new
+          python3 - <<'PY'
+          import os
+          import subprocess
+
+          value = os.environ.get("CF_TOKEN")
+          if not value:
+              raise SystemExit("PRICING_SECRET_REFERENCE_NOT_AVAILABLE")
+          subprocess.run(
+              ["sudo", "-n", "python3", "scripts/pricing-certbot-repair.py", "--allow-new"],
+              input=value.encode("ascii"),
+              check=True,
+          )
+          PY
           sudo -n certbot certonly \
             --dns-cloudflare \
             --dns-cloudflare-credentials "$cred" \
