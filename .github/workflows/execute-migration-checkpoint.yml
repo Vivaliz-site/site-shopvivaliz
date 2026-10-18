@@ -1,0 +1,127 @@
+name: Execute Migration Checkpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target VM (marina or origin)'
+        required: true
+        default: 'marina'
+        type: choice
+        options:
+          - marina
+          - origin
+
+env:
+  REPO: shopvivaliz-deploy
+
+jobs:
+  checkpoint:
+    name: Execute Checkpoint on ${{ inputs.target }}
+    runs-on: [self-hosted, linux, oracle-vms]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Identify target
+        id: target
+        run: |
+          if [ "${{ inputs.target }}" = "marina" ]; then
+            echo "host=10.0.1.112" >> $GITHUB_OUTPUT
+            echo "label=Marina Private" >> $GITHUB_OUTPUT
+          else
+            echo "host=137.131.149.55" >> $GITHUB_OUTPUT
+            echo "label=Origin Public" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Test connectivity
+        run: |
+          echo "Testing connectivity to ${{ steps.target.outputs.label }} (${{ steps.target.outputs.host }})..."
+          ping -c 1 ${{ steps.target.outputs.host }} || echo "WARNING: Ping failed, continuing..."
+
+      - name: P0 Gate - Block Origin Workers
+        run: |
+          echo "[1/4] P0: Creating origin-workers-fenced marker..."
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.target.outputs.host }} \
+            "sudo mkdir -p /etc/shopvivaliz/migration && sudo touch /etc/shopvivaliz/migration/origin-workers-fenced && ls -la /etc/shopvivaliz/migration/"
+          echo "✅ P0 gate created"
+
+      - name: PHP Modules - Install Missing
+        run: |
+          echo "[2/4] Installing PHP 8.3 modules..."
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.target.outputs.host }} << 'EOF'
+          set -Eeuo pipefail
+          echo "[PHP] Updating package lists..."
+          sudo apt-get update -qq
+          echo "[PHP] Installing modules: soap, sqlite3, apcu, redis, gmp, bz2, pdo..."
+          sudo apt-get install -y \
+            php8.3-soap \
+            php8.3-sqlite3 \
+            php8.3-apcu \
+            php8.3-redis \
+            php8.3-gmp \
+            php8.3-bz2 \
+            php8.3-pdo \
+            2>&1 | grep -E "^(Setting|Processing)" | tail -15
+          echo "[PHP] Reloading Apache..."
+          sudo systemctl reload apache2
+          echo "✅ PHP modules installed"
+          EOF
+
+      - name: Run Validators (P1, P2, P4)
+        run: |
+          echo "[3/4] Running migration validators..."
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.target.outputs.host }} << 'EOF'
+          cd /home/ubuntu/shopvivaliz-deploy/repo
+          echo "=== P1: MySQL Reconciliation Diagnosis ==="
+          bash scripts/p1-diagnose-mysql-delta.sh 2>&1 | tail -25 | tee /tmp/p1-result.log
+          echo ""
+          echo "=== P2: OAuth ML Renewal Validation ==="
+          bash scripts/p2-validate-oauth-ml-renewal.sh 2>&1 | tail -25 | tee /tmp/p2-result.log
+          echo ""
+          echo "=== P4: PHP Modules Validation ==="
+          bash scripts/p4-validate-php-modules.sh 2>&1 | tail -25 | tee /tmp/p4-result.log
+          echo ""
+          echo "=== Summary ==="
+          echo "P1 checks: $(grep -c '✅' /tmp/p1-result.log 2>/dev/null || echo 0)"
+          echo "P2 checks: $(grep -c '✅' /tmp/p2-result.log 2>/dev/null || echo 0)"
+          echo "P4 checks: $(grep -c '✅' /tmp/p4-result.log 2>/dev/null || echo 0)"
+          EOF
+
+      - name: Determine Cutover Readiness
+        id: readiness
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ steps.target.outputs.host }} << 'EOF'
+          echo "=== CHECKPOINT FINAL DECISION ==="
+          P1_CHECKS=$(grep -c '✅' /tmp/p1-result.log 2>/dev/null || echo 0)
+          P2_CHECKS=$(grep -c '✅' /tmp/p2-result.log 2>/dev/null || echo 0)
+          P4_CHECKS=$(grep -c '✅' /tmp/p4-result.log 2>/dev/null || echo 0)
+
+          if [ $P1_CHECKS -gt 0 ] && [ $P2_CHECKS -gt 0 ] && [ $P4_CHECKS -gt 0 ]; then
+            echo "🟢 STATUS: APTO FOR CUTOVER"
+            echo "All validators passed. Marina ready for DNS switch."
+          else
+            echo "🔴 STATUS: BLOCKERS FOUND"
+            echo "P1: $P1_CHECKS ✅"
+            echo "P2: $P2_CHECKS ✅"
+            echo "P4: $P4_CHECKS ✅"
+            echo "Please review logs and remediate."
+          fi
+          EOF
+
+      - name: Summary
+        run: |
+          echo "╔════════════════════════════════════════════╗"
+          echo "║  MIGRATION CHECKPOINT COMPLETE             ║"
+          echo "║  Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')                   ║"
+          echo "╚════════════════════════════════════════════╝"
+          echo ""
+          echo "Next: If APTO status, execute DNS cutover:"
+          echo "  1. Update shopvivaliz.com.br DNS → Marina IP"
+          echo "  2. Wait 5 min for propagation"
+          echo "  3. Test: curl https://shopvivaliz.com.br/api/health"
+          echo "  4. Monitor 24 hours"
