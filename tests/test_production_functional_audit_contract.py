@@ -72,7 +72,9 @@ def test_marina_audit_must_probe_the_destination_not_public_origin() -> None:
     assert "export AUDIT_TARGET_IP" in marina, "remote audit must receive destination pin"
     assert "AUDIT_TARGET_IP" in audit and "shopvivaliz.com.br:443:" in audit
     assert audit.count('"${CURL_PIN_ARGS[@]}"') >= 3, "GET, POST and integration health must all use the target route"
-    assert "url_effective" in audit, "followed redirects must fail closed if they leave the pinned host"
+    assert "url_effective" in audit, "audited requests must prove their final effective URL"
+    assert 'curl -q -sSL' not in audit, "do not follow third-party redirects carrying an agent authorization header"
+    assert 'for path in / /catalogo/ /carrinho /checkout; do' in audit, "test canonical path directly without following redirects"
 
 
 if __name__ == "__main__":
