@@ -31,32 +31,23 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Transfer canonical agent key to protected temporary file
+      - name: Stage canonical agent key to protected temporary file
         env:
           SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
         shell: bash
         run: |
           set -euo pipefail
           test "${#SHOPVIVALIZ_AGENT_KEY}" -ge 32
-          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" | ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'umask 077; cat > /tmp/shopvivaliz-agent-rotation.key'
+          umask 077
+          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" > /tmp/shopvivaliz-agent-rotation.key
+          chmod 600 /tmp/shopvivaliz-agent-rotation.key
 
       - name: Write canonical agent key to shared production environment
         shell: bash
         run: |
           set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env /tmp/shopvivaliz-agent-rotation.key' <<'PY'
+          trap 'rm -f /tmp/shopvivaliz-agent-rotation.key' EXIT
+          python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env /tmp/shopvivaliz-agent-rotation.key <<'PY'
           from pathlib import Path
           import os
           import re
@@ -91,25 +82,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          sudo chown ubuntu:ubuntu "$shared/.env"
+          chmod 600 "$shared/.env"
+          php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php
+          sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
+          chmod 640 "$shared/runtime-secrets.php"
+          stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"
+          stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"
 
       - name: Execute and verify the real production watchdog
         shell: bash
         run: |
           set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@127.0.0.1 \
-            'set -euo pipefail; /usr/bin/flock -w 120 /var/lock/shopvivaliz-autonomous-watchdog.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/autonomous-watchdog.php' \
+          /usr/bin/flock -w 120 /var/lock/shopvivaliz-autonomous-watchdog.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/autonomous-watchdog.php \
             > watchdog-response.json
           cat watchdog-response.json
           python3 - watchdog-response.json <<'PY'
