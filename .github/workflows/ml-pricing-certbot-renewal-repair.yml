@@ -9,6 +9,7 @@ permissions:
 jobs:
   repair:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: Production
     timeout-minutes: 20
     env:
       PRICING_HOST: pricing.shopvivaliz.com.br
