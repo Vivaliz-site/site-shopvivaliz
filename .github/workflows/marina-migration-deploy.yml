@@ -24,7 +24,6 @@ jobs:
     env:
       DEPLOY_SHA: ${{ github.sha }}
       MARINA_PUBLIC_IP: 137.131.173.240
-      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,10 +54,9 @@ jobs:
           set -Eeuo pipefail
           sha="$1"
           test "$(hostname -s)" = "marina-a1-4c24g"
-          test -e /etc/shopvivaliz/migration/origin-workers-fenced
           cd /home/ubuntu/shopvivaliz-deploy/repo
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
-          SHOPVIVALIZ_AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY:-}" bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
+          bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
           test "$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)" = "$sha"
           sudo systemctl is-active --quiet apache2
           sudo systemctl is-active --quiet mlrr-fetch-worker.service
