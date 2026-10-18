@@ -118,3 +118,11 @@ Evidências operacionais da retomada posterior à auditoria inicial:
 - Entre as amostras de 02:44:55 e 02:50:00 UTC, `NRestarts` passou de 5 para 6 com `Result=success` e `ExecMainStatus=0`. **Esses reinícios são compatíveis com reciclagem programada de consumidor de cinco minutos, não evidência de crash.** Não há correção de processo indicada apenas pelo contador.
 - Ainda é necessário verificar progresso da fila, jobs/retries, conectividade real com o banco e os logs sem revelar segredos. Esta interpretação técnica não promove o serviço a `APTO` E2E.
 - Evidência MCP: `33643f85-13d7-4355-a569-b1c67c3ea1fb` (destino) e `cb0dd302-b5a4-41a4-b881-f222259eb087` (origem).
+
+### FPM e recursos — rechecagem read-only em 2026-10-18 02:54 UTC
+
+- **Marina:** `pg_isready -h 127.0.0.1 -p 55433` = accepting connections, **não é validação de SQL autenticado nem de consistência da base**. Raiz: 193 GB, 18 GB utilizados, 176 GB livres (9%). Memória: ~21 GiB disponíveis, sem swap configurada. `php-fpm8.3 -t` invocado como **ubuntu não privilegiado** saiu 78 após numerosos avisos de módulos ausentes, com falha terminal `failed to open error_log (/var/log/php8.3-fpm.log): Permission denied (13)`. Não atribuir exit 78 a erro de sintaxe comprovado; revalidar `php-fpm8.3 -t` via manutenção administrativa **oficialmente autorizada**, respeitando a recusa prévia de sudo no RDC. Tarefa: `c6d31b11-8283-4f35-ae9a-cb4e81963890`.
+- **Controladora:** raiz 96 GB, 87 GB usados, 9,4 GB livres (**91%**); RAM 15 GiB, ~8,4 GiB disponíveis; swap 4,5/6 GiB utilizada. Memory PSI avg10/60/300 `some=0.00` e `full=0.00`; `shopvivaliz-disk-guard.timer` ativo. Situação de pressão momentânea melhor, mas **risco de capacidade de disco pendente**, sem limpeza/prune destrutivos. Tarefa `6b8a96f5-ae37-4878-b380-f0543ff20b13`.
+- **Origem:** leitura em 02:52Z confirmou 102 tabelas no MySQL `shopvivaliz`, 16 em `amazon_returns_safet`, além de `provider_events=423`, `returns=26` e `provider_fetch_jobs=47` no PostgreSQL MLRR. O banco `ml_pricing_prod` é containerizado na origem, e portanto não aparece nessa consulta ao MySQL nativo. **Não** deduzir ausência nem paridade de linhas no destino. Tarefa `b2cc2811-eb70-4a74-9294-fcc087249c6a`.
+
+Global **NO_CUT / NÃO APTO**. Nenhum pacote instalado ou módulo desabilitado; nenhuma cópia ou mutação de banco nesta rechecagem.
