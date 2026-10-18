@@ -85,15 +85,35 @@ shared_ml_token_owner() {
   fi
 }
 
+# Gate de migracao: detecta se a origem estava (incorretamente) designada
+# para re-habilitar workers enquanto a Marina e responsavel.
+is_origin_workers_fenced() {
+  # Marcador colocado em /etc/shopvivaliz/migration/origin-workers-fenced
+  # se a origem deve estar bloqueada. Presenca do arquivo = Marina tem ownership.
+  [ -f "/etc/shopvivaliz/migration/origin-workers-fenced" ]
+}
+
 # Servicos de runtime aplicaveis ao estado atual de propriedade compartilhada.
 # Com owner=mlrr o renovador legado sai da lista -- inclusive no rollback, que
 # reusa esta mesma funcao e por isso nao consegue ressuscita-lo.
+# Se a origem estiver fenced, nenhum worker (queue, mlrr, amazon, ml-pricing) roda.
 active_runtime_services() {
   local owner service
+  local -a origin_workers=("shopvivaliz-queue-worker.service" "mlrr-fetch-worker.service" "ml-pricing-worker.service" "amazon-returns-safet.service")
   owner="$(shared_ml_token_owner)"
   for service in "${RUNTIME_SERVICES[@]}"; do
     if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
       continue
+    fi
+    # Se a origem estiver bloqueada (Marina tem ownership), pule qualquer worker
+    # que faz parte da lista de transferencia. Log fail-closed.
+    if is_origin_workers_fenced; then
+      for origin_worker in "${origin_workers[@]}"; do
+        if [ "$service" = "$origin_worker" ]; then
+          log WARN "Servico $service esta bloqueado: origem fenced (Marina tem ownership)"
+          continue 2  # Skip to next service in outer loop
+        fi
+      done
     fi
     printf '%s\n' "$service"
   done
