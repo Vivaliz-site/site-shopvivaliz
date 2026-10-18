@@ -31,6 +31,9 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$SSH_KEY_MATERIAL" > "$HOME/.ssh/marina-rotation-key"
           printf '%s\n' "$KNOWN_HOSTS_MATERIAL" > "$HOME/.ssh/marina-rotation-known-hosts"
+          # The verified controller inventory contains this exact host key for
+          # the Marina public IP. Keep strict host checking enabled in CI.
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-rotation-known-hosts"
           chmod 600 "$HOME/.ssh/marina-rotation-key" "$HOME/.ssh/marina-rotation-known-hosts"
 
       - name: Transfer rotated key to protected temporary file
