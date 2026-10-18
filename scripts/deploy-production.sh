@@ -123,6 +123,13 @@ restart_runtime_services() {
   local service
   local -a services=()
   local -a candidates=()
+
+  # Gate P0: Se a origem estiver fenced, nao reinicie nenhum worker da Marina.
+  # Isso e uma protecao adicional para evitar que deploy acidental reactive workers bloqueados.
+  if is_origin_workers_fenced; then
+    log INFO "Origem fenced (Marina tem ownership dos workers). Reinicio de runtime restrito."
+  fi
+
   mapfile -t candidates < <(active_runtime_services)
   for service in "${candidates[@]}"; do
     if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ ! -f "$CURRENT_LINK/daemon-mercadolivre-token-renewer.php" ]; then
@@ -136,6 +143,13 @@ restart_runtime_services() {
     fi
     services+=("$service")
   done
+
+  # Se array vazio (todos foram filtrados ou nao existem), nada fazer.
+  if [ "${#services[@]}" -eq 0 ]; then
+    log INFO "Nenhum servico de runtime para reiniciar (pode estar bloqueado ou vazio)"
+    return 0
+  fi
+
   if ! sudo systemctl restart "${services[@]}"; then
     log ERROR "Reinicio dos servicos de runtime falhou"
     return 1
