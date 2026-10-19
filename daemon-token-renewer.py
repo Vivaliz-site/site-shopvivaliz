@@ -251,7 +251,13 @@ def ensure_token_store_parent() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         os.chmod(path.parent, 0o770)
-        os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
+        try:
+            os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
+        except PermissionError:
+            # The service account may lack ownership-changing capability;
+            # production provisioning already creates this setgid directory
+            # with the required ACL, so do not block token rotation here.
+            pass
 
 
 def update_env(new_token: str, new_refresh_token: str) -> None:
