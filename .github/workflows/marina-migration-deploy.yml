@@ -90,8 +90,6 @@ jobs:
           git checkout-index --force -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           echo '--- MARINA_POST_RECONCILIATION ---'
           git status --porcelain
-          git status --porcelain=v2
-          git ls-files --eol -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           git rev-parse HEAD
           git rev-parse FETCH_HEAD
           git diff --name-status
