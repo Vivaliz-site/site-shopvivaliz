@@ -18,6 +18,16 @@ user_memory="$claude_dir/CLAUDE.md"
 bootstrap_doc="/home/ubuntu/shopvivaliz-deploy/current/docs/knowledge/claude-vm-bootstrap.md"
 bootstrap_link="$claude_dir/shopvivaliz-bootstrap.md"
 node_bin="$(command -v node)"
+paid_bridge_manual_approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
+paid_bridge_mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"
+
+case "$paid_bridge_manual_approved:$paid_bridge_mode" in
+  0:disabled|1:interactive) ;;
+  *)
+    printf '%s\n' 'Invalid paid bridge policy; expected 0:disabled or 1:interactive' >&2
+    exit 64
+    ;;
+esac
 
 test -n "$node_bin"
 test -f "$bridge_source"
@@ -64,8 +74,8 @@ Type=simple
 WorkingDirectory=$workspace
 ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CLAUDE_BRIDGE_PORT=17657
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=$paid_bridge_manual_approved
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=$paid_bridge_mode
 Environment=AI_SQUAD_CLAUDE_BIN=$claude_bin
 Environment=AI_SQUAD_CLAUDE_ENV_PATH=$env_path
 Environment=AI_SQUAD_CLAUDE_HOME=/home/ubuntu

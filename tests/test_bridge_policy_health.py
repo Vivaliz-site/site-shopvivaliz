@@ -108,8 +108,9 @@ class BridgePolicyHealthTests(unittest.TestCase):
                 self.assertIn("bridge-health-policy.py", s)
         for role in ("codex", "claude"):
             source = (ROOT / f"ops/ai-squad/install-{role}-bridge-user-service.sh").read_text()
-            self.assertIn("SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0", source)
-            self.assertIn("SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled", source)
+            self.assertIn('paid_bridge_manual_approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"', source)
+            self.assertIn('paid_bridge_mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"', source)
+            self.assertIn('0:disabled|1:interactive', source)
             self.assertIn(f"{role}-bridge.mjs", source)
             self.assertIn('staged_bridge=', source)
 
