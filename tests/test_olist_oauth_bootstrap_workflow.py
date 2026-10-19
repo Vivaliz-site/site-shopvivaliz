@@ -5,7 +5,9 @@ import os
 import subprocess
 import tempfile
 import unittest
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.test_olist_oauth_credential_candidates import OlistOAuthCredentialCandidateTests  # noqa: F401
 
@@ -13,6 +15,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "refresh-olist-token-2h.yml"
 CONFIGURE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "configure-production-runtime.yml"
 BOOTSTRAP = REPO_ROOT / "scripts" / "bootstrap-olist-oauth-runtime.py"
+BOOTSTRAP_MODULE_SPEC = spec_from_file_location("bootstrap_olist_oauth_runtime", BOOTSTRAP)
+assert BOOTSTRAP_MODULE_SPEC and BOOTSTRAP_MODULE_SPEC.loader
+BOOTSTRAP_MODULE = module_from_spec(BOOTSTRAP_MODULE_SPEC)
+BOOTSTRAP_MODULE_SPEC.loader.exec_module(BOOTSTRAP_MODULE)
 OAUTH_VALUES = {
     "OLIST_CLIENT_ID": "olist-client-id-sentinel",
     "OLIST_CLIENT_SECRET": "olist-client-secret-sentinel",
@@ -122,6 +128,23 @@ class OlistOAuthBootstrapScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, combined)
             for value in OAUTH_VALUES.values():
                 self.assertNotIn(value, combined)
+
+    def test_merge_does_not_require_chown_when_setgid_directory_preserves_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / ".env"
+            seed = root / "oauth-bootstrap.seed"
+            target.write_text("DB_HOST=db.internal\n", encoding="utf-8")
+            self.write_seed(seed)
+
+            with patch.object(BOOTSTRAP_MODULE.os, "name", "posix"), patch.object(
+                BOOTSTRAP_MODULE.os, "chown", side_effect=PermissionError, create=True
+            ):
+                updated_count, added_count = BOOTSTRAP_MODULE.merge_oauth(target, seed)
+
+            self.assertEqual(updated_count, len(OAUTH_VALUES))
+            self.assertEqual(added_count, len(OAUTH_VALUES))
+            self.assertIn("OLIST_REFRESH_TOKEN=olist-refresh-sentinel", target.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

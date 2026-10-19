@@ -100,7 +100,12 @@ def merge_oauth(target: Path, seed: Path) -> tuple[int, int]:
         mode = original.st_mode & 0o777
         os.chmod(temporary, mode)
         if os.name != "nt":
-            os.chown(temporary, original.st_uid, original.st_gid)
+            temporary_metadata = temporary.stat()
+            if (
+                temporary_metadata.st_uid != original.st_uid
+                or temporary_metadata.st_gid != original.st_gid
+            ):
+                raise RuntimeError("temporary_env_owner_mismatch")
         os.replace(temporary, resolved)
         updated = resolved.stat()
         if (updated.st_mode & 0o777) != mode:
