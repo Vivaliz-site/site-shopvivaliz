@@ -1,0 +1,45 @@
+name: Marina Direct MCP Read-only CI
+
+on:
+  pull_request:
+    paths:
+      - 'marina-direct-mcp/**'
+      - 'tests/test_marina_direct_mcp.py'
+      - '.github/workflows/marina-direct-mcp-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'marina-direct-mcp/**'
+      - 'tests/test_marina_direct_mcp.py'
+      - '.github/workflows/marina-direct-mcp-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-regression:
+    name: marina-readonly-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate isolated transport code
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile marina-direct-mcp/server.py tests/test_marina_direct_mcp.py
+          python3 tests/test_marina_direct_mcp.py -v
+      - name: Assert no bootstrap transport or remote actions are added
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('marina-direct-mcp/server.py')
+          code = path.read_text(encoding='utf-8')
+          for forbidden in ('os.system(', 'shell=True', 'sudo ', 'docker exec', '0.0.0.0', '0::0'):
+              assert forbidden not in code, forbidden
+          for marker in ('loopback_only', 'unauthorized', 'host_identity_mismatch', 'ALLOWED_SERVICES'):
+              assert marker in code, marker
+          print('MARINA_DIRECT_READONLY_SCOPE=PASS')
+          PY
