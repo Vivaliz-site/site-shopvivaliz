@@ -77,6 +77,8 @@ jobs:
           git fetch --quiet origin main
           git restore --source=FETCH_HEAD --staged --worktree -- .github/workflows/master-production-pipeline.yml
           git add -- .github/workflows/master-production-pipeline.yml
+          git config core.autocrlf false
+          git checkout-index --force -- .github/workflows/master-production-pipeline.yml
           test -z "$(git status --porcelain)"
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
           bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
