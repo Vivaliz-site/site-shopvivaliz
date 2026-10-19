@@ -84,12 +84,12 @@ jobs:
           unexpected_paths=$(comm -23 <(printf '%s\n' "$actual_paths") <(printf '%s\n' "$allowed_paths"))
           test -z "$unexpected_paths"
           # Reconcile the complete tracked checkout from the fetched release.
-          # --reset -u updates both index and worktree without relying on the
-          # remote clone's symbolic/detached HEAD shape.
+          # Clear stale skip-worktree flags before updating index and worktree;
+          # this keeps the operation non-destructive while preserving the gate.
+          git update-index --no-skip-worktree -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           git read-tree --reset -u FETCH_HEAD
           git update-ref --no-deref HEAD FETCH_HEAD
-          git show FETCH_HEAD:.github/workflows/master-production-pipeline.yml > .github/workflows/master-production-pipeline.yml
-          git show FETCH_HEAD:ops/cloudflare-zone-settings-check.json > ops/cloudflare-zone-settings-check.json
+          git checkout-index --force -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           echo '--- MARINA_POST_RECONCILIATION ---'
           git status --porcelain
           git rev-parse HEAD
