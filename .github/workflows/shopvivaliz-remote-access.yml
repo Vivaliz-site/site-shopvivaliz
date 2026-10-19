@@ -263,19 +263,19 @@ jobs:
               health="{}"
               if value="$(curl -fsS --max-time 8 "http://127.0.0.1:$port/health" 2>/dev/null)"; then health="$value"; fi
               python3 - "$name" "$health" <<"PY"
-import json, sys
-name, raw = sys.argv[1], sys.argv[2]
-try:
-    data = json.loads(raw)
-except Exception:
-    data = {}
-prefix = "AI_SQUAD_" + name.upper() + "_HEALTH_"
-for source, label in (("endpoint", "ENDPOINT"), ("ok", "OK"), ("authenticated", "AUTHENTICATED"), ("token_configured", "TOKEN_CONFIGURED"), ("credential_store_configured", "CREDENTIAL_STORE_CONFIGURED"), ("available_profile_count", "AVAILABLE_PROFILE_COUNT")):
-    value = data.get(source, "")
-    if isinstance(value, bool):
-        value = str(value).lower()
-    print(prefix + label + "=" + str(value))
-PY
+              import json, sys
+              name, raw = sys.argv[1], sys.argv[2]
+              try:
+                  data = json.loads(raw)
+              except Exception:
+                  data = {}
+              prefix = "AI_SQUAD_" + name.upper() + "_HEALTH_"
+              for source, label in (("endpoint", "ENDPOINT"), ("ok", "OK"), ("authenticated", "AUTHENTICATED"), ("token_configured", "TOKEN_CONFIGURED"), ("credential_store_configured", "CREDENTIAL_STORE_CONFIGURED"), ("available_profile_count", "AVAILABLE_PROFILE_COUNT")):
+                  value = data.get(source, "")
+                  if isinstance(value, bool):
+                      value = str(value).lower()
+                  print(prefix + label + "=" + str(value))
+              PY
             done'
 
       - name: Upload AI Squad UI evidence
