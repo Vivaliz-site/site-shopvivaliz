@@ -95,7 +95,7 @@ jobs:
           git diff --name-status
           git diff --cached --name-status
           echo '--- END MARINA_POST_RECONCILIATION ---'
-          dirty_after="$(git status --porcelain)"
+          dirty_after="$(git status --porcelain || true)"
           printf 'MARINA_DIRTY_AFTER_START\n%s\nMARINA_DIRTY_AFTER_END\n' "$dirty_after"
           test -z "$dirty_after"
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
