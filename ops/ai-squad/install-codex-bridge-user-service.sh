@@ -38,9 +38,14 @@ if [ ! -f "$codex_real" ] && command -v npm >/dev/null 2>&1; then
     codex_real="$npm_root_global/@openai/codex/bin/codex.js"
   fi
 fi
+if [ -x /home/ubuntu/.local/bin/codex ]; then
+  codex_real=/home/ubuntu/.local/bin/codex
+fi
 if [ ! -f "$codex_real" ]; then
+  if [ ! -x "$codex_real" ]; then
   printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=codex_script_missing' >&2
   exit 1
+  fi
 fi
 mkdir -p "$service_dir" "$workspace"
 chmod 700 "$runtime" "$workspace"

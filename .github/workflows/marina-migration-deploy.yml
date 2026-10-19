@@ -82,12 +82,9 @@ jobs:
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
           ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
-            codex_script=/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js
-            if [ ! -f "$codex_script" ]; then
-              npm install --global --no-audit --no-fund @openai/codex
-            fi
-            npm_root_global="$(npm root --global)"
-            test -f "$npm_root_global/@openai/codex/bin/codex.js"
+            curl -fsSL https://chatgpt.com/codex/install.sh | sh
+            test -x /home/ubuntu/.local/bin/codex
+            CODEX_HOME=/home/ubuntu/.codex-business/fredmourao /home/ubuntu/.local/bin/codex login status
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
           '
 
