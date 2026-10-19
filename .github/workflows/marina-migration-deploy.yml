@@ -54,6 +54,18 @@ jobs:
           set -Eeuo pipefail
           sha="$1"
           test "$(hostname -s)" = "marina-a1-4c24g"
+          uid="$(id -u ubuntu)"
+          export HOME=/home/ubuntu
+          export XDG_RUNTIME_DIR="/run/user/$uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          sudo loginctl enable-linger ubuntu
+          for _ in $(seq 1 20); do
+            if sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null
           cd /home/ubuntu/shopvivaliz-deploy/repo
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
           bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
