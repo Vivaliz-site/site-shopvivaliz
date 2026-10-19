@@ -931,19 +931,25 @@ function svais_anthropic_dispatch(
 
     $attempts = [];
     foreach (svais_anthropic_transport_order() as $transport) {
-        try {
-            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
-            if (trim((string)($result['text'] ?? '')) === '') {
-                throw new RuntimeException('provider_empty_response');
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+                if (trim((string)($result['text'] ?? '')) === '') {
+                    throw new RuntimeException('provider_empty_response');
+                }
+                if (!svais_provider_model_matches('anthropic', (string)$cfg['model'], (string)($result['model'] ?? ''))) {
+                    throw new RuntimeException('model_mismatch');
+                }
+                $result['transport'] = $transport;
+                $result['transport_attempts'] = $attempts;
+                return $result;
+            } catch (Throwable $e) {
+                $failureClass = svais_failure_class($e);
+                $attempts[] = ['transport' => $transport, 'class' => $failureClass];
+                if ($attempt !== 0 || $failureClass !== 'timeout') {
+                    break;
+                }
             }
-            if (!svais_provider_model_matches('anthropic', (string)$cfg['model'], (string)($result['model'] ?? ''))) {
-                throw new RuntimeException('model_mismatch');
-            }
-            $result['transport'] = $transport;
-            $result['transport_attempts'] = $attempts;
-            return $result;
-        } catch (Throwable $e) {
-            $attempts[] = ['transport' => $transport, 'class' => svais_failure_class($e)];
         }
     }
 
@@ -1020,34 +1026,27 @@ function svais_openai_dispatch(
         if ($transport === 'manual_chatgpt') break;
         if ($skipCodex && $transport === 'codex_chatgpt') continue;
 
-        $transportAttempts = $transport === 'codex_chatgpt' ? 2 : 1;
-        for ($attempt = 0; $attempt < $transportAttempts; $attempt++) {
-            try {
-                $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
-                $text = trim((string)($result['text'] ?? ''));
-                if ($text === '') {
-                    throw new RuntimeException('provider_empty_response');
-                }
-
-                $requestedModel = (string)$cfg['model'];
-                $actualModel = (string)($result['model'] ?? '');
-                if ($actualModel !== $requestedModel) {
-                    throw new RuntimeException('model_mismatch');
-                }
-
-                $result['transport'] = $transport;
-                $result['transport_attempts'] = $attempts;
-                return $result;
-            } catch (Throwable $e) {
-                $failureClass = svais_failure_class($e);
-                $attempts[] = [
-                    'transport' => $transport,
-                    'class' => $failureClass,
-                ];
-                if ($transport !== 'codex_chatgpt' || $attempt !== 0 || $failureClass !== 'timeout') {
-                    break;
-                }
+        try {
+            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+            $text = trim((string)($result['text'] ?? ''));
+            if ($text === '') {
+                throw new RuntimeException('provider_empty_response');
             }
+
+            $requestedModel = (string)$cfg['model'];
+            $actualModel = (string)($result['model'] ?? '');
+            if ($actualModel !== $requestedModel) {
+                throw new RuntimeException('model_mismatch');
+            }
+
+            $result['transport'] = $transport;
+            $result['transport_attempts'] = $attempts;
+            return $result;
+        } catch (Throwable $e) {
+            $attempts[] = [
+                'transport' => $transport,
+                'class' => svais_failure_class($e),
+            ];
         }
     }
 

@@ -31,6 +31,16 @@ function fail(message) {
   throw new Error('AI_SQUAD_UI_AUDIT_FAIL: ' + message);
 }
 
+function expectedRequestFailureReason({ url, error }) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return ''; }
+  const sameOrigin = parsed.origin === 'https://shopvivaliz.com.br';
+  if (error !== 'net::ERR_ABORTED' || !sameOrigin) return '';
+  if (parsed.pathname.startsWith('/0fb1/')) return 'navigation-aborted-analytics-proxy';
+  if (parsed.pathname === '/api/agent/buscador.php') return 'navigation-aborted-buscador-stream';
+  return '';
+}
+
 if (browserHeadless) fail('headless_mode_not_certifiable');
 
 const raw = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
@@ -63,7 +73,12 @@ const requestFailures = [];
 const serverErrors = [];
 page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
-page.on('requestfailed', request => requestFailures.push({ url: request.url(), error: request.failure()?.errorText || '' }));
+page.on('requestfailed', request => {
+  const url = request.url();
+  const error = request.failure()?.errorText || '';
+  const expectedReason = expectedRequestFailureReason({ url, error });
+  requestFailures.push({ url, error, expected: expectedReason !== '', expectedReason });
+});
 page.on('response', response => { if (response.status() >= 500) serverErrors.push({ url: response.url(), status: response.status() }); });
 
 try {
@@ -133,6 +148,9 @@ try {
         sourceLinks: node.querySelectorAll('.sources a').length,
         meta: (node.querySelector('.agent small')?.textContent || '').trim(),
         errorText: node.matches('.msg.error') ? (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500) : '',
+        manualAttempts: Array.from(node.querySelectorAll('.manual-note'))
+          .map(x => (x.textContent || '').trim())
+          .find(text => text.startsWith('Tentativas automáticas:')) || '',
       });
     }
     return {
@@ -176,7 +194,19 @@ try {
   }
   if (consoleErrors.length) fail('console_error_present');
   if (pageErrors.length) fail('pageerror_present');
-  if (requestFailures.length) fail('requestfailed_present');
+  const unexpectedRequestFailures = requestFailures.filter(item => !item.expected);
+  if (unexpectedRequestFailures.length) {
+    const sanitizedRequestFailures = unexpectedRequestFailures.map(({ url, error }) => {
+      try {
+        const parsed = new URL(url);
+        return { origin: parsed.origin, pathname: parsed.pathname, error };
+      } catch {
+        return { origin: '', pathname: '[invalid-url]', error };
+      }
+    });
+    console.log('AI_SQUAD_UI_REQUEST_FAILURES=' + JSON.stringify(sanitizedRequestFailures));
+    fail('requestfailed_present');
+  }
   if (serverErrors.length) fail('http_5xx_present');
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -190,7 +220,8 @@ try {
   if (reloadHealth.length !== 3 || reloadHealth.some(x => !x.dotClass.split(/\s+/).includes('ok'))) fail('reload_provider_health_not_verified');
   if (consoleErrors.length) fail('console_error_after_reload');
   if (pageErrors.length) fail('pageerror_after_reload');
-  if (requestFailures.length) fail('requestfailed_after_reload');
+  const unexpectedRequestFailuresAfterReload = requestFailures.filter(item => !item.expected);
+  if (unexpectedRequestFailuresAfterReload.length) fail('requestfailed_after_reload');
   if (serverErrors.length) fail('http_5xx_after_reload');
   console.log(JSON.stringify({
     cycle: summary.cycle,

@@ -224,6 +224,29 @@ $anthropicResult = svais_anthropic_dispatch(
 ais_assert(($anthropicResult['text'] ?? '') === 'claude-oauth-ok', 'Claude Code OAuth result missing');
 ais_assert($anthropicCalls === ['claude_code'], 'Claude Code account login must be the only Anthropic transport');
 
+$anthropicRetryCalls = [];
+$anthropicRetry = svais_anthropic_dispatch(
+    $deep['anthropic'],
+    'system',
+    'prompt',
+    true,
+    function (string $transport) use (&$anthropicRetryCalls, $deep): array {
+        $anthropicRetryCalls[] = $transport;
+        if (count($anthropicRetryCalls) === 1) {
+            throw new RuntimeException('claude_bridge_timeout');
+        }
+        return [
+            'text' => 'claude-retry-ok',
+            'sources' => ['https://example.test/source'],
+            'usage' => [],
+            'model' => $deep['anthropic']['model'],
+            'transport' => 'claude_code',
+        ];
+    }
+);
+ais_assert(($anthropicRetry['text'] ?? '') === 'claude-retry-ok', 'Transient Claude retry result missing');
+ais_assert($anthropicRetryCalls === ['claude_code', 'claude_code'], 'Transient Claude failure must receive one bounded retry');
+
 $anthropicFailureCalls = [];
 $anthropicFailure = null;
 try {
@@ -288,34 +311,6 @@ $codexResult = svais_openai_dispatch(
 );
 ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result missing');
 ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
-
-$calls = [];
-$transientRetry = null;
-try {
-    $transientRetry = svais_openai_dispatch(
-        $dispatchCfg,
-        'system',
-        'prompt',
-        true,
-        function (string $transport) use (&$calls, $dispatchCfg): array {
-            $calls[] = $transport;
-            if (count($calls) === 1) {
-                throw new RuntimeException('codex_bridge_timeout');
-            }
-            return [
-                'text' => 'codex-retry-ok',
-                'sources' => ['https://example.test/source'],
-                'usage' => [],
-                'model' => $dispatchCfg['model'],
-                'transport' => 'codex_chatgpt',
-            ];
-        }
-    );
-} catch (Throwable $e) {
-    ais_assert(false, 'Transient Codex failure should be retried: ' . $e->getMessage());
-}
-ais_assert(($transientRetry['text'] ?? '') === 'codex-retry-ok', 'Transient Codex retry result missing');
-ais_assert($calls === ['codex_chatgpt', 'codex_chatgpt'], 'Transient Codex failure must receive one bounded retry');
 
 $calls = [];
 $quotaFallback = null;
