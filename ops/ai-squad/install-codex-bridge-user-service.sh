@@ -10,7 +10,7 @@ runtime="$HOME/.local/share/shopvivaliz-squad-codex"
 workspace="$runtime/workspace"
 bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/codex-bridge.mjs"
 bridge="$HOME/.local/share/shopvivaliz-ai-squad/codex-bridge.mjs"
-codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"
+codex_real="${AI_SQUAD_CODEX_REAL:-/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js}"
 business_home="/home/ubuntu/.codex-business"
 node_bin="$(command -v node)"
 paid_bridge_manual_approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
@@ -31,6 +31,12 @@ fi
 if [ ! -f "$bridge_source" ]; then
   printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=bridge_source_missing' >&2
   exit 1
+fi
+if [ ! -f "$codex_real" ] && command -v npm >/dev/null 2>&1; then
+  npm_root_global="$(npm root --global 2>/dev/null || true)"
+  if [ -f "$npm_root_global/@openai/codex/bin/codex.js" ]; then
+    codex_real="$npm_root_global/@openai/codex/bin/codex.js"
+  fi
 fi
 if [ ! -f "$codex_real" ]; then
   printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=codex_script_missing' >&2
