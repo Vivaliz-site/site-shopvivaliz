@@ -70,10 +70,11 @@ jobs:
           umask 077
           test -n "$MARINA_CODEX_AUTH_JSON"
           test -n "$MARINA_CLAUDE_CREDENTIALS_JSON"
-          install -d -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
-          printf '%s' "$MARINA_CODEX_AUTH_JSON" > /home/ubuntu/.codex-business/fredmourao/auth.json
-          printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" > /home/ubuntu/.claude/.credentials.json
-          chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
+          sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
+          printf '%s' "$MARINA_CODEX_AUTH_JSON" | sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null
+          printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null
+          sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
+          sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
           echo AUTH_STORES_MATERIALIZED=PASS
 
       - name: Ensure approved native Codex runtime
@@ -82,9 +83,13 @@ jobs:
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
           ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            test -d /home/ubuntu/.codex-business/fredmourao
+            sudo -u ubuntu env HOME=/home/ubuntu PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin bash -s <<'AS_UBUNTU'
+            set -Eeuo pipefail
             curl -fsSL https://chatgpt.com/codex/install.sh | sh
             test -x /home/ubuntu/.local/bin/codex
             CODEX_HOME=/home/ubuntu/.codex-business/fredmourao /home/ubuntu/.local/bin/codex login status
+            AS_UBUNTU
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
           '
 
