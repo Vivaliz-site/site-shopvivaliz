@@ -235,13 +235,17 @@ fs.writeFileSync(credentialPath, JSON.stringify({
   },
 }), { mode: 0o600 });
 const explicitAuth = resolveClaudeAuthSource('explicit-token', credentialPath);
-assert.equal(explicitAuth.mode, 'env_token');
+assert.equal(explicitAuth.mode, 'credential_store', 'valid OAuth store must outrank a legacy shared env token');
 assert.equal(explicitAuth.configured, true);
-assert.equal(explicitAuth.token, 'explicit-token');
+assert.equal(explicitAuth.token, '');
 const storedAuth = resolveClaudeAuthSource('', credentialPath);
 assert.equal(storedAuth.mode, 'credential_store');
 assert.equal(storedAuth.configured, true);
 assert.equal(storedAuth.token, '', 'credential-store mode must let Claude CLI own refresh instead of exporting a stale access token');
+const explicitOnlyPath = path.join(authDir, 'missing-explicit.json');
+const explicitOnlyAuth = resolveClaudeAuthSource('explicit-token', explicitOnlyPath);
+assert.equal(explicitOnlyAuth.mode, 'env_token');
+assert.equal(explicitOnlyAuth.token, 'explicit-token');
 assert.deepEqual(resolveClaudeAuthSource('', path.join(authDir, 'missing.json')), {
   mode: 'none',
   configured: false,

@@ -139,9 +139,10 @@ function envValue(name) {
 }
 
 export function resolveClaudeAuthSource(explicitToken, credentialsPath = DEFAULT_CREDENTIALS_PATH) {
-  const direct = String(explicitToken || '').trim();
-  if (direct) return { mode: 'env_token', configured: true, token: direct };
-
+  // Prefer Claude Code's OAuth store when it is present. The shared .env can
+  // contain a legacy CLAUDE_CODE_OAUTH_TOKEN that is expired or belongs to a
+  // different session; selecting it first makes a valid logged-in CLI look
+  // unauthenticated to the bridge.
   try {
     const parsed = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const oauth = parsed?.claudeAiOauth;
@@ -150,10 +151,14 @@ export function resolveClaudeAuthSource(explicitToken, credentialsPath = DEFAULT
       && typeof oauth === 'object'
       && (String(oauth.accessToken || '').trim() || String(oauth.refreshToken || '').trim())
     );
-    return { mode: configured ? 'credential_store' : 'none', configured, token: '' };
+    if (configured) return { mode: 'credential_store', configured: true, token: '' };
   } catch {
-    return { mode: 'none', configured: false, token: '' };
+    // Fall through to the explicit token for installations without a store.
   }
+
+  const direct = String(explicitToken || '').trim();
+  if (direct) return { mode: 'env_token', configured: true, token: direct };
+  return { mode: 'none', configured: false, token: '' };
 }
 
 function claudeAuthSource() {
