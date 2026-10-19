@@ -88,7 +88,8 @@ jobs:
           # this keeps the operation non-destructive while preserving the gate.
           git update-index --no-skip-worktree --no-assume-unchanged -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           git read-tree --reset -u FETCH_HEAD
-          git update-ref --no-deref HEAD FETCH_HEAD
+          git symbolic-ref HEAD refs/heads/main
+          git update-ref refs/heads/main FETCH_HEAD
           git restore --source=FETCH_HEAD --worktree -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           git update-index --assume-unchanged -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
           echo '--- MARINA_POST_RECONCILIATION ---'
