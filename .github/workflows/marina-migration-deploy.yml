@@ -68,14 +68,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           umask 077
-          test -n "$MARINA_CODEX_AUTH_JSON"
-          test -n "$MARINA_CLAUDE_CREDENTIALS_JSON"
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
-          printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
-          printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
-          echo AUTH_STORES_MATERIALIZED=PASS
+          if [ -n "$MARINA_CODEX_AUTH_JSON" ] && [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
+            printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
+            printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
+            echo AUTH_STORES_MATERIALIZED=PASS
+          else
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
+            echo AUTH_STORES_REUSED=PASS
+          fi
 
       - name: Ensure approved native Codex runtime
         shell: bash
