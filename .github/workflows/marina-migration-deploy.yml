@@ -60,6 +60,20 @@ jobs:
           printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
           chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
 
+      - name: Ensure approved native Codex runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            codex_script=/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js
+            if [ ! -f "$codex_script" ]; then
+              npm install --global --no-audit --no-fund @openai/codex
+            fi
+            test -f "$codex_script"
+            printf "CODEX_NATIVE_RUNTIME=READY\\n"
+          '
+
       - name: Execute immutable deploy on Marina
         shell: bash
         run: |
