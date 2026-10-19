@@ -93,6 +93,22 @@ jobs:
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
           '
 
+      - name: Ensure approved native Claude runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            export HOME=/home/ubuntu
+            export PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+            if [ ! -x /home/ubuntu/.local/bin/claude ]; then
+              curl -fsSL https://claude.ai/install.sh | bash
+            fi
+            test -x /home/ubuntu/.local/bin/claude
+            /home/ubuntu/.local/bin/claude auth status --json >/dev/null
+            printf "CLAUDE_NATIVE_RUNTIME=READY\\n"
+          '
+
       - name: Execute immutable deploy on Marina
         shell: bash
         run: |
