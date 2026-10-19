@@ -193,6 +193,10 @@ jobs:
 
       - name: Execute AI Squad UI audit
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        env:
+          MARINA_PUBLIC_IP: 137.131.173.240
+          MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -203,9 +207,18 @@ jobs:
           remote_trace="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
           local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
           local_trace="${RUNNER_TEMP}/ai-squad-ui-audit.zip"
+          marina_key="${RUNNER_TEMP}/marina-ui-audit-key"
+          marina_known_hosts="${RUNNER_TEMP}/marina-ui-audit-known-hosts"
+          printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
+          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
+          chmod 600 "$marina_key" "$marina_known_hosts"
+          marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
 
-          php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
+          scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          chmod 600 "$cred"
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
 
