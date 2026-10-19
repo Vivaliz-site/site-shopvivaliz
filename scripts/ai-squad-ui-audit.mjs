@@ -133,6 +133,9 @@ try {
         sourceLinks: node.querySelectorAll('.sources a').length,
         meta: (node.querySelector('.agent small')?.textContent || '').trim(),
         errorText: node.matches('.msg.error') ? (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500) : '',
+        manualAttempts: Array.from(node.querySelectorAll('.manual-note'))
+          .map(x => (x.textContent || '').trim())
+          .find(text => text.startsWith('Tentativas automáticas:')) || '',
       });
     }
     return {
