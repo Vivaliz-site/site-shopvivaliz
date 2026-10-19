@@ -77,7 +77,8 @@ try {
     ]);
   }
 
-  console.log(`AI_SQUAD_UI_AUTH_STATE url=${page.url()} title=${await page.title()}`);
+  const authBody = (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim().slice(0, 500);
+  console.log(`AI_SQUAD_UI_AUTH_STATE url=${page.url()} title=${await page.title()} body=${authBody}`);
 
   await page.waitForFunction(() => {
     const pathname = window.location.pathname;
