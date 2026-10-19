@@ -309,7 +309,13 @@ foreach ($phases as $phase) {
         ], $stream, $events);
 
         try {
-            $result = svais_call_provider($provider, $profile, $phase, $prompt, $webSearchOverride);
+            $result = svais_call_provider(
+                $provider,
+                $profile,
+                $phase,
+                $prompt,
+                svais_phase_web_search($phase, $webSearchOverride)
+            );
             $entry = [
                 'type' => 'agent_message',
                 'cycle_id' => $cycleId,

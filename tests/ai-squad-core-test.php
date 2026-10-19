@@ -142,6 +142,10 @@ $consensus = svais_consensus_prompt('teste', [[
     'text' => 'posição final',
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
+ais_assert(svais_phase_web_search('research', true) === true, 'research must retain live web search');
+ais_assert(svais_phase_web_search('critique', true) === false, 'critique must reuse research evidence');
+ais_assert(svais_phase_web_search('converge', true) === false, 'convergence must reuse research evidence');
+ais_assert(svais_phase_web_search('research', false) === false, 'disabled web search must remain disabled');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {

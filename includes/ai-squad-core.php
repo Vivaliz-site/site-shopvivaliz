@@ -382,6 +382,15 @@ function svais_cycle_complete_for_consensus(array $transcript, array $providers,
 {
     return svais_cycle_coverage($transcript, $providers, $phases)['complete_provider_coverage'] === true;
 }
+
+function svais_phase_web_search(string $phase, bool $requested): bool
+{
+    // Independent research obtains the live evidence. Debate and convergence
+    // already receive that transcript; repeating live search there needlessly
+    // increases latency and can stall a provider transport on long prompts.
+    return $requested && $phase === 'research';
+}
+
 function svais_provider_state(array $profile, bool $verifyGemini = false, ?callable $geminiProbe = null): array
 {
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
