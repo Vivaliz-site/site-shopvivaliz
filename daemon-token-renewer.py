@@ -468,7 +468,14 @@ def effective_loop_intervals(requested_interval: int, requested_retry_interval: 
 def permission_error_detail(exc: PermissionError) -> str:
     """Expose only the failing filesystem operand, never credential values."""
     filename = getattr(exc, "filename", None) or getattr(exc, "filename2", None)
-    return f" path={filename}" if filename else ""
+    errno_value = getattr(exc, "errno", None)
+    message = str(exc).replace("\n", " ").strip()
+    detail = f" errno={errno_value}" if errno_value is not None else ""
+    if filename:
+        detail += f" path={filename}"
+    if message:
+        detail += f" message={message}"
+    return detail
 
 
 def main() -> int:
