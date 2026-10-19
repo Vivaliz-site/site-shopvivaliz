@@ -217,19 +217,15 @@ jobs:
             local -a services=(
               shopvivaliz-token-renewer.service
               shopvivaliz-shopee-token-renewer.service
-              shopvivaliz-queue-worker.service
             )
             # The source VM must never restart Marina-owned queue processing.
             # This same function is used for activation and rollback.
-            local -a active_services=()
-            for service in "${services[@]}"; do
-              if [ "$service" = "shopvivaliz-queue-worker.service" ] && [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
-                echo 'MARINA_ORIGIN_QUEUE_FENCED=SKIP'
-                continue
-              fi
-              active_services+=("$service")
-            done
-            services=("${active_services[@]}")
+            if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
+              echo 'MARINA_ORIGIN_QUEUE_FENCED=SKIP'
+              # continue without adding the fenced origin worker
+            else
+              services+=(shopvivaliz-queue-worker.service)
+            fi
             owner="$(shared_ml_token_owner)"
             if [ "$owner" = "legacy" ]; then
               services+=("$ml_service")

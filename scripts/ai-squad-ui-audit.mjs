@@ -4,6 +4,7 @@ import os from 'node:os';
 
 const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json';
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
+const tracePath = process.env.AI_SQUAD_UI_TRACE || '/tmp/ai-squad-ui-trace.zip';
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
 const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true';
@@ -53,6 +54,7 @@ const context = await chromium.launchPersistentContext(profileDir, {
     '--use-angle=swiftshader',
   ],
 });
+await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(20000);
 const consoleErrors = [];
@@ -198,6 +200,7 @@ try {
   console.log('AI_SQUAD_UI_AUDIT=PASS');
 } finally {
   await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+  await context.tracing.stop({ path: tracePath }).catch(() => {});
   await context.close().catch(() => {});
   if (ephemeralProfile) fs.rmSync(profileDir, { recursive: true, force: true });
 }
