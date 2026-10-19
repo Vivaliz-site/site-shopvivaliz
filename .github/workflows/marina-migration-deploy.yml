@@ -7,6 +7,12 @@ on:
         description: 'Digite MIGRATE para confirmar a publicação na Marina'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      confirmation:
+        description: 'Confirmação explícita da publicação na Marina'
+        required: true
+        type: string
 
 permissions:
   contents: read
