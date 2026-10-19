@@ -65,13 +65,7 @@ jobs:
           export XDG_RUNTIME_DIR="/run/user/$uid"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           sudo loginctl enable-linger ubuntu
-          for _ in $(seq 1 20); do
-            if sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-          sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null
+          sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running --wait >/dev/null
           cd /home/ubuntu/shopvivaliz-deploy/repo
           echo '--- MARINA_DEPLOY_CHECKOUT_STATUS ---'
           git status --porcelain
