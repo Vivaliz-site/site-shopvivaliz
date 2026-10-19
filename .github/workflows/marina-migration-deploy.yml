@@ -78,7 +78,6 @@ jobs:
           git config core.autocrlf false
           git config core.eol lf
           git restore --source=FETCH_HEAD --staged --worktree -- .github/workflows/master-production-pipeline.yml
-          git add -- .github/workflows/master-production-pipeline.yml
           git checkout-index --force -- .github/workflows/master-production-pipeline.yml
           allowed_paths="$(printf '%s\n' .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json | sort)"
           actual_paths=$(git status --porcelain | sed 's/^.. //' | sort)
