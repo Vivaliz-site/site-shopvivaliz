@@ -38,6 +38,7 @@ jobs:
     env:
       DEPLOY_SHA: ${{ github.sha }}
       MARINA_PUBLIC_IP: 137.131.173.240
+      AI_BRIDGE_CONFIRMATION: ${{ inputs.ai_bridge_confirmation }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,9 +65,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$DEPLOY_SHA" "$AI_BRIDGE_CONFIRMATION" <<'REMOTE'
           set -Eeuo pipefail
           sha="$1"
+          ai_bridge_confirmation="${2:-}"
+          if [ "$ai_bridge_confirmation" = 'ENABLE_AI_BRIDGES' ]; then
+            export SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=1
+            export SHOPVIVALIZ_PAID_BRIDGE_MODE=interactive
+          fi
           test "$(hostname -s)" = "marina-a1-4c24g"
           uid="$(id -u ubuntu)"
           export HOME=/home/ubuntu
