@@ -86,6 +86,7 @@ jobs:
           git read-tree FETCH_HEAD
           git checkout-index --force -- .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml scripts/ai-squad-ui-audit.mjs
           git update-ref "$(git symbolic-ref -q HEAD)" FETCH_HEAD
+          git add -- .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml scripts/ai-squad-ui-audit.mjs
           test -z "$(git status --porcelain)"
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
           bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
