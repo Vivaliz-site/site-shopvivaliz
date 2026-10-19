@@ -251,6 +251,7 @@ jobs:
           hosts="${RUNNER_TEMP}/marina-bridge-status-known-hosts"
           printf '%s\n' "$MARINA_VM_KEY" > "$key"
           printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$hosts"
           chmod 600 "$key" "$hosts"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=10 -i "$key" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
             uid="$(id -u ubuntu)"
