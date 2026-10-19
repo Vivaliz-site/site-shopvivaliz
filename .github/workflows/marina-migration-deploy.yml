@@ -141,6 +141,7 @@ jobs:
           set -Eeuo pipefail
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
           chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
           ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
