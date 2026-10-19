@@ -77,10 +77,10 @@ try {
     ]);
   }
 
-  await page.waitForURL(url => {
-    const pathname = new URL(url).pathname;
+  await page.waitForFunction(() => {
+    const pathname = window.location.pathname;
     return pathname === '/admin/' || pathname.endsWith('/admin/ai-squad.php') || pathname.endsWith('/admin/buscador.php');
-  }, { timeout: 30000 });
+  }, null, { timeout: 30000 });
   const currentPath = new URL(page.url()).pathname;
   if (!currentPath.endsWith('/admin/ai-squad.php') && !currentPath.endsWith('/admin/buscador.php')) {
     await page.goto('https://shopvivaliz.com.br/admin/buscador.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
