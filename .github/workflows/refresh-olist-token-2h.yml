@@ -173,6 +173,23 @@ jobs:
           sudo chmod 0660 "$shared/private/olist-token-rotation.lock"
           sudo chown ubuntu:www-data "$seed"
           chmod 600 "$seed"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          seed = Path('/tmp/shopvivaliz-oauth-bootstrap.seed')
+          token_store = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          if token_store.is_file():
+              store = json.loads(token_store.read_text())
+              refresh = store.get('OLIST_REFRESH_TOKEN') or store.get('TINY_REFRESH_TOKEN') or ''
+              if refresh:
+                  values = dict(line.split('=', 1) for line in seed.read_text().splitlines() if '=' in line)
+                  values['OLIST_REFRESH_TOKEN'] = refresh
+                  values['TINY_REFRESH_TOKEN'] = refresh
+                  seed.write_text(''.join(f'{key}={value}\n' for key, value in values.items()), encoding='utf-8')
+                  seed.chmod(0o600)
+                  print('oauth_runtime_seed_existing_refresh_preferred=true')
+          PY
           export SHOPVIVALIZ_ENV_PATH="$seed"
           export SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store"
           cd "$current"
