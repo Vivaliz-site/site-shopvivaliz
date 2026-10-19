@@ -162,6 +162,17 @@ jobs:
           sudo touch "$shared/private/olist-token-rotation.lock"
           sudo chown ubuntu:www-data "$shared/private/olist-token-rotation.lock"
           sudo chmod 0660 "$shared/private/olist-token-rotation.lock"
+          echo 'oauth_runtime_permission_probe=start'
+          id
+          stat -c 'path=%n owner=%U group=%G mode=%a' \
+            "$shared/private" \
+            "$shared/private/olist-token-rotation.lock" \
+            "$token_store" \
+            "$shared/.env" \
+            "$seed"
+          test -w "$shared/private"
+          test -r "$shared/.env"
+          echo 'oauth_runtime_permission_probe=pass'
           sudo chown ubuntu:www-data "$seed"
           chmod 600 "$seed"
           export SHOPVIVALIZ_ENV_PATH="$seed"
