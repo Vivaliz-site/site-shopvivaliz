@@ -465,6 +465,12 @@ def effective_loop_intervals(requested_interval: int, requested_retry_interval: 
     return check_interval, retry_interval
 
 
+def permission_error_detail(exc: PermissionError) -> str:
+    """Expose only the failing filesystem operand, never credential values."""
+    filename = getattr(exc, "filename", None) or getattr(exc, "filename2", None)
+    return f" path={filename}" if filename else ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Forca uma renovacao e encerra")
@@ -482,7 +488,8 @@ def main() -> int:
         try:
             return 0 if renew_once() is not None else 1
         except Exception as exc:
-            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
+            detail = permission_error_detail(exc) if isinstance(exc, PermissionError) else ""
+            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}{detail}")
             return 1
 
     check_interval, retry_interval = effective_loop_intervals(args.interval, args.retry_interval)
@@ -498,7 +505,8 @@ def main() -> int:
         except KeyboardInterrupt:
             return 130
         except Exception as exc:
-            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
+            detail = permission_error_detail(exc) if isinstance(exc, PermissionError) else ""
+            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}{detail}")
             ok, attempted = False, True
         delay = check_interval if ok else retry_interval
         if attempted and not ok:
