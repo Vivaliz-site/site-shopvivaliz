@@ -158,6 +158,10 @@ jobs:
           seed=/tmp/shopvivaliz-oauth-bootstrap.seed
           token_store="$shared/private/olist-tokens.json"
           test -s "$seed"
+          sudo install -d -o ubuntu -g www-data -m 2770 "$shared/private"
+          sudo touch "$shared/private/olist-token-rotation.lock"
+          sudo chown ubuntu:www-data "$shared/private/olist-token-rotation.lock"
+          sudo chmod 0660 "$shared/private/olist-token-rotation.lock"
           sudo chown ubuntu:www-data "$seed"
           chmod 600 "$seed"
           export SHOPVIVALIZ_ENV_PATH="$seed"
