@@ -388,7 +388,8 @@ function svais_phase_web_search(string $phase, ?bool $requested): bool
     // Independent research obtains the live evidence. Debate and convergence
     // already receive that transcript; repeating live search there needlessly
     // increases latency and can stall a provider transport on long prompts.
-    return $requested === true && $phase === 'research';
+    // The topic policy uses null to mean that live search is required.
+    return $phase === 'research' && $requested !== false;
 }
 
 function svais_provider_state(array $profile, bool $verifyGemini = false, ?callable $geminiProbe = null): array

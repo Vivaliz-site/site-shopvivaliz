@@ -146,7 +146,7 @@ ais_assert(svais_phase_web_search('research', true) === true, 'research must ret
 ais_assert(svais_phase_web_search('critique', true) === false, 'critique must reuse research evidence');
 ais_assert(svais_phase_web_search('converge', true) === false, 'convergence must reuse research evidence');
 ais_assert(svais_phase_web_search('research', false) === false, 'disabled web search must remain disabled');
-ais_assert(svais_phase_web_search('research', null) === false, 'unset web search must remain disabled');
+ais_assert(svais_phase_web_search('research', null) === true, 'topic-required web search must remain enabled');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {
