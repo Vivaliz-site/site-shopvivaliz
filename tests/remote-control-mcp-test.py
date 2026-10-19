@@ -68,6 +68,26 @@ class RemoteControlMcpTests(unittest.TestCase):
             {"always-free-arm-1787907847-26", "shopvivaliz-free-a1", "Fred-Win", "KOCEPSV"},
         )
 
+    def test_marina_oci_host_is_visible_as_pending_inventory(self):
+        hosts = m.execute_tool("hosts_list", {})["hosts"]
+        matches = [item for item in hosts if item.get("name") == "marina-a1-4c24g"]
+        self.assertEqual(len(matches), 1)
+        entry = matches[0]
+        self.assertEqual(entry["platform"], "linux")
+        self.assertEqual(entry["address"], "10.80.1.116")
+        self.assertEqual(entry["transport"], "not_provisioned")
+        self.assertEqual(entry["access_status"], "pending_approved_transport")
+
+    def test_pending_marina_inventory_does_not_grant_remote_command_execution(self):
+        self.assertNotIn("marina-a1-4c24g", m.HOSTS)
+        with self.assertRaisesRegex(ValueError, "unsupported_host"):
+            m.validate_host("marina-a1-4c24g")
+        specs = {item["name"]: item for item in m.tool_specs()}
+        for tool in ("host_health", "service_action", "admin_command_run", "task_submit"):
+            with self.subTest(tool=tool):
+                allowed = specs[tool]["inputSchema"]["properties"]["host"]["enum"]
+                self.assertNotIn("marina-a1-4c24g", allowed)
+
     def test_mcp_tools_include_privileged_and_durable_controls(self):
         names = {item["name"] for item in m.tool_specs()}
         for required in {
