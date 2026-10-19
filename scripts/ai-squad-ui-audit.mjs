@@ -77,6 +77,8 @@ try {
     ]);
   }
 
+  console.log(`AI_SQUAD_UI_AUTH_STATE url=${page.url()} title=${await page.title()}`);
+
   await page.waitForFunction(() => {
     const pathname = window.location.pathname;
     return pathname === '/admin/' || pathname.endsWith('/admin/ai-squad.php') || pathname.endsWith('/admin/buscador.php');
