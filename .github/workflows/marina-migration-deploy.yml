@@ -70,7 +70,8 @@ jobs:
             if [ ! -f "$codex_script" ]; then
               npm install --global --no-audit --no-fund @openai/codex
             fi
-            test -f "$codex_script"
+            npm_root_global="$(npm root --global)"
+            test -f "$npm_root_global/@openai/codex/bin/codex.js"
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
           '
 
