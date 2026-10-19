@@ -26,7 +26,7 @@ esac
 
 test -n "$node_bin"
 test -f "$bridge_source"
-test -x "$codex_real"
+test -f "$codex_real"
 mkdir -p "$service_dir" "$workspace"
 chmod 700 "$runtime" "$workspace"
 # Install the policy-gated bridge into a stable user-owned runtime location.
