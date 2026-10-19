@@ -28,5 +28,7 @@ MarinaPricingRecovery::assertRecentSourceTimestamp(gmdate('Y-m-d\TH:i:s\Z', time
 refused(fn()=>MarinaPricingRecovery::assertGeneralLogOff('ON'), 'general log ON');
 MarinaPricingRecovery::assertGeneralLogOff('OFF');
 MarinaPricingRecovery::assertGeneralLogOff('0');
+refused(fn()=>MarinaPricingRecovery::assertOriginalDbPortUnbound(true), 'live original DB listener');
+MarinaPricingRecovery::assertOriginalDbPortUnbound(false);
 same(MarinaPricingRecovery::countFingerprint(['table_b'=>2,'table_a'=>1]),hash('sha256',json_encode(['table_a'=>1,'table_b'=>2])),'stable fingerprint');
 echo "MARINA_PRICING_SAFETY_TESTS=PASS\n";
