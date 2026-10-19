@@ -66,6 +66,7 @@ ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CLAUDE_BRIDGE_PORT=17657
 Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
 Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
+EnvironmentFile=-$env_path
 Environment=AI_SQUAD_CLAUDE_BIN=$claude_bin
 Environment=AI_SQUAD_CLAUDE_ENV_PATH=$env_path
 Environment=AI_SQUAD_CLAUDE_HOME=/home/ubuntu
