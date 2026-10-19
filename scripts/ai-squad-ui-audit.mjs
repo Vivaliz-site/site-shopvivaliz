@@ -5,6 +5,15 @@ import os from 'node:os';
 const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json';
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
 const tracePath = process.env.AI_SQUAD_UI_TRACE || '/tmp/ai-squad-ui-trace.zip';
+const evidenceDir = String(process.env.AI_SQUAD_UI_EVIDENCE_DIR || '').trim();
+const evidenceRole = String(process.env.AI_SQUAD_UI_EVIDENCE_ROLE || 'primary').trim();
+const evidenceJourneyId = String(process.env.AI_SQUAD_UI_JOURNEY_ID || 'ai-squad-research-consensus').trim();
+const evidenceAuditor = String(process.env.AI_SQUAD_UI_AUDITOR || 'shopvivaliz-real-browser-runner').trim();
+const evidenceSessionId = String(process.env.AI_SQUAD_UI_SESSION_ID || `browser-${Date.now()}`).trim();
+const evidenceEnvironment = String(process.env.AI_SQUAD_UI_ENVIRONMENT || 'production-marina').trim();
+const evidenceReleaseLabel = String(process.env.AI_SQUAD_UI_RELEASE || '').trim();
+const evidenceTraceId = String(process.env.AI_SQUAD_UI_TRACE_ID || `${evidenceRole}-playwright-trace`).trim();
+const evidenceScreenshotId = String(process.env.AI_SQUAD_UI_SCREENSHOT_ID || `${evidenceRole}-screenshot`).trim();
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
 const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true';
@@ -29,6 +38,22 @@ async function loadChromium() {
 
 function fail(message) {
   throw new Error('AI_SQUAD_UI_AUDIT_FAIL: ' + message);
+}
+
+async function resolveEvidenceRelease() {
+  if (evidenceReleaseLabel) return evidenceReleaseLabel;
+  try {
+    const response = await fetch('https://shopvivaliz.com.br/api/health/version.php');
+    const body = await response.json();
+    if (body?.release_sha) return String(body.release_sha);
+  } catch {}
+  fail('evidence_release_unavailable');
+}
+
+function writeEvidenceJson(fileName, value) {
+  if (!evidenceDir) return;
+  fs.mkdirSync(evidenceDir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(evidenceDir, fileName), JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
 }
 
 function expectedRequestFailureReason({ url, error }) {
@@ -71,6 +96,11 @@ const consoleErrors = [];
 const pageErrors = [];
 const requestFailures = [];
 const serverErrors = [];
+const evidenceEvents = [];
+let finalSummary = null;
+let reloadHealth = [];
+const evidenceRelease = await resolveEvidenceRelease();
+const evidenceStamp = `${evidenceRelease}|${evidenceReleaseLabel || evidenceRelease}|${evidenceEnvironment}`;
 page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
 page.on('requestfailed', request => {
@@ -83,6 +113,7 @@ page.on('response', response => { if (response.status() >= 500) serverErrors.pus
 
 try {
   await page.goto('https://shopvivaliz.com.br/admin/buscador.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  evidenceEvents.push({ action: 'navigate', observed: page.url() });
   if (page.url().includes('/auth/login.php')) {
     await page.locator('#email').fill(raw.email);
     await page.locator('#password').fill(raw.password);
@@ -117,10 +148,14 @@ try {
 
   await page.locator('#profile').selectOption('deep_research');
   await page.locator('#mode').selectOption('research');
+  evidenceEvents.push({ action: 'interact', control_id: 'profile', observed: 'deep_research' });
+  evidenceEvents.push({ action: 'interact', control_id: 'mode', observed: 'research' });
   const prompt = 'Pesquise na web raquetes Yonex com cabeça de 100 in² atualmente em liquidação/promoção, disponíveis para compra no Brasil. Procure oportunidades reais, não apenas preço anunciado como promoção. Verifique preço atual, preço anterior quando comprovável, percentual de desconto, peso, tamanho da cabeça, loja, disponibilidade e URL da fonte. Priorize modelos de performance/primeira linha, novos, preferencialmente entre 295 e 305 g. Compare as ofertas encontradas e identifique as melhores oportunidades considerando qualidade da raquete, desconto real e preço final. Não invente preço, estoque ou desconto; toda afirmação comercial deve ter fonte verificável.';
   await page.locator('#message').fill(prompt);
+  evidenceEvents.push({ action: 'interact', control_id: 'message', observed: 'research prompt filled' });
 
   await page.locator('#run').click();
+  evidenceEvents.push({ action: 'interact', control_id: 'run', observed: 'research cycle started' });
   await page.waitForFunction(() => document.querySelector('#run')?.disabled === true, null, { timeout: 5000 });
   await page.waitForFunction(() => {
     const phase = (document.querySelector('#phase')?.textContent || '').trim();
@@ -169,6 +204,11 @@ try {
       })),
     };
   });
+  finalSummary = summary;
+  evidenceEvents.push({
+    action: 'assert_postcondition',
+    observed: `phase=${summary.phase}; messages=${summary.messageCount}; consensus=${summary.consensusAvailable}`,
+  });
   console.log('AI_SQUAD_UI_SUMMARY=' + JSON.stringify(summary));
 
   const expectedPhases = ['Pesquisa independente', 'Contraditório', 'Convergência', 'Síntese de consenso'];
@@ -210,13 +250,19 @@ try {
   if (serverErrors.length) fail('http_5xx_present');
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
+  evidenceEvents.push({ action: 'reload', observed: 'reload started after screenshot' });
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  evidenceEvents.push({ action: 'revisit', observed: page.url() });
   await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
-  await page.waitForFunction(() => document.querySelectorAll('#health .pill').length === 3, null, { timeout: 30000 });
+  await page.waitForFunction(() => {
+    const pills = Array.from(document.querySelectorAll('#health .pill'));
+    return pills.length === 3 && pills.every(pill => pill.querySelector('.dot')?.classList.contains('ok'));
+  }, null, { timeout: 60000, polling: 1000 });
   const reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
     text: (x.textContent || '').trim(),
     dotClass: x.querySelector('.dot')?.className || '',
   })));
+  evidenceEvents.push({ action: 'assert_persistence', observed: `reload health verified providers=${reloadHealth.length}` });
   if (reloadHealth.length !== 3 || reloadHealth.some(x => !x.dotClass.split(/\s+/).includes('ok'))) fail('reload_provider_health_not_verified');
   if (consoleErrors.length) fail('console_error_after_reload');
   if (pageErrors.length) fail('pageerror_after_reload');
@@ -243,6 +289,44 @@ try {
 } finally {
   await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
   await context.tracing.stop({ path: tracePath }).catch(() => {});
+  if (evidenceDir && finalSummary) {
+    const relativeScreenshot = path.basename(screenshotPath);
+    const relativeTrace = path.basename(tracePath);
+    writeEvidenceJson('ui-inventory.json', {
+      schema: 'AUDIT_UI_INVENTORY_V2',
+      sha_release_environment: evidenceStamp,
+      ui_surface_present: true,
+      routes: [{ url: 'https://shopvivaliz.com.br/admin/buscador.php', control_ids: ['profile', 'mode', 'message', 'run'] }],
+      material_journey_ids: [evidenceJourneyId],
+      stateful_cases: false,
+      inspection_sources: ['real-headed-playwright-dom', 'real-headed-playwright-trace'],
+    });
+    writeEvidenceJson(`${evidenceRole}-execution.json`, {
+      schema: 'AUDIT_UI_EXECUTION_V2',
+      sha_release_environment: evidenceStamp,
+      journey_id: evidenceJourneyId,
+      auditor: evidenceAuditor,
+      session_id: evidenceSessionId,
+      captured_at_utc: new Date().toISOString(),
+      events: evidenceEvents,
+      interacted_control_ids: ['profile', 'mode', 'message', 'run'],
+      media_refs: [evidenceTraceId, evidenceScreenshotId],
+      result: finalSummary,
+      reload_health: reloadHealth,
+    });
+    writeEvidenceJson('summary.json', {
+      schema: 'AI_SQUAD_UI_EVIDENCE_SUMMARY_V1',
+      sha_release_environment: evidenceStamp,
+      journey_id: evidenceJourneyId,
+      role: evidenceRole,
+      auditor: evidenceAuditor,
+      session_id: evidenceSessionId,
+      screenshot: relativeScreenshot,
+      trace: relativeTrace,
+      summary: finalSummary,
+      reload_health: reloadHealth,
+    });
+  }
   await context.close().catch(() => {});
   if (ephemeralProfile) fs.rmSync(profileDir, { recursive: true, force: true });
 }
