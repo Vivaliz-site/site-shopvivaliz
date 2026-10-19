@@ -254,8 +254,11 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
   evidenceEvents.push({ action: 'revisit', observed: page.url() });
   await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
-  await page.waitForFunction(() => document.querySelectorAll('#health .pill').length === 3, null, { timeout: 30000 });
-  reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
+  await page.waitForFunction(() => {
+    const pills = Array.from(document.querySelectorAll('#health .pill'));
+    return pills.length === 3 && pills.every(pill => pill.querySelector('.dot')?.classList.contains('ok'));
+  }, null, { timeout: 60000, polling: 1000 });
+  const reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
     text: (x.textContent || '').trim(),
     dotClass: x.querySelector('.dot')?.className || '',
   })));
