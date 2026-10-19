@@ -60,6 +60,22 @@ jobs:
           printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
           chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
 
+      - name: Materialize approved account auth stores
+        env:
+          MARINA_CODEX_AUTH_JSON: ${{ secrets.MARINA_CODEX_AUTH_JSON }}
+          MARINA_CLAUDE_CREDENTIALS_JSON: ${{ secrets.MARINA_CLAUDE_CREDENTIALS_JSON }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          test -n "$MARINA_CODEX_AUTH_JSON"
+          test -n "$MARINA_CLAUDE_CREDENTIALS_JSON"
+          install -d -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
+          printf '%s' "$MARINA_CODEX_AUTH_JSON" > /home/ubuntu/.codex-business/fredmourao/auth.json
+          printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" > /home/ubuntu/.claude/.credentials.json
+          chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
+          echo AUTH_STORES_MATERIALIZED=PASS
+
       - name: Ensure approved native Codex runtime
         shell: bash
         run: |
