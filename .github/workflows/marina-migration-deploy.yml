@@ -88,7 +88,8 @@ jobs:
           # remote clone's symbolic/detached HEAD shape.
           git read-tree --reset -u FETCH_HEAD
           git update-ref --no-deref HEAD FETCH_HEAD
-          git checkout-index --force -- .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json
+          git show FETCH_HEAD:.github/workflows/master-production-pipeline.yml > .github/workflows/master-production-pipeline.yml
+          git show FETCH_HEAD:ops/cloudflare-zone-settings-check.json > ops/cloudflare-zone-settings-check.json
           echo '--- MARINA_POST_RECONCILIATION ---'
           git status --porcelain
           git rev-parse HEAD
