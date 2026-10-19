@@ -92,6 +92,23 @@ final class MarinaPricingRecovery
         }
     }
 
+    public static function assertOriginalDbPortUnbound(bool $listenerPresent): void
+    {
+        if ($listenerPresent) {
+            throw new InvalidArgumentException('Original port 13312 is already occupied; select DB owner first');
+        }
+    }
+
+    private static function assertNoExistingPricingDbListener(): void
+    {
+        // Another agent may start the validation MySQL concurrently. Never repoint while active.
+        $connection = @stream_socket_client('tcp://127.0.0.1:13312', $errorNumber, $errorString, 1);
+        if (is_resource($connection)) {
+            fclose($connection);
+            self::assertOriginalDbPortUnbound(true);
+        }
+    }
+
     public static function tableCounts(PDO $db): array
     {
         $names = $db->query("SELECT TABLE_NAME FROM information_schema.TABLES "
@@ -189,6 +206,8 @@ final class MarinaPricingRecovery
         if ($data['port'] !== 13312) {
             throw new RuntimeException('FAIL_UNEXPECTED_SOURCE_DB_PORT');
         }
+        try { self::assertNoExistingPricingDbListener(); }
+        catch (InvalidArgumentException $error) { throw new RuntimeException('FAIL_ORIGINAL_PRICING_DB_ALREADY_LISTENING'); }
         if (self::unitActive('shopvivaliz-amazon-returns.service')) {
             throw new RuntimeException('FAIL_ALTERNATE_AMAZON_WORKER_ACTIVE');
         }
@@ -238,6 +257,8 @@ final class MarinaPricingRecovery
         if (!hash_equals((string) $originalHash, (string) hash_file('sha256', $path))) {
             throw new RuntimeException('FAIL_ENV_CONCURRENT_MODIFICATION');
         }
+        try { self::assertNoExistingPricingDbListener(); }
+        catch (InvalidArgumentException $error) { throw new RuntimeException('FAIL_ORIGINAL_PORT_BECAME_ACTIVE'); }
         $rewritten = self::rewritePort($contents);
         // Backup is root-readable only and deliberately retained for approved rollback.
         umask(0077);
