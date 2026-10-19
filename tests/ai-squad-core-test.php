@@ -147,6 +147,11 @@ ais_assert(svais_phase_web_search('critique', true) === false, 'critique must re
 ais_assert(svais_phase_web_search('converge', true) === false, 'convergence must reuse research evidence');
 ais_assert(svais_phase_web_search('research', false) === false, 'disabled web search must remain disabled');
 ais_assert(svais_phase_web_search('research', null) === true, 'topic-required web search must remain enabled');
+$groundedGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'research', true);
+ais_assert(($groundedGemini['thinking_level'] ?? '') === 'LOW', 'grounded Gemini research must use low thinking');
+ais_assert((int)($groundedGemini['max_output_tokens'] ?? 0) <= 3000, 'grounded Gemini research output must be bounded');
+$debateGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'critique', false);
+ais_assert(($debateGemini['thinking_level'] ?? '') === $deep['gemini']['thinking_level'], 'debate Gemini must retain profile thinking');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {

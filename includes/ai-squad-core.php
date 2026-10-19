@@ -392,6 +392,18 @@ function svais_phase_web_search(string $phase, ?bool $requested): bool
     return $phase === 'research' && $requested !== false;
 }
 
+function svais_provider_phase_config(string $provider, array $cfg, string $phase, bool $webSearch): array
+{
+    if ($provider === 'gemini' && $phase === 'research' && $webSearch) {
+        // Grounding is the latency-sensitive part of the deep-research cycle.
+        // Keep citations enabled while bounding reasoning/output for a single
+        // independent research pass; debate and consensus retain the profile.
+        $cfg['thinking_level'] = 'LOW';
+        $cfg['max_output_tokens'] = min(3000, max(512, (int)($cfg['max_output_tokens'] ?? 3000)));
+    }
+    return $cfg;
+}
+
 function svais_provider_state(array $profile, bool $verifyGemini = false, ?callable $geminiProbe = null): array
 {
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
@@ -1059,6 +1071,7 @@ function svais_call_provider(string $provider, array $profile, string $phase, st
     if (!is_array($cfg)) {
         throw new InvalidArgumentException('unknown_provider');
     }
+    $cfg = svais_provider_phase_config($provider, $cfg, $phase, $webSearch);
 
     if ($provider === 'openai') {
         try {
