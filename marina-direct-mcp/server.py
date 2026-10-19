@@ -207,7 +207,10 @@ def create_server(
                             "scope": "unprivileged_read_only",
                         }
                     elif name == "marina_service_status" and set(arguments) == {"service"}:
-                        output = service_reader(arguments["service"])
+                        requested_service = arguments["service"]
+                        if not isinstance(requested_service, str) or requested_service not in ALLOWED_SERVICES:
+                            raise ValueError("service_not_allowed")
+                        output = service_reader(requested_service)
                     else:
                         raise ValueError("unsupported_tool_or_arguments")
                     result = {"content": [{"type": "text", "text": json.dumps(output, sort_keys=True)}], "isError": False}
