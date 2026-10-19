@@ -222,6 +222,7 @@ jobs:
             # This same function is used for activation and rollback.
             if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
               echo 'MARINA_ORIGIN_QUEUE_FENCED=SKIP'
+              # continue without adding the fenced origin worker
             else
               services+=(shopvivaliz-queue-worker.service)
             fi
