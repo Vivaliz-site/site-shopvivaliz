@@ -12,7 +12,6 @@ bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/codex-bridge.mjs"
 bridge="$HOME/.local/share/shopvivaliz-ai-squad/codex-bridge.mjs"
 codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"
 business_home="/home/ubuntu/.codex-business"
-env_path="/home/ubuntu/shopvivaliz-deploy/shared/.env"
 node_bin="$(command -v node)"
 
 test -n "$node_bin"
@@ -46,7 +45,6 @@ ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CODEX_BRIDGE_PORT=17656
 Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
 Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
-EnvironmentFile=-$env_path
 Environment=AI_SQUAD_CODEX_REAL=$codex_real
 Environment=AI_SQUAD_CODEX_BUSINESS_HOME=$business_home
 Environment=AI_SQUAD_CODEX_WORKDIR=$workspace
