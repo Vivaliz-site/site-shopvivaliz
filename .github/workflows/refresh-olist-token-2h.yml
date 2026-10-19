@@ -91,6 +91,11 @@ jobs:
       TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
       TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN }}
     steps:
+      - name: Checkout exact workflow revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
       - name: Require explicit confirmation and OAuth seed
         shell: bash
         env:
@@ -151,28 +156,21 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' -- "$GITHUB_SHA" "$GITHUB_WORKSPACE" <<'REMOTE'
           set -Eeuo pipefail
-          current=/home/ubuntu/shopvivaliz-deploy/current
+          sha="$1"
+          current="$2"
           shared=/home/ubuntu/shopvivaliz-deploy/shared
           seed=/tmp/shopvivaliz-oauth-bootstrap.seed
           token_store="$shared/private/olist-tokens.json"
+          test -d "$current"
+          test "$(git -C "$current" rev-parse HEAD)" = "$sha"
+          test -f "$current/daemon-token-renewer.py"
           test -s "$seed"
           sudo install -d -o ubuntu -g www-data -m 2770 "$shared/private"
           sudo touch "$shared/private/olist-token-rotation.lock"
           sudo chown ubuntu:www-data "$shared/private/olist-token-rotation.lock"
           sudo chmod 0660 "$shared/private/olist-token-rotation.lock"
-          echo 'oauth_runtime_permission_probe=start'
-          id
-          stat -c 'path=%n owner=%U group=%G mode=%a' \
-            "$shared/private" \
-            "$shared/private/olist-token-rotation.lock" \
-            "$token_store" \
-            "$shared/.env" \
-            "$seed"
-          test -w "$shared/private"
-          test -r "$shared/.env"
-          echo 'oauth_runtime_permission_probe=pass'
           sudo chown ubuntu:www-data "$seed"
           chmod 600 "$seed"
           export SHOPVIVALIZ_ENV_PATH="$seed"
