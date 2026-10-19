@@ -200,8 +200,11 @@ reconcile_ai_squad_codex_bridge_unit() {
     log ERROR "Instalador do bridge Codex ausente na release: $installer"
     return 1
   fi
-  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+  if ! run_ai_squad_installer "$installer"; then
     log ERROR "Falha ao reconciliar bridge Codex"
+    log ERROR "Codex bridge diagnostics follow"
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user --no-pager --full status shopvivaliz-squad-codex-bridge.service >> "$LOG_FILE" 2>&1 || true
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" journalctl --user -u shopvivaliz-squad-codex-bridge.service -n 40 --no-pager >> "$LOG_FILE" 2>&1 || true
     return 1
   fi
 }
@@ -231,10 +234,20 @@ reconcile_ai_squad_claude_bridge_unit() {
     log ERROR "Instalador user-level do bridge Claude ausente na release: $installer"
     return 1
   fi
-  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+  if ! run_ai_squad_installer "$installer"; then
     log ERROR "Falha ao reconciliar bridge Claude user-level"
     return 1
   fi
+}
+
+run_ai_squad_installer() {
+  local installer="$1"
+  local approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
+  local mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+    SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED="$approved" \
+    SHOPVIVALIZ_PAID_BRIDGE_MODE="$mode" \
+    bash "$installer" >> "$LOG_FILE" 2>&1
 }
 
 verify_ai_squad_bridges_health() {

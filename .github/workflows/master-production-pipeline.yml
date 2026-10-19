@@ -36,7 +36,7 @@ jobs:
       - name: Validate manual confirmation
         if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
-        run: test '${{ inputs.confirmation }}' = DEPLOY
+        run: test '${{ inputs.confirmation }}' = DEPLOY || test '${{ inputs.confirmation }}' = MIGRATE
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.DEPLOY_SHA }}
@@ -104,7 +104,7 @@ jobs:
 
   deploy:
     needs: validate
-    if: ${{ needs.validate.outputs.should_deploy == 'true' }}
+    if: ${{ needs.validate.outputs.should_deploy == 'true' && (github.event_name != 'workflow_dispatch' || inputs.confirmation == 'DEPLOY') }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
@@ -518,6 +518,15 @@ jobs:
           flock -u 9
           echo 'safe_sync_postdeploy -> success'
           REMOTE
+
+  deploy_marina:
+    name: Deploy exact release to Marina
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation == 'MIGRATE' }}
+    uses: ./.github/workflows/marina-migration-deploy.yml
+    with:
+      confirmation: MIGRATE
+      ai_bridge_confirmation: ENABLE_AI_BRIDGES
+    secrets: inherit
 
   publish_evidence:
     name: Publish exact deployment evidence

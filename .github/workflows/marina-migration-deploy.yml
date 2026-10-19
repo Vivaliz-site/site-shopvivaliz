@@ -10,6 +10,20 @@ on:
         description: 'Digite MIGRATE para confirmar a publicação na Marina'
         required: true
         type: string
+      ai_bridge_confirmation:
+        description: 'Digite ENABLE_AI_BRIDGES para autorizar o ciclo real OpenAI/Claude/Gemini'
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      confirmation:
+        description: 'Confirmação explícita da publicação na Marina'
+        required: true
+        type: string
+      ai_bridge_confirmation:
+        description: 'Confirmação explícita do ciclo real dos bridges AI'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -76,13 +90,14 @@ PY
         run: rm -f "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
 
   deploy:
-    if: inputs.confirmation == 'MIGRATE'
+    if: inputs.confirmation == 'MIGRATE' && inputs.ai_bridge_confirmation == 'ENABLE_AI_BRIDGES'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     environment: production
     env:
       DEPLOY_SHA: ${{ github.sha }}
       MARINA_PUBLIC_IP: 137.131.173.240
+      AI_BRIDGE_CONFIRMATION: ${{ inputs.ai_bridge_confirmation }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -104,27 +119,78 @@ PY
           printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
           chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
 
+      - name: Materialize approved account auth stores
+        env:
+          MARINA_CODEX_AUTH_JSON: ${{ secrets.MARINA_CODEX_AUTH_JSON }}
+          MARINA_CLAUDE_CREDENTIALS_JSON: ${{ secrets.MARINA_CLAUDE_CREDENTIALS_JSON }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          if [ -n "$MARINA_CODEX_AUTH_JSON" ] && [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
+            printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
+            printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
+            echo AUTH_STORES_MATERIALIZED=PASS
+          else
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
+            echo AUTH_STORES_REUSED=PASS
+          fi
+
+      - name: Ensure approved native Codex runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            test -d /home/ubuntu/.codex-business/fredmourao
+            export HOME=/home/ubuntu
+            export CODEX_HOME=/home/ubuntu/.codex-business/fredmourao
+            export PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+            curl -fsSL https://chatgpt.com/codex/install.sh | sh
+            test -x /home/ubuntu/.local/bin/codex
+            /home/ubuntu/.local/bin/codex login status
+            printf "CODEX_NATIVE_RUNTIME=READY\\n"
+          '
+
+      - name: Ensure approved native Claude runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            export HOME=/home/ubuntu
+            export PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+            if [ ! -x /home/ubuntu/.local/bin/claude ]; then
+              curl -fsSL https://claude.ai/install.sh | bash
+            fi
+            test -x /home/ubuntu/.local/bin/claude
+            /home/ubuntu/.local/bin/claude auth status --json >/dev/null
+            printf "CLAUDE_NATIVE_RUNTIME=READY\\n"
+          '
+
       - name: Execute immutable deploy on Marina
         shell: bash
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$DEPLOY_SHA" "$AI_BRIDGE_CONFIRMATION" <<'REMOTE'
           set -Eeuo pipefail
           sha="$1"
+          ai_bridge_confirmation="${2:-}"
+          if [ "$ai_bridge_confirmation" = 'ENABLE_AI_BRIDGES' ]; then
+            export SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=1
+            export SHOPVIVALIZ_PAID_BRIDGE_MODE=interactive
+          fi
           test "$(hostname -s)" = "marina-a1-4c24g"
           uid="$(id -u ubuntu)"
           export HOME=/home/ubuntu
           export XDG_RUNTIME_DIR="/run/user/$uid"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           sudo loginctl enable-linger ubuntu
-          for _ in $(seq 1 20); do
-            if sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-          sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running >/dev/null
+          sudo -u ubuntu env HOME=/home/ubuntu XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" systemctl --user is-system-running --wait >/dev/null
           cd /home/ubuntu/shopvivaliz-deploy/repo
           echo '--- MARINA_DEPLOY_CHECKOUT_STATUS ---'
           git status --porcelain
@@ -174,6 +240,29 @@ PY
           sudo systemctl is-active --quiet shopvivaliz-queue-worker.service
           REMOTE
 
+      - name: Enable explicitly approved AI Squad bridges
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
+          chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            uid="$(id -u ubuntu)"
+            export XDG_RUNTIME_DIR="/run/user/$uid"
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+            export SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=1
+            export SHOPVIVALIZ_PAID_BRIDGE_MODE=interactive
+            cd /home/ubuntu/shopvivaliz-deploy/current
+            bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current
+            echo AI_SQUAD_EXPLICIT_MIGRATION_APPROVAL=PASS
+          '
+
       - name: Verify public Marina release and smoke
         shell: bash
         run: |
@@ -194,6 +283,7 @@ PY
           set -Eeuo pipefail
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
           chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
           ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
@@ -206,20 +296,13 @@ PY
               printf "AI_SQUAD_%s_SERVICE_ACTIVE=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$active"
               health="{}"
               if value="$(curl -fsS --max-time 8 "http://127.0.0.1:$port/health" 2>/dev/null)"; then health="$value"; fi
-              python3 - "$name" "$health" <<"PY"
-import json, sys
-name, raw = sys.argv[1], sys.argv[2]
-try:
-    data = json.loads(raw)
-except Exception:
-    data = {}
-prefix = "AI_SQUAD_" + name.upper() + "_HEALTH_"
-for source, label in (("endpoint", "ENDPOINT"), ("ok", "OK"), ("authenticated", "AUTHENTICATED"), ("token_configured", "TOKEN_CONFIGURED"), ("credential_store_configured", "CREDENTIAL_STORE_CONFIGURED"), ("available_profile_count", "AVAILABLE_PROFILE_COUNT")):
-    value = data.get(source, "")
-    if isinstance(value, bool):
-        value = str(value).lower()
-    print(prefix + label + "=" + str(value))
-PY
+              health_value() { printf '%s' "$health" | jq -r "$1"; }
+              printf "AI_SQUAD_%s_HEALTH_ENDPOINT=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".endpoint // empty")"
+              printf "AI_SQUAD_%s_HEALTH_OK=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".ok // empty")"
+              printf "AI_SQUAD_%s_HEALTH_AUTHENTICATED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".authenticated // empty")"
+              printf "AI_SQUAD_%s_HEALTH_TOKEN_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".token_configured // empty")"
+              printf "AI_SQUAD_%s_HEALTH_CREDENTIAL_STORE_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".credential_store_configured // empty")"
+              printf "AI_SQUAD_%s_HEALTH_AVAILABLE_PROFILE_COUNT=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".available_profile_count // empty")"
             done'
 
       - name: Cleanup SSH material

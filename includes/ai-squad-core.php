@@ -382,6 +382,28 @@ function svais_cycle_complete_for_consensus(array $transcript, array $providers,
 {
     return svais_cycle_coverage($transcript, $providers, $phases)['complete_provider_coverage'] === true;
 }
+
+function svais_phase_web_search(string $phase, ?bool $requested): bool
+{
+    // Independent research obtains the live evidence. Debate and convergence
+    // already receive that transcript; repeating live search there needlessly
+    // increases latency and can stall a provider transport on long prompts.
+    // The topic policy uses null to mean that live search is required.
+    return $phase === 'research' && $requested !== false;
+}
+
+function svais_provider_phase_config(string $provider, array $cfg, string $phase, bool $webSearch): array
+{
+    if ($provider === 'gemini' && $phase === 'research' && $webSearch) {
+        // Grounding is the latency-sensitive part of the deep-research cycle.
+        // Keep citations enabled while bounding reasoning/output for a single
+        // independent research pass; debate and consensus retain the profile.
+        $cfg['thinking_level'] = 'LOW';
+        $cfg['max_output_tokens'] = min(3000, max(512, (int)($cfg['max_output_tokens'] ?? 3000)));
+    }
+    return $cfg;
+}
+
 function svais_provider_state(array $profile, bool $verifyGemini = false, ?callable $geminiProbe = null): array
 {
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
@@ -998,27 +1020,34 @@ function svais_openai_dispatch(
         if ($transport === 'manual_chatgpt') break;
         if ($skipCodex && $transport === 'codex_chatgpt') continue;
 
-        try {
-            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
-            $text = trim((string)($result['text'] ?? ''));
-            if ($text === '') {
-                throw new RuntimeException('provider_empty_response');
-            }
+        $transportAttempts = $transport === 'codex_chatgpt' ? 2 : 1;
+        for ($attempt = 0; $attempt < $transportAttempts; $attempt++) {
+            try {
+                $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+                $text = trim((string)($result['text'] ?? ''));
+                if ($text === '') {
+                    throw new RuntimeException('provider_empty_response');
+                }
 
-            $requestedModel = (string)$cfg['model'];
-            $actualModel = (string)($result['model'] ?? '');
-            if ($actualModel !== $requestedModel) {
-                throw new RuntimeException('model_mismatch');
-            }
+                $requestedModel = (string)$cfg['model'];
+                $actualModel = (string)($result['model'] ?? '');
+                if ($actualModel !== $requestedModel) {
+                    throw new RuntimeException('model_mismatch');
+                }
 
-            $result['transport'] = $transport;
-            $result['transport_attempts'] = $attempts;
-            return $result;
-        } catch (Throwable $e) {
-            $attempts[] = [
-                'transport' => $transport,
-                'class' => svais_failure_class($e),
-            ];
+                $result['transport'] = $transport;
+                $result['transport_attempts'] = $attempts;
+                return $result;
+            } catch (Throwable $e) {
+                $failureClass = svais_failure_class($e);
+                $attempts[] = [
+                    'transport' => $transport,
+                    'class' => $failureClass,
+                ];
+                if ($transport !== 'codex_chatgpt' || $attempt !== 0 || $failureClass !== 'timeout') {
+                    break;
+                }
+            }
         }
     }
 
@@ -1049,6 +1078,7 @@ function svais_call_provider(string $provider, array $profile, string $phase, st
     if (!is_array($cfg)) {
         throw new InvalidArgumentException('unknown_provider');
     }
+    $cfg = svais_provider_phase_config($provider, $cfg, $phase, $webSearch);
 
     if ($provider === 'openai') {
         try {

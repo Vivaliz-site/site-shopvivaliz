@@ -10,13 +10,43 @@ runtime="$HOME/.local/share/shopvivaliz-squad-codex"
 workspace="$runtime/workspace"
 bridge_source="$(cd -- "$(dirname -- "$0")" && pwd -P)/codex-bridge.mjs"
 bridge="$HOME/.local/share/shopvivaliz-ai-squad/codex-bridge.mjs"
-codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"
+codex_real="${AI_SQUAD_CODEX_REAL:-/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js}"
 business_home="/home/ubuntu/.codex-business"
 node_bin="$(command -v node)"
+paid_bridge_manual_approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
+paid_bridge_mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"
 
-test -n "$node_bin"
-test -f "$bridge_source"
-test -x "$codex_real"
+case "$paid_bridge_manual_approved:$paid_bridge_mode" in
+  0:disabled|1:interactive) ;;
+  *)
+    printf '%s\n' 'Invalid paid bridge policy; expected 0:disabled or 1:interactive' >&2
+    exit 64
+    ;;
+esac
+
+if [ -z "$node_bin" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=node_missing' >&2
+  exit 1
+fi
+if [ ! -f "$bridge_source" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=bridge_source_missing' >&2
+  exit 1
+fi
+if [ ! -f "$codex_real" ] && command -v npm >/dev/null 2>&1; then
+  npm_root_global="$(npm root --global 2>/dev/null || true)"
+  if [ -f "$npm_root_global/@openai/codex/bin/codex.js" ]; then
+    codex_real="$npm_root_global/@openai/codex/bin/codex.js"
+  fi
+fi
+if [ -x /home/ubuntu/.local/bin/codex ]; then
+  codex_real=/home/ubuntu/.local/bin/codex
+fi
+if [ ! -f "$codex_real" ]; then
+  if [ ! -x "$codex_real" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=codex_script_missing' >&2
+  exit 1
+  fi
+fi
 mkdir -p "$service_dir" "$workspace"
 chmod 700 "$runtime" "$workspace"
 # Install the policy-gated bridge into a stable user-owned runtime location.
@@ -43,8 +73,8 @@ Type=simple
 WorkingDirectory=$workspace
 ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CODEX_BRIDGE_PORT=17656
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=$paid_bridge_manual_approved
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=$paid_bridge_mode
 Environment=AI_SQUAD_CODEX_REAL=$codex_real
 Environment=AI_SQUAD_CODEX_BUSINESS_HOME=$business_home
 Environment=AI_SQUAD_CODEX_WORKDIR=$workspace

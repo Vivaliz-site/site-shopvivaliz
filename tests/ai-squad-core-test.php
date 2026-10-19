@@ -142,6 +142,16 @@ $consensus = svais_consensus_prompt('teste', [[
     'text' => 'posição final',
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
+ais_assert(svais_phase_web_search('research', true) === true, 'research must retain live web search');
+ais_assert(svais_phase_web_search('critique', true) === false, 'critique must reuse research evidence');
+ais_assert(svais_phase_web_search('converge', true) === false, 'convergence must reuse research evidence');
+ais_assert(svais_phase_web_search('research', false) === false, 'disabled web search must remain disabled');
+ais_assert(svais_phase_web_search('research', null) === true, 'topic-required web search must remain enabled');
+$groundedGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'research', true);
+ais_assert(($groundedGemini['thinking_level'] ?? '') === 'LOW', 'grounded Gemini research must use low thinking');
+ais_assert((int)($groundedGemini['max_output_tokens'] ?? 0) <= 3000, 'grounded Gemini research output must be bounded');
+$debateGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'critique', false);
+ais_assert(($debateGemini['thinking_level'] ?? '') === $deep['gemini']['thinking_level'], 'debate Gemini must retain profile thinking');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {
@@ -278,6 +288,34 @@ $codexResult = svais_openai_dispatch(
 );
 ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result missing');
 ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
+
+$calls = [];
+$transientRetry = null;
+try {
+    $transientRetry = svais_openai_dispatch(
+        $dispatchCfg,
+        'system',
+        'prompt',
+        true,
+        function (string $transport) use (&$calls, $dispatchCfg): array {
+            $calls[] = $transport;
+            if (count($calls) === 1) {
+                throw new RuntimeException('codex_bridge_timeout');
+            }
+            return [
+                'text' => 'codex-retry-ok',
+                'sources' => ['https://example.test/source'],
+                'usage' => [],
+                'model' => $dispatchCfg['model'],
+                'transport' => 'codex_chatgpt',
+            ];
+        }
+    );
+} catch (Throwable $e) {
+    ais_assert(false, 'Transient Codex failure should be retried: ' . $e->getMessage());
+}
+ais_assert(($transientRetry['text'] ?? '') === 'codex-retry-ok', 'Transient Codex retry result missing');
+ais_assert($calls === ['codex_chatgpt', 'codex_chatgpt'], 'Transient Codex failure must receive one bounded retry');
 
 $calls = [];
 $quotaFallback = null;
