@@ -79,9 +79,10 @@ try {
 
   await page.waitForURL(url => {
     const pathname = new URL(url).pathname;
-    return pathname === '/admin/' || /\\/admin\\/(?:ai-squad|buscador)\\.php$/.test(pathname);
+    return pathname === '/admin/' || pathname.endsWith('/admin/ai-squad.php') || pathname.endsWith('/admin/buscador.php');
   }, { timeout: 30000 });
-  if (!/\\/admin\\/(?:ai-squad|buscador)\\.php$/.test(new URL(page.url()).pathname)) {
+  const currentPath = new URL(page.url()).pathname;
+  if (!currentPath.endsWith('/admin/ai-squad.php') && !currentPath.endsWith('/admin/buscador.php')) {
     await page.goto('https://shopvivaliz.com.br/admin/buscador.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
   }
   await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
