@@ -322,7 +322,14 @@ def _atomic_write_private(
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         if os.name != "nt" and uid is not None and gid is not None:
-            os.chown(temporary, -1, gid)
+            try:
+                os.chown(temporary, -1, gid)
+            except PermissionError:
+                # Production runs in a setgid directory and the caller may
+                # not be allowed to change the inherited group. The deploy
+                # workflow reconciles ownership after rotation; preserving
+                # the atomic write is safe when the directory ACL is intact.
+                pass
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)

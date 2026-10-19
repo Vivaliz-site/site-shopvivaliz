@@ -1,4 +1,5 @@
 import importlib.util
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -26,6 +27,30 @@ def test_atomic_write_does_not_chown_file_owner_as_unprivileged_user(tmp_path, m
 
     assert target.read_text(encoding="utf-8") == "{}\n"
     assert calls == [(-1, 33)]
+
+
+def test_atomic_write_survives_denied_group_chown_on_setgid_directory(tmp_path, monkeypatch):
+    renewer = load_renewer()
+    target = tmp_path / "tokens.json"
+
+    def denied_group_chown(path, uid, gid):
+        raise PermissionError("group change denied")
+
+    real_os = renewer.os
+    monkeypatch.setattr(
+        renewer,
+        "os",
+        SimpleNamespace(
+            name="posix",
+            fdopen=real_os.fdopen,
+            fsync=real_os.fsync,
+            chmod=real_os.chmod,
+            chown=denied_group_chown,
+        ),
+    )
+    renewer._atomic_write_private(target, "{}\n", 0o660, 1001, 33)
+
+    assert target.read_text(encoding="utf-8") == "{}\n"
 
 
 def test_env_atomic_write_does_not_chown_file_owner_as_unprivileged_user(
