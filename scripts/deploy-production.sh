@@ -202,6 +202,9 @@ reconcile_ai_squad_codex_bridge_unit() {
   fi
   if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
     log ERROR "Falha ao reconciliar bridge Codex"
+    log ERROR "Codex bridge diagnostics follow"
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user --no-pager --full status shopvivaliz-squad-codex-bridge.service >> "$LOG_FILE" 2>&1 || true
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" journalctl --user -u shopvivaliz-squad-codex-bridge.service -n 40 --no-pager >> "$LOG_FILE" 2>&1 || true
     return 1
   fi
 }
