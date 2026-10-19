@@ -179,7 +179,18 @@ try {
   }
   if (consoleErrors.length) fail('console_error_present');
   if (pageErrors.length) fail('pageerror_present');
-  if (requestFailures.length) fail('requestfailed_present');
+  if (requestFailures.length) {
+    const sanitizedRequestFailures = requestFailures.map(({ url, error }) => {
+      try {
+        const parsed = new URL(url);
+        return { origin: parsed.origin, pathname: parsed.pathname, error };
+      } catch {
+        return { origin: '', pathname: '[invalid-url]', error };
+      }
+    });
+    console.log('AI_SQUAD_UI_REQUEST_FAILURES=' + JSON.stringify(sanitizedRequestFailures));
+    fail('requestfailed_present');
+  }
   if (serverErrors.length) fail('http_5xx_present');
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
