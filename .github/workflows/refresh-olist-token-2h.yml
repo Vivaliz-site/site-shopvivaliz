@@ -177,6 +177,35 @@ jobs:
           export SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store"
           cd "$current"
           python3 daemon-token-renewer.py --once
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          seed = Path('/tmp/shopvivaliz-oauth-bootstrap.seed')
+          store = json.loads(Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json').read_text())
+          access = store.get('OLIST_ACCESS_TOKEN') or store.get('TINY_ACCESS_TOKEN') or ''
+          refresh = store.get('OLIST_REFRESH_TOKEN') or store.get('TINY_REFRESH_TOKEN') or ''
+          if not access or not refresh:
+              raise SystemExit('oauth runtime token store missing refreshed credentials')
+          values = {
+              'OLIST_CLIENT_ID': '',
+              'OLIST_CLIENT_SECRET': '',
+              'OLIST_ACCESS_TOKEN': access,
+              'OLIST_REFRESH_TOKEN': refresh,
+              'TINY_CLIENT_ID': '',
+              'TINY_CLIENT_SECRET': '',
+              'TINY_ACCESS_TOKEN': access,
+              'TINY_REFRESH_TOKEN': refresh,
+          }
+          original = dict(line.split('=', 1) for line in seed.read_text().splitlines() if '=' in line)
+          for key in ('OLIST_CLIENT_ID', 'OLIST_CLIENT_SECRET', 'TINY_CLIENT_ID', 'TINY_CLIENT_SECRET'):
+              values[key] = original.get(key, '')
+          if any(not value for value in values.values()):
+              raise SystemExit('oauth runtime seed incomplete after refresh')
+          seed.write_text(''.join(f'{key}={value}\n' for key, value in values.items()), encoding='utf-8')
+          seed.chmod(0o600)
+          print('oauth_runtime_seed_from_token_store=true')
+          PY
           python3 scripts/bootstrap-olist-oauth-runtime.py "$shared/.env" "$seed"
           sudo chown ubuntu:www-data "$shared/.env"
           chmod 600 "$shared/.env"
