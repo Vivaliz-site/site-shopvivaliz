@@ -75,3 +75,54 @@ Evidências operacionais da retomada posterior à auditoria inicial:
 - **Acesso laptop:** Desktop Commander lista Fred-Win online, mas execução retornou bloqueio de quota mensal com instrução explícita para não repetir/reconectar. Captura MCP em resolução 3840x1080 falhou por limite de resposta. Não inferir cobrança OCI ou GUI E2E como verificadas.
 
 **Gate da migração continua NÃO APTO.** Preservar `shopvivaliz-free-a1` e todos os volumes e backups. Não redimensionar a controladora sem confirmar quotas/custos. Próximos passos são reconciliação de dados/backup por método autorizado, estabilização da backend, autenticações oficiais Tailscale/RDC, certificados, testes UI E2E na Marina, evitar runners/workers duplicados e ensaio de rollback.
+
+
+## Retomada operacional de 2026-10-18 02:46–02:49 UTC — writers e PHP (NO_CUT)
+
+**Veredito: NO_CUT / NÃO APTO.** Este registro atualiza, sem substituir, a evidência histórica acima e o checkpoint canônico `/home/ubuntu/migration-marina-a1/STATUS.md` na controladora; o destino recebeu adendo em `/home/ubuntu/migration-checks/STATUS.md` (SHA-256 `e1a35a7f2866d0917999b03d593fd7abafca0d61c3c0ecd25b398aadd537c89b`). Não autoriza cutover, cópia bloqueada, uso de credenciais, exclusão, resize ou restart de workers.
+
+### Writer preflight e correção efetiva
+
+| Serviço | Origem antes (02:46Z) | Marina (02:46Z) | Origem depois (02:48:43Z) |
+| --- | --- | --- | --- |
+| `shopvivaliz-queue-worker.service` | inactive/enabled | active/enabled, PID 1355344 | inactive/disabled |
+| `ml-pricing-worker.service` | inactive/enabled | active/enabled, PID 1633911 | inactive/disabled |
+| `mlrr-fetch-worker.service` | inactive/enabled | active/enabled, PID 1362967 | inactive/disabled |
+| `amazon-returns-safet.service` | inactive/enabled | active/enabled, PID 1403163 | inactive/disabled |
+
+- **RED:** origem podia reiniciar automaticamente os quatro consumidores em um reboot, com os correspondentes já ativos na Marina. Origem ainda tem timers produtores de Pricing, MLRR, Amazon Returns e loja; não há prova de ausência de escritores indiretos ou de fencing transacional.
+- **Correção executada:** `systemctl disable` somente nessas quatro unidades **com preflight de estado inactive para todas**. Nenhum stop, restart, máscara, alteração de banco, volume ou DNS. Pós-teste de todas: `inactive/disabled`. Reversível apenas em rollback coordenado **depois** de parar/fencear destino. **Não executar** `enable --now` automaticamente na origem.
+- **Evidência:** task MCP `65767cfa-6c4a-47b6-9837-769d17e44a04`, audit ID `3b9f86dc-9ee0-4ffc-8b62-bc36b7236968`; tarefas de estado `f2757d07-1b26-45c3-a396-123b6fb9fe78` (origem) e `c521dc64-f803-44f5-9364-f8f6fb618bf4` (Marina).
+- **Regressão parcial:** nenhuma duplicação dos quatro processos **na amostragem**. Necessário verificar consumidores derivados, timers, cron, filas, idempotência, integrações externas, conectividade a bancos e estado pós-reboot sob janela oficialmente autorizada.
+
+### Observações frescas restantes
+
+| Componente | Estado | Evidência e ação pendente |
+| --- | --- | --- |
+| PHP Marina | **PENDENTE / alteração privilegiada bloqueada** | `php -v`: PHP 8.3.6 com avisos de `xdebug.so`, `amqp.so`, `ast.so`, `dba.so` ausentes (lista não exaustiva); a origem tem PHP 8.3.33 e Xdebug ativo. Preflight APT histórico: 7 novos pacotes, 0 remoções. Instalação `sudo apt-get install` foi expressamente negada no RDC; **não** repetir por relays, SSH ou outro agente. Somente manutenção elevada autorizada oficialmente, com backup de configuração, phpdismod apenas de módulos comprovadamente obsoletos, FPM test, UI e regressão. |
+| ML Pricing worker | **PENDENTE** | Marina `NRestarts=5` às 02:49Z, `Result=success` e PID ativo. Histórico da origem `NRestarts=291`. Investigar razão dos reinícios e verificar filas, checkpoints e persistência sem imprimir conteúdo sensível de logs ou disparar ações de marketplace. |
+| MLRR e bases | **BLOQUEADO / INCONCLUSIVO** | MLRR tem divergência histórica conhecida de 1 registro; baseline fonte 19 tabelas, 423 `provider_events`, 26 `returns`. Dados completos bidirecionais, writes desde backup, hashes por lotes, SQL autenticado no destino e final delta **não** estão comprovados. Proteção de backup Supabase e probe de credencial MySQL no destino já tiveram recusa explícita: não contornar. Nenhum INSERT, backup restaurado novamente ou transferência nesta retomada. |
+| Portas dos bancos Marina | **PENDENTE** | `ss -lntH` às 02:49Z: `:13312` e `:55433` ligados a `0.0.0.0` e `[::]`. Isso prova bind all-interfaces, **não** acessibilidade pública. Validar SG/NSG/firewall e limitar origem de conexões oficialmente antes do cutover. |
+| Cloudflare / TLS | **PENDENTE** | Reutilizar **mesmo túnel** de Returns na transferência sequencial aprovada. Não iniciar dois conectores. Certificado real de Pricing copiado não prova renovação independente; PR de hardening de credenciais ainda sem release validada. Nenhuma alteração de DNS/certificado/túnel neste trabalho. |
+| E2E UI | **PENDENTE** | Histórico 19/21 cenários locais, dois móveis testados em viewport não correspondente. Sem prova de navegação UI real no destino publicada, reload/sessão/checkout até pré-pagamento, SAFE-T provider-safe e estado transacional: não declarar 21/21. |
+| GitHub CI / PR #2993 | **PENDENTE DE REVISÃO** | Head observado `bf1eb0d1384a7d95298a54aaac1a1f6bc12e9748`: `Repository Governance` run `39083109697` success e `Mandatory Validation Gate` run `39083109742` success, mas PR aberto/não mesclado; revisão atual de segurança e publicação dos testes anteriormente recusada ainda abertas. Não mergear nem despachar workflow mutante. |
+| Oracle shape e billing | **PENDENTE** | Portal oficial Always Free (atualização 2026-06-12) cita 1500 OCPU-h/9000 GB-h por mês; outras páginas Oracle ainda citam franquia histórica 3000/18000. Confirmar entitlement, custos e quotas nas duas tenancies **antes** de resize ou gasto, preservando a Marina 4/24 existente. |
+| Acesso remoto | **PENDENTE** | SSH com host key fixada via controladora confirmou `marina-a1-4c24g`, porém catálogo do MCP conectado ainda anuncia apenas quatro hosts; quinto host sem prova E2E no conector. Não contornar recusas de RDC/IAM. |
+
+**Nenhuma decisão GO, nem ensaio final de rollback, nem cutover.** A origem `shopvivaliz-free-a1` permanece preservada. A próxima fase permitida é auditoria não mutante de produtores/timers e obtenção da via de manutenção oficialmente elevada, seguida de reconciliação bidirecional e E2E real em staging isolado. Regra de rollback: reconciliar writes próprios da Marina antes de reativar qualquer consumidor na origem.
+
+### Diagnóstico adicional do ciclo do ML Pricing — 2026-10-18 02:53 UTC
+
+- Hash SHA-256 da unit systemd **idêntico** na origem e na Marina: `06bdcc8789d1da25e4015664b08b871b254226524e793360ffcb04442dad504a`.
+- `ExecStart` confirmado no destino: `messenger:consume async --limit=100 --time-limit=300 --memory-limit=256M --no-interaction`; `Restart=always` e `RestartUSec=5s`.
+- Entre as amostras de 02:44:55 e 02:50:00 UTC, `NRestarts` passou de 5 para 6 com `Result=success` e `ExecMainStatus=0`. **Esses reinícios são compatíveis com reciclagem programada de consumidor de cinco minutos, não evidência de crash.** Não há correção de processo indicada apenas pelo contador.
+- Ainda é necessário verificar progresso da fila, jobs/retries, conectividade real com o banco e os logs sem revelar segredos. Esta interpretação técnica não promove o serviço a `APTO` E2E.
+- Evidência MCP: `33643f85-13d7-4355-a569-b1c67c3ea1fb` (destino) e `cb0dd302-b5a4-41a4-b881-f222259eb087` (origem).
+
+### FPM e recursos — rechecagem read-only em 2026-10-18 02:54 UTC
+
+- **Marina:** `pg_isready -h 127.0.0.1 -p 55433` = accepting connections, **não é validação de SQL autenticado nem de consistência da base**. Raiz: 193 GB, 18 GB utilizados, 176 GB livres (9%). Memória: ~21 GiB disponíveis, sem swap configurada. `php-fpm8.3 -t` invocado como **ubuntu não privilegiado** saiu 78 após numerosos avisos de módulos ausentes, com falha terminal `failed to open error_log (/var/log/php8.3-fpm.log): Permission denied (13)`. Não atribuir exit 78 a erro de sintaxe comprovado; revalidar `php-fpm8.3 -t` via manutenção administrativa **oficialmente autorizada**, respeitando a recusa prévia de sudo no RDC. Tarefa: `c6d31b11-8283-4f35-ae9a-cb4e81963890`.
+- **Controladora:** raiz 96 GB, 87 GB usados, 9,4 GB livres (**91%**); RAM 15 GiB, ~8,4 GiB disponíveis; swap 4,5/6 GiB utilizada. Memory PSI avg10/60/300 `some=0.00` e `full=0.00`; `shopvivaliz-disk-guard.timer` ativo. Situação de pressão momentânea melhor, mas **risco de capacidade de disco pendente**, sem limpeza/prune destrutivos. Tarefa `6b8a96f5-ae37-4878-b380-f0543ff20b13`.
+- **Origem:** leitura em 02:52Z confirmou 102 tabelas no MySQL `shopvivaliz`, 16 em `amazon_returns_safet`, além de `provider_events=423`, `returns=26` e `provider_fetch_jobs=47` no PostgreSQL MLRR. O banco `ml_pricing_prod` é containerizado na origem, e portanto não aparece nessa consulta ao MySQL nativo. **Não** deduzir ausência nem paridade de linhas no destino. Tarefa `b2cc2811-eb70-4a74-9294-fcc087249c6a`.
+
+Global **NO_CUT / NÃO APTO**. Nenhum pacote instalado ou módulo desabilitado; nenhuma cópia ou mutação de banco nesta rechecagem.
