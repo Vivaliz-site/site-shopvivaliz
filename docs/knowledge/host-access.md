@@ -33,6 +33,18 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 | `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, controller do Remote Control MCP, navegador, MEI, M365 e relay Windows |
 | `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** |
 
+<!-- MARINA_DIRECT_RDC_V1 -->
+## Marina: acesso direto pelo RDC, sem depender de outra VM (verificado em 2026-10-19)
+
+- **Identidade OCI:** a conta `ESPOSA` autenticou na API Oracle Cloud por chave de API já protegida no laptop Fred-Win; `marina-a1-4c24g` aparece `RUNNING`, VNIC privada `10.80.1.116`. Isto comprova identidade cloud, não privilegio root no Linux.
+- **Transporte DIRETO JA OPERANTE:** o plugin **Remote Desktop Commander** vinculado ao ChatGPT lista `marina-a1-4c24g` **online**, e `start_process` executou `hostname -s`, `id -un` e `systemctl show` diretamente na Marina como `ubuntu`, **sem passar pela controladora** `always-free-arm-1787907847-26`. Para tarefas na Marina, buscar no `list_devices` o ID atual desse dispositivo e usar suas ferramentas de host/terminal (sem adivinhar ID estavel). O status deve ser confirmado em cada sessao; RDC 2 depende de vinculo/quota propria e nao equivale a RDC 1.
+- **Limite comprovado:** a unidade `shopvivaliz-desktop-commander.service` esta ativa e aplica `NoNewPrivileges=yes`. `blockedCommands=[]` nao concede root/sudo; manutencao privilegiada ja sofreu recusa expressa. **Nao contornar** a negativa por GitHub Actions, OCI Run Command, MCP da controladora, outra conta, SSH ou tunel alternativo. O operador autorizado deve obter a aprovacao/capacidade oficial, independentemente do dispositivo RDC.
+- **ShopVivaliz Remote Control (outro MCP):** o catalogo operacional central ainda tem quatro hosts executaveis; seu transporte SSH para `10.80.1.116:22` a partir da controladora nao respondeu no ultimo teste, e a host key nao estava inscrita no inventario seguro. Um servidor **ShopVivaliz Remote Control dedicado na Marina** continua **nao provisionado** (sem `shopvivaliz-remote-control-mcp.service`, sem `cloudflared`/tunel seguro proprio). O PR #3149 prepara apenas inventario nao executavel; nunca confundir inventario com conexao MCP direta.
+- **Configuracao futura do MCP direto:** requer daemon proprio na Marina, credenciais separadas e protegidas, conexao autenticada propria por HTTPS/tunel seguro independente, comprovacao de ownership, auditoria, leases/fencing, testes de conexao e autorizacao efetiva antes de habilitar comandos administrativos. Nao reaproveitar tokens/SSH do MCP central e nao expor uma porta MCP administrativa sem autenticao e controle de rede.
+- **Uso imediato:** o caminho direto que ja funciona e o **Remote Desktop Commander** da Marina para operacoes na capacidade efetivamente aprovada. Se uma acao exigir root nao disponivel, registrar o impedimento para manutencao oficial sem substituir a rota autorizada por uma indireta.
+
+<!-- /MARINA_DIRECT_RDC_V1 -->
+
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
 
 ## Produção web/deploy
