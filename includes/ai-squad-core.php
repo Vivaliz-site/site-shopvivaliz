@@ -1020,27 +1020,34 @@ function svais_openai_dispatch(
         if ($transport === 'manual_chatgpt') break;
         if ($skipCodex && $transport === 'codex_chatgpt') continue;
 
-        try {
-            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
-            $text = trim((string)($result['text'] ?? ''));
-            if ($text === '') {
-                throw new RuntimeException('provider_empty_response');
-            }
+        $transportAttempts = $transport === 'codex_chatgpt' ? 2 : 1;
+        for ($attempt = 0; $attempt < $transportAttempts; $attempt++) {
+            try {
+                $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+                $text = trim((string)($result['text'] ?? ''));
+                if ($text === '') {
+                    throw new RuntimeException('provider_empty_response');
+                }
 
-            $requestedModel = (string)$cfg['model'];
-            $actualModel = (string)($result['model'] ?? '');
-            if ($actualModel !== $requestedModel) {
-                throw new RuntimeException('model_mismatch');
-            }
+                $requestedModel = (string)$cfg['model'];
+                $actualModel = (string)($result['model'] ?? '');
+                if ($actualModel !== $requestedModel) {
+                    throw new RuntimeException('model_mismatch');
+                }
 
-            $result['transport'] = $transport;
-            $result['transport_attempts'] = $attempts;
-            return $result;
-        } catch (Throwable $e) {
-            $attempts[] = [
-                'transport' => $transport,
-                'class' => svais_failure_class($e),
-            ];
+                $result['transport'] = $transport;
+                $result['transport_attempts'] = $attempts;
+                return $result;
+            } catch (Throwable $e) {
+                $failureClass = svais_failure_class($e);
+                $attempts[] = [
+                    'transport' => $transport,
+                    'class' => $failureClass,
+                ];
+                if ($transport !== 'codex_chatgpt' || $attempt !== 0 || $failureClass !== 'timeout') {
+                    break;
+                }
+            }
         }
     }
 
