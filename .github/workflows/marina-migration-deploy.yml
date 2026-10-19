@@ -7,10 +7,18 @@ on:
         description: 'Digite MIGRATE para confirmar a publicação na Marina'
         required: true
         type: string
+      ai_bridge_confirmation:
+        description: 'Digite ENABLE_AI_BRIDGES para autorizar o ciclo real OpenAI/Claude/Gemini'
+        required: true
+        type: string
   workflow_call:
     inputs:
       confirmation:
         description: 'Confirmação explícita da publicação na Marina'
+        required: true
+        type: string
+      ai_bridge_confirmation:
+        description: 'Confirmação explícita do ciclo real dos bridges AI'
         required: true
         type: string
 
@@ -23,7 +31,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: inputs.confirmation == 'MIGRATE'
+    if: inputs.confirmation == 'MIGRATE' && inputs.ai_bridge_confirmation == 'ENABLE_AI_BRIDGES'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     environment: production
@@ -114,6 +122,29 @@ jobs:
           sudo systemctl is-active --quiet mlrr-fetch-worker.service
           sudo systemctl is-active --quiet shopvivaliz-queue-worker.service
           REMOTE
+
+      - name: Enable explicitly approved AI Squad bridges
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
+          chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            uid="$(id -u ubuntu)"
+            export XDG_RUNTIME_DIR="/run/user/$uid"
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+            export SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=1
+            export SHOPVIVALIZ_PAID_BRIDGE_MODE=interactive
+            cd /home/ubuntu/shopvivaliz-deploy/current
+            bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current
+            echo AI_SQUAD_EXPLICIT_MIGRATION_APPROVAL=PASS
+          '
 
       - name: Verify public Marina release and smoke
         shell: bash

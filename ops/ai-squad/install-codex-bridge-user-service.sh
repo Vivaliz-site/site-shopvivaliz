@@ -13,6 +13,16 @@ bridge="$HOME/.local/share/shopvivaliz-ai-squad/codex-bridge.mjs"
 codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"
 business_home="/home/ubuntu/.codex-business"
 node_bin="$(command -v node)"
+paid_bridge_manual_approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
+paid_bridge_mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"
+
+case "$paid_bridge_manual_approved:$paid_bridge_mode" in
+  0:disabled|1:interactive) ;;
+  *)
+    printf '%s\n' 'Invalid paid bridge policy; expected 0:disabled or 1:interactive' >&2
+    exit 64
+    ;;
+esac
 
 test -n "$node_bin"
 test -f "$bridge_source"
@@ -43,8 +53,8 @@ Type=simple
 WorkingDirectory=$workspace
 ExecStart=$node_bin $bridge
 Environment=AI_SQUAD_CODEX_BRIDGE_PORT=17656
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=0
-Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=disabled
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=$paid_bridge_manual_approved
+Environment=SHOPVIVALIZ_PAID_BRIDGE_MODE=$paid_bridge_mode
 Environment=AI_SQUAD_CODEX_REAL=$codex_real
 Environment=AI_SQUAD_CODEX_BUSINESS_HOME=$business_home
 Environment=AI_SQUAD_CODEX_WORKDIR=$workspace
