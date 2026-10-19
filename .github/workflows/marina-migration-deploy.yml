@@ -71,6 +71,12 @@ jobs:
           git status --porcelain
           git diff -- .github/workflows/master-production-pipeline.yml
           echo '--- END MARINA_DEPLOY_CHECKOUT_STATUS ---'
+          # The diagnostic proved this single known drift is the already-merged
+          # worker-fence comment. Restore only this file from origin/main; any
+          # other drift remains fail-closed in deploy-production.sh.
+          git fetch --quiet origin main
+          git restore --source=origin/main -- .github/workflows/master-production-pipeline.yml
+          test -z "$(git status --porcelain)"
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
           bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
           test "$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)" = "$sha"
