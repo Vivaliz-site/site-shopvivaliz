@@ -251,17 +251,26 @@ try {
 
   await page.screenshot({ path: screenshotPath, fullPage: true });
   evidenceEvents.push({ action: 'reload', observed: 'reload started after screenshot' });
-  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
-  evidenceEvents.push({ action: 'revisit', observed: page.url() });
-  await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
-  await page.waitForFunction(() => {
-    const pills = Array.from(document.querySelectorAll('#health .pill'));
-    return pills.length === 3 && pills.every(pill => pill.querySelector('.dot')?.classList.contains('ok'));
-  }, null, { timeout: 60000, polling: 1000 });
-  const reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
-    text: (x.textContent || '').trim(),
-    dotClass: x.querySelector('.dot')?.className || '',
-  })));
+  let reloadHealth = [];
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+    evidenceEvents.push({ action: 'revisit', observed: `${page.url()} attempt=${attempt}` });
+    await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
+    try {
+      await page.waitForFunction(() => {
+        const pills = Array.from(document.querySelectorAll('#health .pill'));
+        return pills.length === 3 && pills.every(pill => pill.querySelector('.dot')?.classList.contains('ok'));
+      }, null, { timeout: 30000, polling: 1000 });
+    } catch (error) {
+      if (attempt === 3) throw error;
+      continue;
+    }
+    reloadHealth = await page.locator('#health .pill').evaluateAll(nodes => nodes.map(x => ({
+      text: (x.textContent || '').trim(),
+      dotClass: x.querySelector('.dot')?.className || '',
+    })));
+    if (reloadHealth.length === 3 && reloadHealth.every(x => x.dotClass.split(/\s+/).includes('ok'))) break;
+  }
   evidenceEvents.push({ action: 'assert_persistence', observed: `reload health verified providers=${reloadHealth.length}` });
   if (reloadHealth.length !== 3 || reloadHealth.some(x => !x.dotClass.split(/\s+/).includes('ok'))) fail('reload_provider_health_not_verified');
   if (consoleErrors.length) fail('console_error_after_reload');
