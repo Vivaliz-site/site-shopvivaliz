@@ -163,8 +163,16 @@ jobs:
           export SHOPVIVALIZ_ENV_PATH="$seed"
           export SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store"
           cd "$current"
-          python3 daemon-token-renewer.py --once
-          python3 scripts/bootstrap-olist-oauth-runtime.py "$shared/.env" "$seed"
+          # Match the systemd unit identity: ubuntu with www-data as the
+          # effective group, so atomic writes can preserve production ACLs.
+          sudo -u ubuntu -g www-data env \
+            SHOPVIVALIZ_ENV_PATH="$seed" \
+            SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store" \
+            python3 daemon-token-renewer.py --once
+          sudo -u ubuntu -g www-data env \
+            SHOPVIVALIZ_ENV_PATH="$seed" \
+            SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store" \
+            python3 scripts/bootstrap-olist-oauth-runtime.py "$shared/.env" "$seed"
           sudo chown ubuntu:www-data "$shared/.env"
           chmod 600 "$shared/.env"
           sudo chown ubuntu:www-data "$token_store"
