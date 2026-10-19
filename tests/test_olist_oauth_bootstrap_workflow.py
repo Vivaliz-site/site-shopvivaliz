@@ -46,6 +46,7 @@ class OlistOAuthBootstrapWorkflowTests(unittest.TestCase):
             self.assertIn(f"{name}: {expression}", text)
 
         self.assertIn("bootstrap-olist-oauth-runtime.py", text)
+        self.assertIn("oauth_runtime_seed_existing_refresh_preferred=true", text)
         self.assertIn("oauth_runtime_seed_from_token_store=true", text)
         self.assertIn("OLIST_ACCESS_TOKEN", text)
         self.assertIn("TINY_ACCESS_TOKEN", text)
