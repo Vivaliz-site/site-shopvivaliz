@@ -525,6 +525,7 @@ jobs:
     uses: ./.github/workflows/marina-migration-deploy.yml
     with:
       confirmation: MIGRATE
+      ai_bridge_confirmation: ENABLE_AI_BRIDGES
     secrets: inherit
 
   publish_evidence:
