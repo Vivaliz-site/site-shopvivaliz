@@ -1,5 +1,17 @@
 # Estado da Auditoria
 
+## Rodada de migração Marina — 2026-10-19
+
+**Status:** `BLOCKED_EXTERNAL` — a migração foi publicada e os bridges OpenAI/Codex, Claude Code e Gemini estão configurados no runtime. A jornada real de browser, porém, não pode ser certificada porque a pesquisa web do Gemini falhou no mesmo ciclo com `vertex_oauth=quota,direct=quota`.
+
+**Release publicado:** `d7775c1303d6acceb6fed0322b48e288301b3595` (marcador público confirmado; deploy `39272547195`).
+
+**Evidência de browser real:** run `39272792660` — OpenAI: 3/3 fases com fontes; Claude: 3/3 fases com fontes; Gemini: pesquisa bloqueada por quota, contraditório/convergência responderam, consenso bloqueado por cobertura incompleta. Reproduções anteriores: runs `39258708218` (`vertex_oauth=quota,direct=quota`) e `39269527685` (mesmo bloqueio).
+
+**Alternativas seguras tentadas:** health público e bridge status; deploy imutável; pesquisa real via Vertex OAuth e API direta; retry bounded para timeouts do Codex/Claude, com regressões testadas. Não há quota Gemini disponível nem terceiro transporte autorizado nesta sessão.
+
+**Condição objetiva de retomada:** liberar/restaurar quota do projeto Gemini ou fornecer quota/transport autorizado; então repetir `shopvivaliz-remote-access.yml` com `ai_squad_ui_audit` no mesmo release ou em novo SHA, obter 9 mensagens, fontes dos três provedores, consenso e certificar o manifesto do mesmo SHA. Não declarar `APTO` antes disso.
+
 **Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
 ---
