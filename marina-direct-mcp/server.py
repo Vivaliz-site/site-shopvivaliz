@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Marina-only, read-only MCP staging server. Never grants shell or sudo.
+
+This component does not set up an ingress tunnel or register a ChatGPT
+connector. Its sole listener must remain on loopback.
+"""
+from __future__ import annotations
+
+import argparse
+import hmac
+import json
+import os
+import socket
+import stat
+import subprocess
+import sys
+import threading
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+EXPECTED_HOST = "marina-a1-4c24g"
+PROTOCOL_VERSION = "2025-06-18"
+MAX_BODY = 16384
+ALLOWED_SERVICES = frozenset({
+    "shopvivaliz-desktop-commander.service",
+    "shopvivaliz-queue-worker.service",
+    "mlrr-fetch-worker.service",
+    "amazon-returns-safet.service",
+    "ml-pricing-worker.service",
+    "docker.service",
+})
+TOOLS = [
+    {
+        "name": "marina_host_health",
+        "description": "Identify the directly attached Marina host (read only).",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "marina_service_status",
+        "description": "Inspect an allowlisted service on Marina; never start or stop it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"service": {"type": "string", "enum": sorted(ALLOWED_SERVICES)}},
+            "required": ["service"],
+            "additionalProperties": False,
+        },
+    },
+]
+
+
+def load_token(path: Path) -> bytes:
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise RuntimeError("token_file_not_regular")
+    if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise RuntimeError("token_file_permissions_invalid")
+    token = path.read_bytes().strip()
+    if not 32 <= len(token) <= 256 or any(byte < 33 or byte > 126 for byte in token):
+        raise RuntimeError("token_file_value_invalid")
+    return token
+
+
+def inspect_service(service: str) -> dict[str, str]:
+    if service not in ALLOWED_SERVICES:
+        raise ValueError("service_not_allowed")
+    result = subprocess.run(
+        ["/usr/bin/systemctl", "show", service, "--no-pager",
+         "--property=ActiveState,SubState,UnitFileState,NoNewPrivileges"],
+        capture_output=True, text=True, timeout=4, check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("service_metadata_unavailable")
+    permitted = {"ActiveState", "SubState", "UnitFileState", "NoNewPrivileges"}
+    values = {}
+    for line in result.stdout[:4096].splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in permitted:
+            values[key] = value[:64]
+    return {"service": service, **values}
+
+
+def create_server(
+    token: bytes, port: int = 5580, *,
+    host: str = "127.0.0.1",
+    service_reader=inspect_service,
+) -> ThreadingHTTPServer:
+    if host != "127.0.0.1":
+        raise ValueError("loopback_only")
+    actual_host = socket.gethostname().split(".")[0]
+    if actual_host != EXPECTED_HOST:
+        raise RuntimeError("host_identity_mismatch")
+    if not isinstance(token, bytes) or len(token) < 32:
+        raise ValueError("invalid_auth_configuration")
+    slots = threading.BoundedSemaphore(8)
+
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "MarinaReadOnlyMCP"
+        sys_version = ""
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            # No request URL, bearer headers, client address or body in logs.
+            return
+
+        def send_json(self, status: int, value: object) -> None:
+            raw = json.dumps(value, separators=(",", ":"), ensure_ascii=True).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def authorized(self) -> bool:
+            # Reject browser-origin cross-site calls unless an approved proxy
+            # strips Origin after independently authenticating its client.
+            if self.headers.get("Origin"):
+                self.send_json(403, {"error": "origin_not_allowed"})
+                return False
+            value = self.headers.get("Authorization", "")
+            candidate = value[7:].encode("utf-8") if value.startswith("Bearer ") else b""
+            if not hmac.compare_digest(candidate, token):
+                self.send_json(401, {"error": "unauthorized"})
+                return False
+            return True
+
+        def do_GET(self) -> None:
+            if self.path != "/health":
+                self.send_json(404, {"error": "not_found"})
+            elif self.authorized():
+                self.send_json(200, {
+                    "ok": True,
+                    "name": "shopvivaliz-marina-direct-readonly",
+                    "host": EXPECTED_HOST,
+                    "scope": "unprivileged_read_only",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+        def do_POST(self) -> None:
+            if self.path != "/mcp":
+                self.send_json(404, {"error": "not_found"})
+                return
+            if not self.authorized():
+                return
+            if not slots.acquire(blocking=False):
+                self.send_json(503, {"error": "busy"})
+                return
+            try:
+                self.handle_rpc()
+            finally:
+                slots.release()
+
+        def handle_rpc(self) -> None:
+            try:
+                length = int(self.headers.get("Content-Length", "-1"))
+            except ValueError:
+                self.send_json(400, {"error": "invalid_content_length"})
+                return
+            if length < 0:
+                self.send_json(411, {"error": "length_required"})
+                return
+            if length > MAX_BODY:
+                self.send_json(413, {"error": "body_too_large"})
+                return
+            try:
+                request = json.loads(self.rfile.read(length))
+            except (ValueError, UnicodeDecodeError):
+                self.send_json(400, {"error": "invalid_json"})
+                return
+            if not isinstance(request, dict) or request.get("jsonrpc") != "2.0" or not isinstance(request.get("method"), str):
+                self.send_json(400, {"error": "invalid_jsonrpc"})
+                return
+            method, identifier = request["method"], request.get("id")
+            if method == "notifications/initialized" and "id" not in request:
+                self.send_response(202)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if "id" not in request or isinstance(identifier, bool) or not isinstance(identifier, (str, int)):
+                self.send_json(400, {"error": "invalid_request_id"})
+                return
+            result = None
+            error = None
+            try:
+                if method == "initialize":
+                    result = {
+                        "protocolVersion": PROTOCOL_VERSION,
+                        "capabilities": {"tools": {"listChanged": False}},
+                        "serverInfo": {"name": "shopvivaliz-marina-direct-readonly", "version": "0.1.0"},
+                    }
+                elif method == "ping":
+                    result = {}
+                elif method == "tools/list":
+                    result = {"tools": TOOLS}
+                elif method == "tools/call":
+                    params = request.get("params")
+                    if not isinstance(params, dict) or set(params) != {"name", "arguments"}:
+                        raise ValueError("invalid_tool_request")
+                    name, arguments = params["name"], params["arguments"]
+                    if not isinstance(arguments, dict):
+                        raise ValueError("invalid_tool_arguments")
+                    if name == "marina_host_health" and not arguments:
+                        output = {
+                            "host": actual_host,
+                            "user_uid": os.geteuid(),
+                            "scope": "unprivileged_read_only",
+                        }
+                    elif name == "marina_service_status" and set(arguments) == {"service"}:
+                        output = service_reader(arguments["service"])
+                    else:
+                        raise ValueError("unsupported_tool_or_arguments")
+                    result = {"content": [{"type": "text", "text": json.dumps(output, sort_keys=True)}], "isError": False}
+                else:
+                    error = {"code": -32601, "message": "method_not_found"}
+            except (ValueError, TypeError):
+                error = {"code": -32602, "message": "invalid_params"}
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                error = {"code": -32603, "message": "read_only_probe_unavailable"}
+            payload = {"jsonrpc": "2.0", "id": identifier}
+            payload["error" if error else "result"] = error or result
+            self.send_json(200, payload)
+
+    server = ThreadingHTTPServer((host, port), Handler)
+    server.daemon_threads = True
+    return server
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token-file", type=Path,
+                        default=Path.home() / ".config/shopvivaliz-marina-mcp/auth-token")
+    parser.add_argument("--port", type=int, default=5580)
+    parser.add_argument("--check", action="store_true", help="Check identity and secret metadata without binding")
+    args = parser.parse_args()
+    if socket.gethostname().split(".")[0] != EXPECTED_HOST:
+        raise SystemExit("MARINA_MCP_REFUSED=host_identity_mismatch")
+    try:
+        token = load_token(args.token_file)
+        if args.check:
+            print("MARINA_MCP_READONLY_PREFLIGHT=PASS")
+            return 0
+        server = create_server(token, args.port)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"MARINA_MCP_REFUSED={str(exc)}", file=sys.stderr)
+        return 1
+    print("MARINA_MCP_READONLY_LISTEN=127.0.0.1", flush=True)
+    try:
+        server.serve_forever(poll_interval=0.2)
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
