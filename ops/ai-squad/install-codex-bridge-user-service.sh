@@ -24,9 +24,18 @@ case "$paid_bridge_manual_approved:$paid_bridge_mode" in
     ;;
 esac
 
-test -n "$node_bin"
-test -f "$bridge_source"
-test -f "$codex_real"
+if [ -z "$node_bin" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=node_missing' >&2
+  exit 1
+fi
+if [ ! -f "$bridge_source" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=bridge_source_missing' >&2
+  exit 1
+fi
+if [ ! -f "$codex_real" ]; then
+  printf '%s\n' 'AI_SQUAD_CODEX_PREREQUISITE=codex_script_missing' >&2
+  exit 1
+fi
 mkdir -p "$service_dir" "$workspace"
 chmod 700 "$runtime" "$workspace"
 # Install the policy-gated bridge into a stable user-owned runtime location.
