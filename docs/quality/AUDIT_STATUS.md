@@ -2,15 +2,15 @@
 
 ## Rodada de migração Marina — 2026-10-19
 
-**Status:** `BLOCKED_EXTERNAL` — a migração foi publicada e os bridges OpenAI/Codex, Claude Code e Gemini estão configurados no runtime. A jornada real de browser, porém, não pode ser certificada porque a pesquisa web do Gemini falhou no mesmo ciclo com `vertex_oauth=quota,direct=quota`.
+**Status:** `DEPLOY E AUDITORIAS FRESCAS PASSARAM; CERTIFICAÇÃO FORMAL PENDENTE` — a migração foi publicada e a jornada real de browser passou com consenso completo dos três provedores após a liberação operacional dos bridges.
 
-**Release publicado:** `d7775c1303d6acceb6fed0322b48e288301b3595` (marcador público confirmado; deploy `39272547195`).
+**Release publicado:** `7963d0e11805b731791cbe003c9916dde67565f9` (marcador público confirmado; deploy `39325469206`).
 
-**Evidência de browser real:** run `39272792660` — OpenAI: 3/3 fases com fontes; Claude: 3/3 fases com fontes; Gemini: pesquisa bloqueada por quota, contraditório/convergência responderam, consenso bloqueado por cobertura incompleta. Reproduções anteriores: runs `39258708218` (`vertex_oauth=quota,direct=quota`) e `39269527685` (mesmo bloqueio).
+**Evidência de browser real:** run `39325624598` — ciclo `ais_20261019_211422_471e6978a2`, 9 mensagens, cobertura completa, consenso disponível, health dos três provedores verificado antes e depois do reload, `AI_SQUAD_UI_AUDIT=PASS`.
 
-**Alternativas seguras tentadas:** health público e bridge status; deploy imutável; pesquisa real via Vertex OAuth e API direta; retry bounded para timeouts do Codex/Claude, com regressões testadas. Não há quota Gemini disponível nem terceiro transporte autorizado nesta sessão.
+**Auditoria funcional pós-deploy:** run `39327281260` — páginas críticas, orders health, payment queue, quote real do Melhor Envio e integrações Mercado Pago/Melhor Envio/Olist passaram.
 
-**Condição objetiva de retomada:** liberar/restaurar quota do projeto Gemini ou fornecer quota/transport autorizado; então repetir `shopvivaliz-remote-access.yml` com `ai_squad_ui_audit` no mesmo release ou em novo SHA, obter 9 mensagens, fontes dos três provedores, consenso e certificar o manifesto do mesmo SHA. Não declarar `APTO` antes disso.
+**Pendência objetiva:** gerar o manifesto `AUDIT_CERTIFICATION_MANIFEST_V1` com evidência hashada do mesmo SHA/release/ambiente e obter `AUDIT_VERDICT=APTO` do certifier. Até essa saída, não declarar `APTO` formal.
 
 **Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
