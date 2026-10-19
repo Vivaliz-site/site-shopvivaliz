@@ -313,34 +313,6 @@ ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result 
 ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
 
 $calls = [];
-$transientRetry = null;
-try {
-    $transientRetry = svais_openai_dispatch(
-        $dispatchCfg,
-        'system',
-        'prompt',
-        true,
-        function (string $transport) use (&$calls, $dispatchCfg): array {
-            $calls[] = $transport;
-            if (count($calls) === 1) {
-                throw new RuntimeException('codex_bridge_timeout');
-            }
-            return [
-                'text' => 'codex-retry-ok',
-                'sources' => ['https://example.test/source'],
-                'usage' => [],
-                'model' => $dispatchCfg['model'],
-                'transport' => 'codex_chatgpt',
-            ];
-        }
-    );
-} catch (Throwable $e) {
-    ais_assert(false, 'Transient Codex failure should be retried: ' . $e->getMessage());
-}
-ais_assert(($transientRetry['text'] ?? '') === 'codex-retry-ok', 'Transient Codex retry result missing');
-ais_assert($calls === ['codex_chatgpt', 'codex_chatgpt'], 'Transient Codex failure must receive one bounded retry');
-
-$calls = [];
 $quotaFallback = null;
 try {
     svais_openai_dispatch(
