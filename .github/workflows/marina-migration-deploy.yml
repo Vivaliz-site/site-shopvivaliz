@@ -79,13 +79,15 @@ jobs:
           git add -- .github/workflows/master-production-pipeline.yml
           git config core.autocrlf false
           git checkout-index --force -- .github/workflows/master-production-pipeline.yml
-          expected_paths="$(printf '%s\n' .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json scripts/ai-squad-ui-audit.mjs tests/test_workspace_housekeeper_safety.py | sort)"
+          expected_paths="$(printf '%s\n' .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json tests/test_workspace_housekeeper_safety.py | sort)"
           actual_paths=$(git status --porcelain | sed 's/^.. //' | sort)
           test "$actual_paths" = "$expected_paths"
-          git read-tree FETCH_HEAD
-          git checkout-index --force --all
-          git update-ref HEAD FETCH_HEAD
-          git add -- .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json scripts/ai-squad-ui-audit.mjs tests/test_workspace_housekeeper_safety.py
+          # Reconcile the complete tracked checkout from the fetched release.
+          # --reset -u updates both index and worktree without relying on the
+          # remote clone's symbolic/detached HEAD shape.
+          git read-tree --reset -u FETCH_HEAD
+          git update-ref --no-deref HEAD FETCH_HEAD
+          git add --renormalize -- .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json tests/test_workspace_housekeeper_safety.py
           echo '--- MARINA_POST_RECONCILIATION ---'
           git status --porcelain
           git rev-parse HEAD
