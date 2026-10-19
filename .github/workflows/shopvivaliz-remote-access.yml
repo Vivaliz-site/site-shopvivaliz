@@ -200,7 +200,9 @@ jobs:
           backend_cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
           remote_script="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
           remote_shot="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.png"
+          remote_trace="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
           local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
+          local_trace="${RUNNER_TEMP}/ai-squad-ui-audit.zip"
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
 
           php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
@@ -212,10 +214,12 @@ jobs:
           ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
           scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' node '${remote_script}'"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' AI_SQUAD_UI_TRACE='${remote_trace}' node '${remote_script}'"
           scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_shot}" "$local_shot"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}'"
+          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_trace}" "$local_trace"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}' '${remote_trace}'"
           test -s "$local_shot"
+          test -s "$local_trace"
           echo "AI_SQUAD_UI_AUDIT=PASS"
 
       - name: Upload AI Squad UI evidence
@@ -223,7 +227,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-squad-ui-audit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ai-squad-ui-audit.png
+          path: |
+            ${{ runner.temp }}/ai-squad-ui-audit.png
+            ${{ runner.temp }}/ai-squad-ui-audit.zip
           if-no-files-found: error
           retention-days: 7
 
