@@ -18,4 +18,4 @@ jobs:
       - name: Confirm persistent paid Codex disabled
         run: |
           echo "FREE_PROVIDER_FALLBACK_V2: persistent Codex Goal is retired"
-          echo "No paid AI invocation, no self-hosted runner, no credentials"
+          echo "No paid AI invocation, no dedicated runner, no credentials"
