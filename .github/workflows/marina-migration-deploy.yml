@@ -80,6 +80,10 @@ jobs:
           git config core.autocrlf false
           git checkout-index --force -- .github/workflows/master-production-pipeline.yml
           git reset --mixed FETCH_HEAD
+          expected_paths=$('printf "%s\n" .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml scripts/ai-squad-ui-audit.mjs | sort')
+          actual_paths=$(git status --porcelain | sed 's/^.. //' | sort)
+          test "$actual_paths" = "$expected_paths"
+          git reset --hard FETCH_HEAD
           test -z "$(git status --porcelain)"
           printf '%s\n' main > /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
           bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
