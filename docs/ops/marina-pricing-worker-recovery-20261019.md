@@ -46,3 +46,17 @@ O script **não** copia bancos entre VMs, não altera outro serviço, não envia
 2. Consultar o endpoint de Pricing com o **caminho que verifica o banco e o Messenger**, e verificar uma tarefa **somente leitura** na fila, se permitida, com idempotência. HTTP 200 genérico de `/v1/health` isoladamente não valida o worker.
 3. Revalidar que a origem permaneceu fenced e desabilitada. Não habilitar os serviços no boot sem gate/rollback específico e sem testar não duplicação após reboot.
 4. Registrar hashes, data, comprovante da conta autorizada e evidência de testes no `STATUS.md` e no gate matrix. Manter **NO_CUT/NAO_APTO** até reconciliação transacional MLRR/Supabase, demais E2E, integridade e rollback.
+
+## Mudanca concorrente observada as 00:38-00:41 UTC de 19/10 (gate vinculante)
+
+**NÃO EXECUTAR `--apply` enquanto houver listener em `127.0.0.1:13312`.** Outro executor iniciou o contêiner de teste `marina-pricing-validation` às 00:38 UTC e ele abriu o MySQL via docker-proxy em **`0.0.0.0:13312` e `[::]:13312`**. A credencial preexistente no `runtime.env` autenticou neste contêiner; as 27 tabelas, 16 migrações e o fingerprint SHA256 das **contagens por tabela** coincidiram exatamente com a origem: `267a683a1b688460b06503d16436e9a4b0d7ba9d525885d263a9d1c7a277d1b1`. O TCP externo a partir da origem até a porta 13312 do IP público de Marina teve timeout (isso NÃO certifica a NSG/VCN/firewall completa).
+
+Esse contêiner ainda tem nome e função de **validação**; deve permanecer segregado do serviço produtivo até conferência oficial dos volumes, persistência após boot, ownership, network ingress em IPv4/IPv6, lease de writer e igualdade de conteúdo/transaction log. Seu bind wildcard merece revisão de segurança. A ação de inicializar ou parar o contêiner é uma mutação administrativa sujeita aos controles próprios; não fazer por outro transporte para contornar recusas anteriores.
+
+O código do reparo inclui agora dois gates fail-closed que recusam a transferência de porta ao MySQL nativo se a `13312` estiver respondendo, inclusive ao segundo check imediatamente anterior a qualquer edição do `runtime.env`. Assim, enquanto o contêiner estiver ativo, o PR #3039 é uma **alternativa de recuperação sob decisão técnica pendente**, não uma ação pronta para aplicação. A autoridade deve escolher **um** destino para o Pricing:
+
+1. **Promover a instância isolada de Pricing** somente depois de procedimento oficial que preserve backups/volumes, recrie a publicação apenas no loopback, prove restart seguro, retenção de dados e worker único; ou
+2. **Usar o MySQL nativo `3306`**, após desligamento controlado do contêiner de validação e reconciliação de dados, provisionar a conta limitada e executar o reparo deste PR via sessão de operador realmente autorizada.
+
+Não prosseguir em ambas as rotas simultaneamente. Manter `ml-pricing-worker.service` parado, `amazon-returns-safet.service` com todas as flags de escrita externa OFF, origem fenced e gate global `NO_CUT` até os testes.
+
