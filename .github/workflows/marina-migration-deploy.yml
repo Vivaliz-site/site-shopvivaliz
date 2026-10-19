@@ -87,6 +87,7 @@ jobs:
           # remote clone's symbolic/detached HEAD shape.
           git read-tree --reset -u FETCH_HEAD
           git update-ref --no-deref HEAD FETCH_HEAD
+          git add --renormalize -- .github/workflows/marina-migration-deploy.yml .github/workflows/master-production-pipeline.yml ops/cloudflare-zone-settings-check.json tests/test_workspace_housekeeper_safety.py
           echo '--- MARINA_POST_RECONCILIATION ---'
           git status --porcelain
           git rev-parse HEAD
