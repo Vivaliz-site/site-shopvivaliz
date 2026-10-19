@@ -208,8 +208,10 @@ jobs:
           remote_script="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
           remote_shot="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.png"
           remote_trace="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
+          remote_evidence="/tmp/ai-squad-ui-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
           local_trace="${RUNNER_TEMP}/ai-squad-ui-audit.zip"
+          local_evidence="${RUNNER_TEMP}/ai-squad-ui-evidence"
           marina_key="${RUNNER_TEMP}/marina-ui-audit-key"
           marina_known_hosts="${RUNNER_TEMP}/marina-ui-audit-known-hosts"
           printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
@@ -230,12 +232,16 @@ jobs:
           ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
           scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' AI_SQUAD_UI_TRACE='${remote_trace}' node '${remote_script}'"
-          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_shot}" "$local_shot"
-          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_trace}" "$local_trace"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}' '${remote_trace}'"
-          test -s "$local_shot"
-          test -s "$local_trace"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
+          mkdir -p "$local_evidence"
+          scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
+          cp "$local_evidence/primary.png" "$local_shot"
+          cp "$local_evidence/primary-trace.zip" "$local_trace"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          test -s "$local_evidence/primary.png"
+          test -s "$local_evidence/primary-trace.zip"
+          test -s "$local_evidence/primary-execution.json"
+          test -s "$local_evidence/ui-inventory.json"
           echo "AI_SQUAD_UI_AUDIT=PASS"
 
       - name: Diagnose AI Squad bridges on Marina
@@ -274,6 +280,7 @@ jobs:
           path: |
             ${{ runner.temp }}/ai-squad-ui-audit.png
             ${{ runner.temp }}/ai-squad-ui-audit.zip
+            ${{ runner.temp }}/ai-squad-ui-evidence
           if-no-files-found: error
           retention-days: 7
 
