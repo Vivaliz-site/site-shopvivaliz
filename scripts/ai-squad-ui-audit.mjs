@@ -132,6 +132,7 @@ try {
         manual: node.matches('.msg.manual'),
         sourceLinks: node.querySelectorAll('.sources a').length,
         meta: (node.querySelector('.agent small')?.textContent || '').trim(),
+        errorText: node.matches('.msg.error') ? (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500) : '',
       });
     }
     return {
