@@ -20,6 +20,13 @@ class MarinaScopeTests(unittest.TestCase):
         self.assertIn("Supabase", text)
         self.assertIn("MCP", text)
 
+    def test_audit_escape_register_preserves_open_global_scope_issue(self):
+        entry = (ROOT / "docs/quality/AUDIT_ESCAPE_REGISTER.md").read_text(encoding="utf8")
+        self.assertIn("ESC-2026-008", entry)
+        self.assertIn("AUDIT_SCOPE_OVERCLAIM_V1", entry)
+        self.assertIn("NO_DECOMMISSION", entry)
+        self.assertIn("OPEN", entry)
+
     def test_legacy_nocut_checkpoint_marks_historical_dns_qualification(self):
         text = (ROOT / "MIGRATION-EXECUTE-NOW.md").read_text(encoding="utf8")
         self.assertIn("PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g", text)
