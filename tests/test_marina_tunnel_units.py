@@ -66,7 +66,9 @@ class OperatorGatedUnitsTests(unittest.TestCase):
         _, cfg = unit("shopvivaliz-marina-mcp-tunnel.service")
         self.assertIn("shopvivaliz-marina-mcp.service", cfg["Unit"]["Requires"])
         self.assertIn("shopvivaliz-marina-mcp.service", cfg["Unit"]["After"])
-        self.assertIn("ConditionPathIsExecutable", cfg["Unit"])
+        self.assertNotIn("ConditionPathIsExecutable", (DIR / "shopvivaliz-marina-mcp-tunnel.service").read_text(encoding="utf-8"))
+        self.assertIn("ConditionPathExists=/opt/shopvivaliz-marina-mcp/bin/tunnel-client",
+                      (DIR / "shopvivaliz-marina-mcp-tunnel.service").read_text(encoding="utf-8"))
         self.assertEqual(cfg["Service"]["ReadWritePaths"],
                          "/var/lib/shopvivaliz-marina-mcp")
         start = cfg["Service"]["ExecStart"]
