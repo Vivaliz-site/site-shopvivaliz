@@ -1,0 +1,44 @@
+# STAGING TEMPLATE ONLY. Official Platform tunnel + runtime key and host approval required.
+# This client is independent of the ShopVivaliz backend controller's tunnel.
+[Unit]
+Description=ShopVivaliz Marina independent OpenAI Secure MCP Tunnel
+Requires=shopvivaliz-marina-mcp.service
+After=network-online.target shopvivaliz-marina-mcp.service
+Wants=network-online.target
+ConditionPathExists=/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/tunnel-profile.yaml
+ConditionPathIsExecutable=/opt/shopvivaliz-marina-mcp/bin/tunnel-client
+
+[Service]
+Type=exec
+User=shopvivaliz-marina-mcp
+Group=shopvivaliz-marina-mcp
+Environment=HOME=/var/lib/shopvivaliz-marina-mcp
+Environment=XDG_CONFIG_HOME=/var/lib/shopvivaliz-marina-mcp/.config
+WorkingDirectory=/opt/shopvivaliz-marina-mcp/current
+ExecStart=/opt/shopvivaliz-marina-mcp/bin/tunnel-client run --config /var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/tunnel-profile.yaml
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/shopvivaliz-marina-mcp
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=64
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
