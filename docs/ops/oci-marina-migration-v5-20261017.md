@@ -1,5 +1,18 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## Evidência atualizada em 2026-10-20 04:31–04:32 UTC (não altera o histórico abaixo)
+
+**PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g | SITE_PUBLIC_AUDIT_STATUS=APTO**
+
+A release web `99416b61be202b95a1f77b0469fd6395954eeb74` está ativa na Marina. Uma solicitação HTTPS pública identificada a `shopvivaliz.com.br` retornou HTTP 200; o marcador apareceu **1 vez** no log Apache `shopvivaliz-apex-www-access.log` da Marina e **0 vezes** no log equivalente da origem. O tráfego testado passou pelo proxy Cloudflare. Isso comprova aquela solicitação, não cada região/caminho nem paridade integral. A auditoria de UI/funcionalidade do storefront (PR #3160) registrou `AUDIT_VERDICT=APTO` **para o escopo do site publicado**.
+
+**GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+O cutover público do storefront foi observado, mas a migração e a elegibilidade para desativar a VM de origem **não** estão completas. `shopvivaliz-free-a1` e seus backups permanecem preservados e seus quatro workers migrados seguem protegidos por `origin-workers-fenced`. Na Marina o `ml-pricing-worker.service` permanece `inactive/disabled`; o MySQL de validação escuta em `0.0.0.0:13312` e `[::]:13312`, sem aprovação de volume persistente, backup, restauração, controles IPv4/IPv6 ou ownership. Supabase (transferência previamente recusada), SAFE-T (serviço ativo mas sem auto-boot), MCP próprio independente (não instalado/conectado), reconciliação final, custos OCI, reboot e rollback seguem pendentes. Nenhum bloqueio de plataforma pode ser contornado; não reativar writers na origem por inferência.
+
+Os inventários, resultados e proibições de corte escritos abaixo pertencem à auditoria histórica de 2026-10-17 e devem ser interpretados com a atualização acima. `NO_CUT` histórico não nega a prova posterior de publicação do storefront; permanece a regra **NO_DECOMMISSION** até completar os demais gates. Ver `docs/quality/AUDIT_STATUS.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md`.
+
+
 > Checkpoint operacional **NÃO APTO — migração ainda não concluída**. Evidências colhidas em 2026-10-17 (UTC). Este documento **não é autorização de corte, exclusão, faturamento ou promoção**; revisão/dados frescos obrigatórios.
 
 ## Regras e fonte de verdade
