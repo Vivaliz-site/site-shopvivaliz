@@ -50,12 +50,21 @@ TOOLS = [
 
 
 def load_token(path: Path) -> bytes:
-    metadata = path.lstat()
-    if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
-        raise RuntimeError("token_file_not_regular")
-    if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
-        raise RuntimeError("token_file_permissions_invalid")
-    token = path.read_bytes().strip()
+    # Open once with O_NOFOLLOW: no lstat-to-open symlink/rename race.
+    # Do not reveal filesystem paths, token bytes or syscall details on errors.
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        raise RuntimeError("token_file_open_refused") from None
+    with os.fdopen(fd, "rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode):
+            raise RuntimeError("token_file_not_regular")
+        if metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise RuntimeError("token_file_permissions_invalid")
+        if metadata.st_size < 32 or metadata.st_size > 258:
+            raise RuntimeError("token_file_size_invalid")
+        token = stream.read(259).strip()
     if not 32 <= len(token) <= 256 or any(byte < 33 or byte > 126 for byte in token):
         raise RuntimeError("token_file_value_invalid")
     return token
