@@ -67,6 +67,24 @@ class MarinaScopeTests(unittest.TestCase):
         ):
             self.assertIn(key, text, key)
 
+    def test_updated_content_parity_and_owner_gates_remain_explicit(self):
+        text = (ROOT / "docs/ops/oci-marina-migration-v5-20261017.md").read_text(encoding="utf8")
+        for marker in (
+            "DB_ROW_CONTENT_PARITY=97_OF_102",
+            "BACKUP_BLOG_CAMPAIGN_RESTORE=PASS",
+            "BLOG_PUBLISH_SOURCE_WRITER=CONFIGURED",
+            "BLOG_TARGET_OVERDUE=1",
+            "blog_articles",
+            "email_campaign_runs",
+            "sv_conversion_events",
+            "coupons",
+            "users",
+            "password_hash",
+            "GLOBAL_MIGRATION_STATUS=NAO_APTO",
+            "NO_DECOMMISSION",
+        ):
+            self.assertIn(marker, text, marker)
+
     def test_canonical_migration_runbook_has_fresh_scoped_state(self):
         text = (ROOT / "docs/ops/oci-marina-migration-v5-20261017.md").read_text(encoding="utf8")
         self.assertIn("PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g", text)
