@@ -23,6 +23,18 @@ install -o root -g root -m 0644 "$SOURCE_SERVICE" "$TARGET_DIR/$SERVICE"
 install -o root -g root -m 0644 "$SOURCE_TIMER" "$TARGET_DIR/$TIMER"
 systemd-analyze verify "$TARGET_DIR/$SERVICE" "$TARGET_DIR/$TIMER"
 systemctl daemon-reload
+# The old origin must never schedule a second writer after fencing.
+# This maintenance action requires the officially authorized privileged owner
+# and a valid runtime lease; never invoke this installer to dodge a refusal.
+if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
+  systemctl disable --now "$TIMER"
+  if systemctl is-active --quiet "$TIMER"; then
+    echo "ORIGIN_ABANDONED_CART_TIMER_STILL_ACTIVE" >&2
+    exit 4
+  fi
+  echo "ORIGIN_ABANDONED_CART_TIMER_FENCED=PASS"
+  exit 0
+fi
 systemctl enable --now "$TIMER"
 systemctl is-active --quiet "$TIMER"
 systemctl is-enabled --quiet "$TIMER"
