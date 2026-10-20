@@ -31,7 +31,7 @@ tests/should-deploy-production-test.sh)
       backend_only=0 ;;
   esac
   case "$path" in
-    *.md|docs/*|.codex/*|.github/*|tests/*|scripts/production-impact-changed-paths.sh)
+    *.md|docs/*|.codex/*|.github/*|tests/*)
       ;;
     *)
       web_change=1 ;;
