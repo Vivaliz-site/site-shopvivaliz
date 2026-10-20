@@ -10,6 +10,16 @@ SOURCE_SERVICE="$ROOT/deploy/systemd/$SERVICE"
 SOURCE_TIMER="$ROOT/deploy/systemd/$TIMER"
 TARGET_DIR="/etc/systemd/system"
 
+# Root is not a substitute for the authorized maintenance lease. This script
+# cannot validate the official broker's lease/fencing token, so NEVER mutate
+# units on a fenced origin. The operator must perform the controlled stop,
+# disable and legacy-cron reconciliation through the approved maintenance
+# control plane (see docs/ops/marina-abandoned-cart-single-writer.md).
+if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
+  echo "ORIGIN_CART_MAINTENANCE_LEASE_REQUIRED=NO_MUTATION" >&2
+  exit 75
+fi
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "install_abandoned_cart_recovery_requires_root" >&2
   exit 2
@@ -23,18 +33,8 @@ install -o root -g root -m 0644 "$SOURCE_SERVICE" "$TARGET_DIR/$SERVICE"
 install -o root -g root -m 0644 "$SOURCE_TIMER" "$TARGET_DIR/$TIMER"
 systemd-analyze verify "$TARGET_DIR/$SERVICE" "$TARGET_DIR/$TIMER"
 systemctl daemon-reload
-# The old origin must never schedule a second writer after fencing.
-# This maintenance action requires the officially authorized privileged owner
-# and a valid runtime lease; never invoke this installer to dodge a refusal.
-if [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
-  systemctl disable --now "$TIMER"
-  if systemctl is-active --quiet "$TIMER"; then
-    echo "ORIGIN_ABANDONED_CART_TIMER_STILL_ACTIVE" >&2
-    exit 4
-  fi
-  echo "ORIGIN_ABANDONED_CART_TIMER_FENCED=PASS"
-  exit 0
-fi
+# Only a non-fenced target is eligible for this installer. The old origin
+# must be disabled independently by the officially approved maintainer.
 systemctl enable --now "$TIMER"
 systemctl is-active --quiet "$TIMER"
 systemctl is-enabled --quiet "$TIMER"
