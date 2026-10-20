@@ -15,6 +15,7 @@ readonly STATUS_FILE="$SHARED_DIR/logs/deploy-status.json"
 readonly RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
 readonly RETENTION_COUNT=5
 readonly ML_RENEWER_SERVICE="shopvivaliz-mercadolivre-token-renewer.service"
+readonly ORIGIN_WORKERS_FENCE_FILE="${SHOPVIVALIZ_ORIGIN_WORKERS_FENCE_FILE:-/etc/shopvivaliz/migration/origin-workers-fenced}"
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
@@ -92,6 +93,9 @@ active_runtime_services() {
   local owner service
   owner="$(shared_ml_token_owner)"
   for service in "${RUNTIME_SERVICES[@]}"; do
+    if [ "$service" = "shopvivaliz-queue-worker.service" ] && [ -e "${ORIGIN_WORKERS_FENCE_FILE:-/etc/shopvivaliz/migration/origin-workers-fenced}" ]; then
+      continue
+    fi
     if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
       continue
     fi

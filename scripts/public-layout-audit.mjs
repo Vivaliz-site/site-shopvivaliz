@@ -16,6 +16,11 @@ const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', 
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
 const auditConcurrency = resolveAuditConcurrency();
 const screenshotTimeoutMs = Number.parseInt(process.env.PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS || '10000', 10);
+const navigationTimeoutMs = Number.parseInt(process.env.PUBLIC_AUDIT_NAVIGATION_TIMEOUT_MS || '20000', 10);
+const domContentLoadedTimeoutMs = Math.min(
+  navigationTimeoutMs,
+  Number.parseInt(process.env.PUBLIC_AUDIT_DOMCONTENTLOADED_TIMEOUT_MS || '5000', 10),
+);
 
 const auditFetch = async (url, options = {}) => {
   if (!proxyServer) return fetch(url, options);
@@ -81,7 +86,13 @@ for (const profile of profiles) {
     const url = `${baseUrl}${route.startsWith('/') ? route : `/${route}`}`;
     const slug = route === '/' ? 'home' : route.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').slice(0, 120);
     try {
-      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      // Some production pages keep a third-party resource open indefinitely.
+      // Commit is sufficient to inspect the rendered document; DOMContentLoaded
+      // remains a bounded best-effort enhancement instead of the navigation gate.
+      const response = await page.goto(url, { waitUntil: 'commit', timeout: navigationTimeoutMs });
+      await page.waitForLoadState('domcontentloaded', { timeout: domContentLoadedTimeoutMs }).catch(() => {
+        console.warn(`DOMContentLoaded timeout for ${profile.name} ${route}; continuing with committed document`);
+      });
       const status = response?.status() ?? 0;
       await page.waitForTimeout(1000);
       try {
