@@ -6,6 +6,7 @@ on:
       - 'marina-direct-mcp/**'
       - 'tests/test_marina_direct_mcp.py'
       - 'tests/test_marina_tunnel_preflight.py'
+      - 'tests/test_marina_tunnel_units.py'
       - '.github/workflows/marina-direct-mcp-ci.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'marina-direct-mcp/**'
       - 'tests/test_marina_direct_mcp.py'
       - 'tests/test_marina_tunnel_preflight.py'
+      - 'tests/test_marina_tunnel_units.py'
       - '.github/workflows/marina-direct-mcp-ci.yml'
 
 permissions:
@@ -33,6 +35,7 @@ jobs:
           python3 -m py_compile marina-direct-mcp/server.py marina-direct-mcp/operator_preflight.py tests/test_marina_direct_mcp.py tests/test_marina_tunnel_preflight.py
           python3 tests/test_marina_direct_mcp.py -v
           python3 tests/test_marina_tunnel_preflight.py -v
+          python3 tests/test_marina_tunnel_units.py -v
       - name: Assert no bootstrap transport or remote actions are added
         run: |
           set -Eeuo pipefail
