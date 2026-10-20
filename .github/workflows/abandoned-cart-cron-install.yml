@@ -19,13 +19,17 @@ jobs:
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$VM_KEY"
+          test -n "$VM_KNOWN_HOSTS" || { echo 'VERIFIED_VM_HOSTKEYS_REQUIRED' >&2; exit 2; }
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
 
       - name: Install and verify abandoned cart recovery cron
         shell: bash
@@ -37,13 +41,27 @@ jobs:
           # o cron de recuperacao de carrinho abandonado nunca foi instalado em producao
           # -- confirmado ao vivo via `crontab -l` na VM2, sem nenhuma entrada de
           # send-abandoned-cart-emails.php nem log em disco.
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@127.0.0.1 'bash -s' <<'SH'
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@127.0.0.1 'bash -s' <<'SH'
           set -euo pipefail
+
+          # Explicit host and ownership checks: no cron reinstall on fenced source.
+          if [ "$(hostname -s)" = 'shopvivaliz-free-a1' ] && [ -e /etc/shopvivaliz/migration/origin-workers-fenced ]; then
+            echo 'ORIGIN_ABANDONED_CART_CRON_FENCED=SKIP'
+            exit 0
+          fi
+          test "$(hostname -s)" = 'marina-a1-4c24g' || { echo 'ABANDONED_CART_TARGET_HOST_MISMATCH' >&2; exit 4; }
+
+          # Canonical single owner: never add a second cron next to the timer.
+          if systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer &&
+             systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer; then
+            echo 'ABANDONED_CART_SYSTEMD_SINGLE_OWNER=PASS'
+            exit 0
+          fi
 
           SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'
           LOG_DIR='/home/ubuntu/shopvivaliz-deploy/shared/logs'
           LOG_FILE="$LOG_DIR/abandoned-cart-email.log"
-          LOCK_FILE='/var/lock/shopvivaliz-abandoned-cart-email.lock'
+          LOCK_FILE='/home/ubuntu/shopvivaliz-deploy/shared/locks/abandoned-cart-recovery.lock'
           LINE="*/30 * * * * flock -n $LOCK_FILE php $SCRIPT >> $LOG_FILE 2>&1"
 
           test -f "$SCRIPT"
@@ -61,6 +79,7 @@ jobs:
           test "$(systemctl is-active cron.service)" = 'active'
 
           mkdir -p "$LOG_DIR"
+          test -d /home/ubuntu/shopvivaliz-deploy/shared/locks || { echo 'ABANDONED_CART_SHARED_LOCK_MISSING' >&2; exit 5; }
 
           CURRENT="$(crontab -l 2>/dev/null)" || CURRENT=""
           MATCHES="$(printf '%s\n' "$CURRENT" | grep -Fc 'send-abandoned-cart-emails.php')" || MATCHES="0"
@@ -85,4 +104,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
