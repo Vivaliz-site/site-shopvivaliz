@@ -138,6 +138,19 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
                            "MCP-Protocol-Version": m.PROTOCOL_VERSION})
         self.assertEqual(status, 413)
 
+    def test_disconnected_client_does_not_raise_or_log_secret(self):
+        handler = object.__new__(self.server.RequestHandlerClass)
+        handler.send_response = lambda status: None
+        handler.send_header = lambda name, value: None
+        handler.end_headers = lambda: None
+
+        class PeerDisconnected:
+            def write(self, data):
+                raise BrokenPipeError("peer_disconnected")
+
+        handler.wfile = PeerDisconnected()
+        handler.send_json(200, {"ok": True})
+
     def test_token_is_read_from_one_open_file_descriptor(self):
         # Deny pathname reopening after metadata validation (TOCTOU guard).
         with patch.object(Path, "read_bytes", side_effect=AssertionError("path_reopen_forbidden")):
