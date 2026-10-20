@@ -1,0 +1,52 @@
+name: Marina Migration Scope and Merge Impact CI
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/marina-migration-scope-ci.yml'
+      - '.github/workflows/repair-catalog-hard-quality-pending.yml'
+      - '.github/workflows/runtime-env-keyset-lock.yml'
+      - 'scripts/production-impact-changed-paths.sh'
+      - 'scripts/should-deploy-production.sh'
+      - 'tests/should-deploy-production-test.sh'
+      - 'tests/test_marina_merge_production_impact.py'
+      - 'tests/test_marina_global_cutover_scope.py'
+      - 'MIGRATION-EXECUTE-NOW.md'
+      - 'docs/quality/AUDIT_STATUS.md'
+      - 'docs/ops/oci-marina-migration-v5-20261017.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/marina-migration-scope-ci.yml'
+      - '.github/workflows/repair-catalog-hard-quality-pending.yml'
+      - '.github/workflows/runtime-env-keyset-lock.yml'
+      - 'scripts/production-impact-changed-paths.sh'
+      - 'scripts/should-deploy-production.sh'
+      - 'tests/should-deploy-production-test.sh'
+      - 'tests/test_marina_merge_production_impact.py'
+      - 'tests/test_marina_global_cutover_scope.py'
+      - 'MIGRATION-EXECUTE-NOW.md'
+      - 'docs/quality/AUDIT_STATUS.md'
+      - 'docs/ops/oci-marina-migration-v5-20261017.md'
+
+permissions:
+  contents: read
+
+jobs:
+  merge-impact-and-scope:
+    name: marina-merge-impact-and-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ensure runtime repo scope and safe classification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_marina_merge_production_impact.py -v
+          python3 tests/test_marina_global_cutover_scope.py -v
+          bash tests/should-deploy-production-test.sh
+          echo MARINA_MERGE_DOCS_NONDEPLOY=PASS
+          echo MARINA_PUBLIC_SCOPE_DISTINCT_FROM_DECOMMISSION=PASS
