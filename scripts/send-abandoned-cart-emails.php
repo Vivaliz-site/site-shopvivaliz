@@ -20,7 +20,7 @@ declare(strict_types=1);
 // Fail closed on the old origin BEFORE any DB bootstrap, reconciliation or email.
 // This root-owned marker is part of the migration's single-writer contract.
 if (is_file('/etc/shopvivaliz/migration/origin-workers-fenced')) {
-    fwrite(STDOUT, "ABANDONED_CART_ORIGIN_FENCED=SKIP\\n");
+    fwrite(STDOUT, "ABANDONED_CART_ORIGIN_FENCED=SKIP\n");
     exit(0);
 }
 
