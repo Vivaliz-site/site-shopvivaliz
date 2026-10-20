@@ -137,6 +137,12 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
                            "MCP-Protocol-Version": m.PROTOCOL_VERSION})
         self.assertEqual(status, 413)
 
+    def test_token_is_read_from_one_open_file_descriptor(self):
+        # Deny pathname reopening after metadata validation (TOCTOU guard).
+        with patch.object(Path, "read_bytes", side_effect=AssertionError("path_reopen_forbidden")):
+            self.assertEqual(m.load_token(self.token_file),
+                             b"unit-test-marina-token-very-long-1234567890abcdef")
+
     def test_host_name_and_listener_fail_closed(self):
         with patch.object(m.socket, "gethostname", return_value="always-free-arm-1787907847-26"):
             with self.assertRaisesRegex(RuntimeError, "host_identity_mismatch"):
@@ -151,7 +157,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.token_file.chmod(0o600)
         symlink = Path(self.scratch.name) / "symlink"
         symlink.symlink_to(self.token_file)
-        with self.assertRaisesRegex(RuntimeError, "regular"):
+        with self.assertRaisesRegex(RuntimeError, "open_refused|regular"):
             m.load_token(symlink)
 
 
