@@ -61,7 +61,8 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
                 raw = response.read()
                 return response.status, (json.loads(raw) if raw else {})
         except HTTPError as exc:
-            return exc.code, json.loads(exc.read())
+            raw = exc.read()
+            return exc.code, (json.loads(raw) if raw else {})
 
     def rpc(self, method, params=None, bearer="unit-test-marina-token-very-long-1234567890abcdef"):
         obj = {"jsonrpc": "2.0", "id": 1, "method": method}
