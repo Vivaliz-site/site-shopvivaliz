@@ -8,6 +8,14 @@
 
 ## Regra inviolável
 
+**PR verde não pode permanecer aberto quando não houver impedimento externo válido.**
+
+**Exceção obrigatória — drafts e operadores:** um PR explicitamente marcado `draft`, `blocked-by-runtime-lease`, `blocked-external` ou `no-auto-merge` **não** pode ser promovido, finalizado ou implantado automaticamente apenas porque os testes de código passaram. O autor/proprietário deve remover o bloqueio pela interface oficial somente após obtenção da autorização, ownership e lease/fencing adequados. Este bloqueio é vinculante mesmo quando o worker de execução local ou bot de CI possui credenciais GitHub de escrita. É proibido usar a correção de CI para contornar uma recusa de serviço, RBAC, MFA, privilégio root, Supabase, lease ou ownership.
+
+**Falha concreta que motivou o gate:** em 2026-10-20T10:56:04Z o bot `github-actions[bot]` executou `ready_for_review` no PR operacionalmente bloqueado [#3164](https://github.com/Vivaliz-site/site-shopvivaliz/pull/3164), previamente aberto como `draft`; o PR continha uma mudança no workflow que poderia afetar cron de e-mails de produção, enquanto a chamada oficial `service_action` havia recusado `runtime_lock_required` (audit `9197c5d2-9546-4900-ba74-56e24ac7a584`). O PR foi rebaixado para draft e **fechado sem merge** para eliminar a janela de auto-implantação. A fonte da correção permaneceu em branch para retomada após gate legítimo.
+
+**Invariante executável no PR Completion Enforcer:** seleção agendada deve ignorar drafts no conjunto de candidatos prontos e logs de execução devem declarar `draft_waiting_on_author`; a etapa `gh pr ready` fica expressamente proibida. PRs não-draft com label de bloqueio também não podem ser mesclados. Source-only CI `SUCCESS` não é evidência de capacidade operacional para acionar cron/systemd. A exceção é de segurança, não licença para abandonar correções — issues/branches/checkpoints devem permanecer rastreáveis.
+
 **PR verde não pode permanecer aberto.**
 
 Um agente não pode encerrar, abandonar, trocar de tarefa ou declarar sucesso enquanto existir PR de sua rodada que esteja tecnicamente concluível. A existência de um PR aberto é um estado de trabalho em andamento, nunca evidência de entrega.

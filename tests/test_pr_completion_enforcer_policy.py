@@ -21,8 +21,17 @@ def test_enforcer_syncs_stale_branch_with_external_vm_auth():
 
 
 def test_draft_prs_are_not_silently_ignored():
+    # A draft is a real human/operator hold, not permission to auto-promote.
     assert "draft == false" not in WORKFLOW
-    assert "draft_policy" in WORKFLOW
+    assert "draft_policy=preserve_author_review_and_runtime_approvals" in WORKFLOW
+    assert 'pr_${pr}_draft_waiting_on_author=true' in WORKFLOW
+    assert 'pr_${pr}_no_automatic_readiness_or_merge=true' in WORKFLOW
+    assert "gh pr ready" not in WORKFLOW
+    assert 'pr_${pr}_operator_blocked_by_label=true' in WORKFLOW
+    assert 'blocked-by-runtime-lease' in WORKFLOW
+    assert 'blocked-external' in WORKFLOW
+    assert 'no-auto-merge' in WORKFLOW
+    assert 'select(.head.repo.full_name == $repo and (.draft | not))' in WORKFLOW
 
 
 def test_stale_repair_uses_free_local_ai_and_git_data_api():

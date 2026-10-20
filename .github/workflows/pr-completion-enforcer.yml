@@ -42,7 +42,7 @@ jobs:
             target_pr="$(
               gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100" |
                 jq -r --arg repo "$GITHUB_REPOSITORY" '
-                  [.[] | select(.head.repo.full_name == $repo)]
+                  [.[] | select(.head.repo.full_name == $repo and (.draft | not))]
                   | sort_by(
                       (if ([.labels[].name] | index("repair-required-now")) then 0 else 1 end),
                       .updated_at
@@ -223,7 +223,7 @@ jobs:
             exit 0
           fi
           echo "target_pr_count=${#prs[@]}"
-          echo 'draft_policy=promote_internal_ready'
+          echo 'draft_policy=preserve_author_review_and_runtime_approvals'
           echo 'historical failures ignored after newer success'
           echo 'latest_required_runs=latest-run-per-required-workflow'
           echo 'replayable_required_runs=missing-or-action-required-on-current-head'
@@ -248,9 +248,18 @@ jobs:
               continue
             fi
 
+            # Drafts may encode binding runtime lease, identity, and ownership refusals.
+            # No CI result can authorize the agent to silently make them ready.
             if [[ "$is_draft" == 'true' ]]; then
-              gh pr ready "$pr" --repo "$REPO"
-              echo "pr_${pr}_draft_promoted=true"
+              echo "pr_${pr}_draft_waiting_on_author=true"
+              echo "pr_${pr}_no_automatic_readiness_or_merge=true"
+              waiting_count=$((waiting_count + 1))
+              continue
+            fi
+            # An explicitly held ready PR remains ineligible until its operator
+            # removes the hold after obtaining the official maintenance lease.
+            if jq -e '[.labels[].name] | any(. == "blocked-by-runtime-lease" or . == "blocked-external" or . == "no-auto-merge")' <<<"$meta" >/dev/null; then
+              echo "pr_${pr}_operator_blocked_by_label=true"
               waiting_count=$((waiting_count + 1))
               continue
             fi
