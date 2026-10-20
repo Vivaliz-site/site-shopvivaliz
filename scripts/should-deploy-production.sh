@@ -31,7 +31,13 @@ tests/should-deploy-production-test.sh)
       backend_only=0 ;;
   esac
   case "$path" in
-    *.md|docs/*|.codex/*|.github/*|tests/*)
+    # Both entries below are consumed by CI/gates from the current checkout;
+    # neither is an application runtime script. Do not generate a new public
+    # release just because a governance policy/verifier changed.
+    # Any other scripts/* and all real web/PHP payloads stay deployment-triggering.
+    *.md|docs/*|.codex/*|.github/*|tests/*|\
+scripts/check_pr_completion_policy.py|\
+scripts/should-deploy-production.sh)
       ;;
     *)
       web_change=1 ;;
