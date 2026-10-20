@@ -80,7 +80,7 @@ class MergeProductionImpactTests(unittest.TestCase):
         self.assertEqual(self.deploy(paths), "true")
 
     def test_ci_only_probe_does_not_trigger_web_release(self):
-        paths = ".github/scripts/production-impact-changed-paths.sh\\nMIGRATION-EXECUTE-NOW.md\\n"
+        paths = chr(10).join((".github/scripts/production-impact-changed-paths.sh", "MIGRATION-EXECUTE-NOW.md", ""))
         self.assertEqual(self.deploy(paths), "false")
 
     def test_root_commit_does_not_masquerade_as_no_change(self):
