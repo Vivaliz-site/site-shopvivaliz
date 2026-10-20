@@ -60,7 +60,7 @@ jobs:
 
           SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'
           LOG_DIR='/home/ubuntu/shopvivaliz-deploy/shared/logs'
-          LOG_FILE="$LOG_DIR/abandoned-cart-email.log"
+          LOG_FILE='/home/ubuntu/shopvivaliz-deploy/shared/logs/abandoned-cart-email.log'
           LOCK_FILE='/home/ubuntu/shopvivaliz-deploy/shared/locks/abandoned-cart-recovery.lock'
           LINE="*/30 * * * * flock -n $LOCK_FILE php $SCRIPT >> $LOG_FILE 2>&1"
 
