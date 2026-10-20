@@ -50,6 +50,23 @@ class MarinaScopeTests(unittest.TestCase):
         self.assertIn("[::]:13312", source)
         self.assertIn("mesmo host", source)
 
+    def test_origin_cart_sender_lock_refusal_blocks_full_migration(self):
+        text = (ROOT / "docs/ops/oci-marina-migration-v5-20261017.md").read_text(encoding="utf8")
+        for key in (
+            "ORIGIN_ABANDONED_CART_SENDER_FENCE=NOT_ENFORCED",
+            "PLATFORM_RUNTIME_LEASE=REQUIRED",
+            "DB_SOURCE_TARGET_PARITY=NOT_PROVEN",
+            "GLOBAL_MIGRATION_STATUS=NAO_APTO",
+            "NO_DECOMMISSION",
+            "runtime_lock_required",
+            "shopvivaliz-abandoned-cart-recovery.timer",
+            "blog_articles",
+            "email_campaign_runs",
+            "PR #3164",
+            "DRAFT, NÃO MESCLAR/IMPLANTAR",
+        ):
+            self.assertIn(key, text, key)
+
     def test_canonical_migration_runbook_has_fresh_scoped_state(self):
         text = (ROOT / "docs/ops/oci-marina-migration-v5-20261017.md").read_text(encoding="utf8")
         self.assertIn("PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g", text)
