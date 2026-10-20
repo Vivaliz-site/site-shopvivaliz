@@ -44,12 +44,14 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.addCleanup(self.server.shutdown)
         self.base = f"http://127.0.0.1:{self.server.server_port}"
 
-    def req(self, route="/mcp", body=None, bearer=None, origin=None):
+    def req(self, route="/mcp", body=None, bearer=None, origin=None, extra_headers=None):
         headers = {}
         if bearer:
             headers["Authorization"] = "Bearer " + bearer
         if origin:
             headers["Origin"] = origin
+        if extra_headers:
+            headers.update(extra_headers)
         data = json.dumps(body).encode("utf8") if body is not None else None
         if data is not None:
             headers["Content-Type"] = "application/json"
@@ -65,7 +67,9 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         obj = {"jsonrpc": "2.0", "id": 1, "method": method}
         if params is not None:
             obj["params"] = params
-        return self.req(body=obj, bearer=bearer)
+        return self.req(body=obj, bearer=bearer,
+                        extra_headers={"Accept": "application/json, text/event-stream",
+                                       "MCP-Protocol-Version": m.PROTOCOL_VERSION})
 
     def test_fail_closed_authentication_and_origin(self):
         self.assertEqual(self.req(route="/health")[0], 401)
@@ -104,6 +108,23 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
             _, refused = self.rpc("tools/call", {"name": name, "arguments": args})
             self.assertIn("error", refused, name)
         self.assertEqual(self.probed, ["ml-pricing-worker.service"])
+
+    def test_streamable_http_requires_get_405_and_valid_headers(self):
+        good_token = "unit-test-marina-token-very-long-1234567890abcdef"
+        code, _ = self.req(route="/mcp", bearer=good_token)
+        self.assertEqual(code, 405, "GET MCP without SSE must return 405, not 404")
+        self.assertEqual(self.req(route="/mcp")[0], 401)
+        base = {"jsonrpc": "2.0", "method": "ping", "id": 2}
+        self.assertEqual(self.req(body=base, bearer=good_token,
+                                  extra_headers={"Accept": "application/json, text/event-stream",
+                                                 "MCP-Protocol-Version": "bad-version"})[0], 400)
+        self.assertEqual(self.req(body=base, bearer=good_token,
+                                  extra_headers={"Accept": "application/json",
+                                                 "MCP-Protocol-Version": m.PROTOCOL_VERSION})[0], 406)
+        self.assertEqual(self.req(body=base, bearer=good_token,
+                                  extra_headers={"Content-Type": "text/plain",
+                                                 "Accept": "application/json, text/event-stream",
+                                                 "MCP-Protocol-Version": m.PROTOCOL_VERSION})[0], 415)
 
     def test_unknown_rpc_and_body_bounds(self):
         _, unknown = self.rpc("dangerous/execute")
