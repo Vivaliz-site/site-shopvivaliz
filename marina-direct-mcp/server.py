@@ -126,9 +126,15 @@ def create_server(
             return True
 
         def do_GET(self) -> None:
-            if self.path != "/health":
-                self.send_json(404, {"error": "not_found"})
-            elif self.authorized():
+            if self.path == "/mcp":
+                if self.authorized():
+                    # MCP Streamable HTTP 2025-06-18: GET without SSE must be 405.
+                    self.send_response(405)
+                    self.send_header("Allow", "POST")
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+            elif self.path == "/health" and self.authorized():
                 self.send_json(200, {
                     "ok": True,
                     "name": "shopvivaliz-marina-direct-readonly",
@@ -136,12 +142,26 @@ def create_server(
                     "scope": "unprivileged_read_only",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
+            else:
+                self.send_json(404, {"error": "not_found"})
 
         def do_POST(self) -> None:
             if self.path != "/mcp":
                 self.send_json(404, {"error": "not_found"})
                 return
             if not self.authorized():
+                return
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                self.send_json(415, {"error": "unsupported_media_type"})
+                return
+            accepts = {part.split(";", 1)[0].strip().lower()
+                       for part in self.headers.get("Accept", "").split(",")}
+            if not {"application/json", "text/event-stream"}.issubset(accepts):
+                self.send_json(406, {"error": "mcp_accept_required"})
+                return
+            version = self.headers.get("MCP-Protocol-Version")
+            if version is not None and version != PROTOCOL_VERSION:
+                self.send_json(400, {"error": "unsupported_protocol_version"})
                 return
             if not slots.acquire(blocking=False):
                 self.send_json(503, {"error": "busy"})
