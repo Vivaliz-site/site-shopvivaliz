@@ -40,16 +40,37 @@ scheduler can query a stale database, modify abandonment rows and send mail.
   ABANDONED_CART_ORIGIN_FENCED=SKIP before any DB or mail code.
 - The source systemd sender has
   ConditionPathExists=!/etc/shopvivaliz/migration/origin-workers-fenced.
-- The privileged official installer will stop/disable an origin timer when
-  run under the authorized operator (requires the real runtime lease).
-  On Marina, it enables the designated timer.
+- The installer **fails closed** on a fenced origin BEFORE root checks or
+  writing unit files, with exit code 75 and
+  `ORIGIN_CART_MAINTENANCE_LEASE_REQUIRED=NO_MUTATION`. Root does NOT replace
+  a valid maintenance lease. The operator must stop+disable the source timer
+  **through the official broker under a scoped lease and fencing token**, then
+  reconcile the extra source cron using the same authorized maintenance
+  transaction. On an approved non-fenced Marina host the installer may enable
+  the designated timer.
 - The legacy cron installer rejects a fenced source, prefers the active
   canonical Marina timer, uses a shared file lock when timer is absent, and
   verifies SSH host keys (no StrictHostKeyChecking=no).
 - Unit and code regressions ensure the above are not silently dropped.
 
 This branch/PR deliberately remains DRAFT until maintenance access is
-available. A push/merge of scripts/send-abandoned-cart-emails.php can trigger
+available.
+
+**2026-10-20 security regression:** the previous staged installer called
+`systemctl disable --now` when detecting the root-owned origin fence, but
+had no way to validate the control-plane runtime lease. That was an unsafe
+privilege-equivalence assumption. Fixed in the **unmerged** branch by returning
+exit 75 before all root/systemd operations. RED reproduced on the real Marina
+with a synthetic fenced-origin fixture; GREEN 5/5 tests on Marina and a staged
+read-only command on the actual fenced origin returned exactly 75, while the
+timer remained active/enabled. No source cron/service was changed.
+
+**Official operator capability gap:** the remote service_action tool currently
+accepts stop/start/restart with a valid existing runtime lease/fencing token;
+there is no externally exposed approved lease issuance operation in the
+available MCP tools, and stop alone does not persist across reboot. See
+[operator-owned maintenance capability issue #3169](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3169).
+ A push/merge of scripts/send-abandoned-cart-emails.php can trigger
 a live GitHub workflow that modifies cron or production services; merging
 without the appropriate host lease is not an acceptable workaround.
 
