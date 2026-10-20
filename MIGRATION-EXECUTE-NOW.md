@@ -1,6 +1,18 @@
-# ShopVivaliz / Marina - checkpoint seguro (18/10/2026)
+# ShopVivaliz / Marina - checkpoint seguro e retomada
 
-**ESTADO: NO_CUT / NAO_APTO.** A migracao nao esta pronta para trocar DNS.
+## Atualizacao verificada — 2026-10-20 04:31–04:32 UTC
+
+**PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g | SITE_PUBLIC_AUDIT_STATUS=APTO**
+
+O site publico `shopvivaliz.com.br` ja encaminhou uma requisicao HTTPS identificada a release `99416b61` na Marina: HTTP 200 e 1 registro no Apache da Marina, 0 na origem, para marcador exclusivo. Isso e prova pontual do roteamento via Cloudflare; a auditoria de publicacao web/AI Squad no GitHub (PR #3160) possui `AUDIT_VERDICT=APTO` **limitado ao seu escopo**, nao uma certificacao de toda a migracao.
+
+**GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+A VM `shopvivaliz-free-a1` e os backups devem ser preservados. Origem com workers protegidos por fencing; na Marina, o Pricing continua `inactive/disabled` e MySQL de validacao em `0.0.0.0:13312` e `[::]:13312` sem volume/backup/firewall/restauro certificados. Supabase e seu transporte protegido, paridade final, boot SAFE-T, MCP independente, rollback/reboot e custos/quotas Oracle exigem aprovacao e prova especificas. Nao desfazer o roteamento publico nem reativar writers na origem por inferencia. Nao contornar recusas de plataforma. Ver `docs/quality/AUDIT_STATUS.md` e `docs/ops/marina-independent-secure-mcp-tunnel.md`.
+
+## Historico — checkpoint de 18/10/2026
+
+**ESTADO HISTORICO: NO_CUT / NAO_APTO.** Em 18/10 ainda nao havia prova do site publico servido na Marina. As instrucoes abaixo documentam problemas anteriores e NAO substituem as observacoes recentes.
 Um script criado ou um agendador com exit 0 nao comprova E2E, backup ou integridade.
 
 ## Ponto de parada do Codex
