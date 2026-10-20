@@ -35,11 +35,28 @@ class CartOriginFenceTests(unittest.TestCase):
         self.assertIn("User=ubuntu", unit)
         self.assertIn("NoNewPrivileges=true", unit)
         self.assertIn(LOCK, unit)
-        self.assertIn("systemctl disable --now \"$TIMER\"", setup)
         self.assertIn("[ -e " + FENCE + " ]", setup)
-        self.assertIn("ORIGIN_ABANDONED_CART_TIMER_FENCED=PASS", setup)
+        self.assertIn("ORIGIN_CART_MAINTENANCE_LEASE_REQUIRED", setup)
         self.assertIn('id -u', setup)
         self.assertIn('install_abandoned_cart_recovery_requires_root', setup)
+        self.assertLess(setup.index("[ -e " + FENCE + " ]"), setup.index("id -u"))
+        self.assertNotIn("systemctl disable --now", setup)
+
+    def test_fenced_installer_rejects_before_any_privileged_operation(self):
+        text = INSTALLER.read_text(encoding="utf8")
+        with tempfile.TemporaryDirectory(prefix="fenced-cart-installer-") as tmp:
+            base = Path(tmp)
+            fence = base / "synthetic-fenced-origin"
+            script = base / "installer.sh"
+            script.write_text(text.replace(FENCE, str(fence)), encoding="utf8")
+            fence.touch()
+            denied = subprocess.run(
+                ["bash", str(script)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=5, check=False,
+            )
+            self.assertEqual(denied.returncode, 75)
+            self.assertIn("ORIGIN_CART_MAINTENANCE_LEASE_REQUIRED", denied.stderr)
+            self.assertNotIn("ABANDONED_CART_RECOVERY_INSTALL=PASS", denied.stdout)
 
     def test_cron_installer_cannot_reenable_fenced_origin_or_double_timer(self):
         code = CRON.read_text(encoding="utf8")
