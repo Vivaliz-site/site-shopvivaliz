@@ -35,6 +35,18 @@ these paths are intentionally outside the existing
 `remote-control-mcp-bootstrap.yml` push filters to avoid the legacy
 four-host bootstrap.
 
+## Operator-only, isolated Secure MCP Tunnel readiness
+
+See [the Marina independent tunnel runbook](../docs/ops/marina-independent-secure-mcp-tunnel.md)
+for Platform organization/workspace association, independent runtime-key and local
+MCP bearer header, verified ARM64 client distribution, the dedicated service
+identity, fail-closed local preflight, ChatGPT connection, and rollback.
+
+Run the non-mutating metadata probe with
+`python3 marina-direct-mcp/operator_preflight.py`. A successful probe NEVER
+certifies tunnel authentication, ChatGPT tool connectivity, Pricing readiness,
+or migration cutover. Do not reuse the backend tunnel installer or credentials.
+
 ## Official future provisioning steps (operator-gated)
 
 1. Review source/CI and obtain explicit, **effective** permission from the
