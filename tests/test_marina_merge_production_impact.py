@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DIFF_SCRIPT = ROOT / "scripts" / "production-impact-changed-paths.sh"
+DIFF_SCRIPT = ROOT / ".github" / "scripts" / "production-impact-changed-paths.sh"
 CLASSIFIER = ROOT / "scripts" / "should-deploy-production.sh"
 
 
@@ -79,6 +79,10 @@ class MergeProductionImpactTests(unittest.TestCase):
         self.assertEqual(paths.splitlines(), ["index.php"])
         self.assertEqual(self.deploy(paths), "true")
 
+    def test_ci_only_probe_does_not_trigger_web_release(self):
+        paths = ".github/scripts/production-impact-changed-paths.sh\\nMIGRATION-EXECUTE-NOW.md\\n"
+        self.assertEqual(self.deploy(paths), "false")
+
     def test_root_commit_does_not_masquerade_as_no_change(self):
         root_sha = self.git("rev-list", "--max-parents=0", "HEAD")
         paths = self.changes(root_sha)
@@ -108,7 +112,7 @@ class MergeProductionImpactTests(unittest.TestCase):
             ROOT / ".github/workflows/runtime-env-keyset-lock.yml",
         ):
             code = path.read_text(encoding="utf-8")
-            self.assertIn("bash scripts/production-impact-changed-paths.sh", code)
+            self.assertIn("bash .github/scripts/production-impact-changed-paths.sh", code)
             self.assertNotIn("git diff-tree --no-commit-id --name-only -r", code)
 
 
