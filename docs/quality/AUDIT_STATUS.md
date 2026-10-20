@@ -1,8 +1,12 @@
 # Estado da Auditoria
 
-## Rodada de migração Marina — 2026-10-20
+## Rodada de publicação do site público na Marina — 2026-10-20 (escopo auditado)
 
-**Status:** `APTO` — migração publicada, auditoria funcional e três auditorias UI independentes passaram no mesmo SHA/release/ambiente; certificador formal retornou `AUDIT_VERDICT=APTO`.
+**SITE_PUBLIC_AUDIT_STATUS=APTO** — o `AUDIT_VERDICT=APTO` certifica **somente o escopo da auditoria funcional do storefront e das jornadas UI efetivamente executadas** no SHA/release `99416b61be202b95a1f77b0469fd6395954eeb74`. Preserva-se a certificação original e suas evidências; não há conversão automática em aprovação para toda a infraestrutura.
+
+**GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION** — a certificação da publicação web não aprova desativar `shopvivaliz-free-a1`, mover dados protegidos, mudar os donos das filas nem declarar todos os serviços concluídos. Precisam de aceites separados: Pricing (worker inativo e banco em porta wildcard sem backup/volume/ACL/restart certificados), paridade/transferência autorizada de Supabase, boot do Amazon SAFE-T, MFA/TLS/rollback e MCP ShopVivaliz independente da controladora, ainda não instalado nem conectado. Os limites administrativos e a recusa anterior para transferência Supabase permanecem vinculantes.
+
+**PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g** — em 2026-10-20 04:31–04:32 UTC, uma requisição HTTPS pública com marcador exclusivo retornou HTTP 200 e foi encontrada no `shopvivaliz-apex-www-access.log` da Marina (1 ocorrência, 0 na origem). Essa prova identifica **uma** requisição encaminhada via Cloudflare à Marina; não comprova todos os paths, regiões, origens ou os outros serviços. Origem e backups preservados.
 
 **Release publicado:** `99416b61be202b95a1f77b0469fd6395954eeb74` (marcador público confirmado; deploy `39351461463`).
 
@@ -12,7 +16,7 @@
 
 **Certificação formal:** manifesto `AUDIT_CERTIFICATION_MANIFEST_V1` para SHA `99416b...`; `AUDIT_POLICY_VERSION=2026-09-21-absolute-v5` e `AUDIT_VERDICT=APTO`.
 
-**Observação operacional:** o worker de fila no host de origem permanece inativo por fence intencional; a saúde funcional e o processamento de produção foram validados na Marina. Não há pendência crítica aberta.
+**Observação operacional:** o worker de fila da origem permanece desligado por fencing; a saúde funcional do **site** foi validada na Marina. Não há pendência crítica declarada **nesse escopo certificado**, mas a migração global permanece `NAO_APTO` e `NO_DECOMMISSION` pelos gates listados acima.
 
 **Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
