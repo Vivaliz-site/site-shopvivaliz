@@ -46,7 +46,7 @@ jobs:
           set -Eeuo pipefail
           expected_sha=''
           if [[ "${{ github.event_name }}" == 'push' ]]; then
-            bash scripts/production-impact-changed-paths.sh "$GITHUB_SHA" > /tmp/production-impact-paths.txt
+            bash .github/scripts/production-impact-changed-paths.sh "$GITHUB_SHA" > /tmp/production-impact-paths.txt
             should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
             [[ "$should_deploy" == 'true' ]] && expected_sha="$GITHUB_SHA"
           fi
