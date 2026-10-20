@@ -1,5 +1,40 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## Atualização verificada — 2026-10-20 14:59–15:23 UTC: integridade real dos dados e writer editorial ainda na origem
+
+**DB_ROW_CONTENT_PARITY=97_OF_102 | BACKUP_BLOG_CAMPAIGN_RESTORE=PASS | BLOG_PUBLISH_SOURCE_WRITER=CONFIGURED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+- Paridade das **102 tabelas MySQL `shopvivaliz`**: leitura de snapshot consistente, sem writes, e hashes de cada linha normalizada em ambas as VMs mostraram **97 tabelas com conteúdo equivalente** e cinco com diferenças. Em 14:59 UTC a origem tinha **14.704** linhas; a Marina **14.703**. A cifra histórica 14.701 no P0 anterior **não deve ser usada como contagem atual**. As três diferenças numéricas: `blog_articles` (59/58), `email_campaign_runs` (53/51) e `sv_conversion_events` (363/365).
+- `users`: 10 linhas em ambos; **um** registro com `password_hash` e `updated_at` divergentes, cujo timestamp é **mais recente na Marina**. A credencial não foi lida em claro, exposta, importada nem redefinida. **Não copiar a tabela ou o hash antigo sobre a Marina**; exigir autenticação/UI de conta legítima antes de encerrar.
+- `coupons`: três linhas em ambos; **dois** registros com `updated_at` mais recente na Marina, mas todos os campos comerciais equivalentes. Preservar o destino e não sobrescrever timestamps sem prova de propriedade.
+- `sv_conversion_events`: há **dois eventos adicionais na Marina**. São dados legítimos do destino a preservar; não substituir pela origem. Análise de eventos é somente contagem/hash, sem dados de sessão divulgados.
+- `blog_articles`: falta na Marina o artigo **id 30430**, presente apenas na origem e ainda agendado. O artigo comum **id 16206** está `published` na origem e `scheduled` na Marina, com agendamento vencido desde 2026-10-19. Outras onze linhas antigas diferem **somente** em `updated_at` por aproximadamente dois segundos durante a ativação da release em ambas as VMs. Não transportar SQL integralmente nem redefinir status sem CAS, owner, agendador único e UI do CMS.
+- `email_campaign_runs`: IDs **52 e 53** existem somente na origem, com status `completed` e **zero** destinatários, enviados e falhas no levantamento anterior. Preservar como histórico auditável, sem disparar/repetir e-mails; revalidar efeitos antes de eventual arquivo/espelho seletivo.
+
+### Backups locais e ensaios de recuperação — duas pontas
+
+- Origem: arquivo privado `/home/ubuntu/.shopvivaliz-migration-private/blog-campaign-local.bz8iC9Nr/shopvivaliz_blog_campaign.sql.gz`, SHA-256 SQL `3eb7582516fd6b06f9c47341c0e68ca7ae676e80de395cbee77d4bf295202e48`. O diretório antigo `migration-checks` da origem continua `root:root` mode 0700; foi respeitado e não alterado.
+- Marina: arquivo privado `/home/ubuntu/migration-checks/blog-campaign-local.uwaaiZ1O/shopvivaliz_blog_campaign.sql.gz`, SHA-256 SQL `e74c665ceee42514975c8c6a946a7da0302d7b4d4bbfccc8113b5a870a2d9327`.
+- Cada dump transacional cobre **somente `blog_articles` e `email_campaign_runs`**. Diretórios 0700, arquivos 0600 e manifestos com hash e `restore_validation=PASS`. Em ambas as VMs uma instância MySQL temporária sob `/var/tmp`, `--skip-networking`/socket local, importou as duas tabelas: **origem 59/53 e Marina 58/51**. Todos os registros restaurados foram comparados por hash de conteúdo com o banco correspondente (`RESTORE_ROW_HASH_PARITY=PASS`). O primeiro ensaio falhou porque o dump de tabelas não continha `CREATE DATABASE`/`USE`; o teste isolado foi corrigido para criar a base vazia apenas na instância temporária (RED/GREEN), sem mudanças em produção. Sem MySQL de teste remanescente nem transferência entre hosts.
+- **Limitação**: esses arquivos estão **na própria VM** correspondente; não certificam durabilidade externa, Supabase, controle de volume Docker ou autorização para decommission.
+
+### Causa do desvio editorial / responsabilidade pelos escritores
+
+- `.github/workflows/blog-publish-scheduled.yml` agenda publicação **a cada 15 minutos** em `runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]` e executa por SSH `ubuntu@127.0.0.1` no checkout **da origem**, incluindo `apply-real-email-campaigns-migration.php`, `api/blog/publish-scheduled.php` **e `run-blog-email-campaigns.php` (e-mail real)**. Esse contrato não indica conexão independente à Marina. A pasta do runner da origem existe; **nenhum runner equivalente** foi encontrado na Marina. Há identidade de token `BLOG_PUBLISH_TOKEN` provisionada no runtime de ambas as VMs, mas **não se confirmou** identidade do secret GitHub nem executor final aprovado; os valores nunca foram exibidos.
+- Consulta HTTPS **não autenticada** a `api/blog/publish-scheduled.php` respondeu **401**, resultado esperado; nenhum token foi usado e nenhuma publicação foi disparada. Na origem: 47 publicados, 12 agendados futuros e zero vencidos; Marina: 46 publicados, 11 futuros e **um agendado vencido** (`BLOG_TARGET_OVERDUE=1`). A rotina da origem pode atualizar o banco antigo enquanto o público é atendido pela Marina, mantendo a divergência.
+- O timer/cron de recuperação de carrinhos na origem também permanece ativo sem testar `origin-workers-fenced`; a chamada `service_action` oficial foi recusada por `runtime_lock_required`. **Não** contornar essa recusa via RDC, SSH, `task_submit`, GitHub ou OCI. O PR #3164 permanece fechado/draft sem merge. Não confundir CI verde, backups ou token de publicação com autorização de um novo writer.
+
+### Sequência de correção segura e obrigatória
+
+1. Operador autenticado do mecanismo **oficial** obtém lease de manutenção/fencing token com escopo correto e capacidade autorizada para deduplicar cron/timer na **origem**. Desabilitar agendamentos do carrinho com readback do boot e confirmar ausência de reativação automática. Preservar exclusivamente o writer da Marina, sob mesmo controle de idempotência.
+2. Provisionar e auditar **um** publicador editorial/campanhas na Marina: runner próprio sob ownership aprovado **ou** endpoint HTTPS autenticado e fluxo de campanhas com idempotência, segredos separados, testes de negativa e positivos, além de evidências de envio. **Não** mudar o workflow antigo antes de provar o novo; ele executa e-mails reais, não só posts. Depois bloquear o writer antigo via lease e confirmar que os dois não operam simultaneamente.
+3. Reconciliar **seletivamente** id 16206 e id 30430 sob backup confirmado, identidade/slug, CAS em `updated_at` e status e UI do CMS (publicar apenas o agendamento vencido aprovado; não gerar artigos/campanhas duplicados). Nunca copiar `users`, `coupons` ou `sv_conversion_events` da origem para substituir registros novos da Marina. Históricos de e-mail exigem prova de zero-envios e não autorizam replay.
+4. Prosseguir nos gates separados: Pricing MySQL 13312/IPv4+IPv6 e worker, SAFE-T boot, Supabase protegido, MCP OpenAI independente, reconciliação final, UI real e teste de reboot/rollback; manter origem e backups **até** aceites independentes e autorização de descomissionamento.
+
+**Resultado: BACKUP_BLOG_CAMPAIGN_RESTORE=PASS, mas DB_SOURCE_TARGET_PARITY=NOT_PROVEN, ORIGIN_ABANDONED_CART_SENDER_FENCE=NOT_ENFORCED e GLOBAL_MIGRATION_STATUS=NAO_APTO / NO_DECOMMISSION.** Nenhum escritor/serviço, token, DNS, dado comercial ou política privilegiada foi modificado nessa etapa de auditoria.
+
+---
+
 ## P0 — 2026-10-20 10:55 UTC: escritor de e-mail duplicado na origem e delta SQL ainda aberto
 
 **ORIGIN_ABANDONED_CART_SENDER_FENCE=NOT_ENFORCED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
