@@ -9,12 +9,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pwd
 import socket
 import stat
 import subprocess
 from pathlib import Path
 
 EXPECTED_HOST = "marina-a1-4c24g"
+SERVICE_USER = "shopvivaliz-marina-mcp"
 UNITS = (
     "shopvivaliz-marina-mcp.service",
     "shopvivaliz-marina-mcp-tunnel.service",
@@ -102,8 +104,18 @@ def binary_status(path: Path, current_uid: int) -> str:
 def collect(home: Path | None = None) -> dict:
     current_uid = os.geteuid()
     host = socket.gethostname().split(".")[0]
-    home = home or Path.home()
+    account = pwd.getpwuid(current_uid)
+    home = home if home is not None else Path(account.pw_dir)
     secrets_root = home / ".config" / "shopvivaliz-marina-mcp"
+    try:
+        root_meta = secrets_root.lstat()
+        root_safe = (
+            stat.S_ISDIR(root_meta.st_mode) and not stat.S_ISLNK(root_meta.st_mode)
+            and root_meta.st_uid == current_uid
+            and stat.S_IMODE(root_meta.st_mode) == 0o700
+        )
+    except OSError:
+        root_safe = False
     secrets = {
         label: protected_file_status(secrets_root / filename, current_uid, lower, upper)
         for label, (filename, lower, upper) in SECRET_SIZES.items()
@@ -116,6 +128,8 @@ def collect(home: Path | None = None) -> dict:
         binding = parse_listener_status(listen.stdout) if listen.returncode == 0 else "probe_unavailable"
     except (OSError, subprocess.TimeoutExpired):
         binding = "probe_unavailable"
+    if not root_safe:
+        secrets = {key: "secret_directory_unsafe_or_missing" for key in secrets}
     units = {unit: unit_snapshot(unit) for unit in UNITS}
     source = Path(__file__).with_name("server.py")
     source_staged = source.is_file()
@@ -124,19 +138,20 @@ def collect(home: Path | None = None) -> dict:
         and value.get("ActiveState") == "active"
         and value.get("UnitFileState") == "enabled"
         and value.get("NoNewPrivileges") == "yes"
-        and value.get("User") == "ubuntu"
+        and value.get("User") == SERVICE_USER
         for value in units.values()
     )
     candidate = (
         host == EXPECTED_HOST and current_uid != 0
-        and source_staged
+        and account.pw_name == SERVICE_USER
+        and root_safe and source_staged
         and all(v == "metadata_ok_not_auth_tested" for v in secrets.values())
         and binary_status(BINARY_PATH, current_uid) == "metadata_ok_version_unverified"
         and binding == "loopback_only" and unit_ready
     )
     return {
         "host_identity": "marina_verified" if host == EXPECTED_HOST else "host_mismatch",
-        "privilege": "unprivileged" if current_uid != 0 else "root_not_accepted",
+        "privilege": "dedicated_unprivileged_user" if current_uid != 0 and account.pw_name == SERVICE_USER else "wrong_service_identity",
         "source_staged": source_staged,
         "secrets_metadata": secrets,
         "client_binary": binary_status(BINARY_PATH, current_uid),
