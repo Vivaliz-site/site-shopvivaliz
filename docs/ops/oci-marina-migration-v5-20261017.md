@@ -1,5 +1,18 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## Evidência verificada — 2026-10-20 10:20 UTC: recuperação SQL Pricing
+
+**PRICING_LOGICAL_BACKUP_AND_SQL_RESTORE=PASS | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+Foi criada na **própria Marina**, sem privilégio root, uma cópia lógica transacional do banco `ml_pricing_prod` em `/home/ubuntu/migration-checks/pricing-db/ml_pricing_prod_20261020T100857Z.sql.gz`. MySQL `mysqldump 8.0.46` com `--single-transaction`, incluindo rotinas, eventos e gatilhos, leu o destino já autorizado `127.0.0.1:13312`. Nenhum dado ou segredo foi enviado para outra VM, CI, chat, Git ou armazenamento remoto. O diretório privado usa permissão `0700` e backup, manifesto e provas `0600`. Backup contém **27 tabelas** e foi verificado por descompactação integral e SHA-256 do SQL `25b9d7619e40065664b52c27dca1e833a58a2981dc6533e73490eb34c35f3c3a`.
+
+**RESTORE_VALIDATION=PASS | RESTORED_SQL_ROW_PARITY=PASS**: o backup foi importado integralmente em **instância MySQL isolada sem TCP** (`--skip-networking`), criada pelo usuário `ubuntu` num diretório privado sob `/var/tmp` permitido pela política AppArmor já existente. A restauração apresentou **27/27 tabelas com contagens de registros iguais** às respectivas tabelas do banco original, mais **16/16 versões Doctrine idênticas**. A instância e seu diretório temporário foram destruídos ao final; zero processos `mysqld` de usuário remanescentes, e o `mysql.service` de produção não foi alterado. Evidências locais: `pricing-db/*.manifest.json`, `restore-test-20261020T1018Z.txt` e `restore-row-parity-20261020T1020Z.txt`. Consulta pública das evidências sanitizadas na [issue #3038](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3038).
+
+O **primeiro ensaio** de inicialização do MySQL temporário falhou por confinamento AppArmor ao criar o datadir sob `/home`; a correção foi executar **somente o MySQL temporário** sob `/var/tmp`, explicitamente permitido pela política existente, sem modificar AppArmor, permissões administrativas ou o MySQL de produção (RED/causa/GREEN). A cópia validada fica **no mesmo host** e ainda **não** comprova backup externo durável, restauração após reboot, persistência/ownership do volume Docker, política de reinício, firewall/NSG IPv4/IPv6, recuperação completa do Supabase ou processamento real do Pricing.
+
+**PRICING_WORKER=INACTIVE_DISABLED** no destino na última checagem; MySQL da validação segue escutando em `0.0.0.0:13312` e `[::]:13312`, pendente de restrição por operador oficialmente autorizado. Sondas TCP *somente conectividade* da origem e controladora à VNIC privada `10.80.1.116`, portas `13312`/`5580`, retornaram indisponível nessas duas rotas, **não** prova de segurança contra outros peers. Nenhuma tentativa de contornar o bloqueio de privilégio root/Docker, nenhuma transferência protegida do Supabase, ativação de worker, rollback ou descomissionamento. **Preservar origem, fencing e backups até aceite global independente**.
+
+
 ## Evidência atualizada em 2026-10-20 04:31–04:32 UTC (não altera o histórico abaixo)
 
 **PUBLIC_ROUTE_OBSERVED=marina-a1-4c24g | SITE_PUBLIC_AUDIT_STATUS=APTO**
