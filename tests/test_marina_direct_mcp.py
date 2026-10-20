@@ -131,7 +131,10 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.assertEqual(unknown["error"]["code"], -32601)
         body = {"jsonrpc": "2.0", "id": 1, "method": "ping",
                 "padding": "x" * (m.MAX_BODY + 10)}
-        status, _ = self.req(body=body, bearer="unit-test-marina-token-very-long-1234567890abcdef")
+        status, _ = self.req(
+            body=body, bearer="unit-test-marina-token-very-long-1234567890abcdef",
+            extra_headers={"Accept": "application/json, text/event-stream",
+                           "MCP-Protocol-Version": m.PROTOCOL_VERSION})
         self.assertEqual(status, 413)
 
     def test_host_name_and_listener_fail_closed(self):
