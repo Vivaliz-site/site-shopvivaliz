@@ -6,7 +6,7 @@ Requires=shopvivaliz-marina-mcp.service
 After=network-online.target shopvivaliz-marina-mcp.service
 Wants=network-online.target
 ConditionPathExists=/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/tunnel-profile.yaml
-ConditionPathIsExecutable=/opt/shopvivaliz-marina-mcp/bin/tunnel-client
+ConditionPathExists=/opt/shopvivaliz-marina-mcp/bin/tunnel-client
 
 [Service]
 Type=exec
