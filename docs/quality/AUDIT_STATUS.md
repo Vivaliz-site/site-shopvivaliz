@@ -1,16 +1,18 @@
 # Estado da Auditoria
 
-## Rodada de migração Marina — 2026-10-19
+## Rodada de migração Marina — 2026-10-20
 
-**Status:** `DEPLOY E AUDITORIAS FRESCAS PASSARAM; CERTIFICAÇÃO FORMAL PENDENTE` — a migração foi publicada e a jornada real de browser passou com consenso completo dos três provedores após a liberação operacional dos bridges.
+**Status:** `APTO` — migração publicada, auditoria funcional e três auditorias UI independentes passaram no mesmo SHA/release/ambiente; certificador formal retornou `AUDIT_VERDICT=APTO`.
 
-**Release publicado:** `7963d0e11805b731791cbe003c9916dde67565f9` (marcador público confirmado; deploy `39325469206`).
+**Release publicado:** `99416b61be202b95a1f77b0469fd6395954eeb74` (marcador público confirmado; deploy `39351461463`).
 
-**Evidência de browser real:** run `39325624598` — ciclo `ais_20261019_211422_471e6978a2`, 9 mensagens, cobertura completa, consenso disponível, health dos três provedores verificado antes e depois do reload, `AI_SQUAD_UI_AUDIT=PASS`.
+**Evidência de browser real:** runs `39351898560`, `39353310486` e `39363734687` — três sessões distintas, 9 mensagens por ciclo, cobertura completa, consenso disponível, health dos três provedores verificado antes e depois do reload, `AI_SQUAD_UI_AUDIT=PASS`.
 
-**Auditoria funcional pós-deploy:** run `39327281260` — páginas críticas, orders health, payment queue, quote real do Melhor Envio e integrações Mercado Pago/Melhor Envio/Olist passaram.
+**Auditoria funcional pós-deploy:** run `39351896032` — páginas críticas, orders health, payment queue, quote real do Melhor Envio e integrações Mercado Pago/Melhor Envio/Olist passaram.
 
-**Pendência objetiva:** gerar o manifesto `AUDIT_CERTIFICATION_MANIFEST_V1` com evidência hashada do mesmo SHA/release/ambiente e obter `AUDIT_VERDICT=APTO` do certifier. Até essa saída, não declarar `APTO` formal.
+**Certificação formal:** manifesto `AUDIT_CERTIFICATION_MANIFEST_V1` para SHA `99416b...`; `AUDIT_POLICY_VERSION=2026-09-21-absolute-v5` e `AUDIT_VERDICT=APTO`.
+
+**Observação operacional:** o worker de fila no host de origem permanece inativo por fence intencional; a saúde funcional e o processamento de produção foram validados na Marina. Não há pendência crítica aberta.
 
 **Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
