@@ -16,6 +16,15 @@ check() {
 
 check false README.md docs/VM-SSH-ACCESS.md .codex/config.toml .github/workflows/foo.yml tests/unit-test.php
 check false docs/runbook.md
+# CI policy code is NOT a deployed storefront/worker payload. Actual PHP,
+# scripts/deploy-production.sh and any unknown script still demand deployment.
+check false scripts/check_pr_completion_policy.py .github/workflows/pr-completion-enforcer.yml tests/test_pr_completion_enforcer_policy.py REGRA-PR-FALHOU-CORRIGIR-NA-HORA.md
+check false scripts/should-deploy-production.sh tests/should-deploy-production-test.sh .github/workflows/master-production-pipeline.yml
+check false scripts/check_pr_completion_policy.py scripts/should-deploy-production.sh
+check true scripts/check_pr_completion_policy.py api/orders/create-validated.php
+check true scripts/check_pr_completion_policy.py scripts/runtime-worker.php
+check true scripts/should-deploy-production.sh scripts/deploy-production.sh
+check true scripts/check_pr_completion_policy.py scripts/unrecognized-agent.py
 check true index.php
 check true scripts/runtime-worker.php
 check true README.md api/health/version.php
