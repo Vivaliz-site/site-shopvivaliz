@@ -113,13 +113,17 @@ def create_server(
 
         def send_json(self, status: int, value: object) -> None:
             raw = json.dumps(value, separators=(",", ":"), ensure_ascii=True).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(raw)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(raw)
+            try:
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(raw)
+            except (BrokenPipeError, ConnectionResetError):
+                # A disconnected peer is normal and must not produce a traceback.
+                return
 
         def authorized(self) -> bool:
             # Reject browser-origin cross-site calls unless an approved proxy
@@ -253,7 +257,15 @@ def create_server(
             payload["error" if error else "result"] = error or result
             self.send_json(200, payload)
 
-    server = ThreadingHTTPServer((host, port), Handler)
+    class RedactedHTTPServer(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            failure = sys.exc_info()[1]
+            if isinstance(failure, (BrokenPipeError, ConnectionResetError, TimeoutError)):
+                return
+            # Suppress request/header/client details, retain diagnostic class.
+            print("MARINA_MCP_HANDLER_FAILURE=" + type(failure).__name__, file=sys.stderr)
+
+    server = RedactedHTTPServer((host, port), Handler)
     server.daemon_threads = True
     return server
 
