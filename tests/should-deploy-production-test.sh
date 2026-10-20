@@ -16,6 +16,10 @@ check() {
 
 check false README.md docs/VM-SSH-ACCESS.md .codex/config.toml .github/workflows/foo.yml tests/unit-test.php
 check false docs/runbook.md
+# CI-only first-parent classifier must not force a new storefront release.
+check false scripts/production-impact-changed-paths.sh
+check false scripts/production-impact-changed-paths.sh .github/workflows/repair-catalog-hard-quality-pending.yml tests/test_marina_merge_production_impact.py
+check true scripts/production-impact-changed-paths.sh api/orders/create.php
 check true index.php
 check true scripts/runtime-worker.php
 check true README.md api/health/version.php
