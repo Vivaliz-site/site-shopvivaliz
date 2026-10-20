@@ -50,11 +50,11 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
             headers["Authorization"] = "Bearer " + bearer
         if origin:
             headers["Origin"] = origin
-        if extra_headers:
-            headers.update(extra_headers)
         data = json.dumps(body).encode("utf8") if body is not None else None
         if data is not None:
             headers["Content-Type"] = "application/json"
+        if extra_headers:
+            headers.update(extra_headers)
         req = Request(self.base + route, data=data, headers=headers)
         try:
             with urlopen(req, timeout=4) as response:
