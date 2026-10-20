@@ -1,5 +1,18 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## P0 — 2026-10-20 10:55 UTC: escritor de e-mail duplicado na origem e delta SQL ainda aberto
+
+**ORIGIN_ABANDONED_CART_SENDER_FENCE=NOT_ENFORCED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+Apesar do marcador raiz `/etc/shopvivaliz/migration/origin-workers-fenced` estar presente e dos quatro workers migrados permanecerem `inactive/disabled`, a origem `shopvivaliz-free-a1` **ainda possui dois agendamentos ativos da recuperação de carrinho abandonado**: cron `ubuntu` a cada 30 minutos e `shopvivaliz-abandoned-cart-recovery.timer` systemd `active/enabled`. A Marina possui outro timer ativo. Cron e unit usam **arquivos de lock diferentes**, e o script de envio instalado na origem ainda **não valida o fence antes do PDO e do mailer**. Nas execuções recentes observadas `Enviados=0`, `Candidatos=0`, `Falhas=0`; nenhum envio duplicado foi comprovado, mas o próximo carrinho elegível poderá gerar uma escrita/envio pela origem desatualizada.
+
+**PLATFORM_RUNTIME_LEASE=REQUIRED** — a ferramenta **oficial** ShopVivaliz Remote Control recusou explicitamente a parada do timer da origem com `runtime_lock_required` (audit `9197c5d2-9546-4900-ba74-56e24ac7a584`). Não repetir a ação por RDC, SSH, GitHub Actions, `task_submit`, OCI ou outro caminho para contornar a recusa. O operador legítimo deve adquirir o **lease de manutenção e fencing token corretamente escopados** e realizar o stop/disable do timer + remoção/deduplicação do cron, preservando o timer da Marina. A correção de código está preparada e testada no [PR #3164](https://github.com/Vivaliz-site/site-shopvivaliz/pull/3164), **DRAFT, NÃO MESCLAR/IMPLANTAR** até essas condições; o merge também poderia acionar automações mutáveis. Prova de teste: script da branch executado temporariamente na origem encontrou o fence real e saiu `ABANDONED_CART_ORIGIN_FENCED=SKIP` antes de acessar DB/mail, sem modificar os arquivos instalados. Acompanhar [issue P0 #3163](https://github.com/Vivaliz-site/site-shopvivaliz/issues/3163).
+
+**DB_SOURCE_TARGET_PARITY=NOT_PROVEN** — comparação PDO exclusivamente de leitura das contagens exatas nas **102 tabelas** `shopvivaliz`: origem **14.704 linhas**, Marina **14.701**. Somente `blog_articles` (origem 59; Marina 58) e `email_campaign_runs` (origem 53; Marina 51) divergem por quantidade. Há um artigo agendado apenas na origem (id 30430) e um artigo presente em ambas (id 16206) com publicação/atualização mais recentes na origem, enquanto a Marina ainda registra status agendado. Dois históricos da tabela `email_campaign_runs` exclusivos da origem (ids 52/53) estão `completed` com **zero destinatários, zero enviados e zero falhas**. Nenhuma campanha foi disparada nem linhas importadas nesta auditoria; não copiar dados ou reexecutar mensagens automaticamente. A reconciliação seletiva exige backup de ambas as pontas, CAS em identidade/versão/owner, validação de edição mais recente, idempotência comercial e UI real.
+
+**A publicação do site continua `SITE_PUBLIC_AUDIT_STATUS=APTO` no seu escopo.** Isso **não libera o descomissionamento** da origem, mesmo com o backup/restauração lógica do Pricing validado. Os bloqueios de Docker/VM, Supabase protegido, MFA/Platform Tunnels, SAFE-T boot, proteção dos writers e rollback seguem independentes. Esta atualização é **somente documentação**, não para interromper cron/timer, transferir payloads ou abrir novas portas.
+
+
 ## Evidência verificada — 2026-10-20 10:20 UTC: recuperação SQL Pricing
 
 **PRICING_LOGICAL_BACKUP_AND_SQL_RESTORE=PASS | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
