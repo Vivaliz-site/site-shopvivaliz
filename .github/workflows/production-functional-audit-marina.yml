@@ -1,0 +1,105 @@
+name: Production Functional Audit on Marina
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-functional-audit-marina
+  cancel-in-progress: false
+
+jobs:
+  functional:
+    name: Prove production works on Marina
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 12
+    environment: production
+    env:
+      BASE_URL: https://shopvivaliz.com.br
+      AUDIT_TARGET_IP: 127.0.0.1
+      MARINA_PUBLIC_IP: 137.131.173.240
+      REMOTE_STAGE: /tmp/production-functional-audit-marina-${{ github.run_id }}-${{ github.run_attempt }}
+      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate anti-false-positive contract
+        run: python3 tests/test_production_functional_audit_contract.py
+
+      - name: Configure verified Marina SSH access
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-audit-key"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-audit-known-hosts"
+          # Verified from the controller inventory; strict checking remains on.
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-audit-known-hosts"
+          chmod 600 "$HOME/.ssh/marina-audit-key" "$HOME/.ssh/marina-audit-known-hosts"
+
+      - name: Stage exact audit on Marina
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-audit-known-hosts" -i "$HOME/.ssh/marina-audit-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          test "$(hostname -s)" = "marina-a1-4c24g"
+          case "$stage" in /tmp/production-functional-audit-marina-*) ;; *) exit 2 ;; esac
+          install -d -m 700 "$stage"
+          REMOTE
+          scp "${ssh_opts[@]}" scripts/production-functional-audit.sh "ubuntu@$MARINA_PUBLIC_IP:$REMOTE_STAGE/production-functional-audit.sh"
+          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "umask 077; cat > '$REMOTE_STAGE/agent.key'"
+
+      - name: Execute real production transaction probes on Marina
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-audit-known-hosts" -i "$HOME/.ssh/marina-audit-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$REMOTE_STAGE" "$BASE_URL" "$AUDIT_TARGET_IP" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          base_url=$2
+          target_ip=$3
+          test "$target_ip" = "127.0.0.1"
+          test "$(hostname -s)" = "marina-a1-4c24g"
+          case "$stage" in /tmp/production-functional-audit-marina-*) ;; *) exit 2 ;; esac
+          test -s "$stage/agent.key"
+          export BASE_URL="$base_url"
+          export AUDIT_TARGET_IP="$target_ip"
+          export SHOPVIVALIZ_AGENT_KEY="$(cat "$stage/agent.key")"
+          bash "$stage/production-functional-audit.sh"
+          REMOTE
+
+      - name: Cleanup remote audit staging
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -f "$HOME/.ssh/marina-audit-key" && -f "$HOME/.ssh/marina-audit-known-hosts" ]]; then
+            ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-audit-known-hosts" -i "$HOME/.ssh/marina-audit-key")
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          case "$stage" in /tmp/production-functional-audit-marina-*) rm -rf -- "$stage" ;; *) exit 2 ;; esac
+          REMOTE
+          fi
+          rm -f "$HOME/.ssh/marina-audit-key" "$HOME/.ssh/marina-audit-known-hosts"
+
+      - name: Publish failure summary
+        if: failure()
+        shell: bash
+        run: |
+          echo '::error::PRODUCTION_FUNCTIONAL_AUDIT_MARINA=FAIL. Producao nao pode ser declarada saudavel.'
+          echo 'Target functional audit failed; inspect the failing stage before proposing a fix.' >> "$GITHUB_STEP_SUMMARY"

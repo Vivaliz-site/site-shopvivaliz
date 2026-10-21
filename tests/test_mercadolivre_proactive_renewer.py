@@ -125,6 +125,38 @@ def test_deploy_excludes_the_legacy_renewer_when_mlrr_owns_credentials(tmp_path:
     assert "shopvivaliz-shopee-token-renewer.service" in mlrr_services
 
 
+def test_deploy_excludes_origin_queue_worker_when_migration_fence_exists(tmp_path: Path) -> None:
+    text = DEPLOY.read_text(encoding="utf-8")
+    start = text.index("readonly -a RUNTIME_SERVICES=(")
+    services_decl = text[start : text.index(")\n", start) + 2]
+    owner_fn = extract_bash_function(text, "shared_ml_token_owner")
+    active_fn = extract_bash_function(text, "active_runtime_services")
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "runtime-secrets.php").write_text(
+        "<?php return ['ML_TOKEN_OWNER' => 'mlrr'];\n", encoding="utf-8"
+    )
+    fence = tmp_path / "origin-workers-fenced"
+    fence.touch()
+    script = tmp_path / "probe-fenced.sh"
+    script.write_text(
+        "#!/usr/bin/env bash\nset -Eeuo pipefail\n"
+        f'SHARED_DIR="{shared}"\n'
+        f'ORIGIN_WORKERS_FENCE_FILE="{fence}"\n'
+        f'ML_RENEWER_SERVICE="{ML_SERVICE}"\n'
+        f"{services_decl}\n{owner_fn}\n{active_fn}\nactive_runtime_services\n",
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        ["bash", str(script)], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert completed.returncode == 0, completed.stderr
+    services = completed.stdout.split()
+    assert "shopvivaliz-queue-worker.service" not in services
+    assert "shopvivaliz-token-renewer.service" in services
+    assert "shopvivaliz-shopee-token-renewer.service" in services
+
+
 def test_deploy_disables_the_legacy_renewer_under_mlrr_ownership() -> None:
     text = DEPLOY.read_text(encoding="utf-8")
     reconcile = extract_bash_function(text, "reconcile_runtime_service_units")

@@ -62,6 +62,22 @@ def test() -> None:
         assert marker in rules, f"missing anti-false-positive rule: {marker}"
 
 
+def test_marina_audit_must_probe_the_destination_not_public_origin() -> None:
+    """A remote shell on Marina is not proof that HTTPS requests reached Marina."""
+    marina = (ROOT / ".github" / "workflows" / "production-functional-audit-marina.yml").read_text(encoding="utf-8")
+    audit = AUDIT.read_text(encoding="utf-8")
+
+    assert "BASE_URL: https://shopvivaliz.com.br" in marina
+    assert "AUDIT_TARGET_IP: 127.0.0.1" in marina, "target must route to Marina loopback, not Cloudflare/public source"
+    assert "export AUDIT_TARGET_IP" in marina, "remote audit must receive destination pin"
+    assert "AUDIT_TARGET_IP" in audit and "shopvivaliz.com.br:443:" in audit
+    assert audit.count('"${CURL_PIN_ARGS[@]}"') >= 3, "GET, POST and integration health must all use the target route"
+    assert "url_effective" in audit, "audited requests must prove their final effective URL"
+    assert 'curl -q -sSL' not in audit, "do not follow third-party redirects carrying an agent authorization header"
+    assert 'for path in / /catalogo/ /carrinho /checkout; do' in audit, "test canonical path directly without following redirects"
+
+
 if __name__ == "__main__":
     test()
+    test_marina_audit_must_probe_the_destination_not_public_origin()
     print("production functional audit contract: PASS")

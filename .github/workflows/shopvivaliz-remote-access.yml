@@ -37,6 +37,7 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - ai_squad_bridge_status
           - amazon_support_readback
           - amazon_support_readback_221530_221532
           - amazon_support_reply
@@ -119,7 +120,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "gemini_24x7_controller_install", "continuity_backup_v5_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "ai_squad_bridge_status", "amazon_support_readback", "amazon_support_readback_221530_221532", "amazon_support_reply", "amazon_support_reply_221532_221546", "amazon_support_email_reply_221532_221546", "amazon_support_chat_reply_221998", "amazon_support_reply_221530_221532", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status", "agent_ssh_install", "agent_ssh_status", "iphone_ssh_relay_install", "iphone_ssh_relay_status", "backend_browser_runner_install", "backend_browser_runner_status", "secure_mcp_platform_ui_probe", "secure_mcp_platform_auth", "secure_mcp_cloudflare_access_probe", "secure_mcp_cloudflare_ui_probe", "claude_remote_control_probe", "claude_remote_control_install", "claude_remote_control_status", "chatgpt_continuity_diagnostic", "chatgpt_continuity_repair", "gemini_24x7_controller_install", "continuity_backup_v5_repair", "chatgpt_freeze_task_state", "chatgpt_freeze_state_owner_repair", "chatgpt_freeze_task_successor"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -130,6 +131,8 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if action == "ai_squad_bridge_status" and target != "shopvivaliz-free-a1":
+              raise SystemExit("AI Squad bridge status is restricted to production orchestration")
           if action.startswith("amazon_support_") and target != "shopvivaliz-free-a1":
               raise SystemExit("Amazon Seller Support actions are restricted to the site VM")
           if action == "rustdesk_server_install" and target != "always-free-arm-1787907847-26":
@@ -193,6 +196,10 @@ jobs:
 
       - name: Execute AI Squad UI audit
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        env:
+          MARINA_PUBLIC_IP: 137.131.173.240
+          MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -200,10 +207,23 @@ jobs:
           backend_cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
           remote_script="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
           remote_shot="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.png"
+          remote_trace="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
+          remote_evidence="/tmp/ai-squad-ui-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
+          local_trace="${RUNNER_TEMP}/ai-squad-ui-audit.zip"
+          local_evidence="${RUNNER_TEMP}/ai-squad-ui-evidence"
+          marina_key="${RUNNER_TEMP}/marina-ui-audit-key"
+          marina_known_hosts="${RUNNER_TEMP}/marina-ui-audit-known-hosts"
+          printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
+          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
+          chmod 600 "$marina_key" "$marina_known_hosts"
+          marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
 
-          php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
+          scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          chmod 600 "$cred"
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
 
@@ -212,23 +232,60 @@ jobs:
           ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
           scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' node '${remote_script}'"
-          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_shot}" "$local_shot"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}'"
-          test -s "$local_shot"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
+          mkdir -p "$local_evidence"
+          scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
+          cp "$local_evidence/primary.png" "$local_shot"
+          cp "$local_evidence/primary-trace.zip" "$local_trace"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          test -s "$local_evidence/primary.png"
+          test -s "$local_evidence/primary-trace.zip"
+          test -s "$local_evidence/primary-execution.json"
+          test -s "$local_evidence/ui-inventory.json"
           echo "AI_SQUAD_UI_AUDIT=PASS"
+
+      - name: Diagnose AI Squad bridges on Marina
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_bridge_status'
+        env:
+          MARINA_PUBLIC_IP: 137.131.173.240
+          MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key="${RUNNER_TEMP}/marina-bridge-status-key"
+          hosts="${RUNNER_TEMP}/marina-bridge-status-known-hosts"
+          printf '%s\n' "$MARINA_VM_KEY" > "$key"
+          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$hosts"
+          chmod 600 "$key" "$hosts"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" -o ConnectTimeout=10 -i "$key" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            uid="$(id -u ubuntu)"
+            xdg="/run/user/$uid"
+            for item in codex:shopvivaliz-squad-codex-bridge.service:17656 claude:shopvivaliz-squad-claude-bridge.service:17657; do
+              IFS=: read -r name service port <<< "$item"
+              active=false
+              if sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user is-active --quiet "$service"; then active=true; fi
+              printf "AI_SQUAD_%s_SERVICE_ACTIVE=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$active"
+              health="{}"
+              if value="$(curl -fsS --max-time 8 "http://127.0.0.1:$port/health" 2>/dev/null)"; then health="$value"; fi
+              printf "AI_SQUAD_%s_HEALTH_JSON=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$health"
+            done'
 
       - name: Upload AI Squad UI evidence
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
         uses: actions/upload-artifact@v4
         with:
           name: ai-squad-ui-audit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ai-squad-ui-audit.png
+          path: |
+            ${{ runner.temp }}/ai-squad-ui-audit.png
+            ${{ runner.temp }}/ai-squad-ui-audit.zip
+            ${{ runner.temp }}/ai-squad-ui-evidence
           if-no-files-found: error
           retention-days: 7
 
       - name: Execute on site production host
-        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit'
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit' && steps.req.outputs.action != 'ai_squad_bridge_status'
         env:
           ACTION: ${{ steps.req.outputs.action }}
         shell: bash

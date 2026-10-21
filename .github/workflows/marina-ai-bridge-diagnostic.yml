@@ -1,0 +1,69 @@
+name: Marina AI Bridge Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite DIAGNOSE_AI_BRIDGES para confirmar'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: inputs.confirmation == 'DIAGNOSE_AI_BRIDGES'
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    env:
+      MARINA_PUBLIC_IP: 137.131.173.240
+    steps:
+      - name: Configure verified Marina SSH access
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-ai-key"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-ai-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-ai-known-hosts"
+          chmod 600 "$HOME/.ssh/marina-ai-key" "$HOME/.ssh/marina-ai-known-hosts"
+
+      - name: Read bridge health without exposing credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-ai-known-hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/marina-ai-key")
+          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+            uid="$(id -u ubuntu)"
+            xdg="/run/user/$uid"
+            for item in codex:shopvivaliz-squad-codex-bridge.service:17656 claude:shopvivaliz-squad-claude-bridge.service:17657; do
+              IFS=: read -r name service port <<< "$item"
+              active=false
+              if sudo -u ubuntu env XDG_RUNTIME_DIR="$xdg" systemctl --user is-active --quiet "$service"; then active=true; fi
+              printf "AI_SQUAD_%s_SERVICE_ACTIVE=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$active"
+              health="{}"
+              if value="$(curl -fsS --max-time 8 "http://127.0.0.1:$port/health" 2>/dev/null)"; then health="$value"; fi
+              python3 - "$name" "$health" <<"PY"
+              import json, sys
+              name, raw = sys.argv[1], sys.argv[2]
+              try:
+                  data = json.loads(raw)
+              except Exception:
+                  data = {}
+              prefix = "AI_SQUAD_" + name.upper() + "_HEALTH_"
+              for source, label in (("endpoint", "ENDPOINT"), ("ok", "OK"), ("authenticated", "AUTHENTICATED"), ("token_configured", "TOKEN_CONFIGURED"), ("credential_store_configured", "CREDENTIAL_STORE_CONFIGURED"), ("available_profile_count", "AVAILABLE_PROFILE_COUNT")):
+                  value = data.get(source, "")
+                  if isinstance(value, bool):
+                      value = str(value).lower()
+                  print(prefix + label + "=" + str(value))
+              PY
+            done'
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/marina-ai-key" "$HOME/.ssh/marina-ai-known-hosts"

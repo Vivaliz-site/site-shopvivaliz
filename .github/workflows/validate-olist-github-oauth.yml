@@ -1,0 +1,59 @@
+name: Validate Olist GitHub OAuth
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    environment: production
+    timeout-minutes: 5
+    env:
+      OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+      OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+      OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+    steps:
+      - name: Validate refresh grant without exposing credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$OLIST_CLIENT_ID"
+          test -n "$OLIST_CLIENT_SECRET"
+          test -n "$OLIST_REFRESH_TOKEN"
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          payload = urllib.parse.urlencode({
+              'grant_type': 'refresh_token',
+              'client_id': os.environ['OLIST_CLIENT_ID'],
+              'client_secret': os.environ['OLIST_CLIENT_SECRET'],
+              'refresh_token': os.environ['OLIST_REFRESH_TOKEN'],
+          }).encode()
+          request = urllib.request.Request(
+              'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token',
+              data=payload,
+              headers={'Content-Type': 'application/x-www-form-urlencoded'},
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  data = json.loads(response.read())
+              if not isinstance(data, dict) or not data.get('access_token'):
+                  raise SystemExit('OLIST_GITHUB_REFRESH_VALID=no')
+          except urllib.error.HTTPError as exc:
+              try:
+                  body = json.loads(exc.read(4096).decode('utf-8', 'replace'))
+              except Exception:
+                  body = {}
+              error = body.get('error') if isinstance(body, dict) else ''
+              print('OLIST_GITHUB_REFRESH_VALID=no')
+              print('OLIST_GITHUB_OAUTH_ERROR=' + (error if error in {'invalid_grant', 'invalid_client', 'unauthorized_client', 'access_denied'} else 'http_error'))
+              raise SystemExit(1)
+          print('OLIST_GITHUB_REFRESH_VALID=yes')
+          PY

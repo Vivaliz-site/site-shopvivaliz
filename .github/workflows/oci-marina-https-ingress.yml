@@ -1,0 +1,152 @@
+name: OCI Marina HTTPS ingress
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply the exact TCP/443 ingress change"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-marina-https-ingress
+  cancel-in-progress: false
+
+jobs:
+  ingress:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      OCI_REGION: ${{ secrets.OCI_ESPOSA_REGION }}
+      OCI_USER: ${{ secrets.OCI_ESPOSA_USER }}
+      OCI_TENANCY: ${{ secrets.OCI_ESPOSA_TENANCY }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_ESPOSA_FINGERPRINT }}
+      APPLY: ${{ inputs.apply }}
+      INSTANCE_NAME: marina-a1-4c24g
+    steps:
+      - name: Install OCI SDK
+        run: python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Inspect or apply only TCP/443 ingress
+        env:
+          OCI_KEY_MATERIAL: ${{ secrets.OCI_ESPOSA_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          key="$RUNNER_TEMP/oci-marina.pem"
+          printf '%s\n' "$OCI_KEY_MATERIAL" > "$key"
+          chmod 600 "$key"
+          python3 - "$key" <<'PY'
+          import ipaddress
+          import os
+          import sys
+          import oci
+
+          key = sys.argv[1]
+          cfg = {
+              "user": os.environ["OCI_USER"],
+              "tenancy": os.environ["OCI_TENANCY"],
+              "fingerprint": os.environ["OCI_FINGERPRINT"],
+              "region": os.environ["OCI_REGION"],
+              "key_file": key,
+          }
+          oci.config.validate_config(cfg)
+          search = oci.resource_search.ResourceSearchClient(cfg)
+          compute = oci.core.ComputeClient(cfg)
+          network = oci.core.VirtualNetworkClient(cfg)
+          query = "query instance resources where displayName = '" + os.environ["INSTANCE_NAME"] + "'"
+          items = search.search_resources(
+              oci.resource_search.models.StructuredSearchDetails(query=query, type="Structured")
+          ).data.items
+          if len(items) != 1:
+              raise SystemExit(f"MARINA_INSTANCE_NOT_UNIQUE={len(items)}")
+          instance = compute.get_instance(items[0].identifier).data
+          if instance.display_name != os.environ["INSTANCE_NAME"] or instance.lifecycle_state != "RUNNING":
+              raise SystemExit("MARINA_INSTANCE_IDENTITY_OR_STATE_INVALID")
+          attachments = [
+              a for a in compute.list_vnic_attachments(instance.compartment_id, instance_id=instance.id).data
+              if a.lifecycle_state == "ATTACHED"
+          ]
+          if len(attachments) != 1:
+              raise SystemExit(f"MARINA_VNIC_NOT_UNIQUE={len(attachments)}")
+          vnic = network.get_vnic(attachments[0].vnic_id).data
+          if vnic.public_ip != "137.131.173.240":
+              raise SystemExit(f"MARINA_PUBLIC_IP_MISMATCH={vnic.public_ip}")
+          subnet = network.get_subnet(vnic.subnet_id).data
+          print(f"MARINA_IDENTITY=PASS public_ip={vnic.public_ip}")
+          print(f"MARINA_VNIC={vnic.id}")
+          print(f"MARINA_SUBNET={subnet.id}")
+          print(f"MARINA_NSG_COUNT={len(vnic.nsg_ids)}")
+
+          port = oci.core.models.PortRange(min=443, max=443)
+          rule = oci.core.models.IngressSecurityRule(
+              protocol="6",
+              source="0.0.0.0/0",
+              source_type="CIDR_BLOCK",
+              tcp_options=oci.core.models.TcpOptions(destination_port_range=port),
+              description="ShopVivaliz Marina public HTTPS cutover",
+          )
+          nsg_rule = oci.core.models.AddSecurityRuleDetails(
+              direction="INGRESS",
+              protocol="6",
+              source="0.0.0.0/0",
+              source_type="CIDR_BLOCK",
+              is_stateless=False,
+              tcp_options=oci.core.models.TcpOptions(destination_port_range=port),
+              description="ShopVivaliz Marina public HTTPS cutover",
+          )
+
+          def is_https(r):
+              if r.protocol not in ("6", "tcp", "all") or r.source != "0.0.0.0/0":
+                  return False
+              tcp = getattr(r, "tcp_options", None)
+              dest = getattr(tcp, "destination_port_range", None) if tcp else None
+              return bool(dest and dest.min <= 443 <= dest.max)
+
+          targets = []
+          if vnic.nsg_ids:
+              for nsg_id in vnic.nsg_ids:
+                  nsg = network.get_network_security_group(nsg_id).data
+                  rules = network.list_network_security_group_security_rules(nsg.id).data
+                  targets.append(("NSG", nsg, rules))
+          else:
+              sl = network.get_security_list(subnet.security_list_ids[0]).data
+              targets.append(("SECURITY_LIST", sl, sl.ingress_security_rules))
+
+          for kind, resource, rules in targets:
+              present = any(is_https(r) for r in rules)
+              print(f"{kind}_ID={resource.id} HTTPS_443_PRESENT={str(present).upper()}")
+              if present or os.environ["APPLY"].lower() != "true":
+                  continue
+              if kind == "NSG":
+                  network.add_network_security_group_security_rules(
+                      resource.id,
+                      oci.core.models.AddNetworkSecurityGroupSecurityRulesDetails(
+                          security_rules=[nsg_rule],
+                      ),
+                  )
+              else:
+                  new_rules = list(rules) + [rule]
+                  network.update_security_list(
+                      resource.id,
+                      oci.core.models.UpdateSecurityListDetails(ingress_security_rules=new_rules),
+                  )
+              print(f"{kind}_HTTPS_443=APPLIED")
+
+          if os.environ["APPLY"].lower() != "true":
+              print("OCI_MARINA_HTTPS_INGRESS=DRY_RUN")
+          else:
+              print("OCI_MARINA_HTTPS_INGRESS=APPLIED")
+          PY
+          rm -f "$key"
+
+      - name: Remove OCI key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/oci-marina.pem"

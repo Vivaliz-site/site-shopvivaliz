@@ -1,0 +1,38 @@
+# STAGING TEMPLATE ONLY. Official host administrator review/install required.
+# Never install or execute through GitHub Actions or an unapproved RDC privilege route.
+[Unit]
+Description=ShopVivaliz Marina independent read-only MCP
+After=network.target
+ConditionPathExists=/var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token
+
+[Service]
+Type=exec
+User=shopvivaliz-marina-mcp
+Group=shopvivaliz-marina-mcp
+WorkingDirectory=/opt/shopvivaliz-marina-mcp/current
+ExecStart=/usr/bin/python3 /opt/shopvivaliz-marina-mcp/current/server.py --port 5580 --token-file /var/lib/shopvivaliz-marina-mcp/.config/shopvivaliz-marina-mcp/auth-token
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=128M
+TasksMax=32
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

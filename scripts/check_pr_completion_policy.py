@@ -58,6 +58,10 @@ REQUIRED = {
         "stale_gate_event",
         "external_auth_branch_sync=true",
         "native_update_branch_forbidden=true",
+        "draft_policy=preserve_author_review_and_runtime_approvals",
+        'pr_${pr}_draft_waiting_on_author=true',
+        'pr_${pr}_operator_blocked_by_label=true',
+        "blocked-by-runtime-lease",
         "scripts/pr_conflict_vm_heal.sh",
         "scripts/pr_conflict_gemini_healer.py",
     ],
@@ -169,6 +173,7 @@ FORBIDDEN = {
     ],
     ".github/workflows/pr-completion-enforcer.yml": [
         "GH_REPO_TOKEN",
+        "gh pr ready",
         "gh pr merge",
         "VM_HOST: 163.176.103.253",
         "update-branch",
