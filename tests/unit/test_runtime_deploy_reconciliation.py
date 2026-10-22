@@ -131,6 +131,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('/etc/systemd/system', helper)
         self.assertNotIn('sudo systemctl start "$claude_service"', helper)
         self.assertIn('python3 "$bridge_checker" claude', helper)
+        self.assertIn('AI_SQUAD_CLAUDE_HEALTH_DIAGNOSTIC=', helper)
         self.assertIn('17657', checker)
         self.assertIn('return "disabled" if error.code == 403', checker)
 

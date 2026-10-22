@@ -24,7 +24,16 @@ fi
 if XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user cat "$legacy_claude_service" >/dev/null 2>&1; then
   XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user disable --now "$legacy_claude_service"
 fi
-XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$claude_installer"
+if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$claude_installer"; then
+  printf '%s\n' 'AI_SQUAD_CLAUDE_BRIDGE_INSTALL=FAILED' >&2
+  health_diagnostic='unavailable'
+  if health_diagnostic="$(curl -fsS --max-time 8 http://127.0.0.1:17657/health)"; then
+    printf 'AI_SQUAD_CLAUDE_HEALTH_DIAGNOSTIC=%s\n' "$health_diagnostic" >&2
+  else
+    printf '%s\n' 'AI_SQUAD_CLAUDE_HEALTH_DIAGNOSTIC=unavailable' >&2
+  fi
+  exit 1
+fi
 
 if ! python3 "$bridge_checker" claude; then
   echo "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=FAILED" >&2
