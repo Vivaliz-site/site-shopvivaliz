@@ -19,18 +19,30 @@ python3 tests/test_workspace_housekeeper_safety.py
 python3 tests/test_production_functional_audit_security.py
 python3 scripts/validate-task-continuity-enforcement.py
 bash tests/chatgpt-account-diagnostic-contract-test.sh
-python3 -m unittest tests.test_task_continuity_enforcement -v
-python3 -m unittest tests.test_task_continuation_watchdog -v
-python3 -m unittest tests.test_task_resume_dispatcher -v
-python3 -m unittest tests.test_task_resume_queue -v
-python3 -m unittest tests.test_global_task_continuity_v8 -v
-python3 -m unittest tests.test_checkpoint_first_zero_window -v
-python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
-python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
-node tests/chatgpt-continuity-bridge-worker-test.mjs
+if python3 -c 'import fcntl' >/dev/null 2>&1; then
+  python3 -m unittest tests.test_task_continuity_enforcement -v
+  python3 -m unittest tests.test_task_continuation_watchdog -v
+  python3 -m unittest tests.test_task_resume_dispatcher -v
+  python3 -m unittest tests.test_task_resume_queue -v
+  python3 -m unittest tests.test_global_task_continuity_v8 -v
+  python3 -m unittest tests.test_checkpoint_first_zero_window -v
+  python3 -m unittest tests.test_chatgpt_continuity_nudge_dispatcher -v
+  python3 -m unittest tests.test_chatgpt_continuity_backend_runtime -v
+else
+  echo 'SKIP POSIX_CONTINUITY_UNIT_SUITE=fcntl_unavailable; required in Linux CI'
+fi
+if [ "$(uname -s)" = "Linux" ]; then
+  node tests/chatgpt-continuity-bridge-worker-test.mjs
+else
+  echo "SKIP POSIX_BRIDGE_WORKER_TEST=$(uname -s); required in Linux CI"
+fi
 bash -n scripts/install-chatgpt-continuity-backend-bridge.sh
 python3 -m unittest tests.test_executor_fallback_order -v
-env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
+if [ "$(uname -s)" = "Linux" ]; then
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES python3 -m unittest tests.test_background_gemini_runner -v
+else
+  echo "SKIP POSIX_BACKGROUND_GEMINI_TEST=$(uname -s); required in Linux CI"
+fi
 python3 -m unittest tests.test_ci_feedback_optimization -v
 python3 -m unittest tests.test_pr_gate_scope -v
 python3 -m unittest tests.test_pr_gate_replay -v
@@ -44,7 +56,11 @@ php tests/shopvivaliz-brevo-mailer-contract-test.php
 php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
 python3 -m unittest tests.test_stock_alerts_brevo_mail -v
 python3 -m unittest tests.test_shopee_logistics_worker -v
-python3 -m unittest tests.test_ci_performance_fetch -v
+if [ "$(uname -s)" = "Linux" ]; then
+  python3 -m unittest tests.test_ci_performance_fetch -v
+else
+  echo "SKIP POSIX_CI_PERFORMANCE_FETCH_TEST=$(uname -s); required in Linux CI"
+fi
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict

@@ -123,6 +123,8 @@ os.execv(os.environ['AUDIT_FIXTURE_CURL'], [os.environ['AUDIT_FIXTURE_CURL'], *a
 class FunctionalAuditSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if os.name == 'nt':
+            raise unittest.SkipTest('POSIX audit fixture runs in Linux CI')
         if not REAL_CURL or not shutil.which('bash'):
             raise RuntimeError('requires curl and bash')
 
