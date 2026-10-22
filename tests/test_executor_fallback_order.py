@@ -41,7 +41,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn('SHOPVIVALIZ_RESUME_STAGE', self.script)
         self.assertIn('!= "cli_last"', self.script)
         self.assertIn("chatgpt_common -> chatgpt_work -> cli_last", self.script)
-        policy = (ROOT / "docs/knowledge/task-continuity.md").read_text()
+        policy = (ROOT / "docs/knowledge/task-continuity.md").read_text(encoding="utf-8")
         self.assertIn("CODEX_LAST_RESORT_V1", policy)
 
     def test_continuity_policy_is_checked(self) -> None:

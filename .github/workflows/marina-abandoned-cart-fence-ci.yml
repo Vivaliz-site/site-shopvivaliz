@@ -1,0 +1,54 @@
+name: Marina Abandoned Cart Origin Fencing (no deploy)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/marina-abandoned-cart-fence-ci.yml'
+      - '.github/workflows/abandoned-cart-cron-install.yml'
+      - 'scripts/send-abandoned-cart-emails.php'
+      - 'scripts/install-abandoned-cart-recovery-service.sh'
+      - 'deploy/systemd/shopvivaliz-abandoned-cart-recovery.service'
+      - 'tests/test_abandoned_cart_origin_fence.py'
+      - 'tests/abandoned-cart-recovery-scheduler-test.php'
+      - 'tests/abandoned-cart-cron-path-test.php'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/marina-abandoned-cart-fence-ci.yml'
+      - '.github/workflows/abandoned-cart-cron-install.yml'
+      - 'scripts/send-abandoned-cart-emails.php'
+      - 'scripts/install-abandoned-cart-recovery-service.sh'
+      - 'deploy/systemd/shopvivaliz-abandoned-cart-recovery.service'
+      - 'tests/test_abandoned_cart_origin_fence.py'
+
+permissions:
+  contents: read
+
+jobs:
+  sender-fence-contract:
+    name: sender-origin-fence-no-deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Syntax, locking, fencing and negative/positive side-effect tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l scripts/send-abandoned-cart-emails.php
+          bash -n scripts/install-abandoned-cart-recovery-service.sh
+          python3 tests/test_abandoned_cart_origin_fence.py -v
+          php tests/abandoned-cart-recovery-scheduler-test.php
+          php tests/abandoned-cart-cron-path-test.php
+          if grep -Fq 'StrictHostKeyChecking=no' .github/workflows/abandoned-cart-cron-install.yml; then
+            echo "::error::Abandoned cart cron must enforce verified SSH host keys"
+            exit 3
+          fi
+          echo 'ORIGIN_CART_FENCE_STATIC_AND_DYNAMIC=PASS'
+          echo 'PRODUCTION_ACTIONS_EXECUTED=false'
