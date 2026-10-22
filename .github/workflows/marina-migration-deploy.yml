@@ -269,7 +269,15 @@ jobs:
             export SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED=1
             export SHOPVIVALIZ_PAID_BRIDGE_MODE=interactive
             cd /home/ubuntu/shopvivaliz-deploy/current
-            bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current
+            if ! bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current; then
+              echo '--- AI_SQUAD_CLAUDE_HEALTH_DIAGNOSTIC ---'
+              curl -fsS --max-time 8 http://127.0.0.1:17657/health || true
+              echo
+              echo '--- AI_SQUAD_CLAUDE_SERVICE_DIAGNOSTIC ---'
+              sudo -u ubuntu env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user --no-pager --full status shopvivaliz-squad-claude-bridge.service | sed -n '1,35p' || true
+              echo '--- END_AI_SQUAD_CLAUDE_DIAGNOSTIC ---'
+              exit 1
+            fi
             echo AI_SQUAD_EXPLICIT_MIGRATION_APPROVAL=PASS
           REMOTE
 
@@ -318,6 +326,7 @@ jobs:
               printf "AI_SQUAD_%s_HEALTH_ENDPOINT=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".endpoint // empty")"
               printf "AI_SQUAD_%s_HEALTH_OK=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".ok // empty")"
               printf "AI_SQUAD_%s_HEALTH_AUTHENTICATED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".authenticated // empty")"
+              printf "AI_SQUAD_%s_HEALTH_AUTH_FAILURE_CLASS=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".auth_failure_class // empty")"
               printf "AI_SQUAD_%s_HEALTH_TOKEN_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".token_configured // empty")"
               printf "AI_SQUAD_%s_HEALTH_CREDENTIAL_STORE_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".credential_store_configured // empty")"
               printf "AI_SQUAD_%s_HEALTH_AVAILABLE_PROFILE_COUNT=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".available_profile_count // empty")"

@@ -23,6 +23,7 @@ class MarinaMigrationDeployTransportTests(unittest.TestCase):
         self.assertIn("CLAUDE_CODE_OAUTH_TOKEN=", text)
         self.assertIn("claude_auth_status_required", text)
         self.assertIn("CLAUDE_NATIVE_RUNTIME=READY", text)
+        self.assertIn("HEALTH_AUTH_FAILURE_CLASS", text)
 
 
 if __name__ == "__main__":

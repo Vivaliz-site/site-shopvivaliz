@@ -266,5 +266,6 @@ assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health pro
 assert.match(bridgeSource, /auth\.mode !== 'env_token'/, 'explicit OAuth token mode must continue to real inference when CLI auth status is unavailable');
 assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
 assert.match(bridgeSource, /credential_store_configured/, 'health must expose credential-store auth source without secrets');
+assert.match(bridgeSource, /auth_failure_class/, 'health must expose only a sanitized auth failure class');
 assert.match(bridgeSource, /shouldReprobeAuth\(authState\).*scheduleAuthProbe/s, 'false or stale health must schedule a fresh auth probe');
 console.log('AI_SQUAD_CLAUDE_BRIDGE_TEST=PASS');
