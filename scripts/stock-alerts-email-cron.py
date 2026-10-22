@@ -173,8 +173,7 @@ def send_email(email_to, product_name, sku, unsubscribe_token):
             response.read()
             ok = int(getattr(response, "status", 0)) == 201
         if ok:
-            # Keep cron output ASCII-safe on Windows and minimal Linux images.
-            print(f"[OK] Email enviado para {email_to} (SKU: {sku})")
+            print(f"[✓] Email enviado para {email_to} (SKU: {sku})")
         return ok
     except Exception as exc:
         print(f"[ERRO] Falha ao enviar email para {email_to}: {type(exc).__name__}")

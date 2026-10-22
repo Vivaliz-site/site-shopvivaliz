@@ -54,7 +54,11 @@ python3 tests/shopvivaliz-mail-legacy-provider-guard-test.py
 php tests/cloudflare-email-titan-finalize-test.php
 php tests/shopvivaliz-brevo-mailer-contract-test.php
 php -d zend.assertions=1 -d assert.exception=1 tests/shopvivaliz-brevo-mailer-runtime-test.php
-python3 -m unittest tests.test_stock_alerts_brevo_mail -v
+if [ "$(uname -s)" = "Linux" ]; then
+  python3 -m unittest tests.test_stock_alerts_brevo_mail -v
+else
+  echo "SKIP POSIX_STOCK_ALERTS_TEST=$(uname -s); required in Linux CI"
+fi
 python3 -m unittest tests.test_shopee_logistics_worker -v
 if [ "$(uname -s)" = "Linux" ]; then
   python3 -m unittest tests.test_ci_performance_fetch -v
