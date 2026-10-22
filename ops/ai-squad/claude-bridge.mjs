@@ -21,7 +21,7 @@ const MODEL_ALLOWLIST = new Set([
   'claude-haiku-4-5-20251001',
 ]);
 
-let authState = { checked_at: 0, authenticated: false };
+let authState = { checked_at: 0, authenticated: false, failure_class: 'not_checked' };
 let authProbePromise = null;
 let claudeWorkQueue = Promise.resolve();
 
@@ -242,7 +242,7 @@ async function probeAuth() {
   return serializeClaudeWork(async () => {
     const auth = claudeAuthSource();
     if (!auth.configured) {
-      authState = { checked_at: Date.now(), authenticated: false };
+      authState = { checked_at: Date.now(), authenticated: false, failure_class: 'not_configured' };
       return false;
     }
     try {
@@ -256,7 +256,11 @@ async function probeAuth() {
       // local browser credential store only. The real inference below remains
       // mandatory, so this exception cannot turn an invalid token green.
       if (auth.mode !== 'env_token' && (status.code !== 0 || statusData?.loggedIn !== true)) {
-        authState = { checked_at: Date.now(), authenticated: false };
+        authState = {
+          checked_at: Date.now(),
+          authenticated: false,
+          failure_class: classifyClaudeError(claudeFailureDetail(status)),
+        };
         return false;
       }
 
@@ -272,10 +276,18 @@ async function probeAuth() {
       const ok = result.code === 0
         && data.is_error !== true
         && data.result !== '';
-      authState = { checked_at: Date.now(), authenticated: ok };
+      authState = {
+        checked_at: Date.now(),
+        authenticated: ok,
+        failure_class: ok ? null : classifyClaudeError(claudeFailureDetail(result)),
+      };
       return ok;
-    } catch {
-      authState = { checked_at: Date.now(), authenticated: false };
+    } catch (error) {
+      authState = {
+        checked_at: Date.now(),
+        authenticated: false,
+        failure_class: classifyClaudeError(error?.message || error),
+      };
       return false;
     }
   });
@@ -461,6 +473,7 @@ async function handle(req, res) {
       credential_store_configured: auth.mode === 'credential_store',
       auth_source: auth.mode,
       authenticated: authState.authenticated,
+      auth_failure_class: authState.failure_class || null,
       binary_configured: binaryConfigured,
       model_allowlist: [...MODEL_ALLOWLIST],
     });
