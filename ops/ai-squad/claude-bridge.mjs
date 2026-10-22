@@ -251,7 +251,11 @@ async function probeAuth() {
       // path used by the AI Squad, otherwise the UI can go falsely green.
       const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
       const statusData = JSON.parse(status.stdout || '{}');
-      if (status.code !== 0 || statusData?.loggedIn !== true) {
+      // An explicit CLAUDE_CODE_OAUTH_TOKEN is a non-interactive auth source;
+      // Claude Code may keep `auth status` logged out because it reports the
+      // local browser credential store only. The real inference below remains
+      // mandatory, so this exception cannot turn an invalid token green.
+      if (auth.mode !== 'env_token' && (status.code !== 0 || statusData?.loggedIn !== true)) {
         authState = { checked_at: Date.now(), authenticated: false };
         return false;
       }

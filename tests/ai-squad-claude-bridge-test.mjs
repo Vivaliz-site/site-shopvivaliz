@@ -263,6 +263,7 @@ fs.rmSync(invocationDir, { recursive: true, force: true });
 
 const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
 assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health probe must reject auth-status-only false green');
+assert.match(bridgeSource, /auth\.mode !== 'env_token'/, 'explicit OAuth token mode must continue to real inference when CLI auth status is unavailable');
 assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
 assert.match(bridgeSource, /credential_store_configured/, 'health must expose credential-store auth source without secrets');
 assert.match(bridgeSource, /shouldReprobeAuth\(authState\).*scheduleAuthProbe/s, 'false or stale health must schedule a fresh auth probe');
