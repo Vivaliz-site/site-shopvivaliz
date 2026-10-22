@@ -52,6 +52,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [ "$(hostname -s)" = "marina-a1-4c24g" ]; then
+            printf 'MARINA_EXECUTION_MODE=local\n' >> "$GITHUB_ENV"
+            printf 'MARINA_RUNNER_IDENTITY=marina-a1-4c24g\n' >> "$GITHUB_ENV"
+            exit 0
+          fi
+          printf 'MARINA_EXECUTION_MODE=remote\n' >> "$GITHUB_ENV"
+          test "$(hostname -s)" = "marina-a1-4c24g" || {
+            echo 'MARINA_RUNNER_IDENTITY_REQUIRED' >&2
+            exit 4
+          }
           test -n "$VM_KEY"
           test -n "$VM_KNOWN_HOSTS"
           install -d -m 700 "$HOME/.ssh"
@@ -70,13 +80,28 @@ jobs:
           umask 077
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
           if [ -n "$MARINA_CODEX_AUTH_JSON" ] && [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then
-            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
-            printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
-            printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
-            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
+              printf '%s' "$MARINA_CODEX_AUTH_JSON" | sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null
+              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null
+              sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
+              sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
+              printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
+              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
+            fi
             echo AUTH_STORES_MATERIALIZED=PASS
           else
-            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              test -s /home/ubuntu/.codex-business/fredmourao/auth.json
+              test -s /home/ubuntu/.claude/.credentials.json
+              test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600
+              test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
+            fi
             echo AUTH_STORES_REUSED=PASS
           fi
 
@@ -85,7 +110,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+          marina_exec() {
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              bash -s "$@"
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$@"
+            fi
+          }
+          marina_exec <<'REMOTE'
+          set -Eeuo pipefail
             test -d /home/ubuntu/.codex-business/fredmourao
             export HOME=/home/ubuntu
             export CODEX_HOME=/home/ubuntu/.codex-business/fredmourao
@@ -94,14 +127,22 @@ jobs:
             test -x /home/ubuntu/.local/bin/codex
             /home/ubuntu/.local/bin/codex login status
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
-          '
+          REMOTE
 
       - name: Ensure approved native Claude runtime
         shell: bash
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+          marina_exec() {
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              bash -s "$@"
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$@"
+            fi
+          }
+          marina_exec <<'REMOTE'
+          set -Eeuo pipefail
             export HOME=/home/ubuntu
             export PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
             if [ ! -x /home/ubuntu/.local/bin/claude ]; then
@@ -110,14 +151,21 @@ jobs:
             test -x /home/ubuntu/.local/bin/claude
             /home/ubuntu/.local/bin/claude auth status --json >/dev/null
             printf "CLAUDE_NATIVE_RUNTIME=READY\\n"
-          '
+          REMOTE
 
       - name: Execute immutable deploy on Marina
         shell: bash
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$DEPLOY_SHA" "$AI_BRIDGE_CONFIRMATION" <<'REMOTE'
+          marina_exec() {
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              bash -s "$@"
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$@"
+            fi
+          }
+          marina_exec "$DEPLOY_SHA" "$AI_BRIDGE_CONFIRMATION" <<'REMOTE'
           set -Eeuo pipefail
           sha="$1"
           ai_bridge_confirmation="${2:-}"
@@ -188,12 +236,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
-          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
-          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
-          chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+          marina_exec() {
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              bash -s "$@"
+            else
+              printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
+              printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+              printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
+              chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$@"
+            fi
+          }
+          marina_exec <<'REMOTE'
+          set -Eeuo pipefail
             uid="$(id -u ubuntu)"
             export XDG_RUNTIME_DIR="/run/user/$uid"
             export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -202,7 +258,7 @@ jobs:
             cd /home/ubuntu/shopvivaliz-deploy/current
             bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current
             echo AI_SQUAD_EXPLICIT_MIGRATION_APPROVAL=PASS
-          '
+          REMOTE
 
       - name: Verify public Marina release and smoke
         shell: bash
@@ -222,12 +278,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
-          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
-          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
-          chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail
+          marina_exec() {
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              bash -s "$@"
+            else
+              printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-migration-key"
+              printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-migration-known-hosts"
+              printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-migration-known-hosts"
+              chmod 600 "$HOME/.ssh/marina-migration-key" "$HOME/.ssh/marina-migration-known-hosts"
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'bash -s' -- "$@"
+            fi
+          }
+          marina_exec <<'REMOTE'
+          set -Eeuo pipefail
             uid="$(id -u ubuntu)"
             xdg="/run/user/$uid"
             for item in codex:shopvivaliz-squad-codex-bridge.service:17656 claude:shopvivaliz-squad-claude-bridge.service:17657; do
@@ -244,7 +308,8 @@ jobs:
               printf "AI_SQUAD_%s_HEALTH_TOKEN_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".token_configured // empty")"
               printf "AI_SQUAD_%s_HEALTH_CREDENTIAL_STORE_CONFIGURED=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".credential_store_configured // empty")"
               printf "AI_SQUAD_%s_HEALTH_AVAILABLE_PROFILE_COUNT=%s\\n" "$(printf %s "$name" | tr a-z A-Z)" "$(health_value ".available_profile_count // empty")"
-            done'
+            done
+          REMOTE
 
       - name: Cleanup SSH material
         if: always()
