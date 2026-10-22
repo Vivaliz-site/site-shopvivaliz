@@ -17,6 +17,13 @@ class MarinaMigrationDeployTransportTests(unittest.TestCase):
         self.assertIn('marina_exec "$DEPLOY_SHA" "$AI_BRIDGE_CONFIRMATION" <<\'REMOTE\'', text)
         self.assertIn("MARINA_RUNNER_IDENTITY_REQUIRED", text)
 
+    def test_native_claude_gate_accepts_explicit_oauth_token_source(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN=", text)
+        self.assertIn("claude_auth_status_required", text)
+        self.assertIn("CLAUDE_NATIVE_RUNTIME=READY", text)
+
 
 if __name__ == "__main__":
     unittest.main()

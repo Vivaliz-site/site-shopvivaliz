@@ -149,7 +149,20 @@ jobs:
               curl -fsSL https://claude.ai/install.sh | bash
             fi
             test -x /home/ubuntu/.local/bin/claude
-            /home/ubuntu/.local/bin/claude auth status --json >/dev/null
+            # An explicit CLAUDE_CODE_OAUTH_TOKEN is the approved non-interactive
+            # auth source for the bridge. Claude Code's auth status reports the
+            # local browser credential store and can be logged out even when
+            # this token is present. The bridge health probe still requires a
+            # bounded real inference before the migration can pass.
+            env_path=/home/ubuntu/shopvivaliz-deploy/shared/.env
+            claude_auth_status_required=true
+            if [ -f "$env_path" ] && grep -Eq '^CLAUDE_CODE_OAUTH_TOKEN=[^[:space:]]+$' "$env_path"; then
+              claude_auth_status_required=false
+              printf "CLAUDE_AUTH_SOURCE=explicit_env_token\\n"
+            fi
+            if [ "$claude_auth_status_required" = true ]; then
+              /home/ubuntu/.local/bin/claude auth status --json >/dev/null
+            fi
             printf "CLAUDE_NATIVE_RUNTIME=READY\\n"
           REMOTE
 
