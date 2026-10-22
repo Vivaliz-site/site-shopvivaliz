@@ -271,10 +271,20 @@ jobs:
             cd /home/ubuntu/shopvivaliz-deploy/current
             if ! bash scripts/reconcile-ai-squad-runtime.sh /home/ubuntu/shopvivaliz-deploy/current; then
               echo '--- AI_SQUAD_CLAUDE_HEALTH_DIAGNOSTIC ---'
-              curl -fsS --max-time 8 http://127.0.0.1:17657/health || true
+              health_diagnostic='unavailable'
+              if health_diagnostic="$(curl -fsS --max-time 8 http://127.0.0.1:17657/health)"; then
+                printf '%s\n' "$health_diagnostic"
+              else
+                echo 'health_diagnostic=unavailable'
+              fi
               echo
               echo '--- AI_SQUAD_CLAUDE_SERVICE_DIAGNOSTIC ---'
-              sudo -u ubuntu env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user --no-pager --full status shopvivaliz-squad-claude-bridge.service | sed -n '1,35p' || true
+              service_diagnostic='unavailable'
+              if service_diagnostic="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" systemctl --user --no-pager --full status shopvivaliz-squad-claude-bridge.service | sed -n '1,35p')"; then
+                printf '%s\n' "$service_diagnostic"
+              else
+                echo 'service_diagnostic=unavailable'
+              fi
               echo '--- END_AI_SQUAD_CLAUDE_DIAGNOSTIC ---'
               exit 1
             fi
