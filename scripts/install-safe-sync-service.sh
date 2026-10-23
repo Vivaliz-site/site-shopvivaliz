@@ -58,8 +58,17 @@ fi
 
 if [[ ! -d "$SYNC_ROOT/.git" ]]; then
   if [[ -e "$SYNC_ROOT" ]]; then
-    echo "Caminho de sync existe mas nao e clone Git: $SYNC_ROOT" >&2
-    exit 5
+    # A previous bootstrap may have left an empty placeholder directory. It is
+    # safe to remove only that exact empty directory; never recurse or delete
+    # an unknown path because it may contain operational data.
+    if [[ -d "$SYNC_ROOT" && ! -L "$SYNC_ROOT" ]] \
+      && [[ -z "$(find "$SYNC_ROOT" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+      rmdir "$SYNC_ROOT"
+      echo "SAFE_SYNC_REPAIR=REMOVED_EMPTY_PLACEHOLDER"
+    else
+      echo "Caminho de sync existe mas nao e clone Git e nao e um placeholder vazio: $SYNC_ROOT" >&2
+      exit 5
+    fi
   fi
   runuser -u ubuntu -- git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH" "$remote_url" "$SYNC_ROOT"
 else
