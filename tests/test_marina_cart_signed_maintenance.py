@@ -87,7 +87,7 @@ class SignedMaintenanceTests(unittest.TestCase):
         now_us = int(time.monotonic()*1_000_000)
         return {"exit_code":0,"stdout":json.dumps({"host":host,"active":"active","enabled":"enabled",
                     "sender_result":"success","sender_exit_code":"0",
-                    "sender_last_success_us":str(now_us-5*60_000_000),
+                    "sender_last_success_us":str(now_us-max(1, min(60_000_000, now_us//2))),
                     "monotonic_now_us":now_us})}
 
     def fake_execution(self, ticket, signature):
