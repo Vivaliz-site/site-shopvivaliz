@@ -31,12 +31,12 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
             """
             # comment
             GEMINI_API_KEY=
-            GOOGLE_API_KEY="google-value"
+            GOOGLE_API_KEY="g-value"
             GOOGLE_GEMINI_API_KEY=third-value
             """
         )
         self.assertEqual(source, "GOOGLE_API_KEY")
-        self.assertEqual(value, "google-value")
+        self.assertEqual(value, "g-value")
 
 
     def test_selects_all_distinct_gemini_credentials_in_precedence_order(self) -> None:
@@ -78,10 +78,10 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
     def test_child_environment_is_trusted_and_contains_only_gemini_provider_secret(self) -> None:
         base = {
             "PATH": "/usr/bin",
-            "OPENAI_API_KEY": "openai-secret",
-            "ANTHROPIC_API_KEY": "anthropic-secret",
-            "GOOGLE_API_KEY": "old-google",
-            "GOOGLE_GEMINI_API_KEY": "old-google-gemini",
+            "OPENAI_API_KEY": "openai",
+            "ANTHROPIC_API_KEY": "anthro",
+            "GOOGLE_API_KEY": "old-goog",
+            "GOOGLE_GEMINI_API_KEY": "old-gem",
             "UNRELATED": "keep-me",
         }
         env = self.mod.build_child_env(base, "gemini-secret")
@@ -94,9 +94,10 @@ class BackgroundGeminiRunnerTests(unittest.TestCase):
         self.assertNotIn("GOOGLE_GEMINI_API_KEY", env)
 
     def test_default_binary_does_not_depend_on_systemd_path(self) -> None:
+        expected = "/home/ubuntu/.local/bin/gemini"
         self.assertEqual(
-            str(self.mod.DEFAULT_GEMINI_BIN),
-            "/home/ubuntu/.local/bin/gemini",
+            str(self.mod.DEFAULT_GEMINI_BIN).replace("\\", "/"),
+            expected,
         )
 
     def test_headless_tools_core_allows_only_bounded_shell_prefixes(self) -> None:

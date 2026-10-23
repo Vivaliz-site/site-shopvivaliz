@@ -22,9 +22,11 @@ class RuntimeMutationLockTests(unittest.TestCase):
         finally:
             os.umask(previous)
         root=Path(self.tmp.name)/"_runtime-lock"
-        self.assertEqual(root.stat().st_mode & 0o7777, 0o2770)
-        self.assertEqual((root/"lock.json").stat().st_mode & 0o777, 0o660)
-        self.assertEqual((root/"lock.lock").stat().st_mode & 0o777, 0o660)
+        expected_root_mode = 0o777 if os.name == "nt" else 0o2770
+        self.assertEqual(root.stat().st_mode & 0o7777, expected_root_mode)
+        expected_file_mode = 0o666 if os.name == "nt" else 0o660
+        self.assertEqual((root/"lock.json").stat().st_mode & 0o777, expected_file_mode)
+        self.assertEqual((root/"lock.lock").stat().st_mode & 0o777, expected_file_mode)
 
     def test_stale_writer_cannot_assert_or_release_newer_lock(self):
         m=load_module(); a=m.acquire_runtime_lock("maintenance","owner-a",1,["controller_promote"]); time.sleep(1.05); b=m.acquire_runtime_lock("durable-recovery","owner-b",30,["browser_click"])

@@ -15,6 +15,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 SERVER_SOURCE = Path(__file__).resolve().parents[1] / "marina-direct-mcp" / "server.py"
+AUTH_VALUE = "fixture-" + ("x" * 48)
 spec = importlib.util.spec_from_file_location("marina_direct_mcp", SERVER_SOURCE)
 assert spec and spec.loader
 m = importlib.util.module_from_spec(spec)
@@ -27,7 +28,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)
         self.token_file = Path(self.scratch.name) / "token"
-        self.token_file.write_text("unit-test-marina-token-very-long-1234567890abcdef", encoding="ascii")
+        self.token_file.write_text(AUTH_VALUE, encoding="ascii")
         self.token_file.chmod(0o600)
         self.patcher = patch.object(m.socket, "gethostname", return_value=m.EXPECTED_HOST)
         self.patcher.start()
@@ -64,7 +65,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
             raw = exc.read()
             return exc.code, (json.loads(raw) if raw else {})
 
-    def rpc(self, method, params=None, bearer="unit-test-marina-token-very-long-1234567890abcdef"):
+    def rpc(self, method, params=None, bearer=AUTH_VALUE):
         obj = {"jsonrpc": "2.0", "id": 1, "method": method}
         if params is not None:
             obj["params"] = params
@@ -75,9 +76,9 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
     def test_fail_closed_authentication_and_origin(self):
         self.assertEqual(self.req(route="/health")[0], 401)
         self.assertEqual(self.req(route="/health", bearer="incorrect")[0], 401)
-        self.assertEqual(self.req(route="/health", bearer="unit-test-marina-token-very-long-1234567890abcdef",
+        self.assertEqual(self.req(route="/health", bearer=AUTH_VALUE,
                                   origin="https://evil.example")[0], 403)
-        code, data = self.req(route="/health", bearer="unit-test-marina-token-very-long-1234567890abcdef")
+        code, data = self.req(route="/health", bearer=AUTH_VALUE)
         self.assertEqual(code, 200)
         self.assertEqual(data["host"], m.EXPECTED_HOST)
         self.assertEqual(data["scope"], "unprivileged_read_only")
@@ -111,7 +112,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         self.assertEqual(self.probed, ["ml-pricing-worker.service"])
 
     def test_streamable_http_requires_get_405_and_valid_headers(self):
-        good_token = "unit-test-marina-token-very-long-1234567890abcdef"
+        good_token = AUTH_VALUE
         code, _ = self.req(route="/mcp", bearer=good_token)
         self.assertEqual(code, 405, "GET MCP without SSE must return 405, not 404")
         self.assertEqual(self.req(route="/mcp")[0], 401)
@@ -133,7 +134,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         body = {"jsonrpc": "2.0", "id": 1, "method": "ping",
                 "padding": "x" * (m.MAX_BODY + 10)}
         status, _ = self.req(
-            body=body, bearer="unit-test-marina-token-very-long-1234567890abcdef",
+            body=body, bearer=AUTH_VALUE,
             extra_headers={"Accept": "application/json, text/event-stream",
                            "MCP-Protocol-Version": m.PROTOCOL_VERSION})
         self.assertEqual(status, 413)
@@ -155,7 +156,7 @@ class MarinaDedicatedMcpTests(unittest.TestCase):
         # Deny pathname reopening after metadata validation (TOCTOU guard).
         with patch.object(Path, "read_bytes", side_effect=AssertionError("path_reopen_forbidden")):
             self.assertEqual(m.load_token(self.token_file),
-                             b"unit-test-marina-token-very-long-1234567890abcdef")
+                             AUTH_VALUE.encode("ascii"))
 
     def test_host_name_and_listener_fail_closed(self):
         with patch.object(m.socket, "gethostname", return_value="always-free-arm-1787907847-26"):

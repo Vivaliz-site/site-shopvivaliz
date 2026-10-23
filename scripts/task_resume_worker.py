@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import signal
 import time
 from pathlib import Path
 from typing import Any, Sequence
+
+try:
+    from .continuity.file_lock import locked_file
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "continuity"))
+    from file_lock import locked_file
 
 try:
     from . import task_resume_dispatcher as dispatcher
@@ -109,12 +115,13 @@ def worker_run_once(
     }
 
     lock_path = runtime / WORKER_LOCK_FILE
-    with lock_path.open("a+", encoding="utf-8") as lock:
-        try:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            summary["locked"] = True
-            return summary
+    try:
+        context = locked_file(lock_path, blocking=False)
+        context.__enter__()
+    except BlockingIOError:
+        summary["locked"] = True
+        return summary
+    with context:
 
         summary["recovered"] = _recover_dead_running_records(runtime)
         candidates = _queued_records(runtime)

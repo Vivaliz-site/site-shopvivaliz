@@ -239,7 +239,7 @@ def build_gemini_command(
         "--approval-mode",
         "auto_edit",
         "--admin-policy",
-        str(admin_policy_path),
+        admin_policy_path.as_posix(),
         "--prompt",
         prompt,
     ]
@@ -329,8 +329,9 @@ def run_bounded_gemini(
     provider hangs, and never print partially generated content on timeout.
     Models remain on the explicitly verified Free tier.
     """
+    launch_command = _portable_script_command(command)
     process = subprocess.Popen(
-        command, env=child_env, stdin=subprocess.DEVNULL,
+        launch_command, env=child_env, stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         start_new_session=True,
     )
@@ -367,10 +368,45 @@ def run_bounded_gemini(
 
 def _resolve_binary(configured: str) -> str:
     candidate = Path(configured).expanduser()
-    if candidate.is_file() and os.access(candidate, os.X_OK):
+    if candidate.is_file() and (
+        os.access(candidate, os.X_OK)
+        or (os.name == "nt" and candidate.read_bytes()[:2] == b"#!")
+    ):
         return str(candidate)
     fallback = shutil.which("gemini")
     return fallback or ""
+
+
+def _portable_script_command(command: list[str]) -> list[str]:
+    """Run Unix-shebang test fixtures through Git Bash on Windows only."""
+    if os.name != "nt" or not command:
+        return command
+    candidate = Path(command[0])
+    try:
+        shebang = candidate.read_text(encoding="utf-8", errors="ignore").splitlines()[0]
+        is_shebang = candidate.is_file() and shebang.startswith("#!")
+    except OSError:
+        shebang = ""
+        is_shebang = False
+    if not is_shebang:
+        return command
+    if "python" in shebang:
+        return [sys.executable, *command]
+
+    candidates: list[Path] = []
+    git = shutil.which("git")
+    if git:
+        git_path = Path(git).resolve()
+        candidates.extend([
+            git_path.parent / "bash.exe",
+            git_path.parent.parent / "usr" / "bin" / "bash.exe",
+            git_path.parent.parent.parent / "usr" / "bin" / "bash.exe",
+        ])
+    candidates.append(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "usr" / "bin" / "bash.exe")
+    for bash in candidates:
+        if bash.is_file():
+            return [str(bash), *command]
+    return command
 
 
 def run(
