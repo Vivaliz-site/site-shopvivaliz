@@ -65,6 +65,24 @@ if [[ ! -d "$SYNC_ROOT/.git" ]]; then
       && [[ -z "$(find "$SYNC_ROOT" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
       rmdir "$SYNC_ROOT"
       echo "SAFE_SYNC_REPAIR=REMOVED_EMPTY_PLACEHOLDER"
+    elif [[ -d "$SYNC_ROOT" && ! -L "$SYNC_ROOT" ]] \
+      && [[ -f "$SYNC_ROOT/git-auto-sync.py" ]] \
+      && [[ -f "$SYNC_ROOT/scripts/safe-repo-sync.sh" ]] \
+      && [[ -f "$SYNC_ROOT/scripts/deploy-production.sh" ]] \
+      && [[ -f "$SYNC_ROOT/scripts/should-deploy-production.sh" ]]; then
+      # A legacy bootstrap can leave a complete working tree without its .git
+      # metadata. Preserve it for recovery, then create the canonical clone;
+      # never recursively delete or overwrite this operational data.
+      quarantine_root="$(dirname "$SYNC_ROOT")/quarantine"
+      quarantine_target="$quarantine_root/sync-repo-non-git-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+      install -d -o root -g root -m 0750 "$quarantine_root"
+      if [[ -e "$quarantine_target" || -L "$quarantine_target" ]]; then
+        echo "Destino de quarentena ja existe: $quarantine_target" >&2
+        exit 5
+      fi
+      mv -T -- "$SYNC_ROOT" "$quarantine_target"
+      echo "SAFE_SYNC_REPAIR=QUARANTINED_NON_GIT_CHECKOUT"
+      echo "SAFE_SYNC_QUARANTINE=$quarantine_target"
     else
       echo "Caminho de sync existe mas nao e clone Git e nao e um placeholder vazio: $SYNC_ROOT" >&2
       exit 5
