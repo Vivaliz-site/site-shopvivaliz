@@ -43,7 +43,9 @@ class SignedMaintenanceTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.operator_file = self.root / "approvers.json"
+        self.registry_parent = self.root / "protected-registry"
+        self.registry_parent.mkdir(mode=0o700)
+        self.operator_file = self.registry_parent / "approvers.json"
         self.key = Ed25519PrivateKey.generate()
         pub = self.key.public_key().public_bytes(encoding=serialization.Encoding.Raw,
                                                   format=serialization.PublicFormat.Raw)
@@ -137,6 +139,24 @@ class SignedMaintenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(m.MaintenanceDenied, "runtime_lease_unavailable"):
             self.apply()
         self.assertEqual(len(self.executions), 0)
+
+    def test_group_writable_registry_parent_is_denied(self):
+        self.registry_parent.chmod(0o770)
+        with self.assertRaisesRegex(m.MaintenanceDenied, "operator_registry_parent_untrusted"):
+            self.apply()
+        self.assertEqual(self.lock.count, 0)
+
+    def test_registry_symlink_parent_is_denied(self):
+        alt = self.root / "alternate-trust"
+        alt.mkdir(mode=0o700)
+        alt_file = alt / "approvers.json"
+        alt_file.write_bytes(self.operator_file.read_bytes())
+        alt_file.chmod(0o600)
+        self.operator_file.unlink()
+        self.registry_parent.rmdir()
+        self.registry_parent.symlink_to(alt, target_is_directory=True)
+        with self.assertRaisesRegex(m.MaintenanceDenied, "operator_registry_parent_untrusted"):
+            self.apply()
 
     def test_world_readable_operator_registry_denied(self):
         self.operator_file.chmod(0o644)
