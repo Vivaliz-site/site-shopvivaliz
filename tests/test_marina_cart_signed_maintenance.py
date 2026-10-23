@@ -30,6 +30,10 @@ class FakeLease:
         assert actions == [m.APPROVAL_ACTION] and ttl <= 90
         self.count += 1
         return {"lease_id": "internal-only", "fencing_token": self.count}
+    def assert_runtime_lock(self, lease_id, fencing_token, action):
+        if self.busy or lease_id != "internal-only" or action != m.APPROVAL_ACTION:
+            raise RuntimeError("lease no longer live")
+        return {"lease_id":lease_id, "fencing_token":fencing_token}
     def release_runtime_lock(self, lease_id, fencing_token, reason):
         assert lease_id == "internal-only"
         self.released += 1
