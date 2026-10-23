@@ -142,6 +142,16 @@ $consensus = svais_consensus_prompt('teste', [[
     'text' => 'posição final',
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
+ais_assert(svais_phase_web_search('research', true) === true, 'research must retain live web search');
+ais_assert(svais_phase_web_search('critique', true) === false, 'critique must reuse research evidence');
+ais_assert(svais_phase_web_search('converge', true) === false, 'convergence must reuse research evidence');
+ais_assert(svais_phase_web_search('research', false) === false, 'disabled web search must remain disabled');
+ais_assert(svais_phase_web_search('research', null) === true, 'topic-required web search must remain enabled');
+$groundedGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'research', true);
+ais_assert(($groundedGemini['thinking_level'] ?? '') === 'LOW', 'grounded Gemini research must use low thinking');
+ais_assert((int)($groundedGemini['max_output_tokens'] ?? 0) <= 3000, 'grounded Gemini research output must be bounded');
+$debateGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'critique', false);
+ais_assert(($debateGemini['thinking_level'] ?? '') === $deep['gemini']['thinking_level'], 'debate Gemini must retain profile thinking');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {
@@ -213,6 +223,29 @@ $anthropicResult = svais_anthropic_dispatch(
 );
 ais_assert(($anthropicResult['text'] ?? '') === 'claude-oauth-ok', 'Claude Code OAuth result missing');
 ais_assert($anthropicCalls === ['claude_code'], 'Claude Code account login must be the only Anthropic transport');
+
+$anthropicRetryCalls = [];
+$anthropicRetry = svais_anthropic_dispatch(
+    $deep['anthropic'],
+    'system',
+    'prompt',
+    true,
+    function (string $transport) use (&$anthropicRetryCalls, $deep): array {
+        $anthropicRetryCalls[] = $transport;
+        if (count($anthropicRetryCalls) === 1) {
+            throw new RuntimeException('claude_bridge_timeout');
+        }
+        return [
+            'text' => 'claude-retry-ok',
+            'sources' => ['https://example.test/source'],
+            'usage' => [],
+            'model' => $deep['anthropic']['model'],
+            'transport' => 'claude_code',
+        ];
+    }
+);
+ais_assert(($anthropicRetry['text'] ?? '') === 'claude-retry-ok', 'Transient Claude retry result missing');
+ais_assert($anthropicRetryCalls === ['claude_code', 'claude_code'], 'Transient Claude failure must receive one bounded retry');
 
 $anthropicFailureCalls = [];
 $anthropicFailure = null;

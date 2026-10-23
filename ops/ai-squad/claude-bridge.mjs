@@ -21,7 +21,7 @@ const MODEL_ALLOWLIST = new Set([
   'claude-haiku-4-5-20251001',
 ]);
 
-let authState = { checked_at: 0, authenticated: false };
+let authState = { checked_at: 0, authenticated: false, failure_class: 'not_checked' };
 let authProbePromise = null;
 let claudeWorkQueue = Promise.resolve();
 
@@ -139,9 +139,10 @@ function envValue(name) {
 }
 
 export function resolveClaudeAuthSource(explicitToken, credentialsPath = DEFAULT_CREDENTIALS_PATH) {
-  const direct = String(explicitToken || '').trim();
-  if (direct) return { mode: 'env_token', configured: true, token: direct };
-
+  // Prefer Claude Code's OAuth store when it is present. The shared .env can
+  // contain a legacy CLAUDE_CODE_OAUTH_TOKEN that is expired or belongs to a
+  // different session; selecting it first makes a valid logged-in CLI look
+  // unauthenticated to the bridge.
   try {
     const parsed = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const oauth = parsed?.claudeAiOauth;
@@ -150,10 +151,14 @@ export function resolveClaudeAuthSource(explicitToken, credentialsPath = DEFAULT
       && typeof oauth === 'object'
       && (String(oauth.accessToken || '').trim() || String(oauth.refreshToken || '').trim())
     );
-    return { mode: configured ? 'credential_store' : 'none', configured, token: '' };
+    if (configured) return { mode: 'credential_store', configured: true, token: '' };
   } catch {
-    return { mode: 'none', configured: false, token: '' };
+    // Fall through to the explicit token for installations without a store.
   }
+
+  const direct = String(explicitToken || '').trim();
+  if (direct) return { mode: 'env_token', configured: true, token: direct };
+  return { mode: 'none', configured: false, token: '' };
 }
 
 function claudeAuthSource() {
@@ -237,7 +242,7 @@ async function probeAuth() {
   return serializeClaudeWork(async () => {
     const auth = claudeAuthSource();
     if (!auth.configured) {
-      authState = { checked_at: Date.now(), authenticated: false };
+      authState = { checked_at: Date.now(), authenticated: false, failure_class: 'not_configured' };
       return false;
     }
     try {
@@ -246,8 +251,16 @@ async function probeAuth() {
       // path used by the AI Squad, otherwise the UI can go falsely green.
       const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
       const statusData = JSON.parse(status.stdout || '{}');
-      if (status.code !== 0 || statusData?.loggedIn !== true) {
-        authState = { checked_at: Date.now(), authenticated: false };
+      // An explicit CLAUDE_CODE_OAUTH_TOKEN is a non-interactive auth source;
+      // Claude Code may keep `auth status` logged out because it reports the
+      // local browser credential store only. The real inference below remains
+      // mandatory, so this exception cannot turn an invalid token green.
+      if (auth.mode !== 'env_token' && (status.code !== 0 || statusData?.loggedIn !== true)) {
+        authState = {
+          checked_at: Date.now(),
+          authenticated: false,
+          failure_class: classifyClaudeError(claudeFailureDetail(status)),
+        };
         return false;
       }
 
@@ -263,10 +276,18 @@ async function probeAuth() {
       const ok = result.code === 0
         && data.is_error !== true
         && data.result !== '';
-      authState = { checked_at: Date.now(), authenticated: ok };
+      authState = {
+        checked_at: Date.now(),
+        authenticated: ok,
+        failure_class: ok ? null : classifyClaudeError(claudeFailureDetail(result)),
+      };
       return ok;
-    } catch {
-      authState = { checked_at: Date.now(), authenticated: false };
+    } catch (error) {
+      authState = {
+        checked_at: Date.now(),
+        authenticated: false,
+        failure_class: classifyClaudeError(error?.message || error),
+      };
       return false;
     }
   });
@@ -452,6 +473,7 @@ async function handle(req, res) {
       credential_store_configured: auth.mode === 'credential_store',
       auth_source: auth.mode,
       authenticated: authState.authenticated,
+      auth_failure_class: authState.failure_class || null,
       binary_configured: binaryConfigured,
       model_allowlist: [...MODEL_ALLOWLIST],
     });

@@ -251,7 +251,13 @@ def ensure_token_store_parent() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         os.chmod(path.parent, 0o770)
-        os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
+        try:
+            os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
+        except PermissionError:
+            # The service account may lack ownership-changing capability;
+            # production provisioning already creates this setgid directory
+            # with the required ACL, so do not block token rotation here.
+            pass
 
 
 def update_env(new_token: str, new_refresh_token: str) -> None:
@@ -322,7 +328,14 @@ def _atomic_write_private(
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         if os.name != "nt" and uid is not None and gid is not None:
-            os.chown(temporary, -1, gid)
+            try:
+                os.chown(temporary, -1, gid)
+            except PermissionError:
+                # Production runs in a setgid directory and the caller may
+                # not be allowed to change the inherited group. The deploy
+                # workflow reconciles ownership after rotation; preserving
+                # the atomic write is safe when the directory ACL is intact.
+                pass
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -452,6 +465,19 @@ def effective_loop_intervals(requested_interval: int, requested_retry_interval: 
     return check_interval, retry_interval
 
 
+def permission_error_detail(exc: PermissionError) -> str:
+    """Expose only the failing filesystem operand, never credential values."""
+    filename = getattr(exc, "filename", None) or getattr(exc, "filename2", None)
+    errno_value = getattr(exc, "errno", None)
+    message = str(exc).replace("\n", " ").strip()
+    detail = f" errno={errno_value}" if errno_value is not None else ""
+    if filename:
+        detail += f" path={filename}"
+    if message:
+        detail += f" message={message}"
+    return detail
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Forca uma renovacao e encerra")
@@ -469,7 +495,8 @@ def main() -> int:
         try:
             return 0 if renew_once() is not None else 1
         except Exception as exc:
-            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
+            detail = permission_error_detail(exc) if isinstance(exc, PermissionError) else ""
+            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}{detail}")
             return 1
 
     check_interval, retry_interval = effective_loop_intervals(args.interval, args.retry_interval)
@@ -485,7 +512,8 @@ def main() -> int:
         except KeyboardInterrupt:
             return 130
         except Exception as exc:
-            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
+            detail = permission_error_detail(exc) if isinstance(exc, PermissionError) else ""
+            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}{detail}")
             ok, attempted = False, True
         delay = check_interval if ok else retry_interval
         if attempted and not ok:

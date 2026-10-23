@@ -86,6 +86,11 @@ shared_ml_token_owner() {
   fi
 }
 
+# A root-owned migration fence prevents origin writers from restarting while Marina owns them.
+is_origin_workers_fenced() {
+  [ -f /etc/shopvivaliz/migration/origin-workers-fenced ]
+}
+
 # Servicos de runtime aplicaveis ao estado atual de propriedade compartilhada.
 # Com owner=mlrr o renovador legado sai da lista -- inclusive no rollback, que
 # reusa esta mesma funcao e por isso nao consegue ressuscita-lo.
@@ -98,6 +103,12 @@ active_runtime_services() {
     fi
     if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
       continue
+    fi
+    if is_origin_workers_fenced; then
+      case "$service" in
+        shopvivaliz-queue-worker.service|mlrr-fetch-worker.service|ml-pricing-worker.service|amazon-returns-safet.service)
+          continue ;;
+      esac
     fi
     printf '%s\n' "$service"
   done
@@ -120,6 +131,10 @@ restart_runtime_services() {
     fi
     services+=("$service")
   done
+  if [ "${#services[@]}" -eq 0 ]; then
+    log INFO "Nenhum servico de runtime elegivel para reiniciar"
+    return 0
+  fi
   if ! sudo systemctl restart "${services[@]}"; then
     log ERROR "Reinicio dos servicos de runtime falhou"
     return 1
@@ -185,8 +200,11 @@ reconcile_ai_squad_codex_bridge_unit() {
     log ERROR "Instalador do bridge Codex ausente na release: $installer"
     return 1
   fi
-  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+  if ! run_ai_squad_installer "$installer"; then
     log ERROR "Falha ao reconciliar bridge Codex"
+    log ERROR "Codex bridge diagnostics follow"
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" systemctl --user --no-pager --full status shopvivaliz-squad-codex-bridge.service >> "$LOG_FILE" 2>&1 || true
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" journalctl --user -u shopvivaliz-squad-codex-bridge.service -n 40 --no-pager >> "$LOG_FILE" 2>&1 || true
     return 1
   fi
 }
@@ -216,10 +234,20 @@ reconcile_ai_squad_claude_bridge_unit() {
     log ERROR "Instalador user-level do bridge Claude ausente na release: $installer"
     return 1
   fi
-  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+  if ! run_ai_squad_installer "$installer"; then
     log ERROR "Falha ao reconciliar bridge Claude user-level"
     return 1
   fi
+}
+
+run_ai_squad_installer() {
+  local installer="$1"
+  local approved="${SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED:-0}"
+  local mode="${SHOPVIVALIZ_PAID_BRIDGE_MODE:-disabled}"
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+    SHOPVIVALIZ_PAID_BRIDGE_MANUAL_APPROVED="$approved" \
+    SHOPVIVALIZ_PAID_BRIDGE_MODE="$mode" \
+    bash "$installer" >> "$LOG_FILE" 2>&1
 }
 
 verify_ai_squad_bridges_health() {

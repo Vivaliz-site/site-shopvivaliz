@@ -2,6 +2,7 @@
 Description=ShopVivaliz abandoned cart recovery sender
 After=network-online.target
 Wants=network-online.target
+ConditionPathExists=!/etc/shopvivaliz/migration/origin-workers-fenced
 
 [Service]
 Type=oneshot

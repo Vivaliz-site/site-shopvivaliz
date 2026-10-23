@@ -397,7 +397,7 @@ if [[ "$dev_aux_adoption" == 9557 ]]; then
         status=1
         ;;
       *)
-        report_browser_state 'DEV_AUX_UNAVAILABLE' "${session_state:-UNKNOWN}"
+        report_browser_state 'DEV_AUX_CDP_RESPONSIVE_UNVERIFIED' "${session_state:-UNKNOWN}"
         status=1
         ;;
     esac

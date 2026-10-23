@@ -18,6 +18,10 @@ UMask=0007
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
+ExecStartPre=/usr/bin/install -d -o ubuntu -g www-data -m 2770 /home/ubuntu/shopvivaliz-deploy/shared/private
+ExecStartPre=/usr/bin/touch /home/ubuntu/shopvivaliz-deploy/shared/private/olist-token-rotation.lock
+ExecStartPre=/usr/bin/chown ubuntu:www-data /home/ubuntu/shopvivaliz-deploy/shared/private/olist-token-rotation.lock
+ExecStartPre=/usr/bin/chmod 0660 /home/ubuntu/shopvivaliz-deploy/shared/private/olist-token-rotation.lock
 StandardOutput=journal
 StandardError=journal
 

@@ -235,13 +235,17 @@ fs.writeFileSync(credentialPath, JSON.stringify({
   },
 }), { mode: 0o600 });
 const explicitAuth = resolveClaudeAuthSource('explicit-token', credentialPath);
-assert.equal(explicitAuth.mode, 'env_token');
+assert.equal(explicitAuth.mode, 'credential_store', 'valid OAuth store must outrank a legacy shared env token');
 assert.equal(explicitAuth.configured, true);
-assert.equal(explicitAuth.token, 'explicit-token');
+assert.equal(explicitAuth.token, '');
 const storedAuth = resolveClaudeAuthSource('', credentialPath);
 assert.equal(storedAuth.mode, 'credential_store');
 assert.equal(storedAuth.configured, true);
 assert.equal(storedAuth.token, '', 'credential-store mode must let Claude CLI own refresh instead of exporting a stale access token');
+const explicitOnlyPath = path.join(authDir, 'missing-explicit.json');
+const explicitOnlyAuth = resolveClaudeAuthSource('explicit-token', explicitOnlyPath);
+assert.equal(explicitOnlyAuth.mode, 'env_token');
+assert.equal(explicitOnlyAuth.token, 'explicit-token');
 assert.deepEqual(resolveClaudeAuthSource('', path.join(authDir, 'missing.json')), {
   mode: 'none',
   configured: false,
@@ -259,7 +263,9 @@ fs.rmSync(invocationDir, { recursive: true, force: true });
 
 const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
 assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health probe must reject auth-status-only false green');
+assert.match(bridgeSource, /auth\.mode !== 'env_token'/, 'explicit OAuth token mode must continue to real inference when CLI auth status is unavailable');
 assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
 assert.match(bridgeSource, /credential_store_configured/, 'health must expose credential-store auth source without secrets');
+assert.match(bridgeSource, /auth_failure_class/, 'health must expose only a sanitized auth failure class');
 assert.match(bridgeSource, /shouldReprobeAuth\(authState\).*scheduleAuthProbe/s, 'false or stale health must schedule a fresh auth probe');
 console.log('AI_SQUAD_CLAUDE_BRIDGE_TEST=PASS');

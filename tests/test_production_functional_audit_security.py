@@ -138,7 +138,9 @@ raise SystemExit(completed.returncode)
 class FunctionalAuditSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if not REAL_CURL or not bash_binary():
+        if os.name == 'nt':
+            raise unittest.SkipTest('POSIX audit fixture runs in Linux CI')
+        if not REAL_CURL or not shutil.which('bash'):
             raise RuntimeError('requires curl and bash')
 
     def assert_safe_success(self, fx):
