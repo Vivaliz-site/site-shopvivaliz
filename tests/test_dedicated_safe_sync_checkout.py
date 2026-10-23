@@ -24,6 +24,9 @@ assert 'SEED_REPO="${SEED_REPO:-/home/ubuntu/shopvivaliz-deploy/repo}"' in insta
 assert 'status --porcelain' in installer
 assert 'merge --ff-only' in installer
 assert 'git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH"' in installer
+assert 'rmdir "$SYNC_ROOT"' in installer
+assert 'SAFE_SYNC_REPAIR=REMOVED_EMPTY_PLACEHOLDER' in installer
+assert 'Caminho de sync existe mas nao e clone Git e nao e um placeholder vazio' in installer
 
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in auto_sync
