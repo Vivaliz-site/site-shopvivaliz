@@ -213,6 +213,7 @@ def apply(ticket: dict[str, Any], signature_b64: str, *,
             ledger.claim(ticket["approval_id"], signer)
             status = "indeterminate"
             try:
+                runtime_lock.assert_runtime_lock(lease["lease_id"], lease["fencing_token"], APPROVAL_ACTION)
                 # Signed capability travels through SSH stdin, NEVER argv, audit or logs.
                 response = _decode_result(execute_source(ticket, signature_b64))
                 if (response.get("retirement") != "APPLIED" or response.get("source_host") != SOURCE_HOST
@@ -224,6 +225,7 @@ def apply(ticket: dict[str, Any], signature_b64: str, *,
                         or after.get("timer_enabled") != "disabled"):
                     raise MaintenanceDenied("source_postcondition_invalid")
                 _inspect_destination(run_host)
+                runtime_lock.assert_runtime_lock(lease["lease_id"], lease["fencing_token"], APPROVAL_ACTION)
                 status = "applied"
                 return {"applied":True, "approval_id":ticket["approval_id"], "source_timer":"inactive/disabled",
                         "source_cron_entries":0, "destination_timer":"active/enabled", "owner_kind":"maintenance",
