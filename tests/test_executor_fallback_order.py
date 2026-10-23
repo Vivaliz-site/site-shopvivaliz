@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ExecutorFallbackOrderTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.script = (ROOT / "scripts/autonomous-provider-failover.sh").read_text()
+        self.script = (ROOT / "scripts/autonomous-provider-failover.sh").read_text(encoding="utf-8")
 
     def test_first_tier_is_gemini_flash_and_local_ollama(self) -> None:
         self.assertIn("BACKGROUND_ORDER=(gemini ollama)", self.script)
@@ -32,7 +32,7 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertLess(self.script.index("\n    ollama)"), self.script.index("\n    anthropic)"))
 
     def test_installer_defaults_to_no_paid_background(self) -> None:
-        installer=(ROOT / "scripts/install-gemini-24x7-controller.sh").read_text()
+        installer=(ROOT / "scripts/install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CLAUDE_FALLBACK=0", installer)
         self.assertIn("SHOPVIVALIZ_BACKGROUND_CODEX_FALLBACK=0", installer)
         self.assertIn("run_background_ollama.py", installer)
@@ -41,11 +41,11 @@ class ExecutorFallbackOrderTests(unittest.TestCase):
         self.assertIn('SHOPVIVALIZ_RESUME_STAGE', self.script)
         self.assertIn('!= "cli_last"', self.script)
         self.assertIn("chatgpt_common -> chatgpt_work -> cli_last", self.script)
-        policy = (ROOT / "docs/knowledge/task-continuity.md").read_text()
+        policy = (ROOT / "docs/knowledge/task-continuity.md").read_text(encoding="utf-8")
         self.assertIn("CODEX_LAST_RESORT_V1", policy)
 
     def test_continuity_policy_is_checked(self) -> None:
-        validator=(ROOT / "scripts/validate-task-continuity-enforcement.py").read_text()
+        validator=(ROOT / "scripts/validate-task-continuity-enforcement.py").read_text(encoding="utf-8")
         self.assertIn('"ORDER=(gemini ollama)"', validator)
         self.assertIn('"BACKGROUND_ORDER=(gemini ollama)"', validator)
 

@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,31 @@ from typing import Any
 
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SEARCH_CAP = 1000
+
+
+def _gh_command(endpoint: str = "") -> list[str]:
+    """Resolve GitHub CLI on POSIX and Windows without invoking a shell."""
+    if os.name != "nt":
+        return ["gh"]
+    # Prefer a test/local command shim ahead of a globally installed gh.exe.
+    resolved = shutil.which("gh.cmd") or shutil.which("gh.exe") or shutil.which("gh")
+    if not resolved:
+        return ["gh"]
+    if Path(resolved).suffix.lower() in {".bat", ".cmd"}:
+        # cmd.exe receives the complete command after /c; quote the endpoint
+        # because GitHub's created= range contains '&'.
+        return [
+            os.environ.get("COMSPEC", "cmd.exe"),
+            "/d",
+            "/c",
+            "call",
+            resolved,
+            "api",
+            "--paginate",
+            "--slurp",
+            f'"{endpoint}"',
+        ]
+    return [resolved]
 
 
 def _parse_utc(value: str) -> datetime:
@@ -81,7 +107,7 @@ def fetch_runs(
             f"?created={created_range}&per_page=100"
         )
         completed = subprocess.run(
-            ["gh", "api", "--paginate", "--slurp", endpoint],
+            _gh_command(endpoint) if os.name == "nt" else ["gh", "api", "--paginate", "--slurp", endpoint],
             text=True,
             capture_output=True,
             check=False,

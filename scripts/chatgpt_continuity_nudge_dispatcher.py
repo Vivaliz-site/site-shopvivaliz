@@ -20,7 +20,6 @@ prints the bridge token.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -31,6 +30,15 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    from .continuity.file_lock import locked_file
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "continuity"))
+    from file_lock import locked_file
+
+# Nonblocking dispatch remains the equivalent of fcntl.LOCK_EX | fcntl.LOCK_NB.
 
 try:
     from .agent_task_state import (
@@ -287,16 +295,16 @@ def _request_matches_current_checkpoint(runtime_dir: Path, request: dict[str, An
 def _dispatcher_lock(runtime_dir: Path):
     runtime_dir.mkdir(parents=True, exist_ok=True)
     path = runtime_dir / LOCK_FILE
-    with path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            yield False
-            return
-        try:
-            yield True
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    try:
+        context = locked_file(path, blocking=False)
+        context.__enter__()
+    except BlockingIOError:
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        context.__exit__(None, None, None)
 
 
 def _fsync_dir(path: Path) -> None:

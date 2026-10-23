@@ -10,7 +10,6 @@ counts are emitted.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -18,6 +17,15 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+try:
+    from .continuity.file_lock import locked_file
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "continuity"))
+    from file_lock import locked_file
+
+# Queue serialization remains the equivalent of fcntl.LOCK_EX on Linux.
 
 try:
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
@@ -48,12 +56,8 @@ def checkpoint_fingerprint(payload: dict[str, Any]) -> str:
 def _queue_lock(root: Path, *, exclusive: bool) -> Iterator[None]:
     root.mkdir(parents=True, exist_ok=True)
     lock_path = root / LOCK_FILE
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    with locked_file(lock_path):
+        yield
 
 
 def _load_state(path: Path) -> dict[str, Any] | None:

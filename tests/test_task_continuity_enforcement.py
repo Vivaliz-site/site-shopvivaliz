@@ -367,7 +367,8 @@ class AgentTaskStateTests(unittest.TestCase):
 
         self.assertEqual(len(chown_calls), 1)
         self.assertEqual((chown_calls[0][1], chown_calls[0][2]), (parent.st_uid, parent.st_gid))
-        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        expected_mode = 0o666 if os.name == "nt" else 0o600
+        self.assertEqual(target.stat().st_mode & 0o777, expected_mode)
 
     def test_running_task_cannot_be_completed_before_ready_gate(self) -> None:
         current = state.start_task("task-simple", "Corrigir uma tarefa simples", "gpt")
@@ -553,22 +554,26 @@ class AgentTaskStateTests(unittest.TestCase):
     def test_runtime_state_uses_shared_directory_inside_immutable_deploy(self) -> None:
         deploy_root = Path("/home/ubuntu/shopvivaliz-deploy/releases/20260926-170000-abc")
         resolved = state.resolve_runtime_dir(deploy_root, configured="")
-        self.assertEqual(
-            resolved,
-            Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
+        self.assertTrue(
+            resolved.as_posix().endswith(
+                "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+            )
         )
 
         for checkout in ("repo", "sync-repo"):
             with self.subTest(checkout=checkout):
                 mutable_checkout = Path("/home/ubuntu/shopvivaliz-deploy") / checkout
-                self.assertEqual(
-                    state.resolve_runtime_dir(mutable_checkout, configured=""),
-                    Path("/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"),
+                self.assertTrue(
+                    state.resolve_runtime_dir(mutable_checkout, configured="").as_posix().endswith(
+                        "/home/ubuntu/shopvivaliz-deploy/shared/agent-task-state"
+                    )
                 )
 
         local_root = Path("/tmp/site-shopvivaliz")
         local = state.resolve_runtime_dir(local_root, configured="")
-        self.assertEqual(local, local_root / "storage" / "private" / "agent-task-state")
+        self.assertTrue(
+            local.as_posix().endswith("/tmp/site-shopvivaliz/storage/private/agent-task-state")
+        )
 
 
 class OperationsWorkerContinuityTests(unittest.TestCase):

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import fcntl
 import sys
 import tempfile
 import unittest
@@ -10,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts import agent_task_state as state
+from scripts.continuity.file_lock import locked_file
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -53,8 +53,7 @@ class TaskContinuationWatchdogTests(unittest.TestCase):
         self._age_task("task-locked", seconds=600)
 
         lock_path = self.runtime / "_continuity-watchdog.lock"
-        with lock_path.open("a+", encoding="utf-8") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with locked_file(lock_path):
             result = watchdog.run_once(stale_seconds=120, runtime_dir=self.runtime)
 
         self.assertTrue(result.get("locked", False))

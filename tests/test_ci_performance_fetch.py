@@ -20,7 +20,7 @@ class CiPerformanceFetchTest(unittest.TestCase):
     def _fake_gh(self, root: Path) -> Path:
         bindir = root / "bin"
         bindir.mkdir()
-        gh = bindir / "gh"
+        gh = bindir / ("gh.py" if os.name == "nt" else "gh")
         gh.write_text(
             """#!/usr/bin/env python3
 import json
@@ -53,6 +53,13 @@ print(json.dumps([{"total_count": total, "workflow_runs": [run]}]))
             encoding="utf-8",
         )
         gh.chmod(0o755)
+        if os.name == "nt":
+            # Windows does not execute extensionless shebang fixtures from PATH.
+            # Keep the fixture behavior identical through a native command shim.
+            (bindir / "gh.cmd").write_text(
+                f'@"{sys.executable}" "%~dp0gh.py" %*\n',
+                encoding="utf-8",
+            )
         return bindir
 
     def _run(self, mode: str = "ok", repository: str = "Vivaliz-site/site-shopvivaliz"):
@@ -63,7 +70,7 @@ print(json.dumps([{"total_count": total, "workflow_runs": [run]}]))
         env = os.environ.copy()
         env.update(
             {
-                "PATH": f"{bindir}:{env.get('PATH', '')}",
+                "PATH": f"{bindir}{os.pathsep}{env.get('PATH', '')}",
                 "FAKE_GH_LOG": str(root / "calls.log"),
                 "FAKE_GH_COUNTER": str(root / "counter.txt"),
                 "FAKE_GH_MODE": mode,

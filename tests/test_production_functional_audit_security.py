@@ -18,6 +18,20 @@ BODY_SENTINEL = 'synthetic-private-provider-response'
 REAL_CURL = shutil.which('curl')
 
 
+def bash_binary():
+    """Use Git Bash on Windows instead of the WSL shim named bash.exe."""
+    if os.name != 'nt':
+        return 'bash'
+    git = shutil.which('git')
+    if not git:
+        return None
+    for ancestor in Path(git).resolve().parents:
+        candidate = ancestor / 'usr' / 'bin' / 'bash.exe'
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
 class AuditFixture:
     def __init__(self, key=SENTINEL, error_path=None, integration_code=200,
                  bash_flags=(), curlrc=False, alias_only=False, overrides=None):
@@ -86,7 +100,7 @@ class AuditFixture:
     def run(self):
         wrapper = self.root / 'curl'
         wrapper.write_text('#!/usr/bin/env python3\n' + r'''
-import json, os, sys
+import json, os, subprocess, sys
 from pathlib import Path
 key = os.environ['AUDIT_FIXTURE_KEY']
 args = sys.argv[1:]
@@ -97,7 +111,8 @@ record = {
 }
 with Path(os.environ['AUDIT_FIXTURE_RECORD']).open('a') as out:
     out.write(json.dumps(record) + '\n')
-os.execv(os.environ['AUDIT_FIXTURE_CURL'], [os.environ['AUDIT_FIXTURE_CURL'], *args])
+completed = subprocess.run([os.environ['AUDIT_FIXTURE_CURL'], *args])
+raise SystemExit(completed.returncode)
 ''')
         wrapper.chmod(0o700)
         if self.curlrc:
@@ -114,7 +129,7 @@ os.execv(os.environ['AUDIT_FIXTURE_CURL'], [os.environ['AUDIT_FIXTURE_CURL'], *a
                     'AUDIT_FIXTURE_KEY': self.key,
                     'AUDIT_FIXTURE_RECORD': str(self.record),
                     'AUDIT_FIXTURE_CURL': REAL_CURL})
-        result = subprocess.run(['bash', *self.bash_flags, str(AUDIT)], env=env, cwd=ROOT,
+        result = subprocess.run([bash_binary(), *self.bash_flags, str(AUDIT)], env=env, cwd=ROOT,
                                 capture_output=True, text=True, timeout=30)
         self.observations = [json.loads(line) for line in self.record.read_text().splitlines()] if self.record.exists() else []
         return result
@@ -123,7 +138,7 @@ os.execv(os.environ['AUDIT_FIXTURE_CURL'], [os.environ['AUDIT_FIXTURE_CURL'], *a
 class FunctionalAuditSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if not REAL_CURL or not shutil.which('bash'):
+        if not REAL_CURL or not bash_binary():
             raise RuntimeError('requires curl and bash')
 
     def assert_safe_success(self, fx):

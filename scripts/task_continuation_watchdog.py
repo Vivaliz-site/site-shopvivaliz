@@ -12,12 +12,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import fcntl
 import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    from .continuity.file_lock import locked_file
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "continuity"))
+    from file_lock import locked_file
 
 try:
     from .agent_task_state import DEFAULT_REPOSITORY, RUNTIME_DIR
@@ -40,16 +46,11 @@ def utc_now() -> str:
 def _watchdog_lock(root: Path):
     root.mkdir(parents=True, exist_ok=True)
     path = root / LOCK_FILE
-    with path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            yield False
-            return
-        try:
+    try:
+        with locked_file(path, blocking=False):
             yield True
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except BlockingIOError:
+        yield False
 
 
 def _parse_time(value: Any) -> datetime | None:
