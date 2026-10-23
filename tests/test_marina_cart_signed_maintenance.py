@@ -7,6 +7,9 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
+from contextlib import ExitStack
+from unittest.mock import patch
 import time
 import unittest
 import uuid
@@ -18,6 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("maintenance_cart", ROOT / "remote-control-mcp/maintenance_cart.py")
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+# Load the standalone source helper as a module without invoking its CLI,
+# impersonating no production host and performing no system operation.
+sys.modules["maintenance_cart"] = m
+source_spec = importlib.util.spec_from_file_location("marina_source_helper", ROOT / "remote-control-mcp/retire-origin-abandoned-cart.py")
+source_helper = importlib.util.module_from_spec(source_spec)
+source_spec.loader.exec_module(source_helper)
 
 class FakeLease:
     def __init__(self):
@@ -186,6 +195,35 @@ class SignedMaintenanceTests(unittest.TestCase):
         self.assertIn("source_ssh_route_untrusted", server)
         self.assertIn("marina_private_route_not_provisioned", server)
         self.assertIn("marina_cart_preview", server)
+
+    def test_source_cron_removal_preserves_all_unrelated_lines(self):
+        expected = source_helper.EXPECTED_CRON
+        other = "0 1 * * * /usr/local/bin/other-safe-job"
+        before = (other + "\n" + expected + "\n# keep this comment\n").encode()
+        calls = []
+        def fake_run(argv, *, data=None, check=True):
+            calls.append((argv, data))
+        with patch.object(source_helper, "_read_cron", return_value=before), patch.object(source_helper, "_run", side_effect=fake_run):
+            source_helper._remove_one_cron(before)
+        self.assertEqual(calls, [(["crontab", "-u", "ubuntu", "-"], (other + "\n# keep this comment\n").encode())])
+
+    def test_source_cron_removal_denies_change_since_preflight(self):
+        before = (source_helper.EXPECTED_CRON + "\n").encode()
+        with patch.object(source_helper, "_read_cron", return_value=before + b"# race\n"), patch.object(source_helper, "_run") as run:
+            with self.assertRaisesRegex(m.MaintenanceDenied, "crontab_changed_during_transaction"):
+                source_helper._remove_one_cron(before)
+            run.assert_not_called()
+
+    def test_source_rejects_concurrent_sender_file_lock(self):
+        import fcntl
+        cron = self.root / "cart-legacy.lock"
+        timer = self.root / "cart-timer.lock"
+        with patch.object(source_helper, "CRON_LOCK", cron), patch.object(source_helper, "TIMER_LOCK", timer):
+            with cron.open("a+b") as current_sender:
+                fcntl.flock(current_sender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with ExitStack() as locked:
+                    with self.assertRaisesRegex(m.MaintenanceDenied, "sender_currently_running"):
+                        source_helper._lock_writers(locked)
 
     def test_fixed_origin_script_requires_signed_stdin_and_two_locks(self):
         script = (ROOT/"remote-control-mcp"/"retire-origin-abandoned-cart.py").read_text()
