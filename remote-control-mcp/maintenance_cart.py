@@ -37,6 +37,15 @@ def _canonical(document: dict[str, Any]) -> bytes:
     return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
 
 def _read_protected_json(path: Path, owner_uid: int = 0) -> dict[str, Any]:
+    # Reject a trusted key registry located below a writable parent or a
+    # symlink-controlled directory; the leaf-only mode check is insufficient.
+    for parent in (path.parent, path.parent.parent):
+        try:
+            meta = parent.lstat()
+        except OSError as exc:
+            raise MaintenanceDenied("operator_registry_parent_unavailable") from exc
+        if not stat.S_ISDIR(meta.st_mode) or meta.st_uid != owner_uid or meta.st_mode & 0o022:
+            raise MaintenanceDenied("operator_registry_parent_untrusted")
     try:
         fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
         with os.fdopen(fd, "rb") as f:
@@ -214,6 +223,9 @@ def apply(ticket: dict[str, Any], signature_b64: str, *,
             status = "indeterminate"
             try:
                 runtime_lock.assert_runtime_lock(lease["lease_id"], lease["fencing_token"], APPROVAL_ACTION)
+                # Ticket validity is checked again as close as possible to
+                # the actual operation; a long preflight never extends approval.
+                verify_ticket(ticket, signature_b64, registry_path=registry_path, owner_uid=owner_uid)
                 # Signed capability travels through SSH stdin, NEVER argv, audit or logs.
                 response = _decode_result(execute_source(ticket, signature_b64))
                 if (response.get("retirement") != "APPLIED" or response.get("source_host") != SOURCE_HOST
