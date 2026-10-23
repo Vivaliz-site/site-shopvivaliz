@@ -126,6 +126,9 @@ def retire(ticket: dict[str, object], signature_b64: str) -> dict[str, object]:
                     backup.write(cron)
                     backup.flush()
                     os.fsync(backup.fileno())
+                # Never act on a ticket whose short expiration elapsed during
+                # source preflight, lock acquisition or durable backup fsync.
+                verify_ticket(ticket, signature_b64)
                 _run(["systemctl", "stop", TIMER])
                 _run(["systemctl", "disable", TIMER])
                 _remove_one_cron(cron)
