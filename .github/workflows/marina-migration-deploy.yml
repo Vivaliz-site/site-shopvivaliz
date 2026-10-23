@@ -79,31 +79,94 @@ jobs:
           set -Eeuo pipefail
           umask 077
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/marina-migration-known-hosts" -i "$HOME/.ssh/marina-migration-key")
-          if [ -n "$MARINA_CODEX_AUTH_JSON" ] && [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then
-            if [ "$MARINA_EXECUTION_MODE" = local ]; then
-              sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
-              printf '%s' "$MARINA_CODEX_AUTH_JSON" | sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null
-              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null
-              sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
-              sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json
-            else
-              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
-              printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
-              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
-              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json /home/ubuntu/.claude/.credentials.json'
-            fi
-            echo AUTH_STORES_MATERIALIZED=PASS
+          claude_store_is_valid() {
+            python3 - "$1" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+          oauth = payload.get("claudeAiOauth")
+          valid = isinstance(oauth, dict) and bool(
+              str(oauth.get("accessToken", "")).strip()
+              or str(oauth.get("refreshToken", "")).strip()
+          )
+          raise SystemExit(0 if valid else 1)
+          PY
+          }
+
+          if [ "$MARINA_EXECUTION_MODE" = local ]; then
+            sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude
           else
-            if [ "$MARINA_EXECUTION_MODE" = local ]; then
-              test -s /home/ubuntu/.codex-business/fredmourao/auth.json
-              test -s /home/ubuntu/.claude/.credentials.json
-              test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600
-              test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600
-            else
-              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
-            fi
-            echo AUTH_STORES_REUSED=PASS
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.codex-business/fredmourao /home/ubuntu/.claude'
           fi
+
+          if [ -n "$MARINA_CODEX_AUTH_JSON" ]; then
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              printf '%s' "$MARINA_CODEX_AUTH_JSON" | sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null
+              sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json
+              sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json
+            else
+              printf '%s' "$MARINA_CODEX_AUTH_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.codex-business/fredmourao/auth.json >/dev/null'
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.codex-business/fredmourao/auth.json && sudo chmod 600 /home/ubuntu/.codex-business/fredmourao/auth.json'
+            fi
+            echo CODEX_AUTH_STORE=MATERIALIZED
+          else
+            echo CODEX_AUTH_STORE=REUSED
+          fi
+
+          if [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then
+            temp_claude_store="$(mktemp)"
+            trap 'rm -f "$temp_claude_store"' EXIT
+            printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" > "$temp_claude_store"
+            claude_store_is_valid "$temp_claude_store"
+            echo CLAUDE_AUTH_STORE=VALID
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null
+              sudo chown ubuntu:ubuntu /home/ubuntu/.claude/.credentials.json
+              sudo chmod 600 /home/ubuntu/.claude/.credentials.json
+            else
+              printf '%s' "$MARINA_CLAUDE_CREDENTIALS_JSON" | ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo -u ubuntu tee /home/ubuntu/.claude/.credentials.json >/dev/null'
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'sudo chown ubuntu:ubuntu /home/ubuntu/.claude/.credentials.json && sudo chmod 600 /home/ubuntu/.claude/.credentials.json'
+            fi
+            echo CLAUDE_AUTH_STORE=MATERIALIZED
+          else
+            echo CLAUDE_AUTH_STORE=REUSED
+          fi
+
+          if [ "$MARINA_EXECUTION_MODE" = local ]; then
+            test -s /home/ubuntu/.codex-business/fredmourao/auth.json
+            test -s /home/ubuntu/.claude/.credentials.json
+            test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600
+            test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600
+          else
+            ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'set -Eeuo pipefail; test -s /home/ubuntu/.codex-business/fredmourao/auth.json; test -s /home/ubuntu/.claude/.credentials.json; test "$(stat -c %U:%a /home/ubuntu/.codex-business/fredmourao/auth.json)" = ubuntu:600; test "$(stat -c %U:%a /home/ubuntu/.claude/.credentials.json)" = ubuntu:600'
+          fi
+
+          claude_store_check='import json,sys; oauth=json.load(open(sys.argv[1], encoding="utf-8")).get("claudeAiOauth"); raise SystemExit(0 if isinstance(oauth, dict) and (str(oauth.get("accessToken", "")).strip() or str(oauth.get("refreshToken", "")).strip()) else 1)'
+          claude_store_valid=false
+          if [ "$MARINA_EXECUTION_MODE" = local ]; then
+            if sudo python3 -c "$claude_store_check" /home/ubuntu/.claude/.credentials.json; then
+              claude_store_valid=true
+            fi
+          elif ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "python3 -c '$claude_store_check' /home/ubuntu/.claude/.credentials.json"; then
+            claude_store_valid=true
+          fi
+          if [ "$claude_store_valid" = true ]; then
+            # A stale env token must not shadow the authenticated Claude Code
+            # login store. Remove only this exact managed key and preserve all
+            # other runtime settings plus the file's existing mode/ownership.
+            if [ "$MARINA_EXECUTION_MODE" = local ]; then
+              if sudo test -f /home/ubuntu/shopvivaliz-deploy/shared/.env; then
+                sudo sed -i '/^CLAUDE_CODE_OAUTH_TOKEN=/d' /home/ubuntu/shopvivaliz-deploy/shared/.env
+              fi
+            else
+              ssh "${ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" 'if sudo test -f /home/ubuntu/shopvivaliz-deploy/shared/.env; then sudo sed -i "/^CLAUDE_CODE_OAUTH_TOKEN=/d" /home/ubuntu/shopvivaliz-deploy/shared/.env; fi'
+            fi
+            echo CLAUDE_AUTH_SOURCE=credential_store
+          fi
+
+          echo AUTH_STORES_READY=PASS
 
       - name: Ensure approved native Codex runtime
         shell: bash
@@ -149,14 +212,16 @@ jobs:
               curl -fsSL https://claude.ai/install.sh | bash
             fi
             test -x /home/ubuntu/.local/bin/claude
-            # An explicit CLAUDE_CODE_OAUTH_TOKEN is the approved non-interactive
-            # auth source for the bridge. Claude Code's auth status reports the
-            # local browser credential store and can be logged out even when
-            # this token is present. The bridge health probe still requires a
-            # bounded real inference before the migration can pass.
+            # Prefer the Claude Code interactive OAuth store. A raw OAuth token
+            # is only a fallback for already-approved non-interactive runs; the
+            # bridge health probe still requires bounded real inference.
             env_path=/home/ubuntu/shopvivaliz-deploy/shared/.env
+            credentials_path=/home/ubuntu/.claude/.credentials.json
             claude_auth_status_required=true
-            if [ -f "$env_path" ] && grep -Eq '^CLAUDE_CODE_OAUTH_TOKEN=[^[:space:]]+$' "$env_path"; then
+            claude_store_check='import json,sys; oauth=json.load(open(sys.argv[1], encoding="utf-8")).get("claudeAiOauth"); raise SystemExit(0 if isinstance(oauth, dict) and (str(oauth.get("accessToken", "")).strip() or str(oauth.get("refreshToken", "")).strip()) else 1)'
+            if [ -f "$credentials_path" ] && python3 -c "$claude_store_check" "$credentials_path"; then
+              printf "CLAUDE_AUTH_SOURCE=credential_store\\n"
+            elif [ -f "$env_path" ] && grep -Eq '^CLAUDE_CODE_OAUTH_TOKEN=[^[:space:]]+$' "$env_path"; then
               claude_auth_status_required=false
               printf "CLAUDE_AUTH_SOURCE=explicit_env_token\\n"
             fi
