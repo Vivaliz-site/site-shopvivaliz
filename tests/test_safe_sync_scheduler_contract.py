@@ -38,6 +38,9 @@ assert 'sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer' in workfl
 assert 'flock -n 9' in workflow
 assert 'health_score_percent -> 100' in workflow
 assert 'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
+assert "Diagnose dedicated safe sync path" in workflow
+assert "SAFE_SYNC_PATH_ENTRY_COUNT" in workflow
+assert "SAFE_SYNC_GIT_METADATA=MISSING" in workflow
 assert 'git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH"' in systemd_installer
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
 assert 'exec env SHOPVIVALIZ_DEPLOY_REPO_DIR="$ROOT" "$DEPLOY_RUNNER" main' in safe_sync

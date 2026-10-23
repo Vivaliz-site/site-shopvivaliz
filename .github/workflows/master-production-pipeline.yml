@@ -184,6 +184,39 @@ jobs:
             -e "$ssh_cmd" ./ "ubuntu@127.0.0.1:$release_dir/"
           printf '%s\n' "$release_dir" > /tmp/shopvivaliz-release-dir
           echo "release_dir=$release_dir"
+      - name: Diagnose dedicated safe sync path
+        shell: bash
+        run: |
+          set -euo pipefail
+          sync_root='/home/ubuntu/shopvivaliz-deploy/sync-repo'
+          if sudo test -L "$sync_root"; then
+            echo 'SAFE_SYNC_PATH_CLASS=SYMLINK'
+          elif sudo test -d "$sync_root"; then
+            entry_count="$(sudo find "$sync_root" -mindepth 1 -maxdepth 1 -print | wc -l)"
+            echo "SAFE_SYNC_PATH_CLASS=DIRECTORY"
+            echo "SAFE_SYNC_PATH_ENTRY_COUNT=$entry_count"
+            sudo stat -c 'SAFE_SYNC_PATH_METADATA=%F owner=%U:%G mode=%a' -- "$sync_root"
+            for relative in \
+              git-auto-sync.py \
+              scripts/safe-repo-sync.sh \
+              scripts/deploy-production.sh \
+              scripts/should-deploy-production.sh; do
+              if sudo test -f "$sync_root/$relative"; then
+                echo "SAFE_SYNC_EXPECTED_PATH_${relative//\//_}=PRESENT"
+              else
+                echo "SAFE_SYNC_EXPECTED_PATH_${relative//\//_}=MISSING"
+              fi
+            done
+            if sudo test -d "$sync_root/.git"; then
+              echo 'SAFE_SYNC_GIT_METADATA=PRESENT'
+            else
+              echo 'SAFE_SYNC_GIT_METADATA=MISSING'
+            fi
+          elif sudo test -e "$sync_root"; then
+            sudo stat -c 'SAFE_SYNC_PATH_CLASS=NON_DIRECTORY type=%F owner=%U:%G mode=%a' -- "$sync_root"
+          else
+            echo 'SAFE_SYNC_PATH_CLASS=ABSENT'
+          fi
       - name: Activate release atomically
         shell: bash
         run: |
