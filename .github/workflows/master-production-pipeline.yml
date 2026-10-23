@@ -437,6 +437,12 @@ jobs:
             echo "SAFE_SYNC_POSTDEPLOY=RUN_MATCHING_SHA"
             if ! sudo systemctl start shopvivaliz-sync-safe.service; then
               echo 'safe_repo_sync_postdeploy_start_failed=true' >&2
+              if ! sudo systemctl status --no-pager --full shopvivaliz-sync-safe.service >&2; then
+                echo 'safe_sync_status_diagnostic_failed=true' >&2
+              fi
+              if ! sudo journalctl --unit=shopvivaliz-sync-safe.service --no-pager --full --lines=120 >&2; then
+                echo 'safe_sync_journal_diagnostic_failed=true' >&2
+              fi
               fail=1
             fi
             safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"
