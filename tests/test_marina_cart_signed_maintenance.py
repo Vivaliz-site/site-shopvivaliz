@@ -196,6 +196,17 @@ class SignedMaintenanceTests(unittest.TestCase):
         self.assertIn("marina_private_route_not_provisioned", server)
         self.assertIn("marina_cart_preview", server)
 
+    def test_origin_helper_refuses_missing_fence_without_any_mutation(self):
+        with patch.object(source_helper, "_identity"), \
+             patch.object(source_helper, "verify_ticket", return_value="fredmourao-ai"), \
+             patch.object(source_helper, "FENCE", self.root / "fence-not-present"), \
+             patch.object(source_helper, "_lock_writers") as lock, \
+             patch.object(source_helper, "_run") as mutate:
+            with self.assertRaisesRegex(m.MaintenanceDenied, "source_fence_not_trusted"):
+                source_helper.retire(self.ticket, self.sign())
+            lock.assert_not_called()
+            mutate.assert_not_called()
+
     def test_source_cron_removal_preserves_all_unrelated_lines(self):
         expected = source_helper.EXPECTED_CRON
         other = "0 1 * * * /usr/local/bin/other-safe-job"
