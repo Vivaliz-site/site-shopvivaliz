@@ -36,6 +36,13 @@ install_controller() {
   install -d -m 755 -o root -g root "$INSTALL_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR/scripts/continuity"
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  # Verifier code only: approval signing keys and the source-side root helper
+  # MUST NOT be installed or enabled by generic MCP bootstrap.
+  cart_gate_source="$(dirname "$SERVER_SOURCE")/maintenance_cart.py"
+  if [ -f "$cart_gate_source" ]; then
+    install -m 0644 -o root -g root "$cart_gate_source" "$INSTALL_DIR/maintenance_cart.py"
+    echo "MARINA_CART_GATE_CODE_STAGED=YES_NOT_ENABLED"
+  fi
   install -m 0755 -o root -g root "$AGENT_TASK_STATE_SOURCE" "$INSTALL_DIR/scripts/agent_task_state.py"
   install -m 0644 -o root -g root "$CONTINUITY_SOURCE_DIR"/*.py "$INSTALL_DIR/scripts/continuity/"
 
