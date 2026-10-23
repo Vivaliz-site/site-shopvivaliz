@@ -125,13 +125,32 @@ def _inspect_source(run_host: Callable[[str, str], dict[str, Any]]) -> dict[str,
     return source
 
 def _inspect_destination(run_host: Callable[[str, str], dict[str, Any]]) -> dict[str, Any]:
-    command = ('python3 -c \'import json,socket,subprocess;'
-               'a=subprocess.run(["systemctl","is-active","shopvivaliz-abandoned-cart-recovery.timer"],capture_output=True,text=True);'
-               'b=subprocess.run(["systemctl","is-enabled","shopvivaliz-abandoned-cart-recovery.timer"],capture_output=True,text=True);'
-               'print(json.dumps({"host":socket.gethostname().split(".")[0],"active":a.stdout.strip(),"enabled":b.stdout.strip()}))\'')
+    # Reject an enabled timer if its effectful sender is failing or stale.
+    # Compare monotonic clocks on the SAME destination host (not wall time).
+    command = ("python3 -c 'import json,socket,subprocess,time;"
+               "timer=\"shopvivaliz-abandoned-cart-recovery.timer\";"
+               "service=\"shopvivaliz-abandoned-cart-recovery.service\";"
+               "read=lambda unit,prop:subprocess.run([\"systemctl\",\"show\",unit,\"-p\",prop,\"--value\"],"
+               "capture_output=True,text=True,check=True,timeout=5).stdout.strip();"
+               "print(json.dumps({\"host\":socket.gethostname().split(\".\")[0],"
+               "\"active\":read(timer,\"ActiveState\"),"
+               "\"enabled\":read(timer,\"UnitFileState\"),"
+               "\"sender_result\":read(service,\"Result\"),"
+               "\"sender_exit_code\":read(service,\"ExecMainStatus\"),"
+               "\"sender_last_success_us\":read(service,\"ExecMainExitTimestampMonotonic\"),"
+               "\"monotonic_now_us\":int(time.monotonic()*1000000)}))'")
     dest = _decode_result(run_host(DEST_HOST, command))
     if dest.get("host") != DEST_HOST or dest.get("active") != "active" or dest.get("enabled") != "enabled":
         raise MaintenanceDenied("destination_writer_not_confirmed")
+    if dest.get("sender_result") != "success" or dest.get("sender_exit_code") != "0":
+        raise MaintenanceDenied("destination_sender_not_healthy")
+    try:
+        last = int(dest["sender_last_success_us"])
+        now_mono = int(dest["monotonic_now_us"])
+    except (TypeError, ValueError, KeyError) as exc:
+        raise MaintenanceDenied("destination_sender_liveness_unknown") from exc
+    if last <= 0 or now_mono <= last or now_mono - last > 7_200_000_000:
+        raise MaintenanceDenied("destination_sender_stale_or_unverified")
     return dest
 
 def preview(run_host: Callable[[str, str], dict[str, Any]]) -> dict[str, Any]:
