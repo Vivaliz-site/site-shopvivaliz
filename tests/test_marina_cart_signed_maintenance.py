@@ -84,7 +84,11 @@ class SignedMaintenanceTests(unittest.TestCase):
                 "timer_active":"active" if self.source_legacy else "inactive",
                 "timer_enabled":"enabled" if self.source_legacy else "disabled"})}
         assert host == m.DEST_HOST and "systemctl" in cmd
-        return {"exit_code":0,"stdout":json.dumps({"host":host,"active":"active","enabled":"enabled"})}
+        now_us = int(time.monotonic()*1_000_000)
+        return {"exit_code":0,"stdout":json.dumps({"host":host,"active":"active","enabled":"enabled",
+                    "sender_result":"success","sender_exit_code":"0",
+                    "sender_last_success_us":str(now_us-5*60_000_000),
+                    "monotonic_now_us":now_us})}
 
     def fake_execution(self, ticket, signature):
         self.executions.append(ticket["approval_id"])
@@ -142,6 +146,48 @@ class SignedMaintenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(m.MaintenanceDenied, "source_cron_cas_mismatch"):
             self.apply()
         self.assertEqual(self.lock.count, 0)
+
+    def test_recent_healthy_destination_is_required_before_source_retirement(self):
+        original = self.fake_run
+        def stale_destination(host, command):
+            result = original(host, command)
+            if host == m.DEST_HOST:
+                state = json.loads(result["stdout"])
+                state["sender_last_success_us"] = str(state["monotonic_now_us"] - 8_000_000_000)
+                result["stdout"] = json.dumps(state)
+            return result
+        with self.assertRaisesRegex(m.MaintenanceDenied, "destination_sender_stale_or_unverified"):
+            m.apply(self.ticket, self.sign(), run_host=stale_destination,
+                    execute_source=self.fake_execution, runtime_lock=self.lock,
+                    registry_path=self.operator_file, state_dir=self.root/"state",owner_uid=os.getuid())
+        self.assertEqual(self.lock.count, 0)
+        self.assertEqual(len(self.executions), 0)
+
+    def test_failed_destination_sender_does_not_retire_source(self):
+        original = self.fake_run
+        def failed_destination(host, command):
+            result = original(host, command)
+            if host == m.DEST_HOST:
+                state = json.loads(result["stdout"])
+                state["sender_result"] = "failed"
+                result["stdout"] = json.dumps(state)
+            return result
+        with self.assertRaisesRegex(m.MaintenanceDenied, "destination_sender_not_healthy"):
+            m.apply(self.ticket, self.sign(), run_host=failed_destination,
+                    execute_source=self.fake_execution, runtime_lock=self.lock,
+                    registry_path=self.operator_file, state_dir=self.root/"state",owner_uid=os.getuid())
+        self.assertEqual(self.lock.count, 0)
+        self.assertEqual(len(self.executions), 0)
+
+    def test_destination_timer_only_is_not_writer_health(self):
+        original = self.fake_run
+        def timer_only(host, command):
+            result = original(host, command)
+            if host == m.DEST_HOST:
+                result["stdout"] = json.dumps({"host":host,"active":"active","enabled":"enabled"})
+            return result
+        with self.assertRaisesRegex(m.MaintenanceDenied, "destination_sender_not_healthy"):
+            m.preview(timer_only)
 
     def test_concurrent_lease_denied(self):
         self.lock.busy = True
