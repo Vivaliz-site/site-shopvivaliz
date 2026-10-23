@@ -91,6 +91,8 @@ def _remove_one_cron(original: bytes) -> None:
     retained = [row for row in rows if row.rstrip("\r\n") != EXPECTED_CRON]
     if len(rows) - len(retained) != 1:
         raise MaintenanceDenied("crontab_sender_cas_invalid")
+    if _read_cron() != original:
+        raise MaintenanceDenied("crontab_changed_during_transaction")
     _run(["crontab", "-u", "ubuntu", "-"], data="".join(retained).encode("utf-8"))
 
 def retire(ticket: dict[str, object], signature_b64: str) -> dict[str, object]:
