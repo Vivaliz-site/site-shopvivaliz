@@ -186,9 +186,21 @@ jobs:
             export HOME=/home/ubuntu
             export CODEX_HOME=/home/ubuntu/.codex-business/fredmourao
             export PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
-            curl -fsSL https://chatgpt.com/codex/install.sh | sh
-            test -x /home/ubuntu/.local/bin/codex
-            /home/ubuntu/.local/bin/codex login status
+            codex_bin=''
+            for candidate in /home/ubuntu/.local/bin/codex /usr/local/bin/codex /usr/bin/codex; do
+              if test -x "$candidate"; then
+                codex_bin="$candidate"
+                break
+              fi
+            done
+            if test -z "$codex_bin"; then
+              command -v npm >/dev/null 2>&1
+              npm install --global @openai/codex@latest
+              codex_bin="$(command -v codex || true)"
+            fi
+            test -n "$codex_bin"
+            test -x "$codex_bin"
+            "$codex_bin" login status
             printf "CODEX_NATIVE_RUNTIME=READY\\n"
           REMOTE
 
