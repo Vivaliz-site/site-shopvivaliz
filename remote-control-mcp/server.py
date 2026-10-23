@@ -1240,6 +1240,10 @@ AUDIT_RESULT_METADATA_KEYS = (
 
 
 def sanitize_audit_args(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool == "marina_cart_retire_source":
+        ticket = args.get("ticket") if isinstance(args.get("ticket"), dict) else {}
+        return {"approval_id": str(ticket.get("approval_id") or "")[:40],
+                "signed_approval_redacted": True}
     if tool == "checkpoint_update_atomic":
         # Checkpoint notes and nested metadata must never appear in audit args.
         return {
@@ -2310,6 +2314,52 @@ def _assert_conversation_mutation(name: str, args: dict[str, Any]) -> None:
         raise ValueError(f"conversation_mutation_gate:{outcome.get('reason', 'rejected')}")
 
 
+
+# Operator-signed cart maintenance uses a separate approval authority; generic
+# MCP bearer tokens, GitHub permissions and conversation leases are NOT grants.
+def _cart_scoped_host_command(host: str, command: str, cancel_check=None) -> dict[str, Any]:
+    import ipaddress
+    import maintenance_cart as cart
+    if host not in {cart.SOURCE_HOST, cart.DEST_HOST}:
+        raise cart.MaintenanceDenied("maintenance_host_not_allowed")
+    cfg = validate_host(host)
+    if host == cart.DEST_HOST:
+        # A public OCI IP is never a substitute for a verified private route.
+        addr = ipaddress.ip_address(str(cfg.get("address", "")))
+        if cfg.get("transport") != "ssh" or addr not in ipaddress.ip_network("10.80.0.0/16"):
+            raise cart.MaintenanceDenied("marina_private_route_not_provisioned")
+    if host == cart.SOURCE_HOST and cfg.get("transport") != "ssh":
+        raise cart.MaintenanceDenied("source_ssh_route_untrusted")
+    return run_host_command(host, command, timeout=15, cancel_check=cancel_check,
+                            recover_transport=False)
+
+
+def _cart_execute_source_with_signed_stdin(ticket: dict[str, Any], signature: str,
+                                           cancel_check=None) -> dict[str, Any]:
+    import maintenance_cart as cart
+    cfg = validate_host(cart.SOURCE_HOST)
+    if cfg.get("transport") != "ssh" or str(cfg.get("address")) != "10.0.1.112":
+        raise cart.MaintenanceDenied("source_ssh_route_untrusted")
+    payload = json.dumps({"ticket": ticket, "signature_b64": signature},
+                         separators=(",", ":"), sort_keys=True).encode("ascii")
+    if len(payload) > 2048:
+        raise cart.MaintenanceDenied("approval_payload_too_large")
+    # No shell, user-supplied command, argv capability or implicit retry.
+    invocation = ssh_base(str(cfg["address"]), str(cfg["user"]), int(cfg.get("port", 22)))
+    invocation.append("sudo -n /usr/bin/python3 " + cart.SOURCE_PROGRAM + " --retire")
+    proc = subprocess.Popen(invocation, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        out, err = proc.communicate(input=payload, timeout=60)
+    except subprocess.TimeoutExpired:
+        terminate_process_group(proc)
+        raise cart.MaintenanceDenied("source_execution_indeterminate") from None
+    if len(out) > 4096 or len(err) > 4096:
+        raise cart.MaintenanceDenied("source_result_too_large")
+    return {"host": cart.SOURCE_HOST, "exit_code": proc.returncode,
+            "stdout": redact_text(out.decode("utf-8", errors="replace")),
+            "stderr": redact_text(err.decode("utf-8", errors="replace"))}
+
 def execute_tool(
     name: str,
     args: dict[str, Any],
@@ -2318,6 +2368,21 @@ def execute_tool(
     host = args.get("host")
     _assert_runtime_mutation(name, args)
     _assert_conversation_mutation(name, args)
+    if name in {"marina_cart_preview", "marina_cart_retire_source"}:
+        import maintenance_cart as cart
+        scoped = lambda hostname, cmd: _cart_scoped_host_command(hostname, cmd, cancel_check)
+        if name == "marina_cart_preview":
+            return cart.preview(scoped)
+        if os.environ.get("SHOPVIVALIZ_CART_MAINTENANCE_ENABLED") != "approved-v1":
+            raise cart.MaintenanceDenied("operator_approved_rollout_not_enabled")
+        # The dedicated signed-ticket verifier mints its own private maintenance
+        # runtime lease, then immediately consumes it; do not accept supplied
+        # lease IDs/fencing tokens or reuse a conversation foreground lease.
+        if set(args) != {"ticket", "signature_b64"}:
+            raise cart.MaintenanceDenied("maintenance_arguments_invalid")
+        return cart.apply(args["ticket"], args["signature_b64"], run_host=scoped,
+                          execute_source=lambda t, s: _cart_execute_source_with_signed_stdin(t, s, cancel_check),
+                          runtime_lock=runtime_lock)
     if name == "claude_remote_control_status":
         return claude_remote_control_status()
     if name == "claude_remote_control_reconcile":
@@ -2635,6 +2700,11 @@ TOOLS = [
     ("desktop_screenshot", "Capture the constrained graphical surface for a canonical Windows support host: the interactive Windows desktop on Fred-Win or the resolved RustDesk window on KOCEPSV.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}}, True, False),
     ("desktop_click", "Click bounded coordinates on the constrained graphical surface for a canonical Windows support host.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "string", "enum": ["left", "middle", "right"]}, "clicks": {"type": "integer", "minimum": 1, "maximum": 3}}, False, True),
     ("desktop_type", "Type into the active constrained graphical surface. Text is transported only through protected stdin/request files and is redacted from audit records.", {"host": {"type": "string", "enum": list(DESKTOP_HOSTS)}, "text": {"type": "string", "maxLength": 4096}, "press_enter": {"type": "boolean"}}, False, True),
+    ("marina_cart_preview", "Read-only preflight for retiring the old source abandoned-cart timer and cron. Returns scope and hashed cron snapshot; DOES NOT issue approval or lease.", {}, True, False),
+    ("marina_cart_retire_source", "Operator-signed, short-lived and one-use maintenance ticket only. No generic lease issuance; stop+disable ONLY the old source cart timer and remove its exact legacy cron, preserving Marina as sole writer.", {
+        "ticket": {"type": "object"},
+        "signature_b64": {"type": "string", "maxLength": 128},
+    }, False, True),
     ("hosts_list", "List the four canonical ShopVivaliz hosts and transport roles.", {}, True, False),
     ("host_health", "Check live identity, privilege and reachability for a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
     ("processes_list", "List top processes on a named host.", {"host": {"type": "string", "enum": list(HOSTS)}}, True, False),
