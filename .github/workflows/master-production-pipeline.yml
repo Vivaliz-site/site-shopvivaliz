@@ -137,7 +137,15 @@ jobs:
           for name in ML_CLIENT_ID_VALUE ML_CLIENT_SECRET_VALUE ML_REDIRECT_URI_VALUE; do
             test -n "${!name:-}" || { echo "::error::Required Mercado Livre secret missing: $name"; exit 1; }
           done
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" scripts/update-production-env.py ubuntu@127.0.0.1:/tmp/shopvivaliz-update-production-env.py
+          # The production runner's SSH daemon accepts the validated shell
+          # transport but does not expose the SCP subsystem. Stream the
+          # reviewed helper through that same pinned channel instead of
+          # weakening host verification or falling back to a local write.
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'cat > /tmp/shopvivaliz-update-production-env.py'
+          from pathlib import Path
+
+          print(Path('scripts/update-production-env.py').read_text(encoding='utf-8'), end='')
+          PY
           python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'cd /home/ubuntu/shopvivaliz-deploy/shared && sudo python3 /tmp/shopvivaliz-update-production-env.py'
           import json, os
           keys = ('ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI')

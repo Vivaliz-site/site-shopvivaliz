@@ -163,7 +163,7 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temp_name, mode)
-        if existing_stat is not None:
+        if existing_stat is not None and hasattr(os, "chown"):
             os.chown(temp_name, existing_stat.st_uid, existing_stat.st_gid)
         os.replace(temp_name, path)
     finally:
