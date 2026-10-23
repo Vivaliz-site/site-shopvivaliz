@@ -164,10 +164,10 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
             prs=("${{ github.event.pull_request.number }}")
           elif [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' && -n "${GITHUB_REF_NAME:-}" ]]; then
-            head_filter="$(jq -rn --arg value "${REPO}:${GITHUB_REF_NAME}" '$value | @uri')"
             mapfile -t prs < <(
-              github_api "repos/${REPO}/pulls?state=open&head=${head_filter}&base=main&per_page=100" \
-                | jq -r '.[] | select(.draft == false) | .number'
+              github_api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
+                | jq -r --arg head "$GITHUB_REF_NAME" --arg repo "$REPO" \
+                  '.[] | select(.draft == false and .head.ref == $head and .head.repo.full_name == $repo) | .number'
             )
           else
             mapfile -t prs < <(
