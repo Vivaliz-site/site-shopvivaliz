@@ -69,12 +69,10 @@ final class SvMarinaMaintenanceBrokerClient
         if ($gate !== null) {
             return $gate;
         }
-        if (!is_callable($this->transport)) {
-            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_transport_not_configured'];
-        }
+        $transport = is_callable($this->transport) ? $this->transport : $this->defaultTransport();
 
         try {
-            $response = ($this->transport)($method, $path, $payload, $this->config);
+            $response = $transport($method, $path, $payload, $this->config);
         } catch (Throwable $e) {
             return [
                 'ok' => false,
@@ -135,5 +133,56 @@ final class SvMarinaMaintenanceBrokerClient
             }
         }
         return $safe;
+    }
+
+    /**
+     * The production path is the official broker over its private route.
+     * No host command, SSH fallback, or direct scheduler control is permitted.
+     * @return callable(string, string, array, array): array
+     */
+    private function defaultTransport(): callable
+    {
+        return static function (string $method, string $path, array $payload, array $config): array {
+            if (!function_exists('curl_init')) {
+                throw new RuntimeException('broker_curl_unavailable');
+            }
+            $baseUrl = rtrim((string)($config['broker_url'] ?? ''), '/');
+            $url = $baseUrl . $path;
+            $headers = [
+                'Accept: application/json',
+                'Content-Type: application/json; charset=utf-8',
+                'X-Marina-Broker-Audience: ' . (string)($config['audience'] ?? ''),
+                'X-Marina-Private-Route: ' . (string)($config['private_route'] ?? ''),
+            ];
+            $handle = curl_init($url);
+            if ($handle === false) {
+                throw new RuntimeException('broker_curl_init_failed');
+            }
+            $options = [
+                CURLOPT_CUSTOMREQUEST => $method,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT => 15,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+            ];
+            if ($method !== 'GET') {
+                $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            }
+            curl_setopt_array($handle, $options);
+            $body = curl_exec($handle);
+            $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+            $error = curl_error($handle);
+            curl_close($handle);
+            if ($body === false || $error !== '' || $status < 200 || $status >= 300) {
+                throw new RuntimeException('broker_http_error');
+            }
+            $decoded = json_decode((string)$body, true);
+            if (!is_array($decoded)) {
+                throw new RuntimeException('broker_json_invalid');
+            }
+            return $decoded;
+        };
     }
 }
