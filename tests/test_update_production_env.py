@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import stat
 from pathlib import Path
 
@@ -117,7 +118,8 @@ def test_merge_env_sanitizes_malformed_existing_lines_even_without_updates(tmp_p
     assert "VALID_EXISTING=value" in content
     assert "symlink ../../shared/.env .env" not in content
     assert "stray-token-without-equals" not in content
-    assert stat.S_IMODE(env_file.stat().st_mode) == 0o640
+    if os.name != "nt":
+        assert stat.S_IMODE(env_file.stat().st_mode) == 0o640
 
 
 # ---------------------------------------------------------------------------
