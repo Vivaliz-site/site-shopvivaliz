@@ -210,7 +210,18 @@ jobs:
           models = oci.compute_instance_agent.models
           known_hosts_path = os.environ["VM_KNOWN_HOSTS"]
 
-          key_line = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) ([A-Za-z0-9+/]+={0,2})$")
+          key_line = re.compile(
+              r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256)\s+([A-Za-z0-9+/]+={0,2})(?:\s+.*)?$"
+          )
+
+          def canonical_key(match):
+              payload = match.group(2)
+              payload += "=" * (-len(payload) % 4)
+              try:
+                  base64.b64decode(payload, validate=True)
+              except Exception:
+                  return None
+              return match.group(1) + " " + match.group(2)
 
           def exact_instance(name):
               query = "query instance resources where displayName = '" + name + "'"
@@ -290,9 +301,11 @@ jobs:
                   hosts = fields[0].split(",")
                   if not any(host in hosts for host in hostnames):
                       continue
-                  match = key_line.fullmatch(fields[1] + " " + fields[2])
-                  if match:
-                      result.append(match.group(1) + " " + match.group(2))
+              match = key_line.fullmatch(" ".join(fields[1:]))
+              if match:
+                  key = canonical_key(match)
+                  if key:
+                      result.append(key)
               # GitHub's protected known_hosts may use hashed host fields.
               # ssh-keygen performs the HMAC lookup without revealing the
               # protected host field, so retain strict checking while allowing
@@ -313,9 +326,11 @@ jobs:
                       fields = line.split()
                       if len(fields) < 3 or fields[0].startswith("#") or fields[0].startswith("@"):
                           continue
-                      match = key_line.fullmatch(fields[1] + " " + fields[2])
+                      match = key_line.fullmatch(" ".join(fields[1:]))
                       if match:
-                          result.append(match.group(1) + " " + match.group(2))
+                          key = canonical_key(match)
+                          if key:
+                              result.append(key)
               return list(dict.fromkeys(result))
 
           backend_pinned = pinned_alias_keys({

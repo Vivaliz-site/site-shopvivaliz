@@ -25,6 +25,7 @@ required = [
     'pinned_alias_keys',
     'ssh-keygen", "-F"',
     'HostKeyAlias',
+    'canonical_key',
     'NO_PINNED_HOST_KEY',
 ]
 missing = [needle for needle in required if needle not in text]
