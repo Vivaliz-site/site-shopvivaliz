@@ -20,7 +20,6 @@ foreach ($workflows as $relative) {
     $checks = [
         'shared relay selector' => 'scripts/select-active-products-browser-relay.sh',
         'selected relay environment' => 'SV_BROWSER_RELAY_PORT',
-        'selected relay propagation' => 'RELAY_PORT=\'$SV_BROWSER_RELAY_PORT\'',
         'validated selected port' => "port not in {'5557','5558'}",
     ];
     foreach ($checks as $label => $needle) {
@@ -28,6 +27,11 @@ foreach ($workflows as $relative) {
             fwrite(STDERR, "$relative missing $label\n");
             exit(1);
         }
+    }
+    if (!str_contains($text, 'RELAY_PORT=\'$SV_BROWSER_RELAY_PORT\'')
+        && !str_contains($text, 'RELAY_PORT="$SV_BROWSER_RELAY_PORT"')) {
+        fwrite(STDERR, "$relative missing selected relay propagation\n");
+        exit(1);
     }
     if (str_contains($text, 'http://127.0.0.1:5557/mcp/tool/execute_command')) {
         fwrite(STDERR, "$relative still hardcodes Fred relay for browser execution\n");
