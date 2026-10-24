@@ -56,6 +56,32 @@ if [[ ! -d "$sync_parent" ]]; then
   install -d -o ubuntu -g ubuntu -m 0755 "$sync_parent"
 fi
 
+# This checkout is an operational clone, not a developer worktree. Keep its
+# line-ending policy explicit so a host-level core.autocrlf setting cannot turn
+# an otherwise identical tracked file into a false dirty checkout.
+configure_sync_checkout() {
+  runuser -u ubuntu -- git -C "$SYNC_ROOT" config core.autocrlf false
+  runuser -u ubuntu -- git -C "$SYNC_ROOT" config core.eol lf
+}
+
+normalize_line_ending_only_drift() {
+  local dirty staged untracked
+  dirty="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" status --porcelain=v1 --untracked-files=all)"
+  [[ -n "$dirty" ]] || return 0
+  if runuser -u ubuntu -- git -C "$SYNC_ROOT" diff --cached --quiet -- .; then
+    staged=0
+  else
+    staged=1
+  fi
+  untracked="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" ls-files --others --exclude-standard)"
+  if [[ "$staged" != 0 ]] || [[ -n "$untracked" ]] \
+    || ! runuser -u ubuntu -- git -C "$SYNC_ROOT" diff --quiet --ignore-space-at-eol -- .; then
+    return 1
+  fi
+  echo 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT'
+  runuser -u ubuntu -- git -C "$SYNC_ROOT" restore --source=HEAD --worktree -- .
+}
+
 if [[ ! -d "$SYNC_ROOT/.git" ]]; then
   if [[ -e "$SYNC_ROOT" ]]; then
     # A previous bootstrap may have left an empty placeholder directory. It is
@@ -89,11 +115,14 @@ if [[ ! -d "$SYNC_ROOT/.git" ]]; then
     fi
   fi
   runuser -u ubuntu -- git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH" "$remote_url" "$SYNC_ROOT"
+  configure_sync_checkout
+  runuser -u ubuntu -- git -C "$SYNC_ROOT" restore --source=HEAD --worktree -- .
 else
-  if [[ -n "$(runuser -u ubuntu -- git -C "$SYNC_ROOT" status --porcelain)" ]]; then
+  configure_sync_checkout
+  normalize_line_ending_only_drift || {
     echo "Checkout dedicado de sync esta sujo: $SYNC_ROOT" >&2
     exit 6
-  fi
+  }
   current_branch="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" branch --show-current)"
   if [[ "$current_branch" != "$SYNC_BRANCH" ]]; then
     echo "Checkout dedicado de sync esta em $current_branch, esperado $SYNC_BRANCH" >&2
