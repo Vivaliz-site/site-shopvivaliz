@@ -126,7 +126,11 @@ def _line_ending_only_paths() -> list[str] | None:
         return []
     staged = run(["git", "diff", "--cached", "--quiet", "--"])
     untracked = run(["git", "ls-files", "--others", "--exclude-standard"], check=True)
-    if staged.returncode != 0 or untracked.stdout.strip():
+    if staged.returncode != 0:
+        log.warning("normalizacao recusada: existem alteracoes staged")
+        return None
+    if untracked.stdout.strip():
+        log.warning("normalizacao recusada: existem arquivos nao rastreados")
         return None
     paths = [line[3:].strip() for line in status.stdout.splitlines() if line and len(line) > 3]
     for path in paths:
@@ -134,7 +138,11 @@ def _line_ending_only_paths() -> list[str] | None:
         if relative.is_absolute() or ".." in relative.parts:
             return None
         working = REPO_DIR / relative
-        if working.is_symlink() or not working.is_file() or b"\x00" in working.read_bytes():
+        if working.is_symlink():
+            log.warning("normalizacao recusada: caminho symlink %s", path)
+            return None
+        if not working.is_file() or b"\x00" in working.read_bytes():
+            log.warning("normalizacao recusada: caminho binario ou ausente %s", path)
             return None
         head = subprocess.run(
             ["git", "show", f"HEAD:{path}"],
@@ -144,8 +152,10 @@ def _line_ending_only_paths() -> list[str] | None:
             check=False,
         )
         if head.returncode != 0 or b"\x00" in head.stdout:
+            log.warning("normalizacao recusada: blob HEAD indisponivel ou binario %s", path)
             return None
         if _normalized_line_endings(working.read_bytes()) != _normalized_line_endings(head.stdout):
+            log.warning("normalizacao recusada: conteudo diferente de HEAD %s", path)
             return None
     return paths
 
@@ -319,6 +329,11 @@ def main() -> int:
         run(["git", "config", "core.eol", "lf"], check=True)
         line_ending_drift_normalized = normalize_line_ending_only_drift()
         dirty = tracked_dirty_paths()
+        log.info(
+            "Safe sync dirty precheck: normalized_line_endings=%s paths=%s",
+            line_ending_drift_normalized,
+            ",".join(dirty) if dirty else "none",
+        )
         payload.update(
             {
                 "branch": current_branch,
