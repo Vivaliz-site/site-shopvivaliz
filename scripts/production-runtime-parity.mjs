@@ -34,6 +34,7 @@ function expectedRequestFailureReason({ url, error, resourceType }) {
   if (error === 'net::ERR_NETWORK_CHANGED' && resourceType === 'font' && parsed.hostname === 'fonts.gstatic.com') return 'external-font-network-change';
   if (error === 'net::ERR_ABORTED') {
     if (resourceType === 'image' && parsed.hostname === 's3.amazonaws.com' && parsed.pathname.startsWith('/tiny-anexos-us/erp/')) return 'navigation-aborted-product-image';
+    if (sameOrigin && resourceType === 'other' && parsed.pathname === '/images/favicon.svg') return 'navigation-aborted-favicon';
     if (['www.google-analytics.com', 'www.googletagmanager.com'].includes(parsed.hostname)) return 'navigation-aborted-analytics';
     if (sameOrigin && (parsed.pathname.startsWith('/0fb1/') || parsed.pathname === '/cdn-cgi/rum')) return 'navigation-aborted-analytics-proxy';
     if (parsed.hostname === 'api.mercadopago.com' && ['/v1/payment_methods/search', '/v1/device_sessions/web_device', '/v1/devices/widgets'].includes(parsed.pathname)) return 'checkout-reload-aborted-mercadopago-probe';
