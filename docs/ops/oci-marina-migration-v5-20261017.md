@@ -1,5 +1,13 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## Atualização local de prontidão — 2026-10-24: método do acompanhamento de manutenção fechado
+
+**MAINTENANCE_BROKER=NOT_PROVISIONED | OPERATION_STATUS_METHOD_GATE=PASS_LOCAL | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+- O endpoint administrativo de consulta de operação (`/api/admin/marina-maintenance-operation.php`) agora recusa qualquer método diferente de `GET` com `405`. O teste focal passou somente após a correção; também passaram os testes locais de contrato, broker, endpoints e UI de manutenção, mais lint PHP 8.3.
+- Esta evidência verifica somente o contrato local da superfície administrativa. Não provisiona broker, signatário, ticket, lease, rota privada ou acesso de operador; não aprova nem executa a retirada do timer/cron da origem.
+- Nesta rodada não houve mutação OCI, DNS, release ativa, dados comerciais, e-mail ou scheduler. A origem não foi iniciada, parada ou excluída por esta tarefa. O draft PR #3176 continua sujeito ao fluxo oficial de signatário, RBAC, lease/fencing, revisão e validação real antes de qualquer promoção.
+
 ## Atualização verificada — 2026-10-20 14:59–15:23 UTC: integridade real dos dados e writer editorial ainda na origem
 
 **DB_ROW_CONTENT_PARITY=97_OF_102 | BACKUP_BLOG_CAMPAIGN_RESTORE=PASS | BLOG_PUBLISH_SOURCE_WRITER=CONFIGURED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**

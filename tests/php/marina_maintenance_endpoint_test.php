@@ -44,5 +44,6 @@ marina_endpoint_assert(str_contains($status, "'GET'"), 'status must be read-only
 
 $operation = (string)file_get_contents($files['operation']);
 marina_endpoint_assert(str_contains($operation, 'operation_id'), 'operation endpoint must validate operation id');
+marina_endpoint_assert(str_contains($operation, "'GET'"), 'operation endpoint must reject non-GET requests');
 
 fwrite(STDOUT, "marina_maintenance_endpoint_test: OK\n");
