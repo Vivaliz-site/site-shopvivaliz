@@ -22,16 +22,31 @@ test -s "$source_unit" && test -s "$source_helper" || {
   exit 13
 }
 
-install -d -m 0755 /usr/local/libexec
-install -m 0755 "$source_helper" /usr/local/libexec/shopvivaliz-xvfb99-prepare.sh
-install -m 0644 "$source_unit" /etc/systemd/system/shopvivaliz-xvfb99.service
+# The continuity bridge already owns :99 when this unit is installed.
+# Fail closed rather than launching a second Xvfb or disturbing its cookie.
+display_provider=shopvivaliz-xvfb99.service
+if systemctl cat shopvivaliz-virtual-display.service >/dev/null 2>&1; then
+  if ! systemctl is-active --quiet shopvivaliz-virtual-display.service; then
+    echo "ERROR=canonical_virtual_display_not_active" >&2
+    exit 14
+  fi
+  if [ ! -S /tmp/.X11-unix/X99 ]; then
+    echo "ERROR=canonical_display_socket_missing" >&2
+    exit 15
+  fi
+  display_provider=shopvivaliz-virtual-display.service
+else
+  install -d -m 0755 /usr/local/libexec
+  install -m 0755 "$source_helper" /usr/local/libexec/shopvivaliz-xvfb99-prepare.sh
+  install -m 0644 "$source_unit" /etc/systemd/system/shopvivaliz-xvfb99.service
+fi
 
 for unit in shopvivaliz-dev-browser shopvivaliz-atendimento-browser shopvivaliz-chatgpt-browser shopvivaliz-authenticated-browser-wm; do
   install -d -m 0755 "/etc/systemd/system/$unit.service.d"
-  cat > "/etc/systemd/system/$unit.service.d/96-xvfb99-dependency.conf" <<'DROPIN'
+  cat > "/etc/systemd/system/$unit.service.d/96-xvfb99-dependency.conf" <<DROPIN
 [Unit]
-Requires=shopvivaliz-xvfb99.service
-After=shopvivaliz-xvfb99.service
+Requires=$display_provider
+After=$display_provider
 DROPIN
 done
 
@@ -48,8 +63,15 @@ ExecStartPre=+${runuser_bin} -u fredconsole -- /usr/bin/env DISPLAY=:0 XAUTHORIT
 DROPIN
 
 systemctl daemon-reload
-systemctl enable --now shopvivaliz-xvfb99.service
-systemctl is-active --quiet shopvivaliz-xvfb99.service
+if [ "$display_provider" = shopvivaliz-virtual-display.service ]; then
+  # The canonical provider is already active; retire only the competing unit.
+  if systemctl cat shopvivaliz-xvfb99.service >/dev/null 2>&1; then
+    systemctl disable --now shopvivaliz-xvfb99.service
+  fi
+else
+  systemctl enable --now shopvivaliz-xvfb99.service
+fi
+systemctl is-active --quiet "$display_provider"
 test -S /tmp/.X11-unix/X99
 # No browser/session restart: Xvfb, dependencies and ACL are applied at
 # the next service start. Existing verified Chromium profiles stay intact.
