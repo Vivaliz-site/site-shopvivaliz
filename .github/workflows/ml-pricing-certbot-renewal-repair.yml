@@ -35,7 +35,7 @@ jobs:
 
       - name: Restore persistent scoped DNS credentials securely
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
         shell: bash
         run: |
           set +x
