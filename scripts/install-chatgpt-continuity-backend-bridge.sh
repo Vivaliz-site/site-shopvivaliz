@@ -13,7 +13,9 @@ legacy_browser_healthcheck_service_path='/etc/systemd/system/shopvivaliz-browser
 legacy_browser_healthcheck_script='/usr/local/sbin/shopvivaliz-browser-healthcheck.sh'
 legacy_continuity_atendimento_override="$HOME/.config/systemd/user/$unit.d/90-atendimento-cdp.conf"
 legacy_guardian_atendimento_override="/etc/systemd/system/$browser_guardian_service.d/90-atendimento-browser.conf"
-tunnel_key='/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor'
+tunnel_key="${CHATGPT_CONTINUITY_TUNNEL_KEY:-/home/ubuntu/.ssh/oci-marina-a1-2026}"
+tunnel_host="${CHATGPT_CONTINUITY_TUNNEL_HOST:-137.131.173.240}"
+tunnel_known_hosts="${CHATGPT_CONTINUITY_TUNNEL_KNOWN_HOSTS:-/home/ubuntu/.ssh/known_hosts.old}"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 worker_source="${CHATGPT_CONTINUITY_WORKER_SOURCE:-$script_dir/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs}"
@@ -95,7 +97,8 @@ sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for browser 
 [[ -f "$browser_guardian_service_source" ]] || fail "browser guardian service missing: $browser_guardian_service_source"
 [[ -f "$browser_guardian_timer_source" ]] || fail "browser guardian timer missing: $browser_guardian_timer_source"
 [[ -s "$token_file" ]] || fail "protected bridge token missing: $token_file"
-[[ -s "$tunnel_key" ]] || fail "private A1 tunnel key missing: $tunnel_key"
+[[ -s "$tunnel_key" ]] || fail "Marina continuity tunnel key missing: $tunnel_key"
+[[ -s "$tunnel_known_hosts" ]] || fail "Marina continuity known-hosts file missing: $tunnel_known_hosts"
 
 runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 export XDG_RUNTIME_DIR="$runtime_dir"
@@ -120,13 +123,13 @@ trap 'rm -f "$tunnel_unit_tmp" "$continuity_unit_tmp"' EXIT
 
 cat > "$tunnel_unit_tmp" <<UNIT
 [Unit]
-Description=ShopVivaliz ChatGPT continuity private tunnel to A1 loopback origin
+Description=ShopVivaliz ChatGPT continuity private tunnel to Marina loopback origin
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$ssh_bin -NT -i $tunnel_key -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -L 127.0.0.1:18081:127.0.0.1:8080 ubuntu@10.0.1.112
+ExecStart=$ssh_bin -NT -i $tunnel_key -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$tunnel_known_hosts -L 127.0.0.1:18081:127.0.0.1:8080 ubuntu@$tunnel_host
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
@@ -271,8 +274,8 @@ for _ in $(seq 1 12); do
   fi
   sleep 1
 done
-[[ "$tunnel_ready" = true ]] || fail 'private A1 continuity tunnel did not become ready'
-systemctl --user is-active --quiet "$tunnel_unit" || fail 'private A1 continuity tunnel is not active'
+[[ "$tunnel_ready" = true ]] || fail 'Marina continuity tunnel did not become ready'
+systemctl --user is-active --quiet "$tunnel_unit" || fail 'Marina continuity tunnel is not active'
 
 systemctl --user enable --now "$unit" >/dev/null
 if [[ -f "$restart_pending" ]]; then
