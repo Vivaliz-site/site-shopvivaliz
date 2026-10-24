@@ -333,3 +333,18 @@ def test_retention_cleanup_preflights_inactive_release_permissions() -> None:
         'if rm -rf -- "$release_path"; then'
     )
     assert 'sudo rm -rf -- "$release_path"' in body
+
+def test_low_disk_gate_prevents_failed_rollout_release_accumulation() -> None:
+    """A low-space backend must not allocate another immutable release."""
+    text = _text()
+    required = (
+        "readonly MIN_DEPLOY_FREE_BYTES=6442450944",
+        'df -B1 --output=avail "$RELEASES_DIR"',
+        'if [ "$deploy_available_bytes" -lt "$MIN_DEPLOY_FREE_BYTES" ]; then',
+        'write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE"',
+        "exit 75",
+    )
+    for needle in required:
+        assert needle in text
+    assert text.index('df -B1 --output=avail "$RELEASES_DIR"') < text.index('RELEASE_TIME="$(date +%Y%m%d-%H%M%S)"')
+    assert text.index('exit 75', text.index('df -B1 --output=avail "$RELEASES_DIR"')) < text.index('NEW_RELEASE_PATH="$RELEASES_DIR/$NEW_RELEASE"')
