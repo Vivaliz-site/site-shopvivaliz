@@ -19,6 +19,9 @@ required = [
     'ssh-keygen -q -t rsa -b 4096',
     'HostKeyAlgorithms=+ssh-rsa',
     'PubkeyAcceptedAlgorithms=+ssh-rsa',
+    'VM_HOST_KEY_RECONCILIATION=PASS',
+    'create_instance_agent_command',
+    '/etc/ssh/ssh_host_ed25519_key.pub',
 ]
 missing = [needle for needle in required if needle not in text]
 if missing:
