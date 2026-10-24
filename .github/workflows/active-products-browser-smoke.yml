@@ -48,29 +48,29 @@ jobs:
       - name: Configure verified VM access
         shell: bash
         env:
-          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          MARINA_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          MARINA_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
-          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
-          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key"
-          test -n "$known_hosts"
+          test -n "$MARINA_KEY"
+          test -n "$MARINA_HOSTS"
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$MARINA_KEY" > "$HOME/.ssh/marina-browser-key"
+          printf '%s\n' "$MARINA_HOSTS" > "$HOME/.ssh/marina-browser-known-hosts"
+          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-browser-known-hosts"
+          chmod 600 "$HOME/.ssh/marina-browser-key" "$HOME/.ssh/marina-browser-known-hosts"
 
-      - name: Select healthy private Windows relay
+      - name: Select healthy local Windows relay
         shell: bash
+        env:
+          SV_RELAY_LOCAL: '1'
         run: |
           set -Eeuo pipefail
           relay_port="$(bash scripts/select-active-products-browser-relay.sh)"
           case "$relay_port" in 5557|5558) ;; *) echo "Invalid relay selection" >&2; exit 7 ;; esac
           printf 'SV_BROWSER_RELAY_PORT=%s\n' "$relay_port" >> "$GITHUB_ENV"
-          echo "Selected allowlisted browser relay port: $relay_port"
+          printf 'SV_RELAY_LOCAL=1\n' >> "$GITHUB_ENV"
+          echo "Selected allowlisted local browser relay port: $relay_port"
 
       - name: Provision ephemeral admin audit session
         shell: bash
@@ -80,8 +80,8 @@ jobs:
           echo "::add-mask::$session_id"
           session_name="$({
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
+              -o UserKnownHostsFile="$HOME/.ssh/marina-browser-known-hosts" \
+              -i "$HOME/.ssh/marina-browser-key" ubuntu@137.131.173.240 \
               'bash -s' -- "$session_id" <<'REMOTE'
           set -Eeuo pipefail
           sid="$1"
@@ -142,10 +142,8 @@ jobs:
 
           body_b64="$(base64 -w0 /tmp/active-products-browser-body.json)"
           set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@10.0.1.38 \
-            "BODY_B64='$body_b64' RELAY_PORT='$SV_BROWSER_RELAY_PORT' python3 - <<'PY'
+          if [[ "${SV_RELAY_LOCAL:-0}" == 1 ]]; then
+            BODY_B64="$body_b64" RELAY_PORT="$SV_BROWSER_RELAY_PORT" python3 - <<'PY' > /tmp/active-products-browser-remote.log 2>&1
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           port=os.environ.get('RELAY_PORT','')
@@ -164,8 +162,12 @@ jobs:
           print('SV_REMOTE_RESULT_B64='+base64.b64encode(raw).decode())
           print(json.dumps(decoded,ensure_ascii=False,indent=2))
           if result.get('success') is not True or decoded.get('overall') is not True: raise SystemExit(7)
-          PY" > /tmp/active-products-browser-remote.log 2>&1
-          status=$?
+          PY
+            status=$?
+          else
+            echo 'SV_RELAY_LOCAL must be enabled on the canonical backend browser runner' >&2
+            status=7
+          fi
           set -e
 
           python3 - /tmp/active-products-browser-remote.log test-results/active-products-browser-smoke/result.json <<'PY'
@@ -185,10 +187,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/id_rsa" ]]; then
+          if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/marina-browser-key" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
+              -o UserKnownHostsFile="$HOME/.ssh/marina-browser-known-hosts" \
+              -i "$HOME/.ssh/marina-browser-key" ubuntu@137.131.173.240 \
               'bash -s' -- "$SV_ADMIN_SESSION_ID" <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
@@ -211,4 +213,4 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/active-products-browser-smoke.py.gz.b64 /tmp/active-products-browser-body.json /tmp/active-products-browser-remote.log
+          rm -f "$HOME/.ssh/marina-browser-key" "$HOME/.ssh/marina-browser-known-hosts" /tmp/active-products-browser-smoke.py.gz.b64 /tmp/active-products-browser-body.json /tmp/active-products-browser-remote.log
