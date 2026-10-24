@@ -249,6 +249,11 @@ jobs:
               awk '{print $1, $2}' "$key_file" || :
             fi
           done
+          if command -v ssh-keyscan >/dev/null 2>&1; then
+            if active_keys="$(timeout 10 ssh-keyscan -T 5 127.0.0.1 2>/dev/null)"; then
+              printf '%s\n' "$active_keys" | awk '{print $2, $3}'
+            fi
+          fi
           '''
               details = models.CreateInstanceAgentCommandDetails(
                   compartment_id=instance.compartment_id,
