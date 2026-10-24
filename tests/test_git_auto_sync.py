@@ -37,8 +37,9 @@ def test_generated_cache_blocks_safe_sync() -> None:
 def test_line_ending_normalization_is_narrow_and_fail_closed() -> None:
     source = MODULE_PATH.read_text(encoding="utf-8")
     assert "core.autocrlf" in source
+    assert "_normalized_line_endings" in source
+    assert '["git", "show"' in source
     assert 'git", "restore", "--source=HEAD", "--worktree", "--", "."' in source
-    assert 'git", "diff", "--quiet", "--ignore-space-at-eol"' in source
     assert 'git", "ls-files", "--others", "--exclude-standard"' in source
     assert "line_ending_drift_normalized" in source
 
