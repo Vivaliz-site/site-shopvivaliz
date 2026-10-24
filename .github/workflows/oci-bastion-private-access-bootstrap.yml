@@ -199,6 +199,7 @@ jobs:
           import base64
           import os
           import re
+          import subprocess
           import time
           import oci
 
@@ -292,6 +293,29 @@ jobs:
                   match = key_line.fullmatch(fields[1] + " " + fields[2])
                   if match:
                       result.append(match.group(1) + " " + match.group(2))
+              # GitHub's protected known_hosts may use hashed host fields.
+              # ssh-keygen performs the HMAC lookup without revealing the
+              # protected host field, so retain strict checking while allowing
+              # the same pinned key to be recovered after a tunnel alias or
+              # non-standard forwarded port changes.
+              for hostname in sorted(hostnames):
+                  try:
+                      lookup = subprocess.run(
+                          ["ssh-keygen", "-F", hostname, "-f", known_hosts_path],
+                          capture_output=True,
+                          text=True,
+                          check=False,
+                          timeout=5,
+                      )
+                  except (OSError, subprocess.TimeoutExpired):
+                      continue
+                  for line in lookup.stdout.splitlines():
+                      fields = line.split()
+                      if len(fields) < 3 or fields[0].startswith("#") or fields[0].startswith("@"):
+                          continue
+                      match = key_line.fullmatch(fields[1] + " " + fields[2])
+                      if match:
+                          result.append(match.group(1) + " " + match.group(2))
               return list(dict.fromkeys(result))
 
           backend_pinned = pinned_alias_keys({
@@ -305,6 +329,8 @@ jobs:
               os.environ["SITE_PRIVATE_IP"],
               "[" + os.environ["SITE_PRIVATE_IP"] + "]:22",
               "[" + os.environ["SITE_PRIVATE_IP"] + "]:" + os.environ["SITE_TUNNEL_PORT"],
+              "127.0.0.1",
+              "[127.0.0.1]:" + os.environ["SITE_TUNNEL_PORT"],
           })
           backend_keys = list(dict.fromkeys(backend_pinned or public_host_keys(backend, "backend")))
           site_keys = list(dict.fromkeys(site_pinned or public_host_keys(site, "site")))
@@ -328,9 +354,20 @@ jobs:
           with open(known_hosts_path, "w", encoding="utf-8") as target:
               for line in preserved:
                   target.write(line + "\n")
-              for host, keys in ((os.environ["BACKEND_PRIVATE_IP"], backend_keys), ("127.0.0.1", site_keys)):
+              # HostKeyAlias is used with forwarded, non-standard ports. Keep
+              # both canonical and bracketed-port forms so OpenSSH resolves
+              # the exact alias used by each route without TOFU.
+              aliases_and_keys = (
+                  (
+                      (os.environ["BACKEND_PRIVATE_IP"], "[" + os.environ["BACKEND_PRIVATE_IP"] + "]:" + os.environ["BACKEND_TUNNEL_PORT"]),
+                      backend_keys,
+                  ),
+                  (("127.0.0.1", "[127.0.0.1]:" + os.environ["SITE_TUNNEL_PORT"]), site_keys),
+              )
+              for aliases_for_key, keys in aliases_and_keys:
                   for key in keys:
-                      target.write(host + " " + key + "\n")
+                      for host in aliases_for_key:
+                          target.write(host + " " + key + "\n")
           os.chmod(known_hosts_path, 0o600)
           print("VM_HOST_KEY_RECONCILIATION=PASS")
           print("VM_HOST_KEY_RECONCILIATION_BACKEND_KEYS=" + str(len(backend_keys)))
