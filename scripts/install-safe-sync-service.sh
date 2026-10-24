@@ -131,6 +131,29 @@ else
   runuser -u ubuntu -- git -C "$SYNC_ROOT" fetch --quiet --prune --no-tags origin "$SYNC_BRANCH"
   local_sha="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" rev-parse HEAD)"
   remote_sha="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" rev-parse "origin/$SYNC_BRANCH")"
+
+  # A legacy HEAD can itself contain mixed line endings. In that state, an
+  # attribute-aware restore of HEAD may remain reported as dirty even though
+  # the only difference is line endings. Re-prove that condition after fetch,
+  # then reconcile directly to the fetched source of truth before merging.
+  post_normalize_dirty="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" status --porcelain=v1 --untracked-files=all)"
+  if [[ -n "$post_normalize_dirty" ]]; then
+    post_normalize_untracked="$(runuser -u ubuntu -- git -C "$SYNC_ROOT" ls-files --others --exclude-standard)"
+    if ! runuser -u ubuntu -- git -C "$SYNC_ROOT" diff --cached --quiet -- . \
+      || [[ -n "$post_normalize_untracked" ]] \
+      || ! runuser -u ubuntu -- git -C "$SYNC_ROOT" diff --quiet --ignore-space-at-eol -- .; then
+      echo "Checkout dedicado de sync possui alteracoes semanticas apos normalizacao" >&2
+      exit 6
+    fi
+    echo 'SAFE_SYNC_REPAIR=RECONCILED_LINE_ENDING_ONLY_DRIFT'
+    runuser -u ubuntu -- git -C "$SYNC_ROOT" restore --source="origin/$SYNC_BRANCH" --staged --worktree -- .
+    runuser -u ubuntu -- git -C "$SYNC_ROOT" reset --hard "origin/$SYNC_BRANCH"
+    if [[ -n "$(runuser -u ubuntu -- git -C "$SYNC_ROOT" status --porcelain=v1 --untracked-files=all)" ]]; then
+      echo "Checkout dedicado de sync permaneceu sujo apos reconciliacao" >&2
+      exit 6
+    fi
+    local_sha="$remote_sha"
+  fi
   if [[ "$local_sha" != "$remote_sha" ]]; then
     if ! runuser -u ubuntu -- git -C "$SYNC_ROOT" merge-base --is-ancestor "$local_sha" "$remote_sha"; then
       echo "Checkout dedicado de sync divergiu de origin/$SYNC_BRANCH" >&2
