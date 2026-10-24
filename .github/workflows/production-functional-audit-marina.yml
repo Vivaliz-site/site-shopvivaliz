@@ -41,17 +41,17 @@ jobs:
           if [ "$(hostname -s)" = "marina-a1-4c24g" ]; then
             printf 'MARINA_EXECUTION_MODE=local\n' >> "$GITHUB_ENV"
             printf 'MARINA_RUNNER_IDENTITY=marina-a1-4c24g\n' >> "$GITHUB_ENV"
-            exit 0
+          else
+            printf 'MARINA_EXECUTION_MODE=remote\n' >> "$GITHUB_ENV"
+            test -n "$VM_KEY"
+            test -n "$VM_KNOWN_HOSTS"
+            install -d -m 700 "$HOME/.ssh"
+            printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-audit-key"
+            printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-audit-known-hosts"
+            # Verified from the controller inventory; strict checking remains on.
+            printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-audit-known-hosts"
+            chmod 600 "$HOME/.ssh/marina-audit-key" "$HOME/.ssh/marina-audit-known-hosts"
           fi
-          printf 'MARINA_EXECUTION_MODE=remote\n' >> "$GITHUB_ENV"
-          test -n "$VM_KEY"
-          test -n "$VM_KNOWN_HOSTS"
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/marina-audit-key"
-          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/marina-audit-known-hosts"
-          # Verified from the controller inventory; strict checking remains on.
-          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$HOME/.ssh/marina-audit-known-hosts"
-          chmod 600 "$HOME/.ssh/marina-audit-key" "$HOME/.ssh/marina-audit-known-hosts"
 
       - name: Stage exact audit on Marina
         shell: bash
