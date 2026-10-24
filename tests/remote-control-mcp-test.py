@@ -2378,9 +2378,9 @@ class BootstrapContractTests(unittest.TestCase):
         for forbidden in (
             "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
             "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
-            "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
         ):
             self.assertNotIn(forbidden, repair)
+        self.assertIn("https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php", repair)
 
     def test_chatgpt_continuity_diagnostic_checks_user_service_scope(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
