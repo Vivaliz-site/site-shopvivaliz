@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 
@@ -42,6 +43,13 @@ def test_line_ending_normalization_is_narrow_and_fail_closed() -> None:
     assert '["git", "restore", "--source=HEAD", "--worktree", "--", path]' in source
     assert 'git", "ls-files", "--others", "--exclude-standard"' in source
     assert "line_ending_drift_normalized" in source
+
+
+def test_cloudflare_diagnostic_blob_is_lf_only() -> None:
+    blob = subprocess.check_output(
+        ["git", "show", "HEAD:ops/cloudflare-zone-settings-check.json"]
+    )
+    assert b"\r" not in blob
 
 
 def test_production_services_follow_main_and_run_detail_sync() -> None:
