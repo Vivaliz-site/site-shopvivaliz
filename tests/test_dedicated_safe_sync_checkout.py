@@ -34,6 +34,9 @@ assert 'core.autocrlf false' in installer
 assert 'core.eol lf' in installer
 assert 'ignore-space-at-eol' in installer
 assert 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT' in installer
+assert 'SAFE_SYNC_REPAIR=RECONCILED_LINE_ENDING_ONLY_DRIFT' in installer
+assert 'git -C "$SYNC_ROOT" restore --source="origin/$SYNC_BRANCH" --staged --worktree -- .' in installer
+assert 'git -C "$SYNC_ROOT" reset --hard "origin/$SYNC_BRANCH"' in installer
 assert 'ls-files --others --exclude-standard' in installer
 
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
