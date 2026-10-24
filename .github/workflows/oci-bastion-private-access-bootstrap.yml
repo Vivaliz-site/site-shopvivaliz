@@ -197,6 +197,7 @@ jobs:
           # recovering from a rotated/rebuilt VM host key.
           python3 - <<'PY'
           import base64
+          import hashlib
           import os
           import re
           import subprocess
@@ -222,6 +223,12 @@ jobs:
               except Exception:
                   return None
               return match.group(1) + " " + match.group(2)
+
+          def key_fingerprint(key):
+              key_type, payload = key.split()
+              digest = hashlib.sha256(base64.b64decode(payload)).digest()
+              encoded = base64.b64encode(digest).decode().rstrip("=")
+              return key_type + ":SHA256:" + encoded
 
           def exact_instance(name):
               query = "query instance resources where displayName = '" + name + "'"
@@ -421,6 +428,10 @@ jobs:
           print("VM_HOST_KEY_RECONCILIATION=PASS")
           print("VM_HOST_KEY_RECONCILIATION_BACKEND_KEYS=" + str(len(backend_keys)))
           print("VM_HOST_KEY_RECONCILIATION_SITE_KEYS=" + str(len(site_keys)))
+          print("VM_HOST_KEY_RECONCILIATION_BACKEND_AGENT_FINGERPRINTS=" + ",".join(key_fingerprint(key) for key in backend_agent) or "none")
+          print("VM_HOST_KEY_RECONCILIATION_BACKEND_PINNED_FINGERPRINTS=" + ",".join(key_fingerprint(key) for key in backend_pinned) or "none")
+          print("VM_HOST_KEY_RECONCILIATION_SITE_AGENT_FINGERPRINTS=" + ",".join(key_fingerprint(key) for key in site_agent) or "none")
+          print("VM_HOST_KEY_RECONCILIATION_SITE_PINNED_FINGERPRINTS=" + ",".join(key_fingerprint(key) for key in site_pinned) or "none")
           PY
 
       - name: Open verified private SSH tunnels
@@ -449,6 +460,16 @@ jobs:
           sleep 3
 
           SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=10 -i "$VM_KEY_FILE")
+          echo "PRIVATE_SSH_TUNNEL_PRESENTED_FINGERPRINTS_BEGIN"
+          for route in "$BACKEND_TUNNEL_PORT" "$SITE_TUNNEL_PORT"; do
+            ssh-keyscan -T 10 -p "$route" 127.0.0.1 2>/dev/null \
+              | while read -r host key_type key_data _; do
+                  [ -n "${key_data:-}" ] || continue
+                  printf '%s %s %s\n' "$host" "$key_type" "$key_data" \
+                    | ssh-keygen -lf - 2>/dev/null
+                done
+          done
+          echo "PRIVATE_SSH_TUNNEL_PRESENTED_FINGERPRINTS_END"
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"'
           ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
           echo "PRIVATE_SSH_TUNNELS=PASS"
