@@ -36,6 +36,13 @@ install_controller() {
   install -d -m 755 -o root -g root "$INSTALL_DIR"
   install -d -m 755 -o root -g root "$INSTALL_DIR/scripts/continuity"
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  # Verifier code only: approval signing keys and the source-side root helper
+  # MUST NOT be installed or enabled by generic MCP bootstrap.
+  cart_gate_source="$(dirname "$SERVER_SOURCE")/maintenance_cart.py"
+  if [ -f "$cart_gate_source" ]; then
+    install -m 0644 -o root -g root "$cart_gate_source" "$INSTALL_DIR/maintenance_cart.py"
+    echo "MARINA_CART_GATE_CODE_STAGED=YES_NOT_ENABLED"
+  fi
   install -m 0755 -o root -g root "$AGENT_TASK_STATE_SOURCE" "$INSTALL_DIR/scripts/agent_task_state.py"
   install -m 0644 -o root -g root "$CONTINUITY_SOURCE_DIR"/*.py "$INSTALL_DIR/scripts/continuity/"
 
@@ -105,7 +112,18 @@ install_controller_code_only() {
   [ -d "$INSTALL_DIR/scripts/continuity" ] || die existing_continuity_runtime_required 25
   systemctl is-active --quiet "$SERVICE" || die controller_not_active 26
   systemctl is-active --quiet "$BROWSER_SERVICE" || die browser_mcp_not_active 27
-  python3 -m py_compile "$SERVER_SOURCE" "$UNIT_SOURCE"
+  local cart_gate_source="$(dirname "$SERVER_SOURCE")/maintenance_cart.py"
+  if [ -e "$cart_gate_source" ]; then
+    # Refuse broken verifier dependencies before touching a running MCP.
+    python3 -m py_compile "$SERVER_SOURCE" "$UNIT_SOURCE" "$cart_gate_source"
+    python3 -c 'from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey'
+  else
+    # This narrow installer may still serve legacy code without the new tool.
+    if grep -q 'marina_cart_retire_source' "$SERVER_SOURCE"; then
+      die cart_verifier_source_missing 31
+    fi
+    python3 -m py_compile "$SERVER_SOURCE" "$UNIT_SOURCE"
+  fi
 
   local lockfile="$STATE_DIR/.checkpoint-mcp-install.lock"
   exec 9>"$lockfile"
@@ -113,10 +131,15 @@ install_controller_code_only() {
   flock -n 9 || die concurrent_mcp_installer 28
 
   local writer="$INSTALL_DIR/scripts/continuity/checkpoint_update_atomic.py"
-  local backupdir writer_preexisting=0 success=0
+  local backupdir writer_preexisting=0 cart_preexisting=0 success=0
+  local cart_gate="$INSTALL_DIR/maintenance_cart.py"
   backupdir="$(mktemp -d "$STATE_DIR/.checkpoint-mcp-backup.XXXXXXXX")"
   chmod 0700 "$backupdir"
   cp -p "$INSTALL_DIR/server.py" "$backupdir/server.py"
+  if [ -e "$cart_gate" ]; then
+    cart_preexisting=1
+    cp -p "$cart_gate" "$backupdir/maintenance_cart.py"
+  fi
   if [ -e "$writer" ]; then
     writer_preexisting=1
     cp -p "$writer" "$backupdir/checkpoint_update_atomic.py"
@@ -125,6 +148,11 @@ install_controller_code_only() {
     if [ "$success" -ne 1 ]; then
       echo "BACKEND_MCP_ONLY_INSTALL=ROLLBACK" >&2
       cp -p "$backupdir/server.py" "$INSTALL_DIR/server.py"
+      if [ "$cart_preexisting" -eq 1 ]; then
+        cp -p "$backupdir/maintenance_cart.py" "$cart_gate"
+      else
+        rm -f "$cart_gate"
+      fi
       if [ "$writer_preexisting" -eq 1 ]; then
         cp -p "$backupdir/checkpoint_update_atomic.py" "$writer"
       else
@@ -137,13 +165,18 @@ install_controller_code_only() {
         echo "BACKEND_MCP_ROLLBACK_BROWSER_RESTART_FAILED" >&2
       fi
     fi
-    rm -f "$backupdir/server.py" "$backupdir/checkpoint_update_atomic.py"
+    rm -f "$backupdir/server.py" "$backupdir/checkpoint_update_atomic.py" "$backupdir/maintenance_cart.py"
     rmdir "$backupdir"
   }
   trap cleanup_and_rollback EXIT
 
   install -m 0644 -o root -g root "$UNIT_SOURCE" "$writer"
   install -m 0755 -o root -g root "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
+  if [ -f "$cart_gate_source" ]; then
+    # Code-only installation: no operator keys, source helper, or feature flag.
+    install -m 0644 -o root -g root "$cart_gate_source" "$cart_gate"
+    cmp "$cart_gate_source" "$cart_gate"
+  fi
   cmp "$SERVER_SOURCE" "$INSTALL_DIR/server.py"
   cmp "$UNIT_SOURCE" "$writer"
   systemctl restart "$SERVICE"

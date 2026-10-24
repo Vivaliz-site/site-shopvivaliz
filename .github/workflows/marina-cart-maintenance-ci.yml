@@ -1,0 +1,34 @@
+name: Marina Cart Signed Maintenance Contract (NO DEPLOY)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-maintenance-no-deploy:
+    name: Verify signature/fencing/rollback contracts (no host mutation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install signature verification dependency
+        run: python -m pip install "cryptography>=41,<47"
+      - name: Syntax and offline security tests
+        run: |
+          python3 -m py_compile remote-control-mcp/server.py \
+            remote-control-mcp/maintenance_cart.py \
+            remote-control-mcp/retire-origin-abandoned-cart.py \
+            tests/test_marina_cart_signed_maintenance.py
+          python3 -m unittest discover -s tests \
+            -p 'test_marina_cart_signed_maintenance.py' -v
+      - name: Confirm no production helper was executed
+        run: |
+          echo "MARINA_CART_MAINTENANCE_CI=NO_DEPLOY"
+          echo "MAINTENANCE_SIGNED_TICKET=NOT_PROVISIONED"
+          echo "PRODUCTION_SOURCE_TIMER=UNCHANGED"
