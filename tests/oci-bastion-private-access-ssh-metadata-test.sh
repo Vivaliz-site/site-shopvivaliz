@@ -22,6 +22,8 @@ required = [
     'VM_HOST_KEY_RECONCILIATION=PASS',
     'create_instance_agent_command',
     '/etc/ssh/ssh_host_ed25519_key.pub',
+    'pinned_alias_keys',
+    'NO_PINNED_HOST_KEY',
 ]
 missing = [needle for needle in required if needle not in text]
 if missing:
