@@ -347,6 +347,41 @@ jobs:
               "127.0.0.1",
               "[127.0.0.1]:" + os.environ["SITE_TUNNEL_PORT"],
           })
+          temporary_aliases = {
+              backend_name,
+              os.environ["BACKEND_PRIVATE_IP"],
+              "[" + os.environ["BACKEND_PRIVATE_IP"] + "]:22",
+              "[" + os.environ["BACKEND_PRIVATE_IP"] + "]:" + os.environ["BACKEND_TUNNEL_PORT"],
+              site_name,
+              os.environ["SITE_PRIVATE_IP"],
+              "[" + os.environ["SITE_PRIVATE_IP"] + "]:22",
+              "[" + os.environ["SITE_PRIVATE_IP"] + "]:" + os.environ["SITE_TUNNEL_PORT"],
+              "127.0.0.1",
+              "[127.0.0.1]:" + os.environ["SITE_TUNNEL_PORT"],
+          }
+          # A protected known_hosts file may contain hashed temporary aliases.
+          # Resolve those aliases before rewriting so an obsolete hashed entry
+          # cannot remain ahead of the current instance key and trigger a
+          # false host-key change during strict verification.
+          hashed_temporary_lines = set()
+          for hostname in sorted(temporary_aliases):
+              try:
+                  lookup = subprocess.run(
+                      ["ssh-keygen", "-F", hostname, "-f", known_hosts_path],
+                      capture_output=True,
+                      text=True,
+                      check=False,
+                      timeout=5,
+                  )
+              except (OSError, subprocess.TimeoutExpired):
+                  continue
+              for line in lookup.stdout.splitlines():
+                  fields = line.split()
+                  if len(fields) < 3 or fields[0].startswith("#") or fields[0].startswith("@"):
+                      continue
+                  match = key_line.fullmatch(" ".join(fields[1:]))
+                  if match and fields[0].startswith("|"):
+                      hashed_temporary_lines.add(" ".join(fields))
           # Prefer the current key read from the exact RUNNING OCI instance.
           # The protected file is a fallback for an unavailable Agent, not a
           # higher-priority source that could reintroduce a rotated key.
@@ -364,9 +399,11 @@ jobs:
           def is_temporary_alias(line):
               if not line or line.startswith("#"):
                   return False
+              if " ".join(line.split()) in hashed_temporary_lines:
+                  return True
               host_field = line.split()[0]
               for host in host_field.split(","):
-                  if host in aliases or (host.startswith("[") and "]:" in host and host[1:].split("]:", 1)[0] in aliases):
+                  if host in temporary_aliases or host in aliases or (host.startswith("[") and "]:" in host and host[1:].split("]:", 1)[0] in aliases):
                       return True
               return False
 
