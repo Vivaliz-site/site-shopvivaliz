@@ -424,6 +424,10 @@ jobs:
           else
             echo 'catalog_token_services_unchanged=true'
           fi
+          # The installer is conditional on source changes, but the safety gate
+          # is not: a previously disabled timer must be restored on every
+          # activation even when its unit files are unchanged.
+          sudo systemctl enable --now shopvivaliz-catalog-reconcile.timer
           if [ "$amazon_service_changed" = true ]; then
             sudo bash "$current/scripts/install-amazon-returns-service.sh"
           else
