@@ -214,15 +214,23 @@ jobs:
           local_evidence="${RUNNER_TEMP}/ai-squad-ui-evidence"
           marina_key="${RUNNER_TEMP}/marina-ui-audit-key"
           marina_known_hosts="${RUNNER_TEMP}/marina-ui-audit-known-hosts"
-          printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
-          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
-          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
-          chmod 600 "$marina_key" "$marina_known_hosts"
-          marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
+          marina_execution_mode=remote
+          if [ "$(hostname -s)" = 'marina-a1-4c24g' ]; then
+            marina_execution_mode=local
+          fi
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
 
-          ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
-          scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          if [ "$marina_execution_mode" = local ]; then
+            php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          else
+            printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
+            printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
+            printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
+            chmod 600 "$marina_key" "$marina_known_hosts"
+            marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
+            ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
+            scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          fi
           chmod 600 "$cred"
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
