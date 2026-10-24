@@ -116,6 +116,23 @@ def is_preserved_path(path: str) -> bool:
     return False
 
 
+def normalize_line_ending_only_drift() -> bool:
+    """Repair only a proven CRLF/LF-only drift in the operational checkout."""
+    status = run(["git", "status", "--porcelain=v1", "--untracked-files=all"], check=True)
+    if not status.stdout.strip():
+        return False
+
+    staged = run(["git", "diff", "--cached", "--quiet", "--"])
+    untracked = run(["git", "ls-files", "--others", "--exclude-standard"], check=True)
+    semantic_diff = run(["git", "diff", "--quiet", "--ignore-space-at-eol", "--"])
+    if staged.returncode != 0 or untracked.stdout.strip() or semantic_diff.returncode != 0:
+        return False
+
+    run(["git", "restore", "--source=HEAD", "--worktree", "--", "."], check=True)
+    log.warning("drift de fim de linha normalizado; nenhum conteudo foi alterado")
+    return True
+
+
 def tracked_dirty_paths() -> list[str]:
     result = run(["git", "status", "--porcelain"], check=True)
     paths: list[str] = []
@@ -262,6 +279,9 @@ def main() -> int:
     try:
         local_sha = git_output(["rev-parse", "HEAD"])
         current_branch = git_output(["branch", "--show-current"])
+        run(["git", "config", "core.autocrlf", "false"], check=True)
+        run(["git", "config", "core.eol", "lf"], check=True)
+        line_ending_drift_normalized = normalize_line_ending_only_drift()
         dirty = tracked_dirty_paths()
         payload.update(
             {
@@ -269,6 +289,7 @@ def main() -> int:
                 "local_sha": local_sha,
                 "remote_sha": None,
                 "dirty_paths": dirty,
+                "line_ending_drift_normalized": line_ending_drift_normalized,
             }
         )
 
