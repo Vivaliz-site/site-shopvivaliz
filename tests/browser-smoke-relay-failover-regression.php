@@ -34,4 +34,14 @@ foreach ($workflows as $relative) {
         exit(1);
     }
 }
+
+$activeProductsWorkflow = (string) file_get_contents($root . '/.github/workflows/active-products-browser-smoke.yml');
+if (!str_contains($activeProductsWorkflow, "workflow_run:")
+    || !str_contains($activeProductsWorkflow, "workflows: ['Master Production Pipeline 24/7']")
+    || !str_contains($activeProductsWorkflow, 'github.event_name == \'workflow_dispatch\'')
+    || !str_contains($activeProductsWorkflow, 'inputs.target_sha')
+    || !str_contains($activeProductsWorkflow, 'github.event.workflow_run.head_sha')) {
+    fwrite(STDERR, "active-products-browser-smoke must support both production workflow completion and explicit SHA dispatch\n");
+    exit(1);
+}
 fwrite(STDOUT, "browser-smoke-relay-failover: ok\n");

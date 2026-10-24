@@ -1,7 +1,15 @@
 name: Active Products Browser Smoke
 
 on:
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'SHA exato já publicado em produção para validar'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -9,8 +17,10 @@ permissions:
 jobs:
   browser-smoke:
     if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main')
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
@@ -18,7 +28,7 @@ jobs:
       - name: Checkout deployed commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.event.workflow_run.head_sha }}
           persist-credentials: false
           fetch-depth: 1
 
