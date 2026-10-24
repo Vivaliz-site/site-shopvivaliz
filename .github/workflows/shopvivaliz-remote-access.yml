@@ -757,7 +757,7 @@ jobs:
               echo "CHATGPT_CONTINUITY_MARINA_TOKEN_METADATA=PASS"
 
               "${MARINA_SSH[@]}" "sudo -n dd if='$marina_token_file' status=none" |
-                "${SSH[@]}" 'umask 077; install -d -m 750 /home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity; tmp=$(mktemp /home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chown www-data:ubuntu "$tmp"; chmod 640 "$tmp"; mv "$tmp" /home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token'
+                "${SSH[@]}" 'set -Eeuo pipefail; dir=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity; sudo -n install -d -o www-data -g ubuntu -m 750 "$dir"; tmp=$(sudo -n mktemp "$dir/.bridge.token.XXXXXX"); sudo -n dd of="$tmp" status=none; sudo -n chown www-data:ubuntu "$tmp"; sudo -n chmod 640 "$tmp"; sudo -n mv "$tmp" "$dir/bridge.token"'
               backend_sha="$(sudo -n sha256sum -- "$backend_token_file" | awk '{print $1}')"
               test "$backend_sha" = "$marina_sha"
               sudo -n chown www-data:ubuntu "$backend_token_dir" "$backend_token_file"
