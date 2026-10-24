@@ -32,6 +32,7 @@ assert 'SAFE_SYNC_POSTDEPLOY=DEFERRED_NEWER_MAIN' in workflow
 assert 'SAFE_SYNC_POSTDEPLOY=RUN_MATCHING_SHA' in workflow
 assert 'SAFE_SYNC_POSTDEPLOY=UNEXPECTED_DIVERGENCE' in workflow
 assert 'sudo systemctl start shopvivaliz-sync-safe.service' in workflow
+assert 'journalctl --unit=shopvivaliz-sync-safe.service' in workflow
 assert 'systemctl show --property=Result --value shopvivaliz-sync-safe.service' in workflow
 assert 'sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer' in workflow
 assert 'sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer' in workflow
