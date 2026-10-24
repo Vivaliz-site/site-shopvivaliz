@@ -171,6 +171,17 @@ def normalize_line_ending_only_drift() -> bool:
         # directly. A repository may declare eol=lf while the HEAD blob still
         # contains CRLF; direct writes recreate the dirty state.
         run(["git", "restore", "--source=HEAD", "--worktree", "--", path], check=True)
+        post_restore = run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", path],
+            check=True,
+        )
+        eol = run(["git", "ls-files", "--eol", "--", path], check=True)
+        log.info(
+            "normalizacao pos-restore path=%s status=%s eol=%s",
+            path,
+            post_restore.stdout.strip() or "clean",
+            eol.stdout.strip() or "unknown",
+        )
     log.warning("drift de fim de linha normalizado; nenhum conteudo foi alterado")
     return True
 
