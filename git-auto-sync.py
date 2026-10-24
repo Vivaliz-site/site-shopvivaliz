@@ -134,7 +134,7 @@ def _line_ending_only_paths() -> list[str] | None:
         if relative.is_absolute() or ".." in relative.parts:
             return None
         working = REPO_DIR / relative
-        if not working.is_file() or b"\x00" in working.read_bytes():
+        if working.is_symlink() or not working.is_file() or b"\x00" in working.read_bytes():
             return None
         head = subprocess.run(
             ["git", "show", f"HEAD:{path}"],
@@ -156,7 +156,15 @@ def normalize_line_ending_only_drift() -> bool:
     if not paths:
         return False
 
-    run(["git", "restore", "--source=HEAD", "--worktree", "--", "."], check=True)
+    for path in paths:
+        head = subprocess.run(
+            ["git", "show", f"HEAD:{path}"],
+            cwd=REPO_DIR,
+            capture_output=True,
+            timeout=180,
+            check=True,
+        )
+        (REPO_DIR / Path(path)).write_bytes(head.stdout)
     log.warning("drift de fim de linha normalizado; nenhum conteudo foi alterado")
     return True
 
