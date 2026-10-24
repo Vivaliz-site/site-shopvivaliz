@@ -116,16 +116,44 @@ def is_preserved_path(path: str) -> bool:
     return False
 
 
-def normalize_line_ending_only_drift() -> bool:
-    """Repair only a proven CRLF/LF-only drift in the operational checkout."""
+def _normalized_line_endings(value: bytes) -> bytes:
+    return value.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _line_ending_only_paths() -> list[str] | None:
     status = run(["git", "status", "--porcelain=v1", "--untracked-files=all"], check=True)
     if not status.stdout.strip():
-        return False
-
+        return []
     staged = run(["git", "diff", "--cached", "--quiet", "--"])
     untracked = run(["git", "ls-files", "--others", "--exclude-standard"], check=True)
-    semantic_diff = run(["git", "diff", "--quiet", "--ignore-space-at-eol", "--"])
-    if staged.returncode != 0 or untracked.stdout.strip() or semantic_diff.returncode != 0:
+    if staged.returncode != 0 or untracked.stdout.strip():
+        return None
+    paths = [line[3:].strip() for line in status.stdout.splitlines() if line and len(line) > 3]
+    for path in paths:
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts:
+            return None
+        working = REPO_DIR / relative
+        if not working.is_file() or b"\x00" in working.read_bytes():
+            return None
+        head = subprocess.run(
+            ["git", "show", f"HEAD:{path}"],
+            cwd=REPO_DIR,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+        if head.returncode != 0 or b"\x00" in head.stdout:
+            return None
+        if _normalized_line_endings(working.read_bytes()) != _normalized_line_endings(head.stdout):
+            return None
+    return paths
+
+
+def normalize_line_ending_only_drift() -> bool:
+    """Repair only a proven CRLF/LF-only drift in the operational checkout."""
+    paths = _line_ending_only_paths()
+    if not paths:
         return False
 
     run(["git", "restore", "--source=HEAD", "--worktree", "--", "."], check=True)
