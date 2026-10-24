@@ -280,22 +280,34 @@ jobs:
           with open(known_hosts_path, encoding="utf-8") as source:
               original_lines = [line.rstrip("\n") for line in source]
 
-          def pinned_alias_keys(hostname):
+          def pinned_alias_keys(hostnames):
               result = []
               for line in original_lines:
                   fields = line.split()
                   if len(fields) < 3 or fields[0].startswith("#") or fields[0].startswith("@"):
                       continue
                   hosts = fields[0].split(",")
-                  if hostname not in hosts and "[" + hostname + "]:22" not in hosts:
+                  if not any(host in hosts for host in hostnames):
                       continue
                   match = key_line.fullmatch(fields[1] + " " + fields[2])
                   if match:
                       result.append(match.group(1) + " " + match.group(2))
               return list(dict.fromkeys(result))
 
-          backend_keys = list(dict.fromkeys(public_host_keys(backend, "backend") + pinned_alias_keys(backend_name)))
-          site_keys = list(dict.fromkeys(public_host_keys(site, "site") + pinned_alias_keys(site_name)))
+          backend_pinned = pinned_alias_keys({
+              backend_name,
+              os.environ["BACKEND_PRIVATE_IP"],
+              "[" + os.environ["BACKEND_PRIVATE_IP"] + "]:22",
+              "[" + os.environ["BACKEND_PRIVATE_IP"] + "]:" + os.environ["BACKEND_TUNNEL_PORT"],
+          })
+          site_pinned = pinned_alias_keys({
+              site_name,
+              os.environ["SITE_PRIVATE_IP"],
+              "[" + os.environ["SITE_PRIVATE_IP"] + "]:22",
+              "[" + os.environ["SITE_PRIVATE_IP"] + "]:" + os.environ["SITE_TUNNEL_PORT"],
+          })
+          backend_keys = list(dict.fromkeys(backend_pinned or public_host_keys(backend, "backend")))
+          site_keys = list(dict.fromkeys(site_pinned or public_host_keys(site, "site")))
           if not backend_keys or not site_keys:
               raise SystemExit("VM_HOST_KEY_RECONCILIATION=NO_PINNED_HOST_KEY")
           aliases = {
