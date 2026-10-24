@@ -167,14 +167,10 @@ def normalize_line_ending_only_drift() -> bool:
         return False
 
     for path in paths:
-        head = subprocess.run(
-            ["git", "show", f"HEAD:{path}"],
-            cwd=REPO_DIR,
-            capture_output=True,
-            timeout=180,
-            check=True,
-        )
-        (REPO_DIR / Path(path)).write_bytes(head.stdout)
+        # Use Git's attribute-aware checkout instead of writing blob bytes
+        # directly. A repository may declare eol=lf while the HEAD blob still
+        # contains CRLF; direct writes recreate the dirty state.
+        run(["git", "restore", "--source=HEAD", "--worktree", "--", path], check=True)
     log.warning("drift de fim de linha normalizado; nenhum conteudo foi alterado")
     return True
 
