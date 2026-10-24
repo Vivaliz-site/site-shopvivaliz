@@ -113,6 +113,25 @@ HOSTS = {
     },
 }
 
+# OCI Marina is a verified separate tenancy and a directly attached RDC device.
+# Inventory is descriptive only: do NOT grant a backend SSH route, privileged
+# host tools or durable work while transport and authorization are unprovisioned.
+PENDING_HOST_INVENTORY = {
+    "marina-a1-4c24g": {
+        "platform": "linux",
+        "address": "10.80.1.116",
+        "transport": "not_provisioned",
+        "access_status": "pending_approved_transport",
+        "direct_access_connector": "Remote Desktop Commander",
+        "role": "OCI Marina migration target",
+    },
+}
+
+def host_inventory() -> list[dict[str, Any]]:
+    return ([{"name": name, **cfg} for name, cfg in HOSTS.items()]
+            + [{"name": name, **cfg} for name, cfg in PENDING_HOST_INVENTORY.items()])
+
+
 # Keep enough durable capacity for a control/diagnostic task even when one
 # long job is active. Windows relay work stays serialized.
 DESKTOP_HOSTS = ("Fred-Win", "KOCEPSV")
@@ -2433,7 +2452,7 @@ def execute_tool(
             [str(item) for item in durable_command], int(args.get('lease_ttl_seconds', 90)),
             _submitter=submitter)
     if name == "hosts_list":
-        return {"hosts": [{"name": n, **cfg} for n, cfg in HOSTS.items()]}
+        return {"hosts": host_inventory()}
     if name == "audit_recent":
         limit = max(1, min(int(args.get("limit", 25)), 200))
         with db_conn() as db:
@@ -2819,7 +2838,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200, {
                 "ok": True, "endpoint": "shopvivaliz-remote-control-mcp",
-                "version": VERSION, "hosts": list(HOSTS), "timestamp": now(),
+                "version": VERSION, "hosts": [item["name"] for item in host_inventory()], "timestamp": now(),
                 "durable": durable_health_summary(),
             })
             return
