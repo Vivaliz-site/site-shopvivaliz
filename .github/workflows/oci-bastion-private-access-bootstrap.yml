@@ -263,6 +263,15 @@ jobs:
               done <<< "$configured_keys"
             fi
           fi
+          for key_root in /etc/ssh /var/lib/ssh; do
+            if [ -d "$key_root" ]; then
+              while IFS= read -r -d '' key_file; do
+                if [ -r "$key_file" ] && [ -s "$key_file" ]; then
+                  awk '{print $1, $2}' "$key_file"
+                fi
+              done < <(find "$key_root" -maxdepth 3 -type f -name '*.pub' -print0 2>/dev/null)
+            fi
+          done
           '''
               details = models.CreateInstanceAgentCommandDetails(
                   compartment_id=instance.compartment_id,
