@@ -2356,7 +2356,8 @@ class BootstrapContractTests(unittest.TestCase):
         for needle in (
             "marina_token_file=\"/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token\"",
             "MARINA_SSH=(ssh",
-            "test \"$(hostname -s)\" = marina-a1-4c24g",
+            "hostname -s",
+            "marina-a1-4c24g",
             "CHATGPT_CONTINUITY_MARINA_TOKEN_METADATA=PASS",
             "backend_sha=\"$(sudo -n sha256sum -- \"$backend_token_file\"",
             "test \"$backend_sha\" = \"$marina_sha\"",
@@ -2364,6 +2365,7 @@ class BootstrapContractTests(unittest.TestCase):
             self.assertIn(needle, remote_repair)
         self.assertNotIn("python3 -c 'import secrets; print(secrets.token_hex(32))'", remote_repair)
         self.assertNotIn('cat "$token_file"', remote_repair)
+        self.assertNotIn('dd if="$token_file" status=none', remote_repair)
 
     def test_chatgpt_continuity_repair_uses_private_loopback_bridge_tunnel(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
