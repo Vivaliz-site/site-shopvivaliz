@@ -126,6 +126,28 @@ class AtomicCheckpointTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checkpoint_update_invalid_rules"):
             m._validate(invalid)
 
+    def test_chatgpt_vm_auth_runbook_sha_is_allowed_with_closed_validation(self):
+        runbook = "docs/knowledge/chatgpt-vm-auth.md"
+        self.assertIn(runbook, m.ALLOWED_RULES)
+        updated = {
+            **self.args,
+            "rules_sha_by_path": {
+                **self.args["rules_sha_by_path"],
+                runbook: "d" * 40,
+            },
+        }
+        result = m.update_checkpoint(updated, self.live)
+        self.assertTrue(result["verified"])
+        saved = json.loads(self.checkpoint.read_text())
+        self.assertEqual(saved["status"], "RUNNING")
+        self.assertEqual(saved["rules_loaded"]["sha_by_path"][runbook], "d" * 40)
+        malformed = {
+            **updated,
+            "rules_sha_by_path": {**updated["rules_sha_by_path"], runbook: "not-a-sha"},
+        }
+        with self.assertRaisesRegex(ValueError, "checkpoint_update_invalid_rules_sha"):
+            m._validate(malformed)
+
     def test_rejects_unverified_or_secret_note(self):
         cases = [
             {**self.args, "next_action": "Bearer abcdefghijklmnopqrst"},
