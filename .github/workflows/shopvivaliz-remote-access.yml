@@ -235,8 +235,13 @@ jobs:
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
 
-          if [ "$marina_execution_mode" = local ]; then
-            test "$(hostname -s)" = 'marina-a1-4c24g'
+          browser_execution_mode=remote
+          if [ -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium ]; then
+            browser_execution_mode=local
+          fi
+
+          if [ "$browser_execution_mode" = local ]; then
+            test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
             case "$remote_evidence" in /tmp/ai-squad-ui-evidence-*) ;; *) exit 2 ;; esac
             install -d -m 700 "$remote_evidence"
             playwright_module=/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js
