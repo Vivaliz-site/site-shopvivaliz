@@ -141,9 +141,9 @@ jobs:
           PY
 
           body_b64="$(base64 -w0 /tmp/active-products-browser-body.json)"
-          set +e
+          status=0
           if [[ "${SV_RELAY_LOCAL:-0}" == 1 ]]; then
-            BODY_B64="$body_b64" RELAY_PORT="$SV_BROWSER_RELAY_PORT" python3 - <<'PY' > /tmp/active-products-browser-remote.log 2>&1
+            if BODY_B64="$body_b64" RELAY_PORT="$SV_BROWSER_RELAY_PORT" python3 - <<'PY' > /tmp/active-products-browser-remote.log 2>&1
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           port=os.environ.get('RELAY_PORT','')
@@ -163,13 +163,15 @@ jobs:
           print(json.dumps(decoded,ensure_ascii=False,indent=2))
           if result.get('success') is not True or decoded.get('overall') is not True: raise SystemExit(7)
           PY
-            status=$?
+            then
+              :
+            else
+              status=$?
+            fi
           else
             echo 'SV_RELAY_LOCAL must be enabled on the canonical backend browser runner' >&2
             status=7
           fi
-          set -e
-
           python3 - /tmp/active-products-browser-remote.log test-results/active-products-browser-smoke/result.json <<'PY'
           import base64,json,pathlib,sys
           text=pathlib.Path(sys.argv[1]).read_text(encoding='utf-8',errors='replace'); marker=''
