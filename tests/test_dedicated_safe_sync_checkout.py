@@ -30,6 +30,11 @@ assert 'SAFE_SYNC_REPAIR=QUARANTINED_NON_GIT_CHECKOUT' in installer
 assert 'mv -T -- "$SYNC_ROOT" "$quarantine_target"' in installer
 assert 'sync-repo-non-git-' in installer
 assert 'Caminho de sync existe mas nao e clone Git e nao e um placeholder vazio' in installer
+assert 'core.autocrlf false' in installer
+assert 'core.eol lf' in installer
+assert 'ignore-space-at-eol' in installer
+assert 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT' in installer
+assert 'ls-files --others --exclude-standard' in installer
 
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in auto_sync
