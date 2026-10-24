@@ -347,8 +347,13 @@ jobs:
               "127.0.0.1",
               "[127.0.0.1]:" + os.environ["SITE_TUNNEL_PORT"],
           })
-          backend_keys = list(dict.fromkeys(backend_pinned or public_host_keys(backend, "backend")))
-          site_keys = list(dict.fromkeys(site_pinned or public_host_keys(site, "site")))
+          # Prefer the current key read from the exact RUNNING OCI instance.
+          # The protected file is a fallback for an unavailable Agent, not a
+          # higher-priority source that could reintroduce a rotated key.
+          backend_agent = public_host_keys(backend, "backend")
+          site_agent = public_host_keys(site, "site")
+          backend_keys = list(dict.fromkeys(backend_agent or backend_pinned))
+          site_keys = list(dict.fromkeys(site_agent or site_pinned))
           if not backend_keys or not site_keys:
               raise SystemExit("VM_HOST_KEY_RECONCILIATION=NO_PINNED_HOST_KEY")
           aliases = {
