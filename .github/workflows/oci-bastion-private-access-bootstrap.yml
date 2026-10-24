@@ -197,7 +197,6 @@ jobs:
           # recovering from a rotated/rebuilt VM host key.
           python3 - <<'PY'
           import base64
-          import ipaddress
           import os
           import re
           import time
@@ -227,8 +226,8 @@ jobs:
           def public_host_keys(instance, label):
               command = r'''set -Eeuo pipefail
           for key_file in /etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_rsa_key.pub /etc/ssh/ssh_host_ecdsa_key.pub; do
-            if [ -s "$key_file" ]; then
-              awk '{print $1, $2}' "$key_file"
+            if [ -r "$key_file" ] && [ -s "$key_file" ]; then
+              awk '{print $1, $2}' "$key_file" || :
             fi
           done
           '''
@@ -247,7 +246,7 @@ jobs:
               try:
                   command_id = agent.create_instance_agent_command(details).data.id
               except oci.exceptions.ServiceError:
-                  raise SystemExit("VM_HOST_KEY_RECONCILIATION=COMMAND_CREATE_FAILED")
+                  return []
               execution = None
               for _ in range(36):
                   execution = agent.get_instance_agent_command_execution(
@@ -257,10 +256,10 @@ jobs:
                       break
                   time.sleep(5)
               if execution is None or execution.lifecycle_state != "SUCCEEDED":
-                  raise SystemExit("VM_HOST_KEY_RECONCILIATION=COMMAND_NOT_SUCCEEDED")
+                  return []
               output = execution.content
               if int(getattr(output, "exit_code", 1) or 1) != 0:
-                  raise SystemExit("VM_HOST_KEY_RECONCILIATION=COMMAND_EXIT_FAILED")
+                  return []
               result = []
               for line in str(getattr(output, "text", "") or "").splitlines():
                   match = key_line.fullmatch(line.strip())
@@ -272,14 +271,33 @@ jobs:
                       continue
                   result.append(match.group(1) + " " + match.group(2))
               result = list(dict.fromkeys(result))
-              if not result:
-                  raise SystemExit("VM_HOST_KEY_RECONCILIATION=NO_VALID_HOST_KEY")
               return result
 
           backend = exact_instance(os.environ["BACKEND_INSTANCE_NAME"])
           site = exact_instance(os.environ["SITE_INSTANCE_NAME"])
-          backend_keys = public_host_keys(backend, "backend")
-          site_keys = public_host_keys(site, "site")
+          backend_name = os.environ["BACKEND_INSTANCE_NAME"]
+          site_name = os.environ["SITE_INSTANCE_NAME"]
+          with open(known_hosts_path, encoding="utf-8") as source:
+              original_lines = [line.rstrip("\n") for line in source]
+
+          def pinned_alias_keys(hostname):
+              result = []
+              for line in original_lines:
+                  fields = line.split()
+                  if len(fields) < 3 or fields[0].startswith("#") or fields[0].startswith("@"):
+                      continue
+                  hosts = fields[0].split(",")
+                  if hostname not in hosts and "[" + hostname + "]:22" not in hosts:
+                      continue
+                  match = key_line.fullmatch(fields[1] + " " + fields[2])
+                  if match:
+                      result.append(match.group(1) + " " + match.group(2))
+              return list(dict.fromkeys(result))
+
+          backend_keys = list(dict.fromkeys(public_host_keys(backend, "backend") + pinned_alias_keys(backend_name)))
+          site_keys = list(dict.fromkeys(public_host_keys(site, "site") + pinned_alias_keys(site_name)))
+          if not backend_keys or not site_keys:
+              raise SystemExit("VM_HOST_KEY_RECONCILIATION=NO_PINNED_HOST_KEY")
           aliases = {
               os.environ["BACKEND_PRIVATE_IP"],
               "127.0.0.1",
@@ -294,8 +312,7 @@ jobs:
                       return True
               return False
 
-          with open(known_hosts_path, encoding="utf-8") as source:
-              preserved = [line.rstrip("\n") for line in source if not is_temporary_alias(line.strip())]
+          preserved = [line for line in original_lines if not is_temporary_alias(line.strip())]
           with open(known_hosts_path, "w", encoding="utf-8") as target:
               for line in preserved:
                   target.write(line + "\n")
