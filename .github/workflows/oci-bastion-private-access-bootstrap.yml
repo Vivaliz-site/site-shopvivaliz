@@ -254,6 +254,15 @@ jobs:
               printf '%s\n' "$active_keys" | awk '{print $2, $3}'
             fi
           fi
+          if command -v sshd >/dev/null 2>&1; then
+            if configured_keys="$(sshd -T 2>/dev/null | awk '$1 == "hostkey" {print $2 ".pub"}')"; then
+              while IFS= read -r key_file; do
+                if [ -r "$key_file" ] && [ -s "$key_file" ]; then
+                  awk '{print $1, $2}' "$key_file"
+                fi
+              done <<< "$configured_keys"
+            fi
+          fi
           '''
               details = models.CreateInstanceAgentCommandDetails(
                   compartment_id=instance.compartment_id,
