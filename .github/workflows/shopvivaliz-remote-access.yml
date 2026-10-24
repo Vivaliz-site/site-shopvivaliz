@@ -766,7 +766,7 @@ jobs:
                 -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/json' \
                 --data '{"operation":"heartbeat"}' \
-                http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
+                https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
                 unset token
                 rm -f "$heartbeat_tmp"
                 echo "::error::Production continuity bridge heartbeat failed before backend repair"
