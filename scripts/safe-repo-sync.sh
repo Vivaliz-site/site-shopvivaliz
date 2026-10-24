@@ -98,6 +98,21 @@ if [ ! -f "$DEPLOY_CLASSIFIER" ]; then
   exit 9
 fi
 
+normalize_line_ending_only_drift() {
+  local dirty
+  dirty="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+  [ -n "$dirty" ] || return 0
+  git -C "$ROOT" diff --cached --quiet -- . || return 0
+  [ -z "$(git -C "$ROOT" ls-files --others --exclude-standard)" ] || return 0
+  git -C "$ROOT" diff --quiet --ignore-space-at-eol -- . || return 0
+  echo 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT'
+  git -C "$ROOT" restore --source=HEAD --worktree -- .
+}
+
+git -C "$ROOT" config core.autocrlf false
+git -C "$ROOT" config core.eol lf
+normalize_line_ending_only_drift
+
 should_deploy=true
 if [[ "$active_sha" =~ ^[0-9a-f]{40}$ ]] \
   && git -C "$ROOT" cat-file -e "${active_sha}^{commit}" 2>/dev/null \

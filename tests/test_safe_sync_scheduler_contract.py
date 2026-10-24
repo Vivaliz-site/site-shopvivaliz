@@ -55,6 +55,9 @@ assert 'systemctl is-enabled --quiet "$TIMER_NAME"' in systemd_installer
 assert 'systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager' in systemd_installer
 assert 'SAFE_SYNC_INSTALL=PASS' in systemd_installer
 assert 'DEPLOY_CLASSIFIER="${DEPLOY_CLASSIFIER:-$ROOT/scripts/should-deploy-production.sh}"' in safe_sync
+assert 'git -C "$ROOT" config core.autocrlf false' in safe_sync
+assert 'git -C "$ROOT" diff --quiet --ignore-space-at-eol -- .' in safe_sync
+assert 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT' in safe_sync
 assert 'git -C "$ROOT" diff --name-only "$active_sha" "$repo_sha" | bash "$DEPLOY_CLASSIFIER"' in safe_sync
 assert 'if [ "$should_deploy" = false ]' in safe_sync
 assert 'nao exige deploy; release preservada' in safe_sync
