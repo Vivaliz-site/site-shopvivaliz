@@ -11,6 +11,7 @@ test -f "$creator"
 test -f "$ui_audit"
 
 grep -q 'ai_squad_ui_audit' "$workflow"
+grep -q 'shopvivaliz-backend-browser' "$workflow"
 grep -q 'AI_SQUAD_UI_AUDIT=PASS' "$ui_audit"
 grep -q 'shopvivaliz-deploy/repo/node_modules/playwright/index.js' "$ui_audit"
 grep -Fq 'mod.default?.chromium' "$ui_audit"
