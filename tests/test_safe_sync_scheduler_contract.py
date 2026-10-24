@@ -39,6 +39,8 @@ assert 'sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer' in workfl
 assert 'flock -n 9' in workflow
 assert 'health_score_percent -> 100' in workflow
 assert 'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
+assert 'SAFE_SYNC_DIRTY_STATUS_BEGIN' in workflow
+assert 'git -C "$root/sync-repo" status --porcelain=v1 --untracked-files=all' in workflow
 assert "Diagnose dedicated safe sync path" in workflow
 assert "SAFE_SYNC_PATH_ENTRY_COUNT" in workflow
 assert "SAFE_SYNC_GIT_METADATA=MISSING" in workflow

@@ -405,6 +405,11 @@ jobs:
           fi
           if ! sudo env SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo" bash "$current/scripts/install-safe-sync-service.sh"; then
             echo 'safe_repo_sync_install_failed=true' >&2
+            if sudo test -d "$root/sync-repo/.git"; then
+              echo 'SAFE_SYNC_DIRTY_STATUS_BEGIN' >&2
+              sudo -u ubuntu git -C "$root/sync-repo" status --porcelain=v1 --untracked-files=all >&2
+              echo 'SAFE_SYNC_DIRTY_STATUS_END' >&2
+            fi
             fail=1
           fi
           if [ "$catalog_service_changed" = true ]; then
