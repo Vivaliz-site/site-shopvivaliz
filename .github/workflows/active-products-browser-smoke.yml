@@ -21,7 +21,10 @@ jobs:
       (github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main')
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    # The relay services live on the canonical backend browser host. Running
+    # here keeps the SSH hop local to that host instead of depending on a
+    # private route from the Marina production runner.
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 15
     environment: production
     steps:

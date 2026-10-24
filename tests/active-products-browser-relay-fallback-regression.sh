@@ -50,6 +50,7 @@ set -e
 [[ "$wrong_rc" -ne 0 ]] || { echo 'unexpected environment must fail selection' >&2; exit 1; }
 
 grep -Fq 'scripts/select-active-products-browser-relay.sh' "$WORKFLOW"
+grep -Fq 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]' "$WORKFLOW"
 grep -Fq 'SV_BROWSER_RELAY_PORT' "$WORKFLOW"
 grep -Fq "http://127.0.0.1:{port}/mcp/tool/execute_command" "$WORKFLOW"
 grep -Fq "bash tests/active-products-browser-relay-fallback-regression.sh" "$QUALITY"
