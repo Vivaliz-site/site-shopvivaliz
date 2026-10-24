@@ -235,17 +235,35 @@ jobs:
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
-          scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
-          scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
-
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
-          mkdir -p "$local_evidence"
-          scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
-          cp "$local_evidence/primary.png" "$local_shot"
-          cp "$local_evidence/primary-trace.zip" "$local_trace"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          if [ "$marina_execution_mode" = local ]; then
+            test "$(hostname -s)" = 'marina-a1-4c24g'
+            case "$remote_evidence" in /tmp/ai-squad-ui-evidence-*) ;; *) exit 2 ;; esac
+            install -d -m 700 "$remote_evidence"
+            playwright_module=/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js
+            if [ ! -s "$playwright_module" ]; then
+              playwright_root="$RUNNER_TEMP/ai-squad-ui-playwright"
+              mkdir -p "$playwright_root"
+              if [ ! -s "$playwright_root/node_modules/playwright/index.js" ]; then
+                PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix "$playwright_root" --no-save --ignore-scripts playwright
+              fi
+              playwright_module="$playwright_root/node_modules/playwright/index.js"
+            fi
+            test -s "$playwright_module"
+            DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_PLAYWRIGHT_MODULE="$playwright_module" AI_SQUAD_ADMIN_CREDENTIAL_FILE="$cred" AI_SQUAD_UI_SCREENSHOT="$remote_evidence/primary.png" AI_SQUAD_UI_TRACE="$remote_evidence/primary-trace.zip" AI_SQUAD_UI_EVIDENCE_DIR="$remote_evidence" AI_SQUAD_UI_EVIDENCE_ROLE=primary AI_SQUAD_UI_AUDITOR="github-actions-primary-${GITHUB_RUN_ID}" AI_SQUAD_UI_SESSION_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary" AI_SQUAD_UI_TRACE_ID=primary-trace AI_SQUAD_UI_SCREENSHOT_ID=primary-screenshot node scripts/ai-squad-ui-audit.mjs
+            mkdir -p "$local_evidence"
+            cp -R "$remote_evidence/." "$local_evidence/"
+          else
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
+            scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
+            scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
+            mkdir -p "$local_evidence"
+            scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
+            cp "$local_evidence/primary.png" "$local_shot"
+            cp "$local_evidence/primary-trace.zip" "$local_trace"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          fi
           test -s "$local_evidence/primary.png"
           test -s "$local_evidence/primary-trace.zip"
           test -s "$local_evidence/primary-execution.json"
