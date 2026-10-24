@@ -2349,6 +2349,8 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('sudo -n dd if=\'$marina_token_file\' status=none', repair_block)
         self.assertIn('backend_sha="$(sudo -n sha256sum -- "$backend_token_file"', repair_block)
         self.assertIn('MARINA_PUBLIC_IP: 137.131.173.240', workflow)
+        self.assertIn('sed -i \'/^10\\.0\\.1\\.38[[:space:]]/d\' "$HOME/.ssh/known_hosts"', workflow)
+        self.assertIn('sudo -n cat /etc/ssh/ssh_host_ed25519_key.pub', workflow)
 
     def test_chatgpt_continuity_repair_uses_marina_as_token_source(self):
         remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
