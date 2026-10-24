@@ -9,6 +9,7 @@ $required = [
     "analytics-proxy-transient",
     "external-font-network-change",
     "navigation-aborted-product-image",
+    "navigation-aborted-favicon",
     "navigation-aborted-analytics",
     "checkout-reload-aborted-mercadopago-probe",
     "checkout-navigation-aborted-tracking",
