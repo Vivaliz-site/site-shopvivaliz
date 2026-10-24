@@ -409,6 +409,13 @@ jobs:
               echo 'SAFE_SYNC_DIRTY_STATUS_BEGIN' >&2
               sudo -u ubuntu git -C "$root/sync-repo" status --porcelain=v1 --untracked-files=all >&2
               echo 'SAFE_SYNC_DIRTY_STATUS_END' >&2
+            if sudo -u ubuntu git -C "$root/sync-repo" diff --quiet -- ops/cloudflare-zone-settings-check.json; then
+              :
+            else
+              echo 'SAFE_SYNC_DIRTY_DIFF_BEGIN' >&2
+              sudo -u ubuntu git -C "$root/sync-repo" diff -- ops/cloudflare-zone-settings-check.json >&2
+              echo 'SAFE_SYNC_DIRTY_DIFF_END' >&2
+            fi
             fi
             fail=1
           fi
