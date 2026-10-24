@@ -14,6 +14,7 @@ readonly LOG_FILE="$LOG_DIR/deploy.log"
 readonly STATUS_FILE="$SHARED_DIR/logs/deploy-status.json"
 readonly RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
 readonly RETENTION_COUNT=5
+readonly MIN_DEPLOY_FREE_BYTES=6442450944
 readonly ML_RENEWER_SERVICE="shopvivaliz-mercadolivre-token-renewer.service"
 readonly ORIGIN_WORKERS_FENCE_FILE="${SHOPVIVALIZ_ORIGIN_WORKERS_FENCE_FILE:-/etc/shopvivaliz/migration/origin-workers-fenced}"
 readonly -a RUNTIME_SERVICES=(
@@ -901,6 +902,21 @@ if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
   log INFO "Producao, runtime e bridges AI Squad ja alinhados em $REMOTE_SHA"
   write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release, runtime e bridges AI Squad ja estavam alinhados"
   exit 0
+fi
+
+# A failed rollout may leave immutable candidate trees behind until a successful
+# deployment runs retention. Do not allocate another release under disk pressure.
+if ! deploy_available_bytes="$(df -B1 --output=avail "$RELEASES_DIR" 2>/dev/null | awk 'NR==2 {print $1}')"; then
+  log ERROR "Nao foi possivel medir espaco livre antes de criar uma release"
+  exit 74
+fi
+case "$deploy_available_bytes" in
+  ""|*[!0-9]*) log ERROR "Espaco livre invalido; deploy recusado"; exit 74 ;;
+esac
+if [ "$deploy_available_bytes" -lt "$MIN_DEPLOY_FREE_BYTES" ]; then
+  log ERROR "Deploy adiado: ${deploy_available_bytes} bytes livres abaixo de ${MIN_DEPLOY_FREE_BYTES}"
+  write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "disco abaixo do minimo de 6 GiB; nova release nao criada" || true
+  exit 75
 fi
 
 RELEASE_TIME="$(date +%Y%m%d-%H%M%S)"
