@@ -495,6 +495,17 @@ jobs:
             [ "$code" = 200 ] || fail=1
           done
           if [ "$fail" -ne 0 ]; then
+            echo 'DEPLOY_RUNTIME_STATUS_BEGIN' >&2
+            for unit in \
+              shopvivaliz-catalog-reconcile.timer \
+              shopvivaliz-sync-safe.timer \
+              shopvivaliz-abandoned-cart-recovery.timer \
+              apache2; do
+              sudo systemctl show "$unit" \
+                --property=LoadState,ActiveState,SubState,UnitFileState,Result \
+                --no-pager >&2 || :
+            done
+            echo 'DEPLOY_RUNTIME_STATUS_END' >&2
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
