@@ -41,6 +41,7 @@ def test_line_ending_normalization_is_narrow_and_fail_closed() -> None:
     assert "_normalized_line_endings" in source
     assert '["git", "show"' in source
     assert '["git", "restore", "--source=HEAD", "--worktree", "--", path]' in source
+    assert '["git", "restore", "--source", remote_sha, "--staged", "--worktree", "--", "."]' in source
     assert 'git", "ls-files", "--others", "--exclude-standard"' in source
     assert "line_ending_drift_normalized" in source
 

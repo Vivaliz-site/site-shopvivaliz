@@ -198,6 +198,29 @@ def tracked_dirty_paths() -> list[str]:
     return unsafe_dirty_paths(paths)
 
 
+def reconcile_line_ending_only_drift(remote_sha: str, dirty: list[str]) -> None:
+    """Replace a proven line-ending-only drift with the fetched remote tree.
+
+    This is needed for legacy clones whose current HEAD blob itself has mixed
+    line endings: restoring that old HEAD can remain dirty under its eol
+    attribute. The proof is repeated immediately before replacement so a
+    concurrent semantic edit still fails closed.
+    """
+    remaining = _line_ending_only_paths()
+    if remaining is None or set(remaining) != set(dirty):
+        raise RuntimeError("drift de fim de linha mudou durante o fetch; sync abortado")
+    run(["git", "restore", "--source", remote_sha, "--staged", "--worktree", "--", "."], check=True)
+    # The worktree and index now contain the fetched source of truth; advance
+    # the dedicated operational branch without reintroducing the old mixed
+    # HEAD blob through a merge attempt.
+    run(["git", "reset", "--hard", remote_sha], check=True)
+    after = tracked_dirty_paths()
+    if after:
+        raise RuntimeError(
+            "checkout remoto permaneceu sujo apos reconciliacao: " + ", ".join(after)
+        )
+
+
 def local_branch_exists(branch: str) -> bool:
     result = run(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
     return result.returncode == 0
@@ -336,9 +359,13 @@ def main() -> int:
         run(["git", "config", "core.eol", "lf"], check=True)
         line_ending_drift_normalized = normalize_line_ending_only_drift()
         dirty = tracked_dirty_paths()
+        line_ending_only_dirty = bool(dirty) and line_ending_drift_normalized and set(
+            _line_ending_only_paths() or []
+        ) == set(dirty)
         log.info(
-            "Safe sync dirty precheck: normalized_line_endings=%s paths=%s",
+            "Safe sync dirty precheck: normalized_line_endings=%s line_ending_only=%s paths=%s",
             line_ending_drift_normalized,
+            line_ending_only_dirty,
             ",".join(dirty) if dirty else "none",
         )
         payload.update(
@@ -365,7 +392,7 @@ def main() -> int:
             log.error(payload["message"])
             return 2
 
-        if dirty:
+        if dirty and not line_ending_only_dirty:
             payload["action"] = "blocked-dirty-tree"
             payload["message"] = (
                 "working tree contem alteracoes; sync seguro abortado antes do fetch"
@@ -373,6 +400,10 @@ def main() -> int:
             write_status(payload)
             log.error("%s: %s", payload["message"], ", ".join(dirty))
             return 3
+        if line_ending_only_dirty:
+            log.warning(
+                "drift de fim de linha sera reconciliado contra o SHA remoto apos o fetch"
+            )
 
         health = check_local_health()
         health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
@@ -389,6 +420,11 @@ def main() -> int:
         fetch_canonical_branch(branch)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         payload["remote_sha"] = remote_sha
+
+        if line_ending_only_dirty:
+            reconcile_line_ending_only_drift(remote_sha, dirty)
+            dirty = []
+            payload["dirty_paths"] = []
 
         if legacy_agent_branch:
             legacy_branch = current_branch
