@@ -152,6 +152,9 @@ ais_assert(($groundedGemini['thinking_level'] ?? '') === 'LOW', 'grounded Gemini
 ais_assert((int)($groundedGemini['max_output_tokens'] ?? 0) <= 3000, 'grounded Gemini research output must be bounded');
 $debateGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'critique', false);
 ais_assert(($debateGemini['thinking_level'] ?? '') === $deep['gemini']['thinking_level'], 'debate Gemini must retain profile thinking');
+$convergeGemini = svais_provider_phase_config('gemini', $deep['gemini'], 'converge', false);
+ais_assert(($convergeGemini['thinking_level'] ?? '') === 'LOW', 'Gemini convergence must use low thinking to stay within bounded quota');
+ais_assert((int)($convergeGemini['max_output_tokens'] ?? 0) <= 2500, 'Gemini convergence output must be bounded');
 
 $completeTranscript = [];
 foreach (['research', 'critique', 'converge'] as $phaseName) {

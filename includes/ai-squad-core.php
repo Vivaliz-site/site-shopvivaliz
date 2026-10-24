@@ -400,6 +400,14 @@ function svais_provider_phase_config(string $provider, array $cfg, string $phase
         // independent research pass; debate and consensus retain the profile.
         $cfg['thinking_level'] = 'LOW';
         $cfg['max_output_tokens'] = min(3000, max(512, (int)($cfg['max_output_tokens'] ?? 3000)));
+    } elseif ($provider === 'gemini' && $phase === 'converge') {
+        // Convergence receives the complete research + critique transcript.
+        // Keep this final Gemini request bounded so the OAuth-backed Vertex
+        // free-tier quota is not exhausted after the two independent rounds.
+        // This preserves a real Gemini response and fail-closed coverage; it
+        // does not substitute another provider or synthesize a missing turn.
+        $cfg['thinking_level'] = 'LOW';
+        $cfg['max_output_tokens'] = min(2500, max(512, (int)($cfg['max_output_tokens'] ?? 2500)));
     }
     return $cfg;
 }
