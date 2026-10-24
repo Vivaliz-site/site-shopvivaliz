@@ -18,6 +18,7 @@ const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || ''
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
 const browserHeadless = String(process.env.AI_SQUAD_BROWSER_HEADLESS || '').trim().toLowerCase() === 'true';
 const ephemeralProfile = configuredProfileDir === '';
+const aiSquadSurfacePattern = /(?:ai-squad|buscador)/i;
 const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
   String(process.env.AI_SQUAD_PLAYWRIGHT_MODULE || '').trim(),
@@ -134,7 +135,7 @@ try {
   if (!currentPath.endsWith('/admin/ai-squad.php') && !currentPath.endsWith('/admin/buscador.php')) {
     await page.goto('https://shopvivaliz.com.br/admin/buscador.php', { waitUntil: 'domcontentloaded', timeout: 45000 });
   }
-  await page.locator('h1').filter({ hasText: /AI Squad|Buscador/ }).waitFor({ state: 'visible' });
+  await page.locator('h1').filter({ hasText: aiSquadSurfacePattern }).waitFor({ state: 'visible' });
   await page.waitForFunction(() => {
     const value = document.querySelector('#models')?.textContent || '';
     return value && !value.includes('Carregando') && !value.includes('Não foi possível');
