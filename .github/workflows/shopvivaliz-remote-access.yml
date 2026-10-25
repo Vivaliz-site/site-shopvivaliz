@@ -698,7 +698,7 @@ jobs:
               cleanup_gemini_controller() { "${SSH[@]}" "rm -rf '$remote_dir'"; }
               trap cleanup_gemini_controller RETURN
               "${SSH[@]}" "install -d -m 700 '$remote_dir/scripts' '$remote_dir/scripts/continuity' '$remote_dir/deploy/systemd' '$remote_dir/docs/knowledge'"
-              for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
+              for source in agent_task_state.py certify-audit-manifest.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py attest-gemini-free-tier.py run_background_ollama.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
                 "${SSH[@]}" "dd of='$remote_dir/scripts/$source' status=none && chmod 700 '$remote_dir/scripts/$source'" < "scripts/$source"
               done
               for source in scripts/continuity/*.py; do
