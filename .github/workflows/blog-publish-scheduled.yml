@@ -24,6 +24,14 @@ jobs:
           mkdir -p artifacts/blog-publish
           printf 'run_id=%s\ngithub_sha=%s\nevent=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" > artifacts/blog-publish/context.txt
 
+      - name: Gate the single Marina writer before loading SSH material
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = "marina-a1-4c24g" || {
+            echo 'BLOG_PUBLISH_MARINA_RUNNER_REQUIRED' >&2
+            exit 75
+          }
+
       - name: Configure verified Oracle SSH
         env:
           ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
