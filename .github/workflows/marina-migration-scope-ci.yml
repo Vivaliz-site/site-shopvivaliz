@@ -15,6 +15,10 @@ on:
       - 'docs/quality/AUDIT_STATUS.md'
       - 'docs/quality/AUDIT_ESCAPE_REGISTER.md'
       - 'docs/ops/oci-marina-migration-v5-20261017.md'
+      - 'includes/marina-maintenance/**'
+      - 'api/admin/marina-maintenance*.php'
+      - 'admin/marina-maintenance.php'
+      - 'tests/php/marina_maintenance_*.php'
   push:
     branches: [main]
     paths:
@@ -30,6 +34,10 @@ on:
       - 'docs/quality/AUDIT_STATUS.md'
       - 'docs/quality/AUDIT_ESCAPE_REGISTER.md'
       - 'docs/ops/oci-marina-migration-v5-20261017.md'
+      - 'includes/marina-maintenance/**'
+      - 'api/admin/marina-maintenance*.php'
+      - 'admin/marina-maintenance.php'
+      - 'tests/php/marina_maintenance_*.php'
 
 permissions:
   contents: read
@@ -52,3 +60,18 @@ jobs:
           bash tests/should-deploy-production-test.sh
           echo MARINA_MERGE_DOCS_NONDEPLOY=PASS
           echo MARINA_PUBLIC_SCOPE_DISTINCT_FROM_DECOMMISSION=PASS
+
+      - name: Setup PHP 8.3 for maintenance contracts
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Verify Marina one-click authorization and signer safety (offline)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php tests/php/marina_maintenance_contract_test.php
+          php tests/php/marina_maintenance_broker_test.php
+          php tests/php/marina_maintenance_endpoint_test.php
+          php tests/php/marina_maintenance_ui_test.php
+          php tests/php/marina_maintenance_one_click_test.php
+          echo MARINA_INTERNAL_SIGNER_CONTRACTS=PASS
