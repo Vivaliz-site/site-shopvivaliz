@@ -25,6 +25,21 @@ class MarinaMigrationDeployTransportTests(unittest.TestCase):
         self.assertIn("CLAUDE_NATIVE_RUNTIME=READY", text)
         self.assertIn("HEALTH_AUTH_FAILURE_CLASS", text)
 
+    def test_claude_login_store_is_materialized_independently_and_validated(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn('if [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then', text)
+        self.assertIn("claudeAiOauth", text)
+        self.assertIn("accessToken", text)
+        self.assertIn("refreshToken", text)
+        self.assertIn("CLAUDE_AUTH_STORE=VALID", text)
+        self.assertIn("CLAUDE_AUTH_SOURCE=credential_store", text)
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN=/d", text)
+        self.assertNotIn(
+            'if [ -n "$MARINA_CODEX_AUTH_JSON" ] && [ -n "$MARINA_CLAUDE_CREDENTIALS_JSON" ]; then',
+            text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

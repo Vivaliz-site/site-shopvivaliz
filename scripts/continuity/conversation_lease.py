@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import fcntl, hashlib, json, os, tempfile, time, uuid
+import hashlib, json, os, sys, tempfile, time, uuid
 from pathlib import Path
 from typing import Any
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from file_lock import locked_file
 class LeaseConflict(RuntimeError): pass
 
 def _state_root()->Path:
@@ -34,8 +37,8 @@ def _write_atomic(path:Path,payload:dict[str,Any])->None:
 def _locked(conversation_id:str):
     class Lock:
         def __enter__(self):
-            self.state_path,lock_path=_paths(conversation_id); self.handle=lock_path.open("a+"); fcntl.flock(self.handle.fileno(),fcntl.LOCK_EX); return self.state_path
-        def __exit__(self,*_): fcntl.flock(self.handle.fileno(),fcntl.LOCK_UN); self.handle.close()
+            self.state_path,lock_path=_paths(conversation_id); self.context=locked_file(lock_path); self.handle=self.context.__enter__(); return self.state_path
+        def __exit__(self,*args): return self.context.__exit__(*args)
     return Lock()
 
 def _now(): return time.time()

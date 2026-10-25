@@ -32,12 +32,18 @@ assert 'SAFE_SYNC_POSTDEPLOY=DEFERRED_NEWER_MAIN' in workflow
 assert 'SAFE_SYNC_POSTDEPLOY=RUN_MATCHING_SHA' in workflow
 assert 'SAFE_SYNC_POSTDEPLOY=UNEXPECTED_DIVERGENCE' in workflow
 assert 'sudo systemctl start shopvivaliz-sync-safe.service' in workflow
+assert 'journalctl --unit=shopvivaliz-sync-safe.service' in workflow
 assert 'systemctl show --property=Result --value shopvivaliz-sync-safe.service' in workflow
 assert 'sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer' in workflow
 assert 'sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer' in workflow
 assert 'flock -n 9' in workflow
 assert 'health_score_percent -> 100' in workflow
 assert 'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
+assert 'SAFE_SYNC_DIRTY_STATUS_BEGIN' in workflow
+assert 'git -C "$root/sync-repo" status --porcelain=v1 --untracked-files=all' in workflow
+assert "Diagnose dedicated safe sync path" in workflow
+assert "SAFE_SYNC_PATH_ENTRY_COUNT" in workflow
+assert "SAFE_SYNC_GIT_METADATA=MISSING" in workflow
 assert 'git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH"' in systemd_installer
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
 assert 'exec env SHOPVIVALIZ_DEPLOY_REPO_DIR="$ROOT" "$DEPLOY_RUNNER" main' in safe_sync
@@ -49,6 +55,9 @@ assert 'systemctl is-enabled --quiet "$TIMER_NAME"' in systemd_installer
 assert 'systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager' in systemd_installer
 assert 'SAFE_SYNC_INSTALL=PASS' in systemd_installer
 assert 'DEPLOY_CLASSIFIER="${DEPLOY_CLASSIFIER:-$ROOT/scripts/should-deploy-production.sh}"' in safe_sync
+assert 'git -C "$ROOT" config core.autocrlf false' in safe_sync
+assert 'git -C "$ROOT" diff --quiet --ignore-space-at-eol -- .' in safe_sync
+assert 'SAFE_SYNC_REPAIR=NORMALIZED_LINE_ENDING_ONLY_DRIFT' in safe_sync
 assert 'git -C "$ROOT" diff --name-only "$active_sha" "$repo_sha" | bash "$DEPLOY_CLASSIFIER"' in safe_sync
 assert 'if [ "$should_deploy" = false ]' in safe_sync
 assert 'nao exige deploy; release preservada' in safe_sync

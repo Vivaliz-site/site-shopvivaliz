@@ -43,6 +43,19 @@ primary="$(run_selector primary)"
 fallback="$(run_selector fallback)"
 [[ "$fallback" == "5558" ]] || { echo "expected fallback 5558, got $fallback" >&2; exit 1; }
 
+cat > "$TMP/curl" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "${*: -1}" in
+  *:5557/health) printf '%s\n' '{"status":"ok","environment":"fred-win","mcp_version":"1.0.0"}' ;;
+  *:5558/health) printf '%s\n' '{"status":"ok","environment":"desktop-kocepsv","mcp_version":"1.0.0"}' ;;
+  *) exit 9 ;;
+esac
+SH
+chmod +x "$TMP/curl"
+local="$(PATH="$TMP:$PATH" SV_RELAY_LOCAL=1 bash "$SELECTOR")"
+[[ "$local" == "5557" ]] || { echo "expected local 5557, got $local" >&2; exit 1; }
+
 set +e
 run_selector wrong_env >/tmp/relay-selector-wrong.out 2>/tmp/relay-selector-wrong.err
 wrong_rc=$?
@@ -50,6 +63,10 @@ set -e
 [[ "$wrong_rc" -ne 0 ]] || { echo 'unexpected environment must fail selection' >&2; exit 1; }
 
 grep -Fq 'scripts/select-active-products-browser-relay.sh' "$WORKFLOW"
+grep -Fq 'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]' "$WORKFLOW"
+grep -Fq "SV_RELAY_LOCAL: '1'" "$WORKFLOW"
+grep -Fq 'ubuntu@137.131.173.240' "$WORKFLOW"
+grep -Fq 'marina-browser-known-hosts' "$WORKFLOW"
 grep -Fq 'SV_BROWSER_RELAY_PORT' "$WORKFLOW"
 grep -Fq "http://127.0.0.1:{port}/mcp/tool/execute_command" "$WORKFLOW"
 grep -Fq "bash tests/active-products-browser-relay-fallback-regression.sh" "$QUALITY"

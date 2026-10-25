@@ -116,6 +116,76 @@ def is_preserved_path(path: str) -> bool:
     return False
 
 
+def _normalized_line_endings(value: bytes) -> bytes:
+    return value.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _line_ending_only_paths() -> list[str] | None:
+    status = run(["git", "status", "--porcelain=v1", "--untracked-files=all"], check=True)
+    if not status.stdout.strip():
+        return []
+    staged = run(["git", "diff", "--cached", "--quiet", "--"])
+    untracked = run(["git", "ls-files", "--others", "--exclude-standard"], check=True)
+    if staged.returncode != 0:
+        log.warning("normalizacao recusada: existem alteracoes staged")
+        return None
+    if untracked.stdout.strip():
+        log.warning("normalizacao recusada: existem arquivos nao rastreados")
+        return None
+    paths = [line[3:].strip() for line in status.stdout.splitlines() if line and len(line) > 3]
+    for path in paths:
+        relative = Path(path)
+        if relative.is_absolute() or ".." in relative.parts:
+            return None
+        working = REPO_DIR / relative
+        if working.is_symlink():
+            log.warning("normalizacao recusada: caminho symlink %s", path)
+            return None
+        if not working.is_file() or b"\x00" in working.read_bytes():
+            log.warning("normalizacao recusada: caminho binario ou ausente %s", path)
+            return None
+        head = subprocess.run(
+            ["git", "show", f"HEAD:{path}"],
+            cwd=REPO_DIR,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+        if head.returncode != 0 or b"\x00" in head.stdout:
+            log.warning("normalizacao recusada: blob HEAD indisponivel ou binario %s", path)
+            return None
+        if _normalized_line_endings(working.read_bytes()) != _normalized_line_endings(head.stdout):
+            log.warning("normalizacao recusada: conteudo diferente de HEAD %s", path)
+            return None
+    return paths
+
+
+def normalize_line_ending_only_drift() -> bool:
+    """Repair only a proven CRLF/LF-only drift in the operational checkout."""
+    paths = _line_ending_only_paths()
+    if not paths:
+        return False
+
+    for path in paths:
+        # Use Git's attribute-aware checkout instead of writing blob bytes
+        # directly. A repository may declare eol=lf while the HEAD blob still
+        # contains CRLF; direct writes recreate the dirty state.
+        run(["git", "restore", "--source=HEAD", "--worktree", "--", path], check=True)
+        post_restore = run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", path],
+            check=True,
+        )
+        eol = run(["git", "ls-files", "--eol", "--", path], check=True)
+        log.info(
+            "normalizacao pos-restore path=%s status=%s eol=%s",
+            path,
+            post_restore.stdout.strip() or "clean",
+            eol.stdout.strip() or "unknown",
+        )
+    log.warning("drift de fim de linha normalizado; nenhum conteudo foi alterado")
+    return True
+
+
 def tracked_dirty_paths() -> list[str]:
     result = run(["git", "status", "--porcelain"], check=True)
     paths: list[str] = []
@@ -126,6 +196,29 @@ def tracked_dirty_paths() -> list[str]:
         if path:
             paths.append(path)
     return unsafe_dirty_paths(paths)
+
+
+def reconcile_line_ending_only_drift(remote_sha: str, dirty: list[str]) -> None:
+    """Replace a proven line-ending-only drift with the fetched remote tree.
+
+    This is needed for legacy clones whose current HEAD blob itself has mixed
+    line endings: restoring that old HEAD can remain dirty under its eol
+    attribute. The proof is repeated immediately before replacement so a
+    concurrent semantic edit still fails closed.
+    """
+    remaining = _line_ending_only_paths()
+    if remaining is None or set(remaining) != set(dirty):
+        raise RuntimeError("drift de fim de linha mudou durante o fetch; sync abortado")
+    run(["git", "restore", "--source", remote_sha, "--staged", "--worktree", "--", "."], check=True)
+    # The worktree and index now contain the fetched source of truth; advance
+    # the dedicated operational branch without reintroducing the old mixed
+    # HEAD blob through a merge attempt.
+    run(["git", "reset", "--hard", remote_sha], check=True)
+    after = tracked_dirty_paths()
+    if after:
+        raise RuntimeError(
+            "checkout remoto permaneceu sujo apos reconciliacao: " + ", ".join(after)
+        )
 
 
 def local_branch_exists(branch: str) -> bool:
@@ -262,13 +355,26 @@ def main() -> int:
     try:
         local_sha = git_output(["rev-parse", "HEAD"])
         current_branch = git_output(["branch", "--show-current"])
+        run(["git", "config", "core.autocrlf", "false"], check=True)
+        run(["git", "config", "core.eol", "lf"], check=True)
+        line_ending_drift_normalized = normalize_line_ending_only_drift()
         dirty = tracked_dirty_paths()
+        line_ending_only_dirty = bool(dirty) and line_ending_drift_normalized and set(
+            _line_ending_only_paths() or []
+        ) == set(dirty)
+        log.info(
+            "Safe sync dirty precheck: normalized_line_endings=%s line_ending_only=%s paths=%s",
+            line_ending_drift_normalized,
+            line_ending_only_dirty,
+            ",".join(dirty) if dirty else "none",
+        )
         payload.update(
             {
                 "branch": current_branch,
                 "local_sha": local_sha,
                 "remote_sha": None,
                 "dirty_paths": dirty,
+                "line_ending_drift_normalized": line_ending_drift_normalized,
             }
         )
 
@@ -286,7 +392,7 @@ def main() -> int:
             log.error(payload["message"])
             return 2
 
-        if dirty:
+        if dirty and not line_ending_only_dirty:
             payload["action"] = "blocked-dirty-tree"
             payload["message"] = (
                 "working tree contem alteracoes; sync seguro abortado antes do fetch"
@@ -294,6 +400,10 @@ def main() -> int:
             write_status(payload)
             log.error("%s: %s", payload["message"], ", ".join(dirty))
             return 3
+        if line_ending_only_dirty:
+            log.warning(
+                "drift de fim de linha sera reconciliado contra o SHA remoto apos o fetch"
+            )
 
         health = check_local_health()
         health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
@@ -310,6 +420,11 @@ def main() -> int:
         fetch_canonical_branch(branch)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         payload["remote_sha"] = remote_sha
+
+        if line_ending_only_dirty:
+            reconcile_line_ending_only_drift(remote_sha, dirty)
+            dirty = []
+            payload["dirty_paths"] = []
 
         if legacy_agent_branch:
             legacy_branch = current_branch

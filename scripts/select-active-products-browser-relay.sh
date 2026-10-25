@@ -12,15 +12,19 @@ probe_relay() {
   local expected_environment="$2"
   local health rc
 
-  if ! health="$("$SSH_BIN" \
-    -o BatchMode=yes \
-    -o StrictHostKeyChecking=yes \
-    -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE" \
-    -o ConnectTimeout=10 \
-    -i "$IDENTITY_FILE" \
-    "$VM_USER@$VM_HOST" \
-    "curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:$port/health" \
-    2>/dev/null)"; then
+  if [[ "${SV_RELAY_LOCAL:-0}" == 1 ]]; then
+    if ! health="$(curl -fsS --connect-timeout 3 --max-time 8 "http://127.0.0.1:$port/health" 2>/dev/null)"; then
+      return 1
+    fi
+  elif ! health="$("$SSH_BIN" \
+      -o BatchMode=yes \
+      -o StrictHostKeyChecking=yes \
+      -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE" \
+      -o ConnectTimeout=10 \
+      -i "$IDENTITY_FILE" \
+      "$VM_USER@$VM_HOST" \
+      "curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:$port/health" \
+      2>/dev/null)"; then
     return 1
   fi
   EXPECTED_ENVIRONMENT="$expected_environment" python3 -c '

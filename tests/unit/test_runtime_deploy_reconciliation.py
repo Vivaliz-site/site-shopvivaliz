@@ -60,6 +60,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('exec 8>"$shared/locks/repo-sync.lock"', text)
         self.assertIn('if ! flock -w 120 8; then', text)
         self.assertIn('SAFE_SYNC_RUN_ON_INSTALL=false', text)
+        self.assertIn('sudo systemctl enable --now shopvivaliz-catalog-reconcile.timer', text)
         self.assertNotIn('/var/lock/shopvivaliz-deploy.lock', text)
         self.assertNotIn('expected_runner_blob=', text)
 

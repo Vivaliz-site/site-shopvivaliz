@@ -19,6 +19,7 @@
 // remote-debugging port open. If that port is not reachable, the worker
 // fails loudly with an actionable message instead of silently doing nothing.
 import fs from 'node:fs';
+import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -331,9 +332,8 @@ const monitorOrphanSweepDue = new Map();
 // this exact monitor basename after proving that the owning PID is gone.
 // Errors must never stop the durable monitor heartbeat.
 function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
-  const slash = file.lastIndexOf('/');
-  const dir = slash > 0 ? file.slice(0, slash) : '.';
-  const prefix = file.slice(slash + 1) + '.tmp.';
+  const dir = path.dirname(file);
+  const prefix = path.basename(file) + '.tmp.';
   let removed = 0;
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -349,7 +349,7 @@ function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
       } catch (error) {
         if (error?.code !== 'ESRCH') continue; // EPERM and unknown errors fail closed.
       }
-      const candidate = dir + '/' + entry.name;
+      const candidate = path.join(dir, entry.name);
       try {
         const st = fs.lstatSync(candidate);
         if (!st.isFile() || nowMs - st.mtimeMs < MONITOR_ORPHAN_TEMP_MIN_AGE_MS) continue;
@@ -362,8 +362,7 @@ function pruneStaleMonitorTempFiles(file, nowMs = Date.now()) {
 }
 
 function persistMonitorStateFile(file, payload) {
-  const slash = file.lastIndexOf('/');
-  const dir = slash > 0 ? file.slice(0, slash) : '.';
+  const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const temp = file + '.tmp.' + process.pid;
   const fd = fs.openSync(temp, 'w', 0o600);

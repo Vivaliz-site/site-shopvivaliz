@@ -1,5 +1,21 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## Safe readiness update — 2026-10-25: Marina-only writer and certificate repair scope
+
+**BLOG_ORIGIN_FENCE_WORKFLOW=FAIL_CLOSED | MARINA_CERT_REPAIR_WORKFLOW=BLOCKED_RUNNER_NOT_PROVISIONED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+- The scheduled editorial and product-highlights email workflows now reject every runner except the short hostname `marina-a1-4c24g` before SSH material is loaded, release data is read, or campaign/email commands can run. Therefore a source runner cannot become a writer even if the legacy `shopvivaliz-a1-deploy` label remains attached. This is a versioned fail-closed guard only: it creates neither a Marina runner nor a replacement writer.
+- The manual certificate credential-reference workflow also accepts only short hostname `marina-a1-4c24g`. It still does not call Certbot renewal, publish DNS, or change routing. **MARINA_CERT_REPAIR_WORKFLOW=BLOCKED_RUNNER_NOT_PROVISIONED**: no approved GitHub Actions runner with that identity/label has been attested in this run, so the workflow must not be dispatched. An authorized GitHub self-hosted-runner administrator plus the Marina OS/protected-secret operator must provision and attest it before a manual run; that authorization is distinct from any maintenance lease.
+- The following remain official operator-only work: repair the failed MySQL logrotate identity and read back `logrotate.service`; restrict and prove the Pricing Docker volume/restart policy; enable only approved services for boot; perform any certificate issuance/renewal DNS-01 action; and make an authorized durable Supabase backup/restore. No task in this update starts services, touches Docker/MySQL, transfers Supabase data, or changes DNS.
+
+## Atualização local de prontidão — 2026-10-24: método do acompanhamento de manutenção fechado
+
+**MAINTENANCE_BROKER=NOT_PROVISIONED | OPERATION_STATUS_METHOD_GATE=PASS_LOCAL | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+- O endpoint administrativo de consulta de operação (`/api/admin/marina-maintenance-operation.php`) agora recusa qualquer método diferente de `GET` com `405`. O teste focal passou somente após a correção; também passaram os testes locais de contrato, broker, endpoints e UI de manutenção, mais lint PHP 8.3.
+- Esta evidência verifica somente o contrato local da superfície administrativa. Não provisiona broker, signatário, ticket, lease, rota privada ou acesso de operador; não aprova nem executa a retirada do timer/cron da origem.
+- Nesta rodada não houve mutação OCI, DNS, release ativa, dados comerciais, e-mail ou scheduler. A origem não foi iniciada, parada ou excluída por esta tarefa. O draft PR #3176 continua sujeito ao fluxo oficial de signatário, RBAC, lease/fencing, revisão e validação real antes de qualquer promoção.
+
 ## Atualização verificada — 2026-10-20 14:59–15:23 UTC: integridade real dos dados e writer editorial ainda na origem
 
 **DB_ROW_CONTENT_PARITY=97_OF_102 | BACKUP_BLOG_CAMPAIGN_RESTORE=PASS | BLOG_PUBLISH_SOURCE_WRITER=CONFIGURED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**

@@ -2336,6 +2336,7 @@ class BootstrapContractTests(unittest.TestCase):
             "scripts/install-chatgpt-continuity-backend-bridge.sh",
             "scripts/chatgpt-continuity/chatgpt-continuity-bridge-worker.mjs",
             "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS",
+            "CHATGPT_CONTINUITY_MARINA_TOKEN_METADATA=PASS",
             "CHATGPT_CONTINUITY_BACKEND_SERVICE=PASS",
             "CHATGPT_CONTINUITY_BRIDGE_HEARTBEAT=PASS",
             "CHATGPT_CONTINUITY_REPAIR=PASS",
@@ -2345,28 +2346,30 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertIn('target != "always-free-arm-1787907847-26"', workflow)
         repair_block = workflow.split("            chatgpt_continuity_repair)", 1)[1].split("              ;;", 1)[0]
         self.assertNotIn('cat "$token_file"', repair_block)
-        self.assertIn('dd if="$token_file" status=none', repair_block)
+        self.assertIn('sudo -n dd if=\'$marina_token_file\' status=none', repair_block)
+        self.assertIn('backend_sha="$(sudo -n sha256sum -- "$backend_token_file"', repair_block)
+        self.assertIn('MARINA_PUBLIC_IP: 137.131.173.240', workflow)
+        self.assertIn('sed -i \'/^10\\.0\\.1\\.38[[:space:]]/d\' "$HOME/.ssh/known_hosts"', workflow)
+        self.assertIn('sudo -n cat /etc/ssh/ssh_host_ed25519_key.pub', workflow)
+        self.assertIn('sudo -n mktemp "$dir/.bridge.token.XXXXXX"', repair_block)
+        self.assertIn('sudo -n mv "$tmp" "$dir/bridge.token"', repair_block)
 
-    def test_chatgpt_continuity_repairs_normalize_site_token_metadata_without_changing_secret(self):
+    def test_chatgpt_continuity_repair_uses_marina_as_token_source(self):
         remote = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
-        oci = (ROOT / ".github" / "workflows" / "oci-bastion-private-access-bootstrap.yml").read_text(encoding="utf-8")
         remote_repair = remote.split("chatgpt_continuity_repair)", 1)[1].split("chatgpt_continuity_diagnostic)", 1)[0]
-        oci_repair = oci.split("- name: ChatGPT continuity repair through OCI Bastion", 1)[1].split("- name:", 1)[0]
-
-        for block in (remote_repair, oci_repair):
-            for needle in (
-                "sudo -n chown www-data:ubuntu",
-                "sudo -n chmod 750",
-                "sudo -n chmod 640",
-                'sudo -u ubuntu test -r "$token_file"',
-                'sha256sum -- "$token_file"',
-                "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS",
-            ):
-                self.assertIn(needle, block)
-            self.assertIn("before=", block)
-            self.assertIn("after=", block)
-            self.assertIn('if [ "$before" != "$after" ]; then', block)
-            self.assertNotIn('cat "$token_file"', block)
+        for needle in (
+            "marina_token_file=\"/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token\"",
+            "MARINA_SSH=(ssh",
+            "hostname -s",
+            "marina-a1-4c24g",
+            "CHATGPT_CONTINUITY_MARINA_TOKEN_METADATA=PASS",
+            "backend_sha=\"$(sudo -n sha256sum -- \"$backend_token_file\"",
+            "test \"$backend_sha\" = \"$marina_sha\"",
+        ):
+            self.assertIn(needle, remote_repair)
+        self.assertNotIn("python3 -c 'import secrets; print(secrets.token_hex(32))'", remote_repair)
+        self.assertNotIn('cat "$token_file"', remote_repair)
+        self.assertNotIn('dd if="$token_file" status=none', remote_repair)
 
     def test_chatgpt_continuity_repair_uses_private_loopback_bridge_tunnel(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")
@@ -2378,9 +2381,9 @@ class BootstrapContractTests(unittest.TestCase):
         for forbidden in (
             "http://10.0.1.112/api/chatgpt-continuity/bridge.php",
             "http://10.0.1.112:8080/api/chatgpt-continuity/bridge.php",
-            "https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php",
         ):
             self.assertNotIn(forbidden, repair)
+        self.assertIn("https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php", repair)
 
     def test_chatgpt_continuity_diagnostic_checks_user_service_scope(self):
         workflow = (ROOT / ".github" / "workflows" / "shopvivaliz-remote-access.yml").read_text(encoding="utf-8")

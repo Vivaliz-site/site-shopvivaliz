@@ -37,8 +37,14 @@ class DisplayRecoveryTests(unittest.TestCase):
         for name in ("shopvivaliz-dev-browser", "shopvivaliz-atendimento-browser",
                      "shopvivaliz-chatgpt-browser", "shopvivaliz-authenticated-browser-wm"):
             self.assertIn(name, body)
-        self.assertIn("Requires=shopvivaliz-xvfb99.service", body)
-        self.assertIn("After=shopvivaliz-xvfb99.service", body)
+        self.assertIn("Requires=$display_provider", body)
+        self.assertIn("After=$display_provider", body)
+        self.assertIn("if systemctl cat shopvivaliz-virtual-display.service", body)
+        self.assertIn("systemctl is-active --quiet shopvivaliz-virtual-display.service", body)
+        self.assertIn("display_provider=shopvivaliz-virtual-display.service", body)
+        self.assertIn("ERROR=canonical_virtual_display_not_active", body)
+        self.assertIn("ERROR=canonical_display_socket_missing", body)
+        self.assertIn("systemctl disable --now shopvivaliz-xvfb99.service", body)
         self.assertIn("shopvivaliz-atendimento-mcp-browser.service.d", body)
         self.assertIn("/usr/bin/xhost +SI:localuser:fredrdp", body)
         self.assertIn("XAUTHORITY=/home/fredconsole/.Xauthority", body)

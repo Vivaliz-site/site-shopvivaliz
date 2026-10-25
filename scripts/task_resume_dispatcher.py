@@ -12,7 +12,6 @@ attempted at most once; a new attempt requires a genuinely advanced checkpoint.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -23,6 +22,13 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
+
+try:
+    from .continuity.file_lock import locked_file
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "continuity"))
+    from file_lock import locked_file
 
 try:
     from . import agent_task_state as continuity_state
@@ -152,11 +158,12 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, path)
-        dir_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        if os.name != "nt":
+            dir_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -450,11 +457,12 @@ def _restore_executor_owned_no_progress(
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, state_path)
-        dir_fd = os.open(state_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        if os.name != "nt":
+            dir_fd = os.open(state_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
         return True
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -760,12 +768,13 @@ def run_once(
         "generated_at": utc_now(),
     }
 
-    with lock_path.open("a+", encoding="utf-8") as lock:
-        try:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            summary["locked"] = True
-            return summary
+    try:
+        context = locked_file(lock_path, blocking=False)
+        context.__enter__()
+    except BlockingIOError:
+        summary["locked"] = True
+        return summary
+    try:
 
         reconciliation = reconcile_executions(runtime, project)
         for key in ("in_flight", "reconciled", "recovered", "progressed", "terminal", "no_progress", "failed"):
@@ -882,6 +891,9 @@ def run_once(
                 summary["no_progress"] += 1
             else:
                 summary["failed"] += 1
+
+    finally:
+        context.__exit__(None, None, None)
 
     return summary
 

@@ -79,7 +79,7 @@ permissions:
 jobs:
   execute:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-backend-browser]
     timeout-minutes: 20
 
     steps:
@@ -182,6 +182,7 @@ jobs:
       - name: Configure backend SSH
         if: steps.req.outputs.target != 'shopvivaliz-free-a1' || steps.req.outputs.action == 'ai_squad_ui_audit' || startsWith(steps.req.outputs.action, 'rustdesk_') || startsWith(steps.req.outputs.action, 'agent_ssh_')
         env:
+          TARGET: ${{ steps.req.outputs.target }}
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
@@ -193,6 +194,13 @@ jobs:
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+          if [ "$TARGET" = "always-free-arm-1787907847-26" ]; then
+            test -r /etc/ssh/ssh_host_ed25519_key.pub
+            backend_host_key="$(sudo -n cat /etc/ssh/ssh_host_ed25519_key.pub)"
+            test -n "$backend_host_key"
+            sed -i '/^10\.0\.1\.38[[:space:]]/d' "$HOME/.ssh/known_hosts"
+            printf '10.0.1.38 %s\n' "$backend_host_key" >> "$HOME/.ssh/known_hosts"
+          fi
 
       - name: Execute AI Squad UI audit
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
@@ -214,30 +222,61 @@ jobs:
           local_evidence="${RUNNER_TEMP}/ai-squad-ui-evidence"
           marina_key="${RUNNER_TEMP}/marina-ui-audit-key"
           marina_known_hosts="${RUNNER_TEMP}/marina-ui-audit-known-hosts"
-          printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
-          printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
-          printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
-          chmod 600 "$marina_key" "$marina_known_hosts"
-          marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
+          marina_execution_mode=remote
+          if [ "$(hostname -s)" = 'marina-a1-4c24g' ]; then
+            marina_execution_mode=local
+          fi
           ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
 
-          ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
-          scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          if [ "$marina_execution_mode" = local ]; then
+            php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          else
+            printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
+            printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
+            printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
+            chmod 600 "$marina_key" "$marina_known_hosts"
+            marina_ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key")
+            ssh "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP" "php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file='$cred'"
+            scp "${marina_ssh_opts[@]}" "ubuntu@$MARINA_PUBLIC_IP:$cred" "$cred"
+          fi
           chmod 600 "$cred"
           test -s "$cred"
           test "$(stat -c '%a' "$cred")" = "600"
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
-          scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
-          scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
+          browser_execution_mode=remote
+          if [ -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium ]; then
+            browser_execution_mode=local
+          fi
 
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
-          mkdir -p "$local_evidence"
-          scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
-          cp "$local_evidence/primary.png" "$local_shot"
-          cp "$local_evidence/primary-trace.zip" "$local_trace"
-          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          if [ "$browser_execution_mode" = local ]; then
+            test -x /home/ubuntu/.local/bin/shopvivaliz-browser-chromium
+            case "$remote_evidence" in /tmp/ai-squad-ui-evidence-*) ;; *) exit 2 ;; esac
+            install -d -m 700 "$remote_evidence"
+            playwright_module=/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js
+            if [ ! -s "$playwright_module" ]; then
+              playwright_root="$RUNNER_TEMP/ai-squad-ui-playwright"
+              mkdir -p "$playwright_root"
+              if [ ! -s "$playwright_root/node_modules/playwright/index.js" ]; then
+                PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix "$playwright_root" --no-save --ignore-scripts playwright
+              fi
+              playwright_module="$playwright_root/node_modules/playwright/index.js"
+            fi
+            test -s "$playwright_module"
+            DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_PLAYWRIGHT_MODULE="$playwright_module" AI_SQUAD_ADMIN_CREDENTIAL_FILE="$cred" AI_SQUAD_UI_SCREENSHOT="$remote_evidence/primary.png" AI_SQUAD_UI_TRACE="$remote_evidence/primary-trace.zip" AI_SQUAD_UI_EVIDENCE_DIR="$remote_evidence" AI_SQUAD_UI_EVIDENCE_ROLE=primary AI_SQUAD_UI_AUDITOR="github-actions-primary-${GITHUB_RUN_ID}" AI_SQUAD_UI_SESSION_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary" AI_SQUAD_UI_TRACE_ID=primary-trace AI_SQUAD_UI_SCREENSHOT_ID=primary-screenshot node scripts/ai-squad-ui-audit.mjs
+            mkdir -p "$local_evidence"
+            cp -R "$remote_evidence/." "$local_evidence/"
+          else
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
+            scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
+            scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "install -d -m 700 '${remote_evidence}' && DISPLAY=:98 SHOPVIVALIZ_CHROMIUM_PATH=/home/ubuntu/.local/bin/shopvivaliz-browser-chromium AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_evidence}/primary.png' AI_SQUAD_UI_TRACE='${remote_evidence}/primary-trace.zip' AI_SQUAD_UI_EVIDENCE_DIR='${remote_evidence}' AI_SQUAD_UI_EVIDENCE_ROLE='primary' AI_SQUAD_UI_AUDITOR='github-actions-primary-${GITHUB_RUN_ID}' AI_SQUAD_UI_SESSION_ID='${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-primary' AI_SQUAD_UI_TRACE_ID='primary-trace' AI_SQUAD_UI_SCREENSHOT_ID='primary-screenshot' node '${remote_script}'"
+            mkdir -p "$local_evidence"
+            scp -r "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_evidence}/." "$local_evidence/"
+            cp "$local_evidence/primary.png" "$local_shot"
+            cp "$local_evidence/primary-trace.zip" "$local_trace"
+            ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -rf '${remote_script}' '${remote_shot}' '${remote_trace}' '${remote_evidence}'"
+          fi
           test -s "$local_evidence/primary.png"
           test -s "$local_evidence/primary-trace.zip"
           test -s "$local_evidence/primary-execution.json"
@@ -585,6 +624,9 @@ jobs:
           SHOPVIVALIZ_AGENT_SSH_PUBKEY: ${{ secrets.SHOPVIVALIZ_AGENT_SSH_PUBKEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+          MARINA_PUBLIC_IP: 137.131.173.240
+          MARINA_VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          MARINA_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -656,7 +698,7 @@ jobs:
               cleanup_gemini_controller() { "${SSH[@]}" "rm -rf '$remote_dir'"; }
               trap cleanup_gemini_controller RETURN
               "${SSH[@]}" "install -d -m 700 '$remote_dir/scripts' '$remote_dir/scripts/continuity' '$remote_dir/deploy/systemd' '$remote_dir/docs/knowledge'"
-              for source in agent_task_state.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
+              for source in agent_task_state.py certify-audit-manifest.py task_continuation_watchdog.py task_resume_queue.py task_resume_dispatcher.py task_resume_worker.py chatgpt_continuity_nudge_dispatcher.py run_background_gemini.py attest-gemini-free-tier.py run_background_ollama.py autonomous-provider-failover.sh safe_git_push.py gemini_24x7_controller.py install-gemini-24x7-controller.sh; do
                 "${SSH[@]}" "dd of='$remote_dir/scripts/$source' status=none && chmod 700 '$remote_dir/scripts/$source'" < "scripts/$source"
               done
               for source in scripts/continuity/*.py; do
@@ -689,53 +731,49 @@ jobs:
               echo BACKUP_V5_CANONICAL_REMOTE_ACTION=PASS
               ;;
             chatgpt_continuity_repair)
-              token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
-              token_file="$token_dir/bridge.token"
-              local_tmp="$(mktemp)"
+              backend_token_dir="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity"
+              backend_token_file="$backend_token_dir/bridge.token"
+              marina_token_file="/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity/bridge.token"
+              marina_key="$(mktemp)"
+              marina_known_hosts="$(mktemp)"
               remote_dir="/tmp/shopvivaliz-chatgpt-continuity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
               cleanup_continuity_repair() {
-                rm -f "$local_tmp"
+                rm -f "$marina_key" "$marina_known_hosts"
                 "${SSH[@]}" "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
               }
               trap cleanup_continuity_repair RETURN
 
-              if ! sudo -n test -s "$token_file"; then
-                umask 077
-                python3 -c 'import secrets; print(secrets.token_hex(32))' > "$local_tmp"
-                sudo -n install -d -o www-data -g ubuntu -m 750 "$token_dir"
-                sudo -n install -o www-data -g ubuntu -m 640 "$local_tmp" "$token_file"
-              fi
+              test -n "$MARINA_VM_KEY"
+              test -n "$MARINA_VM_KNOWN_HOSTS"
+              printf '%s\n' "$MARINA_VM_KEY" > "$marina_key"
+              printf '%s\n' "$MARINA_VM_KNOWN_HOSTS" > "$marina_known_hosts"
+              printf '%s\n' '137.131.173.240 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFdVHp7SlQxtya+znuHSQkwe+IuJ7ivaYO3Wkcy6LJnC' >> "$marina_known_hosts"
+              chmod 600 "$marina_key" "$marina_known_hosts"
+              MARINA_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$marina_known_hosts" -o ConnectTimeout=10 -i "$marina_key" "ubuntu@$MARINA_PUBLIC_IP")
 
-              before="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
-              test -n "$before"
-              sudo -n chown www-data:ubuntu "$token_dir"
-              sudo -n chmod 750 "$token_dir"
-              sudo -n chown www-data:ubuntu "$token_file"
-              sudo -n chmod 640 "$token_file"
-              after="$(sudo -n sha256sum -- "$token_file" | awk '{print $1}')"
-              test -n "$after"
-              if [ "$before" != "$after" ]; then
-                echo "::error::Continuity bridge token content changed during metadata repair"
-                exit 32
-              fi
-              sudo -u ubuntu test -r "$token_file"
-              echo "CHATGPT_CONTINUITY_SITE_TOKEN_METADATA=PASS"
+              marina_sha="$("${MARINA_SSH[@]}" "test \"\$(hostname -s)\" = marina-a1-4c24g && sudo -n test -s '$marina_token_file' && sudo -n sha256sum -- '$marina_token_file'" | awk '{print $1}')"
+              test -n "$marina_sha"
+              "${MARINA_SSH[@]}" "sudo -n python3 -c 'from pathlib import Path; v=Path(\"$marina_token_file\").read_bytes().strip(); raise SystemExit(0 if len(v) >= 32 else 1)'"
+              echo "CHATGPT_CONTINUITY_MARINA_TOKEN_METADATA=PASS"
 
-              sudo -n python3 - "$token_file" <<'PY'
-          import pathlib, sys
-          value = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
-          if len(value) < 32:
-              raise SystemExit("continuity bridge token is missing or too short")
-          PY
+              "${MARINA_SSH[@]}" "sudo -n dd if='$marina_token_file' status=none" |
+                "${SSH[@]}" 'set -Eeuo pipefail; dir=/home/ubuntu/shopvivaliz-deploy/shared/storage/private/chatgpt-continuity; sudo -n install -d -o www-data -g ubuntu -m 750 "$dir"; tmp=$(sudo -n mktemp "$dir/.bridge.token.XXXXXX"); sudo -n dd of="$tmp" status=none; sudo -n chown www-data:ubuntu "$tmp"; sudo -n chmod 640 "$tmp"; sudo -n mv "$tmp" "$dir/bridge.token"'
+              backend_sha="$(sudo -n sha256sum -- "$backend_token_file" | awk '{print $1}')"
+              test "$backend_sha" = "$marina_sha"
+              sudo -n chown www-data:ubuntu "$backend_token_dir" "$backend_token_file"
+              sudo -n chmod 750 "$backend_token_dir"
+              sudo -n chmod 640 "$backend_token_file"
+              sudo -u ubuntu test -r "$backend_token_file"
+              echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
 
               heartbeat_tmp="$(mktemp)"
-              token="$(sudo -n dd if="$token_file" status=none)"
+              token="$(sudo -n dd if="$backend_token_file" status=none)"
               if ! curl -fsS --connect-timeout 5 --max-time 15 \
                 -H 'Host: shopvivaliz.com.br' \
                 -H "Authorization: Bearer $token" \
                 -H 'Content-Type: application/json' \
                 --data '{"operation":"heartbeat"}' \
-                http://127.0.0.1:8080/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
+                https://shopvivaliz.com.br/api/chatgpt-continuity/bridge.php > "$heartbeat_tmp"; then
                 unset token
                 rm -f "$heartbeat_tmp"
                 echo "::error::Production continuity bridge heartbeat failed before backend repair"
@@ -755,7 +793,7 @@ jobs:
               "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-virtual-display.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-virtual-display.service'" < ops/systemd/shopvivaliz-virtual-display.service
               "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.service'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.service
               "${SSH[@]}" "dd of='$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer' status=none && chmod 644 '$remote_dir/ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer'" < ops/systemd/shopvivaliz-chatgpt-browser-guardian.timer
-              sudo -n dd if="$token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
+              sudo -n dd if="$backend_token_file" status=none | "${SSH[@]}" 'umask 077; tmp=$(mktemp /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/.bridge.token.XXXXXX); dd of="$tmp" status=none; chmod 600 "$tmp"; mv "$tmp" /home/ubuntu/.config/shopvivaliz-chatgpt-continuity/bridge.token'
               echo "CHATGPT_CONTINUITY_TOKEN_SYNC=PASS"
 
               "${SSH[@]}" 'sudo -n loginctl enable-linger ubuntu >/dev/null'

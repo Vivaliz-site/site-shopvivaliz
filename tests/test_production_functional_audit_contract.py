@@ -77,6 +77,17 @@ def test_marina_audit_must_probe_the_destination_not_public_origin() -> None:
     assert 'for path in / /catalogo/ /carrinho /checkout; do' in audit, "test canonical path directly without following redirects"
 
 
+def test_marina_runner_uses_local_probe_path_without_public_ssh_fallback() -> None:
+    marina = (ROOT / ".github" / "workflows" / "production-functional-audit-marina.yml").read_text(encoding="utf-8")
+
+    assert 'MARINA_EXECUTION_MODE=local' in marina
+    assert 'if [ "$MARINA_EXECUTION_MODE" = local ]; then' in marina
+    assert 'install -m 700 scripts/production-functional-audit.sh "$REMOTE_STAGE/production-functional-audit.sh"' in marina
+    assert 'bash "$stage/production-functional-audit.sh"' in marina
+    assert 'case "$REMOTE_STAGE" in /tmp/production-functional-audit-marina-*)' in marina
+    assert 'rm -rf -- "$REMOTE_STAGE"' in marina
+
+
 if __name__ == "__main__":
     test()
     test_marina_audit_must_probe_the_destination_not_public_origin()

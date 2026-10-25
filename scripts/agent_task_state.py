@@ -10,12 +10,12 @@ All other states are non-terminal and must retain a concrete next action.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import functools
 import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,6 +30,15 @@ if str(CONTINUITY_LIB_DIR) not in sys.path:
     sys.path.insert(0, str(CONTINUITY_LIB_DIR))
 import conversation_lease
 import runtime_lock
+from file_lock import locked_file
+
+# The Linux implementation historically used fcntl.LOCK_EX; file_lock keeps
+# that invariant while selecting the Windows msvcrt equivalent at runtime.
+
+if not hasattr(os, "geteuid"):
+    os.geteuid = lambda: -1  # type: ignore[attr-defined]
+if not hasattr(os, "chown"):
+    os.chown = lambda *args: None  # type: ignore[attr-defined]
 
 
 def resolve_runtime_dir(root: Path, configured: str = "") -> Path:
@@ -182,19 +191,12 @@ def _state_lock():
     """Serialize all checkpoint transitions across interactive and detached writers."""
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNTIME_DIR / STATE_LOCK_FILE
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
-    try:
-        if os.geteuid() == 0:
+    with locked_file(path) as handle:
+        if getattr(os, "geteuid", lambda: -1)() == 0:
             parent = RUNTIME_DIR.stat()
             os.chown(path, parent.st_uid, parent.st_gid)
-        os.fchmod(fd, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
+        os.chmod(path, 0o600)
+        yield
 
 
 def _serialized_transition(func):
@@ -208,7 +210,7 @@ def _serialized_transition(func):
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     runtime_owner: tuple[int, int] | None = None
-    if os.geteuid() == 0:
+    if getattr(os, "geteuid", lambda: -1)() == 0:
         parent_stat = path.parent.stat()
         runtime_owner = (parent_stat.st_uid, parent_stat.st_gid)
 
@@ -455,7 +457,8 @@ def _run_completion_checks(payload: dict[str, Any]) -> None:
     for index, argv in enumerate(_normalize_completion_checks(payload.get("completion_checks", []))):
         try:
             is_audit = _is_certifier_probe(argv)
-            result = subprocess.run(argv, stdin=subprocess.DEVNULL,
+            command = _portable_completion_argv(argv)
+            result = subprocess.run(command, stdin=subprocess.DEVNULL,
                                     stdout=subprocess.PIPE if is_audit else subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL, timeout=90 if is_audit else 10,
                                     check=False, text=is_audit)
@@ -469,6 +472,27 @@ def _run_completion_checks(payload: dict[str, Any]) -> None:
                          "argv_sha256": hashlib.sha256(json.dumps(argv).encode()).hexdigest()})
     if receipts:
         payload["completion_check_receipts"] = receipts
+
+
+def _portable_completion_argv(argv: list[str]) -> list[str]:
+    """Resolve the bounded POSIX probe executable for Windows validation."""
+    if os.name != "nt" or not argv or argv[0] != "/usr/bin/test":
+        return argv
+    candidates: list[Path] = []
+    git = shutil.which("git")
+    if git:
+        git_path = Path(git).resolve()
+        candidates.extend([
+            git_path.parent / "test.exe",
+            git_path.parent.parent / "usr" / "bin" / "test.exe",
+            git_path.parent.parent.parent / "usr" / "bin" / "test.exe",
+        ])
+    program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+    candidates.append(Path(program_files) / "Git" / "usr" / "bin" / "test.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return [str(candidate), *argv[1:]]
+    return argv
 
 
 @_serialized_transition

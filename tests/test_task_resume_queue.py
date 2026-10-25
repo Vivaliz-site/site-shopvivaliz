@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import tempfile
 import unittest
@@ -135,7 +136,8 @@ class TaskResumeQueueCertificationTests(unittest.TestCase):
             result = queue.compact_queue(self.runtime, force=True)
 
         self.assertTrue(result["compacted"])
-        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+        expected_mode = 0o666 if os.name == "nt" else 0o640
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), expected_mode)
         chown.assert_any_call(mock.ANY, before.st_uid, before.st_gid)
 
     def test_watchdog_automatically_compacts_backlog_without_losing_current_retry(self) -> None:

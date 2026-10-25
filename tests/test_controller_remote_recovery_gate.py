@@ -66,6 +66,17 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
         self.assertIn("controller-recovery-with-lease.py", stage)
         self.assertNotIn("bash '$remote_dir/scripts/install-gemini-24x7-controller.sh'", stage)
 
+    def test_workflow_stages_every_script_required_by_controller_installer(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        installer = (ROOT / "scripts" / "install-gemini-24x7-controller.sh").read_text(encoding="utf-8")
+        match = re.search(r"^            gemini_24x7_controller_install\)(.*?)^            chatgpt_continuity_repair\)", workflow, re.M | re.S)
+        self.assertIsNotNone(match, "missing canonical backend recovery action")
+        stage = match.group(1)
+        required = re.search(r"for source in (.*?)\; do", installer, re.S)
+        self.assertIsNotNone(required, "installer source list missing")
+        for source in required.group(1).split():
+            self.assertIn(source, stage, f"workflow does not stage installer dependency {source}")
+
     def test_rejects_invalid_commit_before_lock(self):
         helper = load_helper()
         runtime = FakeRuntime()
@@ -84,6 +95,10 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
             def run(cmd, **kwargs):
                 if cmd[0] == "git":
                     self.assertTrue(runtime.live)
+                    self.assertEqual(
+                        ["-c", f"safe.directory={helper.CONTROLLER_REPO}", "-C", str(helper.CONTROLLER_REPO)],
+                        cmd[1:5],
+                    )
                     return subprocess.CompletedProcess(cmd, 0, stdout=SHA + "\trefs/heads/main\n")
                 if cmd[0] == "bash":
                     self.assertTrue(runtime.live)

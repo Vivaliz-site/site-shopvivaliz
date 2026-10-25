@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -17,6 +18,39 @@ sys.path.insert(0, str(SCRIPTS))
 
 import agent_task_state as task_state
 import task_continuation_watchdog as watchdog
+
+
+def bash_binary() -> str:
+    if os.name != "nt":
+        return "bash"
+    git = shutil.which("git")
+    candidates = []
+    if git:
+        git_path = Path(git).resolve()
+        candidates.extend([
+            git_path.parent / "bash.exe",
+            git_path.parent.parent / "usr" / "bin" / "bash.exe",
+            git_path.parent.parent.parent / "usr" / "bin" / "bash.exe",
+        ])
+    candidates.append(Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "usr" / "bin" / "bash.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return "bash"
+
+
+def shell_path(path: Path) -> str:
+    """Convert a Windows path to the Git Bash form used by fake commands."""
+    value = path.resolve().as_posix()
+    if len(value) >= 2 and value[1] == ":":
+        value = f"/{value[0].lower()}{value[2:]}"
+    return value
+
+
+def prepend_fake_bin(env: dict[str, str], fake_bin: Path) -> None:
+    env["PATH"] = ":".join(
+        [shell_path(fake_bin), shell_path(Path(bash_binary()).parent), env.get("PATH", "")]
+    )
 
 
 def load_dispatcher():
@@ -122,7 +156,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
         self.assertIn("PROGRESS_CONFIRMED", text, "adopter must not infer historical task completion")
-        result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
+        result = subprocess.run([bash_binary(), "-n", str(script)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
@@ -354,11 +388,11 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -406,11 +440,11 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -539,12 +573,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_CURL_COUNT_FILE"] = str(count_file)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -593,12 +627,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             )
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_CURL_COUNT_FILE"] = str(count_file)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -645,13 +679,13 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             executable("sleep", "exit 0\n")
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             env["GUARDIAN_FAKE_PID"] = "99999999"
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -765,12 +799,12 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
             executable("sleep", "exit 0\n")
 
             env = os.environ.copy()
-            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            prepend_fake_bin(env, fake_bin)
             env["GUARDIAN_NODE_COUNT_FILE"] = str(node_count)
             env["GUARDIAN_SYSTEMCTL_LOG"] = str(systemctl_log)
             env["CHATGPT_BROWSER_HEALTH_FILE"] = str(health_file)
             result = subprocess.run(
-                ["bash", str(guardian)],
+                [bash_binary(), str(guardian)],
                 env=env,
                 text=True,
                 capture_output=True,
@@ -815,7 +849,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
     def test_x99_auth_guard_adds_cookie_over_stdin_and_waits_for_live_xserver(self) -> None:
         guard = ROOT / "scripts" / "chatgpt-continuity" / "shopvivaliz-virtual-display-guard.sh"
         text = guard.read_text()
-        self.assertEqual(subprocess.run(["bash", "-n", str(guard)], capture_output=True).returncode, 0)
+        self.assertEqual(subprocess.run([bash_binary(), "-n", str(guard)], capture_output=True).returncode, 0)
         self.assertIn('[[ "$(id -un)" == \'fredrdp\' ]]', text)
         self.assertIn("display_99_unverified_owner", text)
         self.assertIn("existing_display_became_unverifiable", text)
@@ -842,7 +876,7 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         self.assertLess(body.index(start_display), body.index(start_browser))
         self.assertNotIn('companion_browser_units=', body)
         self.assertEqual(
-            subprocess.run(["bash", "-n", str(ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh")], capture_output=True).returncode,
+            subprocess.run([bash_binary(), "-n", str(ROOT / "scripts" / "install-chatgpt-continuity-backend-bridge.sh")], capture_output=True).returncode,
             0,
         )
 
@@ -882,9 +916,10 @@ class ChatgptContinuityBackendRuntimeTests(unittest.TestCase):
         worker = (ROOT / "scripts" / "chatgpt-continuity" / "chatgpt-continuity-bridge-worker.mjs").read_text(encoding="utf-8")
         self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", installer)
         self.assertIn("shopvivaliz-chatgpt-continuity-a1-tunnel.service", installer)
-        self.assertIn("/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor", installer)
+        self.assertIn("/home/ubuntu/.ssh/oci-marina-a1-2026", installer)
         self.assertIn("-L 127.0.0.1:18081:127.0.0.1:8080", installer)
-        self.assertIn("ubuntu@10.0.1.112", installer)
+        self.assertIn("137.131.173.240", installer)
+        self.assertIn("/home/ubuntu/.ssh/known_hosts.old", installer)
         self.assertIn("CHATGPT_CONTINUITY_BRIDGE_HOST_HEADER", installer)
         self.assertIn("http://127.0.0.1:18081/api/chatgpt-continuity/bridge.php", dispatcher)
         self.assertIn("Host", dispatcher)

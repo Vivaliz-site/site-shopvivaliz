@@ -1,4 +1,4 @@
-name: ML Pricing Certbot Renewal Credentials Repair
+name: ML Pricing Marina Certbot Renewal Credentials Repair
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ml-pricing-origin-certbot-repair
+  group: ml-pricing-marina-certbot-repair
   cancel-in-progress: false
 
 jobs:
@@ -21,17 +21,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Gate origin identity, cert and renewal config
+      - name: Gate Marina identity, cert and renewal config
         shell: bash
         run: |
           set -euo pipefail
           test "${GITHUB_REPOSITORY}" = "Vivaliz-site/site-shopvivaliz"
-          test "$(hostname)" = "shopvivaliz-free-a1"
+          test "$(hostname -s)" = "marina-a1-4c24g"
           test -f /etc/letsencrypt/renewal/pricing.shopvivaliz.com.br.conf
           test -s /etc/letsencrypt/live/pricing.shopvivaliz.com.br/fullchain.pem
           test -f scripts/pricing-certbot-repair.py
           python3 -m py_compile scripts/pricing-certbot-repair.py
-          echo 'PRICING_REPAIR_ORIGIN_GATE=PASS'
+          echo 'PRICING_REPAIR_MARINA_GATE=PASS'
 
       - name: Restore persistent scoped DNS credentials securely
         env:
@@ -70,4 +70,5 @@ jobs:
 
 # Never dispatch the DNS-publishing production-bootstrap workflow to fix this
 # path. This workflow does not call Certbot renewal, modify DNS, create tokens,
-# copy secrets to Marina or change production routing.
+# change production routing. It is manual-only and fails unless the approved
+# Marina runner, renewal configuration, certificate and protected secret exist.

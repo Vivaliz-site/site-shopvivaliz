@@ -36,6 +36,7 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/ai-provider-audit.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🧪 Auditoria IA</a>
                 <a href="/admin/buscador.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(37,99,235,0.35);">🔎 Buscador</a>
                 <a href="/admin/squad-chat.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(14,165,233,0.28);">💬 Squad Chat</a>
+                <a href="/admin/marina-maintenance.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(15,118,110,0.45);">🛡️ Manutenção Marina</a>
                 <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
@@ -89,6 +90,9 @@ $codename = (string)($version['codename'] ?? '');
                 </a>
                 <a href="/admin/squad-chat.php" style="background: #0369a1; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     💬 Squad Chat
+                </a>
+                <a href="/admin/marina-maintenance.php" style="background: #0f766e; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🛡️ Manutenção Marina
                 </a>
                 <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     ⚙️ Integrações
