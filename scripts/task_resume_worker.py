@@ -121,7 +121,7 @@ def worker_run_once(
     except BlockingIOError:
         summary["locked"] = True
         return summary
-    with context:
+    try:
 
         summary["recovered"] = _recover_dead_running_records(runtime)
         candidates = _queued_records(runtime)
@@ -226,6 +226,8 @@ def worker_run_once(
         else:
             summary["failed"] = 1
         return summary
+    finally:
+        context.__exit__(None, None, None)
 
 
 def main() -> int:
