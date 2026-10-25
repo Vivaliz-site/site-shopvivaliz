@@ -90,7 +90,7 @@ $broker = new SvMarinaMaintenanceBrokerClient(static function (string $method, s
 $signer = new SvMarinaMaintenanceSignerClient(static function (string $method, string $path, array $payload): array {
     return $path === '/v1/maintenance/signer/status'
         ? ['state' => 'READY']
-        : ['state' => 'TICKET_ISSUED', 'ticket' => marina_one_click_ticket(), 'signature_b64' => base64_encode('independent-signature')];
+        : ['state' => 'TICKET_ISSUED', 'ticket' => marina_one_click_ticket(), 'signature_b64' => base64_encode(str_repeat('s', 64))];
 }, $signerConfig);
 $service = new SvMarinaMaintenanceAuthorizationService($broker, $signer);
 $success = $service->authorize($context);
