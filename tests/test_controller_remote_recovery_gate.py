@@ -84,6 +84,10 @@ class ControllerRecoveryWorkflowTests(unittest.TestCase):
             def run(cmd, **kwargs):
                 if cmd[0] == "git":
                     self.assertTrue(runtime.live)
+                    self.assertEqual(
+                        ["-c", f"safe.directory={helper.CONTROLLER_REPO}", "-C", str(helper.CONTROLLER_REPO)],
+                        cmd[1:5],
+                    )
                     return subprocess.CompletedProcess(cmd, 0, stdout=SHA + "\trefs/heads/main\n")
                 if cmd[0] == "bash":
                     self.assertTrue(runtime.live)
