@@ -167,11 +167,16 @@ function sv_marina_ticket_matches_authorization(array $ticket, array $context, a
 
 function sv_marina_signature_is_valid_shape(string $signature): bool
 {
-    if ($signature === '' || strlen($signature) > 1024) {
+    // Detached Ed25519 signatures are exactly 64 bytes. This only verifies
+    // canonical encoding and length; the independent broker must authenticate
+    // the registered signer and verify Ed25519 against the signed ticket.
+    if (strlen($signature) !== 88) {
         return false;
     }
     $decoded = base64_decode($signature, true);
-    return is_string($decoded) && $decoded !== '' && strlen($decoded) <= 768;
+    return is_string($decoded)
+        && strlen($decoded) === 64
+        && hash_equals(base64_encode($decoded), $signature);
 }
 
 /** @param array<string, mixed> $context */
