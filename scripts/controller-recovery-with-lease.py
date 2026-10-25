@@ -49,7 +49,17 @@ def promote(
             lease["lease_id"], lease["fencing_token"], "controller_promote"
         )
         result = run(
-            ["git", "-C", str(repo), "ls-remote", "--heads", "origin", "main"],
+            [
+                "git",
+                "-c",
+                f"safe.directory={repo}",
+                "-C",
+                str(repo),
+                "ls-remote",
+                "--heads",
+                "origin",
+                "main",
+            ],
             check=True,
             stdout=subprocess.PIPE,
             text=True,
