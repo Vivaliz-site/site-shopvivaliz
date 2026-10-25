@@ -63,7 +63,7 @@ $context = [
     'requested_by' => 'admin:42',
     'mfa_verified_at' => time(),
 ];
-$success = $configured->authorize(marina_broker_ticket(), base64_encode('detached-signature'), $context, ['preflight_id' => 'preflight-abc-123', 'preflight_digest' => str_repeat('a', 64)]);
+$success = $configured->authorize(marina_broker_ticket(), base64_encode(str_repeat('s', 64)), $context, ['preflight_id' => 'preflight-abc-123', 'preflight_digest' => str_repeat('a', 64)]);
 marina_broker_assert(($success['state'] ?? '') === 'SUCCEEDED_RECONCILED', 'configured transport response must be preserved');
 marina_broker_assert(count($transportCalls) === 1, 'configured broker should receive one approval request');
 marina_broker_assert(($transportCalls[0][0] ?? '') === 'POST', 'approval must use POST');
@@ -86,7 +86,7 @@ $refused = new SvMarinaMaintenanceBrokerClient(
         ...marina_broker_config(),
     ]
 );
-$refusedResult = $refused->authorize(marina_broker_ticket(), base64_encode('detached-signature'), $context, ['preflight_id' => 'preflight-abc-123', 'preflight_digest' => str_repeat('a', 64)]);
+$refusedResult = $refused->authorize(marina_broker_ticket(), base64_encode(str_repeat('s', 64)), $context, ['preflight_id' => 'preflight-abc-123', 'preflight_digest' => str_repeat('a', 64)]);
 marina_broker_assert(($refusedResult['state'] ?? '') === 'REFUSED', 'broker refusal must remain refusal');
 
 $publicHostname = new SvMarinaMaintenanceBrokerClient(static fn() => ['state' => 'READY_FOR_APPROVAL'], marina_broker_config(['broker_url' => 'https://broker.public.example']));
