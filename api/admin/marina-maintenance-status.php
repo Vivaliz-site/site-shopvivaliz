@@ -9,5 +9,5 @@ require_once __DIR__ . '/../../includes/marina-maintenance/endpoint.php';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     sv_marina_json(['ok' => false, 'state' => 'REFUSED', 'code' => 'method_not_allowed'], 405);
 }
-sv_marina_json(sv_marina_broker()->status());
+sv_marina_json(sv_marina_authorization_service()->readiness());
 

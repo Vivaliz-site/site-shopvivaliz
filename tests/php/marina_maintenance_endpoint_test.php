@@ -32,9 +32,14 @@ foreach ($files as $name => $file) {
 
 $approve = (string)file_get_contents($files['approve']);
 marina_endpoint_assert(str_contains($approve, 'sv_marina_require_recent_reauth') && str_contains($sharedSource, 'reauth_required'), 'approval must require recent re-authentication');
-marina_endpoint_assert(str_contains($approve, 'signature_b64'), 'approval must require a detached signature');
-marina_endpoint_assert(str_contains($approve, 'sv_marina_validate_ticket'), 'approval must validate the fixed ticket contract');
+marina_endpoint_assert(!str_contains($approve, 'signature_b64') && !str_contains($approve, "['ticket']"), 'approval must not accept browser-supplied ticket or signature');
+marina_endpoint_assert(str_contains($approve, 'sv_marina_authorization_context'), 'approval must derive one-click context from the authenticated session');
+marina_endpoint_assert(str_contains($approve, 'sv_marina_authorization_service'), 'approval must use the internal signer/broker orchestration service');
 marina_endpoint_assert(str_contains($brokerSource, 'operation_id') && str_contains($approve, 'sv_marina_json'), 'approval response must expose operation identifier when available');
+marina_endpoint_assert(is_file($root . '/includes/marina-maintenance/signer-client.php'), 'independent signer client must exist');
+marina_endpoint_assert(is_file($root . '/includes/marina-maintenance/authorization-service.php'), 'one-click authorization service must exist');
+marina_endpoint_assert(!str_contains($sharedSource, 'admin_recent_reauth_at') && !str_contains($sharedSource, "['recent_reauth_at']"), 'generic reauthentication must never satisfy MFA freshness');
+marina_endpoint_assert(str_contains($sharedSource, "['mfa_verified_at']"), 'only official MFA session assertion may satisfy freshness');
 
 $preview = (string)file_get_contents($files['preview']);
 marina_endpoint_assert(str_contains($preview, 'sv_marina_require_recent_reauth'), 'preview must require recent re-authentication');
@@ -45,5 +50,6 @@ marina_endpoint_assert(str_contains($status, "'GET'"), 'status must be read-only
 $operation = (string)file_get_contents($files['operation']);
 marina_endpoint_assert(str_contains($operation, 'operation_id'), 'operation endpoint must validate operation id');
 marina_endpoint_assert(str_contains($operation, "'GET'"), 'operation endpoint must reject non-GET requests');
+marina_endpoint_assert(str_contains($operation, 'sv_marina_authorization_context') && str_contains($operation, 'sv_marina_require_recent_reauth'), 'operation lookup must bind to a fresh authenticated requester');
 
 fwrite(STDOUT, "marina_maintenance_endpoint_test: OK\n");

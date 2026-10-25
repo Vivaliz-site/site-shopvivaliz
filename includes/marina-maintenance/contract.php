@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 const SV_MARINA_MAINTENANCE_OPERATION = 'retire_origin_abandoned_cart_scheduler';
 const SV_MARINA_MAINTENANCE_MAX_TTL = 180;
+const SV_MARINA_MAINTENANCE_MFA_MAX_AGE = 900;
+const SV_MARINA_MAINTENANCE_BROKER_AUDIENCE = 'marina-maintenance-broker';
 
 function sv_marina_maintenance_operation(): string
 {
@@ -46,6 +48,11 @@ function sv_marina_validate_ticket(array $ticket, int $now): array
         'nonce',
         'issued_at',
         'expires_at',
+        'audience',
+        'authorization_request_id',
+        'requested_by',
+        'preflight_id',
+        'preflight_digest',
         'scope',
     ];
     $unknown = array_values(array_diff(array_keys($ticket), $allowed));
@@ -59,16 +66,28 @@ function sv_marina_validate_ticket(array $ticket, int $now): array
         }
     }
 
-    if ($ticket['ticket_version'] !== 1) {
+    if ($ticket['ticket_version'] !== 2) {
         return ['ok' => false, 'code' => 'ticket_version_invalid'];
     }
     if ($ticket['operation'] !== SV_MARINA_MAINTENANCE_OPERATION) {
         return ['ok' => false, 'code' => 'operation_not_allowed'];
     }
-    foreach (['operator_id', 'ticket_id', 'nonce'] as $field) {
+    foreach (['operator_id', 'ticket_id', 'nonce', 'authorization_request_id', 'preflight_id'] as $field) {
         if (!is_string($ticket[$field]) || !preg_match('/^[A-Za-z0-9._:-]{8,160}$/', $ticket[$field])) {
             return ['ok' => false, 'code' => $field . '_invalid', 'field' => $field];
         }
+    }
+    if ($ticket['audience'] !== SV_MARINA_MAINTENANCE_BROKER_AUDIENCE) {
+        return ['ok' => false, 'code' => 'ticket_audience_invalid'];
+    }
+    if (!is_string($ticket['requested_by']) || !preg_match('/^admin:[1-9][0-9]{0,18}$/', $ticket['requested_by'])) {
+        return ['ok' => false, 'code' => 'ticket_subject_invalid'];
+    }
+    if ($ticket['operator_id'] !== $ticket['requested_by']) {
+        return ['ok' => false, 'code' => 'ticket_operator_mismatch'];
+    }
+    if (!is_string($ticket['preflight_digest']) || !preg_match('/^[a-f0-9]{64}$/', $ticket['preflight_digest'])) {
+        return ['ok' => false, 'code' => 'preflight_digest_invalid'];
     }
     if (!is_int($ticket['issued_at']) || !is_int($ticket['expires_at'])) {
         return ['ok' => false, 'code' => 'ticket_timestamps_invalid'];
@@ -108,13 +127,77 @@ function sv_marina_validate_ticket(array $ticket, int $now): array
     ];
 }
 
+/** @param array<string, mixed> $preflight */
+function sv_marina_validate_preflight_binding(array $preflight): array
+{
+    $id = $preflight['preflight_id'] ?? null;
+    $digest = $preflight['preflight_digest'] ?? null;
+    if (!is_string($id) || !preg_match('/^[A-Za-z0-9._:-]{8,160}$/', $id)) {
+        return ['ok' => false, 'code' => 'preflight_id_invalid'];
+    }
+    if (!is_string($digest) || !preg_match('/^[a-f0-9]{64}$/', $digest)) {
+        return ['ok' => false, 'code' => 'preflight_digest_invalid'];
+    }
+    return ['ok' => true, 'preflight' => ['preflight_id' => $id, 'preflight_digest' => $digest]];
+}
+
+/** @param array<string, mixed> $ticket @param array<string, mixed> $context @param array<string, mixed> $preflight */
+function sv_marina_ticket_matches_authorization(array $ticket, array $context, array $preflight): array
+{
+    $contextResult = sv_marina_validate_authorization_context($context, time());
+    $preflightResult = sv_marina_validate_preflight_binding($preflight);
+    if (($contextResult['ok'] ?? false) !== true || ($preflightResult['ok'] ?? false) !== true) {
+        return ['ok' => false, 'code' => (string)($contextResult['code'] ?? $preflightResult['code'])];
+    }
+    $expected = [
+        'audience' => SV_MARINA_MAINTENANCE_BROKER_AUDIENCE,
+        'authorization_request_id' => $contextResult['context']['authorization_request_id'],
+        'requested_by' => $contextResult['context']['requested_by'],
+        'operator_id' => $contextResult['context']['requested_by'],
+        'preflight_id' => $preflightResult['preflight']['preflight_id'],
+        'preflight_digest' => $preflightResult['preflight']['preflight_digest'],
+    ];
+    foreach ($expected as $field => $value) {
+        if (($ticket[$field] ?? null) !== $value) {
+            return ['ok' => false, 'code' => 'ticket_' . $field . '_mismatch'];
+        }
+    }
+    return ['ok' => true];
+}
+
 function sv_marina_signature_is_valid_shape(string $signature): bool
 {
-    if ($signature === '' || strlen($signature) > 1024) {
+    // Detached Ed25519 signatures are exactly 64 bytes. This only verifies
+    // canonical encoding and length; the independent broker must authenticate
+    // the registered signer and verify Ed25519 against the signed ticket.
+    if (strlen($signature) !== 88) {
         return false;
     }
     $decoded = base64_decode($signature, true);
-    return is_string($decoded) && $decoded !== '' && strlen($decoded) <= 768;
+    return is_string($decoded)
+        && strlen($decoded) === 64
+        && hash_equals(base64_encode($decoded), $signature);
+}
+
+/** @param array<string, mixed> $context */
+function sv_marina_validate_authorization_context(array $context, int $now): array
+{
+    $allowed = ['authorization_request_id', 'requested_by', 'mfa_verified_at'];
+    if (array_diff(array_keys($context), $allowed) !== [] || array_diff($allowed, array_keys($context)) !== []) {
+        return ['ok' => false, 'code' => 'authorization_context_invalid'];
+    }
+    if (!is_string($context['authorization_request_id'] ?? null)
+        || !preg_match('/^[A-Za-z0-9._:-]{8,160}$/', $context['authorization_request_id'])) {
+        return ['ok' => false, 'code' => 'authorization_request_id_invalid'];
+    }
+    if (!is_string($context['requested_by'] ?? null) || !preg_match('/^admin:[1-9][0-9]{0,18}$/', $context['requested_by'])) {
+        return ['ok' => false, 'code' => 'authorization_subject_invalid'];
+    }
+    $mfa = $context['mfa_verified_at'] ?? null;
+    if (!is_int($mfa) || $mfa > $now || ($now - $mfa) > SV_MARINA_MAINTENANCE_MFA_MAX_AGE) {
+        return ['ok' => false, 'code' => 'reauth_required'];
+    }
+    return ['ok' => true, 'context' => $context];
 }
 
 function sv_marina_audit_projection(mixed $value): mixed
@@ -123,7 +206,7 @@ function sv_marina_audit_projection(mixed $value): mixed
         $projected = [];
         foreach ($value as $key => $item) {
             $keyString = strtolower((string)$key);
-            if (preg_match('/private|secret|token|signature|password|credential/', $keyString)) {
+            if (preg_match('/private|secret|token|signature|password|credential|ticket|envelope|nonce/', $keyString)) {
                 $projected[$key] = '[REDACTED]';
             } else {
                 $projected[$key] = sv_marina_audit_projection($item);
