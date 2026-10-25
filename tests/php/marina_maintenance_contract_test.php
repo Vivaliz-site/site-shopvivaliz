@@ -62,6 +62,19 @@ $valid = sv_marina_validate_ticket(marina_valid_ticket(), 1000);
 marina_contract_assert(($valid['ok'] ?? false) === true, 'valid ticket must pass');
 marina_contract_assert(($valid['code'] ?? '') === 'ok', 'valid ticket must return ok code');
 
+marina_contract_assert(sv_marina_signature_is_valid_shape(base64_encode(str_repeat("s", 64))), '64-byte Ed25519 fixture must pass shape validation (not cryptographic verification)');
+foreach ([1, 63, 65, 768] as $invalidLength) {
+    marina_contract_assert(
+        !sv_marina_signature_is_valid_shape(base64_encode(str_repeat("s", $invalidLength))),
+        "signature size {$invalidLength} must be rejected"
+    );
+}
+$canonical = base64_encode(str_repeat("s", 64));
+marina_contract_assert(!sv_marina_signature_is_valid_shape(rtrim($canonical, '=')), 'missing base64 padding must be rejected');
+marina_contract_assert(!sv_marina_signature_is_valid_shape($canonical . "\n"), 'trailing whitespace must be rejected');
+marina_contract_assert(!sv_marina_signature_is_valid_shape('not@base64'), 'invalid base64 must be rejected');
+marina_contract_assert(!sv_marina_signature_is_valid_shape(''), 'empty signature must be rejected');
+
 $tooLong = sv_marina_validate_ticket(marina_valid_ticket(['expires_at' => 1181]), 1000);
 marina_contract_assert(($tooLong['ok'] ?? true) === false, 'ticket longer than 180 seconds must fail');
 marina_contract_assert(($tooLong['code'] ?? '') === 'ticket_ttl_exceeded', 'long ticket must expose bounded TTL code');
