@@ -35,13 +35,14 @@ header('Content-Type: text/html; charset=UTF-8');
         label { display:block; font-weight:700; margin:14px 0 6px; }
         textarea, input { box-sizing:border-box; width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:11px; font:inherit; }
         textarea { min-height:150px; resize:vertical; }
-        button, .button { border:0; border-radius:10px; padding:11px 15px; font-weight:800; cursor:pointer; background:#0f766e; color:#fff; text-decoration:none; display:inline-block; }
+        button, .button { border:0; border-radius:10px; min-height:44px; padding:11px 15px; font-weight:800; cursor:pointer; background:#0f766e; color:#fff; text-decoration:none; display:inline-block; }
         button.secondary, .button.secondary { background:#334155; }
         button:disabled { cursor:not-allowed; opacity:.48; }
         .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
         .notice { border-radius:10px; padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; white-space:pre-wrap; }
         .danger-note { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
         code { background:#eef2ff; padding:2px 5px; border-radius:4px; }
+        @media (max-width: 560px) { main { margin-top:18px; padding-inline:12px; } .hero, .card { padding:18px; } .actions button { width:100%; } }
     </style>
 </head>
 <body>
@@ -52,7 +53,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <main>
         <section class="hero">
             <h1>Autorização de manutenção Oracle Marina</h1>
-            <p class="muted">Esta tela somente prepara e acompanha a operação oficial. A mudança só pode ocorrer pelo broker privado aprovado, com ticket de escopo fixo e assinatura externa.</p>
+            <p class="muted">Esta tela somente prepara e acompanha a operação oficial. O navegador não recebe ticket, assinatura ou chave: o servidor solicita uma autorização efêmera ao signatário independente e a envia diretamente ao broker privado aprovado.</p>
             <div id="state" class="state">Carregando estado…</div>
             <p id="message" class="notice" aria-live="polite">Nenhuma operação foi iniciada.</p>
         </section>
@@ -61,6 +62,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <h2>Pré-verificação</h2>
             <div class="grid" id="facts">
                 <div class="fact"><strong>Broker</strong><span id="broker">Aguardando leitura</span></div>
+                <div class="fact"><strong>Signatário independente</strong><span id="signer">Aguardando leitura</span></div>
                 <div class="fact"><strong>Escopo fixo</strong><span>shopvivaliz-free-a1 → marina</span></div>
                 <div class="fact"><strong>Scheduler</strong><span>shopvivaliz-abandoned-cart-recovery.timer</span></div>
                 <div class="fact"><strong>Mutação direta</strong><span>Bloqueada</span></div>
@@ -71,17 +73,13 @@ header('Content-Type: text/html; charset=UTF-8');
             </div>
         </section>
 
-        <section class="card">
-            <h2>Assinatura externa</h2>
-            <p class="muted">Cole somente o ticket assinado emitido pelo signatário oficial. Nunca cole ou envie a <strong>private key</strong>; ela não é necessária nesta tela e não deve aparecer no navegador, no servidor ou nos logs.</p>
-            <label for="ticket">Ticket JSON</label>
-            <textarea id="ticket" spellcheck="false" placeholder='{"ticket_version":1,"operation":"retire_origin_abandoned_cart_scheduler",...}'></textarea>
-            <label for="signature">Assinatura destacada (base64)</label>
-            <textarea id="signature" spellcheck="false" placeholder="Cole a assinatura destacada fornecida pelo signatário"></textarea>
+        <section class="card" data-flow="one-click">
+            <h2>Autorização em um clique</h2>
+            <p class="muted">Após a pré-verificação, um administrador com MFA recente pode clicar uma vez em <strong>Autorizar</strong>. O servidor usa somente o signatário oficial isolado e o broker privado; sem ticket ou assinatura no navegador.</p>
             <div class="actions">
-                <button type="button" id="approve" disabled>Aprovar operação oficial</button>
+                <button type="button" id="approve" disabled>Autorizar operação oficial</button>
             </div>
-            <div class="notice danger-note" id="approval-help">A aprovação permanece bloqueada até o broker retornar <code>APPROVAL_REQUIRED</code>, a sessão possuir reautenticação recente e os campos serem validados.</div>
+            <div class="notice danger-note" id="approval-help">A aprovação permanece bloqueada até broker e signatário oficiais estarem provisionados, a pré-verificação retornar <code>APPROVAL_REQUIRED</code> e a sessão possuir MFA/reautenticação recente.</div>
         </section>
 
         <section class="card">
@@ -104,20 +102,20 @@ header('Content-Type: text/html; charset=UTF-8');
         };
         const $ = (id) => document.getElementById(id);
         let state = '';
+        let signerState = '';
         let operationId = '';
         const stateClass = (value) => value === 'SUCCEEDED_RECONCILED' ? 'good' : (value === 'NAO_APTO' || value === 'REFUSED' || value === 'INDETERMINATE_INSPECTION_REQUIRED' ? 'bad' : 'warn');
         const display = (value) => value === undefined || value === null || value === '' ? '—' : String(value);
         function setMessage(text, danger = false) { $('message').textContent = text; $('message').className = 'notice' + (danger ? ' danger-note' : ''); }
-        function updateApproval() {
-            let validTicket = false;
-            try { const ticket = JSON.parse($('ticket').value); validTicket = ticket && typeof ticket === 'object' && !Array.isArray(ticket); } catch (_) {}
-            $('approve').disabled = !(state === 'APPROVAL_REQUIRED' && validTicket && $('signature').value.trim().length >= 16);
-        }
+        function updateApproval() { $('approve').disabled = !(state === 'APPROVAL_REQUIRED' && signerState === 'READY'); }
         function render(data) {
             state = display(data.state);
             $('state').textContent = state;
             $('state').className = 'state ' + stateClass(state);
             $('broker').textContent = display(data.code || (state === 'NAO_APTO' ? 'Broker não provisionado' : 'Disponível'));
+            const signer = data.signer || {};
+            signerState = display(signer.state);
+            $('signer').textContent = display(signer.code || signer.state || (state === 'NAO_APTO' ? 'Signatário não provisionado' : 'Disponível'));
             $('operation-id').textContent = display(data.operation_id || operationId);
             $('audit-id').textContent = display(data.audit_id);
             $('reconciliation').textContent = state === 'SUCCEEDED_RECONCILED' ? 'Confirmada pelo broker oficial' : state;
@@ -142,19 +140,29 @@ header('Content-Type: text/html; charset=UTF-8');
             try { render(await call(endpoints.preview, { method: 'POST', headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' }, body: '{}' })); }
             catch (_) { setMessage('Pré-verificação indisponível; nenhuma ação foi executada.', true); }
         });
-        $('ticket').addEventListener('input', updateApproval);
-        $('signature').addEventListener('input', updateApproval);
         $('approve').addEventListener('click', async () => {
             if ($('approve').disabled) return;
-            let ticket;
-            try { ticket = JSON.parse($('ticket').value); } catch (_) { setMessage('Ticket JSON inválido.', true); return; }
             $('approve').disabled = true;
             try {
-                const result = await call(endpoints.approve, { method: 'POST', headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket, signature_b64: $('signature').value.trim() }) });
+                const result = await call(endpoints.approve, { method: 'POST', headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' }, body: '{}' });
                 operationId = result.operation_id || '';
                 render(result);
                 if (operationId && result.state === 'RUNNING') {
-                    const poll = async () => { const current = await call(endpoints.operation + encodeURIComponent(operationId)); render(current); if (current.state === 'RUNNING') setTimeout(poll, 3000); };
+                    let pollAttempts = 0;
+                    const maxPollAttempts = 20;
+                    const poll = async () => {
+                        if (++pollAttempts > maxPollAttempts) {
+                            setMessage('Acompanhamento automático pausado; consulte o estado oficial antes de qualquer nova tentativa.', true);
+                            return;
+                        }
+                        try {
+                            const current = await call(endpoints.operation + encodeURIComponent(operationId));
+                            render(current);
+                            if (current.state === 'RUNNING') setTimeout(poll, 3000);
+                        } catch (_) {
+                            setMessage('Acompanhamento indisponível; consulte o estado oficial antes de qualquer nova tentativa.', true);
+                        }
+                    };
                     setTimeout(poll, 1500);
                 }
             } catch (_) { setMessage('Aprovação não confirmada; inspecione o estado antes de repetir.', true); }

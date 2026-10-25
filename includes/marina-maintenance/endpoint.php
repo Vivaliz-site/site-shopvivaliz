@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/contract.php';
 require_once __DIR__ . '/broker-client.php';
+require_once __DIR__ . '/signer-client.php';
+require_once __DIR__ . '/authorization-service.php';
 require_once dirname(__DIR__) . '/csrf.php';
 
 function sv_marina_json(array $payload, int $status = 200): never
@@ -33,21 +35,26 @@ function sv_marina_require_csrf(string $scope): void
     }
 }
 
-function sv_marina_require_recent_reauth(int $maxAge = 900): void
+function sv_marina_recent_reauth_at(int $maxAge = SV_MARINA_MAINTENANCE_MFA_MAX_AGE): ?int
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
         session_start();
     }
     $now = time();
-    $timestamps = [
-        (int)($_SESSION['admin_recent_reauth_at'] ?? 0),
-        (int)($_SESSION['mfa_verified_at'] ?? 0),
-        (int)($_SESSION['recent_reauth_at'] ?? 0),
-    ];
-    foreach ($timestamps as $timestamp) {
-        if ($timestamp > 0 && $timestamp <= $now && ($now - $timestamp) <= $maxAge) {
-            return;
-        }
+    // A generic password-only reauthentication is not MFA. The central authentication
+    // flow must set this server-side value only after an official MFA assertion.
+    $timestamp = (int)($_SESSION['mfa_verified_at'] ?? 0);
+    if ($timestamp > 0 && $timestamp <= $now && ($now - $timestamp) <= $maxAge) {
+        return $timestamp;
+    }
+    return null;
+}
+
+function sv_marina_require_recent_reauth(int $maxAge = SV_MARINA_MAINTENANCE_MFA_MAX_AGE): int
+{
+    $timestamp = sv_marina_recent_reauth_at($maxAge);
+    if ($timestamp !== null) {
+        return $timestamp;
     }
     sv_marina_json([
         'ok' => false,
@@ -60,5 +67,43 @@ function sv_marina_require_recent_reauth(int $maxAge = 900): void
 function sv_marina_broker(): SvMarinaMaintenanceBrokerClient
 {
     return new SvMarinaMaintenanceBrokerClient();
+}
+
+function sv_marina_signer(): SvMarinaMaintenanceSignerClient
+{
+    return new SvMarinaMaintenanceSignerClient();
+}
+
+function sv_marina_authorization_service(): SvMarinaMaintenanceAuthorizationService
+{
+    return new SvMarinaMaintenanceAuthorizationService(sv_marina_broker(), sv_marina_signer());
+}
+
+/** @return array<string, mixed> */
+function sv_marina_authorization_context(int $mfaVerifiedAt): array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    if ($userId < 1 || empty($_SESSION['is_admin'])) {
+        sv_marina_json(['ok' => false, 'state' => 'REFUSED', 'code' => 'maintenance_role_required'], 403);
+    }
+    $existing = $_SESSION['marina_maintenance_authorization_request'] ?? null;
+    $requestedBy = 'admin:' . $userId;
+    if (!is_array($existing) || !is_string($existing['id'] ?? null) || !is_int($existing['created_at'] ?? null)
+        || ($existing['requested_by'] ?? null) !== $requestedBy
+        || (time() - $existing['created_at']) > SV_MARINA_MAINTENANCE_MAX_TTL) {
+        $_SESSION['marina_maintenance_authorization_request'] = [
+            'id' => 'request-' . bin2hex(random_bytes(16)),
+            'created_at' => time(),
+            'requested_by' => $requestedBy,
+        ];
+    }
+    return [
+        'authorization_request_id' => (string)$_SESSION['marina_maintenance_authorization_request']['id'],
+        'requested_by' => $requestedBy,
+        'mfa_verified_at' => $mfaVerifiedAt,
+    ];
 }
 

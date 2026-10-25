@@ -19,6 +19,11 @@ final class SvMarinaMaintenanceBrokerClient
             'broker_url' => getenv('MARINA_MAINTENANCE_BROKER_URL') ?: '',
             'private_route' => getenv('MARINA_MAINTENANCE_PRIVATE_ROUTE') ?: '',
             'audience' => getenv('MARINA_MAINTENANCE_BROKER_AUDIENCE') ?: '',
+            'transport_identity' => getenv('MARINA_MAINTENANCE_BROKER_TRANSPORT_ID') ?: '',
+            'ca_file' => getenv('MARINA_MAINTENANCE_BROKER_CA_FILE') ?: '',
+            'client_cert' => getenv('MARINA_MAINTENANCE_BROKER_CLIENT_CERT') ?: '',
+            'client_key' => getenv('MARINA_MAINTENANCE_BROKER_CLIENT_KEY') ?: '',
+            'spki_pin' => getenv('MARINA_MAINTENANCE_BROKER_SPKI_PIN') ?: '',
         ];
     }
 
@@ -34,33 +39,53 @@ final class SvMarinaMaintenanceBrokerClient
         ]);
     }
 
-    public function approve(array $ticket, string $signature): array
+    /** @param array<string, mixed> $context */
+    public function preflight(array $context): array
     {
-        $validation = sv_marina_validate_ticket($ticket, time());
-        if (($validation['ok'] ?? false) !== true) {
-            return [
-                'ok' => false,
-                'state' => 'REFUSED',
-                'code' => (string)($validation['code'] ?? 'ticket_invalid'),
-            ];
+        $contextResult = sv_marina_validate_authorization_context($context, time());
+        if (($contextResult['ok'] ?? false) !== true) {
+            return ['ok' => false, 'state' => 'REFUSED', 'code' => (string)$contextResult['code']];
         }
-        if (!sv_marina_signature_is_valid_shape($signature)) {
-            return ['ok' => false, 'state' => 'REFUSED', 'code' => 'signature_invalid'];
-        }
-
-        return $this->request('POST', '/v1/maintenance/approve', [
+        return $this->request('POST', '/v1/maintenance/preflight', [
             'operation' => sv_marina_maintenance_operation(),
-            'ticket' => $validation['ticket'],
-            'signature_b64' => $signature,
+            ...$contextResult['context'],
         ]);
     }
 
-    public function operation(string $operationId): array
+    /** @param array<string, mixed> $ticket @param array<string, mixed> $context @param array<string, mixed> $preflight */
+    public function authorize(array $ticket, string $signature, array $context, array $preflight): array
+    {
+        $validation = sv_marina_validate_ticket($ticket, time());
+        $contextResult = sv_marina_validate_authorization_context($context, time());
+        $binding = sv_marina_validate_preflight_binding($preflight);
+        $match = (($validation['ok'] ?? false) && ($contextResult['ok'] ?? false) && ($binding['ok'] ?? false))
+            ? sv_marina_ticket_matches_authorization($validation['ticket'], $contextResult['context'], $binding['preflight']) : ['ok' => false];
+        if (($validation['ok'] ?? false) !== true || ($contextResult['ok'] ?? false) !== true || ($binding['ok'] ?? false) !== true || ($match['ok'] ?? false) !== true || !sv_marina_signature_is_valid_shape($signature)) {
+            return ['ok' => false, 'state' => 'REFUSED', 'code' => (string)($validation['code'] ?? $contextResult['code'] ?? $binding['code'] ?? $match['code'] ?? 'signature_invalid')];
+        }
+        return $this->request('POST', '/v1/maintenance/authorize', [
+            'operation' => sv_marina_maintenance_operation(),
+            'ticket' => $validation['ticket'],
+            'signature_b64' => $signature,
+            'preflight_id' => $binding['preflight']['preflight_id'],
+            'preflight_digest' => $binding['preflight']['preflight_digest'],
+            // The broker atomically reserves this signed key with the ticket nonce.
+            'idempotency_key' => $contextResult['context']['authorization_request_id'],
+            ...$contextResult['context'],
+        ]);
+    }
+
+    /** @param array<string, mixed> $context */
+    public function operation(string $operationId, array $context): array
     {
         if (!preg_match('/^[A-Za-z0-9._:-]{8,160}$/', $operationId)) {
             return ['ok' => false, 'state' => 'REFUSED', 'code' => 'operation_id_invalid'];
         }
-        return $this->request('GET', '/v1/maintenance/operations/' . rawurlencode($operationId), []);
+        $contextResult = sv_marina_validate_authorization_context($context, time());
+        if (($contextResult['ok'] ?? false) !== true) {
+            return ['ok' => false, 'state' => 'REFUSED', 'code' => (string)$contextResult['code']];
+        }
+        return $this->request('GET', '/v1/maintenance/operations/' . rawurlencode($operationId), $contextResult['context']);
     }
 
     private function request(string $method, string $path, array $payload): array
@@ -89,8 +114,13 @@ final class SvMarinaMaintenanceBrokerClient
         $url = trim((string)($this->config['broker_url'] ?? ''));
         $route = trim((string)($this->config['private_route'] ?? ''));
         $audience = trim((string)($this->config['audience'] ?? ''));
-        if ($url === '' || $route === '' || $audience === '') {
+        $identity = trim((string)($this->config['transport_identity'] ?? ''));
+        $pin = trim((string)($this->config['spki_pin'] ?? ''));
+        if ($url === '' || $route === '' || $audience === '' || $identity === '' || $pin === '') {
             return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_not_provisioned'];
+        }
+        if ($audience !== SV_MARINA_MAINTENANCE_BROKER_AUDIENCE) {
+            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_audience_invalid'];
         }
         if (!preg_match('/^(vcn-|private-|unix:)/', $route)) {
             return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'private_route_required'];
@@ -99,10 +129,15 @@ final class SvMarinaMaintenanceBrokerClient
         if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || empty($parts['host'])) {
             return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_url_invalid'];
         }
-        $host = (string)$parts['host'];
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false
-            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false) {
-            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'public_route_forbidden'];
+        $host = strtolower((string)$parts['host']);
+        if (!preg_match('/(?:\.internal|\.svc)$/', $host)) {
+            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_private_hostname_required'];
+        }
+        if ($identity !== 'spiffe://shopvivaliz/maintenance/broker-v1') {
+            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_transport_identity_required'];
+        }
+        if (!preg_match('#^sha256//[A-Za-z0-9+/]{43}=?$#', $pin)) {
+            return ['ok' => false, 'state' => 'NAO_APTO', 'code' => 'broker_spki_pin_required'];
         }
         return null;
     }
@@ -127,7 +162,7 @@ final class SvMarinaMaintenanceBrokerClient
         }
 
         $safe = ['ok' => $response['state'] === 'SUCCEEDED_RECONCILED', 'state' => $response['state']];
-        foreach (['code', 'operation_id', 'preview_id', 'audit_id', 'expires_at', 'scope', 'preflight', 'freshness'] as $key) {
+        foreach (['code', 'operation_id', 'preview_id', 'preflight_id', 'preflight_digest', 'audit_id', 'expires_at', 'scope', 'freshness', 'signer'] as $key) {
             if (array_key_exists($key, $response)) {
                 $safe[$key] = sv_marina_audit_projection($response[$key]);
             }
@@ -146,13 +181,18 @@ final class SvMarinaMaintenanceBrokerClient
             if (!function_exists('curl_init')) {
                 throw new RuntimeException('broker_curl_unavailable');
             }
+            foreach (['ca_file', 'client_cert', 'client_key'] as $material) {
+                if (!is_file((string)($config[$material] ?? ''))) {
+                    throw new RuntimeException('broker_transport_material_unavailable');
+                }
+            }
             $baseUrl = rtrim((string)($config['broker_url'] ?? ''), '/');
-            $url = $baseUrl . $path;
+            $url = $baseUrl . $path . ($method === 'GET' && $payload !== [] ? '?' . http_build_query($payload, '', '&', PHP_QUERY_RFC3986) : '');
             $headers = [
                 'Accept: application/json',
                 'Content-Type: application/json; charset=utf-8',
                 'X-Marina-Broker-Audience: ' . (string)($config['audience'] ?? ''),
-                'X-Marina-Private-Route: ' . (string)($config['private_route'] ?? ''),
+                'X-Marina-Transport-Identity: ' . (string)($config['transport_identity'] ?? ''),
             ];
             $handle = curl_init($url);
             if ($handle === false) {
@@ -166,6 +206,10 @@ final class SvMarinaMaintenanceBrokerClient
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_SSL_VERIFYPEER => true,
                 CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_CAINFO => (string)$config['ca_file'],
+                CURLOPT_SSLCERT => (string)$config['client_cert'],
+                CURLOPT_SSLKEY => (string)$config['client_key'],
+                CURLOPT_PINNEDPUBLICKEY => (string)$config['spki_pin'],
             ];
             if ($method !== 'GET') {
                 $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

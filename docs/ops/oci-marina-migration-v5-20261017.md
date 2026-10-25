@@ -1,5 +1,12 @@
 # OCI Marina / ShopVivaliz — Auditoria Extrema V5 e gate de preservação
 
+## One-click maintenance request — 2026-10-25: fail-closed only
+
+**MAINTENANCE_ONE_CLICK_UI=CODE_ONLY | BROKER_AND_SIGNER=NOT_PROVISIONED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
+
+- The admin page no longer accepts browser-supplied ticket JSON or detached signatures. A single CSRF-protected click with an official fresh-MFA session can only ask the independently provisioned signer through the server; the signer capability remains outside PHP/browser/Git/CLI and is forwarded internally to the private broker.
+- Code now fails closed unless broker/signer have internal DNS, expected SPIFFE identity, mTLS CA/certificate/key and SPKI pin. Ticket v2 binds broker audience, admin subject, request ID and preflight digest before the broker request. The still-unprovisioned official broker must independently validate role/grant, lease, source state, CAS, writer fence, replay ledger and monotonic fencing. This is not a deployed authority, a signed lease, a source action, or UI E2E evidence.
+
 ## Safe readiness update — 2026-10-25: Marina-only writer and certificate repair scope
 
 **BLOG_ORIGIN_FENCE_WORKFLOW=FAIL_CLOSED | MARINA_CERT_REPAIR_WORKFLOW=BLOCKED_RUNNER_NOT_PROVISIONED | GLOBAL_MIGRATION_STATUS=NAO_APTO | NO_DECOMMISSION**
