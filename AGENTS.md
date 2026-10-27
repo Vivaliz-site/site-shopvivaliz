@@ -886,3 +886,15 @@ retomada automática e use a rota operacional auditável que consiga registrar o
 
 Referencia de acompanhamento: issue #2934. Enquanto houver PSI extremo recorrente, tarefas de continuidade sem vinculacao comprovada ou E2E real faltante, nao declarar `AUDIT_VERDICT=APTO`.
 <!-- /BACKEND_IO_PRESSURE_ADMISSION_V1 -->
+
+<!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+## Gate obrigatório de deploy, pós-deploy e conferência integral de preços (V2)
+
+**Nenhum agente pode encerrar uma tarefa de alteração implantável em PR, checks, merge, publicação acionada ou HTTP 200.** Para afirmar CONCLUIDO, provar a revisão em produção com: PR integrado; CI obrigatório sem falhas e sem contorno de aprovações; SHA de main; `current/.release-sha`; `/api/health/version.php`; evidência imutável `deployment-evidence/deployment/latest.json` com validate/deploy/smoke_test=success; teste funcional pós-deploy; e E2E/UI real quando houver interface. O SHA publicado deve corresponder ao commit integrado, ou a descendente verificável autorizada. Ausência de uma prova mantém `RUNNING/NAO_APTO` com checkpoint e próxima ação; erro externo realmente incontornável exige `BLOCKED_EXTERNAL` comprovado, nunca falso-verde.
+
+**Catálogo/ERP:** além do deploy, executar a auditoria completa de preços e promoções com o verificador `scripts/quality/audit-storefront-erp-prices.py`. O GitHub Actions `.github/workflows/postdeploy-erp-price-parity.yml` executa o comparativo somente leitura após deploy real do pipeline oficial e diariamente. Comparar 100% dos IDs de produtos ativos no ERP v3 com cache e API pública, sem amostragem para o aceite numérico; identificar ausência de produto, preço/promo divergente e SKU duplicado com IDs/preços comerciais conflitantes. Qualquer `PRICE_PARITY_VERDICT=FAIL` impede alegação de catálogo totalmente sincronizado, mesmo com todos os preços publicados aparentemente corretos. A revisão visual da vitrine e das páginas de produto continua obrigatória para E2E de UI, e o teste do webhook deve ser de evento genuíno do ERP.
+
+**Sem bypass:** o guard de aprovação humana `human-approved-price-stock` e demais proteções de CI/branch são independentes e obrigatórios. Agentes não podem criar/atribuir o rótulo de aprovação humana para aprovar sua própria mudança, reduzir escopo do gate, usar preço do cache como verdade ou alterar preço no ERP para fazer o teste passar. Divergências de cadastro/duplicidade devem ser corrigidas pela via comercial autorizada, com prova e nova auditoria.
+
+Um workflow disparado mas não concluído, skipped, com relatório não gerado ou release SHA diferente é **NÃO VALIDADO**, jamais CONCLUIDO. Não substituir evidência real por texto do agente.
+<!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
