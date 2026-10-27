@@ -147,6 +147,45 @@ t_assert(($afterRename[0]['sku'] ?? '') === '35039', 'unrelated product SKU must
 t_assert(($afterRename[1]['sku'] ?? '') === 'NEW-35039', 'canonical ERP ID should permit a nonconflicting SKU change');
 t_assert(count($afterRename) === 2, 'upsert by authoritative ID must not duplicate products');
 
+
+// Sibling regression: stock was still SKU-first after prices became ID-first.
+// The recycled public SKU belongs to ERP ID 999, while 350339 has a renamed
+// SKU. An official stock notification for 350339 must NEVER touch ID 999.
+svoei_update_catalog_stock($collisionRoot, '35039', 17, '350339');
+$stockById = t_items($collisionRoot . '/storage/products-cache-ativos.json');
+t_assert(!isset($stockById[0]['estoque_disponivel']), 'recycled SKU must not receive another product stock');
+t_assert((int)($stockById[1]['estoque_disponivel'] ?? -1) === 17, 'stock must follow authoritative ERP ID after SKU rename');
+t_assert((int)($stockById[1]['estoque']['quantidade'] ?? -1) === 17, 'nested stock must follow ERP ID');
+
+$wrongStockIdRejected = false;
+try {
+    svoei_update_catalog_stock($collisionRoot, '35039', 44, '444444');
+} catch (RuntimeException $e) {
+    $wrongStockIdRejected = $e->getMessage() === 'catalog_product_not_found';
+}
+t_assert($wrongStockIdRejected, 'stock must reject a SKU owned by another known ERP ID');
+$stockAfterWrongId = t_items($collisionRoot . '/storage/products-cache-ativos.json');
+t_assert(!isset($stockAfterWrongId[0]['estoque_disponivel']), 'rejected stock must not affect competing product');
+t_assert((int)($stockAfterWrongId[1]['estoque_disponivel'] ?? -1) === 17, 'rejected stock must preserve canonical product');
+
+$ambiguousStockRoot = $tmp . '/stock-sku-ambiguous';
+mkdir($ambiguousStockRoot . '/storage', 0775, true);
+file_put_contents($ambiguousStockRoot . '/storage/products-cache-ativos.json', json_encode([
+    ['sku' => 'DUPLICATE-STOCK', 'estoque_disponivel' => 3],
+    ['sku' => 'DUPLICATE-STOCK', 'estoque_disponivel' => 7],
+]));
+$ambiguousStockRejected = false;
+try {
+    svoei_update_catalog_stock($ambiguousStockRoot, 'DUPLICATE-STOCK', 99);
+} catch (RuntimeException $e) {
+    $ambiguousStockRejected = $e->getMessage() === 'catalog_product_ambiguous';
+}
+t_assert($ambiguousStockRejected, 'SKU-only stock must reject ambiguous catalog matches');
+$ambiguousStockRows = t_items($ambiguousStockRoot . '/storage/products-cache-ativos.json');
+t_assert(($ambiguousStockRows[0]['estoque_disponivel'] ?? null) === 3, 'ambiguous stock must not mutate first row');
+t_assert(($ambiguousStockRows[1]['estoque_disponivel'] ?? null) === 7, 'ambiguous stock must not mutate second row');
+
+
 // Regression: an existing authoritative ERP ID may not take a SKU belonging
 // to a separate ID-less legacy row. The old code selected the ID match and
 // silently left two public products with the identical SKU.
