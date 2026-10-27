@@ -36,6 +36,7 @@ refuse_writable "$source_root"
 [[ "$(stat -c '%u' "$source_dir")" == '0' ]] || refuse source_not_root_owned
 refuse_writable "$source_dir"
 [[ ! -L "$source_dir/systemd" ]] || refuse unsafe_systemd_source_dir
+[[ "$(stat -c '%u' "$source_dir/systemd")" == '0' ]] || refuse source_systemd_dir_not_root_owned
 refuse_writable "$source_dir/systemd"
 [[ "$(git -C "$source_root" rev-parse HEAD 2>/dev/null)" == "$expected_sha" ]] || refuse unapproved_checkout
 [[ -z "$(git -C "$source_root" status --porcelain -- marina-direct-mcp)" ]] || refuse unclean_checkout
@@ -98,7 +99,8 @@ for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service
   check_target "$source_dir/systemd/$unit" "/etc/systemd/system/$unit"
 done
 
-exec 9>/run/lock/shopvivaliz-marina-mcp-stage.lock
+[[ ! -L /run/shopvivaliz-marina-mcp-stage.lock ]] || refuse unsafe_lock_symlink
+exec 9>/run/shopvivaliz-marina-mcp-stage.lock
 flock -n 9 || refuse concurrent_operator_stage
 if ! getent passwd shopvivaliz-marina-mcp >/dev/null; then
   /usr/sbin/useradd --system --create-home --home-dir /var/lib/shopvivaliz-marina-mcp --shell /usr/sbin/nologin shopvivaliz-marina-mcp
