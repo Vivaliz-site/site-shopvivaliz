@@ -84,6 +84,27 @@ class PreflightTests(unittest.TestCase):
             self.assertIn('wrong host', process.stderr)
             self.assertFalse(marker.exists(), 'untrusted PATH command was executed')
 
+    def test_stager_rejects_shadowing_and_duplicate_admin_units(self):
+        """An already installed admin tunnel must not be silently replaced."""
+        script = (Path(__file__).resolve().parents[1] / 'scripts'
+                  / 'cloudflare-admin-stage-unit.sh').read_text()
+        # Both candidate contracts are mutually exclusive until consolidated.
+        for unit_name in ('shopvivaliz-cloudflare-admin.service',
+                          'shopvivaliz-cloudflared-admin.service'):
+            self.assertIn(unit_name, script)
+        # Detect an inactive or disabled unit on disk, including stale drop-ins
+        # and a future-boot enablement symlink, before creating the new unit.
+        for guard in ('"$systemd_dir/$admin_name"',
+                      '"$systemd_dir/$admin_name.d"',
+                      '"$systemd_dir/multi-user.target.wants/$admin_name"',
+                      '--property=FragmentPath', '--property=DropInPaths',
+                      'systemctl is-enabled "$admin_name"',
+                      'conflicting_cloudflare_admin_unit'):
+            with self.subTest(guard=guard):
+                self.assertIn(guard, script)
+        self.assertLess(script.index('conflicting_cloudflare_admin_unit'),
+                        script.index('unit_tmp="$(mktemp'))
+
     def test_marina_no_new_privs_is_not_ready(self):
         r = mod.evaluate('marina-a1-4c24g', 'marina-a1-4c24g', 1001, True, True, True,
                          {}, 'inactive',
