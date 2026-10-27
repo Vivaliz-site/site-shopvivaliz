@@ -48,6 +48,7 @@ class StagingTests(unittest.TestCase):
             'different_release_active', 'NoNewPrivileges=yes',
             'source_systemd_dir_not_root_owned', 'unsafe_lock_symlink',
             'existing_target_wrong_mode', 'service_group_missing',
+            'checkout_status_unavailable', 'service_state_unavailable', 'unsafe_lock_file',
             'MIGRATION_STATUS=NO_CUT_NAO_APTO',
         ):
             self.assertIn(required, source)
