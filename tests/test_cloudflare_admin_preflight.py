@@ -1,4 +1,7 @@
 import importlib.util
+import os
+import socket
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -55,6 +58,29 @@ class PreflightTests(unittest.TestCase):
         script = (Path(__file__).resolve().parents[1] / 'scripts'
                   / 'cloudflare-admin-stage-unit.sh').read_text()
         self.assertIn('!= 0', script.split('NoNewPrivs:/ {print $2}', 1)[1][:40])
+
+    def test_privileged_stager_ignores_inherited_path(self):
+        """A PATH-supplied hostname must never run before the host gate."""
+        if socket.gethostname().split('.')[0] == 'marina-a1-4c24g':
+            self.skipTest('this negative test requires a non-Marina runner')
+        stage_script = (Path(__file__).resolve().parents[1] / 'scripts'
+                        / 'cloudflare-admin-stage-unit.sh')
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_hostname = Path(tmp) / 'hostname'
+            marker = Path(tmp) / 'host-command-executed'
+            fake_hostname.write_text(
+                '#!/bin/sh\\n: > "' + str(marker) +
+                '"\\nprintf "marina-a1-4c24g\\n"\\n'
+            )
+            fake_hostname.chmod(0o755)
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ.get('PATH', ''))
+            process = subprocess.run(
+                ['/bin/bash', str(stage_script), 'marina-a1-4c24g'],
+                env=env, text=True, capture_output=True, timeout=8, check=False
+            )
+            self.assertEqual(process.returncode, 2, process.stderr)
+            self.assertIn('wrong host', process.stderr)
+            self.assertFalse(marker.exists(), 'untrusted PATH command was executed')
 
     def test_marina_no_new_privs_is_not_ready(self):
         r = mod.evaluate('marina-a1-4c24g', 'marina-a1-4c24g', 1001, True, True, True,
