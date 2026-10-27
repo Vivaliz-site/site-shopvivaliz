@@ -27,6 +27,23 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(r['tunnel_authenticated'], 'NOT_TESTED')
         self.assertEqual(r['sudo_delegation'], 'NOT_TESTED')
 
+    def test_unknown_no_new_privs_fails_closed(self):
+        """A missing or unreadable /proc/self/status must never authorize staging."""
+        safe_token = {'present': True, 'regular_file': True,
+                      'mode_0600': True, 'root_owned': True}
+        for nnp in (None, True):
+            with self.subTest(nnp=nnp):
+                result = mod.evaluate('marina-a1-4c24g', 'marina-a1-4c24g',
+                                      0, nnp, True, True, '/usr/bin/cloudflared',
+                                      'inactive', safe_token)
+                self.assertFalse(result['local_stage_prerequisites'])
+
+    def test_stage_unit_unknown_privilege_status_rejected(self):
+        """The root installer must demand an explicit NoNewPrivs=0."""
+        script = (Path(__file__).resolve().parents[1] / 'scripts'
+                  / 'cloudflare-admin-stage-unit.sh').read_text()
+        self.assertIn('!= 0', script.split('NoNewPrivs:/ {print $2}', 1)[1][:40])
+
     def test_marina_no_new_privs_is_not_ready(self):
         r = mod.evaluate('marina-a1-4c24g', 'marina-a1-4c24g', 1001, True, True, True,
                          None, 'inactive',
