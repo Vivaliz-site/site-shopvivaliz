@@ -26,13 +26,38 @@ if command -v systemctl >/dev/null 2>&1; then
   [[ -n "$ssh_state" ]] || ssh_state=unknown
 fi
 # Match the exact approved systemd ExecStart, not a PATH binary.
+# Check every mutable ancestor of the pinned binary and protected token.
+# An apparently root-owned leaf under a writable parent is not trusted.
+safe_root_directory() {
+  local dir="$1" metadata owner mode
+  [[ -d "$dir" && ! -L "$dir" ]] || return 1
+  metadata="$(stat -c '%u:%a' "$dir" 2>/dev/null)" || return 1
+  owner="${metadata%%:*}"
+  mode="${metadata#*:}"
+  [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+  (( (8#$mode & 8#022) == 0 ))
+}
+binary_parents_safe=false
+if safe_root_directory /opt &&
+   safe_root_directory /opt/shopvivaliz-cloudflared-admin &&
+   safe_root_directory /opt/shopvivaliz-cloudflared-admin/releases &&
+   safe_root_directory /opt/shopvivaliz-cloudflared-admin/releases/2026.10.4; then
+  binary_parents_safe=true
+fi
+token_parents_safe=false
+if safe_root_directory /etc/shopvivaliz &&
+   safe_root_directory /etc/shopvivaliz/cloudflare-admin; then
+  token_parents_safe=true
+fi
 binary_owner_mode="$(stat -c '%u:%a' "$cloudflared_bin" 2>/dev/null || true)"
-if [[ -f "$cloudflared_bin" && -x "$cloudflared_bin" && ! -L "$cloudflared_bin" ]] &&
+if [[ "$binary_parents_safe" == true && -f "$cloudflared_bin" && -x "$cloudflared_bin" && ! -L "$cloudflared_bin" ]] &&
    [[ "$(readlink -f "$cloudflared_bin" 2>/dev/null || true)" == "$cloudflared_bin" ]] &&
    [[ "$binary_owner_mode" =~ ^0:(755|750|700|555|550|500)$ ]]; then
   cloudflared_path=present_root_owned_pinned
 fi
-if [[ -L "$secret_file" ]]; then
+if [[ "$token_parents_safe" != true ]]; then
+  secret_metadata=unsafe_parent_directory
+elif [[ -L "$secret_file" ]]; then
   secret_metadata=unsafe_symlink
 elif [[ -f "$secret_file" ]]; then
   # Inspect only metadata. Never open or print secret bytes.
