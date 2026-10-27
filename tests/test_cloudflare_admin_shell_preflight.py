@@ -52,7 +52,7 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
     def test_pinned_binary_and_token_parent_directories_fail_closed(self):
         """Exercise the actual shell guard, not just string assertions."""
         source = SCRIPT.read_text(encoding="utf-8")
-        match = re.search(r"(?ms)^safe_root_directory\\(\\) \\{\\n.*?^\\}", source)
+        match = re.search(r"(?ms)^safe_root_directory\(\) \{\n.*?^\}", source)
         self.assertIsNotNone(match)
         self.assertIn('[[ "$binary_parents_safe" == true', source)
         self.assertIn('if [[ "$token_parents_safe" != true ]]; then', source)
@@ -60,7 +60,7 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / "safe-leaf"
             directory.mkdir()
-            shell = 'stat() { printf "%s\\n" "$FAKE_METADATA"; }\\n' + guard + '\\nsafe_root_directory "$1"\\n'
+            shell = 'stat() { printf "%s\\n" "$FAKE_METADATA"; }\n' + guard + '\nsafe_root_directory "$1"\n'
             for metadata, allowed in (("0:755", True), ("0:700", True),
                                       ("0:777", False), ("0:775", False),
                                       ("1001:755", False), ("invalid", False)):
