@@ -37,5 +37,6 @@ jobs:
       - name: Cloudflare admin staging preflight regression (when present)
         if: ${{ hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
         run: |
-          python3 -m unittest discover -s tests -p 'test_cloudflare_admin_preflight.py' -v
+          python3 -m unittest discover -s tests -p 'test_cloudflare_admin_*.py' -v
           bash -n scripts/cloudflare-admin-stage-unit.sh
+          bash -n scripts/ops/cloudflare-admin-preflight.sh
