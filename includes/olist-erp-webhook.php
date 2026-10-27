@@ -570,7 +570,7 @@ function svoei_quote_freight(array $data): array
     if ($token === '') throw new RuntimeException('shipping_access_token_missing');
     $payload = ['from' => ['postal_code' => $from], 'to' => ['postal_code' => $to], 'products' => $products, 'options' => ['receipt' => false, 'own_hand' => false, 'collect' => false]];
     $ch = curl_init(me_api_base() . '/api/v2/me/shipment/calculate');
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'Authorization: Bearer [REDACTED] . $token, 'User-Agent: ShopVivaliz/Olist-Freight']]);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json', 'Authorization: Bearer ' . $token, 'User-Agent: ShopVivaliz/Olist-Freight']]);
     $raw = curl_exec($ch); $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE); curl_close($ch);
     if ($status < 200 || $status >= 300 || !is_string($raw)) throw new RuntimeException('shipping_provider_failed');
     $decoded = json_decode($raw, true);
