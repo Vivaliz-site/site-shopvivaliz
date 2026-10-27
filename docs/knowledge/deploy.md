@@ -105,3 +105,7 @@ Não deve ser necessário abrir URLs manuais para concluir SQL, migration ou rep
 Arquivos persistentes, uploads, logs, relatórios e credenciais devem permanecer em `shared/` ou em outro storage persistente previsto pelo deploy; não devem ser gravados dentro de releases imutáveis. Confirme o workflow, os scripts de deploy e os symlinks de persistência antes de concluir que um arquivo deveria estar dentro da release.
 
 O `.env` de produção é persistente em `shared/.env`. Nunca o imprima. Atualizações devem preservar permissões/ownership e remover somente linhas malformadas que não sejam comentário, linha vazia ou atribuição `KEY=VALUE` válida.
+
+## Gate verificavel de conclusao de deploy
+
+Depois do merge, obtenha o commit de `main`, rode `python3 scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>` e exija exit 0 com evidencia de deploy, revisao publica igual e smoke test aprovado. Se o retorno for diferente de zero, a tarefa permanece `RUNNING`; corrigir pipeline e revalidar. `.github/workflows/production-deployment-closure-guard.yml` reaudita apos o pipeline e periodicamente com alerta rastreavel em issue unico. Nao substituir isso por PR, testes green ou apenas health 200.
