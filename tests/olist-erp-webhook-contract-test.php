@@ -147,6 +147,35 @@ t_assert(($afterRename[0]['sku'] ?? '') === '35039', 'unrelated product SKU must
 t_assert(($afterRename[1]['sku'] ?? '') === 'NEW-35039', 'canonical ERP ID should permit a nonconflicting SKU change');
 t_assert(count($afterRename) === 2, 'upsert by authoritative ID must not duplicate products');
 
+// Regression: an existing authoritative ERP ID may not take a SKU belonging
+// to a separate ID-less legacy row. The old code selected the ID match and
+// silently left two public products with the identical SKU.
+$legacySkuCollisionRoot = $tmp . '/upsert-legacy-sku-collision';
+mkdir($legacySkuCollisionRoot . '/storage', 0775, true);
+$legacySkuCollisionRows = [
+    ['id' => '350339', 'sku' => 'ORIGINAL-ERP-SKU', 'precos' => ['preco' => 301.20]],
+    ['sku' => 'REUSED-ERP-SKU', 'precos' => ['preco' => 19.90]],
+];
+file_put_contents(
+    $legacySkuCollisionRoot . '/storage/products-cache-ativos.json',
+    json_encode($legacySkuCollisionRows)
+);
+$legacySkuCollisionRejected = false;
+try {
+    svoei_upsert_catalog_product($legacySkuCollisionRoot, [
+        'id' => '350339',
+        'sku' => 'REUSED-ERP-SKU',
+        'precos' => ['preco' => 301.30],
+    ]);
+} catch (RuntimeException $e) {
+    $legacySkuCollisionRejected = $e->getMessage() === 'catalog_sku_identity_conflict';
+}
+t_assert($legacySkuCollisionRejected, 'ID-first upsert must reject another legacy row owning the new SKU');
+$legacySkuCollisionAfter = t_items($legacySkuCollisionRoot . '/storage/products-cache-ativos.json');
+t_assert(count($legacySkuCollisionAfter) === 2, 'rejected collision must preserve catalog row count');
+t_assert(($legacySkuCollisionAfter[0]['sku'] ?? '') === 'ORIGINAL-ERP-SKU', 'identified row must remain unchanged');
+t_assert(($legacySkuCollisionAfter[1]['sku'] ?? '') === 'REUSED-ERP-SKU', 'legacy row must remain unchanged');
+
 
 // An ID mismatch with a matching SKU must fail closed, not corrupt the cache.
 $unmatchedRoot = $tmp . '/price-id-mismatch';
