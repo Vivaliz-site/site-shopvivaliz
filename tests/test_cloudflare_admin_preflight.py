@@ -69,8 +69,8 @@ class PreflightTests(unittest.TestCase):
             fake_hostname = Path(tmp) / 'hostname'
             marker = Path(tmp) / 'host-command-executed'
             fake_hostname.write_text(
-                '#!/bin/sh\\n: > "' + str(marker) +
-                '"\\nprintf "marina-a1-4c24g\\n"\\n'
+                '#!/bin/sh\n: > "' + str(marker) +
+                '"\nprintf "marina-a1-4c24g\n"\n'
             )
             fake_hostname.chmod(0o755)
             env = dict(os.environ, PATH=tmp + os.pathsep + os.environ.get('PATH', ''))
