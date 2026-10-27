@@ -91,7 +91,7 @@ legitimate privileged maintenance capability, then use a **root-owned clean
 checkout of a reviewed SHA**, placed beneath an entirely root-owned, non-writable
 ancestor chain (for example a protected root-owned staging tree). A checkout
 under an ubuntu-owned `/home/ubuntu` parent is not safe for privileged staging
-because that parent can rename the checked directory between verification and copy. Do not launch it via RDC, SSH, OCI Run Command,
+because that parent can rename the checked directory between verification and copy. The `.git` metadata MUST be a root-owned, non-group/other-writable directory (not an external worktree pointer); `.git/config` MUST be a root-owned, non-writable regular file. The helper runs Git with a clean environment, fixed executable path, and `core.fsmonitor=false`/hooks disabled, because `git status` could otherwise execute a repository-configured fsmonitor hook with operator privileges. These protections only authenticate local staging inputs; they do not substitute for a signed or reviewed release. Do not launch it via RDC, SSH, OCI Run Command,
 GitHub Actions or another MCP to evade an express privilege denial.
 
 On the *actual Marina* through that officially authorized operator context:
