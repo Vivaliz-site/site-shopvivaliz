@@ -38,9 +38,23 @@ def ssh_listener(ss_output):
     return False
 
 
+# A privileged operator may run this probe with an inherited hostile PATH.
+# Never execute caller-supplied commands or inherit loader/runtime variables.
+READONLY_EXECUTABLES = {
+    'systemctl': '/usr/bin/systemctl',
+    'ss': '/usr/bin/ss',
+}
+
+
 def run_readonly(*argv):
+    if not argv or argv[0] not in READONLY_EXECUTABLES:
+        return ''
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=4, check=False)
+        p = subprocess.run(
+            (READONLY_EXECUTABLES[argv[0]], *argv[1:]),
+            capture_output=True, text=True, timeout=4, check=False,
+            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C'},
+        )
         return p.stdout if p.returncode == 0 else ''
     except (OSError, subprocess.TimeoutExpired):
         return ''
