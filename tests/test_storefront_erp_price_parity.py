@@ -91,6 +91,32 @@ class PriceParityTests(unittest.TestCase):
         self.assertEqual(data["status"], "FAIL")
         self.assertEqual(data["issues"][0]["code"], "erp_detail_missing")
 
+    def test_duplicate_published_erp_id_fails_even_if_last_price_matches(self):
+        # Repeated catalog rows must not be hidden by dict normalization.
+        data = audit.evaluate([active(100, "A")],
+            {"100": item(100, "A", 100)}, [item(100, "A", 100)],
+            [published(100, "A", 90), published(100, "A", 100)])
+        self.assertEqual(data["status"], "FAIL")
+        self.assertIn("duplicate_storefront_product_id",
+                      {finding["code"] for finding in data["issues"]})
+
+    def test_published_catalog_row_without_erp_id_fails(self):
+        data = audit.evaluate([active(100, "A")],
+            {"100": item(100, "A", 100)}, [item(100, "A", 100)],
+            [published(100, "A", 100), {"sku": "ORPHAN", "price": 25}])
+        self.assertEqual(data["status"], "FAIL")
+        self.assertIn("published_product_missing_product_id",
+                      {finding["code"] for finding in data["issues"]})
+
+    def test_matching_price_does_not_hide_wrong_published_sku(self):
+        data = audit.evaluate([active(100, "ERP-SKU")],
+            {"100": item(100, "ERP-SKU", 100)},
+            [item(100, "ERP-SKU", 100)],
+            [published(100, "OTHER-SKU", 100)])
+        self.assertEqual(data["status"], "FAIL")
+        self.assertIn("storefront_sku_differs_from_erp",
+                      {finding["code"] for finding in data["issues"]})
+
     def test_public_product_with_wrong_erp_id_is_a_blocker(self):
         data=audit.evaluate([active(100, "SKU")],
             {"100": item(100, "SKU", 100)}, [item(100, "SKU", 100)],
