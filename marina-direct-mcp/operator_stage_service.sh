@@ -158,6 +158,20 @@ if [[ -L "$stage_root/current" ]]; then
   [[ "$(readlink "$stage_root/current")" == "releases/$expected_sha" ]] || refuse different_release_active
 fi
 
+# install -d -o/-g/-m rewrites metadata even when a directory already exists.
+# Never silently broaden existing 0700 directories to 0755 or change groups.
+# Require byte-for-byte compatible directory metadata before any install -d.
+assert_existing_stage_directory_metadata() {
+  local dir="$1"
+  if [[ -e "$dir" || -L "$dir" ]]; then
+    [[ -d "$dir" && ! -L "$dir" ]] || refuse existing_stage_directory_unsafe
+    [[ "$(stat -c '%u:%g:%a' "$dir")" == '0:0:755' ]] || refuse existing_stage_directory_metadata_mismatch
+  fi
+}
+for dir in "$stage_root" "$stage_root/releases" "$stage_root/bin" "$release_dir"; do
+  assert_existing_stage_directory_metadata "$dir"
+done
+
 # Inspect before creating the service identity. Never re-own an existing home.
 if getent passwd shopvivaliz-marina-mcp >/dev/null; then
   record="$(getent passwd shopvivaliz-marina-mcp)"
