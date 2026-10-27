@@ -105,6 +105,45 @@ $updatedById = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35
 t_assert((float)($updatedById['precos']['preco'] ?? 0) === 211.90, 'valid ERP id must update price even with changed SKU');
 t_assert((float)($updatedById['precos']['precoPromocional'] ?? -1) === 0.0, 'removed promotion must be reflected');
 
+// Regression: a recycled SKU on another ERP product must not receive the
+// authoritative product ID's price, even when it appears first in the cache.
+$collisionRoot = $tmp . '/price-id-collision';
+mkdir($collisionRoot . '/storage', 0775, true);
+$collisionRows = [
+    ['id' => '999', 'sku' => '35039', 'precos' => ['preco' => 9.99]],
+    ['id' => '350339', 'sku' => 'OLD-35039', 'precos' => ['preco' => 11.00]],
+];
+file_put_contents($collisionRoot . '/storage/products-cache-ativos.json', json_encode($collisionRows));
+svoei_update_catalog_price($collisionRoot, '35039', 301.10, 0.0, '350339');
+$collisionAfter = t_items($collisionRoot . '/storage/products-cache-ativos.json');
+t_assert((float)($collisionAfter[0]['precos']['preco'] ?? 0) === 9.99, 'recycled SKU must not mutate another ERP product');
+t_assert((float)($collisionAfter[1]['precos']['preco'] ?? 0) === 301.10, 'canonical product ID must win over a colliding SKU');
+
+// An ID mismatch with a matching SKU must fail closed, not corrupt the cache.
+$unmatchedRoot = $tmp . '/price-id-mismatch';
+mkdir($unmatchedRoot . '/storage', 0775, true);
+file_put_contents($unmatchedRoot . '/storage/products-cache-ativos.json', json_encode([$collisionRows[0]]));
+$idMismatchRejected = false;
+try {
+    svoei_update_catalog_price($unmatchedRoot, '35039', 450.00, 0.0, '350339');
+} catch (RuntimeException $e) {
+    $idMismatchRejected = $e->getMessage() === 'catalog_product_not_found';
+}
+t_assert($idMismatchRejected, 'known conflicting ERP ID must reject price mutation');
+$unmatchedAfter = t_items($unmatchedRoot . '/storage/products-cache-ativos.json');
+t_assert((float)($unmatchedAfter[0]['precos']['preco'] ?? 0) === 9.99, 'ID mismatch must not change a different product');
+
+// Compatibility: legacy SKU-only cache rows may be updated if the ID is absent.
+$legacyRoot = $tmp . '/price-id-legacy';
+mkdir($legacyRoot . '/storage', 0775, true);
+file_put_contents($legacyRoot . '/storage/products-cache-ativos.json', json_encode([
+    ['sku' => '35039', 'precos' => ['preco' => 8.88]],
+]));
+svoei_update_catalog_price($legacyRoot, '35039', 199.00, 0.0, '350339');
+$legacyAfter = t_items($legacyRoot . '/storage/products-cache-ativos.json');
+t_assert((float)($legacyAfter[0]['precos']['preco'] ?? 0) === 199.00, 'ID-less legacy row should retain SKU fallback');
+
+
 svoei_update_catalog_stock($tmp, '35039', 11);
 $updated = t_find(t_items($tmp . '/storage/products-cache-ativos.json'), '35039');
 t_assert((int)($updated['estoque_disponivel'] ?? -1) === 11, 'estoque disponivel nao atualizado');
