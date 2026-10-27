@@ -97,6 +97,35 @@ class StagingTests(unittest.TestCase):
                 self.assertLess(lock, source.index(gate),
                                 'preflight must execute under the stage lock')
 
+    def test_existing_stage_directory_metadata_not_rewritten(self):
+        """RED: install -d changes existing restrictive modes; stager must refuse."""
+        function = self._bash_function('assert_existing_stage_directory_metadata')
+        source = SCRIPT.read_text()
+        self.assertLess(
+            source.index('assert_existing_stage_directory_metadata "$dir"'),
+            source.index('install -d -o root -g root -m 0755'),
+            'existing directories must be checked before install -d mutates them',
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / 'preexisting'
+            target.mkdir(mode=0o700)
+            command = ('stat() { printf "%s\n" "$MOCK_STAGE_METADATA"; }\n'
+                       f'assert_existing_stage_directory_metadata "{target}"')
+            for metadata, allowed in (
+                ('0:0:755', True),
+                ('0:0:700', False),
+                ('0:33:755', False),
+                ('33:0:755', False),
+            ):
+                with self.subTest(metadata=metadata):
+                    env = dict(os.environ, MOCK_STAGE_METADATA=metadata)
+                    result = self._run_guard(function, env, command)
+                    self.assertEqual(result.returncode, 0 if allowed else 3,
+                                     result.stderr)
+                    if not allowed:
+                        self.assertIn('existing_stage_directory_metadata_mismatch',
+                                      result.stderr)
+
     def test_privileged_git_status_cannot_execute_fsmonitor_hook(self):
         """RED: Git status runs a configured fsmonitor. GREEN: safe_git suppresses it."""
         function = self._bash_function("safe_git")
