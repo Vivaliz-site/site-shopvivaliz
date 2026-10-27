@@ -33,3 +33,9 @@ jobs:
         env:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: bash scripts/repository-governance-validate.sh ci
+
+      - name: Cloudflare admin staging preflight regression (when present)
+        if: ${{ hashFiles('scripts/cloudflare-admin-preflight.py') != '' }}
+        run: |
+          python3 -m unittest discover -s tests -p 'test_cloudflare_admin_preflight.py' -v
+          bash -n scripts/cloudflare-admin-stage-unit.sh
