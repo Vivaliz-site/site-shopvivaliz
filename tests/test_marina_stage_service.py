@@ -80,6 +80,45 @@ class StagingTests(unittest.TestCase):
         return subprocess.run(["bash", "-c", snippet], env=env,
                               text=True, capture_output=True, timeout=8, check=False)
 
+    def test_privileged_git_status_cannot_execute_fsmonitor_hook(self):
+        """RED: Git status runs a configured fsmonitor. GREEN: safe_git suppresses it."""
+        function = self._bash_function("safe_git")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            subprocess.run(["/usr/bin/git", "init", "-q", str(root)], check=True)
+            source = root / "marina-direct-mcp"
+            source.mkdir()
+            (source / "server.py").write_text("marker = 1\n")
+            subprocess.run(["/usr/bin/git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(root),
+                            "-c", "user.name=Fixture", "-c", "user.email=test@example.com",
+                            "commit", "-qm", "fixture"], check=True)
+            marker = Path(tmp) / "fsmonitor-executed"
+            hook = Path(tmp) / "fsmonitor.sh"
+            hook.write_text('#!/bin/sh\n: > "' + str(marker) + '"\nexit 0\n')
+            hook.chmod(0o755)
+            subprocess.run(["/usr/bin/git", "-C", str(root), "config",
+                            "core.fsmonitor", str(hook)], check=True)
+            env = dict(os.environ, ROOT=str(root),
+                       GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="core.fsmonitor",
+                       GIT_CONFIG_VALUE_0=str(hook))
+            snippet = function + '\nsource_root="$ROOT"\nsafe_git status --porcelain -- marina-direct-mcp\n'
+            result = subprocess.run(["/bin/bash", "-c", snippet], env=env,
+                                    text=True, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists(), "untrusted Git fsmonitor hook executed as stager")
+
+    def test_git_source_metadata_must_be_operator_owned(self):
+        """The approved checkout may not delegate its .git/config to another user."""
+        source = SCRIPT.read_text()
+        for required in ("git_metadata_unsafe", "git_metadata_not_root_owned",
+                         "git_config_unsafe", "git_config_not_root_owned",
+                         "core.fsmonitor=false", "core.hooksPath=/dev/null",
+                         "/usr/bin/env -i", "safe_git rev-parse HEAD",
+                         "safe_git status --porcelain"):
+            self.assertIn(required, source)
+
     def test_unit_boot_autostart_fail_closed(self):
         """Exercise the real shell guard with systemctl states, not text matching."""
         function = self._bash_function("assert_unit_not_autostart")
