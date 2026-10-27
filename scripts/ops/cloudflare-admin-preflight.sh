@@ -13,6 +13,7 @@ esac
 
 unit="shopvivaliz-cloudflared-admin.service"
 secret_file="/etc/shopvivaliz/cloudflare-admin/token"
+cloudflared_bin="/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/cloudflared"
 unit_state=unknown
 ssh_state=unknown
 cloudflared_path=absent
@@ -24,18 +25,22 @@ if command -v systemctl >/dev/null 2>&1; then
   [[ -n "$unit_state" ]] || unit_state=unknown
   [[ -n "$ssh_state" ]] || ssh_state=unknown
 fi
-if command -v cloudflared >/dev/null 2>&1; then
-  cloudflared_path=present
+# Match the exact approved systemd ExecStart, not a PATH binary.
+binary_owner_mode="$(stat -c '%u:%a' "$cloudflared_bin" 2>/dev/null || true)"
+if [[ -f "$cloudflared_bin" && -x "$cloudflared_bin" && ! -L "$cloudflared_bin" ]] &&
+   [[ "$(readlink -f "$cloudflared_bin" 2>/dev/null || true)" == "$cloudflared_bin" ]] &&
+   [[ "$binary_owner_mode" =~ ^0:(755|750|700|555|550|500)$ ]]; then
+  cloudflared_path=present_root_owned_pinned
 fi
 if [[ -L "$secret_file" ]]; then
   secret_metadata=unsafe_symlink
 elif [[ -f "$secret_file" ]]; then
-  mode="$(stat -c '%a' "$secret_file" 2>/dev/null || true)"
-  if [[ "$mode" == 600 || "$mode" == 400 ]]; then
-    secret_metadata=private_regular_file
-  else
-    secret_metadata=unsafe_permissions
-  fi
+  # Inspect only metadata. Never open or print secret bytes.
+  mode_owner="$(stat -c '%a:%u' "$secret_file" 2>/dev/null || true)"
+  case "$mode_owner" in
+    600:0|400:0) secret_metadata=private_root_owned_regular_file ;;
+    *) secret_metadata=unsafe_owner_or_permissions ;;
+  esac
 fi
 runner_nnp=unknown
 if [[ -r /proc/self/status ]]; then
@@ -46,7 +51,7 @@ fi
 printf 'HOST=%s\nROLE=%s\nUID=%s\nSSH_UNIT=%s\nCLOUDFLARED_EXECUTABLE=%s\nCLOUDFLARED_ADMIN_UNIT=%s\nTUNNEL_TOKEN_METADATA=%s\nRUNNER_NO_NEW_PRIVILEGES=%s\n' \
   "$host" "$role" "$(id -u)" "$ssh_state" "$cloudflared_path" "$unit_state" "$secret_metadata" "$runner_nnp"
 printf 'CLOUDFLARE_ACCOUNT_AUTH=NOT_TESTED\nACCESS_POLICY=NOT_TESTED\nTUNNEL_CONNECTIVITY=NOT_TESTED\nSSH_IDENTITY=NOT_TESTED\nSUDO_PERMISSION=NOT_TESTED\n'
-if [[ "$cloudflared_path" == present && "$secret_metadata" == private_regular_file && "$unit_state" == active && "$ssh_state" == active ]]; then
+if [[ "$cloudflared_path" == present_root_owned_pinned && "$secret_metadata" == private_root_owned_regular_file && "$unit_state" == active && "$ssh_state" == active ]]; then
   printf 'LOCAL_PREFLIGHT=CANDIDATE_ONLY\n'
 else
   printf 'LOCAL_PREFLIGHT=INCOMPLETE\n'
