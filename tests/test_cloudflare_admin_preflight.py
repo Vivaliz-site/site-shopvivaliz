@@ -240,6 +240,23 @@ class PreflightTests(unittest.TestCase):
             result = mod.token_metadata(token)
         self.assertFalse(result['safe_parent_dirs'])
 
+    def test_etc_token_ancestor_must_be_trusted(self):
+        """The stager checks /etc: the read-only preflight must not omit it."""
+        token = Path('/etc/shopvivaliz/cloudflare-admin/token')
+
+        def fake_stat(path, **kwargs):
+            mode = 0o777 if str(path) == '/etc' else 0o755
+            return SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | mode)
+
+        with mock.patch.object(mod.Path, 'stat', autospec=True, side_effect=fake_stat):
+            self.assertFalse(mod.secret_parent_dirs_safe(token))
+
+        def safe_stat(path, **kwargs):
+            return SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o755)
+
+        with mock.patch.object(mod.Path, 'stat', autospec=True, side_effect=safe_stat):
+            self.assertTrue(mod.secret_parent_dirs_safe(token))
+
     def test_missing_parent_attestation_cannot_be_ready(self):
         # A fabricated or legacy token metadata dict cannot omit a required gate.
         token = {'present': True, 'regular_file': True,
