@@ -9,7 +9,7 @@ case "$TARGET" in
 esac
 if [[ "$(hostname -s)" != "$TARGET" ]]; then echo 'ERROR: wrong host' >&2; exit 2; fi
 if [[ "$EUID" -ne 0 ]]; then echo 'ERROR: authorized root maintenance session required' >&2; exit 3; fi
-if [[ "$(awk '/^NoNewPrivs:/ {print $2}' /proc/self/status)" == 1 ]]; then
+if [[ "$(awk '/^NoNewPrivs:/ {print $2}' /proc/self/status)" != 0 ]]; then
   echo 'ERROR: NoNewPrivileges prevents approved privileged maintenance' >&2; exit 3
 fi
 if ! systemctl is-active --quiet ssh.service && ! systemctl is-active --quiet sshd.service; then
