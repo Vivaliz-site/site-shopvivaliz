@@ -211,13 +211,14 @@ function svoei_upsert_catalog_product(string $root, array $product): void
     });
 }
 
-function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0): void
+function svoei_update_catalog_price(string $root, string $sku, float $price, float $promotional = 0.0, string $productId = ''): void
 {
     $sku = trim($sku);
-    if ($sku === '') throw new InvalidArgumentException('sku_missing');
-    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional): void {
+    $productId = trim($productId);
+    if ($sku === '' && $productId === '') throw new InvalidArgumentException('product_identifier_missing');
+    svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $productId): void {
         foreach ($items as $index => $item) {
-            if (!svoei_item_matches($item, $sku)) continue;
+            if (!svoei_item_matches($item, $sku, $productId)) continue;
             $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
             $prices['preco'] = max(0.0, $price);
             $prices['precoPromocional'] = max(0.0, $promotional);
@@ -329,6 +330,67 @@ function svoei_refresh_product_from_v3(string $root, string $productId = '', str
     $product = svoei_normalize_v3_product($detail, $stock);
     svoei_upsert_catalog_product($root, $product);
     return $product;
+}
+
+
+/**
+ * Extract ERP references from price notifications. Some price events provide
+ * only idProduto, while others provide codigo/sku/skuMapeamento.
+ * idMapeamento is NOT a Tiny product ID and must never be used for this lookup.
+ *
+ * @return array{product_id:string,sku:string}
+ */
+function svoei_price_event_reference(array $data): array
+{
+    $productId = svoei_first_text([$data['idProduto'] ?? '', $data['id'] ?? '']);
+    if ($productId !== '' && !ctype_digit($productId)) $productId = '';
+    $sku = svoei_first_text([$data['codigo'] ?? '', $data['sku'] ?? '', $data['skuMapeamento'] ?? '']);
+    if ($productId === '' && $sku === '') throw new InvalidArgumentException('product_identifier_missing');
+    return ['product_id' => $productId, 'sku' => $sku];
+}
+
+/**
+ * Price events must not depend on a successful stock API call. Read the current
+ * ERP v3 product detail, never trust a webhook-supplied commercial amount,
+ * then patch the active catalog under the existing webhook lock.
+ *
+ * @return array{sku:string,price:float,promotional_price:float}
+ */
+function svoei_refresh_price_from_v3(string $root, string $productId = '', string $sku = ''): array
+{
+    $token = svtop_tiny_get_token();
+    if ($token === '') throw new RuntimeException('erp_access_token_missing');
+    $productId = trim($productId);
+    $sku = trim($sku);
+    if ($productId === '' && $sku === '') throw new InvalidArgumentException('product_identifier_missing');
+    if ($productId === '') $productId = svoei_resolve_v3_product_id($sku, $token);
+    if (!ctype_digit($productId)) throw new InvalidArgumentException('product_id_invalid');
+
+    $response = svtop_tiny_get('/produtos/' . rawurlencode($productId), $token);
+    if ((int)($response['status'] ?? 0) !== 200) throw new RuntimeException('erp_price_read_failed');
+    $detail = svoei_unwrap_product(is_array($response['json'] ?? null) ? $response['json'] : []);
+    if ($detail === []) throw new RuntimeException('erp_price_payload_empty');
+    $returnedId = trim((string)($detail['id'] ?? ''));
+    if ($returnedId !== '' && $returnedId !== $productId) throw new RuntimeException('erp_product_id_mismatch');
+    $resolvedSku = svoei_first_text([$detail['sku'] ?? '', $detail['codigo'] ?? '']);
+    if ($resolvedSku === '') throw new RuntimeException('erp_product_sku_missing');
+
+    $prices = is_array($detail['precos'] ?? null) ? $detail['precos'] : [];
+    $rawPrice = $prices['preco'] ?? $prices['preco_venda'] ?? $detail['preco'] ?? null;
+    if (!is_numeric($rawPrice) || (float)$rawPrice <= 0) throw new RuntimeException('erp_price_invalid');
+    $price = svoei_number($rawPrice);
+    $promotional = svoei_number($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? 0);
+
+    try {
+        svoei_update_catalog_price($root, $resolvedSku, $price, $promotional, $productId);
+    } catch (RuntimeException $e) {
+        if ($e->getMessage() !== 'catalog_product_not_found') throw $e;
+        // For a newly-created item, first import its authoritative v3 detail.
+        $newProduct = svoei_refresh_product_from_v3($root, $productId, $resolvedSku);
+        if (trim((string)($newProduct['sku'] ?? '')) === '') throw new RuntimeException('erp_new_product_import_failed');
+    }
+
+    return ['sku' => $resolvedSku, 'price' => $price, 'promotional_price' => $promotional];
 }
 
 function svoei_refresh_stock_from_v3(string $root, string $productId, string $mappedSku, string $erpSku = ''): int
