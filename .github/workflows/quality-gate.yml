@@ -5,8 +5,16 @@ on:
     branches: [main, master]
   pull_request:
     paths:
+      - 'marina-direct-mcp/**'
+      - 'tests/test_marina_direct_mcp.py'
+      - 'tests/test_marina_tunnel_preflight.py'
+      - 'tests/test_marina_tunnel_units.py'
+      - 'tests/test_marina_stage_service.py'
       - 'blog/**'
       - 'includes/**'
+      - 'scripts/quality/deployment_closure_guard.py'
+      - 'tests/test_deployment_closure_guard.py'
+      - '.github/workflows/production-deployment-closure-guard.yml'
       - 'scripts/repair-blog-editorial-content.php'
       - 'tests/blog-**'
       - 'tests/google-indexing-canonical-regression-test.php'
@@ -123,6 +131,7 @@ jobs:
           python3 tests/test_chatgpt_access_parity.py
           python3 tests/test_remote_mcp_bootstrap_scope.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
+          python3 tests/test_deployment_closure_guard.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
           node --check scripts/public-layout-audit.mjs

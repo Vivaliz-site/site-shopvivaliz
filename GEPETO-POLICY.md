@@ -56,3 +56,8 @@ Ordem serializada: `["chatgpt_common", "chatgpt_work", "cli"]`.
 Interrupção de streaming não autoriza pular para CLI. O watchdog não chama CLI nem IA paga; ele cria o pedido de retomada. O worker roteia `auto_resume` para `gpt`/ChatGPT comum. A camada CLI exige `SHOPVIVALIZ_RESUME_STAGE=cli_last`; sem isso, falha fechada com exit 75 e mantém o checkpoint `RUNNING`.
 <!-- /CHATGPT_RESUME_ORDER_V5 -->
 
+<!-- VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
+## Entrega real exige release comprovada
+
+Agentes de codigo nao podem dar tarefa por concluida no PR, testes ou merge. Antes de resposta de sucesso, verificar o SHA mergeado em main com `scripts/quality/deployment_closure_guard.py --expected-sha <SHA_MAIN>`, exigir evidencia oficial completa, mesma versao na resposta publica, smoke, E2E e persistencia no ambiente. Se falhar, corrigir a causa e repetir deploy pelo pipeline autorizado; manter tarefa RUNNING sem alegar CONCLUIDO. A verificacao independente automatica e o issue de deriva nao fazem o deploy pelo agente. Nunca usar este procedimento para burlar label de aprovacao humana, CI, branch protection, ownership, RBAC ou leases.
+<!-- /VERIFIED_PRODUCTION_CLOSURE_GUARD_V2 -->
