@@ -106,6 +106,14 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
                                   timeout=5)
             self.assertNotEqual(proc.returncode, 0)
 
+    def test_token_ancestors_include_etc(self):
+        """Shell preflight and privileged staging must require the same chain."""
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('if safe_root_directory /etc &&', source)
+        self.assertIn('safe_root_directory /etc/shopvivaliz &&', source)
+        self.assertIn('safe_root_directory /etc/shopvivaliz/cloudflare-admin; then',
+                      source)
+
     def test_origin_does_not_boot_or_claim_apt(self):
         p = self.run_for("shopvivaliz-free-a1")
         self.assertEqual(p.returncode, 0)
