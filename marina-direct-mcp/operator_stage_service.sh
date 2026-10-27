@@ -1,7 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Operator-only, fail-closed staging of the Marina read-only MCP.
 # Does NOT create credentials, install a tunnel, enable or start services.
 set -Eeuo pipefail
+# Privileged setup must never resolve commands through caller-controlled directories.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 umask 077
 
 refuse() { printf 'MARINA_MCP_STAGE_REFUSED=%s\n' "$1" >&2; exit 3; }
@@ -10,8 +13,11 @@ mode="${1:---inspect}"
 [[ "$mode" == '--inspect' || "$mode" == '--stage' ]] || refuse invalid_mode
 [[ "$(hostname -s)" == 'marina-a1-4c24g' ]] || refuse host_identity_mismatch
 
-if [[ "$mode" == '--inspect' ]]; then
+inspect_only() {
   printf 'MARINA_MCP_STAGE=INSPECT_ONLY\nMIGRATION_STATUS=NO_CUT_NAO_APTO\n'
+}
+if [[ "$mode" == '--inspect' ]]; then
+  inspect_only
   exit 0
 fi
 
