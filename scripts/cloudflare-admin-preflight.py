@@ -60,11 +60,39 @@ def token_metadata(path):
     }
 
 
+def cloudflared_metadata(candidate):
+    """Verify the same root-owned executable constraints as the stage helper."""
+    result = {
+        'present': False,
+        'approved_path': False,
+        'regular_file': False,
+        'root_owned': False,
+        'approved_mode': False,
+    }
+    if not candidate:
+        return result
+    try:
+        resolved = Path(candidate).resolve(strict=True)
+        st = resolved.stat()
+    except (OSError, RuntimeError):
+        return result
+    result.update({
+        'present': True,
+        'approved_path': str(resolved) in ('/usr/bin/cloudflared', '/usr/local/bin/cloudflared'),
+        'regular_file': stat.S_ISREG(st.st_mode),
+        'root_owned': st.st_uid == 0,
+        'approved_mode': stat.S_IMODE(st.st_mode) in (0o755, 0o750, 0o700, 0o555, 0o550, 0o500),
+    })
+    return result
+
+
 def evaluate(target, current_host, euid, nnp, ssh_active, ssh_listen,
-             binary, unit_state, token):
+             binary_meta, unit_state, token):
     host_match = target == current_host
     privileged_installer = euid == 0 and nnp is False
     token_safe = all(token.values())
+    binary_safe = all(binary_meta.get(key) is True for key in (
+        'present', 'approved_path', 'regular_file', 'root_owned', 'approved_mode'))
     return {
         'schema_version': 1,
         'target': target,
@@ -74,11 +102,12 @@ def evaluate(target, current_host, euid, nnp, ssh_active, ssh_listen,
         'no_new_privileges_in_caller': nnp,
         'ssh_service_active': ssh_active,
         'ssh_port_22_listening': ssh_listen,
-        'cloudflared_installed': bool(binary),
+        'cloudflared_installed': bool(binary_meta.get('present')),
+        'cloudflared_binary_metadata': binary_meta,
         'dedicated_tunnel_unit_state': unit_state,
         'dedicated_runtime_token_metadata': token,
         'local_stage_prerequisites': (host_match and privileged_installer and ssh_active
-                                      and ssh_listen and bool(binary) and token_safe),
+                                      and ssh_listen and binary_safe and token_safe),
         'cloudflare_access_policy_verified': 'NOT_TESTED',
         'tunnel_authenticated': 'NOT_TESTED',
         'ssh_access_e2e': 'NOT_TESTED',
@@ -105,7 +134,7 @@ def main(argv=None):
     unit_state = run_readonly('systemctl', 'is-active', 'shopvivaliz-cloudflare-admin.service').strip() or 'inactive'
     token = token_metadata(Path('/etc/shopvivaliz/cloudflare-admin') / (args.target + '.token'))
     result = evaluate(args.target, current_host, os.geteuid(), no_new_privileges(status_text),
-                      ssh_active, ssh_listen, shutil.which('cloudflared'), unit_state, token)
+                      ssh_active, ssh_listen, cloudflared_metadata(shutil.which('cloudflared')), unit_state, token)
     print(json.dumps(result, sort_keys=True, separators=(',', ':')))
     if not result['host_match']:
         return 2
