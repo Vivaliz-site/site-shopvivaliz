@@ -20,7 +20,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SHOPVIVALIZ_PRICE_AUDIT_ROOT", "") or Path(__file__).resolve().parents[2])
 PUBLIC_ROOT = "https://shopvivaliz.com.br"
 EXPLICIT_EXCLUDED_SKUS = frozenset({"parafuso5x16"})
 
