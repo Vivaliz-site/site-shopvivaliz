@@ -36,6 +36,25 @@ class DeployClosureTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(report["status"], "VERIFIED_DOCS_ONLY_AHEAD")
 
+    def test_expected_docs_only_main_commit_is_covered(self):
+        # old deployed SHA is the ancestor of the newer docs-only main SHA.
+        ancestry = lambda ancestor, child: (
+            ancestor == child or (ancestor, child) == (OLD, NEW)
+        )
+        with mock.patch.object(guard, "descendant", side_effect=ancestry):
+            covered = guard.expected_revision_covered(NEW, NEW, OLD, False)
+            self.assertTrue(covered)
+            report = guard.evaluate(
+                NEW, {**EVIDENCE, "sha": OLD}, OLD, False,
+                expected_sha=NEW, expected_is_live=covered,
+            )
+            self.assertEqual(report["status"], "VERIFIED_DOCS_ONLY_AHEAD")
+            self.assertTrue(report["ok"])
+            # A deployable change must never inherit the docs-only exception.
+            self.assertFalse(guard.expected_revision_covered(NEW, NEW, OLD, True))
+            # A commit not in main must not be accepted as the expected SHA.
+            self.assertFalse(guard.expected_revision_covered("c" * 40, NEW, OLD, False))
+
     def test_bad_evidence_rejected(self):
         report = guard.evaluate(NEW, {**EVIDENCE, "status": "FAILED"}, NEW, False)
         self.assertFalse(report["ok"])
