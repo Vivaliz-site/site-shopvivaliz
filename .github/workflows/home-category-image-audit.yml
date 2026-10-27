@@ -79,6 +79,14 @@ jobs:
           if (count($rows) < 20) {
               throw new RuntimeException('Catalog fixture is unexpectedly small.');
           }
+          // Isolated UI-only fixture: mark synthetic PDV provenance so image
+          // rendering can be tested. This is NOT an authenticated PDV audit,
+          // not a production cache and never qualifies as price parity.
+          foreach ($rows as &$row) {
+              $row['price_source'] = 'olist_pdv';
+              $row['pdv_list_id'] = 12345; // synthetic test-only list
+          }
+          unset($row);
           file_put_contents(
               'storage/products-cache-ativos.json',
               json_encode(['products' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
