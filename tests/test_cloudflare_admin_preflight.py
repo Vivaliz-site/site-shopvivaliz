@@ -155,7 +155,7 @@ class PreflightTests(unittest.TestCase):
 
     def test_untrusted_binary_parent_mode_fails_closed(self):
         """A group-writable /usr/bin cannot pass even for a trusted binary leaf."""
-        def fake_stat(path):
+        def fake_stat(path, **kwargs):
             mode = 0o777 if str(path) == '/usr/bin' else 0o755
             return SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | mode)
         with mock.patch.object(mod.Path, 'stat', autospec=True, side_effect=fake_stat):
