@@ -62,8 +62,11 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
             result = subprocess.run(["/bin/bash", str(SCRIPT)], env=env, text=True,
                                     capture_output=True, timeout=5)
             self.assertFalse(marker.exists(), "untrusted caller command executed")
-            self.assertIn("SUDO_PERMISSION=NOT_TESTED", result.stdout
-                          if result.returncode == 0 else "SUDO_PERMISSION=NOT_TESTED")
+            self.assertIn(result.returncode, (0, 3), result.stderr)
+            if result.returncode == 0:
+                self.assertIn("SUDO_PERMISSION=NOT_TESTED", result.stdout)
+            else:
+                self.assertIn("PREFLIGHT_STATUS=UNKNOWN_HOST", result.stdout)
 
     def test_pinned_binary_and_root_token_metadata(self):
         """Readiness cannot rely on an arbitrary PATH executable or non-root token."""
