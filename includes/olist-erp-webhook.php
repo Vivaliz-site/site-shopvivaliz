@@ -217,17 +217,38 @@ function svoei_update_catalog_price(string $root, string $sku, float $price, flo
     $productId = trim($productId);
     if ($sku === '' && $productId === '') throw new InvalidArgumentException('product_identifier_missing');
     svoei_catalog_mutate($root, static function (array &$items) use ($sku, $price, $promotional, $productId): void {
-        foreach ($items as $index => $item) {
-            if (!svoei_item_matches($item, $sku, $productId)) continue;
-            $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
-            $prices['preco'] = max(0.0, $price);
-            $prices['precoPromocional'] = max(0.0, $promotional);
-            $items[$index]['precos'] = $prices;
-            $items[$index]['sync_source'] = 'tiny_v3';
-            $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
-            return;
+        // ERP product ID is authoritative. A SKU may be reused by a different
+        // product, or changed while the cache still contains its old value.
+        $matches = [];
+        if ($productId !== '') {
+            foreach ($items as $index => $item) {
+                $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+                if ($existingId === $productId) $matches[] = $index;
+            }
+            // Only legacy records WITHOUT a product ID may fall back to SKU.
+            // Never overwrite a different, identified product on SKU collision.
+            if ($matches === [] && $sku !== '') {
+                foreach ($items as $index => $item) {
+                    $existingId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+                    if ($existingId === '' && svoei_item_matches($item, $sku)) $matches[] = $index;
+                }
+            }
+        } else {
+            foreach ($items as $index => $item) {
+                if (svoei_item_matches($item, $sku)) $matches[] = $index;
+            }
         }
-        throw new RuntimeException('catalog_product_not_found');
+        if ($matches === []) throw new RuntimeException('catalog_product_not_found');
+        if (count($matches) !== 1) throw new RuntimeException('catalog_product_ambiguous');
+
+        $index = $matches[0];
+        $item = $items[$index];
+        $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
+        $prices['preco'] = max(0.0, $price);
+        $prices['precoPromocional'] = max(0.0, $promotional);
+        $items[$index]['precos'] = $prices;
+        $items[$index]['sync_source'] = 'tiny_v3';
+        $items[$index]['_detail_synced_at'] = gmdate(DATE_ATOM);
     });
 }
 
