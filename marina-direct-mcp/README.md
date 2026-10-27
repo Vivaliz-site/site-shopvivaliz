@@ -107,7 +107,13 @@ bash marina-direct-mcp/operator_stage_service.sh --stage
 
 Staging refuses wrong host, wrong UID, `NoNewPrivs: 1`, unknown commit,
 dirty/non-root-owned sources, unexpected symlinks, conflicting units or
-another active release. It holds a host-local stage lock and fails closed
+another active release. It also refuses to shadow a preexisting disabled
+vendor/runtime systemd unit and refuses any effective systemd drop-in. A
+disabled unit is not an empty slot: after daemon-reload, an /etc unit could
+silently replace it, and drop-ins could alter the approved service contract.
+Idempotent restaging accepts only an exact matching /etc unit with no drop-ins;
+otherwise an authorized host operator must reconcile the conflict separately.
+It holds a host-local stage lock and fails closed
 instead of restarting any running daemon. A successful output is
 `MARINA_MCP_STAGE=CODE_AND_UNITS_ONLY`, **not** `APTO`.
 
