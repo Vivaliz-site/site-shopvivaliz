@@ -120,36 +120,59 @@ class StagingTests(unittest.TestCase):
             self.assertIn(required, source)
 
     def test_unit_boot_autostart_fail_closed(self):
-        """Exercise the real shell guard with systemctl states, not text matching."""
+        """Exercise the real shell guard with systemd unit and fragment states."""
         function = self._bash_function("assert_unit_not_autostart")
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / "systemctl"
             fake.write_text("""#!/bin/sh
 case "$1" in
-  show) printf '%s\\n' "$UNIT_ACTIVE"; exit 0 ;;
+  show)
+    case "$*" in
+      *--property=ActiveState*) printf '%s\\n' "$UNIT_ACTIVE" ;;
+      *--property=FragmentPath*)
+        [ "$FAIL_FRAGMENT" != 1 ] || exit 4
+        printf '%s\\n' "$UNIT_FRAGMENT" ;;
+      *--property=DropInPaths*)
+        [ "$FAIL_DROPINS" != 1 ] || exit 4
+        printf '%s\\n' "$UNIT_DROPINS" ;;
+      *) exit 4 ;;
+    esac ;;
   is-enabled) printf '%s\\n' "$UNIT_ENABLED"
     case "$UNIT_ENABLED" in enabled|static|linked) exit 0 ;; *) exit 1 ;; esac ;;
+  *) exit 4 ;;
 esac
-exit 4
 """)
             fake.chmod(0o755)
-            for active, enabled, allowed in (
-                ("inactive", "enabled", False),
-                ("inactive", "enabled-runtime", False),
-                ("inactive", "static", False),
-                ("inactive", "linked", False),
-                ("inactive", "disabled", True),
-                ("inactive", "not-found", True),
-                ("active", "disabled", False),
-            ):
-                with self.subTest(active=active, enabled=enabled):
+            scenarios = (
+                ("inactive", "enabled", "", "", "", "", False, "unit_may_start_on_boot"),
+                ("inactive", "enabled-runtime", "", "", "", "", False, "unit_may_start_on_boot"),
+                ("inactive", "static", "", "", "", "", False, "unit_may_start_on_boot"),
+                ("inactive", "linked", "", "", "", "", False, "unit_may_start_on_boot"),
+                ("inactive", "disabled", "", "", "", "", True, ""),
+                ("inactive", "not-found", "", "", "", "", True, ""),
+                ("active", "disabled", "", "", "", "", False, "active_unit_mutation_denied"),
+                # RED before fix: disabled pre-existing vendor/runtime unit was accepted.
+                ("inactive", "disabled", "/usr/lib/systemd/system/test.service", "", "", "", False, "foreign_unit_fragment_present"),
+                ("inactive", "disabled", "/run/systemd/system/test.service", "", "", "", False, "foreign_unit_fragment_present"),
+                # Idempotent restaging allows only the exact canonical path;
+                # check_target subsequently verifies its owner, mode and bytes.
+                ("inactive", "disabled", "/etc/systemd/system/test.service", "", "", "", True, ""),
+                ("inactive", "disabled", "", "/etc/systemd/system/test.service.d/override.conf", "", "", False, "unit_dropins_present"),
+                ("inactive", "disabled", "", "", "1", "", False, "unit_fragment_unavailable"),
+                ("inactive", "disabled", "", "", "", "1", False, "unit_dropins_unavailable"),
+            )
+            for active, enabled, fragment, dropins, fail_fragment, fail_dropins, allowed, reason in scenarios:
+                with self.subTest(active=active, enabled=enabled, fragment=fragment,
+                                  dropins=dropins, fail_fragment=fail_fragment, fail_dropins=fail_dropins):
                     env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"],
-                               UNIT_ACTIVE=active, UNIT_ENABLED=enabled)
+                               UNIT_ACTIVE=active, UNIT_ENABLED=enabled,
+                               UNIT_FRAGMENT=fragment, UNIT_DROPINS=dropins,
+                               FAIL_FRAGMENT=fail_fragment, FAIL_DROPINS=fail_dropins)
                     result = self._run_guard(function, env,
                                              "assert_unit_not_autostart test.service")
                     self.assertEqual(result.returncode, 0 if allowed else 3, result.stderr)
-                    if active == "inactive" and not allowed:
-                        self.assertIn("unit_may_start_on_boot", result.stderr)
+                    if not allowed:
+                        self.assertIn(reason, result.stderr)
 
     def test_existing_home_guard_prevents_implicit_chown(self):
         """A foreign/preexisting service home must fail before install -d can chown."""
