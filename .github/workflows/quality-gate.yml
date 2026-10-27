@@ -5,6 +5,11 @@ on:
     branches: [main, master]
   pull_request:
     paths:
+      - 'marina-direct-mcp/**'
+      - 'tests/test_marina_direct_mcp.py'
+      - 'tests/test_marina_tunnel_preflight.py'
+      - 'tests/test_marina_tunnel_units.py'
+      - 'tests/test_marina_stage_service.py'
       - 'blog/**'
       - 'includes/**'
       - 'scripts/quality/deployment_closure_guard.py'
