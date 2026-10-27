@@ -39,6 +39,15 @@ class TestCloudflareAdminPreflight(unittest.TestCase):
         self.assertIn("ROLE=marina", p.stdout)
         self.assertIn("SUDO_PERMISSION=NOT_TESTED", p.stdout)
 
+    def test_pinned_binary_and_root_token_metadata(self):
+        """Readiness cannot rely on an arbitrary PATH executable or non-root token."""
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("/opt/shopvivaliz-cloudflared-admin/releases/2026.10.4/cloudflared", source)
+        self.assertNotIn("command -v cloudflared", source)
+        self.assertIn("present_root_owned_pinned", source)
+        self.assertIn("600:0|400:0", source)
+        self.assertIn("private_root_owned_regular_file", source)
+
     def test_origin_does_not_boot_or_claim_apt(self):
         p = self.run_for("shopvivaliz-free-a1")
         self.assertEqual(p.returncode, 0)
