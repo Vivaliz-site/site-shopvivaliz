@@ -217,6 +217,13 @@ function svoei_upsert_catalog_product(string $root, array $product): void
             if ($existingId === '') $legacySkuMatches[] = $index;
         }
 
+        // An identified product may not acquire a SKU already owned by a
+        // separate legacy (ID-less) catalog row. Otherwise the ID-first path
+        // silently creates two products with the same public SKU.
+        if ($idMatches !== [] && $legacySkuMatches !== []) {
+            throw new RuntimeException('catalog_sku_identity_conflict');
+        }
+
         $matches = $id !== ''
             ? ($idMatches !== [] ? $idMatches : $legacySkuMatches)
             : $skuMatches;
