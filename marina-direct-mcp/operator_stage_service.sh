@@ -104,6 +104,16 @@ assert_unit_not_autostart() {
     ""|"/etc/systemd/system/$unit") ;;
     *) refuse foreign_unit_fragment_present ;;
   esac
+  # systemctl may be serving cached metadata before daemon-reload. Inspect
+  # on-disk overrides too, or a newly created drop-in could become effective
+  # when this stager reloads systemd after copying the reviewed service unit.
+  local disk_path
+  for disk_path in "/lib/systemd/system/$unit" "/usr/lib/systemd/system/$unit" "/run/systemd/system/$unit"; do
+    [[ ! -e "$disk_path" && ! -L "$disk_path" ]] || refuse foreign_unit_file_on_disk
+  done
+  for disk_path in "/etc/systemd/system/$unit.d" "/run/systemd/system/$unit.d" "/lib/systemd/system/$unit.d" "/usr/lib/systemd/system/$unit.d"; do
+    [[ ! -e "$disk_path" && ! -L "$disk_path" ]] || refuse unit_dropin_dir_on_disk
+  done
 }
 for unit in shopvivaliz-marina-mcp.service shopvivaliz-marina-mcp-tunnel.service; do
   grep -Fqx 'User=shopvivaliz-marina-mcp' "$source_dir/systemd/$unit" || refuse unit_identity_invalid
