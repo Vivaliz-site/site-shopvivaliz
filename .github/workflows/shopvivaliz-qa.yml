@@ -6,6 +6,9 @@ on:
   pull_request:
     paths:
       - 'api/**'
+      - 'scripts/quality/deployment_closure_guard.py'
+      - 'tests/test_deployment_closure_guard.py'
+      - '.github/workflows/production-deployment-closure-guard.yml'
       - 'admin/**'
       - 'includes/**'
       - 'scripts/*.php'
@@ -46,6 +49,7 @@ jobs:
           python3 -m py_compile remote-control-browser-mcp/server.py
           python3 tests/remote-control-browser-mcp-test.py
           python3 tests/test_dev_aux_adoption_deploy.py
+          python3 tests/test_deployment_closure_guard.py
           bash -n scripts/adopt-verified-dev-aux-browser.sh
 
   memory-nudge:
