@@ -71,6 +71,43 @@ done
 stat_output="$(stat -c '%a:%u' "$TOKEN_FILE")"
 [[ "$stat_output" == '600:0' ]] || { echo 'ERROR: tunnel token must be root-owned mode 0600' >&2; exit 3; }
 readonly UNIT=/etc/systemd/system/shopvivaliz-cloudflare-admin.service
+# The other Cloudflare admin draft uses a different service name and runtime
+# contract. Never stage a second tunnel beside an existing one, including an
+# inactive/disabled unit or an on-disk override awaiting daemon-reload.
+# A successful staging operation must not shadow a vendor unit or inherit a
+# preexisting drop-in. Consolidation and operator review are required first.
+for admin_name in shopvivaliz-cloudflare-admin.service shopvivaliz-cloudflared-admin.service; do
+  for systemd_dir in /etc/systemd/system /run/systemd/system /usr/lib/systemd/system /lib/systemd/system; do
+    for candidate in "$systemd_dir/$admin_name" "$systemd_dir/$admin_name.d" \
+                     "$systemd_dir/multi-user.target.wants/$admin_name" \
+                     "$systemd_dir/default.target.wants/$admin_name"; do
+      if [[ -e "$candidate" || -L "$candidate" ]]; then
+        echo 'ERROR: conflicting_cloudflare_admin_unit; review and consolidate contracts' >&2
+        exit 3
+      fi
+    done
+  done
+  active_state="$(systemctl show "$admin_name" --property=ActiveState --value --no-pager 2>/dev/null)" || {
+    echo 'ERROR: unable to verify admin unit runtime state' >&2; exit 3;
+  }
+  [[ "$active_state" == inactive ]] || {
+    echo 'ERROR: admin unit not conclusively inactive' >&2; exit 3;
+  }
+  fragment_path="$(systemctl show "$admin_name" --property=FragmentPath --value --no-pager 2>/dev/null)" || {
+    echo 'ERROR: unable to verify admin unit fragment' >&2; exit 3;
+  }
+  dropin_paths="$(systemctl show "$admin_name" --property=DropInPaths --value --no-pager 2>/dev/null)" || {
+    echo 'ERROR: unable to verify admin unit drop-ins' >&2; exit 3;
+  }
+  [[ -z "$fragment_path" && -z "$dropin_paths" ]] || {
+    echo 'ERROR: existing admin service metadata; refusing to shadow' >&2; exit 3;
+  }
+  enabled_state="$(systemctl is-enabled "$admin_name" 2>/dev/null || true)"
+  case "$enabled_state" in
+    not-found) ;;
+    *) echo 'ERROR: admin unit has existing enablement state' >&2; exit 3 ;;
+  esac
+done
 if [[ -e "$UNIT" || -L "$UNIT" ]]; then
   echo 'ERROR: existing dedicated unit preserved, refusing to overwrite' >&2; exit 3
 fi
