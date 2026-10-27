@@ -48,7 +48,8 @@ if safe_root_directory /opt &&
   binary_parents_safe=true
 fi
 token_parents_safe=false
-if safe_root_directory /etc/shopvivaliz &&
+if safe_root_directory /etc &&
+   safe_root_directory /etc/shopvivaliz &&
    safe_root_directory /etc/shopvivaliz/cloudflare-admin; then
   token_parents_safe=true
 fi
