@@ -346,3 +346,11 @@ Para diagnosticos de login/GUI na backend, obrigatorio ler `docs/knowledge/shopv
 - Prevenir recorrencia: instalador escreve paid fallback=0; execucao background
   ignora paid fallback=1 e bridges pagos negam acesso por padrao.
 <!-- /FREE_PROVIDER_FALLBACK_V2 -->
+
+<!-- DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
+## Encerramento com deploy provado, nunca com PR
+
+Toda alteração implantável requer CI verde, merge permitido, deploy de release imutável e comprovação pós-deploy do mesmo SHA em `current/.release-sha`, `api/health/version.php` e `deployment-evidence/deployment/latest.json`, mais smoke e E2E/UI aplicáveis. Um PR aberto/mergeado, um workflow disparado, o relato do agente ou um health genérico não encerram a tarefa. Preservar checkpoint `RUNNING` até provas reais e `CONCLUIDO` somente após terminal gate válido; proteções humanas nunca podem ser autoaprovadas.
+
+Preços: `scripts/quality/audit-storefront-erp-prices.py` compara integralmente preços, promoções, ids de produto e SKU da API v3 com cache e catálogo público, em modo somente leitura. A rotina pós-deploy + diária `.github/workflows/postdeploy-erp-price-parity.yml` deve registrar `PRICE_PARITY_VERDICT` e artefato de evidência. Duplicidade de SKU, divergência, erro de consulta ou versão incompatível são falha de aceite, não aviso ignorável. A autenticação e a entrega de eventos reais por webhook continuam gates separados. Ver `docs/knowledge/deploy.md` e `AGENTS.md`.
+<!-- /DEPLOY_PRICE_PARITY_AUTOMATED_GATE_V2 -->
