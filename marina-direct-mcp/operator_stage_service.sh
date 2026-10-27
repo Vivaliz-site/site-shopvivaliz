@@ -59,8 +59,23 @@ refuse_writable "$source_dir"
 [[ ! -L "$source_dir/systemd" ]] || refuse unsafe_systemd_source_dir
 [[ "$(stat -c '%u' "$source_dir/systemd")" == '0' ]] || refuse source_systemd_dir_not_root_owned
 refuse_writable "$source_dir/systemd"
-[[ "$(git -C "$source_root" rev-parse HEAD 2>/dev/null)" == "$expected_sha" ]] || refuse unapproved_checkout
-checkout_status="$(git -C "$source_root" status --porcelain -- marina-direct-mcp)" || refuse checkout_status_unavailable
+# Git reads repository configuration while checking the release. An inherited
+# GIT_CONFIG_* / core.fsmonitor hook must never execute in a root stager.
+# Refuse external worktree gitdirs and operator-unowned config, even if the
+# code files themselves appear immutable.
+git_dir="$source_root/.git"
+[[ -d "$git_dir" && ! -L "$git_dir" ]] || refuse git_metadata_unsafe
+[[ "$(stat -c '%u' "$git_dir")" == '0' ]] || refuse git_metadata_not_root_owned
+refuse_writable "$git_dir"
+[[ -f "$git_dir/config" && ! -L "$git_dir/config" ]] || refuse git_config_unsafe
+[[ "$(stat -c '%u' "$git_dir/config")" == '0' ]] || refuse git_config_not_root_owned
+refuse_writable "$git_dir/config"
+safe_git() {
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent \
+    /usr/bin/git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$source_root" "$@"
+}
+[[ "$(safe_git rev-parse HEAD 2>/dev/null)" == "$expected_sha" ]] || refuse unapproved_checkout
+checkout_status="$(safe_git status --porcelain -- marina-direct-mcp)" || refuse checkout_status_unavailable
 [[ -z "$checkout_status" ]] || refuse unclean_checkout
 
 for file in server.py operator_preflight.py systemd/shopvivaliz-marina-mcp.service systemd/shopvivaliz-marina-mcp-tunnel.service; do
